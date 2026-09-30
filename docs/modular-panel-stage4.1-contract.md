@@ -163,8 +163,8 @@ head → startup → header → navigation → global_controls → screens → m
 | --- | --- | --- | --- | --- | --- |
 | legacy-full | core, engine.xray, engine.mihomo, tool.editor, tool.terminal, tool.files, tool.backups, integration.happ, tool.advanced-diagnostics | routing, mihomo, xkeen, xray-logs, commands, files | — | 53 | 0 |
 | full | core, engine.xray, engine.mihomo, tool.editor, tool.terminal, tool.files, tool.backups, integration.happ, tool.advanced-diagnostics | routing, mihomo, xkeen, xray-logs, commands, files | — | 53 | 0 |
-| xray-only | core, tool.editor, engine.xray | routing, xkeen, xray-logs | mihomo, commands, files | 20 | 33 |
-| mihomo-only | core, tool.editor, engine.mihomo | mihomo, xkeen | routing, xray-logs, commands, files | 12 | 41 |
+| xray-minimal | core, tool.editor, engine.xray | routing, xkeen, xray-logs | mihomo, commands, files | 20 | 33 |
+| mihomo-minimal | core, tool.editor, engine.mihomo | mihomo, xkeen | routing, xray-logs, commands, files | 12 | 41 |
 
 ## Критерий завершения Этапа 4.1
 
@@ -173,7 +173,7 @@ head → startup → header → navigation → global_controls → screens → m
 - для каждого screen определены `module_id`, partial, root id, frontend roots и API groups;
 - для каждого modal определены текущая классификация, целевой владелец, partial и DOM-контракт;
 - shell, navigation и mixed-boundaries имеют явные решения;
-- зафиксированы профили `legacy-full`, `full`, `xray-only` и `mihomo-only`;
+- зафиксированы профили `legacy-full`, `full`, `xray-minimal` и `mihomo-minimal`;
 - baseline защищён генератором и тестом синхронности.
 
 Физическое создание partials и перенос markup относятся к подэтапу 4.2 и последующим.

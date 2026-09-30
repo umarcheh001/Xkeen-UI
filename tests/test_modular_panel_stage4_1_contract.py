@@ -116,13 +116,13 @@ def test_stage4_1_contract_covers_shell_screens_modals_and_profiles(tmp_path):
     } <= mixed_ids
 
     profiles = {item["id"]: item for item in payload["profiles"]}
-    assert set(profiles) == {"legacy-full", "full", "xray-only", "mihomo-only"}
+    assert set(profiles) == {"legacy-full", "full", "xray-minimal", "mihomo-minimal"}
     assert profiles["legacy-full"]["forbidden_views"] == []
     assert profiles["full"]["forbidden_modal_ids"] == []
-    assert profiles["xray-only"]["expected_views"] == ["routing", "xkeen", "xray-logs"]
-    assert profiles["xray-only"]["forbidden_views"] == ["mihomo", "commands", "files"]
-    assert profiles["mihomo-only"]["expected_views"] == ["mihomo", "xkeen"]
-    assert profiles["mihomo-only"]["forbidden_views"] == [
+    assert profiles["xray-minimal"]["expected_views"] == ["routing", "xkeen", "xray-logs"]
+    assert profiles["xray-minimal"]["forbidden_views"] == ["mihomo", "commands", "files"]
+    assert profiles["mihomo-minimal"]["expected_views"] == ["mihomo", "xkeen"]
+    assert profiles["mihomo-minimal"]["forbidden_views"] == [
         "routing",
         "xray-logs",
         "commands",
