@@ -37,7 +37,7 @@
       ],
       "removable": false,
       "unit_count": 380,
-      "size_bytes": 5817314,
+      "size_bytes": 5807440,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 17,
@@ -85,17 +85,18 @@
         "xray"
       ],
       "removable": true,
-      "unit_count": 114,
-      "size_bytes": 3492667,
+      "unit_count": 116,
+      "size_bytes": 3508414,
       "kind_counts": {
         "backend_route": 12,
         "backend_service": 17,
-        "backend_test": 32,
+        "backend_test": 33,
         "configuration": 4,
         "editor_schema": 4,
         "frontend_feature": 35,
         "frontend_test": 9,
-        "frontend_ui": 1
+        "frontend_ui": 1,
+        "template": 1
       },
       "route_count": 52,
       "background_task_count": 3,
@@ -8562,7 +8563,7 @@
       "module_id": "core",
       "kind": "template",
       "path": "xkeen-ui/templates/panel.html",
-      "size_bytes": 358406,
+      "size_bytes": 348532,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -13412,6 +13413,29 @@
     {
       "module_id": "engine.xray",
       "kind": "backend_test",
+      "path": "tests/test_modular_panel_stage4_3_xray_logs_screen.py",
+      "size_bytes": 5740,
+      "depends_on": [
+        "core",
+        "tool.editor"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "xkeen",
+        "xray"
+      ],
+      "environment_variables": [
+        "XKEEN_UI_PANEL_SECTIONS_WHITELIST"
+      ],
+      "removable": true
+    },
+    {
+      "module_id": "engine.xray",
+      "kind": "backend_test",
       "path": "tests/test_panel_operator_xray_preflight.py",
       "size_bytes": 1986,
       "depends_on": [
@@ -15133,6 +15157,27 @@
       "environment_variables": [
         "XKEEN_XRAY_TEST_TIMEOUT"
       ],
+      "removable": true
+    },
+    {
+      "module_id": "engine.xray",
+      "kind": "template",
+      "path": "xkeen-ui/templates/panel/screens/xray_logs.html",
+      "size_bytes": 10007,
+      "depends_on": [
+        "core",
+        "tool.editor"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "xkeen",
+        "xray"
+      ],
+      "environment_variables": [],
       "removable": true
     },
     {
@@ -25427,7 +25472,7 @@
       {
         "from": "engine.xray",
         "to": "core",
-        "unit_count": 114,
+        "unit_count": 116,
         "examples": [
           "xkeen-ui/routes/routing/__init__.py",
           "xkeen-ui/routes/routing/blueprint.py",
@@ -25471,7 +25516,7 @@
       {
         "from": "engine.xray",
         "to": "tool.editor",
-        "unit_count": 114,
+        "unit_count": 116,
         "examples": [
           "xkeen-ui/routes/routing/__init__.py",
           "xkeen-ui/routes/routing/blueprint.py",
@@ -25900,7 +25945,7 @@
       {
         "from": "engine.xray",
         "to": "core",
-        "unit_count": 73,
+        "unit_count": 74,
         "examples": [
           "xkeen-ui/routes/routing/__init__.py",
           "xkeen-ui/routes/routing/blueprint.py",
@@ -25944,7 +25989,7 @@
       {
         "from": "engine.xray",
         "to": "tool.editor",
-        "unit_count": 73,
+        "unit_count": 74,
         "examples": [
           "xkeen-ui/routes/routing/__init__.py",
           "xkeen-ui/routes/routing/blueprint.py",
@@ -26462,7 +26507,7 @@
         "template": "xkeen-ui/templates/panel.html",
         "panel_views": 6,
         "panel_modals": 53,
-        "size_bytes": 358406
+        "size_bytes": 348532
       },
       "next_stage": "Этап 4: template partials и module composition."
     },

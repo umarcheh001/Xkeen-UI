@@ -127,6 +127,7 @@ WORKTREE_MODULAR_PANEL_PATHS = frozenset(
         "tests/test_modular_panel_stage4_2_shell.py",
         "tests/test_modular_panel_stage3r1.py",
         "tests/test_modular_panel_stage4_3_routing_screen.py",
+        "tests/test_modular_panel_stage4_3_xray_logs_screen.py",
         "xkeen-ui/templates/panel/macros.html",
         "xkeen-ui/templates/panel/head.html",
         "xkeen-ui/templates/panel/page_config.html",
@@ -134,6 +135,7 @@ WORKTREE_MODULAR_PANEL_PATHS = frozenset(
         "xkeen-ui/templates/panel/header.html",
         "xkeen-ui/templates/panel/navigation.html",
         "xkeen-ui/templates/panel/screens/routing.html",
+        "xkeen-ui/templates/panel/screens/xray_logs.html",
     }
 )
 
