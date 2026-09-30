@@ -165,9 +165,17 @@ def test_shell_rci_clients_use_x_ndma_tkn_header():
 
 
 def test_panel_explains_keeneticos_52_rci_token_location():
-    root = Path(__file__).resolve().parents[1] / "xkeen-ui" / "templates"
+    from scripts.panel_template_source import compose_panel_template
+
+    project_root = Path(__file__).resolve().parents[1]
+    root = project_root / "xkeen-ui" / "templates"
     for name in ("panel.html", "xkeen.html"):
-        text = (root / name).read_text(encoding="utf-8")
+        # panel.html is a composition root; the Xkeen screen is a partial.
+        text = (
+            compose_panel_template(project_root)
+            if name == "panel.html"
+            else (root / name).read_text(encoding="utf-8")
+        )
         assert "KeeneticOS 5.2+" in text
         assert "rci_token" in text
         assert "Пользователи и доступ" in text

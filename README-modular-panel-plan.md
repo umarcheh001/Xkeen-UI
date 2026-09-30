@@ -1,14 +1,14 @@
 # План модульной архитектуры панели Xkeen UI
 
 **Статус:** Этапы 0, 1, 2, 3, 3R, 3R.1, 4.1 и 4.2 закрыты; подэтап 4.3
-в работе, routing, Xray logs и Mihomo screens закрыты<br>
+в работе, routing, Xray logs, Mihomo и Xkeen screens закрыты<br>
 **Дата:** 30 сентября 2026 года
 **Область:** облегчение панели, профили установки и официальный каталог модулей
 
 **Текущий прогресс:** Этапы 0–3 и 3R, подэтапы 4.1 и 4.2 закрыты;
 Этап 3R.1 и baseline initial HTML закрыты; в подэтапе 4.3 закрыты экраны
-`routing.html`, `xray_logs.html` и `mihomo.html`, следующий экран —
-`xkeen.html`.
+`routing.html`, `xray_logs.html`, `mihomo.html` и `xkeen.html`, следующий
+экран — `commands.html`.
 
 ## 1. Цель проекта
 
@@ -1022,12 +1022,22 @@ Mihomo screen: **закрыт 30 сентября 2026 года**.
 Xray-only профиля; теперь он рендерится только при `engine.mihomo`. Кнопка
 HWID (`integration.happ`) осталась внутри экрана до составного gate 4.4.
 
+Xkeen screen: **закрыт 30 сентября 2026 года**.
+
+Артефакты:
+
+- `docs/modular-panel-stage4.3-xkeen-screen.md`;
+- `xkeen-ui/templates/panel/screens/xkeen.html`;
+- `tests/test_modular_panel_stage4_3_xkeen_screen.py`.
+
+Экран принадлежит core и подключается без module gate.
+
 Последовательно вынести разметку экранов в partials:
 
 1. `routing.html` — `engine.xray` — **выполнено**;
 2. `xray_logs.html` — `engine.xray` — **выполнено**;
 3. `mihomo.html` — `engine.mihomo` — **выполнено**;
-4. `xkeen.html` — core-owned Xkeen screen;
+4. `xkeen.html` — core-owned Xkeen screen — **выполнено**;
 5. `commands.html` — `tool.terminal`;
 6. `files.html` — `tool.files`.
 
