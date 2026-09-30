@@ -15,6 +15,11 @@ STAGE = {
     "closed_on": "2026-09-30",
 }
 DEFAULT_BASELINE_REF = "186f43acca82d440c851075df90da03cca312c8b"
+# The baseline commit predates the canonical profile ids (plan §5.4.1).
+CANONICAL_PROFILE_IDS = {
+    "xray-only": "xray-minimal",
+    "mihomo-only": "mihomo-minimal",
+}
 _INCLUDE_RE = re.compile(
     r"""\{%-?\s*include\s+["'](?P<path>panel/[^"']+)["']\s*-?%\}"""
 )
@@ -57,7 +62,7 @@ def build_baseline(root: Path, ref: str = DEFAULT_BASELINE_REF) -> dict:
     for profile in contract["profiles"]:
         profiles.append(
             {
-                "id": profile["id"],
+                "id": CANONICAL_PROFILE_IDS.get(profile["id"], profile["id"]),
                 "active_module_ids": profile["active_module_ids"],
                 "expected_views": profile["expected_views"],
                 "expected_navigation_sections": profile["expected_navigation_sections"],

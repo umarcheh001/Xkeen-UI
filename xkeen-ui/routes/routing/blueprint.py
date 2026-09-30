@@ -12,6 +12,7 @@ from flask import Blueprint
 from typing import Any, Callable, Dict, Optional
 
 from .dat import register_dat_routes
+from .dat_files import register_dat_file_routes
 from .geodat import register_geodat_routes
 from .fragments import register_fragments_routes
 from .config import register_config_routes
@@ -60,6 +61,7 @@ def create_routing_blueprint(
     # endpoints
     register_geodat_routes(bp)
     register_dat_routes(bp)
+    register_dat_file_routes(bp)
     register_fragments_routes(bp, xray_configs_dir=XRAY_CONFIGS_DIR, routing_file=ROUTING_FILE)
     register_config_routes(
         bp,

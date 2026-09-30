@@ -152,6 +152,29 @@ def _filemanager_upload_request_max_bytes(env: Optional[Mapping[str, Any]] = Non
     return int(get_filemanager_upload_max_bytes(env)) + int(UPLOAD_FORM_OVERHEAD_BYTES)
 
 
+DAT_UPLOAD_PATH = "/api/routing/dat/upload"
+DAT_MAX_MB_ENV = "XKEEN_MAX_DAT_MB"
+DEFAULT_DAT_MAX_MB = 128
+
+
+def _is_dat_upload_path(path: str) -> bool:
+    return str(path or "").split("?", 1)[0].strip() == DAT_UPLOAD_PATH
+
+
+def get_dat_upload_max_bytes(env: Optional[Mapping[str, Any]] = None) -> int:
+    """GeoIP/GeoSite upload ceiling; ``XKEEN_MAX_DAT_MB <= 0`` falls back to the UI limit."""
+
+    source = env if env is not None else os.environ
+    raw = str(source.get(DAT_MAX_MB_ENV, DEFAULT_DAT_MAX_MB) or DEFAULT_DAT_MAX_MB).strip()
+    try:
+        max_mb = int(float(raw))
+    except Exception:
+        max_mb = DEFAULT_DAT_MAX_MB
+    if max_mb <= 0:
+        return get_ui_max_content_length(env)
+    return max_mb * 1024 * 1024
+
+
 def _check_known_content_length(content_length: Any, *, max_bytes: int) -> None:
     try:
         if content_length is None:
@@ -277,6 +300,8 @@ def install_request_size_guards(app, *, env: Optional[Mapping[str, Any]] = None)
         path = str(getattr(request, "path", "") or "")
         if _is_filemanager_upload_path(path):
             return _upload_too_large_response(get_filemanager_upload_max_bytes(env))
+        if _is_dat_upload_path(path):
+            return _upload_too_large_response(get_dat_upload_max_bytes(env))
         if path.startswith("/api/"):
             limit = app.config.get("MAX_CONTENT_LENGTH") or max_content_length
             return _too_large_response(int(limit))
@@ -299,6 +324,14 @@ def install_request_size_guards(app, *, env: Optional[Mapping[str, Any]] = None)
         if _is_filemanager_upload_path(path):
             try:
                 request.max_content_length = _filemanager_upload_request_max_bytes(env)
+            except Exception:
+                pass
+            return None
+
+        if _is_dat_upload_path(path):
+            # The route streams to disk and enforces the exact limit itself.
+            try:
+                request.max_content_length = get_dat_upload_max_bytes(env) + UPLOAD_FORM_OVERHEAD_BYTES
             except Exception:
                 pass
             return None

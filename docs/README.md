@@ -5,7 +5,7 @@
 ## Основные документы
 
 - `README_frontend_migration_plan.md` — текущий статус закрытого migration scope и список guardrails, которые нельзя откатывать.
-- `../README-modular-panel-plan.md` — план модульной панели; Этапы 0–3 и 3R, подэтапы 4.1–4.2 закрыты, следующий — подэтап 4.3.
+- `../README-modular-panel-plan.md` — план модульной панели; Этапы 0–3, 3R и 3R.1, подэтапы 4.1–4.3 закрыты, следующий — подэтап 4.4.
 - `frontend-target-architecture.md` — целевой архитектурный контракт фронтенда в текущем репозитории.
 - `frontend-feature-api.md` — правила для feature API, registry и compat-слоя.
 - `config-schema-ux-roadmap.md` — roadmap по развитию UX вокруг схем Xray JSON и Mihomo YAML: schema enrichment, semantic validation, snippets, quick fixes и guided flows.
@@ -34,6 +34,10 @@
 - `modular-panel-stage4.1-contract.md` — закрытый подэтап 4.1: контракт границ frontend shell, экранов, модальных окон, mixed-boundaries и профильный HTML baseline.
 - `modular-panel-stage4.2-frontend-shell.md` — закрытый подэтап 4.2: выделение общего shell в Jinja partials и composed-source guardrails.
 - `modular-panel-stage4.3-routing-screen.md` — первый закрытый экран подэтапа 4.3: routing markup вынесен в partial `engine.xray`.
+- `modular-panel-stage4.3-xray-logs-screen.md` — второй закрытый экран подэтапа 4.3: логи Xray вынесены в partial `engine.xray` и больше не попадают в Mihomo-only HTML.
+- `modular-panel-stage4.3-mihomo-screen.md` — третий закрытый экран подэтапа 4.3: экран Mihomo вынесен в partial `engine.mihomo` и больше не попадает в Xray-only HTML.
+- `modular-panel-stage4.3-xkeen-screen.md` — четвёртый закрытый экран подэтапа 4.3: core-owned экран Xkeen вынесен в partial без module gate.
+- `modular-panel-stage4.3-tool-screens.md` — экраны команд (`tool.terminal`) и файлов (`tool.files`) вынесены в partials; итоги browser smoke minimal-профилей и оставшиеся frontend-вызовы API выключенных модулей.
 - `devtools-operator-theme.md` — закрытый перевод DevTools со старой blue-glass темы на общие с основной панелью Operator tokens, flat shell/data rows/log canvas/modals и responsive dark/light contract.
 - `top-level-navigation-plan.md` — итог по уже закрытому переводу всех five canonical entrypoints с document navigation на in-app navigation и фиксация финального five-route runtime contract.
 - `panel-operator-stage0-contract.md` — закрытый Этап 0 редизайна Operator Console: presentation ownership, матрица views/accordions/editors/modals, DOM freeze и dark/light visual baseline.

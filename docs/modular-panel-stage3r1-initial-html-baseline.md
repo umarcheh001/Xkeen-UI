@@ -21,8 +21,8 @@ markup из composition root в отдельные partials.
 |---|---|---|---:|---:|
 | `legacy-full` | routing, mihomo, xkeen, xray-logs, commands, files | routing, mihomo, xkeen, xray-logs, commands, files, mihomo-generator, devtools, donate | 53 | 0 |
 | `full` | routing, mihomo, xkeen, xray-logs, commands, files | routing, mihomo, xkeen, xray-logs, commands, files, mihomo-generator, devtools, donate | 53 | 0 |
-| `xray-only` | routing, xkeen, xray-logs | routing, xkeen, xray-logs, donate | 20 | 33 |
-| `mihomo-only` | mihomo, xkeen | mihomo, xkeen, mihomo-generator, donate | 12 | 41 |
+| `xray-minimal` | routing, xkeen, xray-logs | routing, xkeen, xray-logs, donate | 20 | 33 |
+| `mihomo-minimal` | mihomo, xkeen | mihomo, xkeen, mihomo-generator, donate | 12 | 41 |
 
 ## Воспроизведение
 

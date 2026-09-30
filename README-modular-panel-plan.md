@@ -1,13 +1,14 @@
 # План модульной архитектуры панели Xkeen UI
 
-**Статус:** Этапы 0, 1, 2, 3, 3R, 3R.1, 4.1 и 4.2 закрыты; подэтап 4.3
-в работе, routing screen закрыт<br>
+**Статус:** Этапы 0, 1, 2, 3, 3R, 3R.1, 4.1, 4.2 и 4.3 закрыты; следующий —
+подэтап 4.4<br>
 **Дата:** 30 сентября 2026 года
 **Область:** облегчение панели, профили установки и официальный каталог модулей
 
-**Текущий прогресс:** Этапы 0–3 и 3R, подэтапы 4.1 и 4.2 закрыты;
-Этап 3R.1 и baseline initial HTML закрыты; в подэтапе 4.3 первый экран
-`routing.html` закрыт, следующий экран — `xray_logs.html`.
+**Текущий прогресс:** Этапы 0–3 и 3R, подэтапы 4.1, 4.2 и 4.3 закрыты;
+Этап 3R.1 и baseline initial HTML закрыты; в подэтапе 4.3 все шесть экранов
+вынесены в module-owned partials, minimal-профили открываются без console
+errors. Следующий — подэтап 4.4 (модальные окна).
 
 ## 1. Цель проекта
 
@@ -307,10 +308,12 @@ HWID-модалка и кнопка принадлежат `integration.happ`, �
 ### 5.4.1. Идентификаторы профилей
 
 Названия профилей в плане, коде и контракте 4.1 должны совпадать. Канонические
-id: `legacy-full`, `full`, `xray-minimal`, `mihomo-minimal`, `custom`
-(контракт 4.1 сейчас использует `xray-only`/`mihomo-only` — переименовать
-при следующей регенерации). Пресеты профилей хранятся в registry, а не только
-в документации.
+id: `legacy-full`, `full`, `xray-minimal`, `mihomo-minimal`, `custom`.
+Контракт 4.1 и baseline 3R.1.6 переведены на канонические id 30 сентября
+2026 года (baseline снят на коммите со старыми `xray-only`/`mihomo-only`,
+генератор сопоставляет их при пересборке). Пресеты профилей хранятся в
+registry, а не только в документации; пресеты и атомарный переход между
+профилями реализуются в Этапе 7.
 
 Переход между профилями выполняется одной атомарной операцией
 (`POST /api/modules/profile`), а не цепочкой PATCH: промежуточные состояния
@@ -355,8 +358,9 @@ Full → Xray Minimal невозможен.
 проверка в момент PATCH недостаточна: между PATCH и рестартом можно включить
 DNS-защиту или переключить ядро. Проверка повторяется при старте
 (`initialize_for_startup`); если отложенное отключение стало опасным, модуль
-остаётся активным, а причина (`deferred_disable_blocked`) пишется в state,
-`core.log` и `/api/modules`.
+остаётся активным на время текущего процесса, а причина
+(`deferred_disable_blocked`) видна в `/api/modules` и пишется в `core.log`.
+Выбор пользователя в state при этом не меняется.
 
 ## 6. Этапы работ
 
@@ -769,8 +773,13 @@ optional advanced части.
 
 - работающий engine нельзя отключить — API возвращает `409 active_core_module`;
 - неработающий engine в Full-профиле можно отключить;
-- при старте registry восстанавливает отключённый engine, который фактически
-  продолжает работать, и отмечает `blocked_reason=deferred_disable_blocked`;
+- при старте отключённый engine, который фактически продолжает работать,
+  остаётся активным только в текущем процессе: в `/api/modules` он виден как
+  `enabled=false`, `effective_enabled=true`,
+  `blocked_reason=deferred_disable_blocked`, событие пишется в `core.log`.
+  Выбор пользователя в `modules.json` не меняется, поэтому отключение
+  применяется при первом старте без работающего ядра; вместе с engine
+  удерживаются и его зависимости;
 - проверка владельца DNS выполняется до изменения registry state.
 
 Изменение профиля применяется после штатного restart; workers не остаются
@@ -780,9 +789,16 @@ optional advanced части.
 
 Ошибка optional-модуля не останавливает core:
 
-- factory ошибки Mihomo, Happ и terminal перехватываются на границе регистрации;
+- factory ошибки всех optional-модулей (Xray, Mihomo, утилита ссылок,
+  backups, terminal, advanced diagnostics, files) перехватываются на границе
+  регистрации; blueprints модуля сначала создаются все, затем регистрируются,
+  поэтому упавший модуль не остаётся зарегистрированным наполовину;
 - ошибки scheduler также перехватываются на startup;
 - `ModuleRegistry.record_initialization_failure()` сохраняет `last_error`;
+- `last_error` описывает только предыдущий процесс: `initialize_for_startup()`
+  стирает его, и каждый старт — новая попытка инициализации. Иначе разовый
+  сбой (например, расписания подписок) навсегда выключал модуль в любом
+  профиле, кроме `legacy-full`, а `enable` его не возвращал;
 - module projection показывает `status=failed`;
 - `/api/modules`, recovery и core routes продолжают работать.
 
@@ -790,16 +806,19 @@ optional advanced части.
 
 Неизвестная future schema работает в read-only режиме:
 
-- исходный файл не перезаписывается;
-- создаётся `modules.json.bad.<timestamp>`;
+- исходный файл не перезаписывается, в том числе записью `last_error`
+  (ошибка инициализации в этом режиме хранится только в памяти процесса);
+- создаётся `modules.json.bad.<timestamp>` — одна копия за процесс, а не при
+  каждом чтении состояния;
 - runtime использует безопасный legacy-full projection;
 - попытка записи отвечает `409 state_schema_newer`;
 - corrupt state получает recovery backup и `recovery_reason`.
 
 ### 3R.1.4. `installed` из фактических файлов
 
-Registry учитывает `module-installed.json` и file markers модулей. Safe mode и
-legacy-full активируют только реально установленные модули. Удалённый пакет
+Registry учитывает `module-installed.json` и file markers модулей. Safe mode,
+legacy-full и аварийный fallback при недоступном state активируют только
+реально установленные модули. Удалённый пакет
 `engine.mihomo` не импортируется и не попадает в runtime active set.
 
 ### 3R.1.5. Ownership и registry
@@ -811,14 +830,17 @@ legacy-full активируют только реально установле�
   `app.extensions["xkeen.module_owner_errors"]`;
 - `tool.editor.can_disable` динамически становится `false`, пока активен
   хотя бы один engine;
-- `integration.happ` использует нейтральные name/description и зависит от core;
+- `integration.happ` использует нейтральные name/description («Утилита ссылок
+  подписок») и нейтральный id системного требования
+  `subscription-link-utility`, зависит от core; признак установки — собственные
+  файлы модуля, а не core-owned `happ_links`;
 - `tool.advanced-diagnostics` больше не заявляет self-update как собственную
   функцию; maintenance API остаётся core-owned.
 
 ### 3R.1.6. Baseline до изменений initial HTML
 
 До подэтапа 4.3 сохранён structural initial-HTML baseline для `legacy-full`,
-`full`, `xray-only` и `mihomo-only`:
+`full`, `xray-minimal` и `mihomo-minimal`:
 
 - сохранены raw/composed SHA-256, размер, line count и DOM id count;
 - зафиксированы ожидаемые screens, navigation sections и modal composition;
@@ -832,7 +854,7 @@ neutral module metadata и initial-HTML baseline реализованы и за�
 
 ## Этап 4. Разделение frontend shell и экранов
 
-**Статус:** в работе; подэтапы 4.1 и 4.2 закрыты, следующий — подэтап 4.3.
+**Статус:** в работе; подэтапы 4.1, 4.2 и 4.3 закрыты, следующий — подэтап 4.4.
 Всего шесть последовательных подэтапов.
 
 Этап 4 отвечает за **серверную композицию HTML** и границы шаблонов. Он не
@@ -965,7 +987,7 @@ DOM/API guardrails.
 
 ### Подэтап 4.3. Выделение экранов по модульным границам
 
-**Статус:** в работе.
+**Статус:** закрыт 30 сентября 2026 года.
 
 Routing screen: **закрыт 30 сентября 2026 года**.
 
@@ -975,14 +997,88 @@ Routing screen: **закрыт 30 сентября 2026 года**.
 - `xkeen-ui/templates/panel/screens/routing.html`;
 - `tests/test_modular_panel_stage4_3_routing_screen.py`.
 
+Xray logs screen: **закрыт 30 сентября 2026 года**.
+
+Артефакты:
+
+- `docs/modular-panel-stage4.3-xray-logs-screen.md`;
+- `xkeen-ui/templates/panel/screens/xray_logs.html`;
+- `tests/test_modular_panel_stage4_3_xray_logs_screen.py`.
+
+До выделения `#view-xray-logs` не был закрыт gate и попадал в initial HTML
+Mihomo-only профиля; теперь он рендерится только при `engine.xray`.
+
+Mihomo screen: **закрыт 30 сентября 2026 года**.
+
+Артефакты:
+
+- `docs/modular-panel-stage4.3-mihomo-screen.md`;
+- `xkeen-ui/templates/panel/screens/mihomo.html`;
+- `tests/test_modular_panel_stage4_3_mihomo_screen.py`;
+- `tests/support/panel_render.py` — общий server-side рендер страницы по
+  набору модулей.
+
+До выделения `#view-mihomo` тоже не был закрыт gate и попадал в initial HTML
+Xray-only профиля; теперь он рендерится только при `engine.mihomo`. Кнопка
+HWID (`integration.happ`) осталась внутри экрана до составного gate 4.4.
+
+Xkeen screen: **закрыт 30 сентября 2026 года**.
+
+Артефакты:
+
+- `docs/modular-panel-stage4.3-xkeen-screen.md`;
+- `xkeen-ui/templates/panel/screens/xkeen.html`;
+- `tests/test_modular_panel_stage4_3_xkeen_screen.py`.
+
+Экран принадлежит core и подключается без module gate.
+
+Commands и Files screens: **закрыты 30 сентября 2026 года**.
+
+Артефакты:
+
+- `docs/modular-panel-stage4.3-tool-screens.md`;
+- `xkeen-ui/templates/panel/screens/commands.html`;
+- `xkeen-ui/templates/panel/screens/files.html`;
+- `tests/test_modular_panel_stage4_3_tool_screens.py`.
+
+Строка статуса и обновления ядер осталась в экране команд (`tool.terminal`):
+обновление выполняется через каталог команд терминала.
+
+**Browser smoke 30 сентября 2026 года** (E2E-стенд, профили через
+`modules.json`): в Full, Xray-minimal и Mihomo-minimal рендерятся только свои
+экраны, все видимые вкладки открываются, набор ошибок Xray-minimal совпадает с
+baseline до выделения экранов. Оставшиеся `404` были frontend-вызовами API
+выключенных модулей и устранены до закрытия 4.3:
+
+- сводка ресурсов в header (`#xk-resource-monitor`) опрашивает
+  `/api/system/*` модуля `tool.advanced-diagnostics` и теперь рендерится под
+  `{% if has_diagnostics %}`; без корня `initResourceMonitor()` не запускает
+  опрос;
+- карточка GeoIP/GeoSite (`engine.xray`) использовала `/api/fs/stat-batch`,
+  `/api/fs/list`, `/api/fs/upload` и `/api/fs/download` модуля `tool.files`.
+  Теперь у неё собственные `/api/routing/dat/stat`, `/files`, `/upload` и
+  `/download` (`routes/routing/dat_files.py`): только `.dat`, та же allowlist,
+  что у `/api/routing/dat/update`, загрузка потоком с лимитом
+  `XKEEN_MAX_DAT_MB`. Загрузка и скачивание DAT больше не ломаются в профиле
+  без файлового менеджера.
+
+Повторный smoke: в Xray-minimal и Mihomo-minimal нет ни одного `4xx/5xx`;
+единственные ошибки консоли — handshake `/ws/events`, который на Windows-стенде
+без `gevent-websocket` не работает и в Full.
+
+Остаётся backend-связь для Этапа 7: `routes/routing/dat.py` и `dat_files.py`
+(`engine.xray`) импортируют `services/fs_common/local.py`, а `dat.py` ещё и
+`services/filemanager/metadata.py`; по inventory оба принадлежат `tool.files`.
+При удалении файлов модуля их нужно оставить или перевести в core.
+
 Последовательно вынести разметку экранов в partials:
 
 1. `routing.html` — `engine.xray` — **выполнено**;
-2. `xray_logs.html` — `engine.xray`;
-3. `mihomo.html` — `engine.mihomo`;
-4. `xkeen.html` — core-owned Xkeen screen;
-5. `commands.html` — `tool.terminal`;
-6. `files.html` — `tool.files`.
+2. `xray_logs.html` — `engine.xray` — **выполнено**;
+3. `mihomo.html` — `engine.mihomo` — **выполнено**;
+4. `xkeen.html` — core-owned Xkeen screen — **выполнено**;
+5. `commands.html` — `tool.terminal` — **выполнено**;
+6. `files.html` — `tool.files` — **выполнено**.
 
 Для каждого экрана:
 
@@ -1138,6 +1234,10 @@ tool.files
 baseline, но убрать оставшиеся static imports, которые подтягивают optional
 код через `panel-core`, `panel.mihomo_header` или shared compatibility layers.
 
+Smoke 4.3 (30 сентября 2026 года) нашёл и закрыл два frontend-вызова API
+выключенных модулей (resource summary и карточка GeoIP/GeoSite). Этап 5
+должен закрепить это E2E-guardrails для всех профилей.
+
 Для каждого optional frontend-модуля зафиксировать:
 
 - условие загрузки по `pageConfig`/Module Registry;
@@ -1208,13 +1308,17 @@ variants. Проверка выполняется в browser Network/Console, а
 - восстановление после неудачного обновления;
 - сохранение пользовательских конфигураций;
 - проверку свободного места;
-- резервную копию активного профиля.
+- резервную копию активного профиля;
 - состав пакета по профилю, включая module-owned backend/frontend/assets;
 - удаление или quarantine файлов модуля, отключённого в новом профиле;
 - очистку устаревших `.gz`, manifest и generated assets после перехода;
 - запрет самообновлению возвращать выключенный модуль без явного выбора;
 - единый архив панели как первый production-вариант; отдельные архивы модулей
-  оставить на следующий цикл.
+  оставить на следующий цикл;
+- пресеты профилей (`full`, `xray-minimal`, `mihomo-minimal`) в registry и
+  атомарный `POST /api/modules/profile` с diff «что станет активным /
+  неактивным после перезапуска» (§5.4.1) — их используют установщик и
+  раздел «Модули» Этапа 8.
 
 Предусловие: закрыт пункт 3R.1.4 (`installed` из фактических файлов), иначе
 safe mode и recovery после удаления файлов модуля роняют панель при старте.
@@ -1550,7 +1654,7 @@ Review было выполнено по коммиту `82a0df9e`, поэтом�
 | 8 | Gates в каждом экране (4.3) противоречат единому composition root (4.5) | подэтап 4.3 |
 | 9 | Удаление screen markup в 4.3 опережает снятие static imports в Этапе 5 | подэтап 4.3 |
 | 10 | Baseline-метрики «параллельно с 3R» не были сняты | Исправлено в 3R.1.6 |
-| 11 | Имена профилей в плане, коде и контракте 4.1 различаются; переход между профилями возможен только цепочкой PATCH | §5.4.1 |
+| 11 | Имена профилей в плане, коде и контракте 4.1 различаются; переход между профилями возможен только цепочкой PATCH | Имена — исправлено 30.09.2026; пресеты и `POST /api/modules/profile` — Этап 7 |
 | 12 | Rollback после рестарта не может выполнять сам процесс панели | Этап 8 |
 | 13 | Owner map захардкожен в `routes/__init__.py`, WS handlers не учтены | 3R.1.5 |
 | 14 | Требование «frontend-бандлы не загружаются» стояло в закрытом Этапе 3 | Этапы 3 и 5 |

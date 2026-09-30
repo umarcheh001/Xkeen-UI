@@ -202,6 +202,50 @@ def test_optional_module_factory_failures_do_not_stop_core(tmp_path, monkeypatch
     assert integration["status"] == "failed"
 
 
+def _module_status(app: Flask, module_id: str) -> str:
+    payload = app.test_client().get("/api/modules").get_json()
+    return next(item for item in payload["modules"] if item["id"] == module_id)["status"]
+
+
+def test_xray_backups_and_files_factory_failures_do_not_stop_core(tmp_path, monkeypatch):
+    import routes.backups
+    import routes.storage_usb
+    import routes.xray_logs
+
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("init")
+
+    monkeypatch.setattr(routes.xray_logs, "create_xray_logs_blueprint", boom)
+    app = _register(tmp_path / "xray", ["core", "tool.editor", "engine.xray"])
+    assert _module_status(app, "engine.xray") == "failed"
+    # The module's earlier blueprints are not left half-registered.
+    assert "routing" not in app.blueprints
+    assert "service" in app.blueprints
+
+    monkeypatch.setattr(routes.backups, "create_backups_blueprint", boom)
+    app = _register(tmp_path / "backups", ["core", "tool.backups"])
+    assert _module_status(app, "tool.backups") == "failed"
+
+    monkeypatch.setattr(routes.storage_usb, "create_storage_usb_blueprint", boom)
+    app = _register(tmp_path / "files", ["core", "tool.files"])
+    assert _module_status(app, "tool.files") == "failed"
+
+
+def test_mihomo_is_not_half_registered_when_second_blueprint_fails(tmp_path, monkeypatch):
+    import routes.mihomo_clash
+
+    monkeypatch.setattr(
+        routes.mihomo_clash,
+        "create_mihomo_clash_blueprint",
+        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("clash-init")),
+    )
+    app = _register(tmp_path, ["core", "tool.editor", "engine.mihomo"])
+
+    assert "mihomo" not in app.blueprints
+    assert "mihomo_clash" not in app.blueprints
+    assert _module_status(app, "engine.mihomo") == "failed"
+
+
 def test_stage3_closure_is_reflected_in_documentation():
     root = Path(__file__).resolve().parents[1]
     plan = (root / "README-modular-panel-plan.md").read_text(encoding="utf-8")

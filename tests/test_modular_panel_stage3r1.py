@@ -41,8 +41,8 @@ def test_stage3r1_baseline_is_reproducible(tmp_path):
     assert {item["id"] for item in payload["profiles"]} == {
         "legacy-full",
         "full",
-        "xray-only",
-        "mihomo-only",
+        "xray-minimal",
+        "mihomo-minimal",
     }
 
 

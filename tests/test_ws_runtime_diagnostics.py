@@ -16,6 +16,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from scripts.panel_template_source import compose_panel_template
 
 ROOT = Path(__file__).resolve().parents[1]
 CHECKER_PATH = ROOT / "xkeen-ui" / "scripts" / "check_pydeps_integrity.py"
@@ -211,7 +212,7 @@ def test_run_server_logs_the_gevent_failure_and_publishes_it_for_capabilities():
 
 
 def test_terminal_window_has_a_place_to_show_the_websocket_warning():
-    text = (ROOT / "xkeen-ui" / "templates" / "panel.html").read_text(encoding="utf-8")
+    text = compose_panel_template(ROOT)
 
     assert 'id="terminal-ws-notice"' in text
     assert 'class="terminal-ws-notice hidden"' in text

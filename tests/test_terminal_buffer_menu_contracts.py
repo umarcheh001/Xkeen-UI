@@ -1,11 +1,12 @@
 from pathlib import Path
+from scripts.panel_template_source import compose_panel_template
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_terminal_buffer_menu_keeps_all_download_formats_visible() -> None:
-    template = (ROOT / "xkeen-ui" / "templates" / "panel.html").read_text(encoding="utf-8")
+    template = compose_panel_template(ROOT)
     vendor_adapter = (
         ROOT / "xkeen-ui" / "static" / "js" / "terminal" / "vendors" / "xterm_import_adapter.js"
     ).read_text(encoding="utf-8")

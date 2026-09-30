@@ -471,7 +471,7 @@ def create_app(*, ws_runtime: bool = False):
     module_registry = ModuleRegistry(UI_STATE_DIR)
     try:
         # Missing state is migrated to legacy-full before routes/background
-        # services start.  Stage 1 deliberately does not add runtime gates.
+        # services start; the activation below gates them for this process.
         module_registry.initialize_for_startup()
     except Exception as e:  # noqa: BLE001 - registry API will report a state I/O error later
         try:

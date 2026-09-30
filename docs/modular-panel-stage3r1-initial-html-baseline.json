@@ -90,7 +90,7 @@
       "forbidden_modal_count": 0
     },
     {
-      "id": "xray-only",
+      "id": "xray-minimal",
       "active_module_ids": [
         "core",
         "tool.editor",
@@ -111,7 +111,7 @@
       "forbidden_modal_count": 33
     },
     {
-      "id": "mihomo-only",
+      "id": "mihomo-minimal",
       "active_module_ids": [
         "core",
         "tool.editor",

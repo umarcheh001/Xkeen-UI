@@ -8,6 +8,7 @@ import urllib.error
 from pathlib import Path
 
 from flask import Flask
+from scripts.panel_template_source import compose_panel_template
 
 
 ROOT = Path(__file__).resolve().parents[1]
