@@ -15,12 +15,17 @@
   }
 }
 
-// Альтернатива (не включайте одновременно с observatory):
+// Для balancer.strategy.type=leastLoad нужна burstObservatory: только она считает
+// разброс задержки и долю неудачных проб. Не включайте одновременно с observatory —
+// ядро возьмёт обычную, и leastLoad останется без этих данных.
 // {
 //   "burstObservatory": {
 //     "subjectSelector": ["proxy"],
-//     "probeUrl": "https://www.google.com/generate_204",
-//     "probeInterval": "60s",
-//     "enableConcurrency": true
+//     "pingConfig": {
+//       "destination": "https://www.google.com/generate_204",
+//       "interval": "2m",
+//       "sampling": 3,
+//       "timeout": "5s"
+//     }
 //   }
 // }

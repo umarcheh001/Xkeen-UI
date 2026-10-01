@@ -146,3 +146,79 @@ def replace_section(obj: Dict[str, Any], kind: str, section: Dict[str, Any]) -> 
     if not placed:
         out[kind] = copy.deepcopy(section)
     return out
+
+
+DEFAULT_PROBE_URL = "https://www.gstatic.com/generate_204"
+
+
+def _text(value: Any) -> str:
+    return value.strip() if isinstance(value, str) else ""
+
+
+def describe_config(cfg_obj: Dict[str, Any]) -> Dict[str, Any]:
+    """Flatten whichever section the file holds into the fields the form shows."""
+    obj = cfg_obj if isinstance(cfg_obj, dict) else {}
+    if isinstance(obj.get(KIND_PLAIN), dict):
+        section = obj[KIND_PLAIN]
+        concurrency = section.get("enableConcurrency")
+        return {
+            "kind": KIND_PLAIN,
+            "subjectSelector": clean_selectors(section.get("subjectSelector")),
+            "probeUrl": str(section.get("probeUrl") or ""),
+            "probeInterval": str(section.get("probeInterval") or ""),
+            "enableConcurrency": concurrency if isinstance(concurrency, bool) else True,
+        }
+    if isinstance(obj.get(KIND_BURST), dict):
+        section = obj[KIND_BURST]
+        ping = section.get("pingConfig") if isinstance(section.get("pingConfig"), dict) else {}
+        return {
+            "kind": KIND_BURST,
+            "subjectSelector": clean_selectors(section.get("subjectSelector")),
+            "probeUrl": str(ping.get("destination") or ""),
+            "probeInterval": str(ping.get("interval") or ""),
+            "enableConcurrency": True,
+        }
+    return {"kind": "", "subjectSelector": [], "probeUrl": "", "probeInterval": "", "enableConcurrency": True}
+
+
+def apply_generate_request(
+    cfg_obj: Dict[str, Any],
+    *,
+    subject: List[str],
+    probe_url: Any,
+    probe_interval: Any,
+    enable_concurrency: Any,
+    want_burst: bool,
+) -> Dict[str, Any]:
+    """Apply the form to the file, keeping exactly one observatory section."""
+    obj = copy.deepcopy(cfg_obj) if isinstance(cfg_obj, dict) else {}
+    plain = obj.get(KIND_PLAIN) if isinstance(obj.get(KIND_PLAIN), dict) else None
+    burst = obj.get(KIND_BURST) if isinstance(obj.get(KIND_BURST), dict) else None
+
+    if burst is not None or want_burst:
+        if burst is None:
+            burst = burst_from_plain(plain or {}, DEFAULT_PROBE_URL)
+        ping = burst.get("pingConfig") if isinstance(burst.get("pingConfig"), dict) else {}
+        if _text(probe_url):
+            ping["destination"] = _text(probe_url)
+        if _text(probe_interval):
+            ping["interval"] = _text(probe_interval)
+        burst["subjectSelector"] = list(subject)
+        burst["pingConfig"] = ping
+        return replace_section(obj, KIND_BURST, burst)
+
+    section = plain if plain is not None else {}
+    section["subjectSelector"] = list(subject)
+    if _text(probe_url):
+        section["probeUrl"] = _text(probe_url)
+    else:
+        section.setdefault("probeUrl", DEFAULT_PROBE_URL)
+    if _text(probe_interval):
+        section["probeInterval"] = _text(probe_interval)
+    else:
+        section.setdefault("probeInterval", "60s")
+    if isinstance(enable_concurrency, bool):
+        section["enableConcurrency"] = enable_concurrency
+    else:
+        section.setdefault("enableConcurrency", True)
+    return replace_section(obj, KIND_PLAIN, section)

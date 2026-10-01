@@ -72,6 +72,7 @@ from services.xray_outbounds_runtime import (
     infer_active_xray_outbound,
     read_xray_outbound_runtime_log_sources,
 )
+from services.xray_observatory import apply_generate_request, collect_catalog, describe_config, read_fragment
 
 
 from routes.common.errors import error_response, exception_response
@@ -2134,52 +2135,9 @@ def create_xray_configs_blueprint(
             exists = False
 
         if exists:
-            try:
-                with open(dst_json, "r", encoding="utf-8") as f:
-                    txt = f.read()
-                parsed = json.loads(txt) if txt.strip() else {}
-                if isinstance(parsed, dict):
-                    cfg_obj = parsed
-            except Exception:
-                cfg_obj = {}
+            cfg_obj = read_fragment(dst_json) or {}
 
-        obs: Dict[str, Any] = {}
-        try:
-            v = cfg_obj.get("observatory") if isinstance(cfg_obj, dict) else None
-            if isinstance(v, dict):
-                obs = v
-        except Exception:
-            obs = {}
-
-        def _str(v, default=""):
-            try:
-                s = str(v)
-                return s
-            except Exception:
-                return default
-
-        def _bool(v, default=True):
-            try:
-                if isinstance(v, bool):
-                    return v
-            except Exception:
-                pass
-            return default
-
-        def _list(v):
-            out: list[str] = []
-            if isinstance(v, list):
-                for x in v:
-                    if isinstance(x, str) and x.strip():
-                        out.append(x.strip())
-            return out
-
-        config = {
-            "subjectSelector": _list(obs.get("subjectSelector")),
-            "probeUrl": _str(obs.get("probeUrl"), ""),
-            "probeInterval": _str(obs.get("probeInterval"), ""),
-            "enableConcurrency": _bool(obs.get("enableConcurrency"), True),
-        }
+        config = describe_config(cfg_obj)
 
         # Also report where JSONC sidecar lives (for UI hints/debug), without exposing realpaths.
         jsonc_exists = False
@@ -2275,42 +2233,17 @@ def create_xray_configs_blueprint(
             return jsonify({"ok": True, "existed": True, "overwritten": False, "file": "07_observatory.json"}), 200
 
         # Load existing JSON as base (preserve unknown keys), otherwise start minimal.
-        cfg_obj: Dict[str, Any] = {}
-        if existed:
-            try:
-                with open(dst_json, "r", encoding="utf-8") as f:
-                    txt = f.read()
-                parsed = json.loads(txt) if txt.strip() else {}
-                if isinstance(parsed, dict):
-                    cfg_obj = parsed
-            except Exception:
-                cfg_obj = {}
+        cfg_obj: Dict[str, Any] = (read_fragment(dst_json) or {}) if existed else {}
 
-        if not isinstance(cfg_obj, dict) or not cfg_obj:
-            cfg_obj = {}
-
-        obs = cfg_obj.get("observatory")
-        if not isinstance(obs, dict):
-            obs = {}
-
-        # Apply fields
-        obs["subjectSelector"] = subject
-        if isinstance(probe_url, str) and probe_url.strip():
-            obs["probeUrl"] = probe_url.strip()
-        elif "probeUrl" not in obs:
-            obs["probeUrl"] = "https://www.gstatic.com/generate_204"
-
-        if isinstance(probe_interval, str) and probe_interval.strip():
-            obs["probeInterval"] = probe_interval.strip()
-        elif "probeInterval" not in obs:
-            obs["probeInterval"] = "60s"
-
-        if isinstance(enable_conc, bool):
-            obs["enableConcurrency"] = enable_conc
-        elif "enableConcurrency" not in obs:
-            obs["enableConcurrency"] = True
-
-        cfg_obj["observatory"] = obs
+        cfg_obj = apply_generate_request(
+            cfg_obj,
+            subject=subject,
+            probe_url=probe_url,
+            probe_interval=probe_interval,
+            enable_concurrency=enable_conc,
+            want_burst=bool(collect_catalog(XRAY_CONFIGS_DIR)["has_least_load"]),
+        )
+        described = describe_config(cfg_obj)
 
         # Write JSON for Xray
         try:
@@ -2321,7 +2254,7 @@ def create_xray_configs_blueprint(
 
         # Write JSONC sidecar for UI (always rewrite to keep it in sync)
         jsonc_text = (
-            "// Автосгенерировано панелью XKeen UI (leastPing)\n"
+            "// Автосгенерировано панелью XKeen UI (обсерватория для балансировщиков)\n"
             "// Этот файл хранится в UI‑каталоге JSONC (не в /opt/etc/xray/configs), чтобы Xray не подхватывал *.jsonc.\n"
             + (json.dumps(cfg_obj, ensure_ascii=False, indent=2) + "\n")
         )
@@ -2346,12 +2279,7 @@ def create_xray_configs_blueprint(
                     "overwritten": True,
                     "file": "07_observatory.json",
                     "jsonc": os.path.basename(dst_jsonc),
-                    "config": {
-                        "subjectSelector": subject,
-                        "probeUrl": obs.get("probeUrl"),
-                        "probeInterval": obs.get("probeInterval"),
-                        "enableConcurrency": obs.get("enableConcurrency"),
-                    },
+                    "config": described,
                 }
             ),
             200,
