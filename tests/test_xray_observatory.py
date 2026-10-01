@@ -83,3 +83,83 @@ def test_burst_from_plain_keeps_selector_and_probe_address():
     assert obs.burst_from_plain({}, "https://fallback.example/204")["pingConfig"]["destination"] == (
         "https://fallback.example/204"
     )
+
+
+def test_describe_config_maps_burst_fields_to_the_form():
+    cfg = {"burstObservatory": {
+        "subjectSelector": ["VPS_"],
+        "pingConfig": {"destination": "https://cp.cloudflare.com/generate_204", "interval": "10m", "sampling": 6},
+    }}
+
+    assert obs.describe_config(cfg) == {
+        "kind": "burstObservatory",
+        "subjectSelector": ["VPS_"],
+        "probeUrl": "https://cp.cloudflare.com/generate_204",
+        "probeInterval": "10m",
+        "enableConcurrency": True,
+    }
+    assert obs.describe_config({})["kind"] == ""
+
+
+def test_generate_updates_an_existing_burst_section_in_place():
+    cfg = {"burstObservatory": {
+        "subjectSelector": ["old"],
+        "pingConfig": {"destination": "https://a.example/204", "interval": "10m", "sampling": 6, "timeout": "5s"},
+    }}
+
+    result = obs.apply_generate_request(
+        cfg, subject=["VPS_"], probe_url="https://b.example/204", probe_interval="", enable_concurrency=None,
+        want_burst=False,
+    )
+
+    assert list(result) == ["burstObservatory"]
+    assert result["burstObservatory"] == {
+        "subjectSelector": ["VPS_"],
+        "pingConfig": {"destination": "https://b.example/204", "interval": "10m", "sampling": 6, "timeout": "5s"},
+    }
+
+
+def test_generate_writes_burst_for_least_load_and_plain_otherwise():
+    burst = obs.apply_generate_request(
+        {}, subject=["VPS_"], probe_url=None, probe_interval=None, enable_concurrency=None, want_burst=True
+    )
+    plain = obs.apply_generate_request(
+        {}, subject=["VPS_"], probe_url=None, probe_interval=None, enable_concurrency=None, want_burst=False
+    )
+
+    assert burst == {"burstObservatory": {
+        "subjectSelector": ["VPS_"],
+        "pingConfig": {"destination": "https://www.gstatic.com/generate_204", "interval": "2m", "sampling": 3,
+                       "timeout": "5s"},
+    }}
+    assert plain == {"observatory": {
+        "subjectSelector": ["VPS_"],
+        "probeUrl": "https://www.gstatic.com/generate_204",
+        "probeInterval": "60s",
+        "enableConcurrency": True,
+    }}
+
+
+def test_generate_converts_plain_to_burst_when_least_load_appeared():
+    cfg = {"log": {}, "observatory": {"subjectSelector": ["old"], "probeUrl": "https://a.example/204",
+                                      "probeInterval": "5m", "enableConcurrency": True}}
+
+    result = obs.apply_generate_request(
+        cfg, subject=["VPS_"], probe_url=None, probe_interval=None, enable_concurrency=None, want_burst=True
+    )
+
+    assert list(result) == ["log", "burstObservatory"]
+    assert result["burstObservatory"]["subjectSelector"] == ["VPS_"]
+    assert result["burstObservatory"]["pingConfig"]["destination"] == "https://a.example/204"
+    assert result["burstObservatory"]["pingConfig"]["interval"] == "2m"
+
+
+def test_bundled_template_shows_a_valid_burst_example():
+    text = (Path(__file__).resolve().parents[1]
+            / "xkeen-ui/opt/etc/xray/templates/observatory/07_observatory_base.jsonc").read_text(encoding="utf-8")
+    burst_part = text.split("burstObservatory", 1)[1]
+
+    assert '"pingConfig"' in burst_part
+    assert '"destination"' in burst_part
+    assert "probeUrl" not in burst_part
+    assert "leastLoad" in text
