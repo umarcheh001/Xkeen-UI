@@ -1,15 +1,16 @@
 # План модульной архитектуры панели Xkeen UI
 
-**Статус:** Этапы 0, 1, 2, 3, 3R, 3R.1, 4.1, 4.2, 4.3 и 4.4 закрыты;
-следующий — подэтап 4.5<br>
-**Дата:** 30 сентября 2026 года
+**Статус:** Этапы 0, 1, 2, 3, 3R, 3R.1, 4.1, 4.2, 4.3, 4.4 и 4.5 закрыты;
+следующий — подэтап 4.6<br>
+**Дата:** 1 октября 2026 года
 **Область:** облегчение панели, профили установки и официальный каталог модулей
 
 **Текущий прогресс:** Этапы 0–3 и 3R, подэтапы 4.1, 4.2 и 4.3 закрыты;
 Этап 3R.1 и baseline initial HTML закрыты; в подэтапе 4.3 все шесть экранов
 вынесены в module-owned partials, minimal-профили открываются без console
-errors. В подэтапе 4.4 все модальные окна разнесены по владельцам.
-Следующий — подэтап 4.5 (composition по активному набору модулей).
+errors. В подэтапе 4.4 все модальные окна разнесены по владельцам. В
+подэтапе 4.5 server composition переведена на allow-listed active-module
+manifest и единый `page_context`. Следующий — подэтап 4.6.
 
 ## 1. Цель проекта
 
@@ -855,7 +856,7 @@ neutral module metadata и initial-HTML baseline реализованы и за�
 
 ## Этап 4. Разделение frontend shell и экранов
 
-**Статус:** в работе; подэтапы 4.1–4.4 закрыты, следующий — подэтап 4.5.
+**Статус:** в работе; подэтапы 4.1–4.5 закрыты, следующий — подэтап 4.6.
 Всего шесть последовательных подэтапов.
 
 Этап 4 отвечает за **серверную композицию HTML** и границы шаблонов. Он не
@@ -1157,6 +1158,23 @@ initial HTML без поломки shared-контейнеров.
 
 ### Подэтап 4.5. Composition по активному набору модулей
 
+**Статус:** закрыт 1 октября 2026 года.
+
+Артефакты:
+
+- `docs/modular-panel-stage4.5-composition.md` — закрывающий контракт,
+  профильная матрица и границы следующего этапа;
+- `xkeen-ui/routes/pages.py` — ordered allow-listed manifest и
+  `_build_panel_page_context(active_module_ids)`;
+- `scripts/panel_template_source.py` — каталог dynamic composition includes;
+- `tests/test_modular_panel_stage4_5_composition.py` — выбор поверхностей,
+  Legacy fallback, profile HTML и документационный guardrail.
+
+Выполнено: shell-slots, navigation, screens и modals выбираются по owners из
+одного manifest. `None` activation сохраняет Legacy/Full fallback; составные
+owners HWID и редактора файлов заданы явно. Static inventory раскрывает только
+allow-listed dynamic partials и сверяется с runtime manifest.
+
 Собрать partials через единый composition root:
 
 1. получить уже рассчитанный в Этапе 3 `active_module_ids`;
@@ -1171,10 +1189,10 @@ initial HTML без поломки shared-контейнеров.
 старый `localStorage`-state. В таком случае должен отображаться только
 поддерживаемый shell/navigation без чужого screen markup.
 
-**Критерий готовности 4.5:** для Xray-only, Mihomo-only, Full и Legacy
-рендерится корректный состав shell/screens/modals; отсутствуют лишние
-navigation buttons, screen roots и module-owned modal ids; HTML не содержит
-случайных `500` из-за отсутствующей template-переменной.
+**Критерий готовности 4.5:** **выполнен**. Для Xray-only, Mihomo-only, Full,
+Legacy и core-only рендерится корректный состав shell/screens/modals;
+отсутствуют лишние navigation buttons, screen roots и module-owned modal ids;
+HTML не содержит случайных `500` из-за отсутствующей template-переменной.
 
 ### Подэтап 4.6. Совместимость, тесты и удаление монолита
 
