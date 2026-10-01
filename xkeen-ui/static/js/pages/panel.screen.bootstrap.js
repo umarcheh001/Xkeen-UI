@@ -2,8 +2,6 @@ import './shell.shared.js';
 import './logs_shell.shared.js';
 import './panel_shell.shared.js';
 import './config_shell.shared.js';
-import './editor.shared.js';
-import './codemirror6.shared.js';
 import './panel.shared_compat.bundle.js';
 import {
   applyPanelShellScrollSettings,
@@ -11,7 +9,7 @@ import {
   showPanelShellView,
 } from './panel_shell.shared.js';
 import { applyPanelViewRuntime } from './panel.view_runtime.js';
-import { hasXkeenMihomoCore, hasXkeenXrayCore } from '../features/xkeen_runtime.js';
+import { ensurePanelModule } from './panel.module_loader.js';
 import { bootPanelPage } from './panel.bootstrap_tail.bundle.js';
 import { initPanelOperatorHeader } from './panel.mihomo_header.js';
 
@@ -80,13 +78,12 @@ export async function loadPanelFeatureBundles() {
   if (_panelFeatureBundlesPromise) return _panelFeatureBundlesPromise;
 
   _panelFeatureBundlesPromise = (async () => {
-    if (hasXkeenXrayCore()) {
-      await import('./panel.routing.bundle.js');
-    }
-
-    if (hasXkeenMihomoCore()) {
-      await import('./panel.mihomo.bundle.js');
-    }
+    await ensurePanelModule('panel-core', 'startup');
+    await ensurePanelModule('editor-runtime', 'startup');
+    await Promise.all([
+      ensurePanelModule('panel-routing', 'startup'),
+      ensurePanelModule('panel-mihomo', 'startup'),
+    ]);
 
     return true;
   })();
@@ -139,6 +136,7 @@ export async function bootPanelScreen() {
     await waitForDocumentReady();
     bootPanelPage();
     await waitForStablePaint();
+    void ensurePanelModule('diagnostics-panel', 'after-paint');
   } finally {
     await releasePanelStartupOverlay();
   }

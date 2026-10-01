@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from flask import Flask, make_response, redirect, render_template, url_for
 from services.capabilities import detect_terminal_state
 from services.cores import detect_available_cores
+from services.module_registry import MODULE_IDS
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +37,34 @@ class PanelNavigationEntry:
     element_id: str | None = None
     href_endpoint: str | None = None
     top_nav: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class PanelFrontendModule:
+    """Allow-listed frontend bundle metadata for one module-owned boundary."""
+
+    key: str
+    owners: tuple[str, ...]
+    load_mode: str
+    views: tuple[str, ...]
+    dom_roots: tuple[str, ...]
+    api_prefixes: tuple[str, ...]
+    ws_prefixes: tuple[str, ...]
+    css_keys: tuple[str, ...] = ()
+
+    def as_payload(self) -> dict[str, object]:
+        # Keep this JSON-safe and declarative. The browser always resolves the
+        # key through its local import allow-list; no import path is published.
+        return {
+            "key": self.key,
+            "moduleId": self.owners[0],
+            "loadMode": self.load_mode,
+            "views": list(self.views),
+            "domRoots": list(self.dom_roots),
+            "apiPrefixes": list(self.api_prefixes),
+            "wsPrefixes": list(self.ws_prefixes),
+            "cssKeys": list(self.css_keys),
+        }
 
 
 PANEL_COMPOSITION: tuple[PanelCompositionEntry, ...] = (
@@ -79,6 +108,90 @@ PANEL_NAVIGATION: tuple[PanelNavigationEntry, ...] = (
     PanelNavigationEntry(("engine.mihomo",), "mihomo-generator", "Mihomo Генератор", "top-tab-btn xk-top-tab xk-top-tab-generator", element_id="top-tab-mihomo-generator", href_endpoint="mihomo_generator_page", top_nav=True),
     PanelNavigationEntry(("core",), "donate", "Поддержать", "top-tab-btn xk-top-tab xk-top-tab-donate", element_id="top-tab-donate"),
 )
+
+
+PANEL_FRONTEND_MODULES: tuple[PanelFrontendModule, ...] = (
+    PanelFrontendModule(
+        "panel-core",
+        ("core",),
+        "startup",
+        ("xkeen",),
+        ("view-xkeen",),
+        ("/api/",),
+        ("/ws/events",),
+    ),
+    PanelFrontendModule(
+        "panel-routing",
+        ("engine.xray",),
+        "startup",
+        ("routing", "xray-logs"),
+        ("view-routing", "view-xray-logs"),
+        ("/api/routing", "/api/xray", "/routing/"),
+        ("/ws/xray-logs",),
+    ),
+    PanelFrontendModule(
+        "panel-mihomo",
+        ("engine.mihomo",),
+        "startup",
+        ("mihomo",),
+        ("view-mihomo",),
+        ("/api/mihomo", "/api/mihomo-clash"),
+        ("/ws/mihomo-clash",),
+    ),
+    PanelFrontendModule(
+        "terminal-lazy",
+        ("tool.terminal",),
+        "view",
+        ("commands",),
+        ("view-commands", "terminal-overlay"),
+        ("/api/terminal", "/api/capabilities"),
+        ("/ws/pty",),
+        ("xterm",),
+    ),
+    PanelFrontendModule(
+        "file-manager-lazy",
+        ("tool.files",),
+        "view",
+        ("files",),
+        ("view-files",),
+        ("/fs/", "/remotefs/", "/fileops/", "/api/storage"),
+        (),
+    ),
+    PanelFrontendModule(
+        "diagnostics-panel",
+        ("tool.advanced-diagnostics",),
+        "after-paint",
+        (),
+        ("xk-resource-monitor", "xk-resource-dashboard-modal"),
+        ("/api/system",),
+        (),
+    ),
+    PanelFrontendModule(
+        "editor-runtime",
+        ("tool.editor",),
+        "interaction",
+        (),
+        ("json-editor-modal", "fm-editor-modal", "routing-editor", "mihomo-editor"),
+        (),
+        (),
+    ),
+)
+
+
+def build_panel_frontend_modules(active_module_ids: set[str] | None) -> dict[str, object]:
+    """Return the client-safe frontend activation descriptor for the panel."""
+
+    active = frozenset(MODULE_IDS if active_module_ids is None else active_module_ids)
+    bundles = [
+        entry.as_payload()
+        for entry in PANEL_FRONTEND_MODULES
+        if set(entry.owners) <= active
+    ]
+    return {
+        "version": 1,
+        "activeModuleIds": sorted(active),
+        "bundles": bundles,
+    }
 
 
 def _build_panel_page_context(active_module_ids: set[str] | None) -> dict[str, object]:
@@ -310,6 +423,7 @@ def register_pages_routes(
 
         _core_ui = _detect_panel_core_ui(active_module_ids)
         page_context = _build_panel_page_context(active_module_ids)
+        panel_frontend_modules = build_panel_frontend_modules(active_module_ids)
         page_ctx = {
             "machine": _machine,
             "is_mips": _is_mips,
@@ -330,6 +444,7 @@ def register_pages_routes(
             "github_repo_url": GITHUB_REPO_URL,
             "fm_right_default": _fm_right_default,
             "page_context": page_context,
+            "panel_frontend_modules": panel_frontend_modules,
             **_core_ui,
         }
 

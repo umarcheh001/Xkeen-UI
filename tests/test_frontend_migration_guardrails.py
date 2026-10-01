@@ -1240,16 +1240,18 @@ def test_stage6_consumer_sweep_uses_runtime_page_config_helpers_in_canonical_rea
                 "devtoolsSectionsWhitelist",
             ],
         },
-        PAGES_DIR / "panel.screen.bootstrap.js": {
-            "required": [
-                "hasXkeenXrayCore()",
-                "hasXkeenMihomoCore()",
-            ],
-            "forbidden": [
-                "window.XKEEN_HAS_XRAY",
-                "window.XKEEN_HAS_MIHOMO",
-            ],
-        },
+            PAGES_DIR / "panel.screen.bootstrap.js": {
+                "required": [
+                    "ensurePanelModule('panel-routing', 'startup')",
+                    "ensurePanelModule('panel-mihomo', 'startup')",
+                ],
+                "forbidden": [
+                    "window.XKEEN_HAS_XRAY",
+                    "window.XKEEN_HAS_MIHOMO",
+                    "hasXkeenXrayCore()",
+                    "hasXkeenMihomoCore()",
+                ],
+            },
         PAGES_DIR / "panel.init.js": {
             "required": [
                 "import { hasXkeenXrayCore } from '../features/xkeen_runtime.js';",

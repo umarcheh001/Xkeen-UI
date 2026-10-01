@@ -81,6 +81,21 @@ _PAGE_CONFIG_TERMINAL_DEFAULTS = {
     "enableLigatures": False,
     "enableWebgl": True,
 }
+_PAGE_CONFIG_FRONTEND_MODULES_DEFAULTS = {
+    "version": 1,
+    "activeModuleIds": [],
+    "bundles": [],
+}
+_PAGE_CONFIG_FRONTEND_BUNDLE_KEYS = (
+    "key",
+    "moduleId",
+    "loadMode",
+    "views",
+    "domRoots",
+    "apiPrefixes",
+    "wsPrefixes",
+    "cssKeys",
+)
 
 
 _IMMUTABLE_MAX_AGE_SECONDS = 31536000
@@ -573,6 +588,48 @@ def _normalize_page_config_list(value: Any) -> list[Any]:
     return []
 
 
+def _normalize_page_config_string_list(value: Any) -> list[str]:
+    return [
+        _normalize_page_config_string(item).strip()
+        for item in _normalize_page_config_list(value)
+        if _normalize_page_config_string(item).strip()
+    ]
+
+
+def _normalize_page_config_frontend_modules(value: Any) -> dict[str, Any]:
+    """Keep the page-owned frontend descriptor declarative and path-free."""
+
+    raw = _normalize_page_config_mapping(value)
+    try:
+        version = int(raw.get("version", _PAGE_CONFIG_FRONTEND_MODULES_DEFAULTS["version"]))
+    except (TypeError, ValueError):
+        version = _PAGE_CONFIG_FRONTEND_MODULES_DEFAULTS["version"]
+    if version != 1:
+        version = _PAGE_CONFIG_FRONTEND_MODULES_DEFAULTS["version"]
+
+    bundles: list[dict[str, Any]] = []
+    for item in _normalize_page_config_list(raw.get("bundles")):
+        bundle = _normalize_page_config_mapping(item)
+        normalized = {
+            "key": _normalize_page_config_string(bundle.get("key")).strip(),
+            "moduleId": _normalize_page_config_string(bundle.get("moduleId")).strip(),
+            "loadMode": _normalize_page_config_string(bundle.get("loadMode")).strip(),
+            "views": _normalize_page_config_string_list(bundle.get("views")),
+            "domRoots": _normalize_page_config_string_list(bundle.get("domRoots")),
+            "apiPrefixes": _normalize_page_config_string_list(bundle.get("apiPrefixes")),
+            "wsPrefixes": _normalize_page_config_string_list(bundle.get("wsPrefixes")),
+            "cssKeys": _normalize_page_config_string_list(bundle.get("cssKeys")),
+        }
+        if normalized["key"] and normalized["moduleId"]:
+            bundles.append(normalized)
+
+    return {
+        "version": version,
+        "activeModuleIds": _normalize_page_config_string_list(raw.get("activeModuleIds")),
+        "bundles": bundles,
+    }
+
+
 def _build_page_config_group(defaults: Mapping[str, Any], overrides: Any, *, normalizers: Mapping[str, Any] | None = None) -> dict[str, Any]:
     normalized_overrides = _normalize_page_config_mapping(overrides)
     result: dict[str, Any] = {}
@@ -841,6 +898,7 @@ class FrontendAssetHelper:
         static: dict[str, Any] | None = None,
         runtime: dict[str, Any] | None = None,
         terminal: dict[str, Any] | None = None,
+        frontend_modules: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         return {
             "contractVersion": _PAGE_CONFIG_CONTRACT_VERSION,
@@ -897,6 +955,7 @@ class FrontendAssetHelper:
                 terminal,
                 normalizers={key: _normalize_page_config_bool for key in _PAGE_CONFIG_TERMINAL_DEFAULTS},
             ),
+            "frontendModules": _normalize_page_config_frontend_modules(frontend_modules),
         }
 
 
@@ -931,6 +990,7 @@ def frontend_page_config(
     static: dict[str, Any] | None = None,
     runtime: dict[str, Any] | None = None,
     terminal: dict[str, Any] | None = None,
+    frontend_modules: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return _get_frontend_asset_helper().frontend_page_config(
         page_name,
@@ -943,6 +1003,7 @@ def frontend_page_config(
         static=static,
         runtime=runtime,
         terminal=terminal,
+        frontend_modules=frontend_modules,
     )
 
 
