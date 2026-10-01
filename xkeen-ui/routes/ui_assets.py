@@ -74,6 +74,7 @@ _PAGE_CONFIG_STATIC_DEFAULTS = {
 }
 _PAGE_CONFIG_RUNTIME_DEFAULTS = {
     "debug": False,
+    "websocket": False,
 }
 _PAGE_CONFIG_TERMINAL_DEFAULTS = {
     "supportsPty": False,

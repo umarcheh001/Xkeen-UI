@@ -590,7 +590,8 @@ def test_selected_canonical_consumers_use_feature_accessors_instead_of_window_xk
             "const devtoolsApi = getFeatureApi('devtools');",
         ],
         ROOT / 'xkeen-ui' / 'static' / 'js' / 'pages' / 'panel_shell.shared.js': [
-            "import { getRoutingCardsNamespace } from '../features/routing_cards_namespace.js';",
+            "import { getPanelModuleApi } from './panel.module_loader.js';",
+            "getPanelModuleApi('panel-routing')",
             "const backups = getPanelLazyFeatureApi('backups');",
             "ensurePanelLazyFeature('backups').then((ready) => {",
             "const routingCards = getRoutingCardsFeatureApi();",

@@ -17,10 +17,9 @@ import {
   wirePanelLazyFeatureClicks,
 } from './panel.lazy_bindings.runtime.js';
 import { appendTerminalDebug } from '../features/terminal_debug.js';
-import { getLogsShellApi } from './logs_shell.shared.js';
+import { getPanelModuleApi } from './panel.module_loader.js';
 import { initPanelCoreUiAutoDetect } from './panel.core_ui_watch.runtime.js';
 import { getServiceStatusApi } from '../features/service_status.js';
-import { getRoutingCardsNamespace } from '../features/routing_cards_namespace.js';
 import {
   ensureXkeenUiBucket,
   getXkeenCoreHttpApi,
@@ -100,7 +99,10 @@ import { wireTopLevelNavigation } from './top_level_nav.shared.js';
 
   function getRoutingCardsNamespaceApi() {
     try {
-      return getRoutingCardsNamespace();
+      const routingBundle = getPanelModuleApi('panel-routing');
+      return routingBundle && typeof routingBundle.getRoutingCardsNamespace === 'function'
+        ? routingBundle.getRoutingCardsNamespace()
+        : null;
     } catch (error) {}
     return null;
   }
@@ -255,7 +257,10 @@ import { wireTopLevelNavigation } from './top_level_nav.shared.js';
 
   function hasLoadedXrayLogsFeature() {
     try {
-      const api = getLogsShellApi();
+      const routingBundle = getPanelModuleApi('panel-routing');
+      const api = routingBundle && typeof routingBundle.getLogsShellApi === 'function'
+        ? routingBundle.getLogsShellApi()
+        : null;
       return !!(api && typeof api.isReady === 'function' && api.isReady());
     } catch (e) {
       return false;

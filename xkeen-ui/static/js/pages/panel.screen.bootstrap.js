@@ -1,7 +1,5 @@
 import './shell.shared.js';
-import './logs_shell.shared.js';
 import './panel_shell.shared.js';
-import './config_shell.shared.js';
 import './panel.shared_compat.bundle.js';
 import {
   applyPanelShellScrollSettings,
@@ -79,7 +77,6 @@ export async function loadPanelFeatureBundles() {
 
   _panelFeatureBundlesPromise = (async () => {
     await ensurePanelModule('panel-core', 'startup');
-    await ensurePanelModule('editor-runtime', 'startup');
     await Promise.all([
       ensurePanelModule('panel-routing', 'startup'),
       ensurePanelModule('panel-mihomo', 'startup'),

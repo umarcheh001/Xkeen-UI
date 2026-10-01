@@ -374,7 +374,7 @@ def test_frontend_asset_helper_exposes_normalized_page_config_contract():
         file_manager={"rightDefault": "/tmp/mnt"},
         github={"repoUrl": "https://example.test/repo"},
         static={"base": "/static/", "version": 20260324},
-        runtime={"debug": "yes"},
+        runtime={"debug": "yes", "websocket": "1"},
         terminal={
             "supportsPty": "1",
             "enableOptionalAddons": "0",
@@ -420,6 +420,12 @@ def test_frontend_asset_helper_exposes_normalized_page_config_contract():
         },
         "runtime": {
             "debug": True,
+            "websocket": True,
+        },
+        "frontendModules": {
+            "version": 1,
+            "activeModuleIds": [],
+            "bundles": [],
         },
         "terminal": {
             "supportsPty": True,

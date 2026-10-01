@@ -1,6 +1,4 @@
-import { getFileManagerApi } from '../features/file_manager.js';
-import { isMihomoPanelEditorDirty } from '../features/mihomo_panel.js';
-import { getRoutingShellApi } from '../features/routing_shell.js';
+import { getPanelModuleApi } from './panel.module_loader.js';
 import {
   confirmXkeenAction,
   getXkeenConfigDirtyApi,
@@ -99,14 +97,19 @@ export function hasPanelUnsavedChanges() {
   } catch (error) {}
 
   try {
-    const routingShell = getRoutingShellApi();
+    const routingBundle = getPanelModuleApi('panel-routing');
+    const routingShell = routingBundle && typeof routingBundle.getRoutingShellApi === 'function'
+      ? routingBundle.getRoutingShellApi()
+      : null;
     if (routingShell && typeof routingShell.isDirty === 'function' && routingShell.isDirty()) {
       return true;
     }
   } catch (error) {}
 
   try {
-    if (isMihomoPanelEditorDirty()) return true;
+    const mihomoBundle = getPanelModuleApi('panel-mihomo');
+    if (mihomoBundle && typeof mihomoBundle.isMihomoPanelEditorDirty === 'function'
+      && mihomoBundle.isMihomoPanelEditorDirty()) return true;
   } catch (error) {}
 
   try {
@@ -117,7 +120,7 @@ export function hasPanelUnsavedChanges() {
   } catch (error) {}
 
   try {
-    const fileManager = getFileManagerApi();
+    const fileManager = getPanelModuleApi('file-manager-lazy');
     const editor = fileManager ? fileManager.editor : null;
     if (editor && typeof editor.isDirty === 'function' && editor.isDirty()) {
       return true;

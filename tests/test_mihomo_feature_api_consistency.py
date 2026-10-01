@@ -19,7 +19,7 @@ def test_panel_mihomo_bundle_uses_canonical_feature_urls():
 
     assert "../features/mihomo_panel.js?v=" not in src
     assert "../features/mihomo_yaml_patch.js?v=" not in src
-    assert "import '../features/mihomo_panel.js';" in src
+    assert "from '../features/mihomo_panel.js';" in src
     assert "import '../features/compat/mihomo_panel.js';" in src
     assert "import '../features/mihomo_yaml_patch.js';" in src
 

@@ -19,6 +19,13 @@ function getEnv(name, fallback) {
 }
 
 
+function e2eRunNamespace() {
+  const profile = getEnv('XKEEN_E2E_MODULE_PROFILE', 'full').replace(/[^a-z0-9_-]/gi, '-');
+  const port = getEnv('XKEEN_E2E_PORT', '18188').replace(/[^0-9]/g, '-');
+  return `${profile || 'full'}-${port || '18188'}`;
+}
+
+
 async function ensureDir(dirPath) {
   await fs.mkdir(dirPath, { recursive: true });
 }
@@ -77,7 +84,7 @@ async function ensureAuthenticated(page, baseURL) {
 export default async function globalSetup(fullConfig) {
   const project = fullConfig.projects[0] || {};
   const baseURL = getEnv('E2E_BASE_URL', project.use?.baseURL || 'http://127.0.0.1:18188');
-  const authPath = path.resolve('e2e/.auth/user.json');
+  const authPath = path.resolve(getEnv('XKEEN_E2E_AUTH_STATE', `e2e/.auth/user-${e2eRunNamespace()}.json`));
 
   await ensureDir(path.dirname(authPath));
   // Never reuse an authenticated browser state from another server run. The

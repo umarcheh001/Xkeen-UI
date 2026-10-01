@@ -403,7 +403,7 @@ def test_panel_view_runtime_uses_panel_lazy_bindings_for_xkeen_and_commands_view
     text = (PAGES_DIR / "panel.view_runtime.js").read_text(encoding="utf-8")
 
     required_fragments = [
-        "import { ensurePanelLazyFeature, getPanelLazyRuntimeApi } from './panel.lazy_bindings.runtime.js';",
+        "import { ensurePanelLazyFeature } from './panel.lazy_bindings.runtime.js';",
         "const ready = await ensurePanelLazyFeature('xkeenTexts');",
         "ensurePanelLazyFeature('commandsList'),",
         "ensurePanelLazyFeature('coresStatus'),",
@@ -578,8 +578,8 @@ def test_page_shell_helper_modules_use_xkeen_runtime_adapters_for_page_api_and_s
         PAGES_DIR / "panel.view_runtime.js": [
             "from '../features/xkeen_runtime.js';",
             "getXkeenStateValue(",
-            "hasXkeenXrayCore()",
             "syncXkeenBodyScrollLock()",
+            "ensurePanelModuleForView(viewName)",
         ],
         PAGES_DIR / "panel_shell.shared.js": [
             "from '../features/xkeen_runtime.js';",

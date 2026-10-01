@@ -13,9 +13,14 @@ const BUNDLE_LOADERS = Object.freeze({
   'editor-runtime': () => import('./panel.editor.bundle.js'),
 });
 
+const STYLE_URLS = Object.freeze({
+  xterm: new URL('../../xterm/xterm.css', import.meta.url).href,
+});
+
 const modulePromises = Object.create(null);
 const moduleResults = Object.create(null);
 const reportedFailures = new Set();
+const stylePromises = Object.create(null);
 
 function getPageConfig() {
   try {
@@ -64,6 +69,43 @@ function reportFailureOnce(key, error) {
   try { console.error('[XKeen] panel module failed:', normalized, error); } catch (secondaryError) {}
 }
 
+function ensureModuleStyle(cssKey) {
+  const key = String(cssKey || '');
+  const href = STYLE_URLS[key];
+  if (!href) return Promise.resolve(false);
+  if (stylePromises[key]) return stylePromises[key];
+
+  stylePromises[key] = new Promise((resolve, reject) => {
+    const selector = `link[data-xk-module-css="${key}"]`;
+    const existing = document.head?.querySelector(selector);
+    if (existing) {
+      resolve(true);
+      return;
+    }
+
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = href;
+    link.dataset.xkModuleCss = key;
+    link.addEventListener('load', () => resolve(true), { once: true });
+    link.addEventListener('error', () => reject(new Error(`failed to load module stylesheet: ${key}`)), { once: true });
+    document.head.appendChild(link);
+  }).catch((error) => {
+    delete stylePromises[key];
+    throw error;
+  });
+
+  return stylePromises[key];
+}
+
+export async function ensurePanelModuleStyles(key) {
+  const descriptor = descriptorFor(key);
+  if (!descriptor || !hasOwnedRoot(descriptor.domRoots)) return false;
+  const cssKeys = Array.isArray(descriptor.cssKeys) ? descriptor.cssKeys : [];
+  await Promise.all(cssKeys.map((cssKey) => ensureModuleStyle(cssKey)));
+  return true;
+}
+
 async function activateBundle(key, descriptor, mod, reason) {
   if (mod && typeof mod.activate === 'function') {
     const api = await mod.activate({ descriptor, reason: String(reason || '') });
@@ -105,6 +147,7 @@ export async function ensurePanelModule(key, reason = '') {
   }
 
   modulePromises[normalized] = Promise.resolve()
+    .then(() => ensurePanelModuleStyles(normalized))
     .then(() => load())
     .then((mod) => activateBundle(normalized, descriptor, mod, reason))
     .then((loaded) => {
@@ -143,4 +186,5 @@ export const panelModuleLoaderApi = Object.freeze({
   getApi: getPanelModuleApi,
   isActive: isPanelModuleActive,
   getDescriptor: getPanelFrontendDescriptor,
+  ensureStyles: ensurePanelModuleStyles,
 });

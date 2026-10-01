@@ -424,11 +424,13 @@ def register_pages_routes(
         _core_ui = _detect_panel_core_ui(active_module_ids)
         page_context = _build_panel_page_context(active_module_ids)
         panel_frontend_modules = build_panel_frontend_modules(active_module_ids)
+        _websocket_runtime = str(os.environ.get("XKEEN_WS_RUNTIME", "")).strip().lower() in {"1", "true", "yes", "on"}
         page_ctx = {
             "machine": _machine,
             "is_mips": _is_mips,
             "terminal_supports_pty": _terminal_supports_pty,
             "xkeen_runtime_debug": str(os.environ.get("XKEEN_DEV", "")).strip().lower() in {"1", "true", "yes", "on"},
+            "xkeen_runtime_websocket": _websocket_runtime,
             "xkeen_terminal_enable_optional_addons": str(os.environ.get("XKEEN_ENABLE_XTERM_OPTIONAL_ADDONS", "")).strip().lower() in {"1", "true", "yes", "on"},
             "xray_profile": _xray_profile,
             "routing_file": ROUTING_FILE,

@@ -53,4 +53,10 @@ export async function ensureFileManagerBundleReady() {
   return fileManagerBundlePromise;
 }
 
+export async function activate() {
+  await ensureFileManagerBundleReady();
+  const mod = await import('../features/file_manager.js');
+  return (mod && typeof mod.getFileManagerApi === 'function') ? mod.getFileManagerApi() : null;
+}
+
 export { FILE_MANAGER_IMPORTS };

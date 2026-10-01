@@ -1,14 +1,8 @@
-import { getLogsShellApi, activateLogsShellView, deactivateLogsShellView } from './logs_shell.shared.js';
-import { getConfigShellApi, activateRoutingConfigView } from './config_shell.shared.js';
-import { ensurePanelLazyFeature, getPanelLazyRuntimeApi } from './panel.lazy_bindings.runtime.js';
+import { ensurePanelLazyFeature } from './panel.lazy_bindings.runtime.js';
 import { getPanelLazyFeatureApi } from './panel.lazy_bindings.runtime.js';
-import {
-  initMihomoPanel,
-  onShowMihomoPanel,
-} from '../features/mihomo_panel.js';
+import { ensurePanelModuleForView, getPanelModuleApi } from './panel.module_loader.js';
 import {
   getXkeenStateValue,
-  hasXkeenXrayCore,
   syncXkeenBodyScrollLock,
 } from '../features/xkeen_runtime.js';
 
@@ -30,29 +24,8 @@ function getEditor(name) {
   return null;
 }
 
-function hasXrayCore() {
-  return hasXkeenXrayCore();
-}
-
-function ensureFileManagerReady() {
-  const api = getPanelLazyRuntimeApi();
-  return (api && typeof api.ensureFileManagerReady === 'function')
-    ? api.ensureFileManagerReady()
-    : Promise.resolve(false);
-}
-
 function getMihomoClashFeatureApi() {
   return getPanelLazyFeatureApi('mihomoClash');
-}
-
-async function resolveFileManagerModuleApi() {
-  try {
-    const mod = await import('../features/file_manager.js');
-    if (mod && typeof mod.getFileManagerApi === 'function') return mod.getFileManagerApi();
-  } catch (error) {
-    try { console.error('[XKeen] file manager module resolve failed', error); } catch (e) {}
-  }
-  return null;
 }
 
 const viewInitFlags = Object.create(null);
@@ -62,7 +35,14 @@ function bindMihomoConfigSubviewRuntime() {
   if (mihomoConfigSubviewRuntimeBound) return;
   mihomoConfigSubviewRuntimeBound = true;
   document.addEventListener('xkeen:mihomo-config-subview-shown', () => {
-    safe(() => onShowMihomoPanel({ reason: 'subview' }));
+    void ensurePanelModuleForView('mihomo').then((loaded) => {
+      const api = loaded && loaded.api;
+      if (api && typeof api.onShowMihomoPanel === 'function') {
+        safe(() => api.onShowMihomoPanel({ reason: 'subview' }));
+      }
+    }).catch((error) => {
+      try { console.error('[XKeen] Mihomo subview activation failed', error); } catch (e) {}
+    });
   });
 }
 
@@ -88,13 +68,19 @@ function initViewOnce(name, fn) {
   return run;
 }
 
-export function applyPanelViewRuntime(name) {
+export async function applyPanelViewRuntime(name) {
   const viewName = String(name || '');
-  if (!viewName) return;
+  if (!viewName) return null;
+  const loaded = await ensurePanelModuleForView(viewName);
+  if (!loaded || loaded.status !== 'ready') return loaded;
+  const moduleApi = loaded && loaded.api ? loaded.api : null;
 
   if (viewName === 'mihomo') {
-    initViewOnce('mihomo', () => {
-      initMihomoPanel();
+    await initViewOnce('mihomo', () => {
+      if (!moduleApi || typeof moduleApi.initMihomoPanel !== 'function') {
+        throw new Error('Mihomo panel module unavailable');
+      }
+      return moduleApi.initMihomoPanel();
     }).catch((error) => {
       try { console.error('[XKeen] view init failed:', viewName, error); } catch (e) {}
     });
@@ -132,19 +118,22 @@ export function applyPanelViewRuntime(name) {
   }
 
   if (viewName === 'routing') {
-    initViewOnce('routing', async () => {
-      if (!hasXrayCore()) return;
-      const configShell = getConfigShellApi();
+    await initViewOnce('routing', async () => {
+      const configShell = moduleApi && typeof moduleApi.getConfigShellApi === 'function'
+        ? moduleApi.getConfigShellApi()
+        : null;
       if (!configShell) throw new Error('routing config shell unavailable');
-      const ready = await activateRoutingConfigView({ reason: 'init' });
+      const ready = await moduleApi.activateRoutingConfigView({ reason: 'init' });
       if (!ready) throw new Error('routing config shell not ready');
     }).catch((error) => {
       try { console.error('[XKeen] view init failed:', viewName, error); } catch (e) {}
     });
 
-    const configShell = getConfigShellApi();
+    const configShell = moduleApi && typeof moduleApi.getConfigShellApi === 'function'
+      ? moduleApi.getConfigShellApi()
+      : null;
     if (configShell) {
-      safe(() => activateRoutingConfigView({ reason: 'tab' }));
+      safe(() => moduleApi.activateRoutingConfigView({ reason: 'tab' }));
       if (typeof configShell.isOutboundsReady === 'function' && configShell.isOutboundsReady()) {
         safe(() => configShell.activateOutboundsView({ reason: 'tab' }));
       }
@@ -152,7 +141,9 @@ export function applyPanelViewRuntime(name) {
   }
 
   if (viewName === 'mihomo') {
-    safe(() => onShowMihomoPanel({ reason: 'tab' }));
+    if (moduleApi && typeof moduleApi.onShowMihomoPanel === 'function') {
+      safe(() => moduleApi.onShowMihomoPanel({ reason: 'tab' }));
+    }
   }
 
   if (viewName === 'xkeen') {
@@ -163,30 +154,33 @@ export function applyPanelViewRuntime(name) {
   }
 
   if (viewName === 'xray-logs') {
-    const logsShell = getLogsShellApi();
+    const logsShell = moduleApi && typeof moduleApi.getLogsShellApi === 'function'
+      ? moduleApi.getLogsShellApi()
+      : null;
     if (logsShell) {
-      Promise.resolve(activateLogsShellView({ reason: 'tab' })).catch((error) => {
+      Promise.resolve(moduleApi.activateLogsShellView({ reason: 'tab' })).catch((error) => {
         try { console.error('[XKeen] logs shell activate failed', error); } catch (e) {}
       });
     }
   } else {
-    const logsShell = getLogsShellApi();
+    const routingBundle = getPanelModuleApi('panel-routing');
+    const logsShell = routingBundle && typeof routingBundle.getLogsShellApi === 'function'
+      ? routingBundle.getLogsShellApi()
+      : null;
     if (logsShell) {
-      safe(() => deactivateLogsShellView());
+      safe(() => routingBundle.deactivateLogsShellView());
     }
   }
 
   if (viewName === 'files') {
-    ensureFileManagerReady().then(async (ready) => {
-      if (!ready) return;
-      const fileManager = await resolveFileManagerModuleApi();
-      if (fileManager && typeof fileManager.onShow === 'function') safe(() => fileManager.onShow());
-    }).catch((error) => {
-      try { console.error('[XKeen] files view activation failed', error); } catch (e) {}
-    });
+    const fileManager = moduleApi;
+    if (fileManager && typeof fileManager.onShow === 'function') {
+      safe(() => fileManager.onShow());
+    }
   }
 
   safe(() => syncXkeenBodyScrollLock());
+  return loaded;
 }
 
 let panelShellViewRuntimeBound = false;
@@ -199,14 +193,20 @@ export function bindPanelShellViewRuntime(sharedShell) {
     const detail = event && event.detail ? event.detail : {};
     const viewName = String(detail.view || '');
     if (!viewName) return;
-    applyPanelViewRuntime(viewName);
+    void applyPanelViewRuntime(viewName).catch((error) => {
+      try { console.error('[XKeen] panel view runtime failed', error); } catch (e) {}
+    });
   });
 
   try {
     const current = sharedShell && typeof sharedShell.getCurrentView === 'function'
       ? String(sharedShell.getCurrentView() || '')
       : '';
-    if (current) applyPanelViewRuntime(current);
+    if (current) {
+      void applyPanelViewRuntime(current).catch((error) => {
+        try { console.error('[XKeen] panel initial view runtime failed', error); } catch (e) {}
+      });
+    }
   } catch (e) {}
 }
 

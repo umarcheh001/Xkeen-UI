@@ -26,7 +26,41 @@ import { initRoutingCards } from '../features/routing_cards.js';
 import '../features/compat/routing_cards.js';
 import '../features/local_io.js';
 import '../features/compat/local_io.js';
+import {
+  getConfigShellApi,
+  activateRoutingConfigView,
+  activateInboundsConfigView,
+  activateOutboundsConfigView,
+} from './config_shell.shared.js';
+import {
+  getLogsShellApi,
+  activateLogsShellView,
+  deactivateLogsShellView,
+} from './logs_shell.shared.js';
+import { getLocalIoApi } from '../features/local_io.js';
+import { getRoutingShellApi } from '../features/routing_shell.js';
+import { getRoutingCardsNamespace } from '../features/routing_cards_namespace.js';
 import { initCoreSources } from '../features/core_source.js';
 
-initRoutingCards();
-initCoreSources(document, 'xray');
+let routingBundleActivated = false;
+
+export function activate() {
+  if (!routingBundleActivated) {
+    routingBundleActivated = true;
+    initRoutingCards();
+    initCoreSources(document, 'xray');
+    try { getLocalIoApi()?.init?.(); } catch (error) {}
+  }
+
+  return {
+    getConfigShellApi,
+    activateRoutingConfigView,
+    activateInboundsConfigView,
+    activateOutboundsConfigView,
+    getLogsShellApi,
+    activateLogsShellView,
+    deactivateLogsShellView,
+    getRoutingShellApi,
+    getRoutingCardsNamespace,
+  };
+}

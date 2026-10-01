@@ -1451,8 +1451,31 @@ let restartLogModuleApi = null;
   function ensureRestartLogWs() {
     if (RL._wsAttached) return;
     if (!getLogEls().length) return;
+    if (!canUseRestartLogWs()) return;
     RL._wsAttached = true;
     connectRestartLogWs().catch(() => {});
+  }
+
+  function canUseRestartLogWs() {
+    try {
+      const runtime = window.XKeen?.pageConfig?.runtime;
+      // A page produced by the current backend explicitly reports whether its
+      // serving process can upgrade WebSocket requests. Keep legacy pages
+      // compatible when that field is absent.
+      if (runtime && runtime.websocket === false) return false;
+      const active = window.XKeen?.pageConfig?.frontendModules?.activeModuleIds;
+      // No descriptor means an older panel page. Preserve its existing WS
+      // behaviour instead of deriving a capability from absent metadata.
+      if (!Array.isArray(active)) return true;
+      return active.some((moduleId) => [
+        'tool.terminal',
+        'engine.xray',
+        'engine.mihomo',
+        'tool.advanced-diagnostics',
+      ].includes(String(moduleId)));
+    } catch (error) {
+      return true;
+    }
   }
 
   RL.renderFromRaw = function renderFromRaw(rawText, options) {

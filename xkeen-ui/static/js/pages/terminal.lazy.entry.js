@@ -10,6 +10,7 @@ import {
   OPTIONAL_XTERM_VENDOR_SPECS,
   REQUIRED_XTERM_VENDOR_SPECS,
 } from '../terminal/vendors/xterm_import_adapter.js';
+import { ensurePanelModuleStyles } from './panel.module_loader.js';
 
 // Build-managed lazy bundle for terminal runtime.
 // Debug build: logs every vendor/app module step to localStorage so the last
@@ -78,6 +79,7 @@ export async function ensureTerminalBundleReady() {
   if (terminalBundlePromise) return terminalBundlePromise;
 
   terminalBundlePromise = (async () => {
+    await ensurePanelModuleStyles('terminal-lazy');
     startTerminalDebugRun({ source: 'terminal.lazy.entry' });
     markTerminalDebugState({ status: 'bundle-loading', lastStage: 'lazy:start' });
     appendTerminalDebug('lazy:start', {

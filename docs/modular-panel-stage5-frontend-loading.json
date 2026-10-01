@@ -1,0 +1,519 @@
+{
+  "schema_version": 1,
+  "generated_from": "scripts/generate_modular_panel_stage5_frontend_loading.py",
+  "stage": {
+    "id": "5",
+    "name": "Динамическая frontend-загрузка",
+    "status": "closed",
+    "closed_on": "2026-10-01"
+  },
+  "loader": {
+    "entrypoint": "xkeen-ui/static/js/pages/panel.module_loader.js",
+    "descriptor_path": "window.XKeen.pageConfig.frontendModules",
+    "loader_registry": "fixed local import() allow-list",
+    "shared_compatibility_css": [
+      "styles.css",
+      "panel-operator.css"
+    ]
+  },
+  "profiles": [
+    {
+      "id": "legacy-full",
+      "active_module_ids": [
+        "core",
+        "engine.mihomo",
+        "engine.xray",
+        "integration.happ",
+        "tool.advanced-diagnostics",
+        "tool.backups",
+        "tool.editor",
+        "tool.files",
+        "tool.terminal"
+      ],
+      "bundles": [
+        {
+          "key": "panel-core",
+          "moduleId": "core",
+          "loadMode": "startup",
+          "views": [
+            "xkeen"
+          ],
+          "domRoots": [
+            "view-xkeen"
+          ],
+          "apiPrefixes": [
+            "/api/"
+          ],
+          "wsPrefixes": [
+            "/ws/events"
+          ],
+          "cssKeys": []
+        },
+        {
+          "key": "panel-routing",
+          "moduleId": "engine.xray",
+          "loadMode": "startup",
+          "views": [
+            "routing",
+            "xray-logs"
+          ],
+          "domRoots": [
+            "view-routing",
+            "view-xray-logs"
+          ],
+          "apiPrefixes": [
+            "/api/routing",
+            "/api/xray",
+            "/routing/"
+          ],
+          "wsPrefixes": [
+            "/ws/xray-logs"
+          ],
+          "cssKeys": []
+        },
+        {
+          "key": "panel-mihomo",
+          "moduleId": "engine.mihomo",
+          "loadMode": "startup",
+          "views": [
+            "mihomo"
+          ],
+          "domRoots": [
+            "view-mihomo"
+          ],
+          "apiPrefixes": [
+            "/api/mihomo",
+            "/api/mihomo-clash"
+          ],
+          "wsPrefixes": [
+            "/ws/mihomo-clash"
+          ],
+          "cssKeys": []
+        },
+        {
+          "key": "terminal-lazy",
+          "moduleId": "tool.terminal",
+          "loadMode": "view",
+          "views": [
+            "commands"
+          ],
+          "domRoots": [
+            "view-commands",
+            "terminal-overlay"
+          ],
+          "apiPrefixes": [
+            "/api/terminal",
+            "/api/capabilities"
+          ],
+          "wsPrefixes": [
+            "/ws/pty"
+          ],
+          "cssKeys": [
+            "xterm"
+          ]
+        },
+        {
+          "key": "file-manager-lazy",
+          "moduleId": "tool.files",
+          "loadMode": "view",
+          "views": [
+            "files"
+          ],
+          "domRoots": [
+            "view-files"
+          ],
+          "apiPrefixes": [
+            "/fs/",
+            "/remotefs/",
+            "/fileops/",
+            "/api/storage"
+          ],
+          "wsPrefixes": [],
+          "cssKeys": []
+        },
+        {
+          "key": "diagnostics-panel",
+          "moduleId": "tool.advanced-diagnostics",
+          "loadMode": "after-paint",
+          "views": [],
+          "domRoots": [
+            "xk-resource-monitor",
+            "xk-resource-dashboard-modal"
+          ],
+          "apiPrefixes": [
+            "/api/system"
+          ],
+          "wsPrefixes": [],
+          "cssKeys": []
+        },
+        {
+          "key": "editor-runtime",
+          "moduleId": "tool.editor",
+          "loadMode": "interaction",
+          "views": [],
+          "domRoots": [
+            "json-editor-modal",
+            "fm-editor-modal",
+            "routing-editor",
+            "mihomo-editor"
+          ],
+          "apiPrefixes": [],
+          "wsPrefixes": [],
+          "cssKeys": []
+        }
+      ],
+      "startup_bundle_keys": [
+        "panel-core",
+        "panel-routing",
+        "panel-mihomo"
+      ],
+      "lazy_bundle_keys": [
+        "terminal-lazy",
+        "file-manager-lazy",
+        "diagnostics-panel",
+        "editor-runtime"
+      ],
+      "lazy_css": {
+        "terminal-lazy": [
+          "xterm"
+        ]
+      }
+    },
+    {
+      "id": "full",
+      "active_module_ids": [
+        "core",
+        "engine.mihomo",
+        "engine.xray",
+        "integration.happ",
+        "tool.advanced-diagnostics",
+        "tool.backups",
+        "tool.editor",
+        "tool.files",
+        "tool.terminal"
+      ],
+      "bundles": [
+        {
+          "key": "panel-core",
+          "moduleId": "core",
+          "loadMode": "startup",
+          "views": [
+            "xkeen"
+          ],
+          "domRoots": [
+            "view-xkeen"
+          ],
+          "apiPrefixes": [
+            "/api/"
+          ],
+          "wsPrefixes": [
+            "/ws/events"
+          ],
+          "cssKeys": []
+        },
+        {
+          "key": "panel-routing",
+          "moduleId": "engine.xray",
+          "loadMode": "startup",
+          "views": [
+            "routing",
+            "xray-logs"
+          ],
+          "domRoots": [
+            "view-routing",
+            "view-xray-logs"
+          ],
+          "apiPrefixes": [
+            "/api/routing",
+            "/api/xray",
+            "/routing/"
+          ],
+          "wsPrefixes": [
+            "/ws/xray-logs"
+          ],
+          "cssKeys": []
+        },
+        {
+          "key": "panel-mihomo",
+          "moduleId": "engine.mihomo",
+          "loadMode": "startup",
+          "views": [
+            "mihomo"
+          ],
+          "domRoots": [
+            "view-mihomo"
+          ],
+          "apiPrefixes": [
+            "/api/mihomo",
+            "/api/mihomo-clash"
+          ],
+          "wsPrefixes": [
+            "/ws/mihomo-clash"
+          ],
+          "cssKeys": []
+        },
+        {
+          "key": "terminal-lazy",
+          "moduleId": "tool.terminal",
+          "loadMode": "view",
+          "views": [
+            "commands"
+          ],
+          "domRoots": [
+            "view-commands",
+            "terminal-overlay"
+          ],
+          "apiPrefixes": [
+            "/api/terminal",
+            "/api/capabilities"
+          ],
+          "wsPrefixes": [
+            "/ws/pty"
+          ],
+          "cssKeys": [
+            "xterm"
+          ]
+        },
+        {
+          "key": "file-manager-lazy",
+          "moduleId": "tool.files",
+          "loadMode": "view",
+          "views": [
+            "files"
+          ],
+          "domRoots": [
+            "view-files"
+          ],
+          "apiPrefixes": [
+            "/fs/",
+            "/remotefs/",
+            "/fileops/",
+            "/api/storage"
+          ],
+          "wsPrefixes": [],
+          "cssKeys": []
+        },
+        {
+          "key": "diagnostics-panel",
+          "moduleId": "tool.advanced-diagnostics",
+          "loadMode": "after-paint",
+          "views": [],
+          "domRoots": [
+            "xk-resource-monitor",
+            "xk-resource-dashboard-modal"
+          ],
+          "apiPrefixes": [
+            "/api/system"
+          ],
+          "wsPrefixes": [],
+          "cssKeys": []
+        },
+        {
+          "key": "editor-runtime",
+          "moduleId": "tool.editor",
+          "loadMode": "interaction",
+          "views": [],
+          "domRoots": [
+            "json-editor-modal",
+            "fm-editor-modal",
+            "routing-editor",
+            "mihomo-editor"
+          ],
+          "apiPrefixes": [],
+          "wsPrefixes": [],
+          "cssKeys": []
+        }
+      ],
+      "startup_bundle_keys": [
+        "panel-core",
+        "panel-routing",
+        "panel-mihomo"
+      ],
+      "lazy_bundle_keys": [
+        "terminal-lazy",
+        "file-manager-lazy",
+        "diagnostics-panel",
+        "editor-runtime"
+      ],
+      "lazy_css": {
+        "terminal-lazy": [
+          "xterm"
+        ]
+      }
+    },
+    {
+      "id": "xray-minimal",
+      "active_module_ids": [
+        "core",
+        "engine.xray",
+        "tool.editor"
+      ],
+      "bundles": [
+        {
+          "key": "panel-core",
+          "moduleId": "core",
+          "loadMode": "startup",
+          "views": [
+            "xkeen"
+          ],
+          "domRoots": [
+            "view-xkeen"
+          ],
+          "apiPrefixes": [
+            "/api/"
+          ],
+          "wsPrefixes": [
+            "/ws/events"
+          ],
+          "cssKeys": []
+        },
+        {
+          "key": "panel-routing",
+          "moduleId": "engine.xray",
+          "loadMode": "startup",
+          "views": [
+            "routing",
+            "xray-logs"
+          ],
+          "domRoots": [
+            "view-routing",
+            "view-xray-logs"
+          ],
+          "apiPrefixes": [
+            "/api/routing",
+            "/api/xray",
+            "/routing/"
+          ],
+          "wsPrefixes": [
+            "/ws/xray-logs"
+          ],
+          "cssKeys": []
+        },
+        {
+          "key": "editor-runtime",
+          "moduleId": "tool.editor",
+          "loadMode": "interaction",
+          "views": [],
+          "domRoots": [
+            "json-editor-modal",
+            "fm-editor-modal",
+            "routing-editor",
+            "mihomo-editor"
+          ],
+          "apiPrefixes": [],
+          "wsPrefixes": [],
+          "cssKeys": []
+        }
+      ],
+      "startup_bundle_keys": [
+        "panel-core",
+        "panel-routing"
+      ],
+      "lazy_bundle_keys": [
+        "editor-runtime"
+      ],
+      "lazy_css": {}
+    },
+    {
+      "id": "mihomo-minimal",
+      "active_module_ids": [
+        "core",
+        "engine.mihomo",
+        "tool.editor"
+      ],
+      "bundles": [
+        {
+          "key": "panel-core",
+          "moduleId": "core",
+          "loadMode": "startup",
+          "views": [
+            "xkeen"
+          ],
+          "domRoots": [
+            "view-xkeen"
+          ],
+          "apiPrefixes": [
+            "/api/"
+          ],
+          "wsPrefixes": [
+            "/ws/events"
+          ],
+          "cssKeys": []
+        },
+        {
+          "key": "panel-mihomo",
+          "moduleId": "engine.mihomo",
+          "loadMode": "startup",
+          "views": [
+            "mihomo"
+          ],
+          "domRoots": [
+            "view-mihomo"
+          ],
+          "apiPrefixes": [
+            "/api/mihomo",
+            "/api/mihomo-clash"
+          ],
+          "wsPrefixes": [
+            "/ws/mihomo-clash"
+          ],
+          "cssKeys": []
+        },
+        {
+          "key": "editor-runtime",
+          "moduleId": "tool.editor",
+          "loadMode": "interaction",
+          "views": [],
+          "domRoots": [
+            "json-editor-modal",
+            "fm-editor-modal",
+            "routing-editor",
+            "mihomo-editor"
+          ],
+          "apiPrefixes": [],
+          "wsPrefixes": [],
+          "cssKeys": []
+        }
+      ],
+      "startup_bundle_keys": [
+        "panel-core",
+        "panel-mihomo"
+      ],
+      "lazy_bundle_keys": [
+        "editor-runtime"
+      ],
+      "lazy_css": {}
+    },
+    {
+      "id": "core-only",
+      "active_module_ids": [
+        "core"
+      ],
+      "bundles": [
+        {
+          "key": "panel-core",
+          "moduleId": "core",
+          "loadMode": "startup",
+          "views": [
+            "xkeen"
+          ],
+          "domRoots": [
+            "view-xkeen"
+          ],
+          "apiPrefixes": [
+            "/api/"
+          ],
+          "wsPrefixes": [
+            "/ws/events"
+          ],
+          "cssKeys": []
+        }
+      ],
+      "startup_bundle_keys": [
+        "panel-core"
+      ],
+      "lazy_bundle_keys": [],
+      "lazy_css": {}
+    }
+  ]
+}

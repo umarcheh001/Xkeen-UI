@@ -1,6 +1,8 @@
 # Modular Panel Stage 5 Dynamic Frontend Loading Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Status:** closed on 1 October 2026. Stage 6 is next.
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Load only frontend assets and runtime behaviour owned by the active Module Registry set, with browser-enforced profile guardrails.
 
@@ -19,6 +21,14 @@
 - `styles.css` and `panel-operator.css` remain shared compatibility CSS. `xterm.css` is the first lazy module stylesheet.
 - E2E profile fixtures use their own state and ports, never the developer's running panel.
 
+## Closure Evidence
+
+- `python -m pytest -q` — 2733 passed.
+- `npm run frontend:verify` — production build and static bridge checks passed.
+- Profile browser checks — Full, Xray-minimal, Mihomo-minimal and core-only each passed their Network, WebSocket, console and lazy-CSS scenarios.
+- The E2E fixture namespaces temporary state by profile and port; concurrent local profile servers cannot clear one another's state.
+- `pageConfig.runtime.websocket` prevents the restart log from opening `/ws/events` when the serving runtime cannot handle WebSocket upgrades.
+
 ---
 
 ### Task 1: Publish the server frontend descriptor
@@ -36,7 +46,7 @@
 - Publishes `pageConfig.frontendModules = {version, activeModuleIds, bundles}`.
 - Every bundle payload has `key`, `moduleId`, `loadMode`, `views`, `domRoots`, `apiPrefixes`, `wsPrefixes`, `cssKeys`.
 
-- [ ] **Step 1: Write the failing descriptor test**
+- [x] **Step 1: Write the failing descriptor test**
 
 ```python
 def test_xray_minimal_page_config_excludes_mihomo_bundle(tmp_path):
@@ -47,13 +57,13 @@ def test_xray_minimal_page_config_excludes_mihomo_bundle(tmp_path):
     assert all("path" not in item and "import" not in item for item in config["frontendModules"]["bundles"])
 ```
 
-- [ ] **Step 2: Confirm the test is red**
+- [x] **Step 2: Confirm the test is red**
 
 Run: `python -m pytest -q tests/test_modular_panel_stage5_frontend_contract.py -k descriptor`
 
 Expected: FAIL because `frontendModules` is not published.
 
-- [ ] **Step 3: Add immutable descriptor definitions**
+- [x] **Step 3: Add immutable descriptor definitions**
 
 ```python
 PANEL_FRONTEND_MODULES = (
@@ -66,13 +76,13 @@ PANEL_FRONTEND_MODULES = (
 
 Pass the generated mapping through the existing `frontend_page_config` script and structurally normalise it in `ui_assets.py`; do not create another global script.
 
-- [ ] **Step 4: Verify the descriptor boundary**
+- [x] **Step 4: Verify the descriptor boundary**
 
 Run: `python -m pytest -q tests/test_modular_panel_stage5_frontend_contract.py tests/test_modular_panel_stage4_5_composition.py tests/test_modular_panel_stage4_6_compatibility.py`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit the descriptor**
+- [x] **Step 5: Commit the descriptor**
 
 ```bash
 git add xkeen-ui/routes/pages.py xkeen-ui/routes/ui_assets.py xkeen-ui/templates/panel/page_config.html tests/test_modular_panel_stage5_frontend_contract.py
@@ -95,7 +105,7 @@ git commit -m "feat(panel): publish frontend module descriptor"
 - Produces `ensurePanelModule(key, reason)`, `ensurePanelModuleForView(view)`, `getPanelModuleApi(key)` and `isPanelModuleActive(key)`.
 - Returns `{status: "ready" | "inactive" | "missing-root" | "failed", key, api}`.
 
-- [ ] **Step 1: Write loader and bootstrap red tests**
+- [x] **Step 1: Write loader and bootstrap red tests**
 
 ```python
 def test_loader_uses_local_allowlist_not_server_import_specifiers():
@@ -111,13 +121,13 @@ def test_bootstrap_delegates_engine_bundles_to_loader():
     assert "await import('./panel.routing.bundle.js')" not in source
 ```
 
-- [ ] **Step 2: Confirm the tests are red**
+- [x] **Step 2: Confirm the tests are red**
 
 Run: `python -m pytest -q tests/test_modular_panel_stage5_frontend_contract.py -k 'loader or bootstrap'`
 
 Expected: FAIL because loader source is absent and bootstrap owns the imports.
 
-- [ ] **Step 3: Implement promise-deduplicated loading**
+- [x] **Step 3: Implement promise-deduplicated loading**
 
 ```javascript
 const BUNDLE_LOADERS = Object.freeze({
@@ -139,13 +149,13 @@ export async function ensurePanelModule(key, reason) {
 
 Replace engine imports in `loadPanelFeatureBundles()` with loader calls. The loader logs a failing active key once; it must not invoke `fetch`, WebSocket or toast in inactive branches.
 
-- [ ] **Step 4: Verify loader and source graph**
+- [x] **Step 4: Verify loader and source graph**
 
 Run: `python -m pytest -q tests/test_modular_panel_stage5_frontend_contract.py tests/test_frontend_migration_guardrails.py`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit loader migration**
+- [x] **Step 5: Commit loader migration**
 
 ```bash
 git add xkeen-ui/static/js/pages/panel.module_loader.js xkeen-ui/static/js/pages/panel.screen.bootstrap.js xkeen-ui/static/js/pages/panel.init.js tests/test_modular_panel_stage5_frontend_contract.py tests/test_frontend_migration_guardrails.py
@@ -173,7 +183,7 @@ git commit -m "feat(panel): load feature bundles through module loader"
 - Xray/Mihomo/files/diagnostics/editor facades use loader APIs instead of static implementation imports.
 - `ensurePanelModuleStyles("terminal-lazy")` adds one `data-xk-module-css="xterm"` link only on terminal load.
 
-- [ ] **Step 1: Write failing graph and CSS tests**
+- [x] **Step 1: Write failing graph and CSS tests**
 
 ```python
 def test_view_runtime_gates_feature_loading_through_loader():
@@ -189,13 +199,13 @@ def test_terminal_css_is_not_initial_html_and_is_loader_owned(tmp_path):
     assert "data-xk-module-css" in loader
 ```
 
-- [ ] **Step 2: Confirm the tests are red**
+- [x] **Step 2: Confirm the tests are red**
 
 Run: `python -m pytest -q tests/test_modular_panel_stage5_frontend_contract.py -k 'view_runtime or terminal_css'`
 
 Expected: FAIL because views retain direct optional imports and xterm CSS is eager.
 
-- [ ] **Step 3: Replace direct feature imports with lazy facades**
+- [x] **Step 3: Replace direct feature imports with lazy facades**
 
 ```javascript
 export async function applyPanelViewRuntime(viewName) {
@@ -211,13 +221,13 @@ const STYLE_URLS = Object.freeze({
 
 Create narrow editor/diagnostics activation files. Keep current exported feature APIs, IDs, events and endpoint URLs. Core watcher may query optional dirty state only after that module is loaded. Keep `styles.css` and `panel-operator.css` in `<head>` with a comment naming them shared compatibility CSS.
 
-- [ ] **Step 4: Verify runtime and terminal regressions**
+- [x] **Step 4: Verify runtime and terminal regressions**
 
 Run: `python -m pytest -q tests/test_modular_panel_stage5_frontend_contract.py tests/test_frontend_runtime_hotfixes.py tests/test_terminal_lite_mode_regressions.py tests/test_modular_panel_stage4_3_routing_screen.py tests/test_modular_panel_stage4_3_mihomo_screen.py`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit optional-boundary migration**
+- [x] **Step 5: Commit optional-boundary migration**
 
 ```bash
 git add xkeen-ui/static/js/pages xkeen-ui/templates/panel/head.html tests/test_modular_panel_stage5_frontend_contract.py tests/test_frontend_runtime_hotfixes.py
@@ -246,7 +256,7 @@ git commit -m "refactor(panel): gate optional runtime imports"
 - Fixture writes exact `modules.json` before Flask starts.
 - The generator emits a deterministic profile matrix with bundle, roots, API/WS and lazy-CSS contracts.
 
-- [ ] **Step 1: Write failing E2E shape and snapshot tests**
+- [x] **Step 1: Write failing E2E shape and snapshot tests**
 
 ```python
 def test_e2e_fixture_seeds_profile_before_flask_starts():
@@ -258,13 +268,13 @@ def test_stage5_snapshot_is_current(tmp_path):
     assert json.loads(SNAPSHOT.read_text(encoding="utf-8")) == _generate(tmp_path)
 ```
 
-- [ ] **Step 2: Confirm the tests are red**
+- [x] **Step 2: Confirm the tests are red**
 
 Run: `python -m pytest -q tests/test_modular_panel_stage5_frontend_contract.py -k 'e2e or snapshot'`
 
 Expected: FAIL because neither profile fixture nor Stage 5 snapshot exists.
 
-- [ ] **Step 3: Seed profiles, assert browser Network/Console and generate the contract**
+- [x] **Step 3: Seed profiles, assert browser Network/Console and generate the contract**
 
 ```python
 E2E_MODULE_PROFILES = {
@@ -285,7 +295,7 @@ page.on('websocket', (socket) => websockets.push(new URL(socket.url()).pathname)
 
 Run each profile as a fresh process/port. Assert inactive bundles, roots, CSS and API/WS paths are absent; assert terminal CSS appears only after terminal activation; assert Full and legacy descriptors match. Document that shared CSS remains intentionally unsplit, regenerate inventories sequentially, then mark Stage 5 closed and Stage 6 next.
 
-- [ ] **Step 4: Run browser and generated-artifact verification**
+- [x] **Step 4: Run browser and generated-artifact verification**
 
 Run:
 
@@ -302,7 +312,7 @@ Repeat the Playwright command with `xray-minimal`/`18190`, `mihomo-minimal`/`181
 
 Expected: all commands exit 0, no profile reports unexpected console errors, and a second generation pass leaves no diff.
 
-- [ ] **Step 5: Run full verification and commit closure**
+- [x] **Step 5: Run full verification and commit closure**
 
 Run:
 

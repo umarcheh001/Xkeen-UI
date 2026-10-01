@@ -1,7 +1,7 @@
 # План модульной архитектуры панели Xkeen UI
 
-**Статус:** Этапы 0, 1, 2, 3, 3R, 3R.1 и Этап 4 закрыты;
-следующий — Этап 5<br>
+**Статус:** Этапы 0, 1, 2, 3, 3R, 3R.1, 4 и 5 закрыты;
+следующий — Этап 6<br>
 **Дата:** 1 октября 2026 года
 **Область:** облегчение панели, профили установки и официальный каталог модулей
 
@@ -12,7 +12,10 @@ errors. В подэтапе 4.4 все модальные окна разнес�
 подэтапе 4.5 server composition переведена на allow-listed active-module
 manifest и единый `page_context`. Подэтап 4.6 закрепил server-rendered
 совместимость профилей, удаление монолитной screen/modal-разметки и ownership
-составных modal. Этап 4 закрыт; следующий — Этап 5.
+составных modal. Этап 4 закрыт. Этап 5 динамической frontend-загрузки также
+закрыт 1 октября 2026 года; следующий — Этап 6.
+
+Историческая отметка подэтапа composition: **Этап 4 закрыт; следующий — Этап 5**.
 
 ## 1. Цель проекта
 
@@ -1237,14 +1240,20 @@ screen-specific разметки, а тесты защищают состав HT
 
 **Статус Этапа 4:** **выполнен 1 октября 2026 года**.
 
-При этом следующие проверки сознательно остаются в Этапе 5:
+Проверки, которые были закрыты в Этапе 5:
 
 - отсутствие ненужных JS-бандлов в Network;
 - динамический `import()` по Module Registry;
 - ленивое подключение module-owned CSS;
 - запрет frontend API-вызовов до загрузки соответствующего модуля.
 
-## Этап 5. Динамическая frontend-загрузка
+## Этап 5. Динамическая frontend-загрузка — закрыт
+
+**Статус:** выполнен 1 октября 2026 года.
+
+Итоговый machine-readable contract: `docs/modular-panel-stage5-frontend-loading.json`.
+Человекочитаемое описание и матрица профилей:
+`docs/modular-panel-stage5-frontend-loading.md`.
 
 ### Задачи
 
@@ -1301,6 +1310,16 @@ Mihomo API/WS; на Mihomo-only профиле не загружает Xray-spec
 То же правило действует для terminal, files, diagnostics и editor optional
 variants. Проверка выполняется в browser Network/Console, а не только по
 наличию `import()` в исходнике.
+
+**Критерий готовности Этапа 5: выполнен.** Flask публикует версионированный
+`frontendModules` descriptor, panel-local loader использует фиксированный
+allow-list локальных `import()`-фабрик, а inactive/missing-root границы
+возвращают no-op. Xray, Mihomo, terminal, files, diagnostics и editor
+загружаются только по активному профилю и surface; `xterm.css` стал первым
+module-owned lazy stylesheet. `styles.css` и `panel-operator.css` намеренно
+остались shared compatibility CSS. Изолированный E2E fixture записывает
+`modules.json` до запуска Flask и проверяет Network/WebSocket/console для
+Full, Xray Minimal, Mihomo Minimal и Core-only, не затрагивая рабочий стенд.
 
 ## Этап 6. Разделение редакторов
 

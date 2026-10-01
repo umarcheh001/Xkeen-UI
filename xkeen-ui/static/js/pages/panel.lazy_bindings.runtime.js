@@ -1,4 +1,4 @@
-import { getConfigShellApi, activateInboundsConfigView, activateOutboundsConfigView } from './config_shell.shared.js';
+import { ensurePanelModule, getPanelModuleApi } from './panel.module_loader.js';
 import {
   getXkeenCoreHttpApi,
   getXkeenGithubRepoUrl,
@@ -19,6 +19,42 @@ function safe(fn) {
 
 function getCoreHttp() {
   return getXkeenCoreHttpApi();
+}
+
+function getRoutingBundleFeatureApi(name) {
+  const key = String(name || '');
+  const routingBundle = getPanelModuleApi('panel-routing');
+  if (!routingBundle) return null;
+
+  if (key === 'xrayLogs' && typeof routingBundle.getLogsShellApi === 'function') {
+    return routingBundle.getLogsShellApi();
+  }
+
+  if (key === 'inbounds' && typeof routingBundle.getConfigShellApi === 'function') {
+    const shell = routingBundle.getConfigShellApi();
+    return shell ? {
+      isReady: () => !!(typeof shell.isInboundsReady === 'function' && shell.isInboundsReady()),
+      ensureReady: (options = null) => routingBundle.activateInboundsConfigView(
+        options && typeof options === 'object' ? options : { reason: 'lazy-binding' }
+      ),
+    } : null;
+  }
+
+  if (key === 'outbounds' && typeof routingBundle.getConfigShellApi === 'function') {
+    const shell = routingBundle.getConfigShellApi();
+    return shell ? {
+      isReady: () => !!(typeof shell.isOutboundsReady === 'function' && shell.isOutboundsReady()),
+      ensureReady: (options = null) => routingBundle.activateOutboundsConfigView(
+        options && typeof options === 'object' ? options : { reason: 'lazy-binding' }
+      ),
+    } : null;
+  }
+
+  return null;
+}
+
+function isRoutingBundleFeature(name) {
+  return ['xrayLogs', 'inbounds', 'outbounds'].includes(String(name || ''));
 }
 
 const panelFeatureModules = Object.create(null);
@@ -159,6 +195,8 @@ export function getPanelLazyRuntimeApi() {
 
 export function getPanelLazyFeatureApi(name) {
   const key = String(name || '');
+  const moduleApi = getRoutingBundleFeatureApi(key);
+  if (moduleApi) return moduleApi;
   const localApi = getPanelFeatureApiFromModule(key);
   if (localApi) return localApi;
   const api = getPanelLazyRuntimeApi();
@@ -177,13 +215,29 @@ export function isPanelLazyFeatureStub(feature) {
 
 export function isPanelLazyFeatureReady(name) {
   const key = String(name || '');
+  const moduleApi = getRoutingBundleFeatureApi(key);
+  if (moduleApi && typeof moduleApi.isReady === 'function') {
+    try { return !!moduleApi.isReady(); } catch (error) { return false; }
+  }
   if (getPanelFeatureSpec(key)) return !!panelFeatureReady[key];
   const api = getPanelLazyRuntimeApi();
   return !!(api && typeof api.isFeatureReady === 'function' && api.isFeatureReady(key));
 }
 
-export function ensurePanelLazyFeature(name) {
+export function ensurePanelLazyFeature(name, options = null) {
   const key = String(name || '');
+  if (isRoutingBundleFeature(key)) {
+    const activation = options && typeof options === 'object'
+      ? options
+      : { reason: `lazy-feature:${key}` };
+    const reason = String(activation.reason || `lazy-feature:${key}`);
+    return ensurePanelModule('panel-routing', reason).then((loaded) => {
+      if (!loaded || loaded.status !== 'ready') return false;
+      const api = getRoutingBundleFeatureApi(key);
+      if (!api || typeof api.ensureReady !== 'function') return false;
+      return Promise.resolve(api.ensureReady(activation)).then((ready) => ready !== false).catch(() => false);
+    });
+  }
   const spec = getPanelFeatureSpec(key);
   if (spec) {
     if (panelFeatureReady[key]) return Promise.resolve(true);
@@ -230,10 +284,10 @@ export function ensurePanelLazyFeature(name) {
 }
 
 export function ensurePanelTerminalReady() {
-  const api = getPanelLazyRuntimeApi();
-  appendTerminalDebug('panel:ensure-terminal-ready', { hasApi: !!api });
-  if (!api || typeof api.ensureTerminalReady !== 'function') return Promise.resolve(false);
-  return Promise.resolve(api.ensureTerminalReady()).then((ready) => !!ready).catch(() => false);
+  appendTerminalDebug('panel:ensure-terminal-ready', { source: 'panel-module-loader' });
+  return ensurePanelModule('terminal-lazy', 'terminal-action')
+    .then((loaded) => !!(loaded && loaded.status === 'ready'))
+    .catch(() => false);
 }
 
 export function isPanelTerminalReady() {
@@ -242,10 +296,15 @@ export function isPanelTerminalReady() {
 }
 
 export function ensurePanelEditorSupport(engine, opts) {
-  const api = getPanelLazyRuntimeApi();
-  return (api && typeof api.ensureEditorSupport === 'function')
-    ? api.ensureEditorSupport(engine, opts)
-    : Promise.resolve(false);
+  return ensurePanelModule('editor-runtime', 'editor-support')
+    .then((loaded) => {
+      if (!loaded || loaded.status !== 'ready') return false;
+      const api = getPanelLazyRuntimeApi();
+      return (api && typeof api.ensureEditorSupport === 'function')
+        ? api.ensureEditorSupport(engine, opts)
+        : false;
+    })
+    .catch(() => false);
 }
 
 export function ensurePanelMonacoSupport(opts) {
@@ -703,9 +762,7 @@ export function wirePanelLazyFeatureClicks() {
       if (consumeReplayFlag(inboundsTrigger)) return;
       event.preventDefault();
       event.stopImmediatePropagation();
-      const configShell = getConfigShellApi();
-      if (!configShell) return;
-      Promise.resolve(activateInboundsConfigView({ reason: 'interaction' })).then((ready) => {
+      ensurePanelLazyFeature('inbounds', { reason: 'interaction' }).then((ready) => {
         if (!ready) return;
         replayDeferredClick(inboundsTrigger);
       });
@@ -725,12 +782,7 @@ export function wirePanelLazyFeatureClicks() {
         if (outboundsTrigger.dataset && outboundsTrigger.dataset.xkOutboundsActivationPending === '1') return;
         if (outboundsTrigger.dataset) outboundsTrigger.dataset.xkOutboundsActivationPending = '1';
       } catch (e) {}
-      const configShell = getConfigShellApi();
-      if (!configShell) {
-        try { if (outboundsTrigger.dataset) delete outboundsTrigger.dataset.xkOutboundsActivationPending; } catch (e) {}
-        return;
-      }
-      Promise.resolve(activateOutboundsConfigView({ reason: 'interaction' })).then((ready) => {
+      ensurePanelLazyFeature('outbounds', { reason: 'interaction' }).then((ready) => {
         if (!ready) return;
         try { if (outboundsTrigger.dataset) delete outboundsTrigger.dataset.xkOutboundsActivationPending; } catch (e) {}
         // Initialization already wires the real header handler. Invoke the
@@ -758,9 +810,7 @@ export function wirePanelLazyFeatureClicks() {
     if (inboundsHeader && !isPanelLazyFeatureReady('inbounds')) {
       event.preventDefault();
       event.stopImmediatePropagation();
-      const configShell = getConfigShellApi();
-      if (!configShell) return;
-      Promise.resolve(activateInboundsConfigView({ reason: 'keyboard-interaction' })).then((ready) => {
+      ensurePanelLazyFeature('inbounds', { reason: 'keyboard-interaction' }).then((ready) => {
         if (ready) replayDeferredClick(inboundsHeader);
       });
       return;
@@ -774,12 +824,7 @@ export function wirePanelLazyFeatureClicks() {
         if (outboundsHeader.dataset && outboundsHeader.dataset.xkOutboundsActivationPending === '1') return;
         if (outboundsHeader.dataset) outboundsHeader.dataset.xkOutboundsActivationPending = '1';
       } catch (e) {}
-      const configShell = getConfigShellApi();
-      if (!configShell) {
-        try { if (outboundsHeader.dataset) delete outboundsHeader.dataset.xkOutboundsActivationPending; } catch (e) {}
-        return;
-      }
-      Promise.resolve(activateOutboundsConfigView({ reason: 'keyboard-interaction' })).then((ready) => {
+      ensurePanelLazyFeature('outbounds', { reason: 'keyboard-interaction' }).then((ready) => {
         if (!ready) return;
         try { if (outboundsHeader.dataset) delete outboundsHeader.dataset.xkOutboundsActivationPending; } catch (e) {}
         const outboundsApi = getPanelLazyFeatureApi('outbounds');
