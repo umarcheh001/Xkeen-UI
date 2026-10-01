@@ -4189,3 +4189,32 @@ def test_http_contract_forwards_the_hosts_switch(tmp_path: Path, monkeypatch):
     assert seen["hosts_enabled"] is False
     client.post("/api/routing/dns-over-vless", json={"action": "enable"})
     assert seen["hosts_enabled"] is None
+
+
+def test_the_last_section_of_a_kind_wins_as_in_the_core(tmp_path: Path):
+    configs, routing_path, _state = _scenario_config(tmp_path)
+    _write(configs / "07_observatory.json", {"burstObservatory": {"subjectSelector": ["my_proxy"]}})
+    _write(configs / "09_x.json", {"burstObservatory": {"subjectSelector": ["reserve_proxy"]}})
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    runtime = dns._collect_runtime(str(configs), routing)
+
+    # The merged config keeps only the later section, so my_proxy_* are not probed.
+    assert runtime["observatory_kind"] == "burstObservatory"
+    assert runtime["observatory_selectors"] == ["reserve_proxy"]
+    target = dns._select_target(runtime, ["my_proxy_1", "my_proxy_2"], routing)
+    assert target["managed_balancer"]["strategy"] == {"type": "random"}
+
+
+def test_a_non_object_owner_strategy_does_not_break_the_clone(tmp_path: Path):
+    configs, routing_path, _state = _scenario_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    source = next(
+        item for item in routing["routing"]["balancers"]
+        if (item.get("strategy") or {}).get("type") == "leastPing"
+    )
+    source["strategy"] = "leastPing"
+    runtime = dns._collect_runtime(str(configs), routing)
+
+    target = dns._select_target(runtime, source["tag"], routing)
+
+    assert target["managed_balancer"]["strategy"] == "leastPing"
