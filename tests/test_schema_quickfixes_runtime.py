@@ -811,3 +811,44 @@ console.log(JSON.stringify({
     assert payload["hasFix"] is True
     assert "support-x25519mlkem768" in payload["title"]
     assert payload["mlkem"] is True
+
+
+
+def _least_load_fixes(semantic_options_js: str) -> dict:
+    return _run_node_json(
+        """
+import { applyQuickFixText, createXrayQuickFixProvider } from './xkeen-ui/static/js/ui/schema_quickfixes.js';
+
+const provider = createXrayQuickFixProvider({ semanticOptions: %s });
+const text = JSON.stringify({
+  routing: { balancers: [{ tag: 'heavy', selector: ['VPS_'], strategy: { type: 'leastLoad' } }] }
+}, null, 2);
+const fixes = provider.getQuickFixes({ text });
+const burst = fixes.find((item) => item.code === 'balancer-burst-observatory-missing');
+console.log(JSON.stringify({
+  codes: fixes.map((item) => item.code),
+  next: burst ? applyQuickFixText(text, burst) : '',
+}));
+"""
+        % semantic_options_js
+    )
+
+
+def test_xray_quickfix_does_not_add_a_second_observatory_next_to_a_plain_one_elsewhere():
+    payload = _least_load_fixes(
+        "{ externalObservatory: { kind: 'observatory', subjectSelector: ['VPS_'], probeInterval: '5m' } }"
+    )
+
+    # The core reads the plain section first; a burst added here would probe for nothing.
+    assert "balancer-burst-observatory-missing" not in payload["codes"]
+
+
+def test_xray_quickfix_burst_scaffold_probes_a_real_url():
+    payload = _least_load_fixes("{}")
+
+    scaffold = json.loads(payload["next"])["burstObservatory"]
+    assert scaffold["subjectSelector"] == ["VPS_"]
+    assert scaffold["pingConfig"]["destination"].startswith("http")
+    assert scaffold["pingConfig"]["interval"] == "2m"
+    assert scaffold["pingConfig"]["sampling"] == 3
+    assert scaffold["pingConfig"]["timeout"] == "5s"

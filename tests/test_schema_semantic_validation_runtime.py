@@ -1282,3 +1282,59 @@ console.log(JSON.stringify({
     assert "inbound-reality-min-client-ver-missing" in payload["missing"]
     assert "inbound-reality-min-client-ver-missing" not in payload["compatible"]
     assert "inbound-reality-min-client-ver-mihomo-incompatible" in payload["incompatible"]
+
+
+
+def _routing_semantic_codes(strategy_type: str, options_js: str) -> list[dict]:
+    return _run_node_json(
+        """
+import { validateXrayRoutingSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';
+
+const result = validateXrayRoutingSemantics({
+  routing: {
+    balancers: [
+      { tag: 'heavy', selector: ['VPS_'], strategy: { type: '%s' } }
+    ]
+  }
+}, %s);
+
+console.log(JSON.stringify(result.map((item) => ({
+  code: item.code || '',
+  hint: item.hint || '',
+  message: item.message || '',
+}))));
+"""
+        % (strategy_type, options_js)
+    )
+
+
+PLAIN_ELSEWHERE = "{ externalObservatory: { kind: 'observatory', subjectSelector: ['VPS_'], probeInterval: '5m' } }"
+BURST_ELSEWHERE = "{ externalBurstObservatory: { kind: 'burstObservatory', subjectSelector: ['VPS_'], probeInterval: '2m' } }"
+
+
+def test_routing_fragment_warns_about_least_load_when_the_observatory_file_is_plain():
+    payload = _routing_semantic_codes("leastLoad", PLAIN_ELSEWHERE)
+
+    warning = next(item for item in payload if item["code"] == "balancer-burst-observatory-missing")
+    # The section lives in another file: adding a second one here would not help.
+    assert "07_observatory.json" in warning["hint"]
+    assert "leastPing" in warning["message"]
+
+
+def test_routing_fragment_accepts_least_load_when_the_observatory_file_is_burst():
+    codes = [item["code"] for item in _routing_semantic_codes("leastLoad", BURST_ELSEWHERE)]
+
+    assert "balancer-burst-observatory-missing" not in codes
+
+
+def test_routing_fragment_accepts_least_ping_when_the_observatory_file_is_burst():
+    codes = [item["code"] for item in _routing_semantic_codes("leastPing", BURST_ELSEWHERE)]
+
+    # burstObservatory reports a delay too, so leastPing works on it.
+    assert "balancer-observatory-missing" not in codes
+
+
+def test_routing_fragment_stays_silent_about_least_load_when_nothing_is_known():
+    codes = [item["code"] for item in _routing_semantic_codes("leastLoad", "{}")]
+
+    assert "balancer-burst-observatory-missing" not in codes

@@ -300,6 +300,7 @@ import { iconHtml } from '../ui/operator_icons.js';
     outboundTags: [],
     inboundTags: [],
     externalObservatory: null,
+    externalBurstObservatory: null,
     ready: false,
   };
   let _routingSemanticContextPromise = null;
@@ -915,6 +916,10 @@ import { iconHtml } from '../ui/operator_icons.js';
           ? _routingSemanticContext.externalObservatory
           : null,
         externalObservatoryPointer: '/observatory',
+        externalBurstObservatory: (_routingSemanticContext && _routingSemanticContext.externalBurstObservatory && typeof _routingSemanticContext.externalBurstObservatory === 'object')
+          ? _routingSemanticContext.externalBurstObservatory
+          : null,
+        externalBurstObservatoryPointer: '/burstObservatory',
       },
     };
   }
@@ -1039,12 +1044,17 @@ import { iconHtml } from '../ui/operator_icons.js';
       fetchTags('/api/xray/outbound-tags?all=1'),
       fetchTags('/api/xray/inbound-tags?all=1'),
       fetchObservatoryConfig(),
-    ]).then(([outboundTags, inboundTags, externalObservatory]) => {
+    ]).then(([outboundTags, inboundTags, observatoryConfig]) => {
+      // The panel reports which kind the section in effect is; leastLoad needs
+      // the burst one, so the two must not be passed off as the same thing.
+      const observatoryInEffect = (observatoryConfig && typeof observatoryConfig === 'object') ? observatoryConfig : null;
+      const burstInEffect = !!observatoryInEffect && observatoryInEffect.kind === 'burstObservatory';
       _routingSemanticContext = {
         key,
         outboundTags: Array.isArray(outboundTags) ? outboundTags.slice() : [],
         inboundTags: Array.isArray(inboundTags) ? inboundTags.slice() : [],
-        externalObservatory: (externalObservatory && typeof externalObservatory === 'object') ? externalObservatory : null,
+        externalObservatory: burstInEffect ? null : observatoryInEffect,
+        externalBurstObservatory: burstInEffect ? observatoryInEffect : null,
         ready: true,
       };
       _routingSemanticContextTs = Date.now();
@@ -1056,6 +1066,7 @@ import { iconHtml } from '../ui/operator_icons.js';
         outboundTags: [],
         inboundTags: [],
         externalObservatory: null,
+        externalBurstObservatory: null,
         ready: false,
       };
       _routingSemanticContextTs = Date.now();

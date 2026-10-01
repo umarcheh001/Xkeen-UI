@@ -2414,3 +2414,12 @@ def test_inline_spinner_keyframes_only_rotate():
 
     spinner_block = styles.split('.xk-inline-spinner {', 1)[1].split('}', 1)[0]
     assert 'margin-top: calc((1lh - 14px) / 2);' in spinner_block
+
+
+def test_routing_editor_tells_the_semantic_check_which_observatory_kind_is_in_effect():
+    routing = Path('xkeen-ui/static/js/features/routing.js').read_text(encoding='utf-8')
+
+    # leastLoad needs burstObservatory; passing every section off as a plain one hid that.
+    assert "observatoryInEffect.kind === 'burstObservatory'" in routing
+    assert "externalBurstObservatory: burstInEffect ? observatoryInEffect : null" in routing
+    assert "externalBurstObservatoryPointer: '/burstObservatory'" in routing
