@@ -24,7 +24,7 @@
 | Editor engine selectors | 8 |
 | Editor engines | CodeMirror, Monaco |
 | Modal IDs | 51 |
-| Inline `style` attributes | 209 |
+| Inline `style` attributes | 203 |
 | Уникальные DOM IDs | 1188 из 1188 |
 | `data-*` attributes | 562 |
 | Изначально скрытые runtime nodes с ID | 151 |
@@ -107,15 +107,15 @@ Route-action `Mihomo Генератор` и modal-action `Поддержать` 
 
 ## Классификация inline-style
 
-Все 282 атрибута классифицированы по декларациям, а не только по наличию слова `display`:
+Все 203 атрибута классифицированы по декларациям, а не только по наличию слова `display`:
 
 | Категория атрибута | Количество | Правило миграции |
 | --- | ---: | --- |
-| State/visibility hook | 63 | оставить inline как runtime-контракт |
-| Presentation/geometry | 213 | переносить в scoped CSS на соответствующих этапах |
-| Mixed state + presentation | 6 | сначала разделить; inline оставить только state/visibility |
+| State/visibility hook | 60 | оставить inline как runtime-контракт |
+| Presentation/geometry | 140 | переносить в scoped CSS на соответствующих этапах |
+| Mixed state + presentation | 3 | сначала разделить; inline оставить только state/visibility |
 
-Всего зафиксировано 493 декларации: 69 state/visibility и 424 presentation/geometry. К state/visibility относятся только исходные `display: none` и `visibility: hidden/collapse`; `display: flex/grid`, размеры, отступы, цвет, opacity и типографика относятся к presentation/geometry.
+Всего зафиксировано 306 деклараций: 63 state/visibility и 243 presentation/geometry. К state/visibility относятся только исходные `display: none` и `visibility: hidden/collapse`; `display: flex/grid`, размеры, отступы, цвет, opacity и типографика относятся к presentation/geometry.
 
 ## DOM и handler freeze
 

@@ -389,7 +389,7 @@ def test_cores_updates_returns_stale_cache_while_refresh_runs_in_background(tmp_
 
 
 def test_commands_panel_is_read_only_and_core_sources_are_module_owned():
-    template = (ROOT / "xkeen-ui" / "templates" / "panel.html").read_text(encoding="utf-8")
+    template = compose_panel_template(ROOT)
     script = (ROOT / "xkeen-ui" / "static" / "js" / "features" / "cores_status.js").read_text(encoding="utf-8")
     source_template = (ROOT / "xkeen-ui" / "templates" / "panel" / "core_source.html").read_text(encoding="utf-8")
     source_script = (ROOT / "xkeen-ui" / "static" / "js" / "features" / "core_source.js").read_text(encoding="utf-8")

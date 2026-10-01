@@ -26,8 +26,8 @@ SCREENS = {
             "terminal-open-pty-btn",
             "cores-check-btn",
             "commands-status-row",
-            "core-xray-update-btn",
-            "core-mihomo-update-btn",
+            "core-xray-stable-release",
+            "core-mihomo-stable-release",
         ),
     ),
     "files": (
