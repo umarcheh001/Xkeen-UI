@@ -290,30 +290,101 @@ def test_file_created_by_the_panel_is_not_removed_by_the_undo(env, tmp_path):
     assert (xray_dir / "07_observatory.json").exists()
 
 
-def test_rebuild_undoes_the_conversion_only_when_no_targets_remain(env, tmp_path, monkeypatch):
-    subs, xray_dir, _jsonc = env
-    ui_state_dir = _state_dir(tmp_path)
+def _rebuild_with(subs, monkeypatch, tmp_path, xray_dir, *, planned, delivered):
     calls = []
     monkeypatch.setattr(
-        subs, "sync_subscription_runtime_plan_delta", lambda **_k: {"observatory_changed": False}
+        subs,
+        "sync_subscription_runtime_plan_delta",
+        lambda **_k: {"observatory_changed": False, "has_runtime_targets": delivered},
     )
     monkeypatch.setattr(
         subs, "_undo_observatory_conversion", lambda *_a, **_k: calls.append("undo") or True
     )
-
-    plans = iter([{"has_runtime_targets": True}, {"has_runtime_targets": True}])
+    plans = iter([{"has_runtime_targets": True}, {"has_runtime_targets": planned}])
     monkeypatch.setattr(subs, "_build_runtime_sync_plan", lambda _state: next(plans))
-    still_active = subs._rebuild_subscription_runtime(
-        str(ui_state_dir), xray_configs_dir=str(xray_dir),
+    result = subs._rebuild_subscription_runtime(
+        str(_state_dir(tmp_path)), xray_configs_dir=str(xray_dir),
         previous_state={"subscriptions": []}, state_override={"subscriptions": []},
     )
+    return result, calls
 
-    plans = iter([{"has_runtime_targets": True}, {"has_runtime_targets": False}])
-    last_gone = subs._rebuild_subscription_runtime(
-        str(ui_state_dir), xray_configs_dir=str(xray_dir),
-        previous_state={"subscriptions": []}, state_override={"subscriptions": []},
+
+def test_rebuild_undoes_the_conversion_only_when_no_targets_remain(env, tmp_path, monkeypatch):
+    subs, xray_dir, _jsonc = env
+    (tmp_path / "a").mkdir()
+    still_active, calls = _rebuild_with(
+        subs, monkeypatch, tmp_path / "a", xray_dir, planned=True, delivered=True
     )
-
     assert still_active["observatory_changed"] is False
+    assert calls == []
+
+    (tmp_path / "b").mkdir()
+    last_gone, calls = _rebuild_with(subs, monkeypatch, tmp_path / "b", xray_dir, planned=False, delivered=False)
     assert last_gone["observatory_changed"] is True
     assert calls == ["undo"]
+
+
+def test_rebuild_undoes_when_delta_reports_no_targets_but_plan_had_some(env, tmp_path, monkeypatch):
+    subs, xray_dir, _jsonc = env
+    result, calls = _rebuild_with(subs, monkeypatch, tmp_path, xray_dir, planned=True, delivered=False)
+    assert result["observatory_changed"] is True
+    assert calls == ["undo"]
+
+
+def test_deleting_the_last_subscription_returns_the_original_file_end_to_end(tmp_path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    xray_dir = tmp_path / "xray" / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    ui_state_dir.mkdir()
+    xray_dir.mkdir(parents=True)
+    jsonc_dir.mkdir()
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(jsonc_dir / (Path(path).name + "c")))
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+    monkeypatch.setattr(
+        subs,
+        "fetch_subscription_body",
+        lambda _url: (
+            "vless://user@example.com:443?type=ws&security=tls&sni=edge.example.com"
+            "&encryption=none&host=cdn.example.com&path=%2Fws#WS%20Germany",
+            {},
+        ),
+    )
+    _routing(xray_dir, "leastLoad")
+    target = xray_dir / "07_observatory.json"
+    target.write_text(PLAIN_BEFORE, encoding="utf-8")
+
+    subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "sub-one",
+            "tag": "subscription.example",
+            "url": "https://example.com/sub",
+            "enabled": True,
+            "ping_enabled": True,
+        },
+    )
+    refreshed = subs.refresh_subscription(
+        str(ui_state_dir),
+        "sub-one",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=None,
+        restart=False,
+    )
+    assert refreshed["ok"] is True
+    active = json.loads(target.read_text(encoding="utf-8"))
+    assert "burstObservatory" in active and "observatory" not in active
+
+    subs.delete_subscription(
+        str(ui_state_dir),
+        "sub-one",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        remove_file=True,
+        restart_xkeen=None,
+    )
+
+    assert target.read_text(encoding="utf-8") == PLAIN_BEFORE
+    assert subs.MANAGED_BASELINES_KEY not in subs.load_subscription_state(str(ui_state_dir))
