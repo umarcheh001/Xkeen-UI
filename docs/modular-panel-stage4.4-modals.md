@@ -13,7 +13,7 @@
 | `diagnostics.html` | `tool.advanced-diagnostics` | `has_diagnostics` | `xk-resource-dashboard-modal` |
 | `routing.html` | `engine.xray` | `has_xray` | 12 окон Xray, включая DNS-over-VLESS, шаблоны, генератор и пул outbounds, DAT contents |
 | `commands.html` | `tool.terminal` | `has_terminal` | `terminal-overlay`, история команд, 4 окна SSH |
-| `shared.html` | `core` | — | выбор ядра, подтверждение, GitHub export/catalog, donate, UI settings |
+| `shared.html` | `core` | — | выбор ядра, источники и установка Xray/Mihomo, подтверждение, GitHub export/catalog, donate, UI settings |
 | `mihomo.html` | `engine.mihomo` | `has_mihomo` | DNS, импорт, инструменты прокси, validation |
 | `happ.html` | `integration.happ` | `has_happ and has_mihomo` | `mihomo-hwid-modal` |
 | `files.html` | `tool.files` | `has_files` | 22 окна файлового менеджера, включая подключения к удалённой ФС и known hosts |
@@ -36,21 +36,16 @@ Mixed-current-классификация контракта 4.1 разрешен
 единственное module-условие внутри screen partial; `has_mihomo` для неё
 обеспечен gate самого экрана.
 
-## Долг: окна источника ядра внутри экранов
+## Источники ядра в shared-диалоге
 
-После закрытия подэтапа в ветку пришла фича выбора источника ядра. Её макрос
-`panel/core_source.html` рисует карточку и два окна сразу — `*-core-source-modal`
-и `*-core-install-modal` — и вызывается из `panel/screens/routing.html`
-(`xray`) и `panel/screens/mihomo.html` (`mihomo`). Эти четыре окна лежат не в
-`panel/modals/`, а внутри экранов движков.
-
-Требование «окно есть только при активном владельце» при этом соблюдается:
-окна следуют gate своего экрана (`has_xray`, `has_mihomo`). Нарушено только
-расположение разметки. Перенос в `modals/routing.html` и `modals/mihomo.html`
-оставлен отдельной задачей: `core_source.js` ищет окна по `id` через
-`document`, так что перенос не потребует правки JS. До тех пор
-`tests/test_modular_panel_stage4_4_modals.py` держит список исключений и
-следит, чтобы других окон вне `panel/modals/` не появилось.
+`panel/core_source.html` хранит переиспользуемый макрос карточки и двух
+вложенных окон (`*-core-source-modal` и `*-core-install-modal`). Единственный
+вызов макроса теперь находится в `panel/modals/shared.html`, рядом с
+`#core-modal`; экраны Xray и Mihomo больше не содержат управляющей разметки.
+Обе пары доступны и на стенде без установленных бинарников: пользователь может
+выбрать проверенный источник до первой установки. Контракт 4.4 проверяет это
+как динамические модалы shared-диалога, поскольку статический инвентарь не
+разворачивает Jinja-макросы.
 
 ## Порядок и расположение
 

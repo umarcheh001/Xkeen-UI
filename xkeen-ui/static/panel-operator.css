@@ -13898,9 +13898,9 @@ body.panel-page .xk-xray-delay-history-hint {
  * and the selected/current distinction readable at a glance. */
 body.panel-page #core-modal .xk-core-modal-content,
 html[data-theme="light"] body.panel-page #core-modal .xk-core-modal-content {
-  width: min(94vw, 500px);
-  max-width: 500px;
-  max-height: min(88dvh, 560px);
+  width: min(94vw, 720px);
+  max-width: 720px;
+  max-height: min(88dvh, 640px);
   padding: 0 !important;
   border-radius: var(--op-radius-lg) !important;
   background: var(--op-surface) !important;
@@ -13910,7 +13910,7 @@ html[data-theme="light"] body.panel-page #core-modal .xk-core-modal-content {
 
 body.panel-page #core-modal .xk-core-modal-header {
   min-height: 58px;
-  padding: 9px 12px !important;
+  padding: 16px 18px 12px !important;
 }
 
 body.panel-page #core-modal .xk-core-titleline {
@@ -14035,6 +14035,7 @@ html[data-theme="light"] body.panel-page #core-modal .xk-core-lead-chip {
 
 body.panel-page #core-modal .xk-core-engine-list {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
   width: 100%;
   margin: 0;
@@ -14235,7 +14236,7 @@ body.panel-page #core-modal .xk-core-status[data-state="error"] {
 body.panel-page #core-modal .xk-core-modal-actions {
   justify-content: flex-end;
   min-height: 52px;
-  padding: 9px 12px !important;
+  padding: 12px 18px 16px !important;
 }
 
 body.panel-page #core-modal .xk-core-actions-row {
@@ -22872,61 +22873,95 @@ body.panel-page .xk-incident-row[data-state="offline"] strong { color: var(--op-
     min-width: 0;
   }
 }
-/* Curated core sources live with their engine module, not the command runner. */
-body.panel-page .xk-core-source-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin: 0 0 14px;
-  padding: 12px 14px;
-  border: 1px solid color-mix(in srgb, var(--border, #334155) 80%, transparent);
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--card, #172033) 94%, #0f766e 6%);
+/* Curated core sources are part of the shared core-management dialog. */
+body.panel-page #core-modal .xk-core-modal-body {
+  padding: 16px 18px !important;
 }
 
-body.panel-page .xk-core-source-card-heading,
-body.panel-page .xk-core-source-actions,
+body.panel-page #core-modal .xk-core-source-management {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--op-border);
+}
+
+body.panel-page #core-modal .xk-core-source-management > h2 {
+  margin: 0 0 2px;
+  color: var(--op-text-strong);
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+body.panel-page #core-modal .xk-core-source-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  min-height: 74px;
+  padding: 11px 14px;
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-radius-sm);
+  background: var(--op-surface-2);
+}
+
+body.panel-page #core-modal .xk-core-source-control-heading,
+body.panel-page #core-modal .xk-core-source-actions,
 body.panel-page .xk-core-source-summary,
 body.panel-page .xk-core-source-modal-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
-body.panel-page .xk-core-source-card-heading { flex-wrap: wrap; }
-body.panel-page .xk-core-source-card h2 { margin: 0; font-size: 1rem; }
-body.panel-page .xk-core-source-status { color: var(--muted, #94a3b8); font-size: .82rem; }
-body.panel-page .xk-core-source-summary { margin-top: 4px; color: var(--muted, #94a3b8); font-size: .82rem; flex-wrap: wrap; }
-body.panel-page .xk-core-source-summary span + span::before { content: '•'; margin-right: 10px; color: var(--border, #475569); }
-body.panel-page .xk-core-source-actions { flex: 0 0 auto; }
+body.panel-page #core-modal .xk-core-source-control-heading { flex-wrap: wrap; }
+body.panel-page #core-modal .xk-core-source-control h3 { margin: 0; color: var(--op-text); font-size: calc(11px * var(--xk-font-scale, 1)); }
+body.panel-page .xk-core-source-status { color: var(--op-muted); font-size: calc(9px * var(--xk-font-scale, 1)); }
+body.panel-page .xk-core-source-summary { margin-top: 4px; color: var(--op-muted); font-size: calc(9px * var(--xk-font-scale, 1)); flex-wrap: wrap; }
+body.panel-page .xk-core-source-summary span + span::before { content: '•'; margin-right: 8px; color: var(--op-faint); }
+body.panel-page #core-modal .xk-core-source-actions { flex: 0 0 auto; }
+body.panel-page #core-modal .xk-core-source-action {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 9px;
+  white-space: nowrap;
+}
+body.panel-page #core-modal .xk-core-source-action .xk-action-icon { display: block; }
 
-body.panel-page .xk-core-source-profiles { display: grid; gap: 8px; margin: 12px 0; }
+body.panel-page .xk-core-source-modal .modal-header { padding: 16px 18px 12px !important; }
+body.panel-page .xk-core-source-modal .modal-body { padding: 16px 18px !important; }
+body.panel-page .xk-core-source-modal .modal-actions { padding: 12px 18px 16px !important; }
+body.panel-page .xk-core-source-profiles { display: grid; gap: 8px; margin: 0; }
 body.panel-page .xk-core-source-profile {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 10px;
   padding: 10px;
-  border: 1px solid var(--border, #334155);
-  border-radius: 5px;
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-radius-sm);
+  background: var(--op-surface-2);
   cursor: pointer;
 }
-body.panel-page .xk-core-source-profile:has(input:checked) { border-color: var(--accent, #14b8a6); background: color-mix(in srgb, var(--accent, #14b8a6) 10%, transparent); }
+body.panel-page .xk-core-source-profile:has(input:checked) { border-color: var(--op-accent-border); background: var(--op-accent-soft); }
 body.panel-page .xk-core-source-profile.is-unavailable { opacity: .58; cursor: not-allowed; }
 body.panel-page .xk-core-source-profile-body { display: grid; gap: 3px; min-width: 0; }
-body.panel-page .xk-core-source-profile-body a { color: var(--link, #38bdf8); font-size: .82rem; overflow-wrap: anywhere; }
-body.panel-page .xk-core-source-profile-body small { color: var(--muted, #94a3b8); line-height: 1.35; }
+body.panel-page .xk-core-source-profile-body a { color: var(--op-accent-hover); font-size: .82rem; overflow-wrap: anywhere; }
+body.panel-page .xk-core-source-profile-body small { color: var(--op-muted); line-height: 1.35; }
 body.panel-page .xk-core-source-notice,
-body.panel-page .xk-core-source-message { margin: 10px 0 0; color: var(--muted, #94a3b8); font-size: .84rem; line-height: 1.4; }
-body.panel-page .xk-core-source-message:not(:empty) { color: var(--text, #e2e8f0); }
+body.panel-page .xk-core-source-message { margin: 10px 0 0; color: var(--op-muted); font-size: .84rem; line-height: 1.4; }
+body.panel-page .xk-core-source-message:not(:empty) { color: var(--op-text); }
 body.panel-page .xk-core-install-details { display: grid; grid-template-columns: minmax(100px, .34fr) minmax(0, 1fr); gap: 8px 12px; margin: 14px 0; }
-body.panel-page .xk-core-install-details dt { color: var(--muted, #94a3b8); }
+body.panel-page .xk-core-install-details dt { color: var(--op-muted); }
 body.panel-page .xk-core-install-details dd { margin: 0; overflow-wrap: anywhere; font-family: var(--font-mono, ui-monospace, monospace); font-size: .84rem; }
 
 @media (max-width: 680px) {
-  body.panel-page .xk-core-source-card { align-items: stretch; flex-direction: column; }
-  body.panel-page .xk-core-source-actions { justify-content: stretch; }
-  body.panel-page .xk-core-source-actions button { flex: 1 1 0; }
+  body.panel-page #core-modal .xk-core-engine-list { grid-template-columns: 1fr; }
+  body.panel-page #core-modal .xk-core-source-control { grid-template-columns: 1fr; align-items: stretch; }
+  body.panel-page #core-modal .xk-core-source-actions { justify-content: flex-start; flex-wrap: wrap; }
   body.panel-page .xk-core-install-details { grid-template-columns: 1fr; gap: 2px; }
   body.panel-page .xk-core-source-modal-actions { align-items: stretch; flex-direction: column-reverse; }
   body.panel-page .xk-core-source-modal-actions button { width: 100%; }

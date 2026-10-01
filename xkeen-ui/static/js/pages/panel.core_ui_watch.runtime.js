@@ -25,6 +25,7 @@ let coreUiPendingSignature = '';
 let coreUiPendingMessage = '';
 let coreUiLastCheckAt = 0;
 let coreUiWatchInited = false;
+let coreUiLiveTopologyInitialized = false;
 
 function getCoreHttp() {
   return getXkeenCoreHttpApi();
@@ -236,6 +237,13 @@ async function fetchDetectedCores() {
   }
 }
 
+function primeCoreUiTopologyFromLiveStatus(nextCores) {
+  if (coreUiLiveTopologyInitialized) return;
+  coreUiKnownDetectedCores = normalizeCoreList(nextCores);
+  coreUiKnownSignature = coreListSignature(coreUiKnownDetectedCores);
+  coreUiLiveTopologyInitialized = true;
+}
+
 function scheduleCoreUiWatch(delayMs) {
   if (coreUiReloadScheduled || coreUiPendingSignature) return;
 
@@ -285,6 +293,7 @@ async function checkCoreUiTopology(reason) {
       return;
     }
 
+    primeCoreUiTopologyFromLiveStatus(nextCores);
     const prevCores = coreUiKnownDetectedCores.slice();
     const nextSig = coreListSignature(nextCores);
     if (nextSig !== coreUiKnownSignature) {

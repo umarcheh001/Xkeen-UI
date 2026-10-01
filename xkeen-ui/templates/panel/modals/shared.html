@@ -1,4 +1,5 @@
 {% from "panel/macros.html" import op_icon %}
+{% from "panel/core_source.html" import render_core_source_controls, render_core_source_modals %}
     <div
       id="core-modal"
       class="modal hidden xk-core-modal-shell" data-operator-modal-family="confirm-compact-form"
@@ -40,6 +41,11 @@
               </button>
             </div>
           </div>
+          <section class="xk-core-source-management" aria-labelledby="core-source-management-title">
+            <h2 id="core-source-management-title">Источники и обновления</h2>
+            {{ render_core_source_controls('xray', 'Xray') }}
+            {{ render_core_source_controls('mihomo', 'Mihomo') }}
+          </section>
           <p id="core-modal-status" class="modal-hint xk-core-status" role="status" aria-live="polite"></p>
         </div>
         <div class="modal-actions xk-core-modal-actions">
@@ -50,6 +56,9 @@
         </div>
       </div>
     </div>
+
+    {{ render_core_source_modals('xray', 'Xray') }}
+    {{ render_core_source_modals('mihomo', 'Mihomo') }}
 
     <!-- Shared confirm modal (replaces browser confirm alerts) -->
     <div id="confirm-modal" class="modal hidden" data-operator-modal-family="confirm-compact-form" role="dialog" aria-modal="true" aria-label="Подтверждение">
