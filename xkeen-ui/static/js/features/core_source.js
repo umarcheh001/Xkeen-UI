@@ -170,7 +170,7 @@ export function initCoreSource(root) {
     if (!button) return;
     const action = button.dataset.coreSourceAction;
     try {
-      if (action === 'open') { await refresh(); modalOpen(sourceModal, true); return; }
+      if (action === 'open') { modalOpen(sourceModal, true); await refresh(); return; }
       if (action === 'prepare') {
         const response = await request(`${endpoint}/core-install/prepare`, { method: 'POST', body: '{}' });
         confirmation = response.confirmation;

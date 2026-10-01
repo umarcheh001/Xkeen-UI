@@ -25,6 +25,13 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
 function mihomoProfiles() {
   return {
     ok: true,
@@ -69,6 +76,25 @@ async function openCoreManagement(page) {
 
 
 test.describe('Curated core source selection', () => {
+  test('opens the source dialog on the first click while profiles are still loading', async ({ page }) => {
+    const profilesReady = deferred();
+    await page.route('**/api/xray/core-profiles', async (route) => {
+      await profilesReady.promise;
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify(xrayProfiles) });
+    });
+
+    await openView(page, 'routing');
+    await openCoreManagement(page);
+
+    const card = page.locator('[data-core-source][data-core-engine="xray"]');
+    const sourceModal = page.locator('#xray-core-source-modal');
+    await card.getByRole('button', { name: 'Источник' }).click();
+    await expect(sourceModal).toBeVisible({ timeout: 500 });
+
+    profilesReady.resolve();
+    await expect(sourceModal.getByRole('radio', { name: 'Официальный Xray' })).toBeVisible();
+  });
+
   test('the core dialog gives desktop descriptions room without losing the no-core workflow', async ({ page }) => {
     await page.route('**/api/xkeen/core', async (route) => route.fulfill({
       contentType: 'application/json',

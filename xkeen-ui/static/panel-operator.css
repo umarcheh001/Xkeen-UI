@@ -1416,7 +1416,7 @@ body.panel-page.xk-operator-header-active .panel-shell-status {
   overflow: hidden;
   clip-path: inset(50%);
 }
-body.panel-page.xk-operator-header-active .panel-header-shell > .xkeen-ctrl-row { display: none; }
+body.panel-page.xk-operator-header-active .panel-header-shell .xkeen-ctrl-row:not(:has(> *)) { display: none; }
 body.panel-page .xk-brand-service-trigger {
   position: absolute;
   inset: -6px;
