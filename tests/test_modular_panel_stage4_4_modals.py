@@ -65,6 +65,14 @@ MODAL_PARTIALS = {
 }
 ALL_MODAL_IDS = {modal_id for _gate, ids in MODAL_PARTIALS.values() for modal_id in ids}
 
+# Documented debt: the core-source macro renders its modals inside the engine
+# screen, so they follow the screen gate instead of living in the owner partial.
+CORE_SOURCE_MACRO = ROOT / "xkeen-ui/templates/panel/core_source.html"
+SCREEN_EMBEDDED_MODALS = {
+    "routing": ("xray-core-source-modal", "xray-core-install-modal"),
+    "mihomo": ("mihomo-core-source-modal", "mihomo-core-install-modal"),
+}
+
 
 def _modal_ids(html: str) -> set[str]:
     found = set()
@@ -127,9 +135,13 @@ def test_initial_html_contains_only_modals_of_active_modules(tmp_path, monkeypat
         return _modal_ids(render_panel(module_ids, tmp_path / name))
 
     def owned(*partials):
-        return {modal_id for partial in partials for modal_id in MODAL_PARTIALS[partial][1]}
+        return {
+            modal_id
+            for partial in partials
+            for modal_id in (*MODAL_PARTIALS[partial][1], *SCREEN_EMBEDDED_MODALS.get(partial, ()))
+        }
 
-    assert modal_set(FULL_MODULE_IDS, "full") == ALL_MODAL_IDS
+    assert modal_set(FULL_MODULE_IDS, "full") == owned(*MODAL_PARTIALS)
     assert modal_set(XRAY_MINIMAL_MODULE_IDS, "xray") == owned("routing", "shared", "editor")
     assert modal_set(MIHOMO_MINIMAL_MODULE_IDS, "mihomo") == owned("mihomo", "shared", "editor")
 
@@ -140,6 +152,22 @@ def test_initial_html_contains_only_modals_of_active_modules(tmp_path, monkeypat
     files_only = modal_set(["core", "tool.files"], "files-only")
     assert owned("files") <= files_only and "fm-editor-modal" not in files_only
     assert "fm-editor-modal" in modal_set(["core", "tool.files", "tool.editor"], "files-editor")
+
+
+def test_screen_embedded_modals_are_limited_to_the_core_source_macro():
+    macro = CORE_SOURCE_MACRO.read_text(encoding="utf-8")
+    templates = ROOT / "xkeen-ui/templates/panel"
+
+    assert _modal_ids(macro) == {"{{ engine_id }}-core-source-modal", "{{ engine_id }}-core-install-modal"}
+    for path in templates.rglob("*.html"):
+        if path == CORE_SOURCE_MACRO or path.parent == MODALS_DIR:
+            continue
+        assert not _modal_ids(path.read_text(encoding="utf-8")), path.name
+    for partial, engine in (("routing", "xray"), ("mihomo", "mihomo")):
+        screen = (templates / f"screens/{partial}.html").read_text(encoding="utf-8")
+        assert screen.count("render_core_source(") == 1
+        assert f"render_core_source('{engine}'," in screen
+        assert set(SCREEN_EMBEDDED_MODALS[partial]) == {f"{engine}-core-source-modal", f"{engine}-core-install-modal"}
 
 
 def test_hwid_trigger_follows_its_modal(tmp_path, monkeypatch):
