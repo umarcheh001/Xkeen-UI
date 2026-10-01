@@ -40,14 +40,17 @@ from services.xray_outbounds import (
     set_sockopt_mark,
 )
 from services.xray_observatory import (
+    DEFAULT_PROBE_URL,
     KIND_BURST,
     KIND_PLAIN,
+    KINDS,
     OBSERVATORY_FILE,
     burst_from_plain,
     clean_selectors,
     collect_catalog,
     covers,
     effective_section,
+    locate_section,
     new_burst_section,
     read_fragment,
     replace_section,
@@ -151,7 +154,6 @@ LAST_RUNTIME_AUTO_RULE_KEYS = ("last_routing_auto_rule", "lastRoutingAutoRule")
 LAST_RUNTIME_ROUTING_MODE_KEYS = ("last_routing_mode", "lastRoutingMode")
 LAST_RUNTIME_ACTIVE_KEYS = ("last_runtime_active", "lastRuntimeActive")
 
-DEFAULT_PROBE_URL = "https://www.gstatic.com/generate_204"
 DEFAULT_PROBE_FALLBACK_URLS = ("https://cp.cloudflare.com/generate_204",)
 DEFAULT_PROBE_TIMEOUT_SECONDS = 8.0
 DEFAULT_TCP_PROBE_TIMEOUT_SECONDS = 3.0
@@ -3556,11 +3558,14 @@ def _undo_observatory_conversion(
 ) -> bool:
     """Give the owner's observatory file back once no subscription needs it.
 
-    While a subscription is active the panel may switch the section kind to
-    match the balancer strategies.  Removing tags cannot undo that, so when the
-    last subscription leaves and the kind differs from the one captured before
-    the first subscription, the captured file is written back whole.  A file of
-    the same kind is left to tag removal: edits the owner made meanwhile stay.
+    While a subscription is active the panel may turn the owner's plain section
+    into a burst one to match the balancer strategies.  Removing tags cannot
+    undo that, so when the last subscription leaves, the file captured before
+    the first subscription is written back whole -- but only over a conversion
+    the panel made itself.  It is recognised by its ``pingConfig``: exactly what
+    the panel writes when it converts that captured section.  Anything else is
+    the owner's: a burst they uploaded meanwhile, a file of the same kind, a
+    section that now lives in another file -- all of it stays as it is.
     """
     with _STATE_LOCK:
         state = load_subscription_state(ui_state_dir)
@@ -3568,11 +3573,17 @@ def _undo_observatory_conversion(
     baseline = baselines.get(MANAGED_BASELINE_OBSERVATORY_KEY) if baselines else None
     if not isinstance(baseline, dict) or not baseline.get("exists"):
         return False
-    before_kind = _observatory_kind_of(_load_jsonc_text(str(baseline.get("text") or "")))
-    if not before_kind:
+    before = _load_jsonc_text(str(baseline.get("text") or ""))
+    if _observatory_kind_of(before) != KIND_PLAIN or KIND_BURST in before:
         return False
     path = _config_fragment_path(xray_configs_dir, baseline.get("path") or OBSERVATORY_FILE)
-    if _observatory_kind_of(read_fragment(path)) == before_kind:
+    current = read_fragment(path)
+    if not isinstance(current, dict) or KIND_PLAIN in current:
+        return False
+    section = current.get(KIND_BURST)
+    if not isinstance(section, dict):
+        return False
+    if section.get("pingConfig") != burst_from_plain(before[KIND_PLAIN], DEFAULT_PROBE_URL)["pingConfig"]:
         return False
     return _restore_managed_file_baseline(
         xray_configs_dir, baseline, default_name=OBSERVATORY_FILE, snapshot=snapshot
@@ -5290,15 +5301,6 @@ def sync_subscription_runtime_plan_delta(
     if next_subscription_only:
         observatory_remove_tags = _clean_tags_list(observatory_remove_tags + subscription_only_excluded_tags)
 
-    observatory_changed = sync_observatory_subjects(
-        xray_configs_dir=xray_configs_dir,
-        add_tags=next_observatory_terms + (preserved_tags if next_has_runtime_targets and not next_subscription_only else []),
-        remove_tags=observatory_remove_tags,
-        managed_active=next_has_runtime_targets,
-        snapshot=snapshot,
-        replace_subjects=entering_subscription_only and bool(next_observatory_terms),
-    )
-
     selector: List[str] = []
     balancer_tag = _choose_auto_balancer_tag(routing)
     applied_manual_tags: List[str] = []
@@ -5433,6 +5435,17 @@ def sync_subscription_runtime_plan_delta(
         )
         main_changed = _write_json_if_changed(routing_path, cfg, snapshot=snapshot)
         routing_changed = bool(main_changed or raw_changed)
+
+    # Only now: the observatory kind follows the balancer strategies, and the
+    # ones that count are those this pass leaves on disk, not those it found.
+    observatory_changed = sync_observatory_subjects(
+        xray_configs_dir=xray_configs_dir,
+        add_tags=next_observatory_terms + (preserved_tags if next_has_runtime_targets and not next_subscription_only else []),
+        remove_tags=observatory_remove_tags,
+        managed_active=next_has_runtime_targets,
+        snapshot=snapshot,
+        replace_subjects=entering_subscription_only and bool(next_observatory_terms),
+    )
 
     return {
         "baseline_restored": False,
@@ -5677,6 +5690,12 @@ def _rebuild_subscription_runtime(
     return result
 
 
+def _fill_plain_observatory_defaults(section: Dict[str, Any]) -> None:
+    section.setdefault("probeUrl", DEFAULT_PROBE_URL)
+    section.setdefault("probeInterval", "60s")
+    section.setdefault("enableConcurrency", True)
+
+
 def _apply_observatory_plan(
     xray_configs_dir: str,
     *,
@@ -5689,31 +5708,33 @@ def _apply_observatory_plan(
 ) -> bool:
     configs_dir = str(xray_configs_dir or "")
     # A broken 07_observatory.json must still stop the caller, as it did before.
-    _load_observatory(os.path.join(configs_dir, OBSERVATORY_FILE), strict_existing=True)
+    loaded = _load_observatory(os.path.join(configs_dir, OBSERVATORY_FILE), strict_existing=True)
 
     catalog = collect_catalog(configs_dir)
-    plain = effective_section(catalog, KIND_PLAIN)
-    burst = effective_section(catalog, KIND_BURST)
     want_burst = bool(catalog["has_least_load"])
+    keep = locate_section(catalog)
+    # The core merges the directory into one config with one section of a kind,
+    # and reads the plain one when both kinds are there.  Whatever is not kept
+    # -- the other kind, an earlier section of the same kind -- is folded in.
+    drops = [item for item in catalog["sections"] if item is not keep]
 
-    if plain is not None and burst is not None:
-        # Both at once: the core reads the plain one and the burst one probes
-        # for nothing.  Keep the one this directory needs, fold the other in.
-        keep, drop = (burst, plain) if want_burst else (plain, burst)
-    else:
-        keep, drop = (plain if plain is not None else burst), None
-
-    if keep is None and not add:
-        return False
+    if keep is None:
+        if not add:
+            return False
+        if any(kind in loaded for kind in KINDS):
+            # The file has a section the catalog could not make out; writing a
+            # fresh one would replace what the owner put there.
+            return False
 
     kind = keep["kind"] if keep is not None else (KIND_BURST if want_burst else KIND_PLAIN)
     target_file = keep["file"] if keep is not None else OBSERVATORY_FILE
     section: Dict[str, Any] = copy.deepcopy(keep["section"]) if keep is not None else {}
+    own_subjects = clean_selectors(section.get("subjectSelector"))
 
     subjects: List[str] = []
     if not replace_subjects:
-        subjects = [item for item in clean_selectors(section.get("subjectSelector")) if item not in remove]
-        if drop is not None:
+        subjects = [item for item in own_subjects if item not in remove]
+        for drop in drops:
             for item in clean_selectors(drop["section"].get("subjectSelector")):
                 if item not in remove and item not in subjects:
                     subjects.append(item)
@@ -5722,20 +5743,24 @@ def _apply_observatory_plan(
         if covers(subjects, tag):
             continue
         subjects.append(tag)
-    section["subjectSelector"] = subjects
+    if subjects != own_subjects:
+        # Otherwise the key stays as the owner wrote it: absent, or with repeats.
+        section["subjectSelector"] = subjects
 
     if keep is None:
         if kind == KIND_BURST:
             section = new_burst_section(subjects, DEFAULT_PROBE_URL)
         else:
-            section.setdefault("probeUrl", DEFAULT_PROBE_URL)
-            section.setdefault("probeInterval", "60s")
-            section.setdefault("enableConcurrency", True)
-    elif kind == KIND_PLAIN and want_burst and convert_kind:
-        section = burst_from_plain(section, DEFAULT_PROBE_URL)
-        kind = KIND_BURST
+            _fill_plain_observatory_defaults(section)
+    else:
+        if kind == KIND_PLAIN and add and not keep["section"]:
+            # An empty section is a placeholder, not a choice: finish it.
+            _fill_plain_observatory_defaults(section)
+        if kind == KIND_PLAIN and want_burst and convert_kind:
+            section = burst_from_plain(section, DEFAULT_PROBE_URL)
+            kind = KIND_BURST
 
-    if keep is not None and drop is None and kind == keep["kind"] and section == keep["section"]:
+    if keep is not None and not drops and kind == keep["kind"] and section == keep["section"]:
         # Nothing to say: leave the owner's file, its comments and layout alone.
         return False
 
@@ -5752,10 +5777,16 @@ def _apply_observatory_plan(
     )
     changed = bool(_write_json_if_changed(target_path, target_obj, snapshot=snapshot) or changed)
 
-    if drop is not None and drop["file"] != target_file:
-        drop_path = os.path.join(configs_dir, drop["file"])
+    dropped_by_file: Dict[str, List[str]] = {}
+    for drop in drops:
+        # A twin in the kept file is already gone: replace_section left one key.
+        if drop["file"] != target_file:
+            dropped_by_file.setdefault(drop["file"], []).append(drop["kind"])
+    for drop_file, drop_kinds in dropped_by_file.items():
+        drop_path = os.path.join(configs_dir, drop_file)
         drop_obj = read_fragment(drop_path) or {}
-        drop_obj.pop(drop["kind"], None)
+        for drop_kind in drop_kinds:
+            drop_obj.pop(drop_kind, None)
         changed = bool(
             _write_jsonc_sidecar_if_changed(
                 drop_path, drop_obj, header="", snapshot=snapshot, preserve_existing_comments=True
