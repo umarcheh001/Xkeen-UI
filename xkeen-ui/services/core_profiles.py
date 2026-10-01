@@ -259,7 +259,8 @@ def _asset_view(raw_asset: Any) -> dict[str, str] | None:
     url = str(raw_asset.get("browser_download_url") or "").strip()
     if not name or not url:
         return None
-    return {"name": name, "url": url}
+    digest = str(raw_asset.get("digest") or "").strip()
+    return {"name": name, "url": url, "digest": digest}
 
 
 def _asset_prefixes(profile: CoreProfile, platform_key: str) -> tuple[str, ...]:
@@ -320,6 +321,11 @@ def _single_sha256(text: str) -> str | None:
     return next(iter(matches)) if len(matches) == 1 else None
 
 
+def _github_asset_sha256(asset: dict[str, str]) -> str | None:
+    match = re.fullmatch(r"sha256:([0-9a-fA-F]{64})", asset.get("digest", ""))
+    return match.group(1).lower() if match else None
+
+
 def _checksum_for_asset(
     profile: CoreProfile,
     asset: dict[str, str],
@@ -328,20 +334,21 @@ def _checksum_for_asset(
 ) -> dict[str, str] | None:
     if profile.engine_id == "mihomo":
         checksum_asset = next((item for item in assets if item["name"] == "checksums.txt"), None)
-        if checksum_asset is None:
-            return None
-        digest = _checksum_from_list(_download_text(checksum_asset["url"], timeout_s), asset["name"])
-        if digest:
-            return {"sha256": digest, "url": checksum_asset["url"], "name": checksum_asset["name"]}
-        return None
+        if checksum_asset is not None:
+            digest = _checksum_from_list(_download_text(checksum_asset["url"], timeout_s), asset["name"])
+            if digest:
+                return {"sha256": digest, "url": checksum_asset["url"], "name": checksum_asset["name"]}
+    else:
+        checksum_name = f"{asset['name']}.dgst"
+        checksum_asset = next((item for item in assets if item["name"] == checksum_name), None)
+        if checksum_asset is not None:
+            digest = _single_sha256(_download_text(checksum_asset["url"], timeout_s))
+            if digest:
+                return {"sha256": digest, "url": checksum_asset["url"], "name": checksum_asset["name"]}
 
-    checksum_name = f"{asset['name']}.dgst"
-    checksum_asset = next((item for item in assets if item["name"] == checksum_name), None)
-    if checksum_asset is None:
-        return None
-    digest = _single_sha256(_download_text(checksum_asset["url"], timeout_s))
+    digest = _github_asset_sha256(asset)
     if digest:
-        return {"sha256": digest, "url": checksum_asset["url"], "name": checksum_asset["name"]}
+        return {"sha256": digest, "url": "", "name": "GitHub asset digest"}
     return None
 
 

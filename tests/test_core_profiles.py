@@ -89,6 +89,23 @@ def test_resolve_prizrak_uses_custom_binary_prefix(monkeypatch):
     assert result["binary_name"] == "mihomo"
 
 
+def test_resolve_mihomo_uses_github_asset_digest_without_checksums_file(monkeypatch):
+    asset = _asset("prizrak-core-linux-amd64-v1.19.32-r1.gz")
+    asset["digest"] = "sha256:" + "d" * 64
+    release = _release("v1.19.32-r1", [asset])
+    monkeypatch.setattr(profiles, "_github_json", lambda *_args, **_kwargs: release)
+
+    result = profiles.resolve_release(
+        profiles.get_profile("mihomo", "prizrak-core"),
+        profiles.RouterPlatform("x86_64", "x86_64", "le"),
+        timeout_s=1,
+    )
+
+    assert result["installable"] is True
+    assert result["asset"]["name"] == "prizrak-core-linux-amd64-v1.19.32-r1.gz"
+    assert result["checksum"]["sha256"] == "d" * 64
+
+
 def test_resolve_xray_uses_matching_dgst_checksum(monkeypatch):
     release = _release(
         "v26.3.27",
