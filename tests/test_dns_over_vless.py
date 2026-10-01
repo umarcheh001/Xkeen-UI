@@ -4277,3 +4277,98 @@ def test_a_guard_fallback_that_left_the_selector_is_reported_as_drift(tmp_path: 
 
     assert result["route_drift"]["managed_fallback"] == "proxy-gone"
     assert result["route_drift"]["current_fallback"] == "proxy-a"
+
+
+def _burst_scenario(tmp_path: Path):
+    configs, routing_path, _state = _scenario_config(tmp_path)
+    _write(configs / "07_observatory.json", {"burstObservatory": {"subjectSelector": ["my_proxy"]}})
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    return dns._collect_runtime(str(configs), routing), routing
+
+
+def test_max_rtt_setting_is_written_into_the_dns_balancer(tmp_path: Path, monkeypatch):
+    runtime, routing = _burst_scenario(tmp_path)
+    monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_MAX_RTT", "450")
+
+    target = dns._select_target(runtime, ["my_proxy_1", "my_proxy_2"], routing)
+
+    assert target["managed_balancer"]["strategy"] == {
+        "type": "leastLoad",
+        "settings": {"expected": 2, "tolerance": 0.5, "maxRTT": "450ms"},
+    }
+
+
+@pytest.mark.parametrize("raw", [None, "", "0", "-200", "не число", "450ms"])
+def test_max_rtt_is_off_unless_a_positive_number_of_milliseconds_is_given(tmp_path: Path, monkeypatch, raw):
+    runtime, routing = _burst_scenario(tmp_path)
+    if raw is None:
+        monkeypatch.delenv("XKEEN_DNS_OVER_VLESS_MAX_RTT", raising=False)
+    else:
+        monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_MAX_RTT", raw)
+
+    target = dns._select_target(runtime, ["my_proxy_1", "my_proxy_2"], routing)
+
+    assert target["managed_balancer"]["strategy"] == LEAST_LOAD_WITH_TOLERANCE
+
+
+def test_max_rtt_is_capped_so_a_typo_cannot_write_nonsense(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_MAX_RTT", "999999999")
+
+    assert dns.max_rtt_ms() == dns.MAX_RTT_BOUNDS[1]
+
+
+def test_max_rtt_only_applies_where_least_load_is_used(tmp_path: Path, monkeypatch):
+    configs, routing_path, _state = _scenario_config(tmp_path)
+    _write(configs / "07_observatory.json", {"observatory": {"subjectSelector": ["my_proxy"]}})
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    runtime = dns._collect_runtime(str(configs), routing)
+    monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_MAX_RTT", "450")
+
+    covered = dns._select_target(runtime, ["my_proxy_1", "my_proxy_2"], routing)
+    uncovered = dns._select_target(runtime, ["my_proxy_1", "reserve_proxy_1"], routing)
+
+    # leastPing and random have no such setting; the core would ignore it at best.
+    assert covered["managed_balancer"]["strategy"] == {"type": "leastPing"}
+    assert uncovered["managed_balancer"]["strategy"] == {"type": "random"}
+
+
+def test_prefer_fast_keeps_least_ping_under_burst_and_still_guards_the_empty_pick(tmp_path: Path, monkeypatch):
+    runtime, routing = _burst_scenario(tmp_path)
+    monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_PREFER", "fast")
+    monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_MAX_RTT", "450")
+
+    target = dns._select_target(runtime, ["my_proxy_1", "my_proxy_2"], routing)
+
+    # The fastest node, as before burst; maxRTT belongs to leastLoad only.
+    assert target["managed_balancer"]["strategy"] == {"type": "leastPing"}
+    assert target["managed_balancer"]["fallbackTag"] == "my_proxy_1"
+
+
+@pytest.mark.parametrize("raw", [None, "", "stable", "STABLE", "что-то ещё"])
+def test_prefer_defaults_to_the_steady_choice(tmp_path: Path, monkeypatch, raw):
+    runtime, routing = _burst_scenario(tmp_path)
+    monkeypatch.delenv("XKEEN_DNS_OVER_VLESS_MAX_RTT", raising=False)
+    if raw is None:
+        monkeypatch.delenv("XKEEN_DNS_OVER_VLESS_PREFER", raising=False)
+    else:
+        monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_PREFER", raw)
+
+    target = dns._select_target(runtime, ["my_proxy_1", "my_proxy_2"], routing)
+
+    assert target["managed_balancer"]["strategy"] == LEAST_LOAD_WITH_TOLERANCE
+
+
+def test_prefer_fast_leaves_a_cloned_least_ping_balancer_as_it_is(tmp_path: Path, monkeypatch):
+    configs, routing_path, _state = _scenario_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    source = next(
+        item for item in routing["routing"]["balancers"]
+        if (item.get("strategy") or {}).get("type") == "leastPing"
+    )
+    _write(configs / "07_observatory.json", {"burstObservatory": {"subjectSelector": [str(v) for v in source["selector"]]}})
+    runtime = dns._collect_runtime(str(configs), routing)
+    monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_PREFER", " Fast ")
+
+    target = dns._select_target(runtime, source["tag"], routing)
+
+    assert target["managed_balancer"]["strategy"] == {"type": "leastPing"}
