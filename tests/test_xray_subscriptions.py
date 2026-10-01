@@ -3043,9 +3043,9 @@ def test_refresh_subscription_only_mode_replaces_manual_runtime_and_bypasses_sha
     assert result["disabled_manual_outbounds"] == 1
 
     observatory = json.loads((xray_dir / "07_observatory.json").read_text(encoding="utf-8"))
-    assert observatory["burstObservatory"]["subjectSelector"] == ["cp.landing-nl.rfid-technologies.org"]
-    assert observatory["burstObservatory"]["pingConfig"]["destination"] == "https://probe.example.com"
-    assert "observatory" not in observatory
+    assert observatory["observatory"]["subjectSelector"] == ["cp.landing-nl.rfid-technologies.org"]
+    assert observatory["observatory"]["probeUrl"] == "https://probe.example.com"
+    assert "burstObservatory" not in observatory
 
     routing = json.loads((xray_dir / "05_routing.json").read_text(encoding="utf-8"))
     balancers = {item["tag"]: item for item in routing["routing"]["balancers"]}

@@ -15,8 +15,10 @@ import json
 import os
 from typing import Any, Dict, Iterable, List
 
+from utils.fs import load_text
 from utils.jsonc import strip_json_comments_text
 
+DEFAULT_PROBE_URL = "https://www.gstatic.com/generate_204"
 OBSERVATORY_FILE = "07_observatory.json"
 KIND_PLAIN = "observatory"
 KIND_BURST = "burstObservatory"
@@ -33,10 +35,13 @@ LEAST_LOAD_TOLERANCE = 0.5
 
 
 def read_fragment(path: str) -> Dict[str, Any] | None:
+    # The core takes Windows-1251 comments too; a file the panel cannot decode
+    # would look empty here and get a fresh section written over it.
     try:
-        with open(path, "r", encoding="utf-8") as fh:
-            text = fh.read()
+        text = load_text(path, default=None)
     except Exception:
+        return None
+    if text is None:
         return None
     for candidate in (text, strip_json_comments_text(text)):
         try:
@@ -101,6 +106,15 @@ def effective_section(catalog: Dict[str, Any], kind: str) -> Dict[str, Any] | No
     return found[-1] if found else None
 
 
+def locate_section(catalog: Dict[str, Any]) -> Dict[str, Any] | None:
+    """The section the panel works on: the one this directory needs, else the one it has."""
+    plain = effective_section(catalog, KIND_PLAIN)
+    burst = effective_section(catalog, KIND_BURST)
+    if plain is not None and burst is not None:
+        return burst if catalog.get("has_least_load") else plain
+    return plain if plain is not None else burst
+
+
 def effective_kind(catalog: Dict[str, Any]) -> str:
     if effective_section(catalog, KIND_PLAIN) is not None:
         return KIND_PLAIN
@@ -148,17 +162,19 @@ def replace_section(obj: Dict[str, Any], kind: str, section: Dict[str, Any]) -> 
     return out
 
 
-DEFAULT_PROBE_URL = "https://www.gstatic.com/generate_204"
-
-
 def _text(value: Any) -> str:
     return value.strip() if isinstance(value, str) else ""
 
 
-def describe_config(cfg_obj: Dict[str, Any]) -> Dict[str, Any]:
-    """Flatten whichever section the file holds into the fields the form shows."""
+def describe_config(cfg_obj: Dict[str, Any], want_burst: bool = False) -> Dict[str, Any]:
+    """Flatten whichever section the file holds into the fields the form shows.
+
+    ``want_burst`` matters only when the file holds both kinds: it names the one
+    a save would keep, so the form shows what it is about to edit.
+    """
     obj = cfg_obj if isinstance(cfg_obj, dict) else {}
-    if isinstance(obj.get(KIND_PLAIN), dict):
+    burst_chosen = bool(want_burst) and isinstance(obj.get(KIND_BURST), dict)
+    if isinstance(obj.get(KIND_PLAIN), dict) and not burst_chosen:
         section = obj[KIND_PLAIN]
         concurrency = section.get("enableConcurrency")
         return {
@@ -194,17 +210,27 @@ def apply_generate_request(
     obj = copy.deepcopy(cfg_obj) if isinstance(cfg_obj, dict) else {}
     plain = obj.get(KIND_PLAIN) if isinstance(obj.get(KIND_PLAIN), dict) else None
     burst = obj.get(KIND_BURST) if isinstance(obj.get(KIND_BURST), dict) else None
+    if plain is not None and burst is not None:
+        # Both at once: keep the one the directory needs, as the subscription sync does.
+        if want_burst:
+            plain = None
+        else:
+            burst = None
 
     if burst is not None or want_burst:
-        if burst is None:
+        fresh = burst is None
+        if fresh:
             burst = burst_from_plain(plain or {}, DEFAULT_PROBE_URL)
         ping = burst.get("pingConfig") if isinstance(burst.get("pingConfig"), dict) else {}
         if _text(probe_url):
             ping["destination"] = _text(probe_url)
-        if _text(probe_interval):
+        # The form always sends its plain-observatory interval; a burst made in
+        # this call keeps the panel's own cycle, an existing one takes the form's.
+        if _text(probe_interval) and not fresh:
             ping["interval"] = _text(probe_interval)
         burst["subjectSelector"] = list(subject)
         burst["pingConfig"] = ping
+        # enable_concurrency is ignored here: burstObservatory has no such field.
         return replace_section(obj, KIND_BURST, burst)
 
     section = plain if plain is not None else {}
