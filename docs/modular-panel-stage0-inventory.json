@@ -36,8 +36,8 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 408,
-      "size_bytes": 5830658,
+      "unit_count": 409,
+      "size_bytes": 5832055,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
@@ -49,7 +49,7 @@
         "frontend_feature": 27,
         "frontend_javascript": 34,
         "frontend_runtime": 1,
-        "frontend_test": 32,
+        "frontend_test": 33,
         "frontend_ui": 17,
         "stylesheet": 5,
         "template": 28
@@ -7677,7 +7677,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/core_source_selection.spec.mjs",
-      "size_bytes": 10207,
+      "size_bytes": 11194,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -7819,6 +7819,24 @@
       "kind": "frontend_test",
       "path": "e2e/header_core_button_loading.spec.mjs",
       "size_bytes": 3874,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "frontend_test",
+      "path": "e2e/header_empty_control_row.spec.mjs",
+      "size_bytes": 397,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -8734,7 +8752,7 @@
       "module_id": "core",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/panel-operator.css",
-      "size_bytes": 730942,
+      "size_bytes": 730955,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
