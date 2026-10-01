@@ -621,3 +621,140 @@ def test_observatory_is_chosen_by_the_routing_the_pass_leaves_on_disk(tmp_path, 
     assert "leastLoad" not in strategies
     assert _sections(xray_dir) == [("07_observatory.json", "observatory")]
     assert result["observatory_changed"] is True
+
+
+def test_entering_subscription_only_leaves_a_covering_owner_file_alone(env):
+    subs, xray_dir, jsonc_dir = env
+    _routing(xray_dir, "leastPing", "leastLoad")
+    target = xray_dir / "07_observatory.json"
+    target.write_text(ETALON, encoding="utf-8")
+
+    # "Subscription only" asks to replace the selector so that outbounds outside
+    # the subscription are no longer probed; the owner's prefix covers only ours.
+    changed = subs.sync_observatory_subjects(
+        xray_configs_dir=str(xray_dir),
+        add_tags=SUB_TAGS,
+        remove_tags=["vless-reality", "manual_proxy"],
+        replace_subjects=True,
+    )
+
+    assert changed is False
+    assert target.read_text(encoding="utf-8") == ETALON
+    assert list(jsonc_dir.iterdir()) == []
+
+
+def test_entering_subscription_only_still_drops_selectors_of_other_outbounds(env):
+    subs, xray_dir, _jsonc = env
+    _routing(xray_dir, "leastLoad")
+    ping = {"destination": "https://cp.cloudflare.com/generate_204", "interval": "10m", "sampling": 6, "timeout": "5s"}
+    (xray_dir / "07_observatory.json").write_text(
+        json.dumps({"burstObservatory": {"subjectSelector": ["VPS_", "manual_", "vless"], "pingConfig": ping}}),
+        encoding="utf-8",
+    )
+
+    changed = subs.sync_observatory_subjects(
+        xray_configs_dir=str(xray_dir),
+        add_tags=[*SUB_TAGS, "OTHER_SUB"],
+        remove_tags=["vless-reality", "manual_proxy"],
+        replace_subjects=True,
+    )
+
+    assert changed is True
+    section = json.loads((xray_dir / "07_observatory.json").read_text(encoding="utf-8"))["burstObservatory"]
+    # "VPS_" covers subscription tags only and stays; the two selectors that
+    # reach excluded outbounds go; the uncovered subscription tag is added.
+    assert section["subjectSelector"] == ["VPS_", "OTHER_SUB"]
+    assert section["pingConfig"] == ping
+
+
+REFERENCE_OBSERVATORY = "\r\n".join([
+    "{",
+    "  // burstObservatory: leastLoad у heavy_load_balancer читает только её статистику",
+    '  "burstObservatory": {',
+    '    "subjectSelector": ["VPS_"],',
+    '    "pingConfig": {',
+    '      "destination": "https://cp.cloudflare.com/generate_204",',
+    '      "interval": "10m", "sampling": 6, "timeout": "5s"',
+    "    }",
+    "  }",
+    "}",
+    "",
+])
+
+
+def _reference_directory(xray_dir: Path) -> None:
+    """The owner's hand-made base: manual proxies share the ``VPS_`` prefix with the subscriptions."""
+    (xray_dir / "04_outbounds.json").write_text(
+        json.dumps({"outbounds": [
+            {"tag": "VPS_NL", "protocol": "vless", "settings": {"address": "nl.example.com", "port": 443, "id": "u"}},
+            {"tag": "VPS_CH", "protocol": "vless", "settings": {"address": "ch.example.com", "port": 443, "id": "u"}},
+            {"tag": "direct", "protocol": "freedom"},
+            {"tag": "block", "protocol": "blackhole"},
+        ]}, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    (xray_dir / "05_routing.json").write_text(
+        json.dumps({"routing": {
+            "balancers": [
+                {"tag": "fast_web_balancer", "selector": ["VPS_"], "fallbackTag": "direct",
+                 "strategy": {"type": "leastPing"}},
+                {"tag": "heavy_load_balancer", "selector": ["VPS_"], "fallbackTag": "direct",
+                 "strategy": {"type": "leastLoad"}},
+            ],
+            "rules": [
+                {"ruleTag": "40_heavy", "domain": ["example.org"], "balancerTag": "heavy_load_balancer"},
+                {"ruleTag": "90_rest", "network": "tcp,udp", "balancerTag": "fast_web_balancer"},
+            ],
+        }}, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    # Written the way a Windows editor would: CRLF and a comment.
+    (xray_dir / "07_observatory.json").write_bytes(REFERENCE_OBSERVATORY.encode("utf-8"))
+
+
+def test_owner_reference_file_survives_subscription_only_subscriptions_end_to_end(env, tmp_path, monkeypatch):
+    subs, xray_dir, jsonc_dir = env
+    ui_state_dir = _state_dir(tmp_path)
+    _reference_directory(xray_dir)
+    reference = (xray_dir / "07_observatory.json").read_bytes()
+    bodies = {
+        "https://example.com/nl": "vless://user@nl.example.com:443?type=tcp&security=reality&sni=e.example.com&pbk=k&encryption=none#NL",
+        "https://example.com/ch": "vless://user@ch.example.com:443?type=tcp&security=reality&sni=e.example.com&pbk=k&encryption=none#CH",
+    }
+    monkeypatch.setattr(subs, "fetch_subscription_body", lambda url: (bodies[url], {}))
+
+    for sub_id, tag, url in (("vps_nl_sub", "VPS_NL_SUB", "https://example.com/nl"),
+                             ("vps_ch_sub", "VPS_CH_SUB", "https://example.com/ch")):
+        subs.upsert_subscription(str(ui_state_dir), {
+            "id": sub_id, "name": tag, "tag": tag, "url": url, "enabled": True, "ping_enabled": True,
+            "routing_auto_rule": True, "routing_mode": "subscription-only",
+            "routing_balancer_tags": ["fast_web_balancer", "heavy_load_balancer"],
+        })
+        result = subs.refresh_subscription(
+            str(ui_state_dir), sub_id, xray_configs_dir=str(xray_dir),
+            snapshot=lambda _path: None, restart_xkeen=None, restart=False,
+        )
+        assert result["ok"] is True
+        assert result["observatory_changed"] is False
+
+    # The mode took the manual proxies out and pointed the balancers at the
+    # subscriptions; the owner's prefix still covers every node that is left.
+    assert (xray_dir / "04_outbounds.json.disable").exists()
+    routing = json.loads((xray_dir / "05_routing.json").read_text(encoding="utf-8"))
+    strategies = {item["tag"]: item["strategy"]["type"] for item in routing["routing"]["balancers"]}
+    assert strategies["heavy_load_balancer"] == "leastLoad"
+    assert (xray_dir / "07_observatory.json").read_bytes() == reference
+    assert not (jsonc_dir / "07_observatory.jsonc").exists()
+
+    for sub_id in ("vps_nl_sub", "vps_ch_sub"):
+        subs.delete_subscription(
+            str(ui_state_dir), sub_id, xray_configs_dir=str(xray_dir),
+            snapshot=lambda _path: None, remove_file=True, restart_xkeen=None,
+        )
+
+    from services.xray_observatory import collect_catalog
+
+    assert (xray_dir / "07_observatory.json").read_bytes() == reference
+    assert [(item["file"], item["kind"]) for item in collect_catalog(str(xray_dir))["sections"]] == [
+        ("07_observatory.json", "burstObservatory")
+    ]

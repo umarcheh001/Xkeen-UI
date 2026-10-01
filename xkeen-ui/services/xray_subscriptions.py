@@ -5436,6 +5436,15 @@ def sync_subscription_runtime_plan_delta(
         main_changed = _write_json_if_changed(routing_path, cfg, snapshot=snapshot)
         routing_changed = bool(main_changed or raw_changed)
 
+    if next_subscription_only:
+        # The same goes for the outbounds this mode excludes: the manual ones
+        # have just been moved out of the config, so they no longer make an
+        # owner's prefix selector "reach outside the subscription".
+        observatory_remove_tags = _clean_tags_list(
+            [tag for tag in prev_observatory_terms if tag not in set(next_observatory_terms)]
+            + _subscription_only_excluded_runtime_tags(xray_configs_dir, next_auto_terms)
+        )
+
     # Only now: the observatory kind follows the balancer strategies, and the
     # ones that count are those this pass leaves on disk, not those it found.
     observatory_changed = sync_observatory_subjects(
@@ -5732,7 +5741,16 @@ def _apply_observatory_plan(
     own_subjects = clean_selectors(section.get("subjectSelector"))
 
     subjects: List[str] = []
-    if not replace_subjects:
+    if replace_subjects:
+        # "Subscription only" narrows probing to the subscription's nodes.  A
+        # selector that already means exactly that -- a prefix of our tags that
+        # reaches none of the excluded outbounds -- stays as the owner wrote it.
+        subjects = [
+            item
+            for item in own_subjects
+            if any(tag.startswith(item) for tag in add) and not any(other.startswith(item) for other in remove)
+        ]
+    else:
         subjects = [item for item in own_subjects if item not in remove]
         for drop in drops:
             for item in clean_selectors(drop["section"].get("subjectSelector")):
