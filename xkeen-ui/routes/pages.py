@@ -63,10 +63,15 @@ def _detect_panel_core_ui(active_module_ids: set[str] | None = None) -> dict[str
         )
         if not effective_sections:
             effective_sections = supported_sections
+        # The core watcher compares "detected" with /api/xkeen/core, which
+        # reports installed binaries.  Active engines are a different set
+        # (legacy-full keeps both), so publishing them as "detected" made a
+        # single-core router reload the panel every few seconds.
+        detected_cores = list(detect_available_cores())
         return {
             "available_cores": available_cores,
-            "detected_cores": available_cores,
-            "core_ui_fallback": False,
+            "detected_cores": detected_cores,
+            "core_ui_fallback": not detected_cores,
             "has_xray": has_xray,
             "has_mihomo": has_mihomo,
             "has_terminal": has_terminal,
