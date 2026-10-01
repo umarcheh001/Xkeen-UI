@@ -278,6 +278,51 @@ def test_tampered_managed_rule_is_not_automatically_removed(tmp_path: Path, monk
     assert any("изменены вручную" in item for item in result["blockers"])
 
 
+def test_managed_rules_rewritten_without_rule_type_are_still_recognized(tmp_path: Path, monkeypatch):
+    """Xray has a single rule type, so configs tidied for newer cores drop the key.
+
+    Such a rewrite left the panel's own rules looking hand-edited, and a
+    working setup turned into one that could be neither enabled nor disabled.
+    """
+    configs, routing_path, state = _base_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    target = {
+        "kind": "balancer",
+        "tag": dns.BALANCER_TAG,
+        "source": "proxy",
+        "label": "балансировщик proxy",
+        "managed_balancer": {
+            "tag": dns.BALANCER_TAG,
+            "selector": ["proxy-a", "proxy-b"],
+            "strategy": {"type": "leastPing"},
+        },
+    }
+    _write(configs / dns.MANAGED_FRAGMENT, dns._managed_fragment())
+    enabled = dns._build_enabled_routing(routing, target)
+    owned = [rule for rule in enabled["routing"]["rules"] if dns._owned_rule(rule)]
+    assert owned and all(rule.get("type") == "field" for rule in owned)
+    for rule in enabled["routing"]["rules"]:
+        rule.pop("type", None)
+    _write(routing_path, enabled)
+    _write(
+        state / dns.STATE_FILENAME,
+        {"version": 1, "enabled": True, "original_dns_override": False, "target": {
+            "kind": "balancer", "tag": dns.BALANCER_TAG, "source": "proxy", "label": "балансировщик proxy",
+        }},
+    )
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+
+    result = dns.get_status(
+        configs_dir=str(configs), routing_file=str(routing_path), ui_state_dir=str(state)
+    )
+
+    assert result["tampered"] is False
+    assert result["partial"] is False
+    assert result["enabled"] is True
+    assert result["can_disable"] is True
+
+
 def test_http_contract_returns_guarded_status(tmp_path: Path, monkeypatch):
     from routes.routing import dns_over_vless as dns_routes
 

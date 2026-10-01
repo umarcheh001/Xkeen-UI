@@ -1899,6 +1899,18 @@ def _owned_rule(rule: Any) -> bool:
     }
 
 
+def _rule_as_written(rule: Any) -> Any:
+    """The rule in the spelling the panel writes, for comparing with its own.
+
+    Xray has a single rule type, so ``"type": "field"`` says nothing and
+    configs tidied for newer cores drop it.  A managed rule that lost only
+    this key is still the panel's rule, not a hand-edited one.
+    """
+    if isinstance(rule, dict) and "type" not in rule:
+        return {"type": "field", **rule}
+    return rule
+
+
 def _direct_outbound_tag(runtime: Dict[str, Any]) -> str:
     """Tag of a freedom outbound, i.e. the one that leaves the tunnel."""
     for item in runtime.get("outbounds", []):
@@ -2120,6 +2132,7 @@ def _managed_presence(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, bo
                 declared_zones[key].append(zone)
     model = routing.get("routing") if isinstance(routing.get("routing"), dict) else {}
     rules = model.get("rules") if isinstance(model.get("rules"), list) else []
+    rules = [_rule_as_written(item) for item in rules]
     proxy_rule_obj = next((item for item in rules if _clean_tag(item.get("ruleTag")) == PROXY_RULE_TAG), None)
     local_rule_obj = next((item for item in rules if _clean_tag(item.get("ruleTag")) == LOCAL_RULE_TAG), None)
     direct_rule_obj = next((item for item in rules if _clean_tag(item.get("ruleTag")) == DIRECT_RULE_TAG), None)
