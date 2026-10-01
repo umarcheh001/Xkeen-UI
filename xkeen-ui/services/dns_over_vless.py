@@ -269,6 +269,35 @@ def watchdog_enabled() -> bool:
     return raw in {"1", "true", "yes", "on"}
 
 
+MAX_RTT_BOUNDS = (0, 60000)
+
+
+def max_rtt_ms() -> int:
+    """Upper bound on a node's average probe delay for the DNS balancer, 0 = no bound.
+
+    ``leastLoad`` prefers the steadiest node, and a far-away server is often
+    very steady: DNS then rides a node several times slower than the nearest
+    one.  The bound is the owner's call -- it depends on which servers they
+    have -- so it comes from the environment and is read on every apply.
+    The value is compared with the observatory's probe delay (a full request
+    through the tunnel, handshake included), not with the DNS answer time.
+    """
+    return _env_number("XKEEN_DNS_OVER_VLESS_MAX_RTT", 0, MAX_RTT_BOUNDS, int)
+
+
+def prefers_fast_node() -> bool:
+    """Whether the DNS balancer should take the fastest node instead of the steadiest.
+
+    Under ``burstObservatory`` the panel uses ``leastLoad``: it drops a dead or
+    flapping node within a probe cycle, but picks by steadiness, so DNS may run
+    several times slower than through the nearest server.  ``fast`` keeps
+    ``leastPing``: the quickest node, at the price of a dead one staying in use
+    until its whole sample has failed and a flapping one never being dropped.
+    Anything but ``fast`` means the steady choice.
+    """
+    return str(os.environ.get("XKEEN_DNS_OVER_VLESS_PREFER") or "").strip().lower() == "fast"
+
+
 def watchdog_settings() -> Dict[str, Any]:
     """Effective watchdog knobs: defaults unless the environment overrides them."""
     return {
@@ -934,11 +963,14 @@ def _probed_strategy(runtime: Dict[str, Any], tags: Iterable[str]) -> Dict[str, 
     """
     if not _observatory_covers(runtime, list(tags)):
         return {"type": "random"}
-    if runtime.get("observatory_kind") == KIND_BURST:
-        return {
-            "type": "leastLoad",
-            "settings": {"expected": LEAST_LOAD_EXPECTED, "tolerance": LEAST_LOAD_TOLERANCE},
-        }
+    if runtime.get("observatory_kind") == KIND_BURST and not prefers_fast_node():
+        settings: Dict[str, Any] = {"expected": LEAST_LOAD_EXPECTED, "tolerance": LEAST_LOAD_TOLERANCE}
+        limit = max_rtt_ms()
+        if limit > 0:
+            # Nodes over the bound are skipped; if that leaves nobody, the
+            # request goes to the fallbackTag, which stays inside the proxies.
+            settings["maxRTT"] = "%dms" % limit
+        return {"type": "leastLoad", "settings": settings}
     return {"type": "leastPing"}
 
 

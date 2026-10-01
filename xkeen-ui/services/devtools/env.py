@@ -70,6 +70,9 @@ ENV_WHITELIST: Tuple[str, ...] = (
     "XKEEN_DNS_OVER_VLESS_WATCHDOG_INTERVAL",
     "XKEEN_DNS_OVER_VLESS_WATCHDOG_FAILS",
     "XKEEN_DNS_OVER_VLESS_WATCHDOG_RESTARTS",
+    # DNS-over-VLESS balancer
+    "XKEEN_DNS_OVER_VLESS_PREFER",
+    "XKEEN_DNS_OVER_VLESS_MAX_RTT",
     "XKEEN_XRAY_TEST_TIMEOUT",
     "XKEEN_DAT_ALLOW_HOSTS",
     "XKEEN_DAT_ALLOW_HTTP",
@@ -414,6 +417,10 @@ def _default_effective_value(
         return "3"
     if k == "XKEEN_DNS_OVER_VLESS_WATCHDOG_RESTARTS":
         return "2"
+    if k == "XKEEN_DNS_OVER_VLESS_PREFER":
+        return "stable"
+    if k == "XKEEN_DNS_OVER_VLESS_MAX_RTT":
+        return "0"
     if k == "XKEEN_DAT_ALLOW_HOSTS":
         return "github.com,raw.githubusercontent.com,objects.githubusercontent.com,release-assets.githubusercontent.com,codeload.github.com"
     if k == "XKEEN_DAT_ALLOW_HTTP":
