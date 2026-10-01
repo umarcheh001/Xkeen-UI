@@ -790,6 +790,10 @@ def _build_target(
     plan = _fallback_plan(runtime, routing if isinstance(routing, dict) else {}, source)
     if plan["kept"]:
         managed["fallbackTag"] = plan["tag"]
+    else:
+        guard = _guard_fallback_tag(runtime, managed["selector"])
+        if guard:
+            managed["fallbackTag"] = guard
     return {
         "kind": "balancer",
         "tag": BALANCER_TAG,
@@ -799,6 +803,30 @@ def _build_target(
         "fallback": plan,
         "managed_balancer": managed,
     }
+
+
+def _selector_members(runtime: Dict[str, Any], selector: Iterable[Any]) -> list[str]:
+    """Live proxy tags a balancer selector resolves to, in config order."""
+    prefixes = [_clean_tag(value) for value in selector if _clean_tag(value)]
+    return [
+        item["tag"]
+        for item in _proxy_outbounds(runtime)
+        if any(item["tag"].startswith(prefix) for prefix in prefixes)
+    ]
+
+
+def _guard_fallback_tag(runtime: Dict[str, Any], selector: Iterable[Any]) -> str:
+    """One of the balancer's own proxies, to stand in when the strategy picks nobody.
+
+    A balancer that returns no node and has no ``fallbackTag`` does not stop the
+    request: the core hands it to the default outbound, the first one of the
+    merged config.  Where that is a freedom outbound, DNS would leave past the
+    tunnel -- with every node cut by ``tolerance`` or simply dead.  Naming a
+    member keeps the request inside the proxies; if that node is down too, DNS
+    goes quiet, which is what the guard watches for.
+    """
+    members = _selector_members(runtime, selector)
+    return members[0] if members else ""
 
 
 def _stored_selection(state: Dict[str, Any]) -> list[str]:
@@ -857,7 +885,14 @@ def _route_drift(runtime: Dict[str, Any], routing: Dict[str, Any], source_tag: s
     snapshot = [str(value).strip() for value in managed.get("selector", []) if str(value).strip()]
     managed_fallback = _clean_tag(managed.get("fallbackTag"))
     plan = _fallback_plan(runtime, routing, source)
-    current_fallback = plan["tag"] if plan["kept"] else ""
+    if plan["kept"]:
+        current_fallback = plan["tag"]
+    elif not managed_fallback or managed_fallback in _selector_members(runtime, current):
+        # Either a clone made before the guard fallback existed, or the guard
+        # itself: any live member of the selector is as good as another.
+        current_fallback = managed_fallback
+    else:
+        current_fallback = _guard_fallback_tag(runtime, current)
     if current == snapshot and current_fallback == managed_fallback:
         return None
     return {
@@ -933,6 +968,8 @@ def _build_combined_target(
             "tag": BALANCER_TAG,
             "selector": list(tags),
             "strategy": strategy,
+            # See _guard_fallback_tag: without it an empty pick goes to the default outbound.
+            "fallbackTag": tags[0],
         },
     }
 
