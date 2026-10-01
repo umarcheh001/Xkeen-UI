@@ -8,10 +8,115 @@ from __future__ import annotations
 
 import os
 import re
+from dataclasses import dataclass
 
 from flask import Flask, make_response, redirect, render_template, url_for
 from services.capabilities import detect_terminal_state
 from services.cores import detect_available_cores
+
+
+@dataclass(frozen=True, slots=True)
+class PanelCompositionEntry:
+    """One allow-listed optional partial and every module required to render it."""
+
+    collection: str
+    owners: tuple[str, ...]
+    template: str
+
+
+@dataclass(frozen=True, slots=True)
+class PanelNavigationEntry:
+    """One top-level panel navigation item owned by the active module set."""
+
+    owners: tuple[str, ...]
+    section: str
+    label: str
+    class_name: str
+    view: str | None = None
+    element_id: str | None = None
+    href_endpoint: str | None = None
+    top_nav: bool = False
+
+
+PANEL_COMPOSITION: tuple[PanelCompositionEntry, ...] = (
+    PanelCompositionEntry("header_badge_partials", ("engine.xray",), "panel/slots/xray_badge.html"),
+    PanelCompositionEntry("header_summary_partials", ("tool.advanced-diagnostics",), "panel/slots/diagnostics_summary.html"),
+    PanelCompositionEntry("header_action_partials", ("tool.advanced-diagnostics",), "panel/slots/diagnostics_actions.html"),
+    PanelCompositionEntry("control_partials", ("engine.xray",), "panel/slots/routing_focus.html"),
+    PanelCompositionEntry("screen_partials", ("engine.xray",), "panel/screens/routing.html"),
+    PanelCompositionEntry("screen_partials", ("engine.mihomo",), "panel/screens/mihomo.html"),
+    PanelCompositionEntry("screen_partials", ("core",), "panel/screens/xkeen.html"),
+    PanelCompositionEntry("screen_partials", ("tool.terminal",), "panel/screens/commands.html"),
+    PanelCompositionEntry("screen_partials", ("tool.files",), "panel/screens/files.html"),
+    PanelCompositionEntry("screen_partials", ("engine.xray",), "panel/screens/xray_logs.html"),
+    PanelCompositionEntry("modal_partials", ("tool.advanced-diagnostics",), "panel/modals/diagnostics.html"),
+    PanelCompositionEntry("modal_partials", ("engine.xray",), "panel/modals/routing.html"),
+    PanelCompositionEntry("modal_partials", ("tool.terminal",), "panel/modals/commands.html"),
+    PanelCompositionEntry("modal_partials", ("core",), "panel/modals/shared.html"),
+    PanelCompositionEntry("modal_partials", ("engine.mihomo",), "panel/modals/mihomo.html"),
+    PanelCompositionEntry("modal_partials", ("integration.happ", "engine.mihomo"), "panel/modals/happ.html"),
+    PanelCompositionEntry("modal_partials", ("tool.files",), "panel/modals/files.html"),
+    PanelCompositionEntry("modal_partials", ("tool.files", "tool.editor"), "panel/modals/files_editor.html"),
+    PanelCompositionEntry("modal_partials", ("tool.editor",), "panel/modals/editor.html"),
+)
+
+PANEL_COMPOSITION_PARTIALS = tuple(entry.template for entry in PANEL_COMPOSITION)
+
+PANEL_NAVIGATION: tuple[PanelNavigationEntry, ...] = (
+    PanelNavigationEntry(("engine.xray",), "routing", "Роутинг Xray", "top-tab-btn xk-top-tab xk-top-tab-routing", view="routing"),
+    PanelNavigationEntry(("engine.mihomo",), "mihomo", "Роутинг Mihomo", "top-tab-btn xk-top-tab xk-top-tab-mihomo", view="mihomo"),
+    PanelNavigationEntry(("core",), "xkeen", "Порты и исключения", "top-tab-btn xk-top-tab xk-top-tab-xkeen", view="xkeen"),
+    PanelNavigationEntry(("engine.xray",), "xray-logs", "Логи Xray", "top-tab-btn xk-top-tab xk-top-tab-logs", view="xray-logs"),
+    PanelNavigationEntry(("tool.terminal",), "commands", "Команды", "top-tab-btn xk-top-tab xk-top-tab-commands", view="commands"),
+    PanelNavigationEntry(("tool.files",), "files", "Файлы", "top-tab-btn xk-top-tab xk-top-tab-files", view="files", element_id="top-tab-files"),
+    PanelNavigationEntry(("engine.mihomo",), "mihomo-generator", "Mihomo Генератор", "top-tab-btn xk-top-tab xk-top-tab-generator", element_id="top-tab-mihomo-generator", href_endpoint="mihomo_generator_page", top_nav=True),
+    PanelNavigationEntry(("core",), "donate", "Поддержать", "top-tab-btn xk-top-tab xk-top-tab-donate", element_id="top-tab-donate"),
+)
+
+
+def _build_panel_page_context(active_module_ids: set[str] | None) -> dict[str, object]:
+    """Select server-owned panel surfaces from the Stage 3 activation result."""
+
+    active = None if active_module_ids is None else frozenset(str(module_id) for module_id in active_module_ids)
+
+    def is_allowed(owners: tuple[str, ...]) -> bool:
+        return active is None or set(owners) <= active
+
+    context: dict[str, object] = {
+        "active_module_ids": [] if active is None else sorted(active),
+        "legacy_fallback": active is None,
+        "navigation_items": [],
+        "header_badge_partials": [],
+        "header_summary_partials": [],
+        "header_action_partials": [],
+        "control_partials": [],
+        "screen_partials": [],
+        "modal_partials": [],
+    }
+    for entry in PANEL_COMPOSITION:
+        if is_allowed(entry.owners):
+            context[entry.collection].append(entry.template)
+
+    navigation_items: list[dict[str, object]] = []
+    active_view_selected = False
+    for entry in PANEL_NAVIGATION:
+        if not is_allowed(entry.owners):
+            continue
+        item = {
+            "section": entry.section,
+            "label": entry.label,
+            "class_name": entry.class_name,
+            "view": entry.view,
+            "element_id": entry.element_id,
+            "href_endpoint": entry.href_endpoint,
+            "top_nav": entry.top_nav,
+            "active": bool(entry.view) and not active_view_selected,
+        }
+        if entry.view:
+            active_view_selected = True
+        navigation_items.append(item)
+    context["navigation_items"] = navigation_items
+    return context
 
 
 def _parse_sections_whitelist(raw: str | None) -> set[str] | None:

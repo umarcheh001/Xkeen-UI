@@ -18,6 +18,39 @@ _INCLUDE_RE = re.compile(
 _MACRO_IMPORT_RE = re.compile(
     r"""\{%-?\s*from\s+["']panel/macros\.html["']\s+import\s+op_icon\s*-?%\}\s*"""
 )
+_DYNAMIC_INCLUDE_RE = re.compile(
+    r"""\{%-?\s*include\s+(?P<name>header_badge_partial|header_summary_partial|header_action_partial|control_partial|screen_partial|modal_partial)\s*-?%\}"""
+)
+
+
+# Dynamic composition loops are intentionally limited to these server-owned
+# paths. Static inventories expand every Full/Legacy branch without evaluating
+# arbitrary Jinja expressions or accepting template names from runtime input.
+DYNAMIC_COMPOSITION_INCLUDE_PATHS: dict[str, tuple[str, ...]] = {
+    "header_badge_partial": ("panel/slots/xray_badge.html",),
+    "header_summary_partial": ("panel/slots/diagnostics_summary.html",),
+    "header_action_partial": ("panel/slots/diagnostics_actions.html",),
+    "control_partial": ("panel/slots/routing_focus.html",),
+    "screen_partial": (
+        "panel/screens/routing.html",
+        "panel/screens/mihomo.html",
+        "panel/screens/xkeen.html",
+        "panel/screens/commands.html",
+        "panel/screens/files.html",
+        "panel/screens/xray_logs.html",
+    ),
+    "modal_partial": (
+        "panel/modals/diagnostics.html",
+        "panel/modals/routing.html",
+        "panel/modals/commands.html",
+        "panel/modals/shared.html",
+        "panel/modals/mihomo.html",
+        "panel/modals/happ.html",
+        "panel/modals/files.html",
+        "panel/modals/files_editor.html",
+        "panel/modals/editor.html",
+    ),
+}
 
 
 def compose_panel_template(root: Path) -> str:
@@ -38,6 +71,14 @@ def compose_panel_template(root: Path) -> str:
             include_path = match.group("path")
             return expand(include_path, (*stack, relative_path))
 
-        return _INCLUDE_RE.sub(replace, source)
+        source = _INCLUDE_RE.sub(replace, source)
+
+        def replace_dynamic(match: re.Match[str]) -> str:
+            return "\n".join(
+                expand(include_path, (*stack, relative_path))
+                for include_path in DYNAMIC_COMPOSITION_INCLUDE_PATHS[match.group("name")]
+            )
+
+        return _DYNAMIC_INCLUDE_RE.sub(replace_dynamic, source)
 
     return expand("panel.html")
