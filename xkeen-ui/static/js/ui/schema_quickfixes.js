@@ -414,11 +414,12 @@ function buildXrayBurstObservatoryScaffold(selectors) {
   const subjectSelector = uniqueStrings(selectors);
   return {
     subjectSelector: subjectSelector.length ? subjectSelector : ['proxy-'],
+    // destination is an HTTP URL the probe requests through the node; the
+    // cycle (interval x sampling) is how long a dead node stays selectable.
     pingConfig: {
-      destination: '1.1.1.1:80',
-      connectivity: DEFAULT_HEALTHCHECK_URL,
-      interval: '30s',
-      sampling: 5,
+      destination: DEFAULT_HEALTHCHECK_URL,
+      interval: '2m',
+      sampling: 3,
       timeout: '5s',
     },
   };
@@ -440,6 +441,9 @@ function collectXrayObservabilityQuickFixes(text, data, semanticOptions) {
     || isPlainObject(root && root.burstObservatory)
     || isPlainObject(options.externalBurstObservatory)
   );
+  // With a plain observatory in another file a burst added here would be the
+  // second section: the core reads the plain one and the new one probes for nothing.
+  const plainLivesElsewhere = isPlainObject(options.externalObservatory);
 
   balancers.forEach((balancer, index) => {
     if (!isPlainObject(balancer)) return;
@@ -462,7 +466,7 @@ function collectXrayObservabilityQuickFixes(text, data, semanticOptions) {
       if (fix) fixes.push(fix);
     }
 
-    if (strategyType === 'leastLoad' && !hasBurstObservatory) {
+    if (strategyType === 'leastLoad' && !hasBurstObservatory && !plainLivesElsewhere) {
       const fix = modifyJsonText(text, ['burstObservatory'], buildXrayBurstObservatoryScaffold(selectors), {
         id: `xray-burst-observatory-add-${balancerPath.join('.')}`,
         title: 'Добавить блок `burstObservatory`',
@@ -679,6 +683,8 @@ function buildXraySemanticQuickFixes(text, data, semanticOptions) {
     }
 
     if (code === 'balancer-burst-observatory-missing' && path.length >= 2) {
+      // Same reason as in collectXrayObservabilityQuickFixes: no second section.
+      if (isPlainObject(semanticOptions && semanticOptions.externalObservatory)) return;
       const balancerPath = path.slice(0, -2);
       const balancer = getValueAtPath(data, balancerPath);
       const selectors = uniqueStrings(Array.isArray(balancer && balancer.selector) ? balancer.selector : []);
