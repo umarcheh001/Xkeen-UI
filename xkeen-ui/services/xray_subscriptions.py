@@ -3540,6 +3540,45 @@ def _restore_subscription_managed_baselines(
     }
 
 
+def _observatory_kind_of(obj: Any) -> str:
+    if isinstance(obj, dict):
+        for kind in (KIND_PLAIN, KIND_BURST):
+            if isinstance(obj.get(kind), dict):
+                return kind
+    return ""
+
+
+def _undo_observatory_conversion(
+    ui_state_dir: str,
+    *,
+    xray_configs_dir: str,
+    snapshot: SnapshotCallback | None = None,
+) -> bool:
+    """Give the owner's observatory file back once no subscription needs it.
+
+    While a subscription is active the panel may switch the section kind to
+    match the balancer strategies.  Removing tags cannot undo that, so when the
+    last subscription leaves and the kind differs from the one captured before
+    the first subscription, the captured file is written back whole.  A file of
+    the same kind is left to tag removal: edits the owner made meanwhile stay.
+    """
+    with _STATE_LOCK:
+        state = load_subscription_state(ui_state_dir)
+        baselines = _normalize_managed_baselines(state.get(MANAGED_BASELINES_KEY))
+    baseline = baselines.get(MANAGED_BASELINE_OBSERVATORY_KEY) if baselines else None
+    if not isinstance(baseline, dict) or not baseline.get("exists"):
+        return False
+    before_kind = _observatory_kind_of(_load_jsonc_text(str(baseline.get("text") or "")))
+    if not before_kind:
+        return False
+    path = _config_fragment_path(xray_configs_dir, baseline.get("path") or OBSERVATORY_FILE)
+    if _observatory_kind_of(read_fragment(path)) == before_kind:
+        return False
+    return _restore_managed_file_baseline(
+        xray_configs_dir, baseline, default_name=OBSERVATORY_FILE, snapshot=snapshot
+    )
+
+
 def _clear_subscription_managed_baselines(ui_state_dir: str) -> bool:
     with _STATE_LOCK:
         state = load_subscription_state(ui_state_dir)
@@ -5624,12 +5663,18 @@ def _rebuild_subscription_runtime(
         rebuilt["routing_changed"] = bool(restored.get("routing_changed") or rebuilt.get("routing_changed"))
         rebuilt["outbounds_changed"] = bool(restored.get("outbounds_changed") or rebuilt.get("outbounds_changed"))
         return rebuilt
-    return sync_subscription_runtime_plan_delta(
+    result = sync_subscription_runtime_plan_delta(
         xray_configs_dir=xray_configs_dir,
         previous_plan=prev_plan,
         next_plan=next_plan,
         snapshot=snapshot,
     )
+    if not next_plan.get("has_runtime_targets"):
+        # Callers drop the baselines right after this returns, so the kind has
+        # to go back now or never.
+        undone = _undo_observatory_conversion(ui_state_dir, xray_configs_dir=xray_configs_dir, snapshot=snapshot)
+        result["observatory_changed"] = bool(result.get("observatory_changed") or undone)
+    return result
 
 
 def _apply_observatory_plan(
