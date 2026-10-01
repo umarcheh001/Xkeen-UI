@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, Optional
 
 from services.cores import detect_available_cores, detect_running_core
+from services.xray_observatory import KIND_BURST, KIND_PLAIN, LEAST_LOAD_EXPECTED, LEAST_LOAD_TOLERANCE
 from services.io.atomic import _atomic_write_json, _atomic_write_text
 from services.xray_config_files import jsonc_path_for
 from services import dns_client_capture
@@ -375,23 +376,25 @@ def _collect_runtime(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, Any
     # tag -> inboundTag a loopback outbound re-injects traffic with, so a
     # fallback chain can be followed across the loopback hop.
     loopback_targets: Dict[str, str] = {}
-    # subjectSelector entries of observatory/burstObservatory: leastPing only
-    # works for outbounds an observatory actually probes.
-    observatory_selectors: list[str] = []
+    # subjectSelector entries per observatory kind.  With both sections present
+    # the core reads the plain one, so only its selectors count as "probed".
+    observatory_by_kind: Dict[str, list[str]] = {KIND_PLAIN: [], KIND_BURST: []}
+    observatory_present: set[str] = set()
 
     for name, obj in _iter_json_fragments(configs_dir):
         dns = obj.get("dns")
         if isinstance(dns, dict) and dns:
             dns_fragments.append(name)
-        for key in ("observatory", "burstObservatory"):
+        for key in (KIND_PLAIN, KIND_BURST):
             section = obj.get(key)
             if not isinstance(section, dict):
                 continue
+            observatory_present.add(key)
             raw = section.get("subjectSelector")
             for value in raw if isinstance(raw, list) else []:
                 prefix = str(value).strip()
                 if prefix:
-                    observatory_selectors.append(prefix)
+                    observatory_by_kind[key].append(prefix)
         for item in obj.get("outbounds") if isinstance(obj.get("outbounds"), list) else []:
             if not isinstance(item, dict):
                 continue
@@ -422,6 +425,11 @@ def _collect_runtime(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, Any
 
     routing_obj = routing.get("routing") if isinstance(routing.get("routing"), dict) else {}
     balancers = [item for item in routing_obj.get("balancers", []) if isinstance(item, dict)]
+    observatory_kind = (
+        KIND_PLAIN if KIND_PLAIN in observatory_present
+        else KIND_BURST if KIND_BURST in observatory_present
+        else ""
+    )
     return {
         "outbounds": outbounds,
         "inbound_tags": inbound_tags,
@@ -429,7 +437,8 @@ def _collect_runtime(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, Any
         "dns_fragments": dns_fragments,
         "balancers": balancers,
         "loopback_targets": loopback_targets,
-        "observatory_selectors": observatory_selectors,
+        "observatory_selectors": observatory_by_kind.get(observatory_kind, []),
+        "observatory_kind": observatory_kind,
     }
 
 
@@ -763,6 +772,16 @@ def _build_target(
         "selector": list(candidate["selector"]),
         "strategy": copy.deepcopy(source.get("strategy") or {"type": "random"}),
     }
+    if _clean_tag(managed["strategy"].get("type")).lower() == "leastping":
+        live = [
+            item["tag"]
+            for item in _proxy_outbounds(runtime)
+            if any(item["tag"].startswith(prefix) for prefix in managed["selector"])
+        ]
+        upgraded = _probed_strategy(runtime, live)
+        # Only ever upgrade: an uncovered leastPing clone stays what the owner wrote.
+        if upgraded["type"] == "leastLoad":
+            managed["strategy"] = upgraded
     # Carry the fallback over only when the whole chain stays inside proxies.
     # A fallback that ends at a freedom outbound would send 127.0.0.53 back to
     # the router and can create a DNS loop/leak, so that one is still dropped.
@@ -868,6 +887,24 @@ def _observatory_covers(runtime: Dict[str, Any], tags: Iterable[str]) -> bool:
     return all(any(str(tag).startswith(prefix) for prefix in prefixes) for tag in tags)
 
 
+def _probed_strategy(runtime: Dict[str, Any], tags: Iterable[str]) -> Dict[str, Any]:
+    """Health-aware strategy for outbounds an observatory actually probes.
+
+    Under ``burstObservatory`` a node counts as alive while any probe of its
+    sample succeeded, and failed probes never enter its average delay -- so
+    ``leastPing`` keeps choosing a dead or flapping node.  ``leastLoad`` can cut
+    a node by its share of failed probes, which is what DNS needs.
+    """
+    if not _observatory_covers(runtime, list(tags)):
+        return {"type": "random"}
+    if runtime.get("observatory_kind") == KIND_BURST:
+        return {
+            "type": "leastLoad",
+            "settings": {"expected": LEAST_LOAD_EXPECTED, "tolerance": LEAST_LOAD_TOLERANCE},
+        }
+    return {"type": "leastPing"}
+
+
 def _build_combined_target(
     chosen: list[Dict[str, Any]], runtime: Dict[str, Any]
 ) -> Dict[str, Any]:
@@ -880,7 +917,7 @@ def _build_combined_target(
     so fall back to ``random``.
     """
     tags = [item["tag"] for item in chosen]
-    strategy = {"type": "leastPing"} if _observatory_covers(runtime, tags) else {"type": "random"}
+    strategy = _probed_strategy(runtime, tags)
     return {
         "kind": "balancer",
         "tag": BALANCER_TAG,

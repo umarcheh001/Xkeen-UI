@@ -977,6 +977,58 @@ def test_least_ping_is_used_only_when_observatory_probes_the_chosen_proxies(tmp_
     assert partly["managed_balancer"]["strategy"] == {"type": "random"}
 
 
+LEAST_LOAD_WITH_TOLERANCE = {"type": "leastLoad", "settings": {"expected": 2, "tolerance": 0.5}}
+
+
+def test_burst_observatory_switches_own_balancer_to_least_load(tmp_path: Path):
+    configs, routing_path, _state = _scenario_config(tmp_path)
+    _write(configs / "07_observatory.json", {"burstObservatory": {"subjectSelector": ["my_proxy"]}})
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    runtime = dns._collect_runtime(str(configs), routing)
+
+    covered = dns._select_target(runtime, ["my_proxy_1", "my_proxy_2"], routing)
+    partly = dns._select_target(runtime, ["my_proxy_1", "reserve_proxy_1"], routing)
+
+    assert runtime["observatory_kind"] == "burstObservatory"
+    assert covered["managed_balancer"]["strategy"] == LEAST_LOAD_WITH_TOLERANCE
+    assert partly["managed_balancer"]["strategy"] == {"type": "random"}
+
+
+def test_plain_observatory_wins_when_both_sections_exist(tmp_path: Path):
+    configs, routing_path, _state = _scenario_config(tmp_path)
+    _write(configs / "07_observatory.json", {"observatory": {"subjectSelector": ["reserve_proxy"]}})
+    _write(configs / "09_burst.json", {"burstObservatory": {"subjectSelector": ["my_proxy"]}})
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    runtime = dns._collect_runtime(str(configs), routing)
+
+    # The core reads the plain section, so my_proxy_* are in fact not probed.
+    assert runtime["observatory_kind"] == "observatory"
+    assert runtime["observatory_selectors"] == ["reserve_proxy"]
+    target = dns._select_target(runtime, ["my_proxy_1", "my_proxy_2"], routing)
+    assert target["managed_balancer"]["strategy"] == {"type": "random"}
+
+
+def test_cloned_least_ping_balancer_becomes_least_load_under_burst(tmp_path: Path):
+    configs, routing_path, _state = _scenario_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    source = next(
+        item for item in routing["routing"]["balancers"]
+        if (item.get("strategy") or {}).get("type") == "leastPing"
+    )
+    probed = [str(value) for value in source["selector"]]
+
+    _write(configs / "07_observatory.json", {"burstObservatory": {"subjectSelector": probed}})
+    burst_runtime = dns._collect_runtime(str(configs), routing)
+    under_burst = dns._select_target(burst_runtime, source["tag"], routing)
+
+    _write(configs / "07_observatory.json", {"observatory": {"subjectSelector": probed}})
+    plain_runtime = dns._collect_runtime(str(configs), routing)
+    under_plain = dns._select_target(plain_runtime, source["tag"], routing)
+
+    assert under_burst["managed_balancer"]["strategy"] == LEAST_LOAD_WITH_TOLERANCE
+    assert under_plain["managed_balancer"]["strategy"] == {"type": "leastPing"}
+
+
 def test_a_balancer_cannot_be_combined_with_other_routes(tmp_path: Path):
     configs, routing_path, _state = _scenario_config(tmp_path)
     routing = json.loads(routing_path.read_text(encoding="utf-8"))
