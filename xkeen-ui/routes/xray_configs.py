@@ -72,7 +72,14 @@ from services.xray_outbounds_runtime import (
     infer_active_xray_outbound,
     read_xray_outbound_runtime_log_sources,
 )
-from services.xray_observatory import apply_generate_request, collect_catalog, describe_config, read_fragment
+from services.xray_observatory import (
+    OBSERVATORY_FILE,
+    apply_generate_request,
+    collect_catalog,
+    describe_config,
+    locate_section,
+    read_fragment,
+)
 
 
 from routes.common.errors import error_response, exception_response
@@ -2118,12 +2125,23 @@ def create_xray_configs_blueprint(
         return jsonify({"ok": True, "existed": False, "files": files_written, "restarted": restarted}), 200
 
 
+    def _observatory_file_in_effect() -> tuple[str, bool]:
+        """The file holding the section the core reads, and whether burst is needed.
+
+        The section may live in any fragment; the form has to read and edit that
+        one, or it shows empty fields and then writes a second section.
+        """
+        catalog = collect_catalog(XRAY_CONFIGS_DIR)
+        holder = locate_section(catalog)
+        return (holder["file"] if holder is not None else OBSERVATORY_FILE), bool(catalog["has_least_load"])
+
     # --- API: Xray observatory config (read) ---
 
     @bp.get("/api/xray/observatory/config")
     def api_xray_observatory_config():
-        """Return parsed observatory settings for 07_observatory.json (if present)."""
-        dst_json = os.path.join(XRAY_CONFIGS_DIR, "07_observatory.json")
+        """Return parsed settings of the observatory section in effect (if any)."""
+        file_name, want_burst = _observatory_file_in_effect()
+        dst_json = os.path.join(XRAY_CONFIGS_DIR, file_name)
         dst_jsonc = jsonc_path_for(dst_json)
         legacy_dst_jsonc = legacy_jsonc_path_for(dst_json)
 
@@ -2137,7 +2155,7 @@ def create_xray_configs_blueprint(
         if exists:
             cfg_obj = read_fragment(dst_json) or {}
 
-        config = describe_config(cfg_obj)
+        config = describe_config(cfg_obj, want_burst=want_burst)
 
         # Also report where JSONC sidecar lives (for UI hints/debug), without exposing realpaths.
         jsonc_exists = False
@@ -2155,7 +2173,7 @@ def create_xray_configs_blueprint(
                     "ok": True,
                     "exists": bool(exists),
                     "dir": XRAY_CONFIGS_DIR,
-                    "file": "07_observatory.json",
+                    "file": file_name,
                     "jsonc": os.path.basename(dst_jsonc),
                     "jsonc_exists": bool(jsonc_exists),
                     "legacy_jsonc_exists": bool(legacy_jsonc_exists),
@@ -2170,7 +2188,10 @@ def create_xray_configs_blueprint(
 
     @bp.post("/api/xray/observatory/generate")
     def api_xray_observatory_generate():
-        """Generate/update 07_observatory.json (+ JSONC sidecar) from UI parameters.
+        """Generate/update the observatory section (+ JSONC sidecar) from UI parameters.
+
+        The section is edited in the file that holds it; 07_observatory.json is
+        used only when the directory has none.
 
         Payload:
           - subjectSelector: list[str] (required)
@@ -2216,7 +2237,8 @@ def create_xray_configs_blueprint(
         probe_interval = payload.get("probeInterval")
         enable_conc = payload.get("enableConcurrency")
 
-        dst_json = os.path.join(XRAY_CONFIGS_DIR, "07_observatory.json")
+        file_name, want_burst = _observatory_file_in_effect()
+        dst_json = os.path.join(XRAY_CONFIGS_DIR, file_name)
         dst_jsonc = jsonc_path_for(dst_json)
         legacy_dst_jsonc = legacy_jsonc_path_for(dst_json)
 
@@ -2230,7 +2252,7 @@ def create_xray_configs_blueprint(
 
         if existed and not overwrite:
             # No-op: return current config
-            return jsonify({"ok": True, "existed": True, "overwritten": False, "file": "07_observatory.json"}), 200
+            return jsonify({"ok": True, "existed": True, "overwritten": False, "file": file_name}), 200
 
         # Load existing JSON as base (preserve unknown keys), otherwise start minimal.
         cfg_obj: Dict[str, Any] = (read_fragment(dst_json) or {}) if existed else {}
@@ -2241,9 +2263,9 @@ def create_xray_configs_blueprint(
             probe_url=probe_url,
             probe_interval=probe_interval,
             enable_concurrency=enable_conc,
-            want_burst=bool(collect_catalog(XRAY_CONFIGS_DIR)["has_least_load"]),
+            want_burst=want_burst,
         )
-        described = describe_config(cfg_obj)
+        described = describe_config(cfg_obj, want_burst=want_burst)
 
         # Write JSON for Xray
         try:
@@ -2277,7 +2299,7 @@ def create_xray_configs_blueprint(
                     "ok": True,
                     "existed": bool(existed),
                     "overwritten": True,
-                    "file": "07_observatory.json",
+                    "file": file_name,
                     "jsonc": os.path.basename(dst_jsonc),
                     "config": described,
                 }
