@@ -5669,7 +5669,7 @@ def _rebuild_subscription_runtime(
         next_plan=next_plan,
         snapshot=snapshot,
     )
-    if not next_plan.get("has_runtime_targets"):
+    if not result.get("has_runtime_targets"):
         # Callers drop the baselines right after this returns, so the kind has
         # to go back now or never.
         undone = _undo_observatory_conversion(ui_state_dir, xray_configs_dir=xray_configs_dir, snapshot=snapshot)
