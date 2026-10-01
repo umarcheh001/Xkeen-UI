@@ -1,7 +1,17 @@
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 import routes.pages as pages
-from scripts.panel_template_source import DYNAMIC_COMPOSITION_INCLUDE_PATHS
+from scripts.panel_template_source import (
+    DYNAMIC_COMPOSITION_INCLUDE_PATHS,
+    DYNAMIC_NAVIGATION_ITEMS,
+)
+from tests.support.panel_render import (
+    FULL_MODULE_IDS as RENDER_FULL_MODULE_IDS,
+    render_panel,
+)
 
 
 FULL_MODULE_IDS = {
@@ -110,3 +120,90 @@ def test_static_source_resolver_catalog_matches_the_runtime_manifest():
     }
 
     assert static_paths == set(pages.PANEL_COMPOSITION_PARTIALS)
+
+
+def test_static_source_resolver_navigation_catalog_matches_runtime_manifest():
+    static_items = tuple(
+        (
+            item["owners"],
+            item["section"],
+            item["label"],
+            item["class_name"],
+            item["view"],
+            item["element_id"],
+            item["href_endpoint"],
+            item["top_nav"],
+        )
+        for item in DYNAMIC_NAVIGATION_ITEMS
+    )
+    runtime_items = tuple(
+        (
+            entry.owners,
+            entry.section,
+            entry.label,
+            entry.class_name,
+            entry.view,
+            entry.element_id,
+            entry.href_endpoint,
+            entry.top_nav,
+        )
+        for entry in pages.PANEL_NAVIGATION
+    )
+
+    assert static_items == runtime_items
+
+
+def _navigation_sections_from_html(html: str) -> list[str]:
+    navigation = html.split('<div class="top-tabs header-tabs"', 1)[1].split("</div>", 1)[0]
+    return re.findall(r'data-xk-section="([^"]+)"', navigation)
+
+
+def test_core_only_html_has_no_optional_navigation_or_shell_markup(tmp_path):
+    html = render_panel(["core"], tmp_path)
+
+    assert _navigation_sections_from_html(html) == ["xkeen", "donate"]
+    for marker in (
+        'id="view-routing"',
+        'id="view-mihomo"',
+        'id="view-commands"',
+        'id="view-files"',
+        'id="xray-logs-badge"',
+        'id="xk-resource-monitor"',
+        'id="routing-focus-switch"',
+    ):
+        assert marker not in html
+
+
+def test_legacy_and_full_html_keep_the_same_composed_surface_set(tmp_path):
+    full = render_panel(RENDER_FULL_MODULE_IDS, tmp_path / "full")
+    legacy = render_panel(None, tmp_path / "legacy")
+
+    for marker in (
+        'id="view-routing"',
+        'id="view-mihomo"',
+        'id="view-xkeen"',
+        'id="view-commands"',
+        'id="view-files"',
+        'id="view-xray-logs"',
+        'id="routing-focus-switch"',
+    ):
+        assert (marker in full) == (marker in legacy)
+
+
+def test_full_profile_preserves_the_diagnostics_modal_position_before_screens(tmp_path):
+    html = render_panel(RENDER_FULL_MODULE_IDS, tmp_path)
+
+    assert html.index('id="xk-resource-dashboard-modal"') < html.index('id="view-routing"')
+
+
+def test_stage4_5_closure_is_documented():
+    root = Path(__file__).resolve().parents[1]
+    plan = (root / "README-modular-panel-plan.md").read_text(encoding="utf-8")
+    index = (root / "docs/README.md").read_text(encoding="utf-8")
+    contract = (root / "docs/modular-panel-stage4.5-composition.md").read_text(encoding="utf-8")
+
+    assert "**Статус:** закрыт 1 октября 2026 года." in plan
+    assert "следующий — подэтап 4.6" in plan
+    assert "modular-panel-stage4.5-composition.md" in plan
+    assert "modular-panel-stage4.5-composition.md" in index
+    assert "Критерий завершения **выполнен**" in contract

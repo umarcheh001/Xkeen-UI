@@ -1,34 +1,14 @@
       </div>
 
       <div class="top-tabs header-tabs" role="navigation" aria-label="Разделы панели">
-        {% if has_xray %}
-        <button class="top-tab-btn xk-top-tab xk-top-tab-routing active" data-view="routing" data-xk-section="routing">
-          Роутинг Xray
+        {% for item in page_context.navigation_items %}
+        <button class="{{ item.class_name }}{% if item.active %} active{% endif %}"
+                {% if not item.view %}type="button" {% endif %}
+                {% if item.view %}data-view="{{ item.view }}" {% endif %}
+                data-xk-section="{{ item.section }}"
+                {% if item.element_id %}id="{{ item.element_id }}" {% endif %}
+                {% if item.href_endpoint %}data-nav-href="{{ url_for(item.href_endpoint) }}" {% endif %}
+                {% if item.top_nav %}data-xk-top-nav="1"{% endif %}>
+          {{ item.label }}
         </button>
-        {% endif %}
-        {% if has_mihomo %}
-        <button class="top-tab-btn xk-top-tab xk-top-tab-mihomo" data-view="mihomo" data-xk-section="mihomo">
-          Роутинг Mihomo
-        </button>
-        {% endif %}
-        <button class="top-tab-btn xk-top-tab xk-top-tab-xkeen" data-view="xkeen" data-xk-section="xkeen">
-          Порты и исключения
-        </button>
-        {% if has_xray %}
-        <button class="top-tab-btn xk-top-tab xk-top-tab-logs" data-view="xray-logs" data-xk-section="xray-logs">
-          Логи Xray
-        </button>
-        {% endif %}
-        <button class="top-tab-btn xk-top-tab xk-top-tab-commands" data-view="commands" data-xk-section="commands">
-          Команды
-        </button>
-        <button class="top-tab-btn xk-top-tab xk-top-tab-files" data-view="files" data-xk-section="files" id="top-tab-files">
-          Файлы
-        </button>
-        {% if has_mihomo %}
-        <button class="top-tab-btn xk-top-tab xk-top-tab-generator" type="button" data-xk-section="mihomo-generator" id="top-tab-mihomo-generator" data-nav-href="{{ url_for('mihomo_generator_page') }}" data-xk-top-nav="1">
-          Mihomo Генератор
-        </button>
-        {% endif %}
-        <button class="top-tab-btn xk-top-tab xk-top-tab-donate" type="button" data-xk-section="donate" id="top-tab-donate">
-          Поддержать
+        {% endfor %}

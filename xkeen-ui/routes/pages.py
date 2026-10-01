@@ -49,7 +49,7 @@ PANEL_COMPOSITION: tuple[PanelCompositionEntry, ...] = (
     PanelCompositionEntry("screen_partials", ("tool.terminal",), "panel/screens/commands.html"),
     PanelCompositionEntry("screen_partials", ("tool.files",), "panel/screens/files.html"),
     PanelCompositionEntry("screen_partials", ("engine.xray",), "panel/screens/xray_logs.html"),
-    PanelCompositionEntry("modal_partials", ("tool.advanced-diagnostics",), "panel/modals/diagnostics.html"),
+    PanelCompositionEntry("pre_screen_modal_partials", ("tool.advanced-diagnostics",), "panel/modals/diagnostics.html"),
     PanelCompositionEntry("modal_partials", ("engine.xray",), "panel/modals/routing.html"),
     PanelCompositionEntry("modal_partials", ("tool.terminal",), "panel/modals/commands.html"),
     PanelCompositionEntry("modal_partials", ("core",), "panel/modals/shared.html"),
@@ -90,6 +90,7 @@ def _build_panel_page_context(active_module_ids: set[str] | None) -> dict[str, o
         "header_summary_partials": [],
         "header_action_partials": [],
         "control_partials": [],
+        "pre_screen_modal_partials": [],
         "screen_partials": [],
         "modal_partials": [],
     }
@@ -300,6 +301,7 @@ def register_pages_routes(
             _fm_right_default = "/tmp/mnt"
 
         _core_ui = _detect_panel_core_ui(active_module_ids)
+        page_context = _build_panel_page_context(active_module_ids)
         page_ctx = {
             "machine": _machine,
             "is_mips": _is_mips,
@@ -319,6 +321,7 @@ def register_pages_routes(
             "command_groups": COMMAND_GROUPS,
             "github_repo_url": GITHUB_REPO_URL,
             "fm_right_default": _fm_right_default,
+            "page_context": page_context,
             **_core_ui,
         }
 

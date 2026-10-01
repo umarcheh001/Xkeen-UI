@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from routes.pages import PANEL_COMPOSITION
 from scripts.panel_template_source import compose_panel_template
 
 
@@ -15,9 +16,14 @@ def test_routing_screen_is_owned_by_engine_xray_partial():
     panel = PANEL.read_text(encoding="utf-8")
     routing = ROUTING.read_text(encoding="utf-8")
 
-    assert '{% include "panel/screens/routing.html" %}' in panel
+    assert "{% for screen_partial in page_context.screen_partials %}" in panel
+    assert "{% include screen_partial %}" in panel
     assert 'id="view-routing"' not in panel
-    assert '{% if has_xray %}' in panel
+    assert [
+        entry.owners
+        for entry in PANEL_COMPOSITION
+        if entry.template == "panel/screens/routing.html"
+    ] == [("engine.xray",)]
     assert '{% if has_xray %}' not in routing
     assert 'id="view-routing"' in routing
     assert 'data-xk-section="routing"' in routing

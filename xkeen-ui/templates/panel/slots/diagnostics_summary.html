@@ -1,0 +1,22 @@
+<button
+  type="button"
+  id="xk-resource-monitor"
+  class="xk-resource-monitor"
+  aria-label="Ресурсы роутера: загрузка данных"
+  title="Ресурсы роутера обновляются каждые 5 секунд"
+  data-state="loading"
+  aria-haspopup="dialog"
+  data-resource-dashboard-target="xk-resource-dashboard-modal"
+>
+  <span class="xk-resource-monitor-item">
+    <span class="xk-resource-monitor-label">CPU</span>
+    <strong id="xk-resource-cpu">—</strong>
+    <span class="xk-resource-meter" aria-hidden="true"><i id="xk-resource-cpu-meter"></i></span>
+  </span>
+  <span class="xk-resource-monitor-item">
+    <span class="xk-resource-monitor-label">RAM</span>
+    <strong id="xk-resource-memory">—</strong>
+    <span class="xk-resource-meter" aria-hidden="true"><i id="xk-resource-memory-meter"></i></span>
+  </span>
+  <span id="xk-resource-monitor-stale" class="xk-resource-monitor-stale" hidden>нет данных</span>
+</button>

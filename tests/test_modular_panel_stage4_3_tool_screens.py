@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from routes.pages import PANEL_COMPOSITION
 from scripts.panel_template_source import compose_panel_template
 from tests.support.panel_render import (
     FULL_MODULE_IDS,
@@ -16,10 +17,9 @@ from tests.support.panel_render import (
 ROOT = Path(__file__).resolve().parents[1]
 PANEL = ROOT / "xkeen-ui/templates/panel.html"
 SCREENS = {
-    # screen -> (partial, gate, module owner, required ids)
+    # screen -> (partial, module owner, required ids)
     "commands": (
         "commands.html",
-        "has_terminal",
         "tool.terminal",
         (
             "terminal-open-shell-btn",
@@ -32,7 +32,6 @@ SCREENS = {
     ),
     "files": (
         "files.html",
-        "has_files",
         "tool.files",
         ("fm-title", "fm-volumes-btn", "fm-ops-btn", "fm-root", "fm-help-btn"),
     ),
@@ -41,17 +40,18 @@ SCREENS = {
 
 @pytest.mark.parametrize("screen", sorted(SCREENS))
 def test_tool_screen_is_owned_by_module_partial(screen):
-    partial, gate, _owner, _ids = SCREENS[screen]
+    partial, owner, _ids = SCREENS[screen]
     panel = PANEL.read_text(encoding="utf-8")
     markup = (ROOT / "xkeen-ui/templates/panel/screens" / partial).read_text(encoding="utf-8")
 
-    include = f'{{% include "panel/screens/{partial}" %}}'
-    assert include in panel
+    assert "{% for screen_partial in page_context.screen_partials %}" in panel
+    assert "{% include screen_partial %}" in panel
     assert f'id="view-{screen}"' not in panel
-    # The gate lives in the composition root, directly around the include.
-    gate_start = panel.rindex(f"{{% if {gate} %}}", 0, panel.index(include))
-    assert panel.index("{% endif %}", gate_start) > panel.index(include)
-    assert gate not in markup
+    assert [
+        entry.owners
+        for entry in PANEL_COMPOSITION
+        if entry.template == f"panel/screens/{partial}"
+    ] == [(owner,)]
     assert f'id="view-{screen}"' in markup
     assert f'data-xk-section="{screen}"' in markup
     assert 'class="modal' not in markup
@@ -67,7 +67,7 @@ def test_tool_screens_keep_dom_contract_and_order():
         for name in ("xkeen", "commands", "files", "xray-logs")
     ]
     assert order == sorted(order)
-    for screen, (_partial, _gate, _owner, required_ids) in SCREENS.items():
+    for screen, (_partial, _owner, required_ids) in SCREENS.items():
         assert source.count(f'id="view-{screen}"') == 1
         for required_id in required_ids:
             assert f'id="{required_id}"' in source

@@ -31,14 +31,11 @@ def test_stage4_2_shell_partials_and_thin_composition_root_exist():
     assert "<head>" not in source
     assert '<body class=' not in source
     assert '<header class="panel-header' not in source
-    assert '{% include "panel/screens/routing.html" %}' in source
+    assert "{% for screen_partial in page_context.screen_partials %}" in source
+    assert "{% include screen_partial %}" in source
     assert 'id="view-routing"' not in source
-    assert '{% include "panel/screens/mihomo.html" %}' in source
     assert 'id="view-mihomo"' not in source
-    assert '{% include "panel/screens/xkeen.html" %}' in source
     assert 'id="view-xkeen"' not in source
-    assert '{% include "panel/screens/commands.html" %}' in source
-    assert '{% include "panel/screens/files.html" %}' in source
     for screen in ("commands", "files"):
         assert f'id="view-{screen}"' not in source
 

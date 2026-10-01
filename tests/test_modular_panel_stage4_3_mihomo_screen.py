@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from routes.pages import PANEL_COMPOSITION
 from scripts.panel_template_source import compose_panel_template
 from tests.support.panel_render import (
     MIHOMO_MINIMAL_MODULE_IDS,
@@ -20,12 +21,14 @@ def test_mihomo_screen_is_owned_by_engine_mihomo_partial():
     panel = PANEL.read_text(encoding="utf-8")
     mihomo = MIHOMO.read_text(encoding="utf-8")
 
-    include = '{% include "panel/screens/mihomo.html" %}'
-    assert include in panel
+    assert "{% for screen_partial in page_context.screen_partials %}" in panel
+    assert "{% include screen_partial %}" in panel
     assert 'id="view-mihomo"' not in panel
-    # The gate lives in the composition root, directly around the include.
-    gate_start = panel.rindex("{% if has_mihomo %}", 0, panel.index(include))
-    assert panel.index("{% endif %}", gate_start) > panel.index(include)
+    assert [
+        entry.owners
+        for entry in PANEL_COMPOSITION
+        if entry.template == "panel/screens/mihomo.html"
+    ] == [("engine.mihomo",)]
     assert "{% if has_mihomo %}" not in mihomo
     assert 'id="view-mihomo"' in mihomo
     assert 'data-xk-section="mihomo"' in mihomo

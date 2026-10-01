@@ -2,53 +2,18 @@
 {% include "panel/head.html" %}
 {% include "panel/shell.html" %}
 
-    {% if has_diagnostics %}
-    {% include "panel/modals/diagnostics.html" %}
-    {% endif %}
+{% for pre_screen_modal_partial in page_context.pre_screen_modal_partials %}
+{% include pre_screen_modal_partial %}
+{% endfor %}
 
-    {% if has_xray %}
-    {% include "panel/screens/routing.html" %}
-    {% endif %}
-    {% if has_mihomo %}
-    {% include "panel/screens/mihomo.html" %}
-    {% endif %}
-    {% include "panel/screens/xkeen.html" %}
+{% for screen_partial in page_context.screen_partials %}
+{% include screen_partial %}
+{% endfor %}
 
-    {% if has_terminal %}
-    {% include "panel/screens/commands.html" %}
-    {% endif %}
-
-    {% if has_files %}
-    {% include "panel/screens/files.html" %}
-    {% endif %}
-
-    {% if has_xray %}
-    {% include "panel/screens/xray_logs.html" %}
-    {% endif %}
-
-    {# Modal partials: one owner each; gates live only in this composition root. #}
-    {% if has_xray %}
-    {% include "panel/modals/routing.html" %}
-    {% endif %}
-    {% if has_terminal %}
-    {% include "panel/modals/commands.html" %}
-    {% endif %}
-    {% include "panel/modals/shared.html" %}
-    {% if has_mihomo %}
-    {% include "panel/modals/mihomo.html" %}
-    {% endif %}
-    {% if has_happ and has_mihomo %}
-    {% include "panel/modals/happ.html" %}
-    {% endif %}
-    {% if has_files %}
-    {% include "panel/modals/files.html" %}
-    {% endif %}
-    {% if has_files and has_editor %}
-    {% include "panel/modals/files_editor.html" %}
-    {% endif %}
-    {% if has_editor %}
-    {% include "panel/modals/editor.html" %}
-    {% endif %}
+    {# Module ownership is resolved by the server-side composition manifest. #}
+    {% for modal_partial in page_context.modal_partials %}
+    {% include modal_partial %}
+    {% endfor %}
 
     <div id="toast-container"></div>
 

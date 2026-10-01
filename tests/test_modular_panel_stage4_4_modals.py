@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from routes.pages import PANEL_COMPOSITION
 from scripts.panel_template_source import compose_panel_template
 from tests.support.panel_render import (
     FULL_MODULE_IDS,
@@ -18,11 +19,11 @@ ROOT = Path(__file__).resolve().parents[1]
 PANEL = ROOT / "xkeen-ui/templates/panel.html"
 MODALS_DIR = ROOT / "xkeen-ui/templates/panel/modals"
 
-# partial -> (gate in panel.html or None, owned ids)
+# partial -> (manifest owners, owned ids)
 MODAL_PARTIALS = {
-    "diagnostics": ("has_diagnostics", ("xk-resource-dashboard-modal",)),
+    "diagnostics": (("tool.advanced-diagnostics",), ("xk-resource-dashboard-modal",)),
     "routing": (
-        "has_xray",
+        ("engine.xray",),
         (
             "xray-context-modal", "xray-devices-modal", "routing-dns-over-vless-modal",
             "inbounds-apply-modal", "routing-balancer-help-modal", "xray-snapshot-modal",
@@ -31,26 +32,26 @@ MODAL_PARTIALS = {
         ),
     ),
     "commands": (
-        "has_terminal",
+        ("tool.terminal",),
         (
             "terminal-overlay", "terminal-history-modal", "ssh-modal", "ssh-edit-modal",
             "ssh-confirm-modal", "ssh-transfer-modal",
         ),
     ),
     "shared": (
-        None,
+        ("core",),
         (
             "core-modal", "confirm-modal", "github-export-modal", "github-catalog-modal",
             "donate-modal", "ui-settings-modal",
         ),
     ),
     "mihomo": (
-        "has_mihomo",
+        ("engine.mihomo",),
         ("mihomo-dns-modal", "mihomo-import-modal", "mihomo-proxy-tools-modal", "mihomo-validation-modal"),
     ),
-    "happ": ("has_happ and has_mihomo", ("mihomo-hwid-modal",)),
+    "happ": (("integration.happ", "engine.mihomo"), ("mihomo-hwid-modal",)),
     "files": (
-        "has_files",
+        ("tool.files",),
         (
             "fm-upload-conflict-modal", "fm-connect-modal", "fm-knownhosts-modal", "fm-create-modal",
             "fm-rename-modal", "fm-archive-modal", "fm-extract-modal", "fm-folder-picker-modal",
@@ -60,8 +61,8 @@ MODAL_PARTIALS = {
             "fm-volumes-modal", "fm-help-modal",
         ),
     ),
-    "files_editor": ("has_files and has_editor", ("fm-editor-modal",)),
-    "editor": ("has_editor", ("json-editor-modal",)),
+    "files_editor": (("tool.files", "tool.editor"), ("fm-editor-modal",)),
+    "editor": (("tool.editor",), ("json-editor-modal",)),
 }
 ALL_MODAL_IDS = {modal_id for _gate, ids in MODAL_PARTIALS.values() for modal_id in ids}
 SHARED_CORE_SOURCE_MODAL_IDS = {
@@ -100,16 +101,15 @@ def test_every_modal_lives_in_exactly_one_owner_partial():
 @pytest.mark.parametrize("name", sorted(MODAL_PARTIALS))
 def test_modal_gate_is_declared_in_composition_root(name):
     panel = PANEL.read_text(encoding="utf-8")
-    gate, _ids = MODAL_PARTIALS[name]
-    include = f'{{% include "panel/modals/{name}.html" %}}'
+    owners, _ids = MODAL_PARTIALS[name]
 
-    assert panel.count(include) == 1
-    before = panel[: panel.index(include)]
-    last_line = before.rstrip().splitlines()[-1].strip()
-    if gate is None:
-        assert not last_line.startswith("{% if "), name
-    else:
-        assert last_line == f"{{% if {gate} %}}", name
+    assert "{% for modal_partial in page_context.modal_partials %}" in panel
+    assert "{% include modal_partial %}" in panel
+    assert [
+        entry.owners
+        for entry in PANEL_COMPOSITION
+        if entry.template == f"panel/modals/{name}.html"
+    ] == [owners]
 
 
 def test_modal_composition_keeps_the_dom_contract():

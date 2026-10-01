@@ -33,52 +33,18 @@
               >Ядро</button>
             </div>
 
-            {% if has_xray %}
-            <div class="panel-shell-badges" data-xk-shell-slot="badges">
-              <!-- Notice: global Xray logging is enabled (loglevel!=none) -->
-              <span
-                id="xray-logs-badge"
-                class="xray-logs-badge"
-                data-state="off"
-                data-live="off"
-                title="Логи Xray выключены"
-                aria-label="Логи Xray выключены"
-              >
-                {{ op_icon('terminal') }}
-              </span>
-            </div>
-            {% endif %}
+            {% for header_badge_partial in page_context.header_badge_partials %}
+            {% include header_badge_partial %}
+            {% endfor %}
           </div>
         </div>
 
         <div class="header-right panel-shell-right" data-xk-shell-zone="global-actions" data-xk-shell-group="actions">
           <div class="panel-shell-summary" data-xk-shell-slot="summary">
 
-            {# Router resources poll /api/system/*, owned by tool.advanced-diagnostics. #}
-            {% if has_diagnostics %}
-            <button
-              type="button"
-              id="xk-resource-monitor"
-              class="xk-resource-monitor"
-              aria-label="Ресурсы роутера: загрузка данных"
-              title="Ресурсы роутера обновляются каждые 5 секунд"
-              data-state="loading"
-              aria-haspopup="dialog"
-              data-resource-dashboard-target="xk-resource-dashboard-modal"
-            >
-              <span class="xk-resource-monitor-item">
-                <span class="xk-resource-monitor-label">CPU</span>
-                <strong id="xk-resource-cpu">—</strong>
-                <span class="xk-resource-meter" aria-hidden="true"><i id="xk-resource-cpu-meter"></i></span>
-              </span>
-              <span class="xk-resource-monitor-item">
-                <span class="xk-resource-monitor-label">RAM</span>
-                <strong id="xk-resource-memory">—</strong>
-                <span class="xk-resource-meter" aria-hidden="true"><i id="xk-resource-memory-meter"></i></span>
-              </span>
-              <span id="xk-resource-monitor-stale" class="xk-resource-monitor-stale" hidden>нет данных</span>
-            </button>
-            {% endif %}
+            {% for header_summary_partial in page_context.header_summary_partials %}
+            {% include header_summary_partial %}
+            {% endfor %}
 
             <div
               class="xk-global-header-activity"
@@ -117,27 +83,9 @@
                 title="UI settings"
               >{{ op_icon('settings') }}<span class="xk-action-label">UI</span></button>
 
-              {% if has_diagnostics %}
-              <a
-                href="{{ url_for('devtools_page') }}"
-                class="service-core-text xk-header-btn xk-header-btn-devtools"
-                data-xk-top-nav="1"
-                title="DevTools"
-              >DevTools</a>
-
-              <a
-                href="{{ url_for('devtools_page') }}#dt-update-card"
-                id="xk-update-link"
-                class="service-core-text hidden"
-                data-xk-top-nav="1"
-                data-loading="true"
-                aria-busy="true"
-                title="Обновление"
-              >
-                <span class="xk-update-dot" aria-hidden="true"></span>
-                <span data-xk-update-label>Обновление</span>
-              </a>
-              {% endif %}
+              {% for header_action_partial in page_context.header_action_partials %}
+              {% include header_action_partial %}
+              {% endfor %}
 
               <button
                 type="button"

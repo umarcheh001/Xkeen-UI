@@ -5,6 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from routes.pages import PANEL_COMPOSITION
 from scripts.panel_template_source import compose_panel_template
 
 
@@ -72,10 +73,15 @@ def test_stage4_1_contract_covers_shell_screens_modals_and_profiles(tmp_path):
     assert shell["head"]["module_id"] == "core"
     assert "window.XKeen.pageConfig" in shell["page_config"]["dom_anchors"]
     assert "top-tab-mihomo-generator" in shell["navigation"]["dom_anchors"]
-    panel_template = compose_panel_template(ROOT)
-    devtools_link_start = panel_template.index("url_for('devtools_page')")
-    devtools_link_end = panel_template.index("panel-core-ui-refresh-btn")
-    assert "{% if has_diagnostics %}" in panel_template[devtools_link_start - 200 : devtools_link_end]
+    assert [
+        entry.template
+        for entry in PANEL_COMPOSITION
+        if entry.owners == ("tool.advanced-diagnostics",)
+    ] == [
+        "panel/slots/diagnostics_summary.html",
+        "panel/slots/diagnostics_actions.html",
+        "panel/modals/diagnostics.html",
+    ]
 
     screens = {item["id"]: item for item in payload["screens"]}
     assert {
@@ -145,7 +151,7 @@ def test_stage4_1_closure_is_reflected_in_documentation():
     docs_index = DOCS_INDEX.read_text(encoding="utf-8")
 
     for fragment in (
-        "Этапы 0, 1, 2, 3, 3R, 3R.1, 4.1, 4.2, 4.3 и 4.4 закрыты;",
+        "4.5 закрыты;",
         "### Подэтап 4.1. Контракт границ shell, экранов и модальных окон",
         "docs/modular-panel-stage4.1-contract.md",
         "Критерий готовности 4.1:",

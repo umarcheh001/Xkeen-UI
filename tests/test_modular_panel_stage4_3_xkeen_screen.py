@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from routes.pages import PANEL_COMPOSITION
 from scripts.panel_template_source import compose_panel_template
 from tests.support.panel_render import (
     MIHOMO_MINIMAL_MODULE_IDS,
@@ -20,14 +21,14 @@ def test_xkeen_screen_is_a_core_owned_partial_without_module_gate():
     panel = PANEL.read_text(encoding="utf-8")
     xkeen = XKEEN.read_text(encoding="utf-8")
 
-    include = '{% include "panel/screens/xkeen.html" %}'
-    assert include in panel
+    assert "{% for screen_partial in page_context.screen_partials %}" in panel
+    assert "{% include screen_partial %}" in panel
     assert 'id="view-xkeen"' not in panel
-    # core-owned: the include is not wrapped into any module gate.
-    line = next(item for item in panel.splitlines() if include in item)
-    assert line.strip() == include
-    before = panel[: panel.index(include)]
-    assert before.count("{% if ") == before.count("{% endif %}")
+    assert [
+        entry.owners
+        for entry in PANEL_COMPOSITION
+        if entry.template == "panel/screens/xkeen.html"
+    ] == [("core",)]
     assert "{% if " not in xkeen
     assert 'id="view-xkeen"' in xkeen
     assert 'data-xk-section="xkeen"' in xkeen

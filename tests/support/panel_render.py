@@ -24,7 +24,7 @@ XRAY_MINIMAL_MODULE_IDS = ["core", "tool.editor", "engine.xray"]
 MIHOMO_MINIMAL_MODULE_IDS = ["core", "tool.editor", "engine.mihomo"]
 
 
-def render_panel(active_module_ids: list[str], tmp_path: Path) -> str:
+def render_panel(active_module_ids: list[str] | None, tmp_path: Path) -> str:
     from routes.pages import register_pages_routes
     from routes.ui_assets import init_ui_assets_helpers, register_build_stamp_global
 
@@ -42,7 +42,11 @@ def render_panel(active_module_ids: list[str], tmp_path: Path) -> str:
     app.context_processor(lambda: {"csrf_token": "token", "terminal_theme_v": 0})
     register_pages_routes(
         app,
-        module_activation={"active_module_ids": active_module_ids},
+        module_activation=(
+            None
+            if active_module_ids is None
+            else {"active_module_ids": active_module_ids}
+        ),
         ROUTING_FILE=str(tmp_path / "05_routing.json"),
         MIHOMO_CONFIG_FILE=str(tmp_path / "config.yaml"),
         INBOUNDS_FILE=str(tmp_path / "03_inbounds.json"),

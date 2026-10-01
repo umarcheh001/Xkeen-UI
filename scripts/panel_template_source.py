@@ -19,7 +19,11 @@ _MACRO_IMPORT_RE = re.compile(
     r"""\{%-?\s*from\s+["']panel/macros\.html["']\s+import\s+op_icon\s*-?%\}\s*"""
 )
 _DYNAMIC_INCLUDE_RE = re.compile(
-    r"""\{%-?\s*include\s+(?P<name>header_badge_partial|header_summary_partial|header_action_partial|control_partial|screen_partial|modal_partial)\s*-?%\}"""
+    r"""\{%-?\s*include\s+(?P<name>header_badge_partial|header_summary_partial|header_action_partial|control_partial|pre_screen_modal_partial|screen_partial|modal_partial)\s*-?%\}"""
+)
+_DYNAMIC_NAVIGATION_LOOP_RE = re.compile(
+    r"""\{%-?\s*for\s+item\s+in\s+page_context\.navigation_items\s*-?%\}.*?\{%-?\s*endfor\s*-?%\}""",
+    re.DOTALL,
 )
 
 
@@ -31,6 +35,7 @@ DYNAMIC_COMPOSITION_INCLUDE_PATHS: dict[str, tuple[str, ...]] = {
     "header_summary_partial": ("panel/slots/diagnostics_summary.html",),
     "header_action_partial": ("panel/slots/diagnostics_actions.html",),
     "control_partial": ("panel/slots/routing_focus.html",),
+    "pre_screen_modal_partial": ("panel/modals/diagnostics.html",),
     "screen_partial": (
         "panel/screens/routing.html",
         "panel/screens/mihomo.html",
@@ -40,7 +45,6 @@ DYNAMIC_COMPOSITION_INCLUDE_PATHS: dict[str, tuple[str, ...]] = {
         "panel/screens/xray_logs.html",
     ),
     "modal_partial": (
-        "panel/modals/diagnostics.html",
         "panel/modals/routing.html",
         "panel/modals/commands.html",
         "panel/modals/shared.html",
@@ -51,6 +55,119 @@ DYNAMIC_COMPOSITION_INCLUDE_PATHS: dict[str, tuple[str, ...]] = {
         "panel/modals/editor.html",
     ),
 }
+
+
+# This mirrors PANEL_NAVIGATION without importing Flask routes in static tools.
+# Tests compare the complete tuple with the runtime manifest to prevent drift.
+DYNAMIC_NAVIGATION_ITEMS: tuple[dict[str, object], ...] = (
+    {
+        "owners": ("engine.xray",),
+        "section": "routing",
+        "label": "Роутинг Xray",
+        "class_name": "top-tab-btn xk-top-tab xk-top-tab-routing",
+        "view": "routing",
+        "element_id": None,
+        "href_endpoint": None,
+        "top_nav": False,
+    },
+    {
+        "owners": ("engine.mihomo",),
+        "section": "mihomo",
+        "label": "Роутинг Mihomo",
+        "class_name": "top-tab-btn xk-top-tab xk-top-tab-mihomo",
+        "view": "mihomo",
+        "element_id": None,
+        "href_endpoint": None,
+        "top_nav": False,
+    },
+    {
+        "owners": ("core",),
+        "section": "xkeen",
+        "label": "Порты и исключения",
+        "class_name": "top-tab-btn xk-top-tab xk-top-tab-xkeen",
+        "view": "xkeen",
+        "element_id": None,
+        "href_endpoint": None,
+        "top_nav": False,
+    },
+    {
+        "owners": ("engine.xray",),
+        "section": "xray-logs",
+        "label": "Логи Xray",
+        "class_name": "top-tab-btn xk-top-tab xk-top-tab-logs",
+        "view": "xray-logs",
+        "element_id": None,
+        "href_endpoint": None,
+        "top_nav": False,
+    },
+    {
+        "owners": ("tool.terminal",),
+        "section": "commands",
+        "label": "Команды",
+        "class_name": "top-tab-btn xk-top-tab xk-top-tab-commands",
+        "view": "commands",
+        "element_id": None,
+        "href_endpoint": None,
+        "top_nav": False,
+    },
+    {
+        "owners": ("tool.files",),
+        "section": "files",
+        "label": "Файлы",
+        "class_name": "top-tab-btn xk-top-tab xk-top-tab-files",
+        "view": "files",
+        "element_id": "top-tab-files",
+        "href_endpoint": None,
+        "top_nav": False,
+    },
+    {
+        "owners": ("engine.mihomo",),
+        "section": "mihomo-generator",
+        "label": "Mihomo Генератор",
+        "class_name": "top-tab-btn xk-top-tab xk-top-tab-generator",
+        "view": None,
+        "element_id": "top-tab-mihomo-generator",
+        "href_endpoint": "mihomo_generator_page",
+        "top_nav": True,
+    },
+    {
+        "owners": ("core",),
+        "section": "donate",
+        "label": "Поддержать",
+        "class_name": "top-tab-btn xk-top-tab xk-top-tab-donate",
+        "view": None,
+        "element_id": "top-tab-donate",
+        "href_endpoint": None,
+        "top_nav": False,
+    },
+)
+
+
+def _static_navigation_markup() -> str:
+    """Return the Full navigation document for source-only inventories."""
+
+    lines: list[str] = []
+    first_view = True
+    for item in DYNAMIC_NAVIGATION_ITEMS:
+        view = item["view"]
+        class_name = str(item["class_name"])
+        if view and first_view:
+            class_name += " active"
+            first_view = False
+        attributes = [f'class="{class_name}"']
+        if view:
+            attributes.append(f'data-view="{view}"')
+        else:
+            attributes.append('type="button"')
+        attributes.append(f'data-xk-section="{item["section"]}"')
+        if item["element_id"]:
+            attributes.append(f'id="{item["element_id"]}"')
+        if item["href_endpoint"]:
+            attributes.append(f'data-nav-href="/{item["href_endpoint"]}"')
+        if item["top_nav"]:
+            attributes.append('data-xk-top-nav="1"')
+        lines.extend((f"<button {' '.join(attributes)}>", str(item["label"]), "</button>"))
+    return "\n".join(lines)
 
 
 def compose_panel_template(root: Path) -> str:
@@ -79,6 +196,7 @@ def compose_panel_template(root: Path) -> str:
                 for include_path in DYNAMIC_COMPOSITION_INCLUDE_PATHS[match.group("name")]
             )
 
-        return _DYNAMIC_INCLUDE_RE.sub(replace_dynamic, source)
+        source = _DYNAMIC_INCLUDE_RE.sub(replace_dynamic, source)
+        return _DYNAMIC_NAVIGATION_LOOP_RE.sub(_static_navigation_markup(), source)
 
     return expand("panel.html")
