@@ -20,6 +20,7 @@ import json
 
 EngineId = Literal["xray", "mihomo"]
 RiskLevel = Literal["official", "alternative", "experimental"]
+ReleasePolicy = Literal["stable_only", "prerelease_allowed"]
 
 _ENGINE_IDS: Final[frozenset[str]] = frozenset({"xray", "mihomo"})
 _SHA256_RE: Final[re.Pattern[str]] = re.compile(r"(?<![0-9a-fA-F])([0-9a-fA-F]{64})(?![0-9a-fA-F])")
@@ -34,7 +35,8 @@ class CoreProfile:
     description: str
     risk_level: RiskLevel
     binary_name: str
-    release_policy: Literal["stable_only"] = "stable_only"
+    release_policy: ReleasePolicy = "stable_only"
+    asset_prefix: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,6 +75,24 @@ CORE_PROFILES: Final[dict[str, tuple[CoreProfile, ...]]] = {
             "experimental",
             "xray",
         ),
+        CoreProfile(
+            "jolymmiles",
+            "xray",
+            "Jolymmiles/Xray-core",
+            "Jolymmiles",
+            "Сборка Xray с изменениями TCP Brutal и SMUX.",
+            "experimental",
+            "xray",
+        ),
+        CoreProfile(
+            "patterniha",
+            "xray",
+            "patterniha/Xray-core",
+            "patterniha",
+            "Альтернативная сборка Xray с собственным циклом релизов.",
+            "experimental",
+            "xray",
+        ),
     ),
     "mihomo": (
         CoreProfile(
@@ -101,6 +121,27 @@ CORE_PROFILES: Final[dict[str, tuple[CoreProfile, ...]]] = {
             "Альтернативная сборка Mihomo.",
             "experimental",
             "mihomo",
+        ),
+        CoreProfile(
+            "vernesong",
+            "mihomo",
+            "vernesong/mihomo",
+            "vernesong/mihomo",
+            "Альтернативная сборка Mihomo; используется опубликованный prerelease.",
+            "experimental",
+            "mihomo",
+            "prerelease_allowed",
+        ),
+        CoreProfile(
+            "aster-core",
+            "mihomo",
+            "Miku0139oao/aster-core",
+            "aster-core",
+            "Mihomo-based альтернативная сборка; используется опубликованный prerelease.",
+            "experimental",
+            "mihomo",
+            "prerelease_allowed",
+            "aster-core",
         ),
     ),
 }
@@ -239,6 +280,27 @@ def _github_json(repo: str, timeout_s: float) -> dict[str, Any]:
     return payload
 
 
+def _github_releases(repo: str, timeout_s: float) -> list[dict[str, Any]]:
+    api_base = str(os.environ.get("XKEEN_UI_GITHUB_API_BASE") or "https://api.github.com").rstrip("/")
+    request = urllib.request.Request(
+        f"{api_base}/repos/{repo}/releases?per_page=20",
+        headers={
+            "Accept": "application/vnd.github+json",
+            "User-Agent": str(os.environ.get("XKEEN_UI_HTTP_USER_AGENT") or "xkeen-ui"),
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=float(timeout_s)) as response:
+            payload = json.loads(response.read().decode("utf-8", errors="replace"))
+    except (urllib.error.HTTPError, urllib.error.URLError, OSError, TimeoutError) as exc:
+        raise CoreProfileError("github_unavailable", "GitHub недоступен. Попробуйте позже.") from exc
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise CoreProfileError("invalid_release", "GitHub вернул некорректные данные релиза.") from exc
+    if not isinstance(payload, list):
+        raise CoreProfileError("invalid_release", "GitHub вернул некорректные данные релиза.")
+    return [item for item in payload if isinstance(item, dict)]
+
+
 def _download_text(url: str, timeout_s: float) -> str:
     request = urllib.request.Request(
         url,
@@ -279,7 +341,7 @@ def _asset_prefixes(profile: CoreProfile, platform_key: str) -> tuple[str, ...]:
         }
         return xray_names.get(platform_key, ())
 
-    prefix = "prizrak-core" if profile.profile_id == "prizrak-core" else "mihomo"
+    prefix = profile.asset_prefix or ("prizrak-core" if profile.profile_id == "prizrak-core" else "mihomo")
     mihomo_names = {
         "amd64": (f"{prefix}-linux-amd64-",),
         "386": (f"{prefix}-linux-386-",),
@@ -366,43 +428,58 @@ def _non_installable(reason: str, platform: RouterPlatform) -> dict[str, Any]:
 
 
 def resolve_release(profile: CoreProfile, platform: RouterPlatform, *, timeout_s: float) -> dict[str, Any]:
-    """Resolve exactly one verified stable release for a curated profile."""
+    """Resolve one verified release permitted by the curated profile policy."""
 
     platform_key = _platform_key(platform)
     if not _asset_prefixes(profile, platform_key):
         return _non_installable("unsupported_arch", platform)
     try:
-        release = _github_json(profile.repo, timeout_s)
+        if profile.release_policy == "prerelease_allowed":
+            releases = [
+                release
+                for release in _github_releases(profile.repo, timeout_s)
+                if not bool(release.get("draft")) and bool(release.get("prerelease"))
+            ]
+        else:
+            releases = [_github_json(profile.repo, timeout_s)]
     except CoreProfileError as exc:
         return _non_installable(exc.code, platform)
-    if bool(release.get("draft")) or bool(release.get("prerelease")):
-        return _non_installable("invalid_release", platform)
-    tag = str(release.get("tag_name") or "").strip()
-    if not tag:
-        return _non_installable("invalid_release", platform)
-    assets = [candidate for item in (release.get("assets") or []) if (candidate := _asset_view(item))]
-    asset = _matching_asset(profile, platform, assets)
-    if asset is None:
-        return _non_installable("asset_missing", platform)
-    try:
-        checksum = _checksum_for_asset(profile, asset, assets, timeout_s)
-    except CoreProfileError as exc:
-        return _non_installable(exc.code, platform)
-    if checksum is None:
-        return _non_installable("checksum_missing", platform)
-    return {
-        "stable": {
-            "tag": tag,
-            "url": str(release.get("html_url") or ""),
-            "name": str(release.get("name") or ""),
-            "published_at": str(release.get("published_at") or release.get("created_at") or ""),
-        },
-        "asset": asset,
-        "checksum": checksum,
-        "binary_name": profile.binary_name,
-        "platform": asdict(platform),
-        "installable": True,
-        "reason": "",
-        "stale": False,
-        "fetched_at": time.time(),
-    }
+
+    missing_reason = "invalid_release"
+    for release in releases:
+        if bool(release.get("draft")) or (
+            profile.release_policy == "stable_only" and bool(release.get("prerelease"))
+        ):
+            continue
+        tag = str(release.get("tag_name") or "").strip()
+        if not tag:
+            continue
+        assets = [candidate for item in (release.get("assets") or []) if (candidate := _asset_view(item))]
+        asset = _matching_asset(profile, platform, assets)
+        if asset is None:
+            missing_reason = "asset_missing"
+            continue
+        try:
+            checksum = _checksum_for_asset(profile, asset, assets, timeout_s)
+        except CoreProfileError as exc:
+            return _non_installable(exc.code, platform)
+        if checksum is None:
+            missing_reason = "checksum_missing"
+            continue
+        return {
+            "stable": {
+                "tag": tag,
+                "url": str(release.get("html_url") or ""),
+                "name": str(release.get("name") or ""),
+                "published_at": str(release.get("published_at") or release.get("created_at") or ""),
+            },
+            "asset": asset,
+            "checksum": checksum,
+            "binary_name": profile.binary_name,
+            "platform": asdict(platform),
+            "installable": True,
+            "reason": "",
+            "stale": False,
+            "fetched_at": time.time(),
+        }
+    return _non_installable(missing_reason, platform)

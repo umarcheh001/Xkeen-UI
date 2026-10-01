@@ -38,6 +38,11 @@ def test_editor_screens_do_not_render_source_controls_above_workspaces():
     assert "render_core_source" not in MIHOMO
 
 
+def test_source_modal_notice_describes_verified_published_releases():
+    assert "опубликованный релиз с совпавшей SHA-256" in SOURCE
+    assert "только стабильный релиз" not in SOURCE
+
+
 def test_core_management_actions_and_dialogs_keep_operator_spacing():
     for fragment in (
         ".xk-core-source-control",

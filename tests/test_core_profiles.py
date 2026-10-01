@@ -31,11 +31,15 @@ def test_catalogs_are_engine_scoped_and_use_stable_ids():
         "official",
         "uwuray",
         "gfw-knocker",
+        "jolymmiles",
+        "patterniha",
     ]
     assert [p.profile_id for p in profiles.list_profiles("mihomo")] == [
         "official",
         "mihomo-enhanced",
         "prizrak-core",
+        "vernesong",
+        "aster-core",
     ]
     with pytest.raises(ValueError, match="Неизвестный профиль"):
         profiles.get_profile("xray", "mihomo-enhanced")
@@ -104,6 +108,48 @@ def test_resolve_mihomo_uses_github_asset_digest_without_checksums_file(monkeypa
     assert result["installable"] is True
     assert result["asset"]["name"] == "prizrak-core-linux-amd64-v1.19.32-r1.gz"
     assert result["checksum"]["sha256"] == "d" * 64
+
+
+@pytest.mark.parametrize(
+    ("profile_id", "asset_name"),
+    [
+        ("vernesong", "mihomo-linux-amd64-alpha-smart-baef5ee.gz"),
+        ("aster-core", "aster-core-linux-amd64-alpha-main-56e24f5.gz"),
+    ],
+)
+def test_resolve_opted_in_prerelease_profiles(profile_id, asset_name, monkeypatch):
+    asset = _asset(asset_name)
+    asset["digest"] = "sha256:" + "e" * 64
+    release = _release("Prerelease-Alpha", [asset], prerelease=True)
+    monkeypatch.setattr(profiles, "_github_json", lambda *_args, **_kwargs: release)
+    monkeypatch.setattr(profiles, "_github_releases", lambda *_args, **_kwargs: [release], raising=False)
+
+    result = profiles.resolve_release(
+        profiles.get_profile("mihomo", profile_id),
+        profiles.RouterPlatform("x86_64", "x86_64", "le"),
+        timeout_s=1,
+    )
+
+    assert result["installable"] is True
+    assert result["stable"]["tag"] == "Prerelease-Alpha"
+    assert result["asset"]["name"] == asset_name
+    assert result["checksum"]["sha256"] == "e" * 64
+
+
+def test_resolve_keeps_prerelease_disabled_for_stable_profiles(monkeypatch):
+    asset = _asset("mihomo-linux-amd64-alpha-smart-baef5ee.gz")
+    asset["digest"] = "sha256:" + "f" * 64
+    release = _release("Prerelease-Alpha", [asset], prerelease=True)
+    monkeypatch.setattr(profiles, "_github_json", lambda *_args, **_kwargs: release)
+
+    result = profiles.resolve_release(
+        profiles.get_profile("mihomo", "official"),
+        profiles.RouterPlatform("x86_64", "x86_64", "le"),
+        timeout_s=1,
+    )
+
+    assert result["installable"] is False
+    assert result["reason"] == "invalid_release"
 
 
 def test_resolve_xray_uses_matching_dgst_checksum(monkeypatch):

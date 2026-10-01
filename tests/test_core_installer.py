@@ -127,7 +127,7 @@ def test_resolved_release_metadata_is_cached_per_profile_and_architecture(tmp_pa
     install.profiles("xray")
     install.profiles("xray")
 
-    assert calls == ["official", "uwuray", "gfw-knocker"]
+    assert calls == ["official", "uwuray", "gfw-knocker", "jolymmiles", "patterniha"]
 
 
 def test_bad_checksum_never_replaces_binary_or_creates_rollback_state(tmp_path):
