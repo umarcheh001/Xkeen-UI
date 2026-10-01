@@ -225,3 +225,95 @@ def test_probe_url_is_read_from_either_kind(env):
     (xray_dir / "07_observatory.json").write_text(ETALON, encoding="utf-8")
 
     assert subs._probe_url_for_subscription(str(xray_dir)) == "https://cp.cloudflare.com/generate_204"
+
+
+PLAIN_BEFORE = (
+    "{\n"
+    '  "observatory": {\n'
+    '    "subjectSelector": ["manual"],\n'
+    '    "probeUrl": "https://cp.cloudflare.com/generate_204",\n'
+    '    "probeInterval": "5m"\n'
+    "  }\n"
+    "}\n"
+)
+
+
+def _state_dir(tmp_path: Path) -> Path:
+    path = tmp_path / "state"
+    path.mkdir()
+    return path
+
+
+def test_last_subscription_leaving_restores_the_original_kind(env, tmp_path):
+    subs, xray_dir, _jsonc = env
+    ui_state_dir = _state_dir(tmp_path)
+    _routing(xray_dir, "leastLoad")
+    target = xray_dir / "07_observatory.json"
+    target.write_text(PLAIN_BEFORE, encoding="utf-8")
+    subs._ensure_subscription_managed_baselines(str(ui_state_dir), str(xray_dir))
+
+    subs.sync_observatory_subjects(xray_configs_dir=str(xray_dir), add_tags=SUB_TAGS)
+    assert _sections(xray_dir) == [("07_observatory.json", "burstObservatory")]
+    subs.sync_observatory_subjects(
+        xray_configs_dir=str(xray_dir), add_tags=[], remove_tags=SUB_TAGS, managed_active=False
+    )
+
+    undone = subs._undo_observatory_conversion(str(ui_state_dir), xray_configs_dir=str(xray_dir))
+
+    assert undone is True
+    assert target.read_text(encoding="utf-8") == PLAIN_BEFORE
+
+
+def test_same_kind_keeps_owner_edits_made_while_subscribed(env, tmp_path):
+    subs, xray_dir, _jsonc = env
+    ui_state_dir = _state_dir(tmp_path)
+    _routing(xray_dir, "leastPing")
+    target = xray_dir / "07_observatory.json"
+    target.write_text(PLAIN_BEFORE, encoding="utf-8")
+    subs._ensure_subscription_managed_baselines(str(ui_state_dir), str(xray_dir))
+
+    edited = PLAIN_BEFORE.replace('"5m"', '"1m"')
+    target.write_text(edited, encoding="utf-8")
+
+    assert subs._undo_observatory_conversion(str(ui_state_dir), xray_configs_dir=str(xray_dir)) is False
+    assert target.read_text(encoding="utf-8") == edited
+
+
+def test_file_created_by_the_panel_is_not_removed_by_the_undo(env, tmp_path):
+    subs, xray_dir, _jsonc = env
+    ui_state_dir = _state_dir(tmp_path)
+    _routing(xray_dir, "leastLoad")
+    subs._ensure_subscription_managed_baselines(str(ui_state_dir), str(xray_dir))
+    subs.sync_observatory_subjects(xray_configs_dir=str(xray_dir), add_tags=SUB_TAGS)
+
+    assert subs._undo_observatory_conversion(str(ui_state_dir), xray_configs_dir=str(xray_dir)) is False
+    assert (xray_dir / "07_observatory.json").exists()
+
+
+def test_rebuild_undoes_the_conversion_only_when_no_targets_remain(env, tmp_path, monkeypatch):
+    subs, xray_dir, _jsonc = env
+    ui_state_dir = _state_dir(tmp_path)
+    calls = []
+    monkeypatch.setattr(
+        subs, "sync_subscription_runtime_plan_delta", lambda **_k: {"observatory_changed": False}
+    )
+    monkeypatch.setattr(
+        subs, "_undo_observatory_conversion", lambda *_a, **_k: calls.append("undo") or True
+    )
+
+    plans = iter([{"has_runtime_targets": True}, {"has_runtime_targets": True}])
+    monkeypatch.setattr(subs, "_build_runtime_sync_plan", lambda _state: next(plans))
+    still_active = subs._rebuild_subscription_runtime(
+        str(ui_state_dir), xray_configs_dir=str(xray_dir),
+        previous_state={"subscriptions": []}, state_override={"subscriptions": []},
+    )
+
+    plans = iter([{"has_runtime_targets": True}, {"has_runtime_targets": False}])
+    last_gone = subs._rebuild_subscription_runtime(
+        str(ui_state_dir), xray_configs_dir=str(xray_dir),
+        previous_state={"subscriptions": []}, state_override={"subscriptions": []},
+    )
+
+    assert still_active["observatory_changed"] is False
+    assert last_gone["observatory_changed"] is True
+    assert calls == ["undo"]
