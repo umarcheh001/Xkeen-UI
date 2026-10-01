@@ -26418,7 +26418,7 @@
         "template": "xkeen-ui/templates/panel.html",
         "panel_views": 6,
         "panel_modals": 53,
-        "size_bytes": 430990
+        "size_bytes": 425384
       },
       "next_stage": "Этап 4: template partials и module composition."
     },
