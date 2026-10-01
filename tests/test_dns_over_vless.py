@@ -69,7 +69,8 @@ def test_enable_plan_is_additive_and_dns_balancer_is_fail_closed(tmp_path: Path)
 
     assert target["kind"] == "balancer"
     assert target["tag"] == dns.BALANCER_TAG
-    assert "fallbackTag" not in target["managed_balancer"]
+    # Fail-closed: the spare route is one of the balancer's own proxies, never direct.
+    assert target["managed_balancer"]["fallbackTag"] == "proxy-a"
     assert planned["routing"]["rules"][0] == {
         "type": "field",
         "inboundTag": [dns.DNS_IN_TAG],
@@ -598,8 +599,9 @@ def test_fallback_into_direct_is_still_dropped(tmp_path: Path):
     target = dns._select_target(runtime, "proxy", routing)
 
     # The subscription auto-balancer falls back to a freedom outbound; keeping
-    # it would leak DNS to the provider.
-    assert "fallbackTag" not in target["managed_balancer"]
+    # it would leak DNS to the provider.  A member of the selector stands in:
+    # with no fallback at all the core would use the default outbound instead.
+    assert target["managed_balancer"]["fallbackTag"] == "proxy-a"
     assert target["fallback"]["kept"] is False
     assert target["fallback"]["verdict"] == "leak"
 
@@ -836,7 +838,10 @@ def test_unresolvable_fallback_is_dropped_rather_than_assumed_safe(tmp_path: Pat
 
     target = dns._select_target(runtime, "balancer_main", routing)
 
-    assert "fallbackTag" not in target["managed_balancer"]
+    assert target["managed_balancer"]["fallbackTag"] != "nothing_points_here"
+    assert target["managed_balancer"]["fallbackTag"] in dns._selector_members(
+        runtime, target["managed_balancer"]["selector"]
+    )
     assert target["fallback"]["verdict"] == "unknown"
 
 
@@ -960,7 +965,8 @@ def test_several_proxies_are_combined_into_an_own_balancer(tmp_path: Path):
     assert target["managed_balancer"]["selector"] == ["my_proxy_1", "reserve_proxy_1"]
     # No observatory in this fixture, so leastPing would never pick a node.
     assert target["managed_balancer"]["strategy"] == {"type": "random"}
-    assert "fallbackTag" not in target["managed_balancer"]
+    # Nothing to inherit, but an empty pick must not reach the default outbound.
+    assert target["managed_balancer"]["fallbackTag"] == "my_proxy_1"
 
 
 def test_least_ping_is_used_only_when_observatory_probes_the_chosen_proxies(tmp_path: Path):
@@ -4218,3 +4224,56 @@ def test_a_non_object_owner_strategy_does_not_break_the_clone(tmp_path: Path):
     target = dns._select_target(runtime, source["tag"], routing)
 
     assert target["managed_balancer"]["strategy"] == "leastPing"
+
+
+def test_guard_fallback_is_a_live_member_and_counts_as_safe(tmp_path: Path):
+    configs, routing_path, _state = _base_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    runtime = dns._collect_runtime(str(configs), routing)
+
+    assert dns._guard_fallback_tag(runtime, ["proxy"]) == "proxy-a"
+    assert dns._guard_fallback_tag(runtime, ["direct"]) == ""
+    assert dns._guard_fallback_tag(runtime, ["no_such_prefix"]) == ""
+    assert dns._fallback_verdict(runtime, routing, "proxy-a") == "safe"
+
+
+def test_clone_with_the_guard_fallback_is_neither_drift_nor_tampering(tmp_path: Path, monkeypatch):
+    configs, routing_path, state = _base_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    runtime = dns._collect_runtime(str(configs), routing)
+    target = dns._select_target(runtime, "proxy", routing)
+    _write(configs / dns.MANAGED_FRAGMENT, dns._managed_fragment())
+    _write(routing_path, dns._build_enabled_routing(routing, target))
+    _write(state / dns.STATE_FILENAME, {"enabled": True, "target": {"source": "proxy"}})
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+
+    result = dns.get_status(
+        configs_dir=str(configs), routing_file=str(routing_path), ui_state_dir=str(state)
+    )
+
+    assert result["enabled"] is True
+    assert result["tampered"] is False
+    assert result["route_drift"] is None
+
+
+def test_a_guard_fallback_that_left_the_selector_is_reported_as_drift(tmp_path: Path, monkeypatch):
+    configs, routing_path, state = _base_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    runtime = dns._collect_runtime(str(configs), routing)
+    target = dns._select_target(runtime, "proxy", routing)
+    enabled = dns._build_enabled_routing(routing, target)
+    clone = next(item for item in enabled["routing"]["balancers"] if item["tag"] == dns.BALANCER_TAG)
+    clone["fallbackTag"] = "proxy-gone"
+    _write(configs / dns.MANAGED_FRAGMENT, dns._managed_fragment())
+    _write(routing_path, enabled)
+    _write(state / dns.STATE_FILENAME, {"enabled": True, "target": {"source": "proxy"}})
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+
+    result = dns.get_status(
+        configs_dir=str(configs), routing_file=str(routing_path), ui_state_dir=str(state)
+    )
+
+    assert result["route_drift"]["managed_fallback"] == "proxy-gone"
+    assert result["route_drift"]["current_fallback"] == "proxy-a"
