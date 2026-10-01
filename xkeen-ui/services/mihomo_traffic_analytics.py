@@ -286,24 +286,41 @@ class MihomoTrafficAnalyticsCollector:
     def _loop(self) -> None:
         while not self._stop.is_set():
             started = self.clock()
-            try:
-                self._sample_connections(started)
-            except Exception as exc:  # noqa: BLE001 - collector must survive source outages
-                self._record_source_error("connections", exc)
-            if started - self._last_client_at >= self.client_interval_seconds:
-                try:
-                    self._sample_clients(started)
-                except Exception as exc:  # noqa: BLE001 - collector must survive source outages
-                    self._record_source_error("clients", exc)
-                self._last_client_at = started
-            if started - self._last_flush_at >= FLUSH_SECONDS:
-                self._flush_pending()
-                self._last_flush_at = started
-            if started - self._last_prune_at >= 3600:
-                self._prune(int(started))
-                self._last_prune_at = started
+            self._tick(started)
             elapsed = max(0.0, self.clock() - started)
             self._stop.wait(max(0.2, self.sample_interval_seconds - elapsed))
+
+    def _tick(self, started: float) -> None:
+        try:
+            self._sample_connections(started)
+            mihomo_live = True
+        except Exception as exc:  # noqa: BLE001 - collector must survive source outages
+            self._record_source_error("connections", exc)
+            mihomo_live = False
+        # The router's per-device counters only mean something next to Mihomo's
+        # own numbers. While its API is silent - the core is stopped or was
+        # never installed - polling the router and writing totals every minute
+        # would wear the flash for a chart nobody can open.
+        if mihomo_live and started - self._last_client_at >= self.client_interval_seconds:
+            if self._last_client_at and (
+                started - self._last_client_at > self.client_interval_seconds * 3
+            ):
+                # The counters kept running through the outage; without a fresh
+                # baseline all of that traffic would land in a single minute.
+                with self._lock:
+                    self._previous_clients = {}
+            try:
+                self._sample_clients(started)
+            except Exception as exc:  # noqa: BLE001 - collector must survive source outages
+                self._record_source_error("clients", exc)
+            self._last_client_at = started
+        if started - self._last_flush_at >= FLUSH_SECONDS:
+            self._flush_pending()
+            self._last_flush_at = started
+        # Nothing to prune in a process that has never seen Mihomo.
+        if self._connections_initialized and started - self._last_prune_at >= 3600:
+            self._prune(int(started))
+            self._last_prune_at = started
 
     def _record_source_error(self, source: str, exc: Exception) -> None:
         message = str(exc or "sample_failed")[:160]

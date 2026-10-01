@@ -317,3 +317,110 @@ def test_quality_reports_source_errors_and_truncated_snapshots(tmp_path: Path):
     assert payload["quality"]["connections"]["errors"] == 1
     assert payload["quality"]["connections"]["truncated_samples"] == 1
     assert payload["quality"]["connections"]["last_error"] == "fixture outage"
+
+
+def _ticking_collector(tmp_path: Path, connections_factory, clock: Clock):
+    calls = {"clients": 0, "received": 1000}
+
+    def clients():
+        calls["clients"] += 1
+        return client_snapshot(received=calls["received"], sent=0)
+
+    collector = MihomoTrafficAnalyticsCollector(
+        db_path=str(tmp_path / "traffic.sqlite3"),
+        connections_factory=connections_factory,
+        clients_factory=clients,
+        clock=clock,
+    )
+    return collector, calls
+
+
+def test_router_is_not_polled_and_nothing_is_written_while_mihomo_is_absent(tmp_path: Path):
+    """A router that runs only Xray must not pay for Mihomo's traffic chart."""
+
+    def no_mihomo():
+        raise RuntimeError("mihomo_target_unavailable")
+
+    clock = Clock()
+    collector, calls = _ticking_collector(tmp_path, no_mihomo, clock)
+    database = tmp_path / "traffic.sqlite3"
+    written = database.stat().st_mtime_ns
+    # Creating the store leaves SQLite side files behind; only new activity counts.
+    side_files = {path.name: path.stat().st_mtime_ns for path in tmp_path.glob("traffic.sqlite3-*")}
+
+    for _minute in range(130):
+        collector._tick(clock())
+        calls["received"] += 5000
+        clock.value += 60
+
+    assert calls["clients"] == 0
+    assert not collector._pending_totals
+    assert database.stat().st_mtime_ns == written
+    assert side_files == {
+        path.name: path.stat().st_mtime_ns for path in tmp_path.glob("traffic.sqlite3-*")
+    }
+
+
+def test_client_counters_restart_from_a_fresh_baseline_after_a_long_mihomo_outage(tmp_path: Path):
+    """Traffic that passed while Mihomo was down must not land in one minute."""
+    state = {"live": True}
+
+    def connections():
+        if not state["live"]:
+            raise RuntimeError("mihomo_target_unavailable")
+        return {"connections": []}
+
+    clock = Clock()
+    collector, calls = _ticking_collector(tmp_path, connections, clock)
+
+    collector._tick(clock())  # baseline
+    calls["received"] += 100
+    clock.value += 30
+    collector._tick(clock())
+    assert sum(value[0] for value in collector._pending_totals.values()) == 100
+
+    state["live"] = False
+    for _step in range(20):
+        clock.value += 30
+        calls["received"] += 1_000_000
+        collector._tick(clock())
+    polled_during_outage = calls["clients"]
+
+    state["live"] = True
+    clock.value += 30
+    collector._tick(clock())  # fresh baseline, the outage is not counted
+    calls["received"] += 200
+    clock.value += 30
+    collector._tick(clock())
+
+    assert polled_during_outage == 2
+    assert sum(value[0] for value in collector._pending_totals.values()) + _stored_download(collector) == 300
+
+
+def test_short_mihomo_hiccup_keeps_the_client_baseline(tmp_path: Path):
+    state = {"live": True}
+
+    def connections():
+        if not state["live"]:
+            raise RuntimeError("timeout")
+        return {"connections": []}
+
+    clock = Clock()
+    collector, calls = _ticking_collector(tmp_path, connections, clock)
+    collector._tick(clock())  # baseline
+
+    state["live"] = False
+    clock.value += 30
+    calls["received"] += 700
+    collector._tick(clock())
+    state["live"] = True
+    clock.value += 10
+    collector._tick(clock())
+
+    assert sum(value[0] for value in collector._pending_totals.values()) + _stored_download(collector) == 700
+
+
+def _stored_download(collector: MihomoTrafficAnalyticsCollector) -> int:
+    with collector._connect() as connection:
+        row = connection.execute("SELECT COALESCE(SUM(download), 0) FROM traffic_total").fetchone()
+    return int(row[0])
