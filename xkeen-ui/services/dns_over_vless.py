@@ -378,6 +378,8 @@ def _collect_runtime(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, Any
     loopback_targets: Dict[str, str] = {}
     # subjectSelector entries per observatory kind.  With both sections present
     # the core reads the plain one, so only its selectors count as "probed".
+    # Two sections of one kind do not add up either: the merged config keeps
+    # the later file's section, so that one replaces what an earlier file gave.
     observatory_by_kind: Dict[str, list[str]] = {KIND_PLAIN: [], KIND_BURST: []}
     observatory_present: set[str] = set()
 
@@ -391,10 +393,9 @@ def _collect_runtime(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, Any
                 continue
             observatory_present.add(key)
             raw = section.get("subjectSelector")
-            for value in raw if isinstance(raw, list) else []:
-                prefix = str(value).strip()
-                if prefix:
-                    observatory_by_kind[key].append(prefix)
+            observatory_by_kind[key] = [
+                str(value).strip() for value in (raw if isinstance(raw, list) else []) if str(value).strip()
+            ]
         for item in obj.get("outbounds") if isinstance(obj.get("outbounds"), list) else []:
             if not isinstance(item, dict):
                 continue
@@ -772,7 +773,8 @@ def _build_target(
         "selector": list(candidate["selector"]),
         "strategy": copy.deepcopy(source.get("strategy") or {"type": "random"}),
     }
-    if _clean_tag(managed["strategy"].get("type")).lower() == "leastping":
+    strategy = managed["strategy"]
+    if isinstance(strategy, dict) and _clean_tag(strategy.get("type")).lower() == "leastping":
         live = [
             item["tag"]
             for item in _proxy_outbounds(runtime)
@@ -914,7 +916,8 @@ def _build_combined_target(
     proxies can only be combined by creating a balancer -- one the user does
     not otherwise have.  ``leastPing`` needs an observatory that actually
     probes these outbounds; without that coverage it would never pick a node,
-    so fall back to ``random``.
+    so fall back to ``random``.  Under ``burstObservatory`` the covered set
+    gets ``leastLoad`` instead, which can drop a node by its failed probes.
     """
     tags = [item["tag"] for item in chosen]
     strategy = _probed_strategy(runtime, tags)
