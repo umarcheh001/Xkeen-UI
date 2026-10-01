@@ -122,6 +122,34 @@
       "template": "panel/modals/shared.html"
     },
     {
+      "collection": "core_source_control_partials",
+      "owners": [
+        "engine.xray"
+      ],
+      "template": "panel/slots/core_source_xray.html"
+    },
+    {
+      "collection": "core_source_control_partials",
+      "owners": [
+        "engine.mihomo"
+      ],
+      "template": "panel/slots/core_source_mihomo.html"
+    },
+    {
+      "collection": "modal_partials",
+      "owners": [
+        "engine.xray"
+      ],
+      "template": "panel/modals/core_source_xray.html"
+    },
+    {
+      "collection": "modal_partials",
+      "owners": [
+        "engine.mihomo"
+      ],
+      "template": "panel/modals/core_source_mihomo.html"
+    },
+    {
       "collection": "modal_partials",
       "owners": [
         "engine.mihomo"
@@ -720,6 +748,8 @@
         "view-mihomo",
         "mihomo-editor",
         "mihomo-clash-runtime",
+        "mihomo-core-source-modal",
+        "mihomo-core-install-modal",
         "view-commands",
         "terminal-overlay",
         "view-files",
@@ -865,6 +895,8 @@
         "xray-log-output",
         "xray-logs-badge",
         "routing-focus-switch",
+        "xray-core-source-modal",
+        "xray-core-install-modal",
         "view-commands",
         "terminal-overlay",
         "view-files",
@@ -991,6 +1023,10 @@
         "fm-root",
         "xray-logs-badge",
         "routing-focus-switch",
+        "xray-core-source-modal",
+        "xray-core-install-modal",
+        "mihomo-core-source-modal",
+        "mihomo-core-install-modal",
         "xk-resource-monitor"
       ],
       "required_data_attributes": {
@@ -1085,6 +1121,10 @@
         "fm-root",
         "xray-logs-badge",
         "routing-focus-switch",
+        "xray-core-source-modal",
+        "xray-core-install-modal",
+        "mihomo-core-source-modal",
+        "mihomo-core-install-modal",
         "xk-resource-monitor",
         "view-xkeen",
         "core-modal"

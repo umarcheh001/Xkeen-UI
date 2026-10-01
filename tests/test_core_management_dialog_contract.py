@@ -25,11 +25,17 @@ def test_source_controls_are_rendered_by_the_shared_core_modal():
     modal_start = SHARED_MODAL.index('id="core-modal"')
     modal_end = SHARED_MODAL.index('id="confirm-modal"')
     modal = SHARED_MODAL[modal_start:modal_end]
+    templates = ROOT / "xkeen-ui/templates/panel"
 
-    assert "render_core_source_controls('xray', 'Xray')" in modal
-    assert "render_core_source_controls('mihomo', 'Mihomo')" in modal
-    assert "render_core_source_modals('xray', 'Xray')" in modal
-    assert "render_core_source_modals('mihomo', 'Mihomo')" in modal
+    # The dialog hosts the controls of every active engine; which engines are
+    # active is decided by the composition manifest, not by this template.
+    assert "{% for core_source_control_partial in page_context.core_source_control_partials %}" in modal
+    assert "{% include core_source_control_partial %}" in modal
+    for engine, label in (("xray", "Xray"), ("mihomo", "Mihomo")):
+        slot = (templates / f"slots/core_source_{engine}.html").read_text(encoding="utf-8")
+        dialogs = (templates / f"modals/core_source_{engine}.html").read_text(encoding="utf-8")
+        assert f"render_core_source_controls('{engine}', '{label}')" in slot
+        assert f"render_core_source_modals('{engine}', '{label}')" in dialogs
     assert 'data-core-source data-core-engine="{{ engine_id }}"' in SOURCE
 
 

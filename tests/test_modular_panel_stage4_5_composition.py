@@ -54,8 +54,10 @@ def test_page_context_filters_each_surface_by_declared_owners():
     assert _paths(xray, "modal_partials") == [
         "panel/modals/routing.html",
         "panel/modals/shared.html",
+        "panel/modals/core_source_xray.html",
         "panel/modals/editor.html",
     ]
+    assert _paths(xray, "core_source_control_partials") == ["panel/slots/core_source_xray.html"]
     assert _navigation_sections(xray) == ["routing", "xkeen", "xray-logs", "donate"]
 
     assert _paths(mihomo, "screen_partials") == [
@@ -64,13 +66,16 @@ def test_page_context_filters_each_surface_by_declared_owners():
     ]
     assert _paths(mihomo, "modal_partials") == [
         "panel/modals/shared.html",
+        "panel/modals/core_source_mihomo.html",
         "panel/modals/mihomo.html",
         "panel/modals/editor.html",
     ]
+    assert _paths(mihomo, "core_source_control_partials") == ["panel/slots/core_source_mihomo.html"]
     assert _navigation_sections(mihomo) == ["mihomo", "xkeen", "mihomo-generator", "donate"]
 
     assert _paths(core, "screen_partials") == ["panel/screens/xkeen.html"]
     assert _paths(core, "modal_partials") == ["panel/modals/shared.html"]
+    assert _paths(core, "core_source_control_partials") == []
     assert _navigation_sections(core) == ["xkeen", "donate"]
 
 
@@ -107,6 +112,10 @@ def test_composition_declares_only_known_static_template_paths():
         "panel/slots/diagnostics_summary.html",
         "panel/slots/diagnostics_actions.html",
         "panel/slots/routing_focus.html",
+        "panel/slots/core_source_xray.html",
+        "panel/slots/core_source_mihomo.html",
+        "panel/modals/core_source_xray.html",
+        "panel/modals/core_source_mihomo.html",
     }
 
     assert set(pages.PANEL_COMPOSITION_PARTIALS) == expected
@@ -172,6 +181,29 @@ def test_core_only_html_has_no_optional_navigation_or_shell_markup(tmp_path):
         'id="routing-focus-switch"',
     ):
         assert marker not in html
+
+
+def test_core_source_surfaces_follow_the_engine_that_serves_them(tmp_path):
+    # The source API is registered per engine module, so a card or dialog of
+    # an inactive engine would have nothing to talk to.
+    def engines(module_ids, name):
+        html = render_panel(module_ids, tmp_path / name)
+        cards = set(re.findall(r'data-core-source data-core-engine="([^"]+)"', html))
+        dialogs = set(re.findall(r'id="([a-z]+)-core-source-modal"', html))
+        installs = set(re.findall(r'id="([a-z]+)-core-install-modal"', html))
+        assert cards == dialogs == installs, name
+        return cards
+
+    assert engines(RENDER_FULL_MODULE_IDS, "full") == {"xray", "mihomo"}
+    assert engines(None, "legacy") == {"xray", "mihomo"}
+    assert engines(sorted(XRAY_MINIMAL_MODULE_IDS), "xray") == {"xray"}
+    assert engines(sorted(MIHOMO_MINIMAL_MODULE_IDS), "mihomo") == {"mihomo"}
+    assert engines(["core"], "core") == set()
+
+    # The dialogs must stay above the core dialog that opens them.
+    full = render_panel(RENDER_FULL_MODULE_IDS, tmp_path / "order")
+    for engine in ("xray", "mihomo"):
+        assert full.index('id="core-modal"') < full.index(f'id="{engine}-core-source-modal"')
 
 
 def test_legacy_and_full_html_keep_the_same_composed_surface_set(tmp_path):

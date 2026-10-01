@@ -63,13 +63,14 @@ MODAL_PARTIALS = {
     ),
     "files_editor": (("tool.files", "tool.editor"), ("fm-editor-modal",)),
     "editor": (("tool.editor",), ("json-editor-modal",)),
+    # Rendered by the core_source macro, so the static source holds no ids.
+    "core_source_xray": (("engine.xray",), ()),
+    "core_source_mihomo": (("engine.mihomo",), ()),
 }
 ALL_MODAL_IDS = {modal_id for _gate, ids in MODAL_PARTIALS.values() for modal_id in ids}
-SHARED_CORE_SOURCE_MODAL_IDS = {
-    "xray-core-source-modal",
-    "xray-core-install-modal",
-    "mihomo-core-source-modal",
-    "mihomo-core-install-modal",
+CORE_SOURCE_MODAL_IDS = {
+    "core_source_xray": ("xray-core-source-modal", "xray-core-install-modal"),
+    "core_source_mihomo": ("mihomo-core-source-modal", "mihomo-core-install-modal"),
 }
 
 def _modal_ids(html: str) -> set[str]:
@@ -132,18 +133,20 @@ def test_initial_html_contains_only_modals_of_active_modules(tmp_path, monkeypat
         return _modal_ids(render_panel(module_ids, tmp_path / name))
 
     def owned(*partials):
-        ids = {
+        return {
             modal_id
             for partial in partials
-            for modal_id in MODAL_PARTIALS[partial][1]
+            for modal_id in (*MODAL_PARTIALS[partial][1], *CORE_SOURCE_MODAL_IDS.get(partial, ()))
         }
-        if "shared" in partials:
-            ids.update(SHARED_CORE_SOURCE_MODAL_IDS)
-        return ids
 
     assert modal_set(FULL_MODULE_IDS, "full") == owned(*MODAL_PARTIALS)
-    assert modal_set(XRAY_MINIMAL_MODULE_IDS, "xray") == owned("routing", "shared", "editor")
-    assert modal_set(MIHOMO_MINIMAL_MODULE_IDS, "mihomo") == owned("mihomo", "shared", "editor")
+    assert modal_set(XRAY_MINIMAL_MODULE_IDS, "xray") == owned(
+        "routing", "shared", "core_source_xray", "editor"
+    )
+    assert modal_set(MIHOMO_MINIMAL_MODULE_IDS, "mihomo") == owned(
+        "mihomo", "shared", "core_source_mihomo", "editor"
+    )
+    assert modal_set(["core"], "core") == owned("shared")
 
     # Composite gates: HWID needs Mihomo, the file editor needs the editor.
     with_happ = modal_set([*MIHOMO_MINIMAL_MODULE_IDS, "integration.happ"], "mihomo-happ")
@@ -154,14 +157,17 @@ def test_initial_html_contains_only_modals_of_active_modules(tmp_path, monkeypat
     assert "fm-editor-modal" in modal_set(["core", "tool.files", "tool.editor"], "files-editor")
 
 
-def test_core_source_modals_follow_the_shared_core_management_dialog(tmp_path):
+def test_core_source_modals_belong_to_their_engine_partials():
     macro = (ROOT / "xkeen-ui/templates/panel/core_source.html").read_text(encoding="utf-8")
     shared = (MODALS_DIR / "shared.html").read_text(encoding="utf-8")
     templates = ROOT / "xkeen-ui/templates/panel"
 
     assert _modal_ids(macro) == {"{{ engine_id }}-core-source-modal", "{{ engine_id }}-core-install-modal"}
-    assert shared.count("render_core_source_modals(") == 2
-    assert SHARED_CORE_SOURCE_MODAL_IDS <= _modal_ids(render_panel(["core"], tmp_path))
+    assert "render_core_source" not in shared
+    for name, engine in (("core_source_xray", "xray"), ("core_source_mihomo", "mihomo")):
+        partial = (MODALS_DIR / f"{name}.html").read_text(encoding="utf-8")
+        assert partial.count("render_core_source_modals(") == 1
+        assert f"render_core_source_modals('{engine}'," in partial
     for path in templates.glob("screens/*.html"):
         assert "render_core_source" not in path.read_text(encoding="utf-8"), path.name
 

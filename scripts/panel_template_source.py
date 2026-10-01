@@ -19,7 +19,7 @@ _MACRO_IMPORT_RE = re.compile(
     r"""\{%-?\s*from\s+["']panel/macros\.html["']\s+import\s+op_icon\s*-?%\}\s*"""
 )
 _DYNAMIC_INCLUDE_RE = re.compile(
-    r"""\{%-?\s*include\s+(?P<name>header_badge_partial|header_summary_partial|header_action_partial|control_partial|pre_screen_modal_partial|screen_partial|modal_partial)\s*-?%\}"""
+    r"""\{%-?\s*include\s+(?P<name>header_badge_partial|header_summary_partial|header_action_partial|control_partial|core_source_control_partial|pre_screen_modal_partial|screen_partial|modal_partial)\s*-?%\}"""
 )
 _DYNAMIC_NAVIGATION_LOOP_RE = re.compile(
     r"""\{%-?\s*for\s+item\s+in\s+page_context\.navigation_items\s*-?%\}.*?\{%-?\s*endfor\s*-?%\}""",
@@ -35,6 +35,10 @@ DYNAMIC_COMPOSITION_INCLUDE_PATHS: dict[str, tuple[str, ...]] = {
     "header_summary_partial": ("panel/slots/diagnostics_summary.html",),
     "header_action_partial": ("panel/slots/diagnostics_actions.html",),
     "control_partial": ("panel/slots/routing_focus.html",),
+    "core_source_control_partial": (
+        "panel/slots/core_source_xray.html",
+        "panel/slots/core_source_mihomo.html",
+    ),
     "pre_screen_modal_partial": ("panel/modals/diagnostics.html",),
     "screen_partial": (
         "panel/screens/routing.html",
@@ -48,6 +52,8 @@ DYNAMIC_COMPOSITION_INCLUDE_PATHS: dict[str, tuple[str, ...]] = {
         "panel/modals/routing.html",
         "panel/modals/commands.html",
         "panel/modals/shared.html",
+        "panel/modals/core_source_xray.html",
+        "panel/modals/core_source_mihomo.html",
         "panel/modals/mihomo.html",
         "panel/modals/happ.html",
         "panel/modals/files.html",

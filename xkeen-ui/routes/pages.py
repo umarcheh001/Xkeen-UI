@@ -53,6 +53,13 @@ PANEL_COMPOSITION: tuple[PanelCompositionEntry, ...] = (
     PanelCompositionEntry("modal_partials", ("engine.xray",), "panel/modals/routing.html"),
     PanelCompositionEntry("modal_partials", ("tool.terminal",), "panel/modals/commands.html"),
     PanelCompositionEntry("modal_partials", ("core",), "panel/modals/shared.html"),
+    # The core-source API is registered per engine module, so the controls
+    # inside the shared core dialog and their dialogs follow the engine. The
+    # dialogs stay right after shared.html to open above the core dialog.
+    PanelCompositionEntry("core_source_control_partials", ("engine.xray",), "panel/slots/core_source_xray.html"),
+    PanelCompositionEntry("core_source_control_partials", ("engine.mihomo",), "panel/slots/core_source_mihomo.html"),
+    PanelCompositionEntry("modal_partials", ("engine.xray",), "panel/modals/core_source_xray.html"),
+    PanelCompositionEntry("modal_partials", ("engine.mihomo",), "panel/modals/core_source_mihomo.html"),
     PanelCompositionEntry("modal_partials", ("engine.mihomo",), "panel/modals/mihomo.html"),
     PanelCompositionEntry("modal_partials", ("integration.happ", "engine.mihomo"), "panel/modals/happ.html"),
     PanelCompositionEntry("modal_partials", ("tool.files",), "panel/modals/files.html"),
@@ -90,6 +97,7 @@ def _build_panel_page_context(active_module_ids: set[str] | None) -> dict[str, o
         "header_summary_partials": [],
         "header_action_partials": [],
         "control_partials": [],
+        "core_source_control_partials": [],
         "pre_screen_modal_partials": [],
         "screen_partials": [],
         "modal_partials": [],

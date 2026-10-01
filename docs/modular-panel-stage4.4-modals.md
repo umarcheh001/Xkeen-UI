@@ -13,7 +13,9 @@
 | `diagnostics.html` | `tool.advanced-diagnostics` | `has_diagnostics` | `xk-resource-dashboard-modal` |
 | `routing.html` | `engine.xray` | `has_xray` | 12 окон Xray, включая DNS-over-VLESS, шаблоны, генератор и пул outbounds, DAT contents |
 | `commands.html` | `tool.terminal` | `has_terminal` | `terminal-overlay`, история команд, 4 окна SSH |
-| `shared.html` | `core` | — | выбор ядра, источники и установка Xray/Mihomo, подтверждение, GitHub export/catalog, donate, UI settings |
+| `shared.html` | `core` | — | выбор ядра, подтверждение, GitHub export/catalog, donate, UI settings |
+| `core_source_xray.html` | `engine.xray` | manifest | источник и установка ядра Xray |
+| `core_source_mihomo.html` | `engine.mihomo` | manifest | источник и установка ядра Mihomo |
 | `mihomo.html` | `engine.mihomo` | `has_mihomo` | DNS, импорт, инструменты прокси, validation |
 | `happ.html` | `integration.happ` | `has_happ and has_mihomo` | `mihomo-hwid-modal` |
 | `files.html` | `tool.files` | `has_files` | 22 окна файлового менеджера, включая подключения к удалённой ФС и known hosts |
@@ -38,14 +40,27 @@ Mixed-current-классификация контракта 4.1 разрешен
 
 ## Источники ядра в shared-диалоге
 
-`panel/core_source.html` хранит переиспользуемый макрос карточки и двух
-вложенных окон (`*-core-source-modal` и `*-core-install-modal`). Единственный
-вызов макроса теперь находится в `panel/modals/shared.html`, рядом с
-`#core-modal`; экраны Xray и Mihomo больше не содержат управляющей разметки.
-Обе пары доступны и на стенде без установленных бинарников: пользователь может
-выбрать проверенный источник до первой установки. Контракт 4.4 проверяет это
-как динамические модалы shared-диалога, поскольку статический инвентарь не
-разворачивает Jinja-макросы.
+`panel/core_source.html` хранит переиспользуемые макросы карточки и двух
+окон (`*-core-source-modal` и `*-core-install-modal`). Экраны Xray и Mihomo
+не содержат управляющей разметки: карточки показываются внутри `#core-modal`.
+
+API источников (`/api/<engine>/core-profiles`, `core-source`, `core-install`)
+регистрируется вместе с модулем движка, а `panel.routing.bundle.js` и
+`panel.mihomo.bundle.js`, которые оживляют карточки, загружаются только для
+активного движка. Поэтому карточка и окна принадлежат движку, а не `core`:
+
+- `panel/slots/core_source_<engine>.html` — карточка; `shared.html` перебирает
+  `page_context.core_source_control_partials` и сам ownership не решает;
+- `panel/modals/core_source_<engine>.html` — два окна; в manifest они стоят
+  сразу после `shared.html`, чтобы открываться поверх `#core-modal`.
+
+Раньше оба движка рисовались из `shared.html` в любом профиле, и в
+Xray-minimal, Mihomo-minimal и core-only оставались карточки без API и без
+JavaScript. Теперь в профиле без движков `#core-modal` показывает подсказку
+вместо карточек. В Legacy и Full набор `id` прежний; четыре окна источника
+сместились в конец общих окон, после `ui-settings-modal`. Статический
+инвентарь не разворачивает Jinja-макросы, поэтому
+контракт 4.4 проверяет эти окна по отрендеренному HTML профилей.
 
 ## Порядок и расположение
 

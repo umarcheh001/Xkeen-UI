@@ -34,9 +34,9 @@ manifest-ами:
 | Набор модулей | Navigation | Screens | Shell slots и modals |
 | --- | --- | --- | --- |
 | Legacy / Full | все разрешённые пункты | все screens | все slots и modals |
-| Xray-minimal (`core`, `tool.editor`, `engine.xray`) | routing, xkeen, xray-logs, donate | routing, xkeen, xray-logs | Xray badge и routing focus; routing, shared и editor modals |
-| Mihomo-minimal (`core`, `tool.editor`, `engine.mihomo`) | mihomo, xkeen, mihomo-generator, donate | mihomo, xkeen | shared, mihomo и editor modals |
-| core-only | xkeen, donate | xkeen | только shared modal; нет Xray, Mihomo, diagnostics, terminal и files surfaces |
+| Xray-minimal (`core`, `tool.editor`, `engine.xray`) | routing, xkeen, xray-logs, donate | routing, xkeen, xray-logs | Xray badge, routing focus и карточка источника ядра Xray; routing, shared, core-source Xray и editor modals |
+| Mihomo-minimal (`core`, `tool.editor`, `engine.mihomo`) | mihomo, xkeen, mihomo-generator, donate | mihomo, xkeen | карточка источника ядра Mihomo; shared, core-source Mihomo, mihomo и editor modals |
+| core-only | xkeen, donate | xkeen | только shared modal; нет Xray, Mihomo, diagnostics, terminal и files surfaces, включая карточки и окна источника ядра |
 
 Таким образом серверная разметка является источником истины. Клиентский
 маршрут может выбрать только уже отданный view и не восстанавливает HTML
@@ -45,9 +45,10 @@ manifest-ами:
 ## Статический source graph
 
 `scripts/panel_template_source.py` по-прежнему разворачивает literal Jinja
-includes. Для composition loops он также знает только семь конкретных имён
+includes. Для composition loops он также знает только восемь конкретных имён
 переменных (три `header_*_partial`, `control_partial`,
-`pre_screen_modal_partial`, `screen_partial` и `modal_partial`) и раскрывает их через
+`core_source_control_partial`, `pre_screen_modal_partial`, `screen_partial` и
+`modal_partial`) и раскрывает их через
 `DYNAMIC_COMPOSITION_INCLUDE_PATHS`. Отдельный
 `DYNAMIC_NAVIGATION_ITEMS` строит только Full/Legacy navigation для
 source-only inventory. Оба каталога сравниваются с runtime manifest в тестах,

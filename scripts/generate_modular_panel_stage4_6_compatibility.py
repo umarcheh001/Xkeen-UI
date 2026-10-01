@@ -137,6 +137,8 @@ def build_contract(root: Path) -> dict[str, Any]:
         "view-mihomo",
         "mihomo-editor",
         "mihomo-clash-runtime",
+        "mihomo-core-source-modal",
+        "mihomo-core-install-modal",
         "view-commands",
         "terminal-overlay",
         "view-files",
@@ -150,6 +152,8 @@ def build_contract(root: Path) -> dict[str, Any]:
         "xray-log-output",
         "xray-logs-badge",
         "routing-focus-switch",
+        "xray-core-source-modal",
+        "xray-core-install-modal",
         "view-commands",
         "terminal-overlay",
         "view-files",
@@ -168,6 +172,10 @@ def build_contract(root: Path) -> dict[str, Any]:
         "fm-root",
         "xray-logs-badge",
         "routing-focus-switch",
+        "xray-core-source-modal",
+        "xray-core-install-modal",
+        "mihomo-core-source-modal",
+        "mihomo-core-install-modal",
         "xk-resource-monitor",
     ]
 
