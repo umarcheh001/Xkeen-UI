@@ -1,7 +1,7 @@
 # План модульной архитектуры панели Xkeen UI
 
-**Статус:** Этапы 0, 1, 2, 3, 3R, 3R.1, 4.1, 4.2, 4.3, 4.4 и 4.5 закрыты;
-следующий — подэтап 4.6<br>
+**Статус:** Этапы 0, 1, 2, 3, 3R, 3R.1 и Этап 4 закрыты;
+следующий — Этап 5<br>
 **Дата:** 1 октября 2026 года
 **Область:** облегчение панели, профили установки и официальный каталог модулей
 
@@ -10,7 +10,9 @@
 вынесены в module-owned partials, minimal-профили открываются без console
 errors. В подэтапе 4.4 все модальные окна разнесены по владельцам. В
 подэтапе 4.5 server composition переведена на allow-listed active-module
-manifest и единый `page_context`. Следующий — подэтап 4.6.
+manifest и единый `page_context`. Подэтап 4.6 закрепил server-rendered
+совместимость профилей, удаление монолитной screen/modal-разметки и ownership
+составных modal. Этап 4 закрыт; следующий — Этап 5.
 
 ## 1. Цель проекта
 
@@ -1196,22 +1198,29 @@ HTML не содержит случайных `500` из-за отсутству
 
 ### Подэтап 4.6. Совместимость, тесты и удаление монолита
 
-После переноса всех областей:
+**Статус:** закрыт 1 октября 2026 года.
 
-- добавить server-side тесты на состав initial HTML для всех профилей;
-- сравнить обязательные DOM id, `data-*`-атрибуты и доступность
-  navigation views с baseline;
-- проверить, что Full/Legacy визуально и функционально эквивалентны
-  текущему `panel.html`;
-- проверить отсутствие HTML отключённых модулей в Xray-only и Mihomo-only;
-- проверить рендер при отсутствии optional template context;
-- обновить inventory/документацию, если фактические template boundaries
-  отличаются от целевой схемы;
-- удалить оставшиеся дубли из старого `panel.html` только после прохождения
-  всех проверок.
+Артефакты:
 
-**Критерий готовности 4.6:** все экраны и module-owned modals имеют
-единственного владельца, `panel.html` больше не содержит монолитной
+- `docs/modular-panel-stage4.6-compatibility.md` — результат, профильная
+  матрица и границы Stage 5;
+- `docs/modular-panel-stage4.6-compatibility.json` — воспроизводимый
+  compatibility contract;
+- `scripts/generate_modular_panel_stage4_6_compatibility.py` — генератор
+  снимка;
+- `tests/test_modular_panel_stage4_6_compatibility.py` — server-side
+  profile/Legacy guardrails.
+
+Выполнено: Full/Legacy сравниваются по полному публичному DOM-контракту;
+Xray-minimal, Mihomo-minimal, core-only и пустой active set проверяются на
+отсутствие отключённых screen/modal/shell surfaces. `panel.html` не содержит
+screen-specific или modal markup, поэтому отдельное удаление дубликатов не
+потребовалось. Контракт 4.1 теперь получает `owner_requirements` modal из
+runtime composition manifest: `fm-editor-modal` корректно требует
+`tool.files AND tool.editor` и не числится доступной в минимальных профилях.
+
+**Критерий готовности 4.6:** **выполнен**. Все экраны и module-owned modals
+имеют единственного владельца, `panel.html` больше не содержит монолитной
 screen-specific разметки, а тесты защищают состав HTML и legacy-совместимость.
 
 ### Общий критерий готовности Этапа 4
@@ -1225,6 +1234,8 @@ screen-specific разметки, а тесты защищают состав HT
 - composition использует единый active-module/page-context contract;
 - серверные тесты защищают HTML composition и не зависят от порядка
   выполнения frontend-скриптов.
+
+**Статус Этапа 4:** **выполнен 1 октября 2026 года**.
 
 При этом следующие проверки сознательно остаются в Этапе 5:
 

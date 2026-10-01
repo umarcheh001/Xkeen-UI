@@ -1,0 +1,1100 @@
+{
+  "schema_version": 1,
+  "stage": {
+    "id": "4.6",
+    "name": "Совместимость, тесты и удаление монолита",
+    "status": "closed",
+    "closed_on": "2026-10-01"
+  },
+  "entrypoint": {
+    "template": "xkeen-ui/templates/panel.html",
+    "role": "thin-composition-root",
+    "line_count": 35,
+    "literal_includes": [
+      "panel/head.html",
+      "panel/shell.html"
+    ],
+    "dynamic_collections": [
+      "pre_screen_modal_partials",
+      "screen_partials",
+      "modal_partials"
+    ],
+    "owns_screen_markup": false,
+    "owns_modal_markup": false
+  },
+  "composition_manifest": [
+    {
+      "collection": "header_badge_partials",
+      "owners": [
+        "engine.xray"
+      ],
+      "template": "panel/slots/xray_badge.html"
+    },
+    {
+      "collection": "header_summary_partials",
+      "owners": [
+        "tool.advanced-diagnostics"
+      ],
+      "template": "panel/slots/diagnostics_summary.html"
+    },
+    {
+      "collection": "header_action_partials",
+      "owners": [
+        "tool.advanced-diagnostics"
+      ],
+      "template": "panel/slots/diagnostics_actions.html"
+    },
+    {
+      "collection": "control_partials",
+      "owners": [
+        "engine.xray"
+      ],
+      "template": "panel/slots/routing_focus.html"
+    },
+    {
+      "collection": "screen_partials",
+      "owners": [
+        "engine.xray"
+      ],
+      "template": "panel/screens/routing.html"
+    },
+    {
+      "collection": "screen_partials",
+      "owners": [
+        "engine.mihomo"
+      ],
+      "template": "panel/screens/mihomo.html"
+    },
+    {
+      "collection": "screen_partials",
+      "owners": [
+        "core"
+      ],
+      "template": "panel/screens/xkeen.html"
+    },
+    {
+      "collection": "screen_partials",
+      "owners": [
+        "tool.terminal"
+      ],
+      "template": "panel/screens/commands.html"
+    },
+    {
+      "collection": "screen_partials",
+      "owners": [
+        "tool.files"
+      ],
+      "template": "panel/screens/files.html"
+    },
+    {
+      "collection": "screen_partials",
+      "owners": [
+        "engine.xray"
+      ],
+      "template": "panel/screens/xray_logs.html"
+    },
+    {
+      "collection": "pre_screen_modal_partials",
+      "owners": [
+        "tool.advanced-diagnostics"
+      ],
+      "template": "panel/modals/diagnostics.html"
+    },
+    {
+      "collection": "modal_partials",
+      "owners": [
+        "engine.xray"
+      ],
+      "template": "panel/modals/routing.html"
+    },
+    {
+      "collection": "modal_partials",
+      "owners": [
+        "tool.terminal"
+      ],
+      "template": "panel/modals/commands.html"
+    },
+    {
+      "collection": "modal_partials",
+      "owners": [
+        "core"
+      ],
+      "template": "panel/modals/shared.html"
+    },
+    {
+      "collection": "modal_partials",
+      "owners": [
+        "engine.mihomo"
+      ],
+      "template": "panel/modals/mihomo.html"
+    },
+    {
+      "collection": "modal_partials",
+      "owners": [
+        "integration.happ",
+        "engine.mihomo"
+      ],
+      "template": "panel/modals/happ.html"
+    },
+    {
+      "collection": "modal_partials",
+      "owners": [
+        "tool.files"
+      ],
+      "template": "panel/modals/files.html"
+    },
+    {
+      "collection": "modal_partials",
+      "owners": [
+        "tool.files",
+        "tool.editor"
+      ],
+      "template": "panel/modals/files_editor.html"
+    },
+    {
+      "collection": "modal_partials",
+      "owners": [
+        "tool.editor"
+      ],
+      "template": "panel/modals/editor.html"
+    }
+  ],
+  "navigation_manifest": [
+    {
+      "owners": [
+        "engine.xray"
+      ],
+      "section": "routing",
+      "view": "routing",
+      "id": null,
+      "href": null,
+      "top_nav": false
+    },
+    {
+      "owners": [
+        "engine.mihomo"
+      ],
+      "section": "mihomo",
+      "view": "mihomo",
+      "id": null,
+      "href": null,
+      "top_nav": false
+    },
+    {
+      "owners": [
+        "core"
+      ],
+      "section": "xkeen",
+      "view": "xkeen",
+      "id": null,
+      "href": null,
+      "top_nav": false
+    },
+    {
+      "owners": [
+        "engine.xray"
+      ],
+      "section": "xray-logs",
+      "view": "xray-logs",
+      "id": null,
+      "href": null,
+      "top_nav": false
+    },
+    {
+      "owners": [
+        "tool.terminal"
+      ],
+      "section": "commands",
+      "view": "commands",
+      "id": null,
+      "href": null,
+      "top_nav": false
+    },
+    {
+      "owners": [
+        "tool.files"
+      ],
+      "section": "files",
+      "view": "files",
+      "id": "top-tab-files",
+      "href": null,
+      "top_nav": false
+    },
+    {
+      "owners": [
+        "engine.mihomo"
+      ],
+      "section": "mihomo-generator",
+      "view": null,
+      "id": "top-tab-mihomo-generator",
+      "href": "/mihomo_generator",
+      "top_nav": true
+    },
+    {
+      "owners": [
+        "core"
+      ],
+      "section": "donate",
+      "view": null,
+      "id": "top-tab-donate",
+      "href": null,
+      "top_nav": false
+    }
+  ],
+  "full_legacy_equivalence": {
+    "profiles": [
+      "legacy-full",
+      "full"
+    ],
+    "compared_surfaces": [
+      "all DOM ids in document order",
+      "data-* attributes on every id-bearing element",
+      "top navigation data-view/data-xk-section/id/href",
+      "modal root ids"
+    ]
+  },
+  "profiles": [
+    {
+      "id": "legacy-full",
+      "active_module_ids": null,
+      "screen_sections": [
+        "routing",
+        "mihomo",
+        "xkeen",
+        "xray-logs",
+        "commands",
+        "files"
+      ],
+      "forbidden_screen_sections": [],
+      "navigation": [
+        {
+          "section": "routing",
+          "view": "routing",
+          "id": null,
+          "href": null,
+          "top_nav": null
+        },
+        {
+          "section": "mihomo",
+          "view": "mihomo",
+          "id": null,
+          "href": null,
+          "top_nav": null
+        },
+        {
+          "section": "xkeen",
+          "view": "xkeen",
+          "id": null,
+          "href": null,
+          "top_nav": null
+        },
+        {
+          "section": "xray-logs",
+          "view": "xray-logs",
+          "id": null,
+          "href": null,
+          "top_nav": null
+        },
+        {
+          "section": "commands",
+          "view": "commands",
+          "id": null,
+          "href": null,
+          "top_nav": null
+        },
+        {
+          "section": "files",
+          "view": "files",
+          "id": "top-tab-files",
+          "href": null,
+          "top_nav": null
+        },
+        {
+          "section": "mihomo-generator",
+          "view": null,
+          "id": "top-tab-mihomo-generator",
+          "href": "/mihomo_generator",
+          "top_nav": "1"
+        },
+        {
+          "section": "donate",
+          "view": null,
+          "id": "top-tab-donate",
+          "href": null,
+          "top_nav": null
+        }
+      ],
+      "required_modal_ids": [
+        "xk-resource-dashboard-modal",
+        "xray-context-modal",
+        "xray-devices-modal",
+        "routing-dns-over-vless-modal",
+        "inbounds-apply-modal",
+        "routing-balancer-help-modal",
+        "xray-snapshot-modal",
+        "routing-template-modal",
+        "routing-template-save-modal",
+        "routing-template-edit-modal",
+        "outbounds-generator-modal",
+        "outbounds-pool-modal",
+        "routing-dat-contents-modal",
+        "terminal-history-modal",
+        "ssh-modal",
+        "ssh-edit-modal",
+        "ssh-confirm-modal",
+        "ssh-transfer-modal",
+        "core-modal",
+        "confirm-modal",
+        "github-export-modal",
+        "github-catalog-modal",
+        "donate-modal",
+        "ui-settings-modal",
+        "mihomo-dns-modal",
+        "mihomo-import-modal",
+        "mihomo-proxy-tools-modal",
+        "mihomo-validation-modal",
+        "mihomo-hwid-modal",
+        "fm-upload-conflict-modal",
+        "fm-connect-modal",
+        "fm-knownhosts-modal",
+        "fm-create-modal",
+        "fm-rename-modal",
+        "fm-archive-modal",
+        "fm-extract-modal",
+        "fm-folder-picker-modal",
+        "fm-archive-list-modal",
+        "fm-mask-modal",
+        "fm-props-modal",
+        "fm-hash-modal",
+        "fm-chmod-modal",
+        "fm-chown-modal",
+        "fm-dropop-modal",
+        "fm-conflicts-modal",
+        "fm-bookmarks-modal",
+        "fm-download-multi-modal",
+        "fm-progress-modal",
+        "fm-ops-modal",
+        "fm-volumes-modal",
+        "fm-help-modal",
+        "fm-editor-modal",
+        "json-editor-modal"
+      ],
+      "forbidden_modal_ids": [],
+      "forbidden_dom_ids": [],
+      "required_data_attributes": {
+        "view-routing": {
+          "data-xk-section": "routing"
+        },
+        "view-mihomo": {
+          "data-xk-section": "mihomo"
+        },
+        "view-xkeen": {
+          "data-xk-section": "xkeen"
+        },
+        "view-xray-logs": {
+          "data-xk-section": "xray-logs"
+        },
+        "view-commands": {
+          "data-xk-section": "commands"
+        },
+        "view-files": {
+          "data-xk-section": "files"
+        },
+        "xray-logs-badge": {
+          "data-state": "off",
+          "data-live": "off"
+        },
+        "routing-dns-over-vless-modal": {
+          "data-operator-modal-family": "confirm-compact-form",
+          "data-modal-noresize": "1",
+          "data-modal-nopos": "1",
+          "data-modal-remember": "0",
+          "data-modal-backdrop-close": "0"
+        },
+        "mihomo-dns-modal": {
+          "data-operator-modal-family": "confirm-compact-form",
+          "data-modal-noresize": "1",
+          "data-modal-nopos": "1",
+          "data-modal-remember": "0"
+        },
+        "xk-resource-dashboard-modal": {
+          "data-operator-modal-family": "master-detail",
+          "data-modal-key": "resource-dashboard"
+        },
+        "core-modal": {
+          "data-operator-modal-family": "confirm-compact-form",
+          "data-modal-remember": "0",
+          "data-modal-nopos": "1"
+        }
+      }
+    },
+    {
+      "id": "full",
+      "active_module_ids": [
+        "core",
+        "engine.xray",
+        "engine.mihomo",
+        "tool.editor",
+        "tool.terminal",
+        "tool.files",
+        "tool.backups",
+        "integration.happ",
+        "tool.advanced-diagnostics"
+      ],
+      "screen_sections": [
+        "routing",
+        "mihomo",
+        "xkeen",
+        "xray-logs",
+        "commands",
+        "files"
+      ],
+      "forbidden_screen_sections": [],
+      "navigation": [
+        {
+          "section": "routing",
+          "view": "routing",
+          "id": null,
+          "href": null,
+          "top_nav": null
+        },
+        {
+          "section": "mihomo",
+          "view": "mihomo",
+          "id": null,
+          "href": null,
+          "top_nav": null
+        },
+        {
+          "section": "xkeen",
+          "view": "xkeen",
+          "id": null,
+          "href": null,
+          "top_nav": null
+        },
+        {
+          "section": "xray-logs",
+          "view": "xray-logs",
+          "id": null,
+          "href": null,
+          "top_nav": null
+        },
+        {
+          "section": "commands",
+          "view": "commands",
+          "id": null,
+          "href": null,
+          "top_nav": null
+        },
+        {
+          "section": "files",
+          "view": "files",
+          "id": "top-tab-files",
+          "href": null,
+          "top_nav": null
+        },
+        {
+          "section": "mihomo-generator",
+          "view": null,
+          "id": "top-tab-mihomo-generator",
+          "href": "/mihomo_generator",
+          "top_nav": "1"
+        },
+        {
+          "section": "donate",
+          "view": null,
+          "id": "top-tab-donate",
+          "href": null,
+          "top_nav": null
+        }
+      ],
+      "required_modal_ids": [
+        "xk-resource-dashboard-modal",
+        "xray-context-modal",
+        "xray-devices-modal",
+        "routing-dns-over-vless-modal",
+        "inbounds-apply-modal",
+        "routing-balancer-help-modal",
+        "xray-snapshot-modal",
+        "routing-template-modal",
+        "routing-template-save-modal",
+        "routing-template-edit-modal",
+        "outbounds-generator-modal",
+        "outbounds-pool-modal",
+        "routing-dat-contents-modal",
+        "terminal-history-modal",
+        "ssh-modal",
+        "ssh-edit-modal",
+        "ssh-confirm-modal",
+        "ssh-transfer-modal",
+        "core-modal",
+        "confirm-modal",
+        "github-export-modal",
+        "github-catalog-modal",
+        "donate-modal",
+        "ui-settings-modal",
+        "mihomo-dns-modal",
+        "mihomo-import-modal",
+        "mihomo-proxy-tools-modal",
+        "mihomo-validation-modal",
+        "mihomo-hwid-modal",
+        "fm-upload-conflict-modal",
+        "fm-connect-modal",
+        "fm-knownhosts-modal",
+        "fm-create-modal",
+        "fm-rename-modal",
+        "fm-archive-modal",
+        "fm-extract-modal",
+        "fm-folder-picker-modal",
+        "fm-archive-list-modal",
+        "fm-mask-modal",
+        "fm-props-modal",
+        "fm-hash-modal",
+        "fm-chmod-modal",
+        "fm-chown-modal",
+        "fm-dropop-modal",
+        "fm-conflicts-modal",
+        "fm-bookmarks-modal",
+        "fm-download-multi-modal",
+        "fm-progress-modal",
+        "fm-ops-modal",
+        "fm-volumes-modal",
+        "fm-help-modal",
+        "fm-editor-modal",
+        "json-editor-modal"
+      ],
+      "forbidden_modal_ids": [],
+      "forbidden_dom_ids": [],
+      "required_data_attributes": {
+        "view-routing": {
+          "data-xk-section": "routing"
+        },
+        "view-mihomo": {
+          "data-xk-section": "mihomo"
+        },
+        "view-xkeen": {
+          "data-xk-section": "xkeen"
+        },
+        "view-xray-logs": {
+          "data-xk-section": "xray-logs"
+        },
+        "view-commands": {
+          "data-xk-section": "commands"
+        },
+        "view-files": {
+          "data-xk-section": "files"
+        },
+        "xray-logs-badge": {
+          "data-state": "off",
+          "data-live": "off"
+        },
+        "routing-dns-over-vless-modal": {
+          "data-operator-modal-family": "confirm-compact-form",
+          "data-modal-noresize": "1",
+          "data-modal-nopos": "1",
+          "data-modal-remember": "0",
+          "data-modal-backdrop-close": "0"
+        },
+        "mihomo-dns-modal": {
+          "data-operator-modal-family": "confirm-compact-form",
+          "data-modal-noresize": "1",
+          "data-modal-nopos": "1",
+          "data-modal-remember": "0"
+        },
+        "xk-resource-dashboard-modal": {
+          "data-operator-modal-family": "master-detail",
+          "data-modal-key": "resource-dashboard"
+        },
+        "core-modal": {
+          "data-operator-modal-family": "confirm-compact-form",
+          "data-modal-remember": "0",
+          "data-modal-nopos": "1"
+        }
+      }
+    },
+    {
+      "id": "xray-minimal",
+      "active_module_ids": [
+        "core",
+        "tool.editor",
+        "engine.xray"
+      ],
+      "screen_sections": [
+        "routing",
+        "xkeen",
+        "xray-logs"
+      ],
+      "forbidden_screen_sections": [
+        "mihomo",
+        "commands",
+        "files"
+      ],
+      "navigation": [
+        {
+          "section": "routing",
+          "view": "routing",
+          "id": null,
+          "href": null,
+          "top_nav": null
+        },
+        {
+          "section": "xkeen",
+          "view": "xkeen",
+          "id": null,
+          "href": null,
+          "top_nav": null
+        },
+        {
+          "section": "xray-logs",
+          "view": "xray-logs",
+          "id": null,
+          "href": null,
+          "top_nav": null
+        },
+        {
+          "section": "donate",
+          "view": null,
+          "id": "top-tab-donate",
+          "href": null,
+          "top_nav": null
+        }
+      ],
+      "required_modal_ids": [
+        "xray-context-modal",
+        "xray-devices-modal",
+        "routing-dns-over-vless-modal",
+        "inbounds-apply-modal",
+        "routing-balancer-help-modal",
+        "xray-snapshot-modal",
+        "routing-template-modal",
+        "routing-template-save-modal",
+        "routing-template-edit-modal",
+        "outbounds-generator-modal",
+        "outbounds-pool-modal",
+        "routing-dat-contents-modal",
+        "core-modal",
+        "confirm-modal",
+        "github-export-modal",
+        "github-catalog-modal",
+        "donate-modal",
+        "ui-settings-modal",
+        "json-editor-modal"
+      ],
+      "forbidden_modal_ids": [
+        "xk-resource-dashboard-modal",
+        "terminal-history-modal",
+        "ssh-modal",
+        "ssh-edit-modal",
+        "ssh-confirm-modal",
+        "ssh-transfer-modal",
+        "mihomo-dns-modal",
+        "mihomo-import-modal",
+        "mihomo-proxy-tools-modal",
+        "mihomo-validation-modal",
+        "mihomo-hwid-modal",
+        "fm-upload-conflict-modal",
+        "fm-connect-modal",
+        "fm-knownhosts-modal",
+        "fm-create-modal",
+        "fm-rename-modal",
+        "fm-archive-modal",
+        "fm-extract-modal",
+        "fm-folder-picker-modal",
+        "fm-archive-list-modal",
+        "fm-mask-modal",
+        "fm-props-modal",
+        "fm-hash-modal",
+        "fm-chmod-modal",
+        "fm-chown-modal",
+        "fm-dropop-modal",
+        "fm-conflicts-modal",
+        "fm-bookmarks-modal",
+        "fm-download-multi-modal",
+        "fm-progress-modal",
+        "fm-ops-modal",
+        "fm-volumes-modal",
+        "fm-help-modal",
+        "fm-editor-modal"
+      ],
+      "forbidden_dom_ids": [
+        "view-mihomo",
+        "mihomo-editor",
+        "mihomo-clash-runtime",
+        "view-commands",
+        "terminal-overlay",
+        "view-files",
+        "fm-root",
+        "xk-resource-monitor"
+      ],
+      "required_data_attributes": {
+        "view-routing": {
+          "data-xk-section": "routing"
+        },
+        "view-xkeen": {
+          "data-xk-section": "xkeen"
+        },
+        "view-xray-logs": {
+          "data-xk-section": "xray-logs"
+        },
+        "xray-logs-badge": {
+          "data-state": "off",
+          "data-live": "off"
+        },
+        "routing-dns-over-vless-modal": {
+          "data-operator-modal-family": "confirm-compact-form",
+          "data-modal-noresize": "1",
+          "data-modal-nopos": "1",
+          "data-modal-remember": "0",
+          "data-modal-backdrop-close": "0"
+        },
+        "core-modal": {
+          "data-operator-modal-family": "confirm-compact-form",
+          "data-modal-remember": "0",
+          "data-modal-nopos": "1"
+        }
+      }
+    },
+    {
+      "id": "mihomo-minimal",
+      "active_module_ids": [
+        "core",
+        "tool.editor",
+        "engine.mihomo"
+      ],
+      "screen_sections": [
+        "mihomo",
+        "xkeen"
+      ],
+      "forbidden_screen_sections": [
+        "routing",
+        "xray-logs",
+        "commands",
+        "files"
+      ],
+      "navigation": [
+        {
+          "section": "mihomo",
+          "view": "mihomo",
+          "id": null,
+          "href": null,
+          "top_nav": null
+        },
+        {
+          "section": "xkeen",
+          "view": "xkeen",
+          "id": null,
+          "href": null,
+          "top_nav": null
+        },
+        {
+          "section": "mihomo-generator",
+          "view": null,
+          "id": "top-tab-mihomo-generator",
+          "href": "/mihomo_generator",
+          "top_nav": "1"
+        },
+        {
+          "section": "donate",
+          "view": null,
+          "id": "top-tab-donate",
+          "href": null,
+          "top_nav": null
+        }
+      ],
+      "required_modal_ids": [
+        "core-modal",
+        "confirm-modal",
+        "github-export-modal",
+        "github-catalog-modal",
+        "donate-modal",
+        "ui-settings-modal",
+        "mihomo-dns-modal",
+        "mihomo-import-modal",
+        "mihomo-proxy-tools-modal",
+        "mihomo-validation-modal",
+        "json-editor-modal"
+      ],
+      "forbidden_modal_ids": [
+        "xk-resource-dashboard-modal",
+        "xray-context-modal",
+        "xray-devices-modal",
+        "routing-dns-over-vless-modal",
+        "inbounds-apply-modal",
+        "routing-balancer-help-modal",
+        "xray-snapshot-modal",
+        "routing-template-modal",
+        "routing-template-save-modal",
+        "routing-template-edit-modal",
+        "outbounds-generator-modal",
+        "outbounds-pool-modal",
+        "routing-dat-contents-modal",
+        "terminal-history-modal",
+        "ssh-modal",
+        "ssh-edit-modal",
+        "ssh-confirm-modal",
+        "ssh-transfer-modal",
+        "mihomo-hwid-modal",
+        "fm-upload-conflict-modal",
+        "fm-connect-modal",
+        "fm-knownhosts-modal",
+        "fm-create-modal",
+        "fm-rename-modal",
+        "fm-archive-modal",
+        "fm-extract-modal",
+        "fm-folder-picker-modal",
+        "fm-archive-list-modal",
+        "fm-mask-modal",
+        "fm-props-modal",
+        "fm-hash-modal",
+        "fm-chmod-modal",
+        "fm-chown-modal",
+        "fm-dropop-modal",
+        "fm-conflicts-modal",
+        "fm-bookmarks-modal",
+        "fm-download-multi-modal",
+        "fm-progress-modal",
+        "fm-ops-modal",
+        "fm-volumes-modal",
+        "fm-help-modal",
+        "fm-editor-modal"
+      ],
+      "forbidden_dom_ids": [
+        "view-routing",
+        "routing-dat-header",
+        "view-xray-logs",
+        "xray-log-output",
+        "xray-logs-badge",
+        "routing-focus-switch",
+        "view-commands",
+        "terminal-overlay",
+        "view-files",
+        "fm-root",
+        "xk-resource-monitor"
+      ],
+      "required_data_attributes": {
+        "view-mihomo": {
+          "data-xk-section": "mihomo"
+        },
+        "view-xkeen": {
+          "data-xk-section": "xkeen"
+        },
+        "mihomo-dns-modal": {
+          "data-operator-modal-family": "confirm-compact-form",
+          "data-modal-noresize": "1",
+          "data-modal-nopos": "1",
+          "data-modal-remember": "0"
+        },
+        "core-modal": {
+          "data-operator-modal-family": "confirm-compact-form",
+          "data-modal-remember": "0",
+          "data-modal-nopos": "1"
+        }
+      }
+    },
+    {
+      "id": "core-only",
+      "active_module_ids": [
+        "core"
+      ],
+      "screen_sections": [
+        "xkeen"
+      ],
+      "forbidden_screen_sections": [
+        "routing",
+        "mihomo",
+        "xray-logs",
+        "commands",
+        "files"
+      ],
+      "navigation": [
+        {
+          "section": "xkeen",
+          "view": "xkeen",
+          "id": null,
+          "href": null,
+          "top_nav": null
+        },
+        {
+          "section": "donate",
+          "view": null,
+          "id": "top-tab-donate",
+          "href": null,
+          "top_nav": null
+        }
+      ],
+      "required_modal_ids": [
+        "core-modal",
+        "confirm-modal",
+        "github-export-modal",
+        "github-catalog-modal",
+        "donate-modal",
+        "ui-settings-modal"
+      ],
+      "forbidden_modal_ids": [
+        "xk-resource-dashboard-modal",
+        "xray-context-modal",
+        "xray-devices-modal",
+        "routing-dns-over-vless-modal",
+        "inbounds-apply-modal",
+        "routing-balancer-help-modal",
+        "xray-snapshot-modal",
+        "routing-template-modal",
+        "routing-template-save-modal",
+        "routing-template-edit-modal",
+        "outbounds-generator-modal",
+        "outbounds-pool-modal",
+        "routing-dat-contents-modal",
+        "terminal-history-modal",
+        "ssh-modal",
+        "ssh-edit-modal",
+        "ssh-confirm-modal",
+        "ssh-transfer-modal",
+        "mihomo-dns-modal",
+        "mihomo-import-modal",
+        "mihomo-proxy-tools-modal",
+        "mihomo-validation-modal",
+        "mihomo-hwid-modal",
+        "fm-upload-conflict-modal",
+        "fm-connect-modal",
+        "fm-knownhosts-modal",
+        "fm-create-modal",
+        "fm-rename-modal",
+        "fm-archive-modal",
+        "fm-extract-modal",
+        "fm-folder-picker-modal",
+        "fm-archive-list-modal",
+        "fm-mask-modal",
+        "fm-props-modal",
+        "fm-hash-modal",
+        "fm-chmod-modal",
+        "fm-chown-modal",
+        "fm-dropop-modal",
+        "fm-conflicts-modal",
+        "fm-bookmarks-modal",
+        "fm-download-multi-modal",
+        "fm-progress-modal",
+        "fm-ops-modal",
+        "fm-volumes-modal",
+        "fm-help-modal",
+        "fm-editor-modal",
+        "json-editor-modal"
+      ],
+      "forbidden_dom_ids": [
+        "view-routing",
+        "view-mihomo",
+        "view-commands",
+        "view-files",
+        "view-xray-logs",
+        "routing-dat-header",
+        "mihomo-editor",
+        "terminal-overlay",
+        "fm-root",
+        "xray-logs-badge",
+        "routing-focus-switch",
+        "xk-resource-monitor"
+      ],
+      "required_data_attributes": {
+        "view-xkeen": {
+          "data-xk-section": "xkeen"
+        },
+        "core-modal": {
+          "data-operator-modal-family": "confirm-compact-form",
+          "data-modal-remember": "0",
+          "data-modal-nopos": "1"
+        }
+      }
+    },
+    {
+      "id": "empty-active-set",
+      "active_module_ids": [],
+      "screen_sections": [],
+      "forbidden_screen_sections": [
+        "routing",
+        "mihomo",
+        "xkeen",
+        "xray-logs",
+        "commands",
+        "files"
+      ],
+      "navigation": [],
+      "required_modal_ids": [],
+      "forbidden_modal_ids": [
+        "xk-resource-dashboard-modal",
+        "xray-context-modal",
+        "xray-devices-modal",
+        "routing-dns-over-vless-modal",
+        "inbounds-apply-modal",
+        "routing-balancer-help-modal",
+        "xray-snapshot-modal",
+        "routing-template-modal",
+        "routing-template-save-modal",
+        "routing-template-edit-modal",
+        "outbounds-generator-modal",
+        "outbounds-pool-modal",
+        "routing-dat-contents-modal",
+        "terminal-history-modal",
+        "ssh-modal",
+        "ssh-edit-modal",
+        "ssh-confirm-modal",
+        "ssh-transfer-modal",
+        "core-modal",
+        "confirm-modal",
+        "github-export-modal",
+        "github-catalog-modal",
+        "donate-modal",
+        "ui-settings-modal",
+        "mihomo-dns-modal",
+        "mihomo-import-modal",
+        "mihomo-proxy-tools-modal",
+        "mihomo-validation-modal",
+        "mihomo-hwid-modal",
+        "fm-upload-conflict-modal",
+        "fm-connect-modal",
+        "fm-knownhosts-modal",
+        "fm-create-modal",
+        "fm-rename-modal",
+        "fm-archive-modal",
+        "fm-extract-modal",
+        "fm-folder-picker-modal",
+        "fm-archive-list-modal",
+        "fm-mask-modal",
+        "fm-props-modal",
+        "fm-hash-modal",
+        "fm-chmod-modal",
+        "fm-chown-modal",
+        "fm-dropop-modal",
+        "fm-conflicts-modal",
+        "fm-bookmarks-modal",
+        "fm-download-multi-modal",
+        "fm-progress-modal",
+        "fm-ops-modal",
+        "fm-volumes-modal",
+        "fm-help-modal",
+        "fm-editor-modal",
+        "json-editor-modal"
+      ],
+      "forbidden_dom_ids": [
+        "view-routing",
+        "view-mihomo",
+        "view-commands",
+        "view-files",
+        "view-xray-logs",
+        "routing-dat-header",
+        "mihomo-editor",
+        "terminal-overlay",
+        "fm-root",
+        "xray-logs-badge",
+        "routing-focus-switch",
+        "xk-resource-monitor",
+        "view-xkeen",
+        "core-modal"
+      ],
+      "required_data_attributes": {}
+    }
+  ],
+  "non_goals": [
+    "frontend bundle loading and static imports",
+    "dynamic import() and lazy CSS loading",
+    "frontend API and WebSocket calls for inactive modules"
+  ]
+}

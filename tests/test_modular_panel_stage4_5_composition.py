@@ -203,7 +203,7 @@ def test_stage4_5_closure_is_documented():
     contract = (root / "docs/modular-panel-stage4.5-composition.md").read_text(encoding="utf-8")
 
     assert "**Статус:** закрыт 1 октября 2026 года." in plan
-    assert "следующий — подэтап 4.6" in plan
+    assert "Этап 4 закрыт; следующий — Этап 5" in plan
     assert "modular-panel-stage4.5-composition.md" in plan
     assert "modular-panel-stage4.5-composition.md" in index
     assert "Критерий завершения **выполнен**" in contract

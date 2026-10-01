@@ -109,6 +109,14 @@ def test_stage4_1_contract_covers_shell_screens_modals_and_profiles(tmp_path):
     assert modals["fm-help-modal"]["target_module_id"] == "tool.files"
     assert modals["ssh-modal"]["target_module_id"] == "tool.terminal"
     assert modals["mihomo-hwid-modal"]["target_module_id"] == "integration.happ"
+    assert modals["mihomo-hwid-modal"]["owner_requirements"] == [
+        "integration.happ",
+        "engine.mihomo",
+    ]
+    assert modals["fm-editor-modal"]["owner_requirements"] == [
+        "tool.files",
+        "tool.editor",
+    ]
 
     mixed_ids = {item["id"] for item in payload["mixed_boundaries"]}
     assert {
@@ -127,6 +135,7 @@ def test_stage4_1_contract_covers_shell_screens_modals_and_profiles(tmp_path):
     assert profiles["full"]["forbidden_modal_ids"] == []
     assert profiles["xray-minimal"]["expected_views"] == ["routing", "xkeen", "xray-logs"]
     assert profiles["xray-minimal"]["forbidden_views"] == ["mihomo", "commands", "files"]
+    assert "fm-editor-modal" in profiles["xray-minimal"]["forbidden_modal_ids"]
     assert profiles["mihomo-minimal"]["expected_views"] == ["mihomo", "xkeen"]
     assert profiles["mihomo-minimal"]["forbidden_views"] == [
         "routing",
@@ -134,6 +143,7 @@ def test_stage4_1_contract_covers_shell_screens_modals_and_profiles(tmp_path):
         "commands",
         "files",
     ]
+    assert "fm-editor-modal" in profiles["mihomo-minimal"]["forbidden_modal_ids"]
 
 
 def test_stage4_1_contract_snapshot_and_markdown_match_generator(tmp_path):
@@ -151,7 +161,7 @@ def test_stage4_1_closure_is_reflected_in_documentation():
     docs_index = DOCS_INDEX.read_text(encoding="utf-8")
 
     for fragment in (
-        "4.5 закрыты;",
+        "Этап 4 закрыт;",
         "### Подэтап 4.1. Контракт границ shell, экранов и модальных окон",
         "docs/modular-panel-stage4.1-contract.md",
         "Критерий готовности 4.1:",

@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import re
+import sys
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -316,6 +317,10 @@ MODAL_PARTIALS = {
     "tool.advanced-diagnostics": "xkeen-ui/templates/panel/modals/diagnostics.html",
 }
 
+MODAL_PARTIAL_OVERRIDES = {
+    "fm-editor-modal": "xkeen-ui/templates/panel/modals/files_editor.html",
+}
+
 MODAL_DEPENDENCIES = {
     "core": ["core"],
     "engine.xray": ["core", "engine.xray"],
@@ -381,9 +386,25 @@ def _load_inventory(root: Path) -> dict[str, Any]:
     return json.loads((root / INVENTORY_PATH).read_text(encoding="utf-8"))
 
 
+def _load_modal_owner_requirements(root: Path) -> dict[str, tuple[str, ...]]:
+    """Read modal gates from the runtime composition manifest."""
+
+    ui_root = str((root / "xkeen-ui").resolve())
+    if ui_root not in sys.path:
+        sys.path.insert(0, ui_root)
+    from routes.pages import PANEL_COMPOSITION
+
+    return {
+        entry.template: entry.owners
+        for entry in PANEL_COMPOSITION
+        if entry.collection in {"pre_screen_modal_partials", "modal_partials"}
+    }
+
+
 def _build_modal_contract(
     text: str,
     inventory: dict[str, Any],
+    modal_owner_requirements: dict[str, tuple[str, ...]],
 ) -> list[dict[str, Any]]:
     inventory_modals = {
         item["id"]: item for item in inventory["ui_surfaces"]["panel_modals"]
@@ -401,15 +422,23 @@ def _build_modal_contract(
         boundary = "shared" if modal_id in SHARED_MODAL_IDS else "owned"
         if current_module_id != target_module_id:
             boundary = "mixed-current-classification"
+        target_partial = MODAL_PARTIAL_OVERRIDES.get(
+            modal_id, MODAL_PARTIALS[target_module_id]
+        )
+        relative_partial = Path(target_partial).relative_to("xkeen-ui/templates").as_posix()
+        owner_requirements = modal_owner_requirements.get(
+            relative_partial, (target_module_id,)
+        )
         result.append(
             {
                 "id": modal_id,
                 "line": modal_lines[modal_id],
                 "current_inventory_module_id": current_module_id,
                 "target_module_id": target_module_id,
-                "target_partial": MODAL_PARTIALS[target_module_id],
+                "target_partial": target_partial,
                 "boundary": boundary,
                 "dependencies": MODAL_DEPENDENCIES[target_module_id],
+                "owner_requirements": list(owner_requirements),
                 "dom_contract": [
                     f"#{modal_id}",
                     "id attributes of all descendants remain stable",
@@ -451,7 +480,10 @@ def build_contract(root: Path) -> dict[str, Any]:
         shell.append(item)
 
     views = _build_view_contract(lines)
-    modals = _build_modal_contract(template_text, inventory)
+    modal_owner_requirements = _load_modal_owner_requirements(root)
+    modals = _build_modal_contract(
+        template_text, inventory, modal_owner_requirements
+    )
     panel_views = []
     for profile in PROFILE_SPECS:
         active = set(profile["active_module_ids"])
@@ -468,10 +500,14 @@ def build_contract(root: Path) -> dict[str, Any]:
             item["id"] for item in views if item["module_id"] not in active
         ]
         expected_modal_ids = [
-            item["id"] for item in modals if item["target_module_id"] in active
+            item["id"]
+            for item in modals
+            if set(item["owner_requirements"]) <= active
         ]
         forbidden_modal_ids = [
-            item["id"] for item in modals if item["target_module_id"] not in active
+            item["id"]
+            for item in modals
+            if not set(item["owner_requirements"]) <= active
         ]
         panel_views.append(
             {
@@ -569,7 +605,7 @@ def build_contract(root: Path) -> dict[str, Any]:
         ],
         "profiles": panel_views,
         "decisions": [
-            "Текущий монолит является baseline; этот подэтап пока не переносит блоки шаблона.",
+            "Исторический монолит заменён thin composition root; Stage 4.6 закрепляет его отсутствующие surface owner checks.",
             "Stage 0 inventory остаётся источником обнаружения текущих UI-поверхностей.",
             "Целевой владелец указан явно там, где inventory исторически классифицировал modal как core.",
             "Shared modal ограничен общими shell/core-сценариями; module-specific modal нельзя прятать в shared.html.",
@@ -593,13 +629,14 @@ def render_markdown(payload: dict[str, Any]) -> str:
         "",
         "Статус: **закрыт 29 сентября 2026 года**.",
         "",
-        "Документ фиксирует границы до начала физического переноса разметки. "
-        "На этом этапе `panel.html` остаётся монолитным baseline; следующие "
-        "подэтапы будут переносить его блоки в partials без изменения DOM/API-контрактов.",
+        "Документ был создан до физического переноса разметки и теперь остаётся "
+        "актуальным contract source для composed document. Исторический монолит "
+        "сохранён в baseline Этапа 3R.1, а `panel.html` работает как thin composition root.",
         "",
         "## Артефакты и baseline",
         "",
         f"- исходный шаблон: `{source['template']}`;",
+        "- роль entrypoint: thin composition root; screen и modal markup принадлежат partials;",
         f"- Stage 0 inventory: `{source['inventory']}`;",
         "- machine-readable contract: `docs/modular-panel-stage4.1-contract.json`;",
         "- пересборка: `python .\\scripts\\generate_modular_panel_stage4_1_contract.py --root .`;",

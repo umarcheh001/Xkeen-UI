@@ -419,6 +419,9 @@
         "core",
         "tool.advanced-diagnostics"
       ],
+      "owner_requirements": [
+        "tool.advanced-diagnostics"
+      ],
       "dom_contract": [
         "#xk-resource-dashboard-modal",
         "id attributes of all descendants remain stable",
@@ -434,6 +437,9 @@
       "boundary": "owned",
       "dependencies": [
         "core",
+        "engine.xray"
+      ],
+      "owner_requirements": [
         "engine.xray"
       ],
       "dom_contract": [
@@ -453,6 +459,9 @@
         "core",
         "engine.xray"
       ],
+      "owner_requirements": [
+        "engine.xray"
+      ],
       "dom_contract": [
         "#xray-devices-modal",
         "id attributes of all descendants remain stable",
@@ -468,6 +477,9 @@
       "boundary": "owned",
       "dependencies": [
         "core",
+        "engine.xray"
+      ],
+      "owner_requirements": [
         "engine.xray"
       ],
       "dom_contract": [
@@ -487,6 +499,9 @@
         "core",
         "engine.xray"
       ],
+      "owner_requirements": [
+        "engine.xray"
+      ],
       "dom_contract": [
         "#inbounds-apply-modal",
         "id attributes of all descendants remain stable",
@@ -502,6 +517,9 @@
       "boundary": "owned",
       "dependencies": [
         "core",
+        "engine.xray"
+      ],
+      "owner_requirements": [
         "engine.xray"
       ],
       "dom_contract": [
@@ -521,6 +539,9 @@
         "core",
         "engine.xray"
       ],
+      "owner_requirements": [
+        "engine.xray"
+      ],
       "dom_contract": [
         "#xray-snapshot-modal",
         "id attributes of all descendants remain stable",
@@ -536,6 +557,9 @@
       "boundary": "owned",
       "dependencies": [
         "core",
+        "engine.xray"
+      ],
+      "owner_requirements": [
         "engine.xray"
       ],
       "dom_contract": [
@@ -555,6 +579,9 @@
         "core",
         "engine.xray"
       ],
+      "owner_requirements": [
+        "engine.xray"
+      ],
       "dom_contract": [
         "#routing-template-save-modal",
         "id attributes of all descendants remain stable",
@@ -570,6 +597,9 @@
       "boundary": "owned",
       "dependencies": [
         "core",
+        "engine.xray"
+      ],
+      "owner_requirements": [
         "engine.xray"
       ],
       "dom_contract": [
@@ -589,6 +619,9 @@
         "core",
         "engine.xray"
       ],
+      "owner_requirements": [
+        "engine.xray"
+      ],
       "dom_contract": [
         "#outbounds-generator-modal",
         "id attributes of all descendants remain stable",
@@ -604,6 +637,9 @@
       "boundary": "owned",
       "dependencies": [
         "core",
+        "engine.xray"
+      ],
+      "owner_requirements": [
         "engine.xray"
       ],
       "dom_contract": [
@@ -623,6 +659,9 @@
         "core",
         "engine.xray"
       ],
+      "owner_requirements": [
+        "engine.xray"
+      ],
       "dom_contract": [
         "#routing-dat-contents-modal",
         "id attributes of all descendants remain stable",
@@ -638,6 +677,9 @@
       "boundary": "owned",
       "dependencies": [
         "core",
+        "tool.terminal"
+      ],
+      "owner_requirements": [
         "tool.terminal"
       ],
       "dom_contract": [
@@ -657,6 +699,9 @@
         "core",
         "tool.terminal"
       ],
+      "owner_requirements": [
+        "tool.terminal"
+      ],
       "dom_contract": [
         "#ssh-modal",
         "id attributes of all descendants remain stable",
@@ -672,6 +717,9 @@
       "boundary": "mixed-current-classification",
       "dependencies": [
         "core",
+        "tool.terminal"
+      ],
+      "owner_requirements": [
         "tool.terminal"
       ],
       "dom_contract": [
@@ -691,6 +739,9 @@
         "core",
         "tool.terminal"
       ],
+      "owner_requirements": [
+        "tool.terminal"
+      ],
       "dom_contract": [
         "#ssh-confirm-modal",
         "id attributes of all descendants remain stable",
@@ -706,6 +757,9 @@
       "boundary": "mixed-current-classification",
       "dependencies": [
         "core",
+        "tool.terminal"
+      ],
+      "owner_requirements": [
         "tool.terminal"
       ],
       "dom_contract": [
@@ -724,6 +778,9 @@
       "dependencies": [
         "core"
       ],
+      "owner_requirements": [
+        "core"
+      ],
       "dom_contract": [
         "#core-modal",
         "id attributes of all descendants remain stable",
@@ -738,6 +795,9 @@
       "target_partial": "xkeen-ui/templates/panel/modals/shared.html",
       "boundary": "shared",
       "dependencies": [
+        "core"
+      ],
+      "owner_requirements": [
         "core"
       ],
       "dom_contract": [
@@ -756,6 +816,9 @@
       "dependencies": [
         "core"
       ],
+      "owner_requirements": [
+        "core"
+      ],
       "dom_contract": [
         "#github-export-modal",
         "id attributes of all descendants remain stable",
@@ -770,6 +833,9 @@
       "target_partial": "xkeen-ui/templates/panel/modals/shared.html",
       "boundary": "shared",
       "dependencies": [
+        "core"
+      ],
+      "owner_requirements": [
         "core"
       ],
       "dom_contract": [
@@ -788,6 +854,9 @@
       "dependencies": [
         "core"
       ],
+      "owner_requirements": [
+        "core"
+      ],
       "dom_contract": [
         "#donate-modal",
         "id attributes of all descendants remain stable",
@@ -802,6 +871,9 @@
       "target_partial": "xkeen-ui/templates/panel/modals/shared.html",
       "boundary": "shared",
       "dependencies": [
+        "core"
+      ],
+      "owner_requirements": [
         "core"
       ],
       "dom_contract": [
@@ -821,6 +893,9 @@
         "core",
         "engine.mihomo"
       ],
+      "owner_requirements": [
+        "engine.mihomo"
+      ],
       "dom_contract": [
         "#mihomo-dns-modal",
         "id attributes of all descendants remain stable",
@@ -836,6 +911,9 @@
       "boundary": "owned",
       "dependencies": [
         "core",
+        "engine.mihomo"
+      ],
+      "owner_requirements": [
         "engine.mihomo"
       ],
       "dom_contract": [
@@ -855,6 +933,9 @@
         "core",
         "engine.mihomo"
       ],
+      "owner_requirements": [
+        "engine.mihomo"
+      ],
       "dom_contract": [
         "#mihomo-proxy-tools-modal",
         "id attributes of all descendants remain stable",
@@ -870,6 +951,9 @@
       "boundary": "owned",
       "dependencies": [
         "core",
+        "engine.mihomo"
+      ],
+      "owner_requirements": [
         "engine.mihomo"
       ],
       "dom_contract": [
@@ -890,6 +974,10 @@
         "engine.mihomo",
         "integration.happ"
       ],
+      "owner_requirements": [
+        "integration.happ",
+        "engine.mihomo"
+      ],
       "dom_contract": [
         "#mihomo-hwid-modal",
         "id attributes of all descendants remain stable",
@@ -905,6 +993,9 @@
       "boundary": "mixed-current-classification",
       "dependencies": [
         "core",
+        "tool.files"
+      ],
+      "owner_requirements": [
         "tool.files"
       ],
       "dom_contract": [
@@ -924,6 +1015,9 @@
         "core",
         "tool.files"
       ],
+      "owner_requirements": [
+        "tool.files"
+      ],
       "dom_contract": [
         "#fm-connect-modal",
         "id attributes of all descendants remain stable",
@@ -939,6 +1033,9 @@
       "boundary": "mixed-current-classification",
       "dependencies": [
         "core",
+        "tool.files"
+      ],
+      "owner_requirements": [
         "tool.files"
       ],
       "dom_contract": [
@@ -958,6 +1055,9 @@
         "core",
         "tool.files"
       ],
+      "owner_requirements": [
+        "tool.files"
+      ],
       "dom_contract": [
         "#fm-create-modal",
         "id attributes of all descendants remain stable",
@@ -973,6 +1073,9 @@
       "boundary": "mixed-current-classification",
       "dependencies": [
         "core",
+        "tool.files"
+      ],
+      "owner_requirements": [
         "tool.files"
       ],
       "dom_contract": [
@@ -992,6 +1095,9 @@
         "core",
         "tool.files"
       ],
+      "owner_requirements": [
+        "tool.files"
+      ],
       "dom_contract": [
         "#fm-archive-modal",
         "id attributes of all descendants remain stable",
@@ -1007,6 +1113,9 @@
       "boundary": "mixed-current-classification",
       "dependencies": [
         "core",
+        "tool.files"
+      ],
+      "owner_requirements": [
         "tool.files"
       ],
       "dom_contract": [
@@ -1026,6 +1135,9 @@
         "core",
         "tool.files"
       ],
+      "owner_requirements": [
+        "tool.files"
+      ],
       "dom_contract": [
         "#fm-folder-picker-modal",
         "id attributes of all descendants remain stable",
@@ -1041,6 +1153,9 @@
       "boundary": "mixed-current-classification",
       "dependencies": [
         "core",
+        "tool.files"
+      ],
+      "owner_requirements": [
         "tool.files"
       ],
       "dom_contract": [
@@ -1060,6 +1175,9 @@
         "core",
         "tool.files"
       ],
+      "owner_requirements": [
+        "tool.files"
+      ],
       "dom_contract": [
         "#fm-mask-modal",
         "id attributes of all descendants remain stable",
@@ -1075,6 +1193,9 @@
       "boundary": "mixed-current-classification",
       "dependencies": [
         "core",
+        "tool.files"
+      ],
+      "owner_requirements": [
         "tool.files"
       ],
       "dom_contract": [
@@ -1094,6 +1215,9 @@
         "core",
         "tool.files"
       ],
+      "owner_requirements": [
+        "tool.files"
+      ],
       "dom_contract": [
         "#fm-hash-modal",
         "id attributes of all descendants remain stable",
@@ -1109,6 +1233,9 @@
       "boundary": "mixed-current-classification",
       "dependencies": [
         "core",
+        "tool.files"
+      ],
+      "owner_requirements": [
         "tool.files"
       ],
       "dom_contract": [
@@ -1128,6 +1255,9 @@
         "core",
         "tool.files"
       ],
+      "owner_requirements": [
+        "tool.files"
+      ],
       "dom_contract": [
         "#fm-chown-modal",
         "id attributes of all descendants remain stable",
@@ -1143,6 +1273,9 @@
       "boundary": "mixed-current-classification",
       "dependencies": [
         "core",
+        "tool.files"
+      ],
+      "owner_requirements": [
         "tool.files"
       ],
       "dom_contract": [
@@ -1162,6 +1295,9 @@
         "core",
         "tool.files"
       ],
+      "owner_requirements": [
+        "tool.files"
+      ],
       "dom_contract": [
         "#fm-conflicts-modal",
         "id attributes of all descendants remain stable",
@@ -1177,6 +1313,9 @@
       "boundary": "mixed-current-classification",
       "dependencies": [
         "core",
+        "tool.files"
+      ],
+      "owner_requirements": [
         "tool.files"
       ],
       "dom_contract": [
@@ -1196,6 +1335,9 @@
         "core",
         "tool.files"
       ],
+      "owner_requirements": [
+        "tool.files"
+      ],
       "dom_contract": [
         "#fm-download-multi-modal",
         "id attributes of all descendants remain stable",
@@ -1211,6 +1353,9 @@
       "boundary": "mixed-current-classification",
       "dependencies": [
         "core",
+        "tool.files"
+      ],
+      "owner_requirements": [
         "tool.files"
       ],
       "dom_contract": [
@@ -1230,6 +1375,9 @@
         "core",
         "tool.files"
       ],
+      "owner_requirements": [
+        "tool.files"
+      ],
       "dom_contract": [
         "#fm-ops-modal",
         "id attributes of all descendants remain stable",
@@ -1245,6 +1393,9 @@
       "boundary": "mixed-current-classification",
       "dependencies": [
         "core",
+        "tool.files"
+      ],
+      "owner_requirements": [
         "tool.files"
       ],
       "dom_contract": [
@@ -1264,6 +1415,9 @@
         "core",
         "tool.files"
       ],
+      "owner_requirements": [
+        "tool.files"
+      ],
       "dom_contract": [
         "#fm-help-modal",
         "id attributes of all descendants remain stable",
@@ -1275,10 +1429,14 @@
       "line": 5512,
       "current_inventory_module_id": "tool.editor",
       "target_module_id": "tool.editor",
-      "target_partial": "xkeen-ui/templates/panel/modals/editor.html",
+      "target_partial": "xkeen-ui/templates/panel/modals/files_editor.html",
       "boundary": "owned",
       "dependencies": [
         "core",
+        "tool.editor"
+      ],
+      "owner_requirements": [
+        "tool.files",
         "tool.editor"
       ],
       "dom_contract": [
@@ -1296,6 +1454,9 @@
       "boundary": "owned",
       "dependencies": [
         "core",
+        "tool.editor"
+      ],
+      "owner_requirements": [
         "tool.editor"
       ],
       "dom_contract": [
@@ -1602,7 +1763,6 @@
         "github-catalog-modal",
         "donate-modal",
         "ui-settings-modal",
-        "fm-editor-modal",
         "json-editor-modal"
       ],
       "forbidden_modal_ids": [
@@ -1638,7 +1798,8 @@
         "fm-progress-modal",
         "fm-ops-modal",
         "fm-volumes-modal",
-        "fm-help-modal"
+        "fm-help-modal",
+        "fm-editor-modal"
       ]
     },
     {
@@ -1677,7 +1838,6 @@
         "mihomo-import-modal",
         "mihomo-proxy-tools-modal",
         "mihomo-validation-modal",
-        "fm-editor-modal",
         "json-editor-modal"
       ],
       "forbidden_modal_ids": [
@@ -1721,12 +1881,13 @@
         "fm-progress-modal",
         "fm-ops-modal",
         "fm-volumes-modal",
-        "fm-help-modal"
+        "fm-help-modal",
+        "fm-editor-modal"
       ]
     }
   ],
   "decisions": [
-    "Текущий монолит является baseline; этот подэтап пока не переносит блоки шаблона.",
+    "Исторический монолит заменён thin composition root; Stage 4.6 закрепляет его отсутствующие surface owner checks.",
     "Stage 0 inventory остаётся источником обнаружения текущих UI-поверхностей.",
     "Целевой владелец указан явно там, где inventory исторически классифицировал modal как core.",
     "Shared modal ограничен общими shell/core-сценариями; module-specific modal нельзя прятать в shared.html."
