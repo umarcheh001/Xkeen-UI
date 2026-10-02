@@ -36,8 +36,8 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 369,
-      "size_bytes": 5747536,
+      "unit_count": 370,
+      "size_bytes": 5752624,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 17,
@@ -49,7 +49,7 @@
         "frontend_feature": 26,
         "frontend_javascript": 34,
         "frontend_runtime": 1,
-        "frontend_test": 31,
+        "frontend_test": 32,
         "frontend_ui": 17,
         "stylesheet": 5,
         "template": 9
@@ -174,7 +174,7 @@
       ],
       "removable": true,
       "unit_count": 25,
-      "size_bytes": 829682,
+      "size_bytes": 830898,
       "kind_counts": {
         "frontend_javascript": 3,
         "frontend_ui": 22
@@ -3194,7 +3194,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_frontend_runtime_hotfixes.py",
-      "size_bytes": 143915,
+      "size_bytes": 144545,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -7072,7 +7072,7 @@
       "module_id": "core",
       "kind": "frontend_javascript",
       "path": "xkeen-ui/static/js/patches/monaco_runtime_fix.js",
-      "size_bytes": 16766,
+      "size_bytes": 16717,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -7286,6 +7286,26 @@
         "flask"
       ],
       "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "frontend_test",
+      "path": "e2e/commands_pty_capability_probe.spec.mjs",
+      "size_bytes": 4507,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [
+        "XKEEN_ALLOW_SHELL"
+      ],
       "removable": false
     },
     {
@@ -17334,7 +17354,7 @@
       "module_id": "tool.editor",
       "kind": "frontend_ui",
       "path": "xkeen-ui/static/js/ui/monaco_shared.js",
-      "size_bytes": 117169,
+      "size_bytes": 118385,
       "depends_on": [
         "core"
       ],
@@ -26578,7 +26598,7 @@
       "evidence": {
         "tool.editor": {
           "unit_count": 25,
-          "size_bytes": 829682
+          "size_bytes": 830898
         },
         "tool.terminal": {
           "unit_count": 49,
