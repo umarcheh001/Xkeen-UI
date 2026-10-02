@@ -12787,6 +12787,76 @@ body.panel-page #outbounds-subscriptions-modal .xk-sub-header {
   padding: 8px 12px 8px 14px !important;
 }
 
+body.panel-page #outbounds-subscriptions-modal .xk-sub-master {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 12px 0 auto;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+body.panel-page #outbounds-subscriptions-modal :is(.xk-sub-master, .xk-sub-paused-banner)[hidden] {
+  display: none;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-master .xk-sub-switch-label {
+  font-size: 13px;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-paused-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin: 0 0 10px;
+  padding: 9px 12px;
+  border: 1px solid color-mix(in srgb, var(--op-warning) 45%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--op-warning) 10%, transparent);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-paused-banner b {
+  color: var(--op-warning);
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-paused-banner span {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-delete-all[hidden] {
+  display: none;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-delete-all:not(:disabled) {
+  color: var(--op-danger) !important;
+  border-color: color-mix(in srgb, var(--op-danger) 38%, transparent) !important;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-delete-all:not(:disabled):hover {
+  background: color-mix(in srgb, var(--op-danger) 12%, transparent) !important;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-table tr.is-paused > td {
+  opacity: 0.78;
+}
+
+body.panel-page #confirm-modal .xk-sub-pause-choice {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  white-space: normal;
+}
+
+body.panel-page #confirm-modal .xk-sub-pause-choice select {
+  width: 100%;
+  max-width: 340px;
+}
+
 body.panel-page #outbounds-subscriptions-modal .xk-sub-titleblock {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

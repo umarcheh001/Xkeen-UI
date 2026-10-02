@@ -182,16 +182,33 @@ def _wait_xkeen_restarted(
     *,
     timeout: float,
     poll_interval: float = 0.25,
+    stable_for: float = 1.0,
 ) -> bool:
-    """Wait for a new running core process, not merely an already-running one."""
+    """Wait for a new running core process, not merely an already-running one.
+
+    New means lasting: XKeen may bring the core up, take it down and bring it
+    up again while it starts, and a process seen once in between is gone by the
+    time anyone asks about it.  Reporting on that one logged a successful
+    restart with the core "stopped".
+    """
     deadline = time.monotonic() + max(0.2, float(timeout or 0))
     saw_stopped = not bool(previous[0])
+    candidate: tuple[str, tuple[int, ...]] | None = None
+    candidate_since = 0.0
     while time.monotonic() < deadline:
         current = _xkeen_runtime_identity()
-        if not current[0]:
+        if not current[0] or not current[1]:
+            # A name without process ids is the old core dying between the two
+            # pidof calls, not a new one.
             saw_stopped = True
+            candidate = None
         elif saw_stopped or current != previous:
-            return True
+            now = time.monotonic()
+            if current != candidate:
+                candidate = current
+                candidate_since = now
+            elif now - candidate_since >= stable_for:
+                return True
         time.sleep(max(0.05, float(poll_interval or 0.25)))
     current = _xkeen_runtime_identity()
     return bool(current[0] and (saw_stopped or current != previous))
