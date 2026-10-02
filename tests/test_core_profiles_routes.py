@@ -30,7 +30,15 @@ class FakeInstaller:
         return {"operation_id": "operation-xray", "status": "running"}
 
     def status(self, engine_id: str, operation_id: str | None = None):
-        return {"operation_id": operation_id, "engine_id": engine_id, "status": "running", "phase": "verify", "error": None}
+        return {
+            "operation_id": operation_id,
+            "engine_id": engine_id,
+            "status": "running",
+            "phase": "verify",
+            "phase_label": "Проверка контрольной суммы",
+            "progress": 28,
+            "error": None,
+        }
 
 
 def _client():
@@ -72,7 +80,10 @@ def test_prepare_apply_and_status_use_confirmation_contract():
 
     status = client.get("/api/xray/core-install/status?operation_id=operation-xray")
     assert status.status_code == 200
-    assert status.get_json()["operation"]["phase"] == "verify"
+    operation = status.get_json()["operation"]
+    assert operation["phase"] == "verify"
+    assert operation["phase_label"] == "Проверка контрольной суммы"
+    assert operation["progress"] == 28
 
 
 def test_installer_errors_remain_machine_readable():

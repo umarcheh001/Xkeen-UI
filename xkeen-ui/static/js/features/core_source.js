@@ -1,6 +1,15 @@
 import { toastXkeen } from './xkeen_runtime.js';
 
 const MAX_POLL_MS = 10 * 60 * 1000;
+const INSTALL_STEPS = [
+  ['download', 'Загрузка релиза'],
+  ['verify', 'Проверка SHA-256'],
+  ['backup', 'Резервная копия'],
+  ['replace', 'Замена бинарного файла'],
+  ['preflight', 'Проверка конфигурации'],
+  ['restart', 'Перезапуск сервиса'],
+  ['healthcheck', 'Проверка работоспособности'],
+];
 
 function text(node, value) {
   if (node) node.textContent = String(value == null ? '' : value);
@@ -111,6 +120,66 @@ export function initCoreSource(root) {
   let confirmation = null;
   let pollTimer = null;
   let pollStartedAt = 0;
+  let activeOperationId = null;
+  let terminalOperationId = null;
+  let operationStatus = 'idle';
+
+  const progressPanel = installModal?.querySelector('[data-core-install-progress]');
+  const progressBar = installModal?.querySelector('[data-core-install-progress-bar]');
+  const progressPercent = installModal?.querySelector('[data-core-install-percent]');
+  const progressPhase = installModal?.querySelector('[data-core-install-phase]');
+  const progressNote = installModal?.querySelector('[data-core-install-progress-note]');
+  const progressSteps = installModal?.querySelector('[data-core-install-steps]');
+  const installDetails = installModal?.querySelector('[data-core-install-details]');
+  const applyButton = installModal?.querySelector('[data-core-source-action="apply"]');
+
+  const phaseIndex = (phase) => INSTALL_STEPS.findIndex(([id]) => id === phase);
+
+  const renderOperation = (operation) => {
+    if (!operation || !progressPanel) return;
+    const status = String(operation.status || 'running');
+    const phase = String(operation.phase || 'download');
+    const label = String(operation.phase_label || INSTALL_STEPS.find(([id]) => id === phase)?.[1] || 'Установка ядра');
+    const progress = Number.isFinite(Number(operation.progress)) ? Math.max(0, Math.min(100, Number(operation.progress))) : 0;
+    const currentIndex = phaseIndex(phase);
+    operationStatus = status;
+    progressPanel.hidden = false;
+    progressPanel.setAttribute('aria-busy', status === 'running' ? 'true' : 'false');
+    if (progressBar) progressBar.value = progress;
+    text(progressPercent, `${Math.round(progress)}%`);
+    text(progressPhase, label);
+    text(progressNote, status === 'running' ? 'Окно можно закрыть, операция продолжится на роутере.' : (status === 'succeeded' ? 'Новая версия прошла проверку и запущена.' : 'Предыдущая версия сохранена или восстановлена.'));
+    if (progressSteps) {
+      progressSteps.replaceChildren();
+      INSTALL_STEPS.forEach(([id, stepLabel], index) => {
+        const item = document.createElement('li');
+        item.dataset.state = status === 'succeeded' || (currentIndex >= 0 && index < currentIndex) ? 'done' : (id === phase ? 'active' : 'pending');
+        item.textContent = stepLabel;
+        progressSteps.appendChild(item);
+      });
+    }
+    text(root.querySelector('[data-core-source-status]'), status === 'running' ? `Установка: ${Math.round(progress)}% · ${label}` : label);
+  };
+
+  const showConfirmation = () => {
+    operationStatus = 'idle';
+    if (progressPanel) {
+      progressPanel.hidden = true;
+      progressPanel.setAttribute('aria-busy', 'false');
+    }
+    if (installDetails) installDetails.hidden = false;
+    if (applyButton) {
+      applyButton.disabled = false;
+      applyButton.textContent = 'Установить';
+    }
+  };
+
+  const startPolling = (operationId) => {
+    if (!operationId) return;
+    activeOperationId = String(operationId);
+    if (!pollStartedAt) pollStartedAt = Date.now();
+    poll(activeOperationId);
+  };
 
   const refresh = async () => {
     const response = await request(`${endpoint}/core-profiles`);
@@ -125,13 +194,14 @@ export function initCoreSource(root) {
     text(root.querySelector('[data-core-source-selected]'), `Источник: ${profileLabel(data.profiles, selected)}`);
     const state = data.state || {};
     const status = state.last_status === 'running'
-      ? `Установка: ${state.last_phase}`
+      ? `Установка: ${Number.isFinite(Number(state.last_progress)) ? `${Math.round(Number(state.last_progress))}% · ` : ''}${state.last_phase_label || state.last_phase}`
       : state.last_status === 'rolled_back'
         ? `Откат: ${state.last_error || 'предыдущая версия восстановлена'}`
         : state.last_status === 'failed'
           ? `Ошибка установки: ${state.last_error || 'проверьте источник'}`
           : 'Проверенные стабильные релизы';
     text(root.querySelector('[data-core-source-status]'), status);
+    if (state.last_status === 'running' && state.last_operation_id && activeOperationId !== state.last_operation_id) startPolling(state.last_operation_id);
     text(sourceModal?.querySelector('[data-core-source-platform]'), `Архитектура: ${data.platform?.opkg_arch || data.platform?.machine || 'не определена'}`);
     renderProfiles(sourceModal, data, selected);
   };
@@ -149,10 +219,19 @@ export function initCoreSource(root) {
     try {
       const response = await request(`${endpoint}/core-install/status?operation_id=${encodeURIComponent(operationId)}`);
       const operation = response.operation || {};
-      text(root.querySelector('[data-core-source-status]'), `Установка: ${operation.phase || operation.status}`);
+      renderOperation(operation);
       if (['succeeded', 'failed', 'rolled_back'].includes(operation.status)) {
+        activeOperationId = null;
         const message = operation.status === 'succeeded' ? 'Ядро успешно обновлено.' : (operation.error || 'Установка не завершена; предыдущая версия восстановлена.');
-        toastXkeen(message, operation.status === 'succeeded' ? 'success' : 'error');
+        if (terminalOperationId !== operation.operation_id) {
+          toastXkeen(message, operation.status === 'succeeded' ? 'success' : 'error');
+          terminalOperationId = operation.operation_id;
+        }
+        text(installModal?.querySelector('[data-core-install-message]'), message);
+        if (applyButton) {
+          applyButton.disabled = false;
+          applyButton.textContent = 'Закрыть';
+        }
         pollStartedAt = 0;
         await refresh();
         return;
@@ -160,7 +239,6 @@ export function initCoreSource(root) {
       pollTimer = setTimeout(() => poll(operationId), 700);
     } catch (error) {
       text(root.querySelector('[data-core-source-status]'), 'Не удалось получить состояние установки; повторяем проверку.');
-      toastXkeen(error.message || 'Не удалось получить статус установки.', 'error');
       pollTimer = setTimeout(() => poll(operationId), 700);
     }
   };
@@ -184,6 +262,7 @@ export function initCoreSource(root) {
           }
         }
         setMessage(installModal, '');
+        showConfirmation();
         modalOpen(installModal, true);
       }
     } catch (error) { toastXkeen(error.message || 'Операция недоступна.', 'error'); }
@@ -211,14 +290,18 @@ export function initCoreSource(root) {
     if (!button) return;
     if (button.dataset.coreSourceAction === 'close-confirm') { modalOpen(installModal, false); return; }
     if (button.dataset.coreSourceAction !== 'apply' || !confirmation) return;
+    if (['succeeded', 'failed', 'rolled_back'].includes(operationStatus)) { modalOpen(installModal, false); return; }
     button.disabled = true;
     try {
       const response = await request(`${endpoint}/core-install/apply`, { method: 'POST', body: JSON.stringify({ confirmation_id: confirmation.confirmation_id }) });
-      modalOpen(installModal, false);
       pollStartedAt = Date.now();
-      poll(response.operation.operation_id);
-    } catch (error) { setMessage(installModal, error.message || 'Не удалось начать установку.'); }
-    finally { button.disabled = false; }
+      terminalOperationId = null;
+      renderOperation(response.operation || { status: 'running', phase: 'download', progress: 8, phase_label: 'Загрузка релиза' });
+      startPolling(response.operation?.operation_id);
+    } catch (error) {
+      setMessage(installModal, error.message || 'Не удалось начать установку.');
+      button.disabled = false;
+    }
   });
 
   refresh().catch((error) => text(root.querySelector('[data-core-source-status]'), error.message || 'Источник недоступен'));

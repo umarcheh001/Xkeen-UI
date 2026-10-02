@@ -14,6 +14,32 @@ from services.io.atomic import _atomic_write_json
 
 
 _ENGINES = ("xray", "mihomo")
+_LEGACY_PHASE_PROGRESS = {
+    "idle": 0,
+    "download": 8,
+    "verify": 28,
+    "backup": 42,
+    "replace": 58,
+    "preflight": 70,
+    "restart": 82,
+    "healthcheck": 94,
+    "rollback": 96,
+    "complete": 100,
+    "rolled_back": 100,
+}
+_LEGACY_PHASE_LABELS = {
+    "idle": "Ожидание установки",
+    "download": "Загрузка релиза",
+    "verify": "Проверка контрольной суммы",
+    "backup": "Резервное копирование текущего ядра",
+    "replace": "Замена бинарного файла",
+    "preflight": "Проверка конфигурации",
+    "restart": "Перезапуск сервиса",
+    "healthcheck": "Проверка работоспособности",
+    "rollback": "Восстановление предыдущей версии",
+    "complete": "Установка завершена",
+    "rolled_back": "Откат завершён",
+}
 
 
 def _empty_engine_state() -> dict[str, Any]:
@@ -24,6 +50,9 @@ def _empty_engine_state() -> dict[str, Any]:
         "installed_asset_name": None,
         "last_status": "idle",
         "last_phase": "idle",
+        "last_phase_label": "Ожидание установки",
+        "last_progress": 0,
+        "last_operation_id": None,
         "last_error": None,
     }
 
@@ -53,6 +82,11 @@ class CoreProfileStateStore:
             value = payload.get(engine)
             if isinstance(value, dict):
                 result[engine].update({key: value.get(key) for key in result[engine] if key in value})
+                phase = str(result[engine].get("last_phase") or "idle")
+                if "last_progress" not in value:
+                    result[engine]["last_progress"] = _LEGACY_PHASE_PROGRESS.get(phase, 0)
+                if "last_phase_label" not in value:
+                    result[engine]["last_phase_label"] = _LEGACY_PHASE_LABELS.get(phase, phase)
         return result
 
     def _write(self, payload: dict[str, Any]) -> None:
@@ -121,14 +155,31 @@ class CoreProfileStateStore:
             self._write(payload)
             return deepcopy(current)
 
-    def set_runtime(self, engine_id: str, *, status: str, phase: str, error: str | None = None) -> dict[str, Any]:
+    def set_runtime(
+        self,
+        engine_id: str,
+        *,
+        status: str,
+        phase: str,
+        error: str | None = None,
+        operation_id: str | None = None,
+        progress: int | None = None,
+        phase_label: str | None = None,
+    ) -> dict[str, Any]:
         if engine_id not in _ENGINES:
             raise ValueError("Неизвестное ядро")
         with self._lock:
             payload = self._read()
-            payload[engine_id].update({"last_status": status, "last_phase": phase, "last_error": error})
+            current = payload[engine_id]
+            current.update({"last_status": status, "last_phase": phase, "last_error": error})
+            if operation_id is not None:
+                current["last_operation_id"] = str(operation_id)
+            if progress is not None:
+                current["last_progress"] = max(0, min(100, int(progress)))
+            if phase_label is not None:
+                current["last_phase_label"] = str(phase_label)
             self._write(payload)
-            return deepcopy(payload[engine_id])
+            return deepcopy(current)
 
     def get_release_cache(self, key: str, *, max_age_s: float) -> dict[str, Any] | None:
         with self._lock:

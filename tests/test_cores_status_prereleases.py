@@ -407,6 +407,10 @@ def test_commands_panel_is_read_only_and_core_sources_are_module_owned():
     assert '/core-install/apply' in source_script
     assert 'SHA-256' in source_script
     assert 'const MAX_POLL_MS = 10 * 60 * 1000;' in source_script
+    assert 'data-core-install-progress' in source_template
+    assert 'data-core-install-steps' in source_template
+    assert 'operation.progress' in source_script
+    assert 'phase_label' in source_script
     assert 'Контрольная сумма релиза не опубликована.' in source_script
     assert "setTimeout(() => poll(operationId), 700);" in source_script
 

@@ -38,6 +38,32 @@ class CoreInstallError(RuntimeError):
         self.message = message
 
 
+_PHASE_PROGRESS = {
+    "download": 8,
+    "verify": 28,
+    "backup": 42,
+    "replace": 58,
+    "preflight": 70,
+    "restart": 82,
+    "healthcheck": 94,
+    "rollback": 96,
+    "complete": 100,
+    "rolled_back": 100,
+}
+_PHASE_LABELS = {
+    "download": "Загрузка релиза",
+    "verify": "Проверка контрольной суммы",
+    "backup": "Резервное копирование текущего ядра",
+    "replace": "Замена бинарного файла",
+    "preflight": "Проверка конфигурации",
+    "restart": "Перезапуск сервиса",
+    "healthcheck": "Проверка работоспособности",
+    "rollback": "Восстановление предыдущей версии",
+    "complete": "Установка завершена",
+    "rolled_back": "Откат завершён",
+}
+
+
 class CoreInstaller:
     """Coordinates release resolution and an atomic install transaction."""
 
@@ -126,6 +152,8 @@ class CoreInstaller:
                 "engine_id": engine_id,
                 "status": "running",
                 "phase": "download",
+                "phase_label": _PHASE_LABELS["download"],
+                "progress": _PHASE_PROGRESS["download"],
                 "error": None,
                 "started_at": time.time(),
                 "finished_at": None,
@@ -145,7 +173,15 @@ class CoreInstaller:
             if candidates:
                 return dict(max(candidates, key=lambda item: float(item.get("started_at") or 0)))
         state = self.state_store.get(engine_id)
-        return {"operation_id": None, "engine_id": engine_id, "status": state.get("last_status", "idle"), "phase": state.get("last_phase", "idle"), "error": state.get("last_error")}
+        return {
+            "operation_id": state.get("last_operation_id"),
+            "engine_id": engine_id,
+            "status": state.get("last_status", "idle"),
+            "phase": state.get("last_phase", "idle"),
+            "phase_label": state.get("last_phase_label", _PHASE_LABELS.get(state.get("last_phase"), "Ожидание установки")),
+            "progress": state.get("last_progress", 0),
+            "error": state.get("last_error"),
+        }
 
     def _resolve(self, profile: CoreProfile, *, fresh: bool = False) -> dict[str, Any]:
         cache_key = f"{profile.engine_id}:{profile.profile_id}:{self.platform.machine}:{self.platform.opkg_arch}:{self.platform.endianness}"
@@ -199,8 +235,18 @@ class CoreInstaller:
             self._operations[operation_id].update(changes)
 
     def _phase(self, operation_id: str, engine_id: str, phase: str) -> None:
-        self._set_operation(operation_id, phase=phase)
-        self.state_store.set_runtime(engine_id, status="running", phase=phase, error=None)
+        progress = _PHASE_PROGRESS.get(phase, 0)
+        phase_label = _PHASE_LABELS.get(phase, phase)
+        self._set_operation(operation_id, phase=phase, phase_label=phase_label, progress=progress)
+        self.state_store.set_runtime(
+            engine_id,
+            status="running",
+            phase=phase,
+            error=None,
+            operation_id=operation_id,
+            progress=progress,
+            phase_label=phase_label,
+        )
 
     def _run(self, operation_id: str, plan: dict[str, Any]) -> None:
         engine_id = str(plan["engine_id"])
@@ -284,8 +330,24 @@ class CoreInstaller:
                 release_tag=str(release["stable"]["tag"]),
                 asset_name=str(release["asset"]["name"]),
             )
-            self.state_store.set_runtime(engine_id, status="succeeded", phase="complete", error=None)
-            self._set_operation(operation_id, status="succeeded", phase="complete", finished_at=time.time(), error=None)
+            self.state_store.set_runtime(
+                engine_id,
+                status="succeeded",
+                phase="complete",
+                error=None,
+                operation_id=operation_id,
+                progress=100,
+                phase_label=_PHASE_LABELS["complete"],
+            )
+            self._set_operation(
+                operation_id,
+                status="succeeded",
+                phase="complete",
+                phase_label=_PHASE_LABELS["complete"],
+                progress=100,
+                finished_at=time.time(),
+                error=None,
+            )
         except Exception as exc:
             error = exc.message if isinstance(exc, CoreInstallError) else "Не удалось завершить установку ядра."
             if replaced and had_backup:
@@ -295,11 +357,28 @@ class CoreInstaller:
                     self.state_store.restore_install_state(engine_id, prior_state)
                     if self.running_core() != self._other_engine(engine_id):
                         self._restart()
-                    self._set_operation(operation_id, status="rolled_back", phase="rolled_back", finished_at=time.time(), error=error)
-                    self.state_store.set_runtime(engine_id, status="rolled_back", phase="rolled_back", error=error)
+                    self._set_operation(
+                        operation_id,
+                        status="rolled_back",
+                        phase="rolled_back",
+                        phase_label=_PHASE_LABELS["rolled_back"],
+                        progress=100,
+                        finished_at=time.time(),
+                        error=error,
+                    )
+                    self.state_store.set_runtime(
+                        engine_id,
+                        status="rolled_back",
+                        phase="rolled_back",
+                        error=error,
+                        operation_id=operation_id,
+                        progress=100,
+                        phase_label=_PHASE_LABELS["rolled_back"],
+                    )
                 except Exception as rollback_exc:
-                    self._set_operation(operation_id, status="failed", phase="rollback", finished_at=time.time(), error="Не удалось завершить откат ядра.")
-                    self.state_store.set_runtime(engine_id, status="failed", phase="rollback", error="Не удалось завершить откат ядра.")
+                    rollback_error = "Не удалось завершить откат ядра."
+                    self._set_operation(operation_id, status="failed", phase="rollback", phase_label=_PHASE_LABELS["rollback"], progress=_PHASE_PROGRESS["rollback"], finished_at=time.time(), error=rollback_error)
+                    self.state_store.set_runtime(engine_id, status="failed", phase="rollback", error=rollback_error, operation_id=operation_id, progress=_PHASE_PROGRESS["rollback"], phase_label=_PHASE_LABELS["rollback"])
             elif replaced:
                 try:
                     if os.path.exists(target):
@@ -308,14 +387,17 @@ class CoreInstaller:
                     if self.running_core() != self._other_engine(engine_id):
                         self._restart()
                 except Exception:
-                    self._set_operation(operation_id, status="failed", phase="rollback", finished_at=time.time(), error="Не удалось завершить откат ядра.")
-                    self.state_store.set_runtime(engine_id, status="failed", phase="rollback", error="Не удалось завершить откат ядра.")
+                    rollback_error = "Не удалось завершить откат ядра."
+                    self._set_operation(operation_id, status="failed", phase="rollback", phase_label=_PHASE_LABELS["rollback"], progress=_PHASE_PROGRESS["rollback"], finished_at=time.time(), error=rollback_error)
+                    self.state_store.set_runtime(engine_id, status="failed", phase="rollback", error=rollback_error, operation_id=operation_id, progress=_PHASE_PROGRESS["rollback"], phase_label=_PHASE_LABELS["rollback"])
                 else:
-                    self._set_operation(operation_id, status="rolled_back", phase="rolled_back", finished_at=time.time(), error=error)
-                    self.state_store.set_runtime(engine_id, status="rolled_back", phase="rolled_back", error=error)
+                    self._set_operation(operation_id, status="rolled_back", phase="rolled_back", phase_label=_PHASE_LABELS["rolled_back"], progress=100, finished_at=time.time(), error=error)
+                    self.state_store.set_runtime(engine_id, status="rolled_back", phase="rolled_back", error=error, operation_id=operation_id, progress=100, phase_label=_PHASE_LABELS["rolled_back"])
             else:
-                self._set_operation(operation_id, status="failed", phase=current_phase, finished_at=time.time(), error=error)
-                self.state_store.set_runtime(engine_id, status="failed", phase=current_phase, error=error)
+                phase_label = _PHASE_LABELS.get(current_phase, current_phase)
+                progress = _PHASE_PROGRESS.get(current_phase, 0)
+                self._set_operation(operation_id, status="failed", phase=current_phase, phase_label=phase_label, progress=progress, finished_at=time.time(), error=error)
+                self.state_store.set_runtime(engine_id, status="failed", phase=current_phase, error=error, operation_id=operation_id, progress=progress, phase_label=phase_label)
         finally:
             with self._guard:
                 self._busy = False

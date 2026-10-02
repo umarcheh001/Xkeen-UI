@@ -56,6 +56,17 @@
     </div>
     <div class="modal-body xk-core-source-modal-body">
       <dl class="xk-core-install-details" data-core-install-details></dl>
+      <section class="xk-core-install-progress" data-core-install-progress hidden aria-live="polite" aria-busy="false">
+        <div class="xk-core-install-progress-head">
+          <div>
+            <strong data-core-install-phase>Подготовка установки</strong>
+            <small data-core-install-progress-note>Проверяем состояние операции</small>
+          </div>
+          <output data-core-install-percent>0%</output>
+        </div>
+        <progress class="xk-core-install-progress-bar" data-core-install-progress-bar max="100" value="0">0%</progress>
+        <ol class="xk-core-install-steps" data-core-install-steps aria-label="Этапы установки"></ol>
+      </section>
       <div class="xk-core-source-message" data-core-install-message role="status" aria-live="polite"></div>
     </div>
     <div class="modal-actions xk-core-source-modal-actions">

@@ -23027,12 +23027,41 @@ body.panel-page .xk-core-source-message:not(:empty) { color: var(--op-text); }
 body.panel-page .xk-core-install-details { display: grid; grid-template-columns: minmax(100px, .34fr) minmax(0, 1fr); gap: 8px 12px; margin: 14px 0; }
 body.panel-page .xk-core-install-details dt { color: var(--op-muted); }
 body.panel-page .xk-core-install-details dd { margin: 0; overflow-wrap: anywhere; font-family: var(--font-mono, ui-monospace, monospace); font-size: .84rem; }
+body.panel-page .xk-core-install-progress {
+  display: grid;
+  gap: 12px;
+  margin: 14px 0 4px;
+  padding: 13px 14px;
+  border: 1px solid var(--op-accent-border);
+  border-radius: var(--op-radius-sm);
+  background: var(--op-accent-soft);
+}
+body.panel-page .xk-core-install-progress-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+body.panel-page .xk-core-install-progress-head > div { display: grid; gap: 3px; min-width: 0; }
+body.panel-page .xk-core-install-progress-head strong { color: var(--op-text); font-size: .95rem; }
+body.panel-page .xk-core-install-progress-head small { color: var(--op-muted); line-height: 1.35; }
+body.panel-page .xk-core-install-progress-head output { color: var(--op-text-strong); font-size: 1.15rem; font-variant-numeric: tabular-nums; font-weight: 700; }
+body.panel-page .xk-core-install-progress-bar { display: block; width: 100%; height: 8px; accent-color: var(--op-accent); }
+body.panel-page .xk-core-install-steps { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; padding: 0; margin: 0; list-style: none; }
+body.panel-page .xk-core-install-steps li { min-width: 0; color: var(--op-faint); font-size: .7rem; line-height: 1.25; text-align: center; overflow-wrap: anywhere; }
+body.panel-page .xk-core-install-steps li::before { content: ''; display: block; width: 7px; height: 7px; margin: 0 auto 5px; border-radius: 50%; background: var(--op-faint); }
+body.panel-page .xk-core-install-steps li[data-state="active"] { color: var(--op-text); font-weight: 650; }
+body.panel-page .xk-core-install-steps li[data-state="active"]::before { background: var(--op-accent); box-shadow: 0 0 0 3px var(--op-accent-soft); }
+body.panel-page .xk-core-install-steps li[data-state="done"] { color: var(--op-muted); }
+body.panel-page .xk-core-install-steps li[data-state="done"]::before { background: var(--op-success, #42b883); }
 
 @media (max-width: 680px) {
   body.panel-page #core-modal .xk-core-engine-list { grid-template-columns: 1fr; }
   body.panel-page #core-modal .xk-core-source-control { grid-template-columns: 1fr; align-items: stretch; }
   body.panel-page #core-modal .xk-core-source-actions { justify-content: flex-start; flex-wrap: wrap; }
   body.panel-page .xk-core-install-details { grid-template-columns: 1fr; gap: 2px; }
+  body.panel-page .xk-core-install-steps { grid-template-columns: 1fr 1fr; gap: 8px; text-align: left; }
+  body.panel-page .xk-core-install-steps li::before { display: inline-block; margin: 0 6px 0 0; }
   body.panel-page .xk-core-source-modal-actions { align-items: stretch; flex-direction: column-reverse; }
   body.panel-page .xk-core-source-modal-actions button { width: 100%; }
 }

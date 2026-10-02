@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import importlib
 import io
+import json
 import time
 import zipfile
 
@@ -92,6 +93,22 @@ def test_selected_profile_and_installed_profile_are_persisted_separately(tmp_pat
     assert value["installed_release_tag"] == "v1.19.0"
 
 
+def test_legacy_runtime_state_backfills_progress_contract(tmp_path):
+    state_dir = tmp_path / "state"
+    state_dir.mkdir(parents=True)
+    state_path = state_dir / "core-profiles" / "state.json"
+    state_path.parent.mkdir()
+    state_path.write_text(
+        json.dumps({"version": 1, "xray": {}, "mihomo": {"last_status": "succeeded", "last_phase": "complete"}}),
+        encoding="utf-8",
+    )
+
+    value = state_module.CoreProfileStateStore(str(state_dir)).get("mihomo")
+
+    assert value["last_progress"] == 100
+    assert value["last_phase_label"] == "Установка завершена"
+
+
 def test_apply_replaces_verified_binary_and_marks_installed(tmp_path):
     install, store, target = _installer(tmp_path)
     prepared = install.prepare("xray")
@@ -99,10 +116,16 @@ def test_apply_replaces_verified_binary_and_marks_installed(tmp_path):
     operation = _wait_for_terminal(install, accepted["operation_id"])
 
     assert operation["status"] == "succeeded"
+    assert operation["progress"] == 100
+    assert operation["phase_label"] == "Установка завершена"
     assert target.read_bytes() == b"new-xray"
     assert store.get("xray")["selected_profile_id"] == "official"
     assert store.get("xray")["installed_profile_id"] == "official"
     assert store.get("xray")["installed_release_tag"] == "v26.3.27"
+    persisted = store.get("xray")
+    assert persisted["last_operation_id"] == accepted["operation_id"]
+    assert persisted["last_progress"] == 100
+    assert persisted["last_phase_label"] == "Установка завершена"
 
 
 def test_confirmation_is_single_use_and_profile_status_reads_binary_version(tmp_path):
@@ -137,6 +160,8 @@ def test_bad_checksum_never_replaces_binary_or_creates_rollback_state(tmp_path):
 
     assert operation["status"] == "failed"
     assert operation["phase"] == "verify"
+    assert operation["progress"] == 28
+    assert operation["phase_label"] == "Проверка контрольной суммы"
     assert target.read_bytes() == b"old-xray"
     assert store.get("xray")["installed_profile_id"] is None
 
