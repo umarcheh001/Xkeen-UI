@@ -1,4 +1,5 @@
 import { ensurePanelLazyFeature } from './panel.lazy_bindings.runtime.js';
+import { ensurePanelEditorSupport } from './panel.lazy_bindings.runtime.js';
 import { getPanelLazyFeatureApi } from './panel.lazy_bindings.runtime.js';
 import { ensurePanelModuleForView, getPanelModuleApi } from './panel.module_loader.js';
 import {
@@ -74,6 +75,11 @@ export async function applyPanelViewRuntime(name) {
   const loaded = await ensurePanelModuleForView(viewName);
   if (!loaded || loaded.status !== 'ready') return loaded;
   const moduleApi = loaded && loaded.api ? loaded.api : null;
+
+  // Screens create their editors during init and silently fall back to a
+  // plain textarea when the editor helpers are not loaded yet. CodeMirror is
+  // the engine every editor variant has; Monaco is still loaded on demand.
+  await ensurePanelEditorSupport('codemirror');
 
   if (viewName === 'mihomo') {
     await initViewOnce('mihomo', () => {

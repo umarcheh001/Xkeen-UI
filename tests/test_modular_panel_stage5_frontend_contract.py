@@ -136,6 +136,17 @@ def test_editor_runtime_is_loaded_only_through_editor_support():
     assert "ensurePanelModule('editor-runtime', 'editor-support')" in lazy_bindings
 
 
+def test_view_runtime_loads_editor_support_before_a_screen_initialises():
+    # Screens build their editors during init and fall back to a plain textarea
+    # when the editor helpers are missing, so the request has to come first.
+    source = (PAGES / "panel.view_runtime.js").read_text(encoding="utf-8")
+
+    ensure = "await ensurePanelEditorSupport('codemirror');"
+    assert source.count(ensure) == 1
+    assert source.index(ensure) < source.index("initViewOnce('mihomo'")
+    assert source.index(ensure) < source.index("initViewOnce('routing'")
+
+
 def test_e2e_fixture_seeds_module_profile_before_flask_starts():
     source = E2E_SERVER.read_text(encoding="utf-8")
 

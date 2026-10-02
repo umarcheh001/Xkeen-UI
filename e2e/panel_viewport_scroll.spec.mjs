@@ -33,6 +33,10 @@ async function openPanel(page, viewport) {
   // xk-operator-header-active. Мерить высоты до этого момента бессмысленно —
   // получаются размеры промежуточной разметки.
   await expect(page.locator('body')).toHaveClass(/xk-operator-header-active/);
+  // Редактор маршрутизации подгружается уже после показа экрана и заменяет
+  // собой текстовое поле другой высоты. Пока он не встал, высота содержимого
+  // ещё меняется, и замеры прокрутки сравнивают разные вёрстки.
+  await expect(page.locator('#view-routing .cm-editor').first()).toBeVisible({ timeout: 15000 });
 }
 
 

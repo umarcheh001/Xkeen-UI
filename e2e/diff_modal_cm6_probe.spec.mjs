@@ -163,6 +163,15 @@ async function installWrapProbeScope(page) {
   }, { text: WRAP_TEXT });
 }
 
+// The diff viewer is an on-demand editor capability: the panel loads it when
+// the Diff action is first used, so the probe asks for it the same way.
+async function ensureDiffCapability(page) {
+  await page.waitForFunction(() => typeof window.XKeen?.ui?.editorCapabilities?.ensure === 'function');
+  const ready = await page.evaluate(() => window.XKeen.ui.editorCapabilities.ensure('diff'));
+  expect(ready).toBe(true);
+  await page.waitForFunction(() => !!window.XKeen?.ui?.diffModal?.open);
+}
+
 async function openScope(page, scopeName) {
   await page.evaluate((scope) => {
     window.XKeen.ui.diff.openForScope(scope).catch((error) => {
@@ -398,7 +407,7 @@ test('CodeMirror diff modal keeps save button and Ctrl+S behavior identical', as
   await page.goto('/');
   await waitForRoutingEditor(page);
   await ensureCodeMirrorRouting(page);
-  await page.waitForFunction(() => !!window.XKeen?.ui?.diffModal?.open);
+  await ensureDiffCapability(page);
 
   await runDiffSaveMatrix(page, ensureCodeMirrorRouting);
 });
@@ -407,7 +416,7 @@ test('Monaco diff modal keeps save button and Ctrl+S behavior identical', async 
   await page.goto('/');
   await waitForRoutingEditor(page);
   await ensureMonacoRouting(page);
-  await page.waitForFunction(() => !!window.XKeen?.ui?.diffModal?.open);
+  await ensureDiffCapability(page);
 
   await runDiffSaveMatrix(page, ensureMonacoRouting);
 });
@@ -416,7 +425,7 @@ test('CodeMirror diff modal keeps both panes visible after apply-left', async ({
   await page.goto('/');
   await waitForRoutingEditor(page);
   await ensureCodeMirrorRouting(page);
-  await page.waitForFunction(() => !!window.XKeen?.ui?.diffModal?.open);
+  await ensureDiffCapability(page);
   await installProbeScope(page);
   await openProbeDiff(page);
 
@@ -439,7 +448,7 @@ test('CodeMirror diff modal keeps save file visible and clickable for writable s
   await page.goto('/');
   await waitForRoutingEditor(page);
   await ensureCodeMirrorRouting(page);
-  await page.waitForFunction(() => !!window.XKeen?.ui?.diffModal?.open);
+  await ensureDiffCapability(page);
   await installProbeScope(page);
   await openProbeDiff(page);
 
@@ -457,7 +466,7 @@ test('diff modal keeps title, toolbar and sources in separate header rows', asyn
   await page.goto('/');
   await waitForRoutingEditor(page);
   await ensureCodeMirrorRouting(page);
-  await page.waitForFunction(() => !!window.XKeen?.ui?.diffModal?.open);
+  await ensureDiffCapability(page);
   await installProbeScope(page);
   await openProbeDiff(page);
 
@@ -493,7 +502,7 @@ test('CodeMirror diff modal keeps panes stable across apply-right, apply-all, an
   await page.goto('/');
   await waitForRoutingEditor(page);
   await ensureCodeMirrorRouting(page);
-  await page.waitForFunction(() => !!window.XKeen?.ui?.diffModal?.open);
+  await ensureDiffCapability(page);
   await installProbeScope(page);
   await openProbeDiff(page);
 
@@ -529,7 +538,7 @@ test('CodeMirror diff modal clearly highlights the hunk clicked with the mouse',
   await page.goto('/');
   await waitForRoutingEditor(page);
   await ensureCodeMirrorRouting(page);
-  await page.waitForFunction(() => !!window.XKeen?.ui?.diffModal?.open);
+  await ensureDiffCapability(page);
   await installProbeScope(page);
   await openProbeDiff(page);
 
@@ -547,7 +556,7 @@ test('CodeMirror diff modal wraps long lines without horizontal pane overflow', 
   await page.goto('/');
   await waitForRoutingEditor(page);
   await ensureCodeMirrorRouting(page);
-  await page.waitForFunction(() => !!window.XKeen?.ui?.diffModal?.open);
+  await ensureDiffCapability(page);
   await installWrapProbeScope(page);
   await openScope(page, 'probe-cm6-wrap');
   await expect(page.locator('#xkeen-diff-modal .xkeen-diff-summary')).toContainText('Различий нет');
