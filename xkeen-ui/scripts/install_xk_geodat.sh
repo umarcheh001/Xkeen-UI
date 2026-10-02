@@ -269,6 +269,16 @@ restore_backup() {
   fi
 }
 
+# The copy only exists to undo a failed install within this run.  Once the
+# new binary is in place nothing reads it, and it sat on every router as a
+# second 2 MB binary until the next install replaced it.
+drop_backup() {
+  if [ -n "$BAK" ]; then
+    rm -f "$BAK" 2>/dev/null || true
+    BAK=""
+  fi
+}
+
 # -------------------- Control --------------------
 
 #   XKEEN_GEODAT_INSTALL=1  -> install without asking
@@ -414,6 +424,7 @@ if [ -n "${XKEEN_GEODAT_LOCAL:-}" ] && [ -f "$XKEEN_GEODAT_LOCAL" ]; then
   fi
 
   echo "xk-geodat: installed to $DEST"
+  drop_backup
   exit 0
 fi
 
@@ -485,6 +496,7 @@ fi
 backup_existing
 if mv "$TMP" "$DEST"; then
   echo "xk-geodat: installed to $DEST"
+  drop_backup
 else
   echo "xk-geodat: install failed — пропуск"
   rm -f "$TMP" 2>/dev/null || true
