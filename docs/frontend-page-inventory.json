@@ -2955,6 +2955,7 @@
             "XKeen.monacoLoader",
             "XKeen.monacoLoader.ensureMonaco",
             "XKeen.ui.settings",
+            "XKeen.ui.toast",
             "XKeen.ui.editorEngine"
           ],
           "lazy_features": []
