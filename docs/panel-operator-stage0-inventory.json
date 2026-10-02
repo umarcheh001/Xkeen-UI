@@ -11630,6 +11630,7 @@
         "xkeen-ui/static/js/ui/confirm_modal.js"
       ],
       "confirm-modal-message": [
+        "xkeen-ui/static/js/features/outbounds.js",
         "xkeen-ui/static/js/ui/confirm_modal.js"
       ],
       "confirm-modal-ok-btn": [
