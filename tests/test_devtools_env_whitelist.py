@@ -37,6 +37,8 @@ README_ONLY_KEYS: frozenset[str] = frozenset(
         # the panel's editable runtime environment.
         "XKEEN_GEODAT_INSTALL",
         "XKEEN_HAPP_DECRYPTOR_INSTALL",
+        "XKEEN_UI_INSTALL_PROFILE",
+        "XKEEN_UI_INSTALL_MODULES",
     }
 )
 

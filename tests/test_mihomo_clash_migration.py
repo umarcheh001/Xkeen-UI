@@ -338,8 +338,6 @@ def test_archive_excludes_runtime_mihomo_config_profiles_and_socket():
 
 def test_installer_preserves_existing_mihomo_runtime_files():
     installer = (APP_DIR / "install.sh").read_text(encoding="utf-8")
-    assert '--exclude "opt/etc/mihomo/config.yaml"' in installer
-    assert '--exclude "opt/etc/mihomo/profiles/"' in installer
     assert 'MIHOMO_PRESERVE_DIR' in installer
     assert 'cp -L "$MIHOMO_CONFIG_FILE"' in installer
     assert 'readlink -f "$MIHOMO_CONFIG_FILE"' in installer

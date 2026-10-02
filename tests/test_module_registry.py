@@ -8,6 +8,7 @@ from flask import Flask
 from routes.modules import create_modules_blueprint
 from services.module_registry import (
     API_VERSION,
+    PROFILE_PRESETS,
     LEGACY_FULL_PROFILE,
     MODULE_DEFINITIONS,
     MODULE_IDS,
@@ -529,6 +530,149 @@ def test_module_api_contract_and_mutations(tmp_path):
     missing = client.get("/api/modules/not-real")
     assert missing.status_code == 404
     assert missing.get_json()["code"] == "module_not_found"
+
+
+def test_profile_presets_are_canonical_and_include_expected_modules():
+    assert set(PROFILE_PRESETS) == {
+        "legacy-full",
+        "full",
+        "xray-minimal",
+        "mihomo-minimal",
+        "custom",
+    }
+    assert PROFILE_PRESETS["xray-minimal"] == (
+        "core",
+        "engine.xray",
+        "tool.editor",
+    )
+    assert PROFILE_PRESETS["mihomo-minimal"] == (
+        "core",
+        "engine.mihomo",
+        "tool.editor",
+    )
+    assert set(PROFILE_PRESETS["full"]) == set(MODULE_IDS)
+
+
+def test_profile_transition_is_atomic_and_returns_restart_diff(tmp_path):
+    registry = _registry(tmp_path)
+    registry.get_registry()
+
+    payload, changed = registry.set_profile("xray-minimal")
+
+    assert changed is True
+    assert payload["profile"] == "xray-minimal"
+    assert payload["restart_required"] is True
+    assert payload["diff"]["profile"] == {
+        "before": "legacy-full",
+        "after": "xray-minimal",
+    }
+    assert payload["diff"]["will_activate_after_restart"] == [
+        "core",
+        "engine.xray",
+        "tool.editor",
+    ]
+    assert set(payload["diff"]["will_deactivate_after_restart"]) == {
+        module_id for module_id in MODULE_IDS if module_id not in PROFILE_PRESETS["xray-minimal"]
+    }
+
+    persisted = json.loads((tmp_path / "modules.json").read_text(encoding="utf-8"))
+    assert persisted["profile"] == "xray-minimal"
+    assert [module_id for module_id, item in persisted["modules"].items() if item["enabled"]] == [
+        "core",
+        "engine.xray",
+        "tool.editor",
+    ]
+
+
+def test_custom_profile_requires_valid_module_set_and_keeps_dependencies(tmp_path):
+    registry = _registry(tmp_path)
+    registry.get_registry()
+
+    payload, changed = registry.set_profile(
+        "custom",
+        module_ids=["core", "engine.mihomo", "tool.editor", "tool.backups"],
+    )
+
+    assert changed is True
+    assert payload["profile"] == "custom"
+    assert payload["diff"]["will_activate_after_restart"] == [
+        "core",
+        "engine.mihomo",
+        "tool.editor",
+        "tool.backups",
+    ]
+
+    try:
+        registry.set_profile("custom", module_ids=["core", "engine.xray"])
+    except ModuleRegistryError as error:
+        assert error.code == "profile_dependency_missing"
+        assert error.status == 400
+        assert error.details["missing_module_ids"] == ["tool.editor"]
+    else:
+        raise AssertionError("custom profile must include declared dependencies")
+
+
+def test_profile_api_rejects_unknown_profile_and_accepts_custom_module_ids(tmp_path):
+    registry = _registry(tmp_path)
+    app = Flask("profile-registry-test")
+    app.config["TESTING"] = True
+    app.register_blueprint(create_modules_blueprint(registry))
+    client = app.test_client()
+
+    unknown = client.post("/api/modules/profile", json={"profile": "no-such-profile"})
+    assert unknown.status_code == 400
+    assert unknown.get_json()["code"] == "profile_invalid"
+
+    custom = client.post(
+        "/api/modules/profile",
+        json={
+            "profile": "custom",
+            "module_ids": ["core", "engine.xray", "tool.editor", "tool.backups"],
+        },
+    )
+    assert custom.status_code == 200
+    assert custom.get_json()["profile"] == "custom"
+    assert custom.get_json()["changed"] is True
+    assert custom.get_json()["diff"]["will_activate_after_restart"] == [
+        "core",
+        "engine.xray",
+        "tool.editor",
+        "tool.backups",
+    ]
+
+
+def test_patch_reports_eligibility_diff_after_leaving_legacy_full(tmp_path):
+    registry = _registry(tmp_path, available=False)
+    registry.get_registry()
+
+    payload, changed = registry.set_enabled("integration.happ", False)
+
+    assert changed is True
+    assert "engine.xray" in payload["diff"]["will_deactivate_after_restart"]
+    assert "engine.mihomo" in payload["diff"]["will_deactivate_after_restart"]
+    assert payload["diff"]["unavailable_after_restart"]["engine.xray"] == "system_requirements_unmet"
+
+
+def test_profile_route_honors_active_core_guard(tmp_path):
+    registry = _registry(tmp_path)
+    app = Flask("profile-guard-test")
+    app.config["TESTING"] = True
+    app.register_blueprint(create_modules_blueprint(
+        registry,
+        before_change=lambda module_id, enabled: {
+            "code": "active_core_module", "message": "core is running", "status": 409
+        } if module_id == "engine.mihomo" and not enabled else None,
+    ))
+
+    response = app.test_client().post("/api/modules/profile", json={"profile": "xray-minimal"})
+
+    assert response.status_code == 409
+    assert response.get_json()["code"] == "active_core_module"
+    assert registry.get_registry()["profile"] == "legacy-full"
+
+    mixed_case = app.test_client().post("/api/modules/profile", json={"profile": "XRAY-MINIMAL"})
+    assert mixed_case.status_code == 409
+    assert registry.get_registry()["profile"] == "legacy-full"
 
 
 def test_registry_metadata_stays_aligned_with_stage0_module_snapshot():

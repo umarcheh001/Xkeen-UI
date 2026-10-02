@@ -57,7 +57,7 @@ def test_installer_exposes_optional_component_choices_without_child_prompt_noise
     assert 'Установить xk-geodat? [Y/n]:' in text
     assert 'GEODAT_OPTION="1"' in text
     assert 'export XKEEN_GEODAT_INSTALL' in text
-    assert 'if [ "${GEODAT_OPTION:-1}" = "1" ]; then' in text
+    assert 'if profile_has_module engine.xray && [ "${GEODAT_OPTION:-1}" = "1" ]; then' in text
     assert 'choose_happ_option() {' in text
     assert 'Режим разработчика для подписок' in text
     assert 'Компоненты загрузятся с GitHub.' in text

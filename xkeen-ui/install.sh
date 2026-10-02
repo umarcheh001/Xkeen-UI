@@ -416,6 +416,75 @@ choose_happ_option() {
   export XKEEN_HAPP_DECRYPTOR_INSTALL
 }
 
+choose_panel_profile() {
+  INSTALL_PROFILE_HELPER="$SRC_DIR/scripts/module_profile_install.py"
+  [ -f "$INSTALL_PROFILE_HELPER" ] || fail_install "В архиве нет helper профилей установки."
+  PROFILE_CHOICE="${XKEEN_UI_INSTALL_PROFILE:-}"
+  if [ -z "$PROFILE_CHOICE" ] && [ -f "$UI_DIR/modules.json" ]; then
+    PROFILE_CHOICE="$("$PYTHON_BIN" - "$UI_DIR/modules.json" <<'PY'
+import json
+import sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as handle:
+        print(json.load(handle).get("profile", ""))
+except (OSError, ValueError, TypeError):
+    pass
+PY
+)"
+  fi
+  if [ -z "$PROFILE_CHOICE" ] && [ -t 0 ] && [ -r /dev/tty ]; then
+    printf '  %bПрофиль панели%b\n' "$UI_BOLD" "$UI_RESET" >&3
+    ui_info "1 Full  2 Xray Minimal  3 Mihomo Minimal  4 Custom"
+    printf '      Выбор [1]: ' >&3
+    IFS= read -r PROFILE_ANSWER < /dev/tty || PROFILE_ANSWER=""
+    case "$PROFILE_ANSWER" in
+      2) PROFILE_CHOICE="xray-minimal" ;;
+      3) PROFILE_CHOICE="mihomo-minimal" ;;
+      4) PROFILE_CHOICE="custom" ;;
+      *) PROFILE_CHOICE="full" ;;
+    esac
+  fi
+  [ -n "$PROFILE_CHOICE" ] || PROFILE_CHOICE="full"
+  case "$PROFILE_CHOICE" in
+    legacy-full|full|xray-minimal|mihomo-minimal|custom) ;;
+    *) fail_install "Неизвестный профиль: $PROFILE_CHOICE" ;;
+  esac
+  if [ "$PROFILE_CHOICE" = "custom" ] && [ -z "${XKEEN_UI_INSTALL_MODULES:-}" ]; then
+    if [ -f "$UI_DIR/modules.json" ]; then
+      XKEEN_UI_INSTALL_MODULES="$("$PYTHON_BIN" - "$UI_DIR/modules.json" <<'PY'
+import json
+import sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as handle:
+        state = json.load(handle)
+    print(",".join(module for module, item in state.get("modules", {}).items() if item.get("enabled")))
+except (OSError, ValueError, TypeError, AttributeError):
+    pass
+PY
+)"
+    fi
+    if [ -z "${XKEEN_UI_INSTALL_MODULES:-}" ] && [ -t 0 ] && [ -r /dev/tty ]; then
+      ui_info "Модули: core, engine.xray, engine.mihomo, tool.editor, tool.terminal, tool.files, tool.backups, integration.happ, tool.advanced-diagnostics"
+      printf '      ID через запятую: ' >&3
+      IFS= read -r XKEEN_UI_INSTALL_MODULES < /dev/tty || XKEEN_UI_INSTALL_MODULES=""
+    fi
+    [ -n "${XKEEN_UI_INSTALL_MODULES:-}" ] || fail_install "Для Custom задайте XKEEN_UI_INSTALL_MODULES."
+  fi
+  XKEEN_UI_INSTALL_PROFILE="$PROFILE_CHOICE"
+  export XKEEN_UI_INSTALL_PROFILE XKEEN_UI_INSTALL_MODULES
+  printf '  %bПрофиль:%b     %s\n' "$UI_DIM" "$UI_RESET" "$PROFILE_CHOICE" >&3
+}
+
+profile_has_module() {
+  case "$PROFILE_CHOICE" in
+    full|legacy-full) return 0 ;;
+    xray-minimal) [ "$1" = "core" ] || [ "$1" = "engine.xray" ] || [ "$1" = "tool.editor" ] ;;
+    mihomo-minimal) [ "$1" = "core" ] || [ "$1" = "engine.mihomo" ] || [ "$1" = "tool.editor" ] ;;
+    custom) case ",$XKEEN_UI_INSTALL_MODULES," in *",$1,"*) return 0 ;; *) return 1 ;; esac ;;
+    *) return 1 ;;
+  esac
+}
+
 fail_install() {
   INSTALL_ERROR_HINT="$1"
   exit "${2:-1}"
@@ -426,6 +495,11 @@ installer_on_exit() {
   trap - 0
   ui_progress_stop
   if [ "$INSTALL_STATUS" -ne 0 ] && [ "$INSTALL_FINISHED" -ne 1 ]; then
+    if [ "${PROFILE_TRANSACTION_ACTIVE:-0}" -eq 1 ]; then
+      "$PYTHON_BIN" "$INSTALL_PROFILE_HELPER" rollback --transaction "$PROFILE_TRANSACTION" || true
+      [ -x "${INIT_SCRIPT:-}" ] && "$INIT_SCRIPT" restart 3>&- || true
+      PROFILE_TRANSACTION_ACTIVE=0
+    fi
     ui_error "Установка остановлена"
     if [ -n "$INSTALL_ERROR_HINT" ]; then
       ui_info "$INSTALL_ERROR_HINT"
@@ -1090,6 +1164,7 @@ else
 fi
 
 echo "[*] Python-зависимости в порядке."
+choose_panel_profile
 
 
 # --- lftp (для файлового менеджера) ---
@@ -1098,7 +1173,7 @@ ui_step_done
 ui_step "Файловый менеджер"
 echo "[*] Проверяю наличие lftp для файлового менеджера..."
 
-if ! command -v lftp >/dev/null 2>&1; then
+if profile_has_module tool.files && ! command -v lftp >/dev/null 2>&1; then
   ui_info "Добавляю файловый менеджер..."
   echo "[*] lftp не найден. Пытаюсь установить lftp через Entware (opkg)..."
 
@@ -1123,7 +1198,7 @@ if ! command -v lftp >/dev/null 2>&1; then
   fi
 fi
 
-if ! command -v lftp >/dev/null 2>&1; then
+if profile_has_module tool.files && ! command -v lftp >/dev/null 2>&1; then
   echo "[!] lftp не найден даже после установки."
   fail_install "lftp не найден после установки."
 fi
@@ -1840,21 +1915,14 @@ mkdir -p "$UI_DIR" "$INIT_DIR" "$LOG_DIR" "$RUN_DIR" "$BACKUP_DIR" "$JSONC_DIR"
 # и пытаемся убрать legacy *.jsonc из XRAY_CONFIG_DIR.
 migrate_legacy_jsonc_files || true
 
-# Сжатые копии прежней установки убираем до копирования: новый архив приносит
-# свои .gz (или не приносит вовсе), а старые иначе отдавались бы вместо новых файлов.
-# Запуск прямо из каталога панели не трогаем — там это и есть новые копии.
-if [ "$(cd "$UI_DIR" 2>/dev/null && pwd)" != "$SRC_DIR" ]; then
-  drop_previous_precompressed "$UI_DIR/static"
-fi
-
 echo "[*] Копирую файлы панели в $UI_DIR..."
-if command -v rsync >/dev/null 2>&1; then
-  rsync -a "$SRC_DIR"/ "$UI_DIR"/ --exclude "install.sh" --exclude "opt/etc/mihomo/config.yaml" --exclude "opt/etc/mihomo/profiles/"
-else
-  cp -r "$SRC_DIR"/* "$UI_DIR"/ 2>/dev/null || true
-  cp -r "$SRC_DIR"/.[!.]* "$UI_DIR"/ 2>/dev/null || true
-  rm -f "$UI_DIR/install.sh"
+PROFILE_TRANSACTION="$UI_DIR.profile-transaction-$$"
+if ! "$PYTHON_BIN" "$INSTALL_PROFILE_HELPER" apply \
+    --source "$SRC_DIR" --target "$UI_DIR" --profile "$PROFILE_CHOICE" \
+    --module-ids "${XKEEN_UI_INSTALL_MODULES:-}" --transaction "$PROFILE_TRANSACTION"; then
+  fail_install "Не удалось применить профиль установки. Проверьте свободное место и журнал."
 fi
+PROFILE_TRANSACTION_ACTIVE=1
 
 if [ -n "$MIHOMO_PRESERVE_DIR" ] && [ -d "$MIHOMO_PRESERVE_DIR" ]; then
   mkdir -p "$MIHOMO_ROOT"
@@ -1992,22 +2060,21 @@ fi
 
 ui_step_done
 ui_step "Терминал и редактор кода"
-echo "[*] Проверяю наличие локальных файлов xterm для веб-терминала..."
-XTERM_DIR="$UI_DIR/static/xterm"
-XTERM_MISSING=0
+if profile_has_module tool.terminal; then
+  echo "[*] Проверяю наличие локальных файлов xterm для веб-терминала..."
+  XTERM_DIR="$UI_DIR/static/xterm"
+  XTERM_MISSING=0
 
-for f in xterm.js xterm-addon-fit.js xterm.css; do
-  if [ ! -f "$XTERM_DIR/$f" ]; then
-    echo "[!] Не найден файл: $XTERM_DIR/$f"
-    XTERM_MISSING=1
+  for f in xterm.js xterm-addon-fit.js xterm.css; do
+    if [ ! -f "$XTERM_DIR/$f" ]; then
+      echo "[!] Не найден файл: $XTERM_DIR/$f"
+      XTERM_MISSING=1
+    fi
+  done
+
+  if [ "$XTERM_MISSING" -ne 0 ]; then
+    fail_install "Установочный архив повреждён: отсутствуют файлы веб-терминала."
   fi
-done
-
-if [ "$XTERM_MISSING" -ne 0 ]; then
-  echo "[!] Критическая ошибка: отсутствуют один или несколько файлов xterm для терминала в веб-панели."
-  echo "    Убедись, что архив с панелью содержит каталог static/xterm"
-  echo "    с файлами xterm.js, xterm-addon-fit.js и xterm.css, и запусти установку снова."
-  fail_install "Установочный архив повреждён: отсутствуют файлы веб-терминала."
 fi
 
 # --- Sysmon wrapper ---
@@ -2203,7 +2270,7 @@ cleanup_legacy_xray_templates
 
 ui_step_done
 ui_step "Шаблоны Mihomo и Xray"
-if [ -d "$SRC_MIHOMO_TEMPLATES" ]; then
+if profile_has_module engine.mihomo && [ -d "$SRC_MIHOMO_TEMPLATES" ]; then
   echo "[*] Устанавливаю шаблон Mihomo в $MIHOMO_TEMPLATES_DIR..."
   mkdir -p "$MIHOMO_TEMPLATES_DIR"
 
@@ -2241,8 +2308,10 @@ fi
 
 # Обновляем только встроенные шаблоны, которые пришли в архиве.
 # Кастомные файлы пользователя с другими именами не трогаем.
-sync_bundled_template_dir "$SRC_XRAY_ROUTING_TEMPLATES" "$XRAY_ROUTING_TEMPLATES_DIR" "роутинга Xray"
-sync_bundled_template_dir "$SRC_XRAY_OBSERVATORY_TEMPLATES" "$XRAY_OBSERVATORY_TEMPLATES_DIR" "observatory Xray"
+if profile_has_module engine.xray; then
+  sync_bundled_template_dir "$SRC_XRAY_ROUTING_TEMPLATES" "$XRAY_ROUTING_TEMPLATES_DIR" "роутинга Xray"
+  sync_bundled_template_dir "$SRC_XRAY_OBSERVATORY_TEMPLATES" "$XRAY_OBSERVATORY_TEMPLATES_DIR" "observatory Xray"
+fi
 
 # --- Compat fix: обеспечить доступность DAT-файлов для Xray (ext:*.dat:...) ---
 
@@ -2368,7 +2437,7 @@ fi
 
 # --- Optional: xk-geodat (DAT GeoIP/GeoSite: "Содержимое" и "В routing") ---
 GEODAT_VERDICT="skip"
-if [ "${GEODAT_OPTION:-1}" = "1" ]; then
+if profile_has_module engine.xray && [ "${GEODAT_OPTION:-1}" = "1" ]; then
   if [ -f "$SRC_DIR/scripts/install_xk_geodat.sh" ]; then
     echo "[*] (Опционально) Устанавливаю xk-geodat для DAT GeoIP/GeoSite..."
     if sh "$SRC_DIR/scripts/install_xk_geodat.sh"; then
@@ -2385,7 +2454,7 @@ fi
 # --- Optional: декриптор ссылок Happ (happ://crypt…) ---
 # Запускается копия из $UI_DIR: движок и ключи ложатся в $UI_DIR/bin рядом с панелью.
 # Ключи Happ скачиваются только после явного «да» — без терминала шаг пропускается.
-if [ -f "$UI_DIR/scripts/install_happ_decryptor.py" ]; then
+if profile_has_module integration.happ && [ -f "$UI_DIR/scripts/install_happ_decryptor.py" ]; then
   "$PYTHON_BIN" "$UI_DIR/scripts/install_happ_decryptor.py" || true
 fi
 
@@ -2656,6 +2725,8 @@ echo "[*] Запускаю сервис..."
 if ! "$INIT_SCRIPT" restart 3>&- || ! "$INIT_SCRIPT" status 3>&-; then
   fail_install "Сервис Xkeen UI не запустился. Проверьте журнал запуска панели."
 fi
+"$PYTHON_BIN" "$INSTALL_PROFILE_HELPER" commit --transaction "$PROFILE_TRANSACTION"
+PROFILE_TRANSACTION_ACTIVE=0
 
 log_install "[=] Итог установки:"
 ui_step_done

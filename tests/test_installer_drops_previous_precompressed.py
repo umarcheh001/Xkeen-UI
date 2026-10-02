@@ -45,14 +45,11 @@ def test_block_is_ascii_only() -> None:
     assert all(ord(ch) < 128 for ch in _drop_source())
 
 
-def test_drop_runs_before_copy_and_align() -> None:
+def test_profile_transaction_runs_before_align_without_destructive_pre_drop() -> None:
     text = _installer_text()
     call = f'{FUNC} "$UI_DIR/static"'
-    assert call in text
-    drop_at = text.index(call)
-    assert drop_at < text.index('rsync -a "$SRC_DIR"/ "$UI_DIR"/')
-    assert drop_at < text.index('cp -r "$SRC_DIR"/* "$UI_DIR"/')
-    assert drop_at < text.index('align_precompressed_mtimes "$UI_DIR/static"')
+    assert call not in text
+    assert text.index('"$INSTALL_PROFILE_HELPER" apply') < text.index('align_precompressed_mtimes "$UI_DIR/static"')
 
 
 def test_every_gz_under_static_is_removed(tmp_path: Path) -> None:

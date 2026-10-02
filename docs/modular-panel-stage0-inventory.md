@@ -36,7 +36,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 | Module ID | Единиц | Размер | Routes | Background | UI surfaces | Removable |
 |---|---:|---:|---:|---:|---:|---|
-| `core` | 427 | 5.66 МБ | 76 | 4 | 35 | нет |
+| `core` | 427 | 5.68 МБ | 77 | 4 | 35 | нет |
 | `engine.xray` | 125 | 3.45 МБ | 56 | 3 | 14 | да |
 | `engine.mihomo` | 128 | 2.89 МБ | 88 | 4 | 6 | да |
 | `tool.editor` | 25 | 812.2 КБ | 0 | 0 | 2 | да |
@@ -48,7 +48,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 ## Backend routes и регистрация
 
-- Endpoint declarations: **313**.
+- Endpoint declarations: **314**.
 - Файлов с route decorators/WS dispatch: **54**.
 - Точек регистрации: **30**.
 

@@ -7,7 +7,7 @@ from typing import Any, Callable
 from flask import Blueprint, jsonify, request
 
 from routes.common.errors import error_response, exception_response
-from services.module_registry import ModuleRegistry, ModuleRegistryError
+from services.module_registry import MODULE_IDS, PROFILE_PRESETS, ModuleRegistry, ModuleRegistryError
 
 
 _MAX_PATCH_BYTES = 8 * 1024
@@ -117,6 +117,59 @@ def create_modules_blueprint(
                 hint="Проверьте доступность каталога UI state.",
                 exc=exc,
                 log_tag="modules.editor_variant_save_failed",
+            )
+
+    @bp.post("/api/modules/profile")
+    def api_modules_profile():
+        try:
+            if request.content_length and int(request.content_length) > _MAX_PATCH_BYTES:
+                return error_response("payload too large", 400, ok=False, code="payload_too_large")
+        except (TypeError, ValueError):
+            pass
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return error_response("payload must be an object", 400, ok=False, code="invalid_payload")
+        unknown_fields = sorted(set(payload) - {"profile", "profile_id", "module_ids", "editor_variant"})
+        if unknown_fields:
+            return error_response("unsupported profile fields", 400, ok=False, code="unsupported_profile_fields", fields=unknown_fields)
+        profile = payload.get("profile", payload.get("profile_id"))
+        if not isinstance(profile, str) or not profile.strip():
+            return error_response("profile is required", 400, ok=False, code="profile_required")
+        profile = profile.strip().lower()
+        try:
+            if before_change is not None:
+                requested = payload.get("module_ids") if profile == "custom" else PROFILE_PRESETS.get(profile)
+                if isinstance(requested, (list, tuple, set)):
+                    currently_enabled = set(module_registry.get_registry()["configured_module_ids"])
+                    for module_id in MODULE_IDS:
+                        if module_id in currently_enabled and module_id not in requested:
+                            blocked = before_change(module_id, False)
+                            if blocked:
+                                return error_response(
+                                    str(blocked.get("message") or "module change is unsafe"),
+                                    int(blocked.get("status") or 409),
+                                    ok=False,
+                                    code=str(blocked.get("code") or "module_change_blocked"),
+                                    **{key: value for key, value in blocked.items() if key not in {"message", "status", "code"}},
+                                )
+            response_payload, changed = module_registry.set_profile(
+                profile,
+                module_ids=payload.get("module_ids"),
+                editor_variant=payload.get("editor_variant"),
+            )
+            response_payload["changed"] = changed
+            return success(response_payload)
+        except ModuleRegistryError as error:
+            return registry_error(error)
+        except Exception as exc:  # noqa: BLE001
+            return exception_response(
+                "Не удалось сохранить профиль установки.",
+                500,
+                ok=False,
+                code="module_profile_save_failed",
+                hint="Проверьте доступность каталога UI state.",
+                exc=exc,
+                log_tag="modules.profile_save_failed",
             )
 
     def update_module(module_id: str, enabled: bool):

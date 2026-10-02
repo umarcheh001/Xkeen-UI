@@ -29,6 +29,7 @@ RUNTIME_DIAGNOSTICS_FILENAME = "module-runtime.json"
 MODULE_SIZES_FILENAME = "module-sizes.json"
 LEGACY_FULL_PROFILE = "legacy-full"
 CUSTOM_PROFILE = "custom"
+PROFILE_IDS = (LEGACY_FULL_PROFILE, "full", "xray-minimal", "mihomo-minimal", CUSTOM_PROFILE)
 SAFE_MODE_ENV = "XKEEN_UI_MODULE_SAFE_MODE"
 EDITOR_VARIANTS = ("light", "full", "advanced")
 EDITOR_CAPABILITIES: dict[str, tuple[str, ...]] = {
@@ -308,6 +309,16 @@ MODULE_DEFINITIONS: tuple[ModuleDefinition, ...] = (
 
 MODULE_IDS = tuple(definition.id for definition in MODULE_DEFINITIONS)
 _DEFINITIONS_BY_ID = {definition.id: definition for definition in MODULE_DEFINITIONS}
+# Presets are kept beside the runtime registry so the installer, API and panel
+# use the same module graph. ``custom`` is intentionally resolved from the
+# request because it has no fixed module set.
+PROFILE_PRESETS: dict[str, tuple[str, ...]] = {
+    LEGACY_FULL_PROFILE: MODULE_IDS,
+    "full": MODULE_IDS,
+    "xray-minimal": ("core", "engine.xray", "tool.editor"),
+    "mihomo-minimal": ("core", "engine.mihomo", "tool.editor"),
+    CUSTOM_PROFILE: (),
+}
 _MAX_LAST_ERROR_CHARS = 1024
 
 
@@ -638,7 +649,6 @@ class ModuleRegistry:
                     "Состояние модулей создано более новой версией панели.",
                     status=409,
                 )
-
             current_variant = str(state["editor"]["variant"])
             changed = current_variant != normalized_variant
             state["editor"] = {"variant": normalized_variant}
@@ -677,6 +687,7 @@ class ModuleRegistry:
                     status=409,
                 )
             definition = _DEFINITIONS_BY_ID[normalized_id]
+            before = self._snapshot_from_state(state)
             current_enabled = bool(state["modules"][normalized_id]["enabled"])
 
             if not enabled and not definition.can_disable:
@@ -729,6 +740,7 @@ class ModuleRegistry:
                 self._write_state_locked(state)
 
             snapshot = self._snapshot_from_state(state)
+            snapshot["diff"] = self._activation_diff(before, snapshot)
             module_payload = next(item for item in snapshot["modules"] if item["id"] == normalized_id)
             return (
                 {
@@ -741,10 +753,100 @@ class ModuleRegistry:
                     "runtime_gates_active": bool(snapshot["runtime_gates_active"]),
                     "configured_module_ids": snapshot["configured_module_ids"],
                     "effective_module_ids": snapshot["effective_module_ids"],
+                    "diff": snapshot["diff"],
                     "module": module_payload,
                 },
                 changed,
             )
+
+    def set_profile(
+        self,
+        profile: str,
+        *,
+        module_ids: list[str] | None = None,
+        editor_variant: str | None = None,
+    ) -> tuple[dict[str, Any], bool]:
+        """Persist a complete profile in one state write."""
+
+        profile = str(profile or "").strip().lower()
+        if profile not in PROFILE_PRESETS:
+            raise ModuleRegistryError(
+                "profile_invalid", "Неизвестный профиль установки.",
+                available_profiles=list(PROFILE_PRESETS),
+            )
+        if profile == CUSTOM_PROFILE:
+            if not isinstance(module_ids, list) or any(not isinstance(item, str) for item in module_ids):
+                raise ModuleRegistryError("profile_modules_required", "Для Custom нужен список module_ids.")
+            if len(module_ids) != len(set(module_ids)):
+                raise ModuleRegistryError("profile_modules_invalid", "Список модулей содержит повторения.")
+            requested = set(module_ids)
+        elif module_ids is not None:
+            raise ModuleRegistryError("profile_modules_invalid", "Пресет не принимает module_ids.")
+        else:
+            requested = set(PROFILE_PRESETS[profile])
+
+        unknown = sorted(requested - set(MODULE_IDS))
+        if unknown:
+            raise ModuleRegistryError("profile_modules_invalid", "Неизвестные модули.", module_ids=unknown)
+        if "core" not in requested:
+            raise ModuleRegistryError("core_required", "Базовый модуль core обязателен.", status=409)
+        missing = sorted({dependency for module_id in requested for dependency in _DEFINITIONS_BY_ID[module_id].dependencies if dependency not in requested})
+        if missing:
+            raise ModuleRegistryError("profile_dependency_missing", "Не хватает зависимостей модулей.", missing_module_ids=missing)
+        conflicts = sorted({conflict for module_id in requested for conflict in _DEFINITIONS_BY_ID[module_id].conflicts if conflict in requested})
+        if conflicts:
+            raise ModuleRegistryError("module_conflict", "Профиль содержит конфликтующие модули.", conflict_module_ids=conflicts)
+        variant = editor_variant if editor_variant is not None else (
+            "full" if profile in ("full", "legacy-full") else "light"
+        )
+        if not isinstance(variant, str):
+            raise ModuleRegistryError("editor_variant_invalid", "Недопустимый вариант редакторов.", available_variants=list(EDITOR_VARIANTS))
+        if variant not in EDITOR_VARIANTS:
+            raise ModuleRegistryError("editor_variant_invalid", "Недопустимый вариант редакторов.", available_variants=list(EDITOR_VARIANTS))
+
+        with self._lock:
+            if self._state_read_only_recovery:
+                raise ModuleRegistryError("state_schema_newer", "Состояние модулей создано более новой версией панели.", status=409)
+            state, normalized = self._load_state_locked()
+            if self._state_read_only_recovery:
+                raise ModuleRegistryError("state_schema_newer", "Состояние модулей создано более новой версией панели.", status=409)
+
+            before = self._snapshot_from_state(state)
+            changed = state["profile"] != profile or state["editor"]["variant"] != variant or any(
+                bool(state["modules"][module_id]["enabled"]) != (module_id in requested)
+                for module_id in MODULE_IDS
+            )
+            state["profile"] = profile
+            state["editor"] = {"variant": variant}
+            for module_id in MODULE_IDS:
+                state["modules"][module_id]["enabled"] = module_id in requested
+                state["modules"][module_id].pop("blocked_reason", None)
+            if changed:
+                state["restart_required"] = True
+            if changed or normalized:
+                self._write_state_locked(state)
+
+            after = self._snapshot_from_state(state)
+            after["diff"] = self._activation_diff(before, after)
+            return after, changed
+
+    @staticmethod
+    def _activation_diff(before: Mapping[str, Any], after: Mapping[str, Any]) -> dict[str, Any]:
+        if before["profile"] == LEGACY_FULL_PROFILE:
+            active_before = {item["id"] for item in before["modules"] if item["installed"]}
+        else:
+            active_before = set(before["effective_module_ids"])
+        active_after = set(after["effective_module_ids"])
+        return {
+            "profile": {"before": before["profile"], "after": after["profile"]},
+            "will_activate_after_restart": [module_id for module_id in MODULE_IDS if module_id in active_after],
+            "will_deactivate_after_restart": [module_id for module_id in MODULE_IDS if module_id in active_before - active_after],
+            "newly_active": [module_id for module_id in MODULE_IDS if module_id in active_after - active_before],
+            "unavailable_after_restart": {
+                item["id"]: item["reason"] for item in after["modules"]
+                if item["enabled"] and not item["effective_enabled"]
+            },
+        }
 
     def _load_state_locked(self) -> tuple[dict[str, Any], bool]:
         file_exists = os.path.isfile(self._path)

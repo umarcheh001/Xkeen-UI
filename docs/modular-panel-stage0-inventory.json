@@ -37,7 +37,7 @@
       ],
       "removable": false,
       "unit_count": 427,
-      "size_bytes": 5936324,
+      "size_bytes": 5953265,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
@@ -54,7 +54,7 @@
         "stylesheet": 5,
         "template": 31
       },
-      "route_count": 76,
+      "route_count": 77,
       "background_task_count": 4,
       "ui_surface_count": 35,
       "representative_paths": [
@@ -130,7 +130,7 @@
       ],
       "removable": true,
       "unit_count": 128,
-      "size_bytes": 3033365,
+      "size_bytes": 3033237,
       "kind_counts": {
         "app_runtime": 4,
         "backend_route": 2,
@@ -815,7 +815,7 @@
       "module_id": "core",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/modules.py",
-      "size_bytes": 7218,
+      "size_bytes": 10282,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -849,6 +849,11 @@
         {
           "method": "POST",
           "path": "/api/modules/<module_id>/enable",
+          "decorator": "bp.post"
+        },
+        {
+          "method": "POST",
+          "path": "/api/modules/profile",
           "decorator": "bp.post"
         }
       ],
@@ -1899,7 +1904,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_registry.py",
-      "size_bytes": 49899,
+      "size_bytes": 56008,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -2787,7 +2792,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_devtools_env_whitelist.py",
-      "size_bytes": 6956,
+      "size_bytes": 7028,
       "depends_on": [
         "tool.advanced-diagnostics",
         "engine.mihomo",
@@ -2827,6 +2832,8 @@
         "XKEEN_SUBSCRIPTION_ALLOW_HTTP",
         "XKEEN_SUBSCRIPTION_ALLOW_PRIVATE_HOSTS",
         "XKEEN_UI_DEVTOOLS_SECTIONS_WHITELIST",
+        "XKEEN_UI_INSTALL_MODULES",
+        "XKEEN_UI_INSTALL_PROFILE",
         "XKEEN_UI_PANEL_SECTIONS_WHITELIST"
       ],
       "removable": false
@@ -3652,7 +3659,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_install_terminal_ui.py",
-      "size_bytes": 2888,
+      "size_bytes": 2922,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -3709,7 +3716,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_installer_drops_previous_precompressed.py",
-      "size_bytes": 2851,
+      "size_bytes": 2765,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -4284,7 +4291,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_registry.py",
-      "size_bytes": 23531,
+      "size_bytes": 28437,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -6032,7 +6039,7 @@
       "module_id": "core",
       "kind": "configuration",
       "path": "xkeen-ui/install.sh",
-      "size_bytes": 102428,
+      "size_bytes": 105270,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -6059,6 +6066,8 @@
         "XKEEN_UI_ENV_FILE",
         "XKEEN_UI_INIT_OWNER",
         "XKEEN_UI_INIT_SCRIPT",
+        "XKEEN_UI_INSTALL_MODULES",
+        "XKEEN_UI_INSTALL_PROFILE",
         "XKEEN_UI_PORT",
         "XKEEN_UI_PYTHONPYCACHEPREFIX",
         "XKEEN_UI_UPDATE_CHANNEL",
@@ -11163,7 +11172,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_test",
       "path": "tests/test_mihomo_clash_migration.py",
-      "size_bytes": 13811,
+      "size_bytes": 13683,
       "depends_on": [
         "core",
         "tool.editor"
@@ -22486,7 +22495,7 @@
     }
   ],
   "routes": {
-    "endpoint_count": 313,
+    "endpoint_count": 314,
     "files_with_routes": 54,
     "endpoint_files": [
       {
@@ -22692,6 +22701,11 @@
           {
             "method": "POST",
             "path": "/api/modules/<module_id>/enable",
+            "decorator": "bp.post"
+          },
+          {
+            "method": "POST",
+            "path": "/api/modules/profile",
             "decorator": "bp.post"
           }
         ]
