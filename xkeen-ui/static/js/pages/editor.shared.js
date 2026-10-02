@@ -2,6 +2,8 @@
 //
 // These modules publish global editor helpers used by multiple screens, but
 // they do not need to sit inside the main shell chunk.
+// The deferred diff capability keeps the historical cache-busting marker:
+// ../ui/diff_engine.js?v=20260430-diff19
 
 import '../ui/editor_engine.js?v=20260325-devtools';
 import '../ui/editor_actions.js?v=20260325-stage3';

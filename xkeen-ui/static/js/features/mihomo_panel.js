@@ -296,20 +296,43 @@ let mihomoPanelModuleApi = null;
 
   let _mihomoQuickFixProvider = null;
   let _mihomoQuickFixProviderPromise = null;
-  async function getMihomoQuickFixProvider() {
+  let _mihomoQuickFixProviderProxy = null;
+  function getMihomoQuickFixProvider() {
     if (isMihomoExpertModeEnabled()) return null;
     if (_mihomoQuickFixProvider) return _mihomoQuickFixProvider;
+    if (_mihomoQuickFixProviderProxy) return _mihomoQuickFixProviderProxy;
     const ensureCapability = window.XKeen?.ui?.editorCapabilities?.ensure;
-    if (typeof ensureCapability === 'function' && !(await ensureCapability('quick-fix'))) return null;
     if (!_mihomoQuickFixProviderPromise) {
-      _mihomoQuickFixProviderPromise = import('../ui/schema_quickfixes.js')
-        .then(({ createMihomoQuickFixProvider }) => {
-          _mihomoQuickFixProvider = createMihomoQuickFixProvider();
-          return _mihomoQuickFixProvider;
-        })
+      _mihomoQuickFixProviderPromise = Promise.resolve(
+        typeof ensureCapability === 'function' ? ensureCapability('quick-fix') : true
+      ).then((ok) => {
+        if (!ok) return null;
+        return import('../ui/schema_quickfixes.js')
+          .then(({ createMihomoQuickFixProvider }) => {
+            _mihomoQuickFixProvider = createMihomoQuickFixProvider();
+            try {
+              const ui = (window.XKeen = window.XKeen || {}).ui = (window.XKeen.ui || {});
+              ui.editorQuickFixProviders = ui.editorQuickFixProviders || {};
+              ui.editorQuickFixProviders.mihomo = _mihomoQuickFixProvider;
+            } catch (e) {}
+            return _mihomoQuickFixProvider;
+          });
+      })
         .catch(() => null);
     }
-    return _mihomoQuickFixProviderPromise;
+    _mihomoQuickFixProviderProxy = {
+      kind: 'mihomo',
+      getQuickFixes(request = {}) {
+        try {
+          return _mihomoQuickFixProvider && typeof _mihomoQuickFixProvider.getQuickFixes === 'function'
+            ? _mihomoQuickFixProvider.getQuickFixes(request)
+            : [];
+        } catch (e) {
+          return [];
+        }
+      },
+    };
+    return _mihomoQuickFixProviderProxy;
   }
 
   async function ensureMihomoSchemaDocument() {
@@ -530,7 +553,7 @@ let mihomoPanelModuleApi = null;
         wordWrap: 'on',
         yamlAssist: getMihomoYamlAssistOptions(),
         snippetProvider: getMihomoSnippetProvider(),
-        quickFixProvider: await getMihomoQuickFixProvider(),
+        quickFixProvider: getMihomoQuickFixProvider(),
       });
       if (!_monaco) return null;
 
@@ -1019,8 +1042,7 @@ let mihomoPanelModuleApi = null;
       viewportMargin: 30,
       yamlAssist: getMihomoYamlAssistOptions(),
       snippetProvider: getMihomoSnippetProvider(),
-      // Advanced quick-fix is optional and loaded by the async schema path.
-      quickFixProvider: null,
+      quickFixProvider: getMihomoQuickFixProvider(),
     });
 
     try {

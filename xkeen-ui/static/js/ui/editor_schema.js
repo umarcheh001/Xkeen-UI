@@ -19,6 +19,7 @@ const _snippetProviderCache = Object.freeze({
   'xray-outbounds': createXraySnippetProvider('xray-outbounds'),
   mihomo: createMihomoSnippetProvider(),
 });
+const _quickFixProviderProxyCache = new Map();
 
 function normalizeText(value) {
   return String(value || '').trim();
@@ -234,10 +235,29 @@ export function resolveEditorSnippetProvider(ctx) {
 }
 
 export function resolveEditorQuickFixProvider(ctx) {
-  // Quick-fix providers belong to the optional advanced editor capability.
-  // Engine bundles pass an explicitly loaded provider when that capability is
-  // available; the basic schema layer must remain free of its dependencies.
-  return null;
+  if (isEditorExpertModeEnabled(ctx)) return null;
+  const o = ctx || {};
+  const explicitKind = normalizeSnippetKind(o.quickFixKind || o.schemaKind);
+  const inferredKind = explicitKind || normalizeSnippetKind(inferSchemaKind(o));
+  if (!['xray-config', 'xray-routing', 'xray-inbounds', 'xray-outbounds', 'mihomo'].includes(inferredKind)) return null;
+  if (_quickFixProviderProxyCache.has(inferredKind)) return _quickFixProviderProxyCache.get(inferredKind);
+
+  // Keep the historical synchronous provider contract without importing the
+  // optional quick-fix implementation into the light editor bundle. The
+  // deferred editor bundles publish concrete providers when they are ready.
+  const proxy = {
+    kind: inferredKind.startsWith('mihomo') ? 'mihomo' : 'xray',
+    getQuickFixes(request = {}) {
+      try {
+        const registry = window.XKeen && window.XKeen.ui && window.XKeen.ui.editorQuickFixProviders;
+        const provider = registry && (registry[inferredKind] || registry[proxy.kind]);
+        if (provider && typeof provider.getQuickFixes === 'function') return provider.getQuickFixes(request);
+      } catch (e) {}
+      return [];
+    },
+  };
+  _quickFixProviderProxyCache.set(inferredKind, proxy);
+  return proxy;
 }
 
 export function resolveEditorSemanticValidation(ctx) {

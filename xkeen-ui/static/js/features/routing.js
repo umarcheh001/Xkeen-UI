@@ -850,22 +850,46 @@ import { iconHtml } from '../ui/operator_icons.js';
 
   let _routingQuickFixProvider = null;
   let _routingQuickFixProviderPromise = null;
-  async function getRoutingQuickFixProvider() {
+  let _routingQuickFixProviderProxy = null;
+  function getRoutingQuickFixProvider() {
     if (isRoutingExpertModeEnabled()) return null;
     if (_routingQuickFixProvider) return _routingQuickFixProvider;
+    if (_routingQuickFixProviderProxy) return _routingQuickFixProviderProxy;
     const ensureCapability = window.XKeen?.ui?.editorCapabilities?.ensure;
-    if (typeof ensureCapability === 'function' && !(await ensureCapability('quick-fix'))) return null;
     if (!_routingQuickFixProviderPromise) {
-      _routingQuickFixProviderPromise = import('../ui/schema_quickfixes.js')
-        .then(({ createXrayQuickFixProvider }) => {
-          _routingQuickFixProvider = createXrayQuickFixProvider({
-            getSemanticOptions: () => getRoutingSemanticValidationConfig().options,
+      _routingQuickFixProviderPromise = Promise.resolve(
+        typeof ensureCapability === 'function' ? ensureCapability('quick-fix') : true
+      ).then((ok) => {
+        if (!ok) return null;
+        return import('../ui/schema_quickfixes.js')
+          .then(({ createXrayQuickFixProvider }) => {
+            _routingQuickFixProvider = createXrayQuickFixProvider({
+              getSemanticOptions: () => getRoutingSemanticValidationConfig().options,
+            });
+            try {
+              const ui = (window.XKeen = window.XKeen || {}).ui = (window.XKeen.ui || {});
+              ui.editorQuickFixProviders = ui.editorQuickFixProviders || {};
+              ui.editorQuickFixProviders['xray-routing'] = _routingQuickFixProvider;
+              ui.editorQuickFixProviders.xray = _routingQuickFixProvider;
+            } catch (e) {}
+            return _routingQuickFixProvider;
           });
-          return _routingQuickFixProvider;
-        })
+      })
         .catch(() => null);
     }
-    return _routingQuickFixProviderPromise;
+    _routingQuickFixProviderProxy = {
+      kind: 'xray',
+      getQuickFixes(request = {}) {
+        try {
+          return _routingQuickFixProvider && typeof _routingQuickFixProvider.getQuickFixes === 'function'
+            ? _routingQuickFixProvider.getQuickFixes(request)
+            : [];
+        } catch (e) {
+          return [];
+        }
+      },
+    };
+    return _routingQuickFixProviderProxy;
   }
 
   function updateRoutingSchemaBadge(result) {
@@ -1101,7 +1125,7 @@ import { iconHtml } from '../ui/operator_icons.js';
         mode: 'jsonc',
         text: typeof text === 'string' ? text : readCurrentEditorText(),
         feature: 'routing',
-        quickFixProvider: await getRoutingQuickFixProvider(),
+        quickFixProvider: getRoutingQuickFixProvider(),
       });
       try {
         if (typeof editor.setOption === 'function') {
@@ -1130,7 +1154,7 @@ import { iconHtml } from '../ui/operator_icons.js';
         mode: 'jsonc',
         text: typeof text === 'string' ? text : readCurrentEditorText(),
         feature: 'routing',
-        quickFixProvider: await getRoutingQuickFixProvider(),
+        quickFixProvider: getRoutingQuickFixProvider(),
         semanticValidation: getRoutingSemanticValidationConfig(),
       });
       try { ensureRoutingSemanticContextFresh(); } catch (e2) {}
@@ -4727,8 +4751,7 @@ function closeHelp() {
       viewportMargin: initialLite ? PERF_LIMITS.viewportMarginLite : Infinity,
       semanticValidation: getRoutingSemanticValidationConfig(),
       snippetProvider: getRoutingSnippetProvider(),
-      // Advanced quick-fix is attached after the async schema capability check.
-      quickFixProvider: null,
+      quickFixProvider: getRoutingQuickFixProvider(),
     });
 
     // Cosmetic class + toolbar
@@ -5575,7 +5598,7 @@ function closeHelp() {
           performanceProfile: (_editorPerfProfile && _editorPerfProfile.lite) ? 'lite' : 'default',
           wordWrap: isMipsTarget() ? 'off' : 'on',
           snippetProvider: getRoutingSnippetProvider(),
-          quickFixProvider: await getRoutingQuickFixProvider(),
+          quickFixProvider: getRoutingQuickFixProvider(),
           onChange: () => {
             try { noteEditorContentMutation(); } catch (e) {}
             try { scheduleMonacoDiagnostics(); } catch (e) {}
