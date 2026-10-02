@@ -180,6 +180,25 @@ def test_github_outage_uses_expired_verified_release_cache(tmp_path):
     assert prepared["release"]["stale"] is True
 
 
+def test_expired_release_cache_refreshes_when_github_is_available(tmp_path):
+    cached_release = _release_for(b"cached-xray")
+    fresh_release = {**_release_for(b"new-xray"), "stable": {**cached_release["stable"], "tag": "v26.3.28"}}
+    install, store, _target = _installer(tmp_path, release=cached_release)
+    cache_key = f"xray:official:{install.platform.machine}:{install.platform.opkg_arch}:{install.platform.endianness}"
+    store.set_release_cache(cache_key, cached_release)
+    cache_path = tmp_path / "state" / "core-profiles" / "release-cache.json"
+    cache = json.loads(cache_path.read_text(encoding="utf-8"))
+    cache[cache_key]["fetched_at"] = time.time() - 3600
+    cache_path.write_text(json.dumps(cache), encoding="utf-8")
+    install.release_resolver = lambda *_args, **_kwargs: fresh_release
+
+    value = install.profiles("xray")
+    official = next(item for item in value["profiles"] if item["profile_id"] == "official")
+
+    assert official["release"]["stable"]["tag"] == "v26.3.28"
+    assert official["release"]["stale"] is False
+
+
 def test_bad_checksum_never_replaces_binary_or_creates_rollback_state(tmp_path):
     install, store, target = _installer(tmp_path, release=_release_for(b"new-xray", checksum="0" * 64))
     prepared = install.prepare("xray")

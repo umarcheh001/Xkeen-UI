@@ -62,6 +62,10 @@ _PHASE_LABELS = {
     "complete": "Установка завершена",
     "rolled_back": "Откат завершён",
 }
+# A stale profile list may contain up to ten repositories. Revalidating each
+# one more often than this would burn the anonymous GitHub API budget while a
+# router is offline; explicit installation preparation still bypasses it.
+_STALE_REVALIDATION_COOLDOWN_S = 900.0
 
 
 class CoreInstaller:
@@ -99,6 +103,7 @@ class CoreInstaller:
         self.release_cache_ttl_s = max(0.0, float(release_cache_ttl_s))
         self._plans: dict[str, dict[str, Any]] = {}
         self._operations: dict[str, dict[str, Any]] = {}
+        self._stale_revalidation_until: dict[str, float] = {}
         self._guard = threading.RLock()
         self._busy = False
 
@@ -190,7 +195,12 @@ class CoreInstaller:
         if cached is not None:
             return cached
         if not fresh and isinstance(stale_cached, dict) and stale_cached.get("installable"):
-            return {**stale_cached, "stale": True}
+            now = time.monotonic()
+            with self._guard:
+                retry_after = self._stale_revalidation_until.get(cache_key, 0.0)
+                if now < retry_after:
+                    return {**stale_cached, "stale": True}
+                self._stale_revalidation_until[cache_key] = now + _STALE_REVALIDATION_COOLDOWN_S
         release = self.release_resolver(profile, self.platform, timeout_s=self.resolve_timeout_s)
         if release.get("installable"):
             self.state_store.set_release_cache(cache_key, release)
