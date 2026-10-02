@@ -331,7 +331,10 @@ function tryMigrateLegacyKey(base) {
         const hasPtyAfterInit = (caps && typeof caps.hasPty === 'function')
           ? caps.hasPty()
           : ((caps && typeof caps.hasWs === 'function') ? caps.hasWs() : false);
-        if (!hasPtyAfterInit) {
+        // Only a known "no" stops here. If the capabilities request failed the
+        // answer is unknown, and the WebSocket itself is the better judge.
+        const capsKnown = (caps && typeof caps.isReady === 'function') ? !!caps.isReady() : true;
+        if (!hasPtyAfterInit && capsKnown) {
           safeWriteln(term, '[PTY] WebSocket не поддерживается на этом устройстве.');
           try { emit('pty:error', { message: 'ws unsupported' }); } catch (e2) {}
           return;

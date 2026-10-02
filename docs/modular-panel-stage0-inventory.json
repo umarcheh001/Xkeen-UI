@@ -37,7 +37,7 @@
       ],
       "removable": false,
       "unit_count": 369,
-      "size_bytes": 5743127,
+      "size_bytes": 5747536,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 17,
@@ -211,7 +211,7 @@
       ],
       "removable": true,
       "unit_count": 49,
-      "size_bytes": 508806,
+      "size_bytes": 508253,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 3,
@@ -6012,7 +6012,7 @@
       "module_id": "core",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/cores_status.js",
-      "size_bytes": 37082,
+      "size_bytes": 37031,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -6365,7 +6365,7 @@
       "module_id": "core",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/xkeen_runtime.js",
-      "size_bytes": 31758,
+      "size_bytes": 36692,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -6668,7 +6668,7 @@
       "module_id": "core",
       "kind": "frontend_javascript",
       "path": "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js",
-      "size_bytes": 31407,
+      "size_bytes": 30933,
       "depends_on": [
         "tool.terminal",
         "engine.xray",
@@ -19870,7 +19870,7 @@
       "module_id": "tool.terminal",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/commands_list.js",
-      "size_bytes": 7439,
+      "size_bytes": 6513,
       "depends_on": [
         "core"
       ],
@@ -19953,7 +19953,7 @@
       "module_id": "tool.terminal",
       "kind": "frontend_terminal",
       "path": "xkeen-ui/static/js/terminal/capabilities.js",
-      "size_bytes": 12939,
+      "size_bytes": 12924,
       "depends_on": [
         "core"
       ],
@@ -20797,7 +20797,7 @@
       "module_id": "tool.terminal",
       "kind": "frontend_terminal",
       "path": "xkeen-ui/static/js/terminal/pty.js",
-      "size_bytes": 19798,
+      "size_bytes": 20065,
       "depends_on": [
         "core"
       ],
@@ -20855,7 +20855,7 @@
       "module_id": "tool.terminal",
       "kind": "frontend_terminal",
       "path": "xkeen-ui/static/js/terminal/runtime.js",
-      "size_bytes": 11549,
+      "size_bytes": 11670,
       "depends_on": [
         "core"
       ],
@@ -26582,7 +26582,7 @@
         },
         "tool.terminal": {
           "unit_count": 49,
-          "size_bytes": 508806
+          "size_bytes": 508253
         },
         "tool.files": {
           "unit_count": 85,

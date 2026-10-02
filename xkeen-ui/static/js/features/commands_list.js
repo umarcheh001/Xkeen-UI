@@ -1,13 +1,16 @@
 import {
+  describeXkeenPtyFailure,
   ensureXkeenTerminalInViewport,
   focusXkeenTerminal,
   getXkeenLazyRuntimeApi,
   hasXkeenTerminalApi,
   hasXkeenTerminalPtyCapability,
-  isXkeenTerminalPtyConnected,
+  loadXkeenCapabilities,
   openXkeenTerminal,
+  pickXkeenPtyCapability,
   sendXkeenTerminal,
   toastXkeen,
+  waitForXkeenPtyConnected,
 } from './xkeen_runtime.js';
 
 let commandsListModuleApi = null;
@@ -31,32 +34,17 @@ let commandsListModuleApi = null;
   }
 
   // Terminal is now lazy-loaded; on a fresh tab capabilities may not be ready yet.
-  // We use a lightweight direct probe as a fallback, so command buttons can still
-  // choose PTY on supported devices without requiring an extra click.
-  let _ptyProbePromise = null;
+  // The answer comes from the loader shared with the terminal, so both always
+  // agree, and a failed request is asked again on the next press.
   async function detectPtyCapability() {
     try {
       if (hasPty()) return true;
     } catch (e0) {}
-    if (_ptyProbePromise) return _ptyProbePromise;
-    _ptyProbePromise = (async () => {
-      try {
-        const r = await fetch('/api/capabilities', { cache: 'no-store', credentials: 'same-origin' });
-        if (!r.ok) return false;
-        const data = await r.json().catch(() => ({}));
-        if (data && data.terminal && typeof data.terminal === 'object' && 'pty' in data.terminal) {
-          return !!data.terminal.pty;
-        }
-        return !!(data && data.websocket);
-      } catch (e) {
-        return false;
-      }
-    })();
-    return _ptyProbePromise;
-  }
-
-  function isPtyConnected() {
-    return isXkeenTerminalPtyConnected();
+    try {
+      return pickXkeenPtyCapability(await loadXkeenCapabilities());
+    } catch (e) {
+      return false;
+    }
   }
 
   function sendPtyRaw(payload) {
@@ -86,19 +74,6 @@ let commandsListModuleApi = null;
     try { setTimeout(run, 360); } catch (e2) {}
   }
 
-
-  function waitForPtyConnected(timeoutMs = 6000, intervalMs = 150) {
-    const deadline = Date.now() + Math.max(500, timeoutMs);
-    return new Promise((resolve) => {
-      const tick = () => {
-        if (isPtyConnected()) return resolve(true);
-        if (Date.now() > deadline) return resolve(false);
-        setTimeout(tick, intervalMs);
-      };
-      tick();
-    });
-  }
-
   async function openPtyAndRun(cmd) {
     // Open full Interactive Shell (PTY) and execute the command inside PTY.
     // Terminal is lazy-loaded on first use; wait for it to be ready to avoid
@@ -120,9 +95,9 @@ let commandsListModuleApi = null;
     // Safety: ensure the window is visible even if it opened with a stale/buggy geometry.
     clampTerminalViewportSoon();
 
-    const ok = await waitForPtyConnected(12000);
-    if (!ok) {
-      toastXkeen('PTY не подключён (WebSocket недоступен или не успел подключиться)', 'info');
+    const waited = await waitForXkeenPtyConnected(12000);
+    if (!waited.ok) {
+      toastXkeen(describeXkeenPtyFailure(waited.reason), 'info');
       return false;
     }
 
