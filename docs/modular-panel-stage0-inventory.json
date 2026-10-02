@@ -37,7 +37,7 @@
       ],
       "removable": false,
       "unit_count": 432,
-      "size_bytes": 6027385,
+      "size_bytes": 6027384,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
@@ -5939,7 +5939,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_xkeen_service_control_fallback.py",
-      "size_bytes": 14379,
+      "size_bytes": 14378,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
