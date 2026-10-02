@@ -197,6 +197,12 @@ let restartLogModuleApi = null;
       failureText: 'обновлены, но перезапуск xkeen завершился ошибкой',
       bucket: 'subscription',
     },
+    'xray-subscriptions-delete-all': {
+      label: 'Подписки Xray',
+      successText: 'удалены все, xkeen перезапущен',
+      failureText: 'удалены все, но перезапуск xkeen завершился ошибкой',
+      bucket: 'subscription',
+    },
     'xray-subscriptions-pause': {
       label: 'Подписки Xray',
       successText: 'приостановлены, xkeen перезапущен',

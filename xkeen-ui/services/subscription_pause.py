@@ -358,9 +358,10 @@ def _switch(
     snapshot: Callable[[str], None] | None,
     restart_xkeen: Callable[..., Any],
     dns_target: Any = "",
+    source: str = "",
 ) -> Dict[str, Any]:
     pausing = direction == "pause"
-    source = f"xray-subscriptions-{direction}"
+    source = source or f"xray-subscriptions-{direction}"
     dns_args = {
         "configs_dir": xray_configs_dir,
         "routing_file": routing_file,
@@ -507,3 +508,70 @@ def pause_all(**kwargs: Any) -> Dict[str, Any]:
 
 def resume_all(**kwargs: Any) -> Dict[str, Any]:
     return _switch("resume", **kwargs)
+
+
+def delete_all(
+    *,
+    ui_state_dir: str,
+    xray_configs_dir: str,
+    routing_file: str,
+    snapshot: Callable[[str], None] | None,
+    restart_xkeen: Callable[..., Any],
+    dns_target: Any = "",
+) -> Dict[str, Any]:
+    """Remove every subscription and leave the router on the owner's servers.
+
+    A pause already does everything a removal needs from the running config,
+    DNS-over-VLESS included, and undoes itself when it cannot finish.  So the
+    working subscriptions are paused first -- nothing is deleted until that has
+    succeeded -- and then the records and the nodes set aside are dropped,
+    which the running core does not notice.
+    """
+    with _LOCK:
+        total = len(subs.list_subscriptions(ui_state_dir))
+        if not total:
+            view = _brief(_dns_now(ui_state_dir, xray_configs_dir, routing_file))
+            return {
+                "ok": True,
+                "changed": False,
+                "deleted": 0,
+                "paused": False,
+                "restarted": False,
+                "restarts": 0,
+                "dns": _dns_result(view, view, round_trip=False, restored=False),
+            }
+
+        switched = _switch(
+            "pause",
+            ui_state_dir=ui_state_dir,
+            xray_configs_dir=xray_configs_dir,
+            routing_file=routing_file,
+            snapshot=snapshot,
+            restart_xkeen=restart_xkeen,
+            dns_target=dns_target,
+            source="xray-subscriptions-delete-all",
+        )
+
+        deleted = 0
+        for item in subs.list_subscriptions(ui_state_dir):
+            subs.delete_subscription(
+                ui_state_dir,
+                str(item.get("id") or ""),
+                xray_configs_dir=xray_configs_dir,
+                snapshot=snapshot,
+                remove_file=True,
+                restart_xkeen=None,
+            )
+            deleted += 1
+        # Nothing is left to resume, so nothing to remember about DNS either.
+        _drop_record(ui_state_dir)
+
+        return {
+            "ok": True,
+            "changed": True,
+            "deleted": deleted,
+            "paused": False,
+            "restarted": bool(switched.get("restarted")),
+            "restarts": int(switched.get("restarts") or 0),
+            "dns": switched["dns"],
+        }

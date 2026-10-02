@@ -36,13 +36,13 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 431,
-      "size_bytes": 6012878,
+      "unit_count": 432,
+      "size_bytes": 6023344,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
         "backend_service": 55,
-        "backend_test": 181,
+        "backend_test": 182,
         "configuration": 10,
         "frontend_bundle": 9,
         "frontend_entrypoint": 2,
@@ -86,7 +86,7 @@
       ],
       "removable": true,
       "unit_count": 128,
-      "size_bytes": 3660822,
+      "size_bytes": 3666382,
       "kind_counts": {
         "backend_route": 13,
         "backend_service": 18,
@@ -98,7 +98,7 @@
         "frontend_ui": 1,
         "template": 4
       },
-      "route_count": 59,
+      "route_count": 60,
       "background_task_count": 3,
       "ui_surface_count": 14,
       "representative_paths": [
@@ -2105,7 +2105,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/subscription_pause.py",
-      "size_bytes": 20810,
+      "size_bytes": 23138,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -5363,6 +5363,24 @@
     {
       "module_id": "core",
       "kind": "backend_test",
+      "path": "tests/test_subscription_delete_all.py",
+      "size_bytes": 3273,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
       "path": "tests/test_subscription_pause_dns.py",
       "size_bytes": 12691,
       "depends_on": [],
@@ -6967,7 +6985,7 @@
       "module_id": "core",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/restart_log.js",
-      "size_bytes": 76627,
+      "size_bytes": 76928,
       "depends_on": [
         "engine.xray"
       ],
@@ -8679,7 +8697,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/subscriptions_pause.spec.mjs",
-      "size_bytes": 9606,
+      "size_bytes": 13696,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -9196,7 +9214,7 @@
       "module_id": "core",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/panel-operator.css",
-      "size_bytes": 732342,
+      "size_bytes": 732816,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -13731,7 +13749,7 @@
       "module_id": "engine.xray",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/xray_subscriptions.py",
-      "size_bytes": 17083,
+      "size_bytes": 17447,
       "depends_on": [
         "core",
         "tool.editor"
@@ -13783,6 +13801,11 @@
         {
           "method": "POST",
           "path": "/api/xray/subscriptions/align-schedule",
+          "decorator": "bp.post"
+        },
+        {
+          "method": "POST",
+          "path": "/api/xray/subscriptions/delete-all",
           "decorator": "bp.post"
         },
         {
@@ -15080,7 +15103,7 @@
       "module_id": "engine.xray",
       "kind": "backend_test",
       "path": "tests/test_xray_subscriptions_pause_routes.py",
-      "size_bytes": 3217,
+      "size_bytes": 3765,
       "depends_on": [
         "core",
         "tool.editor"
@@ -15320,7 +15343,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/outbounds.js",
-      "size_bytes": 426782,
+      "size_bytes": 431430,
       "depends_on": [
         "core",
         "tool.editor",
@@ -22647,7 +22670,7 @@
     }
   ],
   "routes": {
-    "endpoint_count": 317,
+    "endpoint_count": 318,
     "files_with_routes": 54,
     "endpoint_files": [
       {
@@ -23944,6 +23967,11 @@
           {
             "method": "POST",
             "path": "/api/xray/subscriptions/align-schedule",
+            "decorator": "bp.post"
+          },
+          {
+            "method": "POST",
+            "path": "/api/xray/subscriptions/delete-all",
             "decorator": "bp.post"
           },
           {

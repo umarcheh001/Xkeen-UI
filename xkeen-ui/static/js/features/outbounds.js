@@ -4652,6 +4652,7 @@ let outboundsModuleApi = null;
       masterWrap: 'outbounds-subscriptions-master-wrap',
       masterLabel: 'outbounds-subscriptions-master-label',
       pausedBanner: 'outbounds-subscriptions-paused-banner',
+      deleteAll: 'outbounds-subscriptions-delete-all-btn',
       tbody: 'outbounds-subscriptions-tbody',
       empty: 'outbounds-subscriptions-empty',
       status: 'outbounds-subscriptions-status',
@@ -5725,6 +5726,7 @@ let outboundsModuleApi = null;
                       <div id="outbounds-subscriptions-summary" class="xk-pool-summary">0</div>
                       <button type="button" id="outbounds-subscriptions-refresh-due-btn" class="btn-secondary btn-compact" title="Обновить просроченные" data-tooltip-multiline data-tooltip="Обновить одной пачкой&#10;Скачивает подписки, у которых наступил срок, и те, что сохранены без «Сразу» и ещё ни разу не скачивались.&#10;Xray перезапускается один раз на всю пачку.">${iconHtml('refresh')}<span class="xk-action-label">Обновить просроченные</span></button>
                       <button type="button" id="outbounds-subscriptions-align-btn" class="btn-secondary btn-compact" title="Выровнять расписание" data-tooltip="Свести время следующего обновления всех подписок к одному моменту, чтобы дальше они обновлялись одной пачкой.">${iconHtml('normalize')}<span class="xk-action-label">Выровнять расписание</span></button>
+                      <button type="button" id="outbounds-subscriptions-delete-all-btn" class="btn-secondary btn-compact xk-sub-delete-all" aria-label="Удалить все подписки" data-tooltip-multiline data-tooltip="Удалить все подписки&#10;Стирает все подписки разом и возвращает конфигурацию к вашим серверам. Вернуть удалённое нельзя.&#10;Чтобы отключить подписки на время, используй переключатель «Подписки работают»." hidden>${iconHtml('trash')}</button>
                     </div>
                   </div>
                   <div class="xk-sub-tablewrap">
@@ -7964,6 +7966,13 @@ let outboundsModuleApi = null;
       } catch (e2) {}
       try { if (label) label.textContent = text; } catch (e3) {}
       try {
+        const removeAll = $(SUB_IDS.deleteAll);
+        if (removeAll) {
+          removeAll.hidden = !_subscriptions.length;
+          removeAll.disabled = !!_subscriptionsSwitchBusy;
+        }
+      } catch (eRemove) {}
+      try {
         if (banner) {
           banner.hidden = !paused;
           banner.textContent = '';
@@ -7996,32 +8005,65 @@ let outboundsModuleApi = null;
       }
     }
 
-    function subsPauseConfirmOptions(planData, pausing) {
+    // Что пауза сделает с DNS-over-VLESS: одни и те же слова для паузы и для
+    // удаления всех подписок, потому что удаление — это пауза плюс стирание.
+    function subsPauseDnsDetails(dns) {
+      const from = Array.isArray(dns.from) ? dns.from[0] : null;
+      if (dns.outcome === 'keep') {
+        return [`DNS-over-VLESS продолжит работать через ${subsRouteName(from, true)}.`];
+      }
+      if (dns.outcome === 'resync') {
+        return [`DNS-over-VLESS останется на прежнем маршруте (${subsRouteName(from, true)}) и будет перенастроен под новый состав узлов.`];
+      }
+      if (dns.outcome === 'retarget') {
+        return [`DNS-over-VLESS сейчас идёт через подписки — он будет переведён на ${subsRouteName(dns.to, true)}.`];
+      }
+      if (dns.outcome === 'choose') {
+        return ['DNS-over-VLESS сейчас идёт через подписки. Выберите, через какой ваш сервер пустить DNS:'];
+      }
+      if (dns.outcome === 'disable') {
+        return ['DNS-over-VLESS будет выключен, DNS вернётся роутеру.'];
+      }
+      return [];
+    }
+
+    function subsSwitchConfirmOptions(planData, mode) {
       const total = Number(planData && planData.total) || 0;
       const dns = (planData && planData.dns) || {};
-      const from = Array.isArray(dns.from) ? dns.from[0] : null;
+      const one = total === 1;
+      const all = one ? 'Подписка' : `Все ${total} ${subsPluralWord(total)}`;
+      const offOwn = dns.outcome === 'disable'
+        ? 'Своих серверов в настройках нет — прокси не останется, трафик пойдёт напрямую.'
+        : '';
       const details = [];
-      const all = total === 1 ? 'Подписка' : `Все ${total} ${subsPluralWord(total)}`;
       let message = '';
-      if (pausing) {
-        const stop = total === 1 ? 'перестанет работать' : 'перестанут работать';
-        const keep = 'Узлы и настройки подписок сохранятся — возобновить можно в любой момент.';
-        message = dns.outcome === 'disable'
-          ? `${all} ${stop}. Своих серверов в настройках нет — прокси не останется, трафик пойдёт напрямую. ${keep}`
-          : `${all} ${stop}, трафик пойдёт через ваши серверы. ${keep}`;
-        if (dns.outcome === 'keep') {
-          details.push(`DNS-over-VLESS продолжит работать через ${subsRouteName(from, true)}.`);
-        } else if (dns.outcome === 'resync') {
-          details.push(`DNS-over-VLESS останется на прежнем маршруте (${subsRouteName(from, true)}) и будет перенастроен под новый состав узлов.`);
-        } else if (dns.outcome === 'retarget') {
-          details.push(`DNS-over-VLESS сейчас идёт через подписки — он будет переведён на ${subsRouteName(dns.to, true)}.`);
-        } else if (dns.outcome === 'choose') {
-          details.push('DNS-over-VLESS сейчас идёт через подписки. Выберите, через какой ваш сервер пустить DNS:');
-        } else if (dns.outcome === 'disable') {
-          details.push('DNS-over-VLESS будет выключен, DNS вернётся роутеру.');
+      let touchesCore = true;
+
+      if (mode === 'delete') {
+        const gone = one
+          ? 'будет удалена вместе с адресом, фильтрами и скачанными узлами — вернуть её будет нельзя.'
+          : 'будут удалены вместе с адресами, фильтрами и скачанными узлами — вернуть их будет нельзя.';
+        if (planData && planData.paused) {
+          touchesCore = false;
+          message = `${all} ${gone}`;
+          details.push('Подписки уже приостановлены, роутер работает на ваших серверах — Xray перезапускаться не будет.');
+        } else {
+          message = `${all} ${gone} `
+            + (offOwn || 'Трафик пойдёт через ваши серверы, конфигурация вернётся к виду до подписок.');
+          details.push('Если подписки нужно отключить на время, используйте переключатель «Подписки работают»: он ничего не стирает.');
+          details.push(...subsPauseDnsDetails(dns));
         }
+      } else if (mode === 'pause') {
+        const stop = one ? 'перестанет работать' : 'перестанут работать';
+        const keep = 'Узлы и настройки подписок сохранятся — возобновить можно в любой момент.';
+        message = offOwn
+          ? `${all} ${stop}. ${offOwn} ${keep}`
+          : `${all} ${stop}, трафик пойдёт через ваши серверы. ${keep}`;
+        details.push(...subsPauseDnsDetails(dns));
       } else {
-        const back = total === 1 ? 'вернётся в работу с теми узлами, с которыми была приостановлена' : 'вернутся в работу с теми узлами, с которыми были приостановлены';
+        const back = one
+          ? 'вернётся в работу с теми узлами, с которыми была приостановлена'
+          : 'вернутся в работу с теми узлами, с которыми были приостановлены';
         message = `${all} ${back}. Подписки, у которых за это время наступил срок, обновятся при ближайшей проверке.`;
         if (dns.outcome === 'restore') {
           details.push(`DNS-over-VLESS будет возвращён на ${subsRouteName(dns.to, false)}, как было до паузы.`);
@@ -8031,19 +8073,28 @@ let outboundsModuleApi = null;
           details.push('DNS-over-VLESS будет перенастроен: в режиме «Только подписка» ваши серверы убираются из конфига.');
         }
       }
-      const candidates = pausing && dns.outcome === 'choose' && Array.isArray(dns.candidates) ? dns.candidates : [];
+
+      const candidates = touchesCore && mode !== 'resume' && dns.outcome === 'choose' && Array.isArray(dns.candidates)
+        ? dns.candidates
+        : [];
       const restartLine = Number(dns.restarts) > 1
         ? 'Xray будет перезапущен дважды: это займёт около 20 секунд.'
         : 'Xray будет перезапущен.';
-      if (!candidates.length) details.push(restartLine);
+      if (touchesCore && !candidates.length) details.push(restartLine);
+      const texts = {
+        pause: { title: 'Приостановить подписки?', okText: 'Приостановить' },
+        resume: { title: 'Возобновить подписки?', okText: 'Возобновить' },
+        delete: { title: 'Удалить все подписки?', okText: 'Удалить все' },
+      }[mode];
       return {
         confirm: {
-          title: pausing ? 'Приостановить подписки?' : 'Возобновить подписки?',
+          title: texts.title,
           message,
           details,
-          okText: pausing ? 'Приостановить' : 'Возобновить',
-          danger: false,
-          focus: 'ok',
+          okText: texts.okText,
+          // Удаление необратимо: красная кнопка и фокус на отмене.
+          danger: mode === 'delete',
+          focus: mode === 'delete' ? 'cancel' : 'ok',
         },
         candidates,
         restartLine,
@@ -8087,11 +8138,17 @@ let outboundsModuleApi = null;
       return { ok: !!ok, target: select ? String(select.value || '') : '' };
     }
 
+    // Чем кончилась операция, видно по списку подписок.
+    function subsSwitchReached(mode, data) {
+      if (mode === 'delete') return !(Array.isArray(data.subscriptions) && data.subscriptions.length);
+      return !!data.paused === (mode === 'pause');
+    }
+
     // Перезапуск ядра может оборвать и само соединение с панелью. Операция на
     // роутере при этом доходит до конца, поэтому итог берём из списка подписок.
-    async function subsAwaitSwitchOutcome(pausing) {
+    async function subsAwaitSwitchOutcome(mode) {
       const deadline = Date.now() + 90000;
-      let seen = null;
+      let answered = false;
       while (Date.now() < deadline) {
         await new Promise((resolve) => setTimeout(resolve, 3000));
         try {
@@ -8101,19 +8158,20 @@ let outboundsModuleApi = null;
           clearTimeout(timer);
           const data = await res.json().catch(() => null);
           if (res.ok && data && data.ok !== false) {
-            seen = !!data.paused;
-            if (seen === pausing) return true;
+            answered = true;
+            if (subsSwitchReached(mode, data)) return true;
           }
         } catch (e) {}
       }
-      return seen === null ? null : false;
+      return answered ? false : null;
     }
 
-    async function subsSendSwitch(pausing, dnsTarget) {
+    async function subsSendSwitch(mode, dnsTarget) {
+      const endpoint = { pause: 'pause', resume: 'resume', delete: 'delete-all' }[mode];
       let res = null;
       let data = null;
       try {
-        res = await fetch('/api/xray/subscriptions/' + (pausing ? 'pause' : 'resume'), {
+        res = await fetch('/api/xray/subscriptions/' + endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ dns_target: dnsTarget || '' }),
@@ -8121,8 +8179,8 @@ let outboundsModuleApi = null;
         data = await res.json().catch(() => ({}));
       } catch (e) {
         subsSetStatus('Связь с роутером прервалась на время перезапуска Xray. Жду итог…', false, false, { busy: true });
-        const settled = await subsAwaitSwitchOutcome(pausing);
-        if (settled === true) return { ok: true, paused: pausing, dns: {} };
+        const settled = await subsAwaitSwitchOutcome(mode);
+        if (settled === true) return { ok: true, dns: {} };
         if (settled === null) {
           throw new Error('связь с роутером не восстановилась. Операция могла завершиться — обновите страницу.');
         }
@@ -8137,7 +8195,7 @@ let outboundsModuleApi = null;
       return data;
     }
 
-    function subsSwitchSummary(data, pausing) {
+    function subsSwitchSummary(data, mode) {
       const dns = (data && data.dns) || {};
       const to = Array.isArray(dns.to) ? dns.to.filter(Boolean).join(', ') : '';
       let tail = '';
@@ -8145,17 +8203,43 @@ let outboundsModuleApi = null;
       else if (dns.action === 'disabled') tail = ' DNS-over-VLESS выключен, DNS вернулся роутеру.';
       else if (dns.action === 'enabled') tail = ` DNS-over-VLESS снова включён через «${to}».`;
       else if (dns.action === 'resynced') tail = ' DNS-over-VLESS перенастроен на прежнем маршруте.';
-      return (pausing ? 'Подписки приостановлены.' : 'Подписки возобновлены.') + tail;
+      const head = {
+        pause: 'Подписки приостановлены.',
+        resume: 'Подписки возобновлены.',
+        delete: 'Все подписки удалены. Конфигурация возвращена к вашим серверам.',
+      }[mode];
+      return head + tail;
     }
 
-    async function subsToggleAll() {
+    const SUBS_SWITCH_TEXTS = {
+      pause: {
+        draft: 'Приостановить подписки и потерять текущий черновик формы?',
+        ok: 'Приостановить',
+        busy: 'Приостанавливаю подписки и перезапускаю Xray…',
+        failed: 'Подписки не приостановлены: ',
+      },
+      resume: {
+        draft: 'Возобновить подписки и потерять текущий черновик формы?',
+        ok: 'Возобновить',
+        busy: 'Возобновляю подписки и перезапускаю Xray…',
+        failed: 'Подписки не возобновлены: ',
+      },
+      delete: {
+        draft: 'Удалить все подписки и потерять текущий черновик формы?',
+        ok: 'Удалить все',
+        busy: 'Удаляю подписки…',
+        failed: 'Подписки не удалены: ',
+      },
+    };
+
+    // Пауза, возобновление и удаление всех подписок — одна и та же последовательность:
+    // прогноз, подтверждение, запрос, перечитать список.
+    async function subsRunSwitch(mode) {
       if (_subscriptionsSwitchBusy) return false;
-      const pausing = !_subscriptionsPaused;
+      const texts = SUBS_SWITCH_TEXTS[mode];
       const draftOk = await subsConfirmDiscardDraft({
-        message: pausing
-          ? 'Приостановить подписки и потерять текущий черновик формы?'
-          : 'Возобновить подписки и потерять текущий черновик формы?',
-        okText: pausing ? 'Приостановить' : 'Возобновить',
+        message: texts.draft,
+        okText: texts.ok,
         cancelText: 'Остаться',
       });
       if (!draftOk) return false;
@@ -8168,13 +8252,13 @@ let outboundsModuleApi = null;
           throw new Error(String((planData && (planData.error || planData.message)) || ('HTTP ' + res.status)));
         }
       } catch (e) {
-        const msg = 'Не удалось проверить, что изменит переключение: ' + String(e && e.message ? e.message : e);
+        const msg = 'Не удалось проверить, что изменит это действие: ' + String(e && e.message ? e.message : e);
         subsSetStatus(msg, true);
         try { toastXkeen(msg, 'error'); } catch (e2) {}
         return false;
       }
 
-      let options = subsPauseConfirmOptions(planData, pausing);
+      let options = subsSwitchConfirmOptions(planData, mode);
       let answer = await subsConfirmPause(options);
       if (!answer.ok) return false;
 
@@ -8184,18 +8268,13 @@ let outboundsModuleApi = null;
       try {
         let data = null;
         for (let attempt = 0; attempt < 2; attempt += 1) {
-          subsSetStatus(
-            (pausing ? 'Приостанавливаю подписки' : 'Возобновляю подписки') + ' и перезапускаю Xray…',
-            false,
-            false,
-            { busy: true },
-          );
-          data = await subsSendSwitch(pausing, answer.target);
+          subsSetStatus(texts.busy, false, false, { busy: true });
+          data = await subsSendSwitch(mode, answer.target);
           if (!data || !data.choice) break;
           // Прогноз не угадал: маршрутов для DNS оказалось несколько. Ничего не изменено.
-          options = subsPauseConfirmOptions(
+          options = subsSwitchConfirmOptions(
             { total: planData.total, dns: { outcome: 'choose', candidates: data.choice, restarts: 2 } },
-            true,
+            mode,
           );
           answer = await subsConfirmPause(options);
           if (!answer.ok) {
@@ -8205,8 +8284,11 @@ let outboundsModuleApi = null;
           data = null;
         }
         if (!data) throw new Error('не удалось выбрать маршрут для DNS-over-VLESS.');
-        // Своё уведомление: журнал операций про паузу сам ничего не всплывает.
-        const summary = subsSwitchSummary(data, pausing);
+        // Своё уведомление: журнал операций про это сам ничего не всплывает.
+        const summary = subsSwitchSummary(data, mode);
+        if (mode === 'delete') {
+          try { subsResetForm(); } catch (eReset) {}
+        }
         await subsLoad();
         subsSetStatus(summary, false, true);
         try { toastXkeen(summary, 'success'); } catch (e3) {}
@@ -8220,8 +8302,7 @@ let outboundsModuleApi = null;
         try { await refreshRestartLog(); } catch (e4) {}
         return true;
       } catch (e) {
-        const msg = (pausing ? 'Подписки не приостановлены: ' : 'Подписки не возобновлены: ')
-          + String(e && e.message ? e.message : e);
+        const msg = texts.failed + String(e && e.message ? e.message : e);
         try { await subsLoad(); } catch (e5) {}
         subsSetStatus(msg, true);
         try { toastXkeen(msg, 'error'); } catch (e6) {}
@@ -8230,6 +8311,14 @@ let outboundsModuleApi = null;
         _subscriptionsSwitchBusy = false;
         subsRenderPauseState();
       }
+    }
+
+    function subsToggleAll() {
+      return subsRunSwitch(_subscriptionsPaused ? 'resume' : 'pause');
+    }
+
+    function subsDeleteAll() {
+      return subsRunSwitch('delete');
     }
 
     async function subsRefreshDue() {
@@ -8591,6 +8680,7 @@ let outboundsModuleApi = null;
         subsSetStatus('', false);
       });
       wireButton(SUB_IDS.refreshDue, () => { void subsRefreshDue(); });
+      wireButton(SUB_IDS.deleteAll, () => { void subsDeleteAll(); });
       try {
         const master = $(SUB_IDS.master);
         if (master && master.dataset.xkWired !== '1') {

@@ -56,6 +56,21 @@ def test_switch_routes_pass_the_chosen_dns_route(api, monkeypatch, action):
     assert callable(calls[0]["restart_xkeen"])
 
 
+def test_delete_all_route_passes_the_chosen_dns_route(api, monkeypatch):
+    routes, client, calls = api
+    monkeypatch.setattr(
+        routes.subscription_pause,
+        "delete_all",
+        lambda **kwargs: calls.append(kwargs) or {"ok": True, "deleted": 3, "paused": False, "dns": {"action": "kept"}},
+    )
+
+    response = client.post("/api/xray/subscriptions/delete-all", json={"dns_target": "my-pool"})
+
+    assert response.status_code == 200
+    assert response.get_json()["deleted"] == 3
+    assert calls[0]["dns_target"] == "my-pool"
+
+
 def test_choice_needed_is_a_conflict_with_the_candidates(api, monkeypatch):
     routes, client, _calls = api
 

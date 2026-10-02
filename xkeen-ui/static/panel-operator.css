@@ -12828,6 +12828,19 @@ body.panel-page #outbounds-subscriptions-modal .xk-sub-paused-banner span {
   min-width: 0;
 }
 
+body.panel-page #outbounds-subscriptions-modal .xk-sub-delete-all[hidden] {
+  display: none;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-delete-all:not(:disabled) {
+  color: var(--op-danger) !important;
+  border-color: color-mix(in srgb, var(--op-danger) 38%, transparent) !important;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-delete-all:not(:disabled):hover {
+  background: color-mix(in srgb, var(--op-danger) 12%, transparent) !important;
+}
+
 body.panel-page #outbounds-subscriptions-modal .xk-sub-table tr.is-paused > td {
   opacity: 0.78;
 }
