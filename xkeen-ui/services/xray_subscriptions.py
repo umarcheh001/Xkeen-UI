@@ -850,6 +850,7 @@ def _normalize_state(obj: Any) -> Dict[str, Any]:
                 "transport_filter": transport_filter,
                 "excluded_node_keys": excluded_node_keys,
                 "enabled": bool(item.get("enabled", True)),
+                "paused": bool(item.get("paused", False)),
                 "ping_enabled": ping_enabled,
                 "routing_mode": _clean_routing_mode(item.get("routing_mode", item.get("routingMode"))),
                 "routing_balancer_tags": routing_balancer_tags,
@@ -1001,6 +1002,13 @@ def upsert_subscription(ui_state_dir: str, payload: Dict[str, Any]) -> Dict[str,
                 "transport_filter": transport_filter,
                 "excluded_node_keys": excluded_node_keys,
                 "enabled": bool(data.get("enabled", base.get("enabled", True))),
+                # The pause is one switch for all of them: a subscription added
+                # while the others wait must not start working on its own.
+                "paused": (
+                    bool(base.get("paused"))
+                    if existing is not None
+                    else any(isinstance(s, dict) and s.get("paused") for s in subs)
+                ),
                 "ping_enabled": bool(data.get("ping_enabled", data.get("pingEnabled", base.get("ping_enabled", True)))),
                 "routing_mode": routing_mode,
                 "routing_balancer_tags": routing_balancer_tags,
@@ -1062,6 +1070,8 @@ def delete_subscription(
     if remove_file and removed:
         output_path = _subscription_output_path(xray_configs_dir, removed)
         output_removed = bool(_remove_file_if_exists(output_path, snapshot=snapshot) or output_removed)
+        # A paused subscription keeps its nodes set aside; they go with it.
+        _remove_file_if_exists(_paused_config_path(output_path))
         snapshot_cleanup_paths.append(output_path)
         try:
             raw_path = jsonc_path_for(output_path)
@@ -3362,6 +3372,12 @@ def _disabled_config_path(path: str) -> str:
     return str(path or "") + ".disable"
 
 
+def _paused_config_path(path: str) -> str:
+    # Xray reads the directory by extension, so the suffix alone takes the
+    # fragment out of the running config without losing what is in it.
+    return str(path or "") + ".paused"
+
+
 def _remove_config_snapshot_for_path(xray_configs_dir: str, path: str) -> bool:
     """Remove the rollback snapshot for a config path from configs/backups."""
     try:
@@ -4778,7 +4794,7 @@ def _effective_subscription_routing_mode(ui_state_dir: str) -> str:
     for item in state.get("subscriptions") if isinstance(state, dict) else []:
         if not isinstance(item, dict):
             continue
-        if item.get("enabled", True) is False:
+        if item.get("enabled", True) is False or item.get("paused"):
             continue
         mode = _clean_routing_mode(item.get("routing_mode"))
         if mode == ROUTING_MODE_SUBSCRIPTION_ONLY:
@@ -4798,7 +4814,7 @@ def _subscription_runtime_selector_terms(item: Any) -> List[str]:
 
 
 def _subscription_runtime_active(item: Any) -> bool:
-    if not isinstance(item, dict):
+    if not isinstance(item, dict) or item.get("paused"):
         return False
     terms = _subscription_runtime_selector_terms(item)
     if not terms:
@@ -5937,6 +5953,19 @@ def refresh_subscription(
             raise KeyError("subscription not found")
         sub = dict(sub)
 
+    if sub.get("paused"):
+        # Writing the fragment would put this one subscription back to work
+        # behind the switch.  Not a failed download either, so the record of
+        # the last real refresh stays as it is.
+        return {
+            "id": sub.get("id"),
+            "ok": False,
+            "code": "subscriptions_paused",
+            "error": "Подписки приостановлены. Возобновите их, чтобы обновить.",
+            "changed": False,
+            "restarted": False,
+        }
+
     result: Dict[str, Any] = {
         "id": sub.get("id"),
         "ok": False,
@@ -6310,6 +6339,132 @@ def refresh_subscription(
     return result
 
 
+def subscriptions_paused(ui_state_dir: str) -> bool:
+    return any(bool(sub.get("paused")) for sub in list_subscriptions(ui_state_dir))
+
+
+def _move_config_file(source: str, target: str) -> bool:
+    if not os.path.isfile(source):
+        return False
+    os.replace(source, target)
+    return True
+
+
+def pause_subscriptions(
+    ui_state_dir: str,
+    *,
+    xray_configs_dir: str,
+    snapshot: SnapshotCallback | None = None,
+) -> Dict[str, Any]:
+    """Take every subscription out of the running config, keeping its record.
+
+    The same thing deleting them all does to routing, observatory and the
+    owner's outbounds, except that the nodes are set aside instead of removed
+    and the settings stay in the list.  Nothing is restarted here.
+    """
+    with _STATE_LOCK:
+        state = load_subscription_state(ui_state_dir)
+        previous_state = _normalize_state(copy.deepcopy(state))
+        targets = [
+            sub
+            for sub in state.get("subscriptions") or []
+            if isinstance(sub, dict) and not sub.get("paused")
+        ]
+        if not targets:
+            return {"paused": [], "changed": False}
+        now_ts = _now()
+        for sub in targets:
+            sub["paused"] = True
+            sub["paused_ts"] = now_ts
+        next_state = _normalize_state(state)
+        _write_state(ui_state_dir, next_state)
+
+    files_moved = False
+    for sub in targets:
+        output_path = _subscription_output_path(xray_configs_dir, sub)
+        files_moved = bool(_move_config_file(output_path, _paused_config_path(output_path)) or files_moved)
+
+    rebuild_stats = _rebuild_subscription_runtime(
+        ui_state_dir,
+        xray_configs_dir=xray_configs_dir,
+        snapshot=snapshot,
+        previous_state=previous_state,
+        state_override=next_state,
+        rebuild_from_baseline=True,
+    )
+    if not rebuild_stats.get("has_runtime_targets"):
+        _clear_subscription_managed_baselines(ui_state_dir)
+
+    observatory_changed = bool(rebuild_stats.get("observatory_changed"))
+    routing_changed = bool(rebuild_stats.get("routing_changed"))
+    outbounds_changed = bool(rebuild_stats.get("outbounds_changed"))
+    return {
+        "paused": [str(sub.get("id") or "") for sub in targets],
+        "changed": bool(files_moved or observatory_changed or routing_changed or outbounds_changed),
+        "observatory_changed": observatory_changed,
+        "routing_changed": routing_changed,
+        "outbounds_changed": outbounds_changed,
+    }
+
+
+def resume_subscriptions(
+    ui_state_dir: str,
+    *,
+    xray_configs_dir: str,
+    snapshot: SnapshotCallback | None = None,
+) -> Dict[str, Any]:
+    """Put paused subscriptions back to work with the nodes they were paused with.
+
+    Nothing is downloaded: a subscription whose term came up while it waited is
+    picked up by the scheduler afterwards.  Nothing is restarted here.
+    """
+    with _STATE_LOCK:
+        state = load_subscription_state(ui_state_dir)
+        previous_state = _normalize_state(copy.deepcopy(state))
+        targets = [
+            sub
+            for sub in state.get("subscriptions") or []
+            if isinstance(sub, dict) and sub.get("paused")
+        ]
+        if not targets:
+            return {"resumed": [], "changed": False}
+        for sub in targets:
+            sub["paused"] = False
+            sub.pop("paused_ts", None)
+        _write_state(ui_state_dir, _normalize_state(state))
+
+    files_moved = False
+    for sub in targets:
+        output_path = _subscription_output_path(xray_configs_dir, sub)
+        files_moved = bool(_move_config_file(_paused_config_path(output_path), output_path) or files_moved)
+
+    # The configs are the owner's own right now -- exactly what has to be
+    # remembered before the subscriptions change them again.
+    _ensure_subscription_managed_baselines(ui_state_dir, xray_configs_dir)
+    next_state = load_subscription_state(ui_state_dir)
+    rebuild_stats = _rebuild_subscription_runtime(
+        ui_state_dir,
+        xray_configs_dir=xray_configs_dir,
+        snapshot=snapshot,
+        previous_state=previous_state,
+        state_override=next_state,
+        rebuild_from_baseline=True,
+    )
+    if not rebuild_stats.get("has_runtime_targets"):
+        _clear_subscription_managed_baselines(ui_state_dir)
+
+    observatory_changed = bool(rebuild_stats.get("observatory_changed"))
+    routing_changed = bool(rebuild_stats.get("routing_changed"))
+    outbounds_changed = bool(rebuild_stats.get("outbounds_changed"))
+    return {
+        "resumed": [str(sub.get("id") or "") for sub in targets],
+        "changed": bool(files_moved or observatory_changed or routing_changed or outbounds_changed),
+        "observatory_changed": observatory_changed,
+        "routing_changed": routing_changed,
+        "outbounds_changed": outbounds_changed,
+    }
+
+
 def plan_schedule_alignment(ui_state_dir: str) -> Dict[str, Any]:
     """Посчитать общий срок обновления, не трогая состояние."""
     return plan_alignment(list_subscriptions(ui_state_dir), now_ts=_now())
@@ -6379,7 +6534,16 @@ def refresh_due_subscriptions(
     snapshot: SnapshotCallback | None = None,
     restart_xkeen: RestartCallback | None = None,
     restart: bool = True,
+    include_new: bool = False,
 ) -> List[Dict[str, Any]]:
+    """Refresh what is due, as one batch with one restart.
+
+    ``include_new`` is the button's reading of "due": a subscription saved
+    without the immediate download has never been fetched, and its first term
+    is a whole interval away.  The scheduler leaves those alone -- that is what
+    saving without the download asked for -- but a person pressing the button
+    after adding several means exactly them.
+    """
     state = load_subscription_state(ui_state_dir)
     now_ts = _now()
     lookahead = _refresh_lookahead_seconds()
@@ -6387,12 +6551,14 @@ def refresh_due_subscriptions(
     due_subs: List[Dict[str, Any]] = []
     has_due = False
     for sub in list(state.get("subscriptions") or []):
-        if not isinstance(sub, dict) or not bool(sub.get("enabled", True)):
+        if not isinstance(sub, dict) or not bool(sub.get("enabled", True)) or sub.get("paused"):
             continue
         due = sub.get("next_update_ts")
         try:
             due_ts = float(due)
         except Exception:
+            due_ts = 0.0
+        if include_new and not sub.get("last_update_ts"):
             due_ts = 0.0
         if due_ts <= now_ts:
             has_due = True

@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any, Callable
 
 from flask import Blueprint, jsonify, request
 
 from routes.common.errors import error_response, exception_response
+from services import subscription_pause
 from services.latency_jobs import create_latency_job, get_latency_job
+from services.xray_config_files import ROUTING_FILE
 from services.xray_subscriptions import (
     apply_schedule_alignment,
     delete_subscription,
@@ -74,11 +77,16 @@ def create_xray_subscriptions_blueprint(
     @bp.get("/api/xray/subscriptions")
     def api_list_xray_subscriptions():
         try:
+            subscriptions = list_subscriptions(ui_state_dir)
+            paused_since = [item.get("paused_ts") for item in subscriptions if item.get("paused")]
             return (
                 jsonify(
                     {
                         "ok": True,
-                        "subscriptions": list_subscriptions(ui_state_dir),
+                        "subscriptions": subscriptions,
+                        # One switch for all of them; the date is when it was thrown.
+                        "paused": bool(paused_since),
+                        "paused_ts": min((ts for ts in paused_since if ts), default=None),
                         "routing_balancers": list_subscription_routing_balancers(xray_configs_dir),
                         "routing_meta": get_subscription_routing_meta(xray_configs_dir),
                     }
@@ -312,6 +320,7 @@ def create_xray_subscriptions_blueprint(
                 snapshot=snapshot_xray_config_before_overwrite,
                 restart_xkeen=restart_xkeen,
                 restart=restart,
+                include_new=True,
             )
         except Exception as exc:
             return exception_response(
@@ -342,5 +351,62 @@ def create_xray_subscriptions_blueprint(
                 log_tag="xray_subscriptions.align_failed",
             )
         return jsonify({"ok": True, "dry": dry, **plan}), 200
+
+    def _pause_paths() -> dict[str, str]:
+        return {
+            "ui_state_dir": ui_state_dir,
+            "xray_configs_dir": xray_configs_dir,
+            "routing_file": os.path.join(xray_configs_dir, os.path.basename(ROUTING_FILE)),
+        }
+
+    @bp.get("/api/xray/subscriptions/pause-plan")
+    def api_xray_subscriptions_pause_plan():
+        try:
+            return jsonify(subscription_pause.plan(**_pause_paths())), 200
+        except Exception as exc:
+            return exception_response(
+                "Не удалось проверить, что изменит пауза подписок.",
+                500,
+                ok=False,
+                code="subscription_pause_plan_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=exc,
+                log_tag="xray_subscriptions.pause_plan_failed",
+            )
+
+    def _switch_subscriptions(action: str):
+        payload = request.get_json(silent=True) or {}
+        run = subscription_pause.pause_all if action == "pause" else subscription_pause.resume_all
+        try:
+            result = run(
+                **_pause_paths(),
+                snapshot=snapshot_xray_config_before_overwrite,
+                restart_xkeen=restart_xkeen,
+                dns_target=payload.get("dns_target") or "",
+            )
+        except subscription_pause.PauseError as exc:
+            # Nothing is left half-done: the switch undoes itself before raising.
+            return jsonify({"ok": False, "error": str(exc), "code": exc.code, **exc.details}), 409
+        except Exception as exc:
+            return exception_response(
+                "Не удалось приостановить подписки Xray."
+                if action == "pause"
+                else "Не удалось возобновить подписки Xray.",
+                500,
+                ok=False,
+                code=f"subscription_{action}_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=exc,
+                log_tag=f"xray_subscriptions.{action}_failed",
+            )
+        return jsonify(result), 200
+
+    @bp.post("/api/xray/subscriptions/pause")
+    def api_pause_xray_subscriptions():
+        return _switch_subscriptions("pause")
+
+    @bp.post("/api/xray/subscriptions/resume")
+    def api_resume_xray_subscriptions():
+        return _switch_subscriptions("resume")
 
     return bp

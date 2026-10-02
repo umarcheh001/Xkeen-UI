@@ -4648,6 +4648,10 @@ let outboundsModuleApi = null;
       preview: 'outbounds-subscriptions-preview-btn',
       refreshDue: 'outbounds-subscriptions-refresh-due-btn',
       align: 'outbounds-subscriptions-align-btn',
+      master: 'outbounds-subscriptions-master',
+      masterWrap: 'outbounds-subscriptions-master-wrap',
+      masterLabel: 'outbounds-subscriptions-master-label',
+      pausedBanner: 'outbounds-subscriptions-paused-banner',
       tbody: 'outbounds-subscriptions-tbody',
       empty: 'outbounds-subscriptions-empty',
       status: 'outbounds-subscriptions-status',
@@ -4663,6 +4667,9 @@ let outboundsModuleApi = null;
     };
 
     let _subscriptions = [];
+    let _subscriptionsPaused = false;
+    let _subscriptionsPausedTs = 0;
+    let _subscriptionsSwitchBusy = false;
     let _subscriptionRoutingBalancers = [];
     let _subscriptionEditId = '';
     let _subscriptionNodePingState = Object.create(null);
@@ -5582,9 +5589,15 @@ let outboundsModuleApi = null;
                 <span class="xk-sub-subtitle">Узлы из подписок: автообновление, замер скорости и подключение к маршрутизации.</span>
                 <span class="xk-sub-interval-note">Интервал: по умолчанию 24 ч; рекомендация провайдера не перезаписывает выбранное значение.</span>
               </div>
+              <label id="outbounds-subscriptions-master-wrap" class="dt-switch xk-sub-master" data-tooltip-multiline data-tooltip="Все подписки разом&#10;Выключи, чтобы вернуться на свои серверы, не удаляя подписки: узлы и настройки сохранятся.&#10;Включи — и подписки вернутся в работу с теми же узлами, ничего не скачивая." hidden>
+                <input id="outbounds-subscriptions-master" type="checkbox" checked aria-label="Подписки работают">
+                <span class="dt-switch-slider" aria-hidden="true"></span>
+                <span id="outbounds-subscriptions-master-label" class="xk-sub-switch-label">Подписки работают</span>
+              </label>
               <button type="button" class="modal-close" id="outbounds-subscriptions-close-btn" title="Закрыть" aria-label="Закрыть" data-tooltip="Закрыть окно подписок.">${iconHtml('close')}</button>
             </div>
             <div class="modal-body">
+              <div id="outbounds-subscriptions-paused-banner" class="xk-sub-paused-banner" role="status" hidden></div>
               <details class="xk-sub-brief">
                 <summary>
                   <span class="xk-sub-brief-title">Как работают подписки</span>
@@ -5674,7 +5687,7 @@ let outboundsModuleApi = null;
                     <div class="xk-sub-controls">
                       <label class="dt-switch xk-sub-check" aria-label="Автообновление" data-tooltip="Включить плановое автообновление этой подписки."><input id="outbounds-subscriptions-enabled" type="checkbox" checked title="Автообновление" aria-label="Автообновление" data-tooltip="Включить плановое автообновление этой подписки."><span class="dt-switch-slider" aria-hidden="true"></span><span class="xk-sub-switch-label">Автообн.</span></label>
                       <label class="dt-switch xk-sub-check" aria-label="Замер" data-tooltip-multiline data-tooltip="Фоновая проверка скорости узлов&#10;Xray сам, раз в заданный интервал, проверяет задержку каждого узла этой подписки.&#10;Нужно, чтобы балансировщики (служебный пул и отмеченные ниже) выбирали самый быстрый узел. Без замеров им не по чему выбирать.&#10;Выключить можно, если узлы подписки используются только напрямую по тегу. На кнопку «Пинг всех узлов» это не влияет."><input id="outbounds-subscriptions-ping" type="checkbox" checked title="Замер" aria-label="Замер" data-tooltip-multiline data-tooltip="Фоновая проверка скорости узлов&#10;Xray сам, раз в заданный интервал, проверяет задержку каждого узла этой подписки.&#10;Нужно, чтобы балансировщики (служебный пул и отмеченные ниже) выбирали самый быстрый узел. Без замеров им не по чему выбирать.&#10;Выключить можно, если узлы подписки используются только напрямую по тегу. На кнопку «Пинг всех узлов» это не влияет."><span class="dt-switch-slider" aria-hidden="true"></span><span class="xk-sub-switch-label">Замер</span></label>
-                      <label class="dt-switch xk-sub-check" aria-label="Обновить сразу" data-tooltip="После сохранения сразу скачать подписку и создать фрагмент."><input id="outbounds-subscriptions-refresh-now" type="checkbox" checked title="Обновить сразу" aria-label="Обновить сразу" data-tooltip="Сразу скачать подписку после сохранения."><span class="dt-switch-slider" aria-hidden="true"></span><span class="xk-sub-switch-label">Сразу</span></label>
+                      <label class="dt-switch xk-sub-check" aria-label="Обновить сразу" data-tooltip-multiline data-tooltip="Скачать сразу после сохранения&#10;Подписка скачивается, и Xray перезапускается сразу.&#10;Сними, если добавляешь несколько подписок подряд: сохрани их все, а потом нажми «Обновить просроченные» — они скачаются одной пачкой с одним перезапуском."><input id="outbounds-subscriptions-refresh-now" type="checkbox" checked title="Обновить сразу" aria-label="Обновить сразу" data-tooltip="Сразу скачать подписку после сохранения."><span class="dt-switch-slider" aria-hidden="true"></span><span class="xk-sub-switch-label">Сразу</span></label>
                       <label class="dt-switch xk-sub-check xk-sub-auto-rule-check" aria-label="Пул" data-tooltip-multiline data-tooltip="Пускать трафик через самый быстрый узел&#10;Узлы подписки попадают в общий служебный балансировщик proxy, а панель держит правило, по которому трафик клиентов роутера (redirect/tproxy) идёт через этот балансировщик.&#10;Xray сам выбирает узел с наименьшей задержкой, а если живых узлов нет, пускает трафик напрямую.&#10;Выключи, если подписка нужна только в других балансировщиках, отмеченных ниже.&#10;Работает только вместе с «Замером»: при включении «Пула» он включается сам.">
                         <input id="outbounds-subscriptions-routing-auto-rule" type="checkbox" checked title="Пул" aria-label="Пул" data-tooltip-multiline data-tooltip="Пускать трафик через самый быстрый узел&#10;Узлы подписки попадают в общий служебный балансировщик proxy, а панель держит правило, по которому трафик клиентов роутера (redirect/tproxy) идёт через этот балансировщик.&#10;Xray сам выбирает узел с наименьшей задержкой, а если живых узлов нет, пускает трафик напрямую.&#10;Выключи, если подписка нужна только в других балансировщиках, отмеченных ниже.&#10;Работает только вместе с «Замером»: при включении «Пула» он включается сам.">
                         <span class="dt-switch-slider" aria-hidden="true"></span><span class="xk-sub-switch-label">Пул</span>
@@ -5710,7 +5723,7 @@ let outboundsModuleApi = null;
                     </div>
                     <div class="xk-sub-list-head-actions">
                       <div id="outbounds-subscriptions-summary" class="xk-pool-summary">0</div>
-                      <button type="button" id="outbounds-subscriptions-refresh-due-btn" class="btn-secondary btn-compact" title="Обновить просроченные" data-tooltip="Обновить все подписки, у которых уже наступило время следующего обновления.">${iconHtml('refresh')}<span class="xk-action-label">Обновить просроченные</span></button>
+                      <button type="button" id="outbounds-subscriptions-refresh-due-btn" class="btn-secondary btn-compact" title="Обновить просроченные" data-tooltip-multiline data-tooltip="Обновить одной пачкой&#10;Скачивает подписки, у которых наступил срок, и те, что сохранены без «Сразу» и ещё ни разу не скачивались.&#10;Xray перезапускается один раз на всю пачку.">${iconHtml('refresh')}<span class="xk-action-label">Обновить просроченные</span></button>
                       <button type="button" id="outbounds-subscriptions-align-btn" class="btn-secondary btn-compact" title="Выровнять расписание" data-tooltip="Свести время следующего обновления всех подписок к одному моменту, чтобы дальше они обновлялись одной пачкой.">${iconHtml('normalize')}<span class="xk-action-label">Выровнять расписание</span></button>
                     </div>
                   </div>
@@ -6746,6 +6759,15 @@ let outboundsModuleApi = null;
         ? `${count} ${subsNodeWord(count)} из ${sourceCount}`
         : `${count} ${subsNodeWord(count)}`;
 
+      if (s.paused) {
+        return {
+          tone: 'idle',
+          word: 'Приостановлена',
+          detail: lastUpdateTs > 0
+            ? (relative ? `${nodes} · ${relative}` : nodes)
+            : 'узлы появятся после первого обновления',
+        };
+      }
       if (s.last_ok === false) {
         const errorText = String(s.last_error || '').trim();
         return {
@@ -6776,6 +6798,7 @@ let outboundsModuleApi = null;
       const currentTs = subsTimestamp(nowTs) || subsNowTs();
       const interval = subsIntervalSummary(s);
       const nextTs = subsTimestamp(s.next_update_ts);
+      if (s.paused) return { text: 'Автообновление остановлено до возобновления', title: '' };
       if (subsIsDue(s, currentTs)) {
         return {
           text: `Срок наступил — обновится при ближайшей проверке · ${interval}`,
@@ -6908,7 +6931,9 @@ let outboundsModuleApi = null;
         try {
           tr.setAttribute('data-sub-id', String(sub && sub.id ? sub.id : ''));
           tr.classList.toggle('is-selected', String(sub && sub.id ? sub.id : '') === String(_subscriptionEditId || ''));
+          tr.classList.toggle('is-paused', !!(sub && sub.paused));
         } catch (e0) {}
+        const pausedAttr = sub && sub.paused ? 'disabled' : '';
         const state = subsStateOf(sub, nowTs);
         const schedule = subsNextUpdateSummary(sub, nowTs);
         const title = escapeHtml(String(sub && sub.name ? sub.name : sub && sub.id ? sub.id : ''));
@@ -6962,6 +6987,7 @@ let outboundsModuleApi = null;
                 type="button"
                 class="btn-secondary btn-compact xk-sub-list-action xk-sub-list-action-refresh xk-sub-refresh"
                 data-id="${id}"
+                ${pausedAttr}
                 title="Обновить"
                 data-tooltip="Скачать подписку сейчас и пересобрать файл узлов."
                 aria-label="Обновить подписку"
@@ -7009,6 +7035,7 @@ let outboundsModuleApi = null;
           alignBtn.disabled = moments.length < 2 || new Set(moments).size < 2;
         }
       } catch (e) {}
+      try { subsRenderPauseState(); } catch (ePause) {}
 
       Array.from(tbody.querySelectorAll('.xk-sub-file-link')).forEach((btn) => {
         btn.addEventListener('click', (e) => {
@@ -7650,6 +7677,8 @@ let outboundsModuleApi = null;
           throw new Error(String((data && (data.error || data.message)) || ('HTTP ' + res.status)));
         }
         _subscriptions = Array.isArray(data.subscriptions) ? data.subscriptions : [];
+        _subscriptionsPaused = !!data.paused;
+        _subscriptionsPausedTs = Number(data.paused_ts || 0) || 0;
         _subscriptionRoutingBalancers = Array.isArray(data.routing_balancers) ? data.routing_balancers : [];
         try {
           _subscriptionOutputFiles = new Set(_subscriptions.map((sub) => baseName(sub && sub.output_file)).filter(Boolean));
@@ -7901,6 +7930,308 @@ let outboundsModuleApi = null;
       }
     }
 
+    function subsPluralWord(count) {
+      const n = Math.abs(Number(count) || 0);
+      const tail = n % 100;
+      if (tail >= 11 && tail <= 14) return 'подписок';
+      if (n % 10 === 1) return 'подписка';
+      if (n % 10 >= 2 && n % 10 <= 4) return 'подписки';
+      return 'подписок';
+    }
+
+    // «ваш сервер «имя»»: протокол не называем, имя берём из конфига как есть.
+    function subsRouteName(item, own) {
+      const tag = String(item && item.tag ? item.tag : '').trim();
+      if (!tag) return '';
+      const kind = item && item.kind === 'balancer' ? 'балансировщик' : 'сервер';
+      return `${own ? 'ваш ' : ''}${kind} «${tag}»`;
+    }
+
+    function subsRenderPauseState() {
+      const paused = !!_subscriptionsPaused;
+      const wrap = $(SUB_IDS.masterWrap);
+      const input = $(SUB_IDS.master);
+      const label = $(SUB_IDS.masterLabel);
+      const banner = $(SUB_IDS.pausedBanner);
+      const text = paused ? 'Подписки приостановлены' : 'Подписки работают';
+      try { if (wrap) wrap.hidden = !_subscriptions.length; } catch (e) {}
+      try {
+        if (input) {
+          input.checked = !paused;
+          input.disabled = !!_subscriptionsSwitchBusy;
+          input.setAttribute('aria-label', text);
+        }
+      } catch (e2) {}
+      try { if (label) label.textContent = text; } catch (e3) {}
+      try {
+        if (banner) {
+          banner.hidden = !paused;
+          banner.textContent = '';
+          if (paused) {
+            const title = document.createElement('b');
+            title.textContent = 'Подписки приостановлены';
+            const note = document.createElement('span');
+            let since = '';
+            try {
+              // hour12: false — иначе локаль браузера даёт «10:55 PM».
+              since = _subscriptionsPausedTs > 0
+                ? new Date(_subscriptionsPausedTs * 1000).toLocaleString('ru-RU', {
+                  day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', hour12: false,
+                })
+                : '';
+            } catch (eSince) {}
+            note.textContent = (since ? `с ${since}. ` : '')
+              + 'Трафик идёт через ваши серверы, узлы и настройки подписок сохранены.';
+            banner.append(title, note);
+          }
+        }
+      } catch (e4) {}
+      if (paused) {
+        // На паузе скачивать нечего: фрагменты отложены и в конфиг не попадут.
+        [SUB_IDS.refreshDue, SUB_IDS.align].forEach((id) => {
+          try { const btn = $(id); if (btn) btn.disabled = true; } catch (e5) {}
+        });
+      } else {
+        try { const due = $(SUB_IDS.refreshDue); if (due) due.disabled = false; } catch (e6) {}
+      }
+    }
+
+    function subsPauseConfirmOptions(planData, pausing) {
+      const total = Number(planData && planData.total) || 0;
+      const dns = (planData && planData.dns) || {};
+      const from = Array.isArray(dns.from) ? dns.from[0] : null;
+      const details = [];
+      const all = total === 1 ? 'Подписка' : `Все ${total} ${subsPluralWord(total)}`;
+      let message = '';
+      if (pausing) {
+        const stop = total === 1 ? 'перестанет работать' : 'перестанут работать';
+        const keep = 'Узлы и настройки подписок сохранятся — возобновить можно в любой момент.';
+        message = dns.outcome === 'disable'
+          ? `${all} ${stop}. Своих серверов в настройках нет — прокси не останется, трафик пойдёт напрямую. ${keep}`
+          : `${all} ${stop}, трафик пойдёт через ваши серверы. ${keep}`;
+        if (dns.outcome === 'keep') {
+          details.push(`DNS-over-VLESS продолжит работать через ${subsRouteName(from, true)}.`);
+        } else if (dns.outcome === 'resync') {
+          details.push(`DNS-over-VLESS останется на прежнем маршруте (${subsRouteName(from, true)}) и будет перенастроен под новый состав узлов.`);
+        } else if (dns.outcome === 'retarget') {
+          details.push(`DNS-over-VLESS сейчас идёт через подписки — он будет переведён на ${subsRouteName(dns.to, true)}.`);
+        } else if (dns.outcome === 'choose') {
+          details.push('DNS-over-VLESS сейчас идёт через подписки. Выберите, через какой ваш сервер пустить DNS:');
+        } else if (dns.outcome === 'disable') {
+          details.push('DNS-over-VLESS будет выключен, DNS вернётся роутеру.');
+        }
+      } else {
+        const back = total === 1 ? 'вернётся в работу с теми узлами, с которыми была приостановлена' : 'вернутся в работу с теми узлами, с которыми были приостановлены';
+        message = `${all} ${back}. Подписки, у которых за это время наступил срок, обновятся при ближайшей проверке.`;
+        if (dns.outcome === 'restore') {
+          details.push(`DNS-over-VLESS будет возвращён на ${subsRouteName(dns.to, false)}, как было до паузы.`);
+        } else if (dns.outcome === 'keep') {
+          details.push('DNS-over-VLESS продолжит работать как сейчас.');
+        } else if (dns.outcome === 'recheck') {
+          details.push('DNS-over-VLESS будет перенастроен: в режиме «Только подписка» ваши серверы убираются из конфига.');
+        }
+      }
+      const candidates = pausing && dns.outcome === 'choose' && Array.isArray(dns.candidates) ? dns.candidates : [];
+      const restartLine = Number(dns.restarts) > 1
+        ? 'Xray будет перезапущен дважды: это займёт около 20 секунд.'
+        : 'Xray будет перезапущен.';
+      if (!candidates.length) details.push(restartLine);
+      return {
+        confirm: {
+          title: pausing ? 'Приостановить подписки?' : 'Возобновить подписки?',
+          message,
+          details,
+          okText: pausing ? 'Приостановить' : 'Возобновить',
+          danger: false,
+          focus: 'ok',
+        },
+        candidates,
+        restartLine,
+      };
+    }
+
+    // Штатное окно подтверждения пишет текст через textContent, поэтому список
+    // выбора подставляется следом и живёт до следующего открытия окна.
+    async function subsConfirmPause(options) {
+      const candidates = options.candidates || [];
+      const ui = window.XKeen && XKeen.ui;
+      if (!ui || typeof ui.confirm !== 'function') {
+        // Без штатного окна переключать нечем: молчаливое «да» здесь недопустимо.
+        return { ok: false, target: '' };
+      }
+      const pending = ui.confirm(options.confirm);
+      let select = null;
+      if (candidates.length) {
+        const host = document.getElementById('confirm-modal-message');
+        if (host) {
+          const box = document.createElement('span');
+          box.className = 'xk-sub-pause-choice';
+          select = document.createElement('select');
+          select.id = 'outbounds-subscriptions-pause-dns-target';
+          select.className = 'xray-log-filter';
+          select.setAttribute('aria-label', 'Маршрут для DNS-over-VLESS');
+          candidates.forEach((item) => {
+            const option = document.createElement('option');
+            option.value = String(item && item.tag ? item.tag : '');
+            option.textContent = subsRouteName(item, false);
+            select.appendChild(option);
+          });
+          const note = document.createElement('span');
+          note.className = 'xk-sub-pause-choice-note';
+          note.textContent = options.restartLine;
+          box.append(select, note);
+          host.appendChild(box);
+        }
+      }
+      const ok = await pending;
+      return { ok: !!ok, target: select ? String(select.value || '') : '' };
+    }
+
+    // Перезапуск ядра может оборвать и само соединение с панелью. Операция на
+    // роутере при этом доходит до конца, поэтому итог берём из списка подписок.
+    async function subsAwaitSwitchOutcome(pausing) {
+      const deadline = Date.now() + 90000;
+      let seen = null;
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        try {
+          const ctrl = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 5000);
+          const res = await fetch('/api/xray/subscriptions', { cache: 'no-store', signal: ctrl.signal });
+          clearTimeout(timer);
+          const data = await res.json().catch(() => null);
+          if (res.ok && data && data.ok !== false) {
+            seen = !!data.paused;
+            if (seen === pausing) return true;
+          }
+        } catch (e) {}
+      }
+      return seen === null ? null : false;
+    }
+
+    async function subsSendSwitch(pausing, dnsTarget) {
+      let res = null;
+      let data = null;
+      try {
+        res = await fetch('/api/xray/subscriptions/' + (pausing ? 'pause' : 'resume'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dns_target: dnsTarget || '' }),
+        });
+        data = await res.json().catch(() => ({}));
+      } catch (e) {
+        subsSetStatus('Связь с роутером прервалась на время перезапуска Xray. Жду итог…', false, false, { busy: true });
+        const settled = await subsAwaitSwitchOutcome(pausing);
+        if (settled === true) return { ok: true, paused: pausing, dns: {} };
+        if (settled === null) {
+          throw new Error('связь с роутером не восстановилась. Операция могла завершиться — обновите страницу.');
+        }
+        throw new Error('после восстановления связи подписки остались в прежнем состоянии.');
+      }
+      if (res.status === 409 && data && data.code === 'dns_target_choice_required') {
+        return { choice: Array.isArray(data.candidates) ? data.candidates : [] };
+      }
+      if (!res.ok || !data || data.ok === false) {
+        throw new Error(String((data && (data.error || data.message)) || ('HTTP ' + res.status)));
+      }
+      return data;
+    }
+
+    function subsSwitchSummary(data, pausing) {
+      const dns = (data && data.dns) || {};
+      const to = Array.isArray(dns.to) ? dns.to.filter(Boolean).join(', ') : '';
+      let tail = '';
+      if (dns.action === 'moved') tail = dns.restored ? ` DNS-over-VLESS возвращён на «${to}».` : ` DNS-over-VLESS переведён на «${to}».`;
+      else if (dns.action === 'disabled') tail = ' DNS-over-VLESS выключен, DNS вернулся роутеру.';
+      else if (dns.action === 'enabled') tail = ` DNS-over-VLESS снова включён через «${to}».`;
+      else if (dns.action === 'resynced') tail = ' DNS-over-VLESS перенастроен на прежнем маршруте.';
+      return (pausing ? 'Подписки приостановлены.' : 'Подписки возобновлены.') + tail;
+    }
+
+    async function subsToggleAll() {
+      if (_subscriptionsSwitchBusy) return false;
+      const pausing = !_subscriptionsPaused;
+      const draftOk = await subsConfirmDiscardDraft({
+        message: pausing
+          ? 'Приостановить подписки и потерять текущий черновик формы?'
+          : 'Возобновить подписки и потерять текущий черновик формы?',
+        okText: pausing ? 'Приостановить' : 'Возобновить',
+        cancelText: 'Остаться',
+      });
+      if (!draftOk) return false;
+
+      let planData = null;
+      try {
+        const res = await fetch('/api/xray/subscriptions/pause-plan', { cache: 'no-store' });
+        planData = await res.json().catch(() => ({}));
+        if (!res.ok || !planData || planData.ok === false) {
+          throw new Error(String((planData && (planData.error || planData.message)) || ('HTTP ' + res.status)));
+        }
+      } catch (e) {
+        const msg = 'Не удалось проверить, что изменит переключение: ' + String(e && e.message ? e.message : e);
+        subsSetStatus(msg, true);
+        try { toastXkeen(msg, 'error'); } catch (e2) {}
+        return false;
+      }
+
+      let options = subsPauseConfirmOptions(planData, pausing);
+      let answer = await subsConfirmPause(options);
+      if (!answer.ok) return false;
+
+      const prevActive = getActiveFragment();
+      _subscriptionsSwitchBusy = true;
+      subsRenderPauseState();
+      try {
+        let data = null;
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          subsSetStatus(
+            (pausing ? 'Приостанавливаю подписки' : 'Возобновляю подписки') + ' и перезапускаю Xray…',
+            false,
+            false,
+            { busy: true },
+          );
+          data = await subsSendSwitch(pausing, answer.target);
+          if (!data || !data.choice) break;
+          // Прогноз не угадал: маршрутов для DNS оказалось несколько. Ничего не изменено.
+          options = subsPauseConfirmOptions(
+            { total: planData.total, dns: { outcome: 'choose', candidates: data.choice, restarts: 2 } },
+            true,
+          );
+          answer = await subsConfirmPause(options);
+          if (!answer.ok) {
+            subsSetStatus('', false);
+            return false;
+          }
+          data = null;
+        }
+        if (!data) throw new Error('не удалось выбрать маршрут для DNS-over-VLESS.');
+        // Своё уведомление: журнал операций про паузу сам ничего не всплывает.
+        const summary = subsSwitchSummary(data, pausing);
+        await subsLoad();
+        subsSetStatus(summary, false, true);
+        try { toastXkeen(summary, 'success'); } catch (e3) {}
+        await subsSyncOutboundsViewAfterMutation({ prevActive, touchedFiles: [] });
+        await subsSyncRoutingViewAfterMutation({
+          routingChanged: true,
+          routingFile: '05_routing.json',
+          observatoryChanged: true,
+          observatoryFile: '07_observatory.json',
+        });
+        try { await refreshRestartLog(); } catch (e4) {}
+        return true;
+      } catch (e) {
+        const msg = (pausing ? 'Подписки не приостановлены: ' : 'Подписки не возобновлены: ')
+          + String(e && e.message ? e.message : e);
+        try { await subsLoad(); } catch (e5) {}
+        subsSetStatus(msg, true);
+        try { toastXkeen(msg, 'error'); } catch (e6) {}
+        return false;
+      } finally {
+        _subscriptionsSwitchBusy = false;
+        subsRenderPauseState();
+      }
+    }
+
     async function subsRefreshDue() {
       const ok = await subsConfirmDiscardDraft({
         message: 'Обновить просроченные подписки и потерять текущий черновик формы?',
@@ -8136,7 +8467,7 @@ let outboundsModuleApi = null;
         }
         subsSetStatus('Сохранено.', false, true);
         await subsLoad();
-        if ($(SUB_IDS.refreshNow) && $(SUB_IDS.refreshNow).checked && id) {
+        if ($(SUB_IDS.refreshNow) && $(SUB_IDS.refreshNow).checked && id && !_subscriptionsPaused) {
           await subsRefresh(id, { skipDraftConfirm: true });
         } else {
           try { toastXkeen('Подписка сохранена', 'success'); } catch (e3) {}
@@ -8260,6 +8591,17 @@ let outboundsModuleApi = null;
         subsSetStatus('', false);
       });
       wireButton(SUB_IDS.refreshDue, () => { void subsRefreshDue(); });
+      try {
+        const master = $(SUB_IDS.master);
+        if (master && master.dataset.xkWired !== '1') {
+          master.dataset.xkWired = '1';
+          // Положение рубильника меняет только ответ сервера, не сам щелчок.
+          master.addEventListener('click', (event) => {
+            event.preventDefault();
+            void subsToggleAll();
+          });
+        }
+      } catch (eMaster) {}
       wireButton(SUB_IDS.align, () => { void subsAlignSchedule(); });
       wireButton(SUB_IDS.preview, () => { void subsPreview(); });
       wireButton(SUB_IDS.nodesPingAll, () => {
