@@ -2,10 +2,6 @@ import {
   createMihomoSnippetProvider,
   createXraySnippetProvider,
 } from './schema_snippets.js';
-import {
-  createMihomoQuickFixProvider,
-  createXrayQuickFixProvider,
-} from './schema_quickfixes.js';
 
 const SCHEMA_URLS = Object.freeze({
   xray: '/static/schemas/xray-config.schema.json',
@@ -22,13 +18,6 @@ const _snippetProviderCache = Object.freeze({
   'xray-inbounds': createXraySnippetProvider('xray-inbounds'),
   'xray-outbounds': createXraySnippetProvider('xray-outbounds'),
   mihomo: createMihomoSnippetProvider(),
-});
-const _quickFixProviderCache = Object.freeze({
-  'xray-config': createXrayQuickFixProvider(),
-  'xray-routing': createXrayQuickFixProvider(),
-  'xray-inbounds': createXrayQuickFixProvider(),
-  'xray-outbounds': createXrayQuickFixProvider(),
-  mihomo: createMihomoQuickFixProvider(),
 });
 
 function normalizeText(value) {
@@ -245,14 +234,10 @@ export function resolveEditorSnippetProvider(ctx) {
 }
 
 export function resolveEditorQuickFixProvider(ctx) {
-  if (isEditorExpertModeEnabled(ctx)) return null;
-  const o = ctx || {};
-  const explicitKind = normalizeSnippetKind(o.quickFixKind || o.schemaKind);
-  if (explicitKind && _quickFixProviderCache[explicitKind]) return _quickFixProviderCache[explicitKind];
-
-  const inferredKind = normalizeSnippetKind(inferSchemaKind(o));
-  if (!inferredKind) return null;
-  return _quickFixProviderCache[inferredKind] || null;
+  // Quick-fix providers belong to the optional advanced editor capability.
+  // Engine bundles pass an explicitly loaded provider when that capability is
+  // available; the basic schema layer must remain free of its dependencies.
+  return null;
 }
 
 export function resolveEditorSemanticValidation(ctx) {

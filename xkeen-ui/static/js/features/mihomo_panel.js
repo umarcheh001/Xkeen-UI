@@ -24,7 +24,6 @@ import {
   setXkeenPageConfigValue,
 } from './xkeen_runtime.js';
 import { loadEditorSchema, resolveEditorSnippetProvider } from '../ui/editor_schema.js';
-import { createMihomoQuickFixProvider } from '../ui/schema_quickfixes.js';
 import { iconHtml } from '../ui/operator_icons.js';
 
 let mihomoPanelModuleApi = null;
@@ -296,11 +295,21 @@ let mihomoPanelModuleApi = null;
   }
 
   let _mihomoQuickFixProvider = null;
-  function getMihomoQuickFixProvider() {
+  let _mihomoQuickFixProviderPromise = null;
+  async function getMihomoQuickFixProvider() {
     if (isMihomoExpertModeEnabled()) return null;
     if (_mihomoQuickFixProvider) return _mihomoQuickFixProvider;
-    _mihomoQuickFixProvider = createMihomoQuickFixProvider();
-    return _mihomoQuickFixProvider;
+    const ensureCapability = window.XKeen?.ui?.editorCapabilities?.ensure;
+    if (typeof ensureCapability === 'function' && !(await ensureCapability('quick-fix'))) return null;
+    if (!_mihomoQuickFixProviderPromise) {
+      _mihomoQuickFixProviderPromise = import('../ui/schema_quickfixes.js')
+        .then(({ createMihomoQuickFixProvider }) => {
+          _mihomoQuickFixProvider = createMihomoQuickFixProvider();
+          return _mihomoQuickFixProvider;
+        })
+        .catch(() => null);
+    }
+    return _mihomoQuickFixProviderPromise;
   }
 
   async function ensureMihomoSchemaDocument() {
@@ -521,7 +530,7 @@ let mihomoPanelModuleApi = null;
         wordWrap: 'on',
         yamlAssist: getMihomoYamlAssistOptions(),
         snippetProvider: getMihomoSnippetProvider(),
-        quickFixProvider: getMihomoQuickFixProvider(),
+        quickFixProvider: await getMihomoQuickFixProvider(),
       });
       if (!_monaco) return null;
 
@@ -1010,7 +1019,8 @@ let mihomoPanelModuleApi = null;
       viewportMargin: 30,
       yamlAssist: getMihomoYamlAssistOptions(),
       snippetProvider: getMihomoSnippetProvider(),
-      quickFixProvider: getMihomoQuickFixProvider(),
+      // Advanced quick-fix is optional and loaded by the async schema path.
+      quickFixProvider: null,
     });
 
     try {

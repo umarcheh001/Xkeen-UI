@@ -4,16 +4,17 @@ import { test, expect } from '@playwright/test';
 const PROFILE = String(process.env.XKEEN_E2E_MODULE_PROFILE || 'full').toLowerCase();
 
 const EXPECTED_BUNDLES = {
-  full: ['panel-core', 'panel-routing', 'panel-mihomo', 'terminal-lazy', 'file-manager-lazy', 'diagnostics-panel', 'editor-runtime'],
-  'xray-minimal': ['panel-core', 'panel-routing', 'editor-runtime'],
-  'mihomo-minimal': ['panel-core', 'panel-mihomo', 'editor-runtime'],
+  full: ['panel-core', 'panel-routing', 'panel-mihomo', 'terminal-lazy', 'file-manager-lazy', 'diagnostics-panel', 'editor-runtime', 'editor-codemirror', 'editor-monaco', 'editor-diff'],
+  'xray-minimal': ['panel-core', 'panel-routing', 'editor-runtime', 'editor-codemirror'],
+  'mihomo-minimal': ['panel-core', 'panel-mihomo', 'editor-runtime', 'editor-codemirror'],
   'core-only': ['panel-core'],
 };
 
 const FORBIDDEN_BUNDLE_MARKERS = {
-  'xray-minimal': ['panel.mihomo.bundle.js', 'mihomo_clash', 'terminal.lazy.entry.js', 'file_manager.lazy.entry.js', 'panel.diagnostics.bundle.js'],
-  'mihomo-minimal': ['panel.routing.bundle.js', 'terminal.lazy.entry.js', 'file_manager.lazy.entry.js', 'panel.diagnostics.bundle.js'],
-  'core-only': ['panel.routing.bundle.js', 'panel.mihomo.bundle.js', 'mihomo_clash', 'terminal.lazy.entry.js', 'file_manager.lazy.entry.js', 'panel.diagnostics.bundle.js', 'panel.editor.bundle.js'],
+  full: ['panel.editor.enhancements.bundle.js', 'schema_quickfixes.js', 'prettier_loader.js'],
+  'xray-minimal': ['panel.mihomo.bundle.js', 'mihomo_clash', 'terminal.lazy.entry.js', 'file_manager.lazy.entry.js', 'panel.diagnostics.bundle.js', 'panel.editor.monaco.bundle.js', 'panel.editor.diff.bundle.js', 'panel.editor.enhancements.bundle.js', 'schema_quickfixes.js', 'prettier_loader.js'],
+  'mihomo-minimal': ['panel.routing.bundle.js', 'terminal.lazy.entry.js', 'file_manager.lazy.entry.js', 'panel.diagnostics.bundle.js', 'panel.editor.monaco.bundle.js', 'panel.editor.diff.bundle.js', 'panel.editor.enhancements.bundle.js', 'schema_quickfixes.js', 'prettier_loader.js'],
+  'core-only': ['panel.routing.bundle.js', 'panel.mihomo.bundle.js', 'mihomo_clash', 'terminal.lazy.entry.js', 'file_manager.lazy.entry.js', 'panel.diagnostics.bundle.js', 'panel.editor.bundle.js', 'panel.editor.codemirror.bundle.js', 'panel.editor.monaco.bundle.js', 'panel.editor.diff.bundle.js', 'panel.editor.enhancements.bundle.js', 'schema_quickfixes.js', 'prettier_loader.js'],
 };
 
 const FORBIDDEN_API_PREFIXES = {
@@ -63,13 +64,17 @@ test.describe(`dynamic panel loading: ${PROFILE}`, () => {
   test('publishes profile descriptor and respects inactive bundle boundaries', async ({ page }) => {
     const observed = observeBrowser(page);
     await page.goto('/');
-    await expect(page.locator('.panel-header-shell')).toBeVisible();
+    await expect(page.locator('.panel-header-shell')).toBeAttached();
+    await expect.poll(
+      async () => (await moduleDescriptor(page))?.version,
+      { timeout: 20_000 },
+    ).toBe(1);
 
     const descriptor = await moduleDescriptor(page);
-    expect(descriptor?.version).toBe(1);
     expect(new Set(descriptor?.bundles?.map((bundle) => bundle.key))).toEqual(
       new Set(EXPECTED_BUNDLES[PROFILE] || []),
     );
+    expect(descriptor?.editor?.variant).toBe(PROFILE === 'full' ? 'full' : 'light');
     expect(observed.requests.filter((path) => FORBIDDEN_BUNDLE_MARKERS[PROFILE]?.some((marker) => path.includes(marker)))).toEqual([]);
     expect(observed.requests.filter((path) => FORBIDDEN_API_PREFIXES[PROFILE]?.some((prefix) => path.startsWith(prefix)))).toEqual([]);
     expect(observed.requests.filter((path) => path.endsWith('/static/xterm/xterm.css'))).toEqual([]);

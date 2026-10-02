@@ -535,12 +535,21 @@
 
   function openDiff(target, opts) {
     const raw = rawEditor(target);
-    const api = diffApi();
-    if (!api || typeof api.openForScope !== 'function') return Promise.resolve(null);
     const scope = (raw && raw._xkeenDiffScope) ? String(raw._xkeenDiffScope) : '';
     if (!scope) return Promise.resolve(null);
-    try { return Promise.resolve(api.openForScope(scope, opts || {})); }
-    catch (e) { return Promise.resolve(null); }
+    const ensureDiff = window.XKeen && XKeen.ui && XKeen.ui.editorCapabilities
+      ? XKeen.ui.editorCapabilities.ensure
+      : null;
+    const ready = typeof ensureDiff === 'function'
+      ? Promise.resolve(ensureDiff('diff'))
+      : Promise.resolve(true);
+    return ready.then((ok) => {
+      if (!ok) return null;
+      const api = diffApi();
+      if (!api || typeof api.openForScope !== 'function') return null;
+      try { return api.openForScope(scope, opts || {}); }
+      catch (e) { return null; }
+    }).catch(() => null);
   }
 
   function detachToolbar(target) {

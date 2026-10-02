@@ -49,8 +49,12 @@ import {
       if (mod && typeof mod.ensureFileManagerBundleReady === 'function') return mod.ensureFileManagerBundleReady();
       return true;
     }),
-    monacoShared: () => import('../pages/editor_monaco.shared.js'),
-    codemirrorShared: () => import('../pages/codemirror6.shared.js'),
+    monacoShared: () => import('../pages/panel.editor.monaco.bundle.js').then((mod) => (
+      mod && typeof mod.activate === 'function' ? mod.activate() : mod
+    )),
+    codemirrorShared: () => import('../pages/panel.editor.codemirror.bundle.js').then((mod) => (
+      mod && typeof mod.activate === 'function' ? mod.activate() : mod
+    )),
   };
 
   const featureLoaders = {
@@ -127,6 +131,21 @@ import {
   function normalizeEditorEngine(engine) {
     const next = String(engine || '').toLowerCase().trim();
     return (next === 'monaco' || next === 'codemirror') ? next : '';
+  }
+
+  function hasDeclaredEditorCapability(capability) {
+    try {
+      const descriptor = XK.pageConfig && XK.pageConfig.frontendModules
+        ? XK.pageConfig.frontendModules.editor
+        : null;
+      if (!descriptor || typeof descriptor !== 'object') return true;
+      const capabilities = descriptor && Array.isArray(descriptor.capabilities)
+        ? descriptor.capabilities
+        : [];
+      return capabilities.includes(String(capability || '').trim());
+    } catch (e) {
+      return false;
+    }
   }
 
   function getBundleLoader(name) {
@@ -511,6 +530,7 @@ import {
   function ensureEditorSupport(engine, opts) {
     const next = normalizeEditorEngine(engine);
     if (!next) return Promise.resolve(false);
+    if (!hasDeclaredEditorCapability(next)) return Promise.resolve(false);
     if (hasEditorSupport(next)) return Promise.resolve(true);
     if (editorSupportPromises[next]) return editorSupportPromises[next];
 

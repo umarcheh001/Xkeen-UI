@@ -3,6 +3,5 @@
 
 export async function activate() {
   await import('./editor.shared.js');
-  await import('./codemirror6.shared.js');
   return { ready: true };
 }

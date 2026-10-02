@@ -12,10 +12,10 @@
 
 | Профиль | Startup bundles | Lazy bundles | Lazy CSS |
 | --- | --- | --- | --- |
-| `legacy-full` | panel-core, panel-routing, panel-mihomo | terminal-lazy, file-manager-lazy, diagnostics-panel, editor-runtime | xterm |
-| `full` | panel-core, panel-routing, panel-mihomo | terminal-lazy, file-manager-lazy, diagnostics-panel, editor-runtime | xterm |
-| `xray-minimal` | panel-core, panel-routing | editor-runtime | - |
-| `mihomo-minimal` | panel-core, panel-mihomo | editor-runtime | - |
+| `legacy-full` | panel-core, panel-routing, panel-mihomo | terminal-lazy, file-manager-lazy, diagnostics-panel, editor-runtime, editor-codemirror, editor-monaco, editor-diff | xterm |
+| `full` | panel-core, panel-routing, panel-mihomo | terminal-lazy, file-manager-lazy, diagnostics-panel, editor-runtime, editor-codemirror, editor-monaco, editor-diff | xterm |
+| `xray-minimal` | panel-core, panel-routing | editor-runtime, editor-codemirror | - |
+| `mihomo-minimal` | panel-core, panel-mihomo | editor-runtime, editor-codemirror | - |
 | `core-only` | panel-core | - | - |
 
 ## Проверки

@@ -50,7 +50,6 @@ import {
 } from '../ui/routing_scenarios.js';
 import { applySchemaToEditor, resolveEditorSnippetProvider } from '../ui/editor_schema.js';
 import { validateXrayRoutingSemantics } from '../ui/schema_semantic_validation.js';
-import { createXrayQuickFixProvider } from '../ui/schema_quickfixes.js';
 import { iconHtml } from '../ui/operator_icons.js';
 
 (() => {
@@ -850,13 +849,23 @@ import { iconHtml } from '../ui/operator_icons.js';
   }
 
   let _routingQuickFixProvider = null;
-  function getRoutingQuickFixProvider() {
+  let _routingQuickFixProviderPromise = null;
+  async function getRoutingQuickFixProvider() {
     if (isRoutingExpertModeEnabled()) return null;
     if (_routingQuickFixProvider) return _routingQuickFixProvider;
-    _routingQuickFixProvider = createXrayQuickFixProvider({
-      getSemanticOptions: () => getRoutingSemanticValidationConfig().options,
-    });
-    return _routingQuickFixProvider;
+    const ensureCapability = window.XKeen?.ui?.editorCapabilities?.ensure;
+    if (typeof ensureCapability === 'function' && !(await ensureCapability('quick-fix'))) return null;
+    if (!_routingQuickFixProviderPromise) {
+      _routingQuickFixProviderPromise = import('../ui/schema_quickfixes.js')
+        .then(({ createXrayQuickFixProvider }) => {
+          _routingQuickFixProvider = createXrayQuickFixProvider({
+            getSemanticOptions: () => getRoutingSemanticValidationConfig().options,
+          });
+          return _routingQuickFixProvider;
+        })
+        .catch(() => null);
+    }
+    return _routingQuickFixProviderPromise;
   }
 
   function updateRoutingSchemaBadge(result) {
@@ -1092,7 +1101,7 @@ import { iconHtml } from '../ui/operator_icons.js';
         mode: 'jsonc',
         text: typeof text === 'string' ? text : readCurrentEditorText(),
         feature: 'routing',
-        quickFixProvider: getRoutingQuickFixProvider(),
+        quickFixProvider: await getRoutingQuickFixProvider(),
       });
       try {
         if (typeof editor.setOption === 'function') {
@@ -1121,7 +1130,7 @@ import { iconHtml } from '../ui/operator_icons.js';
         mode: 'jsonc',
         text: typeof text === 'string' ? text : readCurrentEditorText(),
         feature: 'routing',
-        quickFixProvider: getRoutingQuickFixProvider(),
+        quickFixProvider: await getRoutingQuickFixProvider(),
         semanticValidation: getRoutingSemanticValidationConfig(),
       });
       try { ensureRoutingSemanticContextFresh(); } catch (e2) {}
@@ -4718,7 +4727,8 @@ function closeHelp() {
       viewportMargin: initialLite ? PERF_LIMITS.viewportMarginLite : Infinity,
       semanticValidation: getRoutingSemanticValidationConfig(),
       snippetProvider: getRoutingSnippetProvider(),
-      quickFixProvider: getRoutingQuickFixProvider(),
+      // Advanced quick-fix is attached after the async schema capability check.
+      quickFixProvider: null,
     });
 
     // Cosmetic class + toolbar
@@ -5565,7 +5575,7 @@ function closeHelp() {
           performanceProfile: (_editorPerfProfile && _editorPerfProfile.lite) ? 'lite' : 'default',
           wordWrap: isMipsTarget() ? 'off' : 'on',
           snippetProvider: getRoutingSnippetProvider(),
-          quickFixProvider: getRoutingQuickFixProvider(),
+          quickFixProvider: await getRoutingQuickFixProvider(),
           onChange: () => {
             try { noteEditorContentMutation(); } catch (e) {}
             try { scheduleMonacoDiagnostics(); } catch (e) {}

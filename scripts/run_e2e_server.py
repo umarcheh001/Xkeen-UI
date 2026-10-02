@@ -124,6 +124,7 @@ def _seed_runtime_fixture(profile: str, active_module_ids: tuple[str, ...]) -> N
                 "schema_version": 1,
                 "profile": f"e2e-{profile}",
                 "restart_required": False,
+                "editor": {"variant": "full" if profile == "full" else "light"},
                 "modules": {
                     module_id: {"enabled": module_id in active_module_ids}
                     for module_id in E2E_MODULE_PROFILES["full"]
@@ -139,6 +140,9 @@ def _seed_runtime_fixture(profile: str, active_module_ids: tuple[str, ...]) -> N
         stub = BIN_DIR / name
         _write(stub, "#!/bin/sh\nexit 0\n")
         stub.chmod(0o755)
+        # ``shutil.which`` on Windows resolves executable names through
+        # PATHEXT, so provide a native-looking companion for the same stub.
+        _write(BIN_DIR / f"{name}.cmd", "@echo off\r\nexit /b 0\r\n")
 
 
 def _ensure_dirs() -> None:

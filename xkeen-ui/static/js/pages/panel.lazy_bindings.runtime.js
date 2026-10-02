@@ -296,7 +296,19 @@ export function isPanelTerminalReady() {
 }
 
 export function ensurePanelEditorSupport(engine, opts) {
+  const normalizedEngine = String(engine || '').toLowerCase().trim();
+  const capabilityKey = normalizedEngine === 'monaco'
+    ? 'editor-monaco'
+    : normalizedEngine === 'codemirror'
+      ? 'editor-codemirror'
+      : '';
+  if (!capabilityKey) return Promise.resolve(false);
+
   return ensurePanelModule('editor-runtime', 'editor-support')
+    .then((loaded) => {
+      if (!loaded || loaded.status !== 'ready') return false;
+      return ensurePanelModule(capabilityKey, 'editor-support');
+    })
     .then((loaded) => {
       if (!loaded || loaded.status !== 'ready') return false;
       const api = getPanelLazyRuntimeApi();
@@ -304,6 +316,20 @@ export function ensurePanelEditorSupport(engine, opts) {
         ? api.ensureEditorSupport(engine, opts)
         : false;
     })
+    .catch(() => false);
+}
+
+export function ensurePanelEditorCapability(capability) {
+  const key = String(capability || '').toLowerCase().trim();
+  const bundleKey = {
+    diff: 'editor-diff',
+    prettier: 'editor-enhancements',
+    'quick-fix': 'editor-enhancements',
+    'schema-extended': 'editor-enhancements',
+  }[key];
+  if (!bundleKey) return Promise.resolve(false);
+  return ensurePanelModule(bundleKey, 'editor-capability')
+    .then((loaded) => !!(loaded && loaded.status === 'ready'))
     .catch(() => false);
 }
 
@@ -880,6 +906,7 @@ export const panelLazyBindingsRuntimeApi = Object.freeze({
   ensureTerminalReady: ensurePanelTerminalReady,
   isTerminalReady: isPanelTerminalReady,
   ensureEditorSupport: ensurePanelEditorSupport,
+  ensureEditorCapability: ensurePanelEditorCapability,
   ensureMonacoSupport: ensurePanelMonacoSupport,
   ensureCodeMirrorSupport: ensurePanelCodeMirrorSupport,
   openTerminal: openPanelTerminal,
@@ -887,3 +914,11 @@ export const panelLazyBindingsRuntimeApi = Object.freeze({
   initTerminalCapabilityButtons: initPanelTerminalCapabilityButtons,
   wireLazyFeatureClicks: wirePanelLazyFeatureClicks,
 });
+
+try {
+  window.XKeen = window.XKeen || {};
+  window.XKeen.ui = window.XKeen.ui || {};
+  window.XKeen.ui.editorCapabilities = Object.freeze({
+    ensure: ensurePanelEditorCapability,
+  });
+} catch (error) {}

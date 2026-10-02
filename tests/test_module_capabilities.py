@@ -37,6 +37,12 @@ def test_module_capabilities_preserve_legacy_payload_and_add_registry_projection
     assert meta["effective_module_ids"] == list(MODULE_IDS)
 
     modules = payload["modules"]
+    assert payload["editor"] == {
+        "variant": "full",
+        "available_variants": ["light", "full", "advanced"],
+        "capabilities": ["codemirror", "monaco", "diff"],
+        "requires_restart": False,
+    }
     assert list(modules) == list(MODULE_IDS)
     mihomo = modules["engine.mihomo"]
     assert mihomo["installed"] is True
@@ -88,6 +94,20 @@ def test_module_capabilities_distinguish_disabled_from_environment_unavailable(t
     assert happ_dependency["reason"] is None
 
 
+def test_editor_variant_is_projected_into_capabilities_after_registry_change(tmp_path):
+    registry = _registry(tmp_path)
+    registry.set_editor_variant("advanced")
+
+    payload = extend_capabilities_with_modules(
+        detect_capabilities({}, which=lambda _name: None),
+        registry,
+    )
+
+    assert payload["editor"]["variant"] == "advanced"
+    assert payload["editor"]["requires_restart"] is True
+    assert "quick-fix" in payload["editor"]["capabilities"]
+
+
 def test_module_capabilities_keep_legacy_result_when_registry_state_is_unavailable():
     class BrokenRegistry:
         def get_registry(self):
@@ -99,6 +119,12 @@ def test_module_capabilities_keep_legacy_result_when_registry_state_is_unavailab
     for key in ("websocket", "terminal", "runtime", "files", "remoteFs", "storageUsb"):
         assert payload[key] == legacy[key]
     assert payload["modules"] == {}
+    assert payload["editor"] == {
+        "variant": "light",
+        "available_variants": ["light", "full", "advanced"],
+        "capabilities": ["codemirror", "schema-basic"],
+        "requires_restart": False,
+    }
     assert payload["moduleRegistry"] == {
         "schema_version": 1,
         "api_version": None,

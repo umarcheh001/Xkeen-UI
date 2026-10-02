@@ -68,6 +68,57 @@ def create_modules_blueprint(
                 log_tag="modules.get_failed",
             )
 
+    @bp.patch("/api/modules/editor")
+    def api_modules_editor_patch():
+        try:
+            if request.content_length and int(request.content_length) > _MAX_PATCH_BYTES:
+                return error_response("payload too large", 400, ok=False, code="payload_too_large")
+        except (TypeError, ValueError):
+            pass
+
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return error_response(
+                "payload must be an object",
+                400,
+                ok=False,
+                code="invalid_payload",
+            )
+
+        unknown_fields = sorted(set(payload) - {"variant"})
+        if unknown_fields:
+            return error_response(
+                "unsupported editor fields",
+                400,
+                ok=False,
+                code="unsupported_editor_fields",
+                fields=unknown_fields,
+            )
+        if "variant" not in payload:
+            return error_response(
+                "variant is required",
+                400,
+                ok=False,
+                code="editor_variant_required",
+            )
+
+        try:
+            response_payload, changed = module_registry.set_editor_variant(payload["variant"])
+            response_payload["changed"] = changed
+            return success(response_payload)
+        except ModuleRegistryError as error:
+            return registry_error(error)
+        except Exception as exc:  # noqa: BLE001
+            return exception_response(
+                "Не удалось сохранить вариант редакторов.",
+                500,
+                ok=False,
+                code="editor_variant_save_failed",
+                hint="Проверьте доступность каталога UI state.",
+                exc=exc,
+                log_tag="modules.editor_variant_save_failed",
+            )
+
     def update_module(module_id: str, enabled: bool):
         try:
             if before_change is not None:

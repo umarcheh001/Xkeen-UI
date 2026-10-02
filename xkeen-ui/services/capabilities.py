@@ -239,6 +239,14 @@ def extend_capabilities_with_modules(
     payload = dict(capabilities)
     try:
         snapshot = module_registry.get_registry()
+        editor = snapshot.get("editor")
+        if not isinstance(editor, dict):
+            editor = {
+                "variant": "light",
+                "available_variants": ["light", "full", "advanced"],
+                "capabilities": ["codemirror", "schema-basic"],
+                "requires_restart": bool(snapshot.get("restart_required")),
+            }
         module_states: Dict[str, Dict[str, Any]] = {}
         for item in snapshot.get("modules", []):
             if not isinstance(item, dict):
@@ -288,6 +296,7 @@ def extend_capabilities_with_modules(
             "effective_module_ids": list(snapshot.get("effective_module_ids") or []),
         }
         payload["modules"] = module_states
+        payload["editor"] = dict(editor)
     except Exception:
         # The legacy capability contract remains available if UI-state storage
         # is temporarily unreadable.  The dedicated /api/modules endpoint
@@ -305,6 +314,12 @@ def extend_capabilities_with_modules(
             "effective_module_ids": [],
         }
         payload["modules"] = {}
+        payload["editor"] = {
+            "variant": "light",
+            "available_variants": ["light", "full", "advanced"],
+            "capabilities": ["codemirror", "schema-basic"],
+            "requires_restart": False,
+        }
     return payload
 
 

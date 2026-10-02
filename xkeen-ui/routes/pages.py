@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from flask import Flask, make_response, redirect, render_template, url_for
 from services.capabilities import detect_terminal_state
 from services.cores import detect_available_cores
-from services.module_registry import MODULE_IDS
+from services.module_registry import EDITOR_CAPABILITIES, EDITOR_VARIANTS, MODULE_IDS
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,11 +51,12 @@ class PanelFrontendModule:
     api_prefixes: tuple[str, ...]
     ws_prefixes: tuple[str, ...]
     css_keys: tuple[str, ...] = ()
+    capabilities: tuple[str, ...] = ()
 
     def as_payload(self) -> dict[str, object]:
         # Keep this JSON-safe and declarative. The browser always resolves the
         # key through its local import allow-list; no import path is published.
-        return {
+        payload = {
             "key": self.key,
             "moduleId": self.owners[0],
             "loadMode": self.load_mode,
@@ -65,6 +66,9 @@ class PanelFrontendModule:
             "wsPrefixes": list(self.ws_prefixes),
             "cssKeys": list(self.css_keys),
         }
+        if self.capabilities:
+            payload["capabilities"] = list(self.capabilities)
+        return payload
 
 
 PANEL_COMPOSITION: tuple[PanelCompositionEntry, ...] = (
@@ -175,21 +179,90 @@ PANEL_FRONTEND_MODULES: tuple[PanelFrontendModule, ...] = (
         (),
         (),
     ),
+    PanelFrontendModule(
+        "editor-codemirror",
+        ("tool.editor",),
+        "interaction",
+        (),
+        (),
+        (),
+        (),
+        capabilities=("codemirror",),
+    ),
+    PanelFrontendModule(
+        "editor-monaco",
+        ("tool.editor",),
+        "interaction",
+        (),
+        (),
+        (),
+        (),
+        capabilities=("monaco",),
+    ),
+    PanelFrontendModule(
+        "editor-diff",
+        ("tool.editor",),
+        "interaction",
+        (),
+        (),
+        (),
+        (),
+        capabilities=("diff",),
+    ),
+    PanelFrontendModule(
+        "editor-enhancements",
+        ("tool.editor",),
+        "interaction",
+        (),
+        (),
+        (),
+        (),
+        capabilities=("prettier", "quick-fix", "schema-extended"),
+    ),
 )
 
 
-def build_panel_frontend_modules(active_module_ids: set[str] | None) -> dict[str, object]:
+def build_panel_frontend_modules(
+    active_module_ids: set[str] | None,
+    *,
+    editor_variant: str | None = None,
+    editor_capabilities: list[str] | tuple[str, ...] | None = None,
+) -> dict[str, object]:
     """Return the client-safe frontend activation descriptor for the panel."""
 
     active = frozenset(MODULE_IDS if active_module_ids is None else active_module_ids)
+    requested_variant = str(editor_variant or "").strip().lower()
+    if requested_variant not in EDITOR_VARIANTS:
+        requested_variant = (
+            "full"
+            if active_module_ids is None
+            or {"engine.xray", "engine.mihomo"} <= set(active)
+            else "light"
+        )
+    capabilities = tuple(
+        str(capability).strip()
+        for capability in (
+            editor_capabilities
+            if editor_capabilities is not None
+            else EDITOR_CAPABILITIES[requested_variant]
+        )
+        if str(capability).strip()
+    )
+    capability_set = set(capabilities)
     bundles = [
         entry.as_payload()
         for entry in PANEL_FRONTEND_MODULES
         if set(entry.owners) <= active
+        and set(entry.capabilities) <= capability_set
     ]
     return {
         "version": 1,
         "activeModuleIds": sorted(active),
+        "editor": {
+            "variant": requested_variant,
+            "capabilities": list(capabilities),
+            "availableVariants": list(EDITOR_VARIANTS),
+        },
         "bundles": bundles,
     }
 
@@ -423,7 +496,16 @@ def register_pages_routes(
 
         _core_ui = _detect_panel_core_ui(active_module_ids)
         page_context = _build_panel_page_context(active_module_ids)
-        panel_frontend_modules = build_panel_frontend_modules(active_module_ids)
+        editor_descriptor = module_activation.get("editor") if isinstance(module_activation, dict) else None
+        panel_frontend_modules = build_panel_frontend_modules(
+            active_module_ids,
+            editor_variant=(editor_descriptor or {}).get("variant")
+            if isinstance(editor_descriptor, dict)
+            else None,
+            editor_capabilities=(editor_descriptor or {}).get("capabilities")
+            if isinstance(editor_descriptor, dict)
+            else None,
+        )
         _websocket_runtime = str(os.environ.get("XKEEN_WS_RUNTIME", "")).strip().lower() in {"1", "true", "yes", "on"}
         page_ctx = {
             "machine": _machine,

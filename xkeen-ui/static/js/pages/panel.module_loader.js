@@ -11,6 +11,10 @@ const BUNDLE_LOADERS = Object.freeze({
   'file-manager-lazy': () => import('./file_manager.lazy.entry.js'),
   'diagnostics-panel': () => import('./panel.diagnostics.bundle.js'),
   'editor-runtime': () => import('./panel.editor.bundle.js'),
+  'editor-codemirror': () => import('./panel.editor.codemirror.bundle.js'),
+  'editor-monaco': () => import('./panel.editor.monaco.bundle.js'),
+  'editor-diff': () => import('./panel.editor.diff.bundle.js'),
+  'editor-enhancements': () => import('./panel.editor.enhancements.bundle.js'),
 });
 
 const STYLE_URLS = Object.freeze({
@@ -39,6 +43,17 @@ function getFrontendModules() {
 function getBundles() {
   const bundles = getFrontendModules().bundles;
   return Array.isArray(bundles) ? bundles : [];
+}
+
+function getEditorDescriptor() {
+  const editor = getFrontendModules().editor;
+  return editor && typeof editor === 'object' ? editor : {};
+}
+
+function hasEditorCapability(capability) {
+  const key = String(capability || '').trim();
+  const capabilities = getEditorDescriptor().capabilities;
+  return !!(key && Array.isArray(capabilities) && capabilities.includes(key));
 }
 
 function descriptorFor(key) {
@@ -180,11 +195,21 @@ export function getPanelFrontendDescriptor() {
   return getFrontendModules();
 }
 
+export function getPanelEditorDescriptor() {
+  return getEditorDescriptor();
+}
+
+export function isPanelEditorCapabilityActive(capability) {
+  return hasEditorCapability(capability);
+}
+
 export const panelModuleLoaderApi = Object.freeze({
   ensure: ensurePanelModule,
   ensureForView: ensurePanelModuleForView,
   getApi: getPanelModuleApi,
   isActive: isPanelModuleActive,
   getDescriptor: getPanelFrontendDescriptor,
+  getEditorDescriptor: getPanelEditorDescriptor,
+  isEditorCapabilityActive: isPanelEditorCapabilityActive,
   ensureStyles: ensurePanelModuleStyles,
 });

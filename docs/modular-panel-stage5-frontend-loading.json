@@ -160,6 +160,45 @@
           "apiPrefixes": [],
           "wsPrefixes": [],
           "cssKeys": []
+        },
+        {
+          "key": "editor-codemirror",
+          "moduleId": "tool.editor",
+          "loadMode": "interaction",
+          "views": [],
+          "domRoots": [],
+          "apiPrefixes": [],
+          "wsPrefixes": [],
+          "cssKeys": [],
+          "capabilities": [
+            "codemirror"
+          ]
+        },
+        {
+          "key": "editor-monaco",
+          "moduleId": "tool.editor",
+          "loadMode": "interaction",
+          "views": [],
+          "domRoots": [],
+          "apiPrefixes": [],
+          "wsPrefixes": [],
+          "cssKeys": [],
+          "capabilities": [
+            "monaco"
+          ]
+        },
+        {
+          "key": "editor-diff",
+          "moduleId": "tool.editor",
+          "loadMode": "interaction",
+          "views": [],
+          "domRoots": [],
+          "apiPrefixes": [],
+          "wsPrefixes": [],
+          "cssKeys": [],
+          "capabilities": [
+            "diff"
+          ]
         }
       ],
       "startup_bundle_keys": [
@@ -171,7 +210,10 @@
         "terminal-lazy",
         "file-manager-lazy",
         "diagnostics-panel",
-        "editor-runtime"
+        "editor-runtime",
+        "editor-codemirror",
+        "editor-monaco",
+        "editor-diff"
       ],
       "lazy_css": {
         "terminal-lazy": [
@@ -322,6 +364,45 @@
           "apiPrefixes": [],
           "wsPrefixes": [],
           "cssKeys": []
+        },
+        {
+          "key": "editor-codemirror",
+          "moduleId": "tool.editor",
+          "loadMode": "interaction",
+          "views": [],
+          "domRoots": [],
+          "apiPrefixes": [],
+          "wsPrefixes": [],
+          "cssKeys": [],
+          "capabilities": [
+            "codemirror"
+          ]
+        },
+        {
+          "key": "editor-monaco",
+          "moduleId": "tool.editor",
+          "loadMode": "interaction",
+          "views": [],
+          "domRoots": [],
+          "apiPrefixes": [],
+          "wsPrefixes": [],
+          "cssKeys": [],
+          "capabilities": [
+            "monaco"
+          ]
+        },
+        {
+          "key": "editor-diff",
+          "moduleId": "tool.editor",
+          "loadMode": "interaction",
+          "views": [],
+          "domRoots": [],
+          "apiPrefixes": [],
+          "wsPrefixes": [],
+          "cssKeys": [],
+          "capabilities": [
+            "diff"
+          ]
         }
       ],
       "startup_bundle_keys": [
@@ -333,7 +414,10 @@
         "terminal-lazy",
         "file-manager-lazy",
         "diagnostics-panel",
-        "editor-runtime"
+        "editor-runtime",
+        "editor-codemirror",
+        "editor-monaco",
+        "editor-diff"
       ],
       "lazy_css": {
         "terminal-lazy": [
@@ -403,6 +487,19 @@
           "apiPrefixes": [],
           "wsPrefixes": [],
           "cssKeys": []
+        },
+        {
+          "key": "editor-codemirror",
+          "moduleId": "tool.editor",
+          "loadMode": "interaction",
+          "views": [],
+          "domRoots": [],
+          "apiPrefixes": [],
+          "wsPrefixes": [],
+          "cssKeys": [],
+          "capabilities": [
+            "codemirror"
+          ]
         }
       ],
       "startup_bundle_keys": [
@@ -410,7 +507,8 @@
         "panel-routing"
       ],
       "lazy_bundle_keys": [
-        "editor-runtime"
+        "editor-runtime",
+        "editor-codemirror"
       ],
       "lazy_css": {}
     },
@@ -473,6 +571,19 @@
           "apiPrefixes": [],
           "wsPrefixes": [],
           "cssKeys": []
+        },
+        {
+          "key": "editor-codemirror",
+          "moduleId": "tool.editor",
+          "loadMode": "interaction",
+          "views": [],
+          "domRoots": [],
+          "apiPrefixes": [],
+          "wsPrefixes": [],
+          "cssKeys": [],
+          "capabilities": [
+            "codemirror"
+          ]
         }
       ],
       "startup_bundle_keys": [
@@ -480,7 +591,8 @@
         "panel-mihomo"
       ],
       "lazy_bundle_keys": [
-        "editor-runtime"
+        "editor-runtime",
+        "editor-codemirror"
       ],
       "lazy_css": {}
     },

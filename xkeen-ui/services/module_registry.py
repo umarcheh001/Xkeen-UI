@@ -30,6 +30,19 @@ MODULE_SIZES_FILENAME = "module-sizes.json"
 LEGACY_FULL_PROFILE = "legacy-full"
 CUSTOM_PROFILE = "custom"
 SAFE_MODE_ENV = "XKEEN_UI_MODULE_SAFE_MODE"
+EDITOR_VARIANTS = ("light", "full", "advanced")
+EDITOR_CAPABILITIES: dict[str, tuple[str, ...]] = {
+    "light": ("codemirror", "schema-basic"),
+    "full": ("codemirror", "monaco", "diff"),
+    "advanced": (
+        "codemirror",
+        "monaco",
+        "diff",
+        "prettier",
+        "quick-fix",
+        "schema-extended",
+    ),
+}
 
 BLUEPRINT_OWNERS: dict[str, str] = {
     "utils": "core",
@@ -298,6 +311,16 @@ _DEFINITIONS_BY_ID = {definition.id: definition for definition in MODULE_DEFINIT
 _MAX_LAST_ERROR_CHARS = 1024
 
 
+def _editor_default_variant(profile: object) -> str:
+    return "full" if str(profile or "").strip().lower() in {LEGACY_FULL_PROFILE, "full"} else "light"
+
+
+def _normalize_editor_variant(raw: object, profile: object) -> str:
+    candidate = raw.get("variant") if isinstance(raw, Mapping) else None
+    normalized = str(candidate or "").strip().lower()
+    return normalized if normalized in EDITOR_VARIANTS else _editor_default_variant(profile)
+
+
 class ModuleRegistryError(ValueError):
     """Expected, client-safe error from a module registry operation."""
 
@@ -410,6 +433,12 @@ class ModuleRegistry:
                 "schema_version": STATE_SCHEMA_VERSION,
                 "api_version": API_VERSION,
                 "profile": LEGACY_FULL_PROFILE,
+                "editor": {
+                    "variant": "full",
+                    "available_variants": list(EDITOR_VARIANTS),
+                    "capabilities": list(EDITOR_CAPABILITIES["full"]),
+                    "requires_restart": False,
+                },
                 "legacy_compatibility": True,
                 "runtime_gates_active": True,
                 "active_module_ids": installed_ids,
@@ -450,6 +479,7 @@ class ModuleRegistry:
                 "schema_version": STATE_SCHEMA_VERSION,
                 "api_version": API_VERSION,
                 "profile": snapshot.get("profile"),
+                "editor": snapshot.get("editor"),
                 "legacy_compatibility": legacy_compatibility,
                 "runtime_gates_active": True,
                 "active_module_ids": active,
@@ -475,6 +505,12 @@ class ModuleRegistry:
                 "schema_version": STATE_SCHEMA_VERSION,
                 "api_version": API_VERSION,
                 "profile": LEGACY_FULL_PROFILE,
+                "editor": {
+                    "variant": "full",
+                    "available_variants": list(EDITOR_VARIANTS),
+                    "capabilities": list(EDITOR_CAPABILITIES["full"]),
+                    "requires_restart": False,
+                },
                 "legacy_compatibility": True,
                 "runtime_gates_active": True,
                 "active_module_ids": installed_ids,
@@ -565,6 +601,7 @@ class ModuleRegistry:
                     "registry_version": REGISTRY_VERSION,
                     "profile": snapshot["profile"],
                     "restart_required": snapshot["restart_required"],
+                    "editor": snapshot["editor"],
                     "runtime_gates_active": bool(snapshot["runtime_gates_active"]),
                     "configured_module_ids": snapshot["configured_module_ids"],
                     "effective_module_ids": snapshot["effective_module_ids"],
@@ -573,6 +610,46 @@ class ModuleRegistry:
         # `_require_known_module` makes this unreachable; retain a defensive
         # failure in case a future registry serializer is changed incorrectly.
         raise ModuleRegistryError("module_not_found", "Модуль не найден.", status=404)
+
+    def set_editor_variant(self, variant: str) -> tuple[dict[str, Any], bool]:
+        """Persist the editor capability variant without changing modules."""
+
+        normalized_variant = str(variant or "").strip().lower()
+        if normalized_variant not in EDITOR_VARIANTS:
+            raise ModuleRegistryError(
+                "editor_variant_invalid",
+                "Недопустимый вариант редакторов.",
+                status=400,
+                variant=normalized_variant,
+                available_variants=list(EDITOR_VARIANTS),
+            )
+
+        with self._lock:
+            if self._state_read_only_recovery:
+                raise ModuleRegistryError(
+                    "state_schema_newer",
+                    "Состояние модулей создано более новой версией панели.",
+                    status=409,
+                )
+            state, normalized = self._load_state_locked()
+            if self._state_read_only_recovery:
+                raise ModuleRegistryError(
+                    "state_schema_newer",
+                    "Состояние модулей создано более новой версией панели.",
+                    status=409,
+                )
+
+            current_variant = str(state["editor"]["variant"])
+            changed = current_variant != normalized_variant
+            state["editor"] = {"variant": normalized_variant}
+            if changed:
+                state["restart_required"] = True
+
+            if changed or normalized:
+                self._write_state_locked(state)
+
+            snapshot = self._snapshot_from_state(state)
+            return snapshot, changed
 
     def set_enabled(self, module_id: str, enabled: bool) -> tuple[dict[str, Any], bool]:
         """Persist a requested module state and return (payload, changed)."""
@@ -825,6 +902,12 @@ class ModuleRegistry:
             "schema_version": STATE_SCHEMA_VERSION,
             "profile": profile,
             "restart_required": restart_required,
+            "editor": {
+                "variant": _normalize_editor_variant(
+                    raw.get("editor") if isinstance(raw.get("editor"), dict) else None,
+                    profile,
+                ),
+            },
             "modules": modules,
         }
         if raw != normalized:
@@ -839,7 +922,18 @@ class ModuleRegistry:
             "schema_version": STATE_SCHEMA_VERSION,
             "profile": LEGACY_FULL_PROFILE,
             "restart_required": False,
+            "editor": {"variant": "full"},
             "modules": {module_id: {"enabled": True} for module_id in MODULE_IDS},
+        }
+
+    @staticmethod
+    def _editor_descriptor(state: Mapping[str, Any]) -> dict[str, Any]:
+        variant = _normalize_editor_variant(state.get("editor"), state.get("profile"))
+        return {
+            "variant": variant,
+            "available_variants": list(EDITOR_VARIANTS),
+            "capabilities": list(EDITOR_CAPABILITIES[variant]),
+            "requires_restart": bool(state.get("restart_required")),
         }
 
     def _snapshot_from_state(self, state: Mapping[str, Any]) -> dict[str, Any]:
@@ -859,6 +953,7 @@ class ModuleRegistry:
             "registry_version": REGISTRY_VERSION,
             "profile": str(state["profile"]),
             "restart_required": bool(state["restart_required"]),
+            "editor": self._editor_descriptor(state),
             # This documents the intentional Stage 1 compatibility boundary.
             # The effective set is an eligibility calculation until Stage 3.
             "runtime_gates_active": bool(self._runtime_activation),

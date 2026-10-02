@@ -49,14 +49,72 @@ def test_missing_state_migrates_to_legacy_full_and_exposes_full_registry(tmp_pat
     assert payload["effective_module_ids"] == list(MODULE_IDS)
     assert [item["id"] for item in payload["modules"]] == list(MODULE_IDS)
     assert all(item["status"] == "enabled" for item in payload["modules"])
+    assert payload["editor"] == {
+        "variant": "full",
+        "available_variants": ["light", "full", "advanced"],
+        "capabilities": ["codemirror", "monaco", "diff"],
+        "requires_restart": False,
+    }
 
     state = json.loads(state_path.read_text(encoding="utf-8"))
     assert state == {
         "schema_version": STATE_SCHEMA_VERSION,
         "profile": LEGACY_FULL_PROFILE,
         "restart_required": False,
+        "editor": {"variant": "full"},
         "modules": {module_id: {"enabled": True} for module_id in MODULE_IDS},
     }
+
+
+def test_editor_variant_is_backward_compatible_and_persisted_atomically(tmp_path):
+    state_path = tmp_path / "modules.json"
+    state_path.write_text(
+        json.dumps(
+            {
+                "schema_version": STATE_SCHEMA_VERSION,
+                "profile": "xray-minimal",
+                "restart_required": False,
+                "modules": {module_id: {"enabled": True} for module_id in MODULE_IDS},
+            }
+        ),
+        encoding="utf-8",
+    )
+    registry = _registry(tmp_path)
+
+    initial = registry.get_registry()
+    assert initial["editor"]["variant"] == "light"
+    assert initial["editor"]["capabilities"] == ["codemirror", "schema-basic"]
+
+    updated, changed = registry.set_editor_variant("advanced")
+    assert changed is True
+    assert updated["editor"]["variant"] == "advanced"
+    assert updated["editor"]["capabilities"] == [
+        "codemirror",
+        "monaco",
+        "diff",
+        "prettier",
+        "quick-fix",
+        "schema-extended",
+    ]
+    assert updated["restart_required"] is True
+    persisted = json.loads(state_path.read_text(encoding="utf-8"))
+    assert persisted["schema_version"] == STATE_SCHEMA_VERSION
+    assert persisted["editor"] == {"variant": "advanced"}
+    assert persisted["modules"]["engine.xray"]["enabled"] is True
+
+
+def test_editor_variant_rejects_unknown_values(tmp_path):
+    registry = _registry(tmp_path)
+    registry.get_registry()
+
+    try:
+        registry.set_editor_variant("monaco")
+    except ModuleRegistryError as error:
+        assert error.code == "editor_variant_invalid"
+        assert error.status == 400
+        assert error.details["available_variants"] == ["light", "full", "advanced"]
+    else:
+        raise AssertionError("unknown editor variant must be rejected")
 
 
 def test_v0_active_modules_state_migrates_to_schema_v1(tmp_path):
@@ -424,6 +482,27 @@ def test_module_api_contract_and_mutations(tmp_path):
     assert listed.status_code == 200
     assert listed.headers["Cache-Control"] == "no-store"
     assert listed.get_json()["effective_module_ids"] == list(MODULE_IDS)
+    assert listed.get_json()["editor"]["variant"] == "full"
+
+    editor = client.patch("/api/modules/editor", json={"variant": "light"})
+    assert editor.status_code == 200
+    assert editor.get_json()["editor"]["variant"] == "light"
+    assert editor.get_json()["restart_required"] is True
+
+    unsupported_editor_field = client.patch(
+        "/api/modules/editor",
+        json={"variant": "full", "enabled": True},
+    )
+    assert unsupported_editor_field.status_code == 400
+    assert unsupported_editor_field.get_json()["code"] == "unsupported_editor_fields"
+
+    invalid_editor = client.patch("/api/modules/editor", json={"variant": "monaco"})
+    assert invalid_editor.status_code == 400
+    assert invalid_editor.get_json()["code"] == "editor_variant_invalid"
+
+    missing_editor_variant = client.patch("/api/modules/editor", json={})
+    assert missing_editor_variant.status_code == 400
+    assert missing_editor_variant.get_json()["code"] == "editor_variant_required"
 
     detail = client.get("/api/modules/engine.mihomo")
     assert detail.status_code == 200

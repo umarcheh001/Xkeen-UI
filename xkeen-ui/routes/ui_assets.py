@@ -624,11 +624,22 @@ def _normalize_page_config_frontend_modules(value: Any) -> dict[str, Any]:
         if normalized["key"] and normalized["moduleId"]:
             bundles.append(normalized)
 
-    return {
+    normalized_frontend_modules = {
         "version": version,
         "activeModuleIds": _normalize_page_config_string_list(raw.get("activeModuleIds")),
         "bundles": bundles,
     }
+    # Editor capabilities are server-owned policy metadata. Keep this small
+    # descriptor in the page config so the loader can reject unsupported
+    # optional bundles without receiving import paths from the server.
+    editor = _normalize_page_config_mapping(raw.get("editor"))
+    if editor:
+        normalized_frontend_modules["editor"] = {
+            "variant": _normalize_page_config_string(editor.get("variant")).strip(),
+            "capabilities": _normalize_page_config_string_list(editor.get("capabilities")),
+            "availableVariants": _normalize_page_config_string_list(editor.get("availableVariants")),
+        }
+    return normalized_frontend_modules
 
 
 def _build_page_config_group(defaults: Mapping[str, Any], overrides: Any, *, normalizers: Mapping[str, Any] | None = None) -> dict[str, Any]:

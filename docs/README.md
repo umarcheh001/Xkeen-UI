@@ -5,7 +5,7 @@
 ## Основные документы
 
 - `README_frontend_migration_plan.md` — текущий статус закрытого migration scope и список guardrails, которые нельзя откатывать.
-- `../README-modular-panel-plan.md` — план модульной панели; Этапы 0–5 закрыты, следующий — Этап 6.
+- `../README-modular-panel-plan.md` — план модульной панели; Этапы 0–6 закрыты, следующий — Этап 7.
 - `frontend-target-architecture.md` — целевой архитектурный контракт фронтенда в текущем репозитории.
 - `frontend-feature-api.md` — правила для feature API, registry и compat-слоя.
 - `config-schema-ux-roadmap.md` — roadmap по развитию UX вокруг схем Xray JSON и Mihomo YAML: schema enrichment, semantic validation, snippets, quick fixes и guided flows.
@@ -42,6 +42,7 @@
 - `modular-panel-stage4.5-composition.md` — закрытый подэтап 4.5: server-side composition от active-module manifest, единый `page_context`, профильный HTML и allow-listed dynamic source resolver.
 - `modular-panel-stage4.6-compatibility.md` — закрывающий подэтап 4.6: server-side compatibility matrix, Full/Legacy DOM-equivalence, составные modal owners и подтверждённое отсутствие монолита в entrypoint.
 - `modular-panel-stage5-frontend-loading.md` — закрытый Этап 5: server descriptor, локальный dynamic-import allow-list, profile-aware bundles, lazy `xterm.css` и изолированные browser Network/WebSocket/console проверки.
+- `modular-panel-stage6-editor-separation.md` — закрытый Этап 6: варианты editor `light/full/advanced`, persisted capability state, editor bundle allow-list и graceful fallback.
 - `modular-panel-stage4.3-tool-screens.md` — экраны команд (`tool.terminal`) и файлов (`tool.files`) вынесены в partials; итоги browser smoke minimal-профилей и оставшиеся frontend-вызовы API выключенных модулей.
 - `devtools-operator-theme.md` — закрытый перевод DevTools со старой blue-glass темы на общие с основной панелью Operator tokens, flat shell/data rows/log canvas/modals и responsive dark/light contract.
 - `top-level-navigation-plan.md` — итог по уже закрытому переводу всех five canonical entrypoints с document navigation на in-app navigation и фиксация финального five-route runtime contract.
