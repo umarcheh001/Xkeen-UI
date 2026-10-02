@@ -191,6 +191,12 @@ let restartLogModuleApi = null;
       toastSuccess: 'Подписка Xray обновлена. xkeen перезапущен.',
       toastFailure: 'Подписка Xray обновлена, но перезапуск xkeen завершился ошибкой.',
     },
+    'xray-subscriptions-batch': {
+      label: 'Подписки Xray',
+      successText: 'обновлены одной пачкой, xkeen перезапущен',
+      failureText: 'обновлены, но перезапуск xkeen завершился ошибкой',
+      bucket: 'subscription',
+    },
     'xray-subscriptions-pause': {
       label: 'Подписки Xray',
       successText: 'приостановлены, xkeen перезапущен',

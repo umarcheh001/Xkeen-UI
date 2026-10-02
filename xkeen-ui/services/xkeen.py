@@ -188,7 +188,10 @@ def _wait_xkeen_restarted(
     saw_stopped = not bool(previous[0])
     while time.monotonic() < deadline:
         current = _xkeen_runtime_identity()
-        if not current[0]:
+        if not current[0] or not current[1]:
+            # A name without process ids is the old core dying between the two
+            # pidof calls, not a new one.  Taking it for "restarted" reported
+            # success early and logged the core as stopped a moment later.
             saw_stopped = True
         elif saw_stopped or current != previous:
             return True

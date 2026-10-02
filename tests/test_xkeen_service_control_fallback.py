@@ -309,3 +309,21 @@ def test_restart_does_not_accept_same_already_running_process(monkeypatch):
     monkeypatch.setattr(xkeen_service.time, 'sleep', lambda *_args: None)
 
     assert xkeen_service.control_xkeen_action('restart', settle_timeout=2) is False
+
+
+def test_restart_is_not_declared_done_on_a_dying_process(monkeypatch):
+    # Старый процесс умирает между двумя вызовами pidof: имя ядра ещё видно,
+    # номеров процесса уже нет. Это не новый процесс, а пауза перед ним.
+    seen: list[tuple[str, tuple[int, ...]]] = []
+    identities = iter([('xray', ()), ('', ()), ('xray', (202,)), ('xray', (202,))])
+
+    def _identity():
+        current = next(identities)
+        seen.append(current)
+        return current
+
+    monkeypatch.setattr(xkeen_service, '_xkeen_runtime_identity', _identity)
+    monkeypatch.setattr(xkeen_service.time, 'sleep', lambda *_args: None)
+
+    assert xkeen_service._wait_xkeen_restarted(('xray', (101,)), timeout=2) is True
+    assert seen[-1] == ('xray', (202,))
