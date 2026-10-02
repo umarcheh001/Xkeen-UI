@@ -278,3 +278,60 @@ def test_plan_changes_nothing(rig: Rig):
     assert rig.bench.config_files() == before
     assert (rig.bench.state / "xray_subscriptions.json").read_text(encoding="utf-8") == state_before
     assert rig.restarts == []
+
+
+def test_dns_on_owners_balancer_stays_on_it_and_follows_its_members(tmp_path: Path, monkeypatch):
+    """Свой балансировщик с префиксом: на паузе в нём свои серверы, без паузы — узлы подписки."""
+    rig = Rig(tmp_path, monkeypatch, own=("home-nl", "home-de"))
+    routing = json.loads(rig.routing.read_text(encoding="utf-8"))
+    routing["routing"]["balancers"] = [
+        {"tag": "my-pool", "selector": ["home-"], "strategy": {"type": "leastPing"}, "fallbackTag": "direct"}
+    ]
+    routing["routing"]["rules"] = [{"type": "field", "inboundTag": ["redirect", "tproxy"], "balancerTag": "my-pool"}]
+    rig.routing.write_text(json.dumps(routing, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    rig.bench.add("alpha", routing_mode="subscription-only", routing_balancer_tags=["my-pool"])
+    rig.dns_on("my-pool")
+    active = rig.bench.config_files()
+    assert rig.dov._find_managed_clone(json.loads(active["05_routing.json"]))["selector"] == ["alpha"]
+
+    plan = rig.plan()
+    assert plan["dns"]["outcome"] == "resync"
+    assert plan["dns"]["from"] == [{"tag": "my-pool", "kind": "balancer"}]
+
+    result = rig.pause()
+
+    assert result["dns"]["action"] == "resynced"
+    assert rig.dns() == {"enabled": True, "selection": ["my-pool"]}
+    paused_routing = json.loads(rig.routing.read_text(encoding="utf-8"))
+    assert rig.dov._find_managed_clone(paused_routing)["selector"] == ["home-"]
+
+    back = rig.resume()
+
+    assert back["dns"]["action"] == "resynced"
+    assert rig.dns() == {"enabled": True, "selection": ["my-pool"]}
+    assert _meaning(rig.bench.config_files()) == _meaning(active)
+
+
+def test_owners_balancer_is_offered_first_when_dns_has_to_move(tmp_path: Path, monkeypatch):
+    rig = Rig(tmp_path, monkeypatch, own=("home-nl", "home-de"))
+    routing = json.loads(rig.routing.read_text(encoding="utf-8"))
+    routing["routing"]["balancers"] = [
+        {"tag": "my-pool", "selector": ["home-"], "strategy": {"type": "leastPing"}, "fallbackTag": "direct"}
+    ]
+    rig.routing.write_text(json.dumps(routing, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    rig.bench.add("alpha")
+    rig.dns_on("proxy")
+
+    plan = rig.plan()
+
+    assert plan["dns"]["outcome"] == "choose"
+    assert plan["dns"]["candidates"] == [
+        {"tag": "my-pool", "kind": "balancer"},
+        {"tag": "home-nl", "kind": "outbound"},
+        {"tag": "home-de", "kind": "outbound"},
+    ]
+
+    result = rig.pause(dns_target="my-pool")
+
+    assert result["dns"]["to"] == ["my-pool"]
+    assert rig.dns() == {"enabled": True, "selection": ["my-pool"]}

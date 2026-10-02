@@ -120,7 +120,7 @@
           "accessible_label": "Предупреждение"
         },
         {
-          "location": "xkeen-ui/static/js/features/restart_log.js:L1328",
+          "location": "xkeen-ui/static/js/features/restart_log.js:L1334",
           "control_type": "runtime-action",
           "accessible_label": "Предупреждение"
         },
@@ -490,7 +490,7 @@
           "accessible_label": "Очистить"
         },
         {
-          "location": "xkeen-ui/static/js/features/restart_log.js:L1772",
+          "location": "xkeen-ui/static/js/features/restart_log.js:L1778",
           "control_type": "runtime-action",
           "accessible_label": "Очистить"
         },
@@ -601,12 +601,12 @@
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/static/js/features/restart_log.js:L1453",
+          "location": "xkeen-ui/static/js/features/restart_log.js:L1459",
           "control_type": "runtime-action",
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/static/js/features/restart_log.js:L1798",
+          "location": "xkeen-ui/static/js/features/restart_log.js:L1804",
           "control_type": "runtime-action",
           "accessible_label": "Закрыть"
         },
@@ -1315,7 +1315,7 @@
           "accessible_label": "Копировать"
         },
         {
-          "location": "xkeen-ui/static/js/features/restart_log.js:L1772",
+          "location": "xkeen-ui/static/js/features/restart_log.js:L1778",
           "control_type": "runtime-action",
           "accessible_label": "Копировать"
         },
@@ -1632,12 +1632,12 @@
           "accessible_label": "Полный экран"
         },
         {
-          "location": "xkeen-ui/static/js/features/restart_log.js:L1808",
+          "location": "xkeen-ui/static/js/features/restart_log.js:L1814",
           "control_type": "runtime-action",
           "accessible_label": "Полный экран"
         },
         {
-          "location": "xkeen-ui/static/js/features/restart_log.js:L1815",
+          "location": "xkeen-ui/static/js/features/restart_log.js:L1821",
           "control_type": "runtime-action",
           "accessible_label": "Полный экран"
         },
@@ -1683,7 +1683,7 @@
           "accessible_label": "Восстановить"
         },
         {
-          "location": "xkeen-ui/static/js/features/restart_log.js:L1840",
+          "location": "xkeen-ui/static/js/features/restart_log.js:L1846",
           "control_type": "runtime-action",
           "accessible_label": "Восстановить"
         },
@@ -1899,7 +1899,7 @@
           "accessible_label": "Информация"
         },
         {
-          "location": "xkeen-ui/static/js/features/restart_log.js:L898",
+          "location": "xkeen-ui/static/js/features/restart_log.js:L904",
           "control_type": "runtime-action",
           "accessible_label": "Информация"
         },
@@ -1955,7 +1955,7 @@
           "accessible_label": "Список"
         },
         {
-          "location": "xkeen-ui/static/js/features/restart_log.js:L1753",
+          "location": "xkeen-ui/static/js/features/restart_log.js:L1759",
           "control_type": "runtime-action",
           "accessible_label": "Список"
         },
@@ -2339,7 +2339,7 @@
           "accessible_label": "Открыть"
         },
         {
-          "location": "xkeen-ui/static/js/features/restart_log.js:L1442",
+          "location": "xkeen-ui/static/js/features/restart_log.js:L1448",
           "control_type": "runtime-action",
           "accessible_label": "Открыть"
         },
@@ -2649,7 +2649,7 @@
           "accessible_label": "Обновить"
         },
         {
-          "location": "xkeen-ui/static/js/features/restart_log.js:L1772",
+          "location": "xkeen-ui/static/js/features/restart_log.js:L1778",
           "control_type": "runtime-action",
           "accessible_label": "Обновить"
         },
@@ -3146,7 +3146,7 @@
           "accessible_label": "Поиск"
         },
         {
-          "location": "xkeen-ui/static/js/features/restart_log.js:L1796",
+          "location": "xkeen-ui/static/js/features/restart_log.js:L1802",
           "control_type": "runtime-action",
           "accessible_label": "Поиск"
         },
@@ -3250,7 +3250,7 @@
       "tabler_asset": "player-stop",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/restart_log.js:L302",
+          "location": "xkeen-ui/static/js/features/restart_log.js:L308",
           "control_type": "runtime-action",
           "accessible_label": "Остановить"
         },
