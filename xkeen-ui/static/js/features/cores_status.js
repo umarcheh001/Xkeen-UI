@@ -1,12 +1,13 @@
 import {
+  describeXkeenPtyFailure,
   ensureXkeenTerminalInViewport,
   focusXkeenTerminal,
   getXkeenLazyRuntimeApi,
   getXkeenTerminalApi,
-  isXkeenTerminalPtyConnected,
   openXkeenTerminal,
   sendXkeenTerminal,
   toastXkeen,
+  waitForXkeenPtyConnected,
 } from './xkeen_runtime.js';
 
 let coresStatusModuleApi = null;
@@ -552,9 +553,9 @@ let coresStatusModuleApi = null;
     } catch (e2) {}
 
     if (mode === 'pty') {
-      const connected = await waitFor(() => isXkeenTerminalPtyConnected(), 12000, 150);
-      if (!connected) {
-        toastMsg('PTY не подключён, не удалось запустить команду.', 'error');
+      const waited = await waitForXkeenPtyConnected(12000);
+      if (!waited.ok) {
+        toastMsg(describeXkeenPtyFailure(waited.reason), 'error');
         return false;
       }
     } else {

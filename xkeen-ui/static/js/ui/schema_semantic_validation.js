@@ -1312,9 +1312,11 @@ function validateXrayObservabilityDependencies(shape, diagnostics) {
   if (!shape || !isPlainObject(shape.routing)) return;
   const routing = shape.routing;
   const balancers = Array.isArray(routing.balancers) ? routing.balancers : [];
-  const shouldCheckLeastPing = shape.kind === 'xray-config' || !!shape.observatory;
-  const shouldCheckLeastLoad = shape.kind === 'xray-config' || !!shape.burstObservatory;
-  if (!shouldCheckLeastPing && !shouldCheckLeastLoad) return;
+  // A fragment can only be judged once some observatory is known: the section
+  // usually lives in its own file and reaches us as external context.
+  const anyObservatory = !!shape.observatory || !!shape.burstObservatory;
+  if (shape.kind !== 'xray-config' && !anyObservatory) return;
+  const plainLivesElsewhere = !!shape.externalObservatory && !shape.localObservatory;
 
   balancers.forEach((balancer, index) => {
     if (!isPlainObject(balancer)) return;
@@ -1322,7 +1324,8 @@ function validateXrayObservabilityDependencies(shape, diagnostics) {
     const pointer = `${xrayItemPointer(shape.balancersPointer, index)}/strategy/type`;
     const tag = cleanName(balancer.tag) || index;
 
-    if (strategyType === 'leastPing' && !shape.observatory) {
+    // burstObservatory reports a delay too, so leastPing works on either kind.
+    if (strategyType === 'leastPing' && !anyObservatory) {
       pushDiagnostic(diagnostics, createJsonDiagnostic(pointer, `Balancer "${tag}" использует стратегию \`leastPing\`, но в конфиге не видно блока \`observatory\`. Без него Xray не знает фактическую задержку outbound-ов.`, {
         severity: 'warning',
         source: 'xray-semantic',
@@ -1332,11 +1335,13 @@ function validateXrayObservabilityDependencies(shape, diagnostics) {
     }
 
     if (strategyType === 'leastLoad' && !shape.burstObservatory) {
-      pushDiagnostic(diagnostics, createJsonDiagnostic(pointer, `Balancer "${tag}" использует стратегию \`leastLoad\`, но в конфиге не видно блока \`burstObservatory\`. Без burst probe стратегия не сможет измерять нагрузку.`, {
+      pushDiagnostic(diagnostics, createJsonDiagnostic(pointer, `Balancer "${tag}" использует стратегию \`leastLoad\`, но в конфиге не видно блока \`burstObservatory\`. С обычной \`observatory\` Xray молча выбирает узел по одной последней пробе, как \`leastPing\`: разброс задержки и долю неудачных проб считает только burst.`, {
         severity: 'warning',
         source: 'xray-semantic',
         code: 'balancer-burst-observatory-missing',
-        hint: 'Добавьте top-level `burstObservatory` или используйте random/roundRobin.',
+        hint: plainLivesElsewhere
+          ? 'Обсерватория лежит в отдельном файле (обычно 07_observatory.json), вторая секция здесь не поможет: ядро возьмёт обычную. Сохраните этот файл, затем пересохраните обсерваторию в окне быстрого балансировщика или обновите подписку — панель заменит её на `burstObservatory`.'
+          : 'Добавьте top-level `burstObservatory` или используйте random/roundRobin.',
       }));
     }
   });
@@ -1653,6 +1658,10 @@ export function validateXrayRoutingSemantics(data, options = {}) {
     }));
   }
 
+  // Balancers live in the routing fragment, so this is where a strategy that
+  // has no observatory to read gets reported -- for a fragment and a full config alike.
+  validateXrayObservabilityDependencies(shape, diagnostics);
+
   return diagnostics;
 }
 
@@ -1663,7 +1672,6 @@ export function validateXrayConfigSemantics(data, options = {}) {
 
   diagnostics.push(...validateXrayRoutingSemantics(data, options));
   validateXrayEndpoints(shape, options, diagnostics);
-  validateXrayObservabilityDependencies(shape, diagnostics);
   validateXrayObservatorySelectors(shape, options, diagnostics);
 
   return diagnostics;

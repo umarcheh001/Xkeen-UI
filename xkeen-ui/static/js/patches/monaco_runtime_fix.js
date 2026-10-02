@@ -145,13 +145,6 @@
     return legacyCopyFallback(value);
   }
 
-  function getCachedClipboardText() {
-    try {
-      if (typeof window.__xkLastClipboardText === 'string') return window.__xkLastClipboardText;
-    } catch (e) {}
-    return null;
-  }
-
   async function clipboardReadText(event) {
     // A context-menu action is dispatched from a mouse event rather than the
     // editor's native `paste` event, so `event.clipboardData` is normally
@@ -184,7 +177,9 @@
       }
     } catch (e) {}
 
-    return getCachedClipboardText();
+    // No fallback to the last text copied inside the editor: when the system
+    // clipboard cannot be read, pasting stale text is worse than not pasting.
+    return null;
   }
 
   async function runClipboardAction(kind, editor, event) {

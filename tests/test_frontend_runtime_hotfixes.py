@@ -24,9 +24,21 @@ def test_monaco_context_menu_paste_reads_system_clipboard_when_no_paste_event():
     assert "clipboard && typeof clipboard.readText === 'function'" in read_fn
     assert 'const text = await clipboard.readText();' in read_fn
     assert 'storeLastClipboardText(text);' in read_fn
-    # Preserve the event-data/cache fallbacks for browsers without readText.
+    # The paste event data stays as a source, but the last text copied inside
+    # the editor must not be pasted in place of an unreadable clipboard.
     assert "event && event.clipboardData" in read_fn
-    assert 'return getCachedClipboardText();' in read_fn
+    assert 'getCachedClipboardText' not in text
+    assert 'return null;' in read_fn
+
+
+def test_monaco_custom_menu_paste_reports_unreadable_clipboard_instead_of_stale_text():
+    text = Path('xkeen-ui/static/js/ui/monaco_shared.js').read_text(encoding='utf-8')
+
+    assert 'customContextMenuClipboardShadow' not in text
+    assert 'function _notifyClipboardUnreadable() {' in text
+    assert 'Вставьте сочетанием Ctrl+V' in text
+    paste_block = text.split("if (action === 'paste') {", 1)[1].split("if (action === 'goToSymbol')", 1)[0]
+    assert '_notifyClipboardUnreadable();' in paste_block
 
 def test_terminal_debug_module_exists_and_exports_expected_helpers():
     path = Path('xkeen-ui/static/js/features/terminal_debug.js')
@@ -2427,3 +2439,12 @@ def test_inline_spinner_keyframes_only_rotate():
 
     spinner_block = styles.split('.xk-inline-spinner {', 1)[1].split('}', 1)[0]
     assert 'margin-top: calc((1lh - 14px) / 2);' in spinner_block
+
+
+def test_routing_editor_tells_the_semantic_check_which_observatory_kind_is_in_effect():
+    routing = Path('xkeen-ui/static/js/features/routing.js').read_text(encoding='utf-8')
+
+    # leastLoad needs burstObservatory; passing every section off as a plain one hid that.
+    assert "observatoryInEffect.kind === 'burstObservatory'" in routing
+    assert "externalBurstObservatory: burstInEffect ? observatoryInEffect : null" in routing
+    assert "externalBurstObservatoryPointer: '/burstObservatory'" in routing

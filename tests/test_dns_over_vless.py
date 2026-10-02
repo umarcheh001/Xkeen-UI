@@ -71,7 +71,8 @@ def test_enable_plan_is_additive_and_dns_balancer_is_fail_closed(tmp_path: Path)
 
     assert target["kind"] == "balancer"
     assert target["tag"] == dns.BALANCER_TAG
-    assert "fallbackTag" not in target["managed_balancer"]
+    # Fail-closed: the spare route is one of the balancer's own proxies, never direct.
+    assert target["managed_balancer"]["fallbackTag"] == "proxy-a"
     assert planned["routing"]["rules"][0] == {
         "type": "field",
         "inboundTag": [dns.DNS_IN_TAG],
@@ -277,6 +278,51 @@ def test_tampered_managed_rule_is_not_automatically_removed(tmp_path: Path, monk
     assert result["tampered"] is True
     assert result["can_disable"] is False
     assert any("изменены вручную" in item for item in result["blockers"])
+
+
+def test_managed_rules_rewritten_without_rule_type_are_still_recognized(tmp_path: Path, monkeypatch):
+    """Xray has a single rule type, so configs tidied for newer cores drop the key.
+
+    Such a rewrite left the panel's own rules looking hand-edited, and a
+    working setup turned into one that could be neither enabled nor disabled.
+    """
+    configs, routing_path, state = _base_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    target = {
+        "kind": "balancer",
+        "tag": dns.BALANCER_TAG,
+        "source": "proxy",
+        "label": "балансировщик proxy",
+        "managed_balancer": {
+            "tag": dns.BALANCER_TAG,
+            "selector": ["proxy-a", "proxy-b"],
+            "strategy": {"type": "leastPing"},
+        },
+    }
+    _write(configs / dns.MANAGED_FRAGMENT, dns._managed_fragment())
+    enabled = dns._build_enabled_routing(routing, target)
+    owned = [rule for rule in enabled["routing"]["rules"] if dns._owned_rule(rule)]
+    assert owned and all(rule.get("type") == "field" for rule in owned)
+    for rule in enabled["routing"]["rules"]:
+        rule.pop("type", None)
+    _write(routing_path, enabled)
+    _write(
+        state / dns.STATE_FILENAME,
+        {"version": 1, "enabled": True, "original_dns_override": False, "target": {
+            "kind": "balancer", "tag": dns.BALANCER_TAG, "source": "proxy", "label": "балансировщик proxy",
+        }},
+    )
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+
+    result = dns.get_status(
+        configs_dir=str(configs), routing_file=str(routing_path), ui_state_dir=str(state)
+    )
+
+    assert result["tampered"] is False
+    assert result["partial"] is False
+    assert result["enabled"] is True
+    assert result["can_disable"] is True
 
 
 def test_http_contract_returns_guarded_status(tmp_path: Path, monkeypatch):
@@ -600,8 +646,9 @@ def test_fallback_into_direct_is_still_dropped(tmp_path: Path):
     target = dns._select_target(runtime, "proxy", routing)
 
     # The subscription auto-balancer falls back to a freedom outbound; keeping
-    # it would leak DNS to the provider.
-    assert "fallbackTag" not in target["managed_balancer"]
+    # it would leak DNS to the provider.  A member of the selector stands in:
+    # with no fallback at all the core would use the default outbound instead.
+    assert target["managed_balancer"]["fallbackTag"] == "proxy-a"
     assert target["fallback"]["kept"] is False
     assert target["fallback"]["verdict"] == "leak"
 
@@ -838,7 +885,10 @@ def test_unresolvable_fallback_is_dropped_rather_than_assumed_safe(tmp_path: Pat
 
     target = dns._select_target(runtime, "balancer_main", routing)
 
-    assert "fallbackTag" not in target["managed_balancer"]
+    assert target["managed_balancer"]["fallbackTag"] != "nothing_points_here"
+    assert target["managed_balancer"]["fallbackTag"] in dns._selector_members(
+        runtime, target["managed_balancer"]["selector"]
+    )
     assert target["fallback"]["verdict"] == "unknown"
 
 
@@ -962,7 +1012,8 @@ def test_several_proxies_are_combined_into_an_own_balancer(tmp_path: Path):
     assert target["managed_balancer"]["selector"] == ["my_proxy_1", "reserve_proxy_1"]
     # No observatory in this fixture, so leastPing would never pick a node.
     assert target["managed_balancer"]["strategy"] == {"type": "random"}
-    assert "fallbackTag" not in target["managed_balancer"]
+    # Nothing to inherit, but an empty pick must not reach the default outbound.
+    assert target["managed_balancer"]["fallbackTag"] == "my_proxy_1"
 
 
 def test_least_ping_is_used_only_when_observatory_probes_the_chosen_proxies(tmp_path: Path):
@@ -977,6 +1028,58 @@ def test_least_ping_is_used_only_when_observatory_probes_the_chosen_proxies(tmp_
     assert covered["managed_balancer"]["strategy"] == {"type": "leastPing"}
     # reserve_proxy_1 is not probed, so the whole set falls back to random.
     assert partly["managed_balancer"]["strategy"] == {"type": "random"}
+
+
+LEAST_LOAD_WITH_TOLERANCE = {"type": "leastLoad", "settings": {"expected": 2, "tolerance": 0.5}}
+
+
+def test_burst_observatory_switches_own_balancer_to_least_load(tmp_path: Path):
+    configs, routing_path, _state = _scenario_config(tmp_path)
+    _write(configs / "07_observatory.json", {"burstObservatory": {"subjectSelector": ["my_proxy"]}})
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    runtime = dns._collect_runtime(str(configs), routing)
+
+    covered = dns._select_target(runtime, ["my_proxy_1", "my_proxy_2"], routing)
+    partly = dns._select_target(runtime, ["my_proxy_1", "reserve_proxy_1"], routing)
+
+    assert runtime["observatory_kind"] == "burstObservatory"
+    assert covered["managed_balancer"]["strategy"] == LEAST_LOAD_WITH_TOLERANCE
+    assert partly["managed_balancer"]["strategy"] == {"type": "random"}
+
+
+def test_plain_observatory_wins_when_both_sections_exist(tmp_path: Path):
+    configs, routing_path, _state = _scenario_config(tmp_path)
+    _write(configs / "07_observatory.json", {"observatory": {"subjectSelector": ["reserve_proxy"]}})
+    _write(configs / "09_burst.json", {"burstObservatory": {"subjectSelector": ["my_proxy"]}})
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    runtime = dns._collect_runtime(str(configs), routing)
+
+    # The core reads the plain section, so my_proxy_* are in fact not probed.
+    assert runtime["observatory_kind"] == "observatory"
+    assert runtime["observatory_selectors"] == ["reserve_proxy"]
+    target = dns._select_target(runtime, ["my_proxy_1", "my_proxy_2"], routing)
+    assert target["managed_balancer"]["strategy"] == {"type": "random"}
+
+
+def test_cloned_least_ping_balancer_becomes_least_load_under_burst(tmp_path: Path):
+    configs, routing_path, _state = _scenario_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    source = next(
+        item for item in routing["routing"]["balancers"]
+        if (item.get("strategy") or {}).get("type") == "leastPing"
+    )
+    probed = [str(value) for value in source["selector"]]
+
+    _write(configs / "07_observatory.json", {"burstObservatory": {"subjectSelector": probed}})
+    burst_runtime = dns._collect_runtime(str(configs), routing)
+    under_burst = dns._select_target(burst_runtime, source["tag"], routing)
+
+    _write(configs / "07_observatory.json", {"observatory": {"subjectSelector": probed}})
+    plain_runtime = dns._collect_runtime(str(configs), routing)
+    under_plain = dns._select_target(plain_runtime, source["tag"], routing)
+
+    assert under_burst["managed_balancer"]["strategy"] == LEAST_LOAD_WITH_TOLERANCE
+    assert under_plain["managed_balancer"]["strategy"] == {"type": "leastPing"}
 
 
 def test_a_balancer_cannot_be_combined_with_other_routes(tmp_path: Path):
@@ -4137,3 +4240,180 @@ def test_http_contract_forwards_the_hosts_switch(tmp_path: Path, monkeypatch):
     assert seen["hosts_enabled"] is False
     client.post("/api/routing/dns-over-vless", json={"action": "enable"})
     assert seen["hosts_enabled"] is None
+
+
+def test_the_last_section_of_a_kind_wins_as_in_the_core(tmp_path: Path):
+    configs, routing_path, _state = _scenario_config(tmp_path)
+    _write(configs / "07_observatory.json", {"burstObservatory": {"subjectSelector": ["my_proxy"]}})
+    _write(configs / "09_x.json", {"burstObservatory": {"subjectSelector": ["reserve_proxy"]}})
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    runtime = dns._collect_runtime(str(configs), routing)
+
+    # The merged config keeps only the later section, so my_proxy_* are not probed.
+    assert runtime["observatory_kind"] == "burstObservatory"
+    assert runtime["observatory_selectors"] == ["reserve_proxy"]
+    target = dns._select_target(runtime, ["my_proxy_1", "my_proxy_2"], routing)
+    assert target["managed_balancer"]["strategy"] == {"type": "random"}
+
+
+def test_a_non_object_owner_strategy_does_not_break_the_clone(tmp_path: Path):
+    configs, routing_path, _state = _scenario_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    source = next(
+        item for item in routing["routing"]["balancers"]
+        if (item.get("strategy") or {}).get("type") == "leastPing"
+    )
+    source["strategy"] = "leastPing"
+    runtime = dns._collect_runtime(str(configs), routing)
+
+    target = dns._select_target(runtime, source["tag"], routing)
+
+    assert target["managed_balancer"]["strategy"] == "leastPing"
+
+
+def test_guard_fallback_is_a_live_member_and_counts_as_safe(tmp_path: Path):
+    configs, routing_path, _state = _base_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    runtime = dns._collect_runtime(str(configs), routing)
+
+    assert dns._guard_fallback_tag(runtime, ["proxy"]) == "proxy-a"
+    assert dns._guard_fallback_tag(runtime, ["direct"]) == ""
+    assert dns._guard_fallback_tag(runtime, ["no_such_prefix"]) == ""
+    assert dns._fallback_verdict(runtime, routing, "proxy-a") == "safe"
+
+
+def test_clone_with_the_guard_fallback_is_neither_drift_nor_tampering(tmp_path: Path, monkeypatch):
+    configs, routing_path, state = _base_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    runtime = dns._collect_runtime(str(configs), routing)
+    target = dns._select_target(runtime, "proxy", routing)
+    _write(configs / dns.MANAGED_FRAGMENT, dns._managed_fragment())
+    _write(routing_path, dns._build_enabled_routing(routing, target))
+    _write(state / dns.STATE_FILENAME, {"enabled": True, "target": {"source": "proxy"}})
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+
+    result = dns.get_status(
+        configs_dir=str(configs), routing_file=str(routing_path), ui_state_dir=str(state)
+    )
+
+    assert result["enabled"] is True
+    assert result["tampered"] is False
+    assert result["route_drift"] is None
+
+
+def test_a_guard_fallback_that_left_the_selector_is_reported_as_drift(tmp_path: Path, monkeypatch):
+    configs, routing_path, state = _base_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    runtime = dns._collect_runtime(str(configs), routing)
+    target = dns._select_target(runtime, "proxy", routing)
+    enabled = dns._build_enabled_routing(routing, target)
+    clone = next(item for item in enabled["routing"]["balancers"] if item["tag"] == dns.BALANCER_TAG)
+    clone["fallbackTag"] = "proxy-gone"
+    _write(configs / dns.MANAGED_FRAGMENT, dns._managed_fragment())
+    _write(routing_path, enabled)
+    _write(state / dns.STATE_FILENAME, {"enabled": True, "target": {"source": "proxy"}})
+    monkeypatch.setattr(dns, "detect_running_core", lambda: "xray")
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+
+    result = dns.get_status(
+        configs_dir=str(configs), routing_file=str(routing_path), ui_state_dir=str(state)
+    )
+
+    assert result["route_drift"]["managed_fallback"] == "proxy-gone"
+    assert result["route_drift"]["current_fallback"] == "proxy-a"
+
+
+def _burst_scenario(tmp_path: Path):
+    configs, routing_path, _state = _scenario_config(tmp_path)
+    _write(configs / "07_observatory.json", {"burstObservatory": {"subjectSelector": ["my_proxy"]}})
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    return dns._collect_runtime(str(configs), routing), routing
+
+
+def test_max_rtt_setting_is_written_into_the_dns_balancer(tmp_path: Path, monkeypatch):
+    runtime, routing = _burst_scenario(tmp_path)
+    monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_MAX_RTT", "450")
+
+    target = dns._select_target(runtime, ["my_proxy_1", "my_proxy_2"], routing)
+
+    assert target["managed_balancer"]["strategy"] == {
+        "type": "leastLoad",
+        "settings": {"expected": 2, "tolerance": 0.5, "maxRTT": "450ms"},
+    }
+
+
+@pytest.mark.parametrize("raw", [None, "", "0", "-200", "не число", "450ms"])
+def test_max_rtt_is_off_unless_a_positive_number_of_milliseconds_is_given(tmp_path: Path, monkeypatch, raw):
+    runtime, routing = _burst_scenario(tmp_path)
+    if raw is None:
+        monkeypatch.delenv("XKEEN_DNS_OVER_VLESS_MAX_RTT", raising=False)
+    else:
+        monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_MAX_RTT", raw)
+
+    target = dns._select_target(runtime, ["my_proxy_1", "my_proxy_2"], routing)
+
+    assert target["managed_balancer"]["strategy"] == LEAST_LOAD_WITH_TOLERANCE
+
+
+def test_max_rtt_is_capped_so_a_typo_cannot_write_nonsense(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_MAX_RTT", "999999999")
+
+    assert dns.max_rtt_ms() == dns.MAX_RTT_BOUNDS[1]
+
+
+def test_max_rtt_only_applies_where_least_load_is_used(tmp_path: Path, monkeypatch):
+    configs, routing_path, _state = _scenario_config(tmp_path)
+    _write(configs / "07_observatory.json", {"observatory": {"subjectSelector": ["my_proxy"]}})
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    runtime = dns._collect_runtime(str(configs), routing)
+    monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_MAX_RTT", "450")
+
+    covered = dns._select_target(runtime, ["my_proxy_1", "my_proxy_2"], routing)
+    uncovered = dns._select_target(runtime, ["my_proxy_1", "reserve_proxy_1"], routing)
+
+    # leastPing and random have no such setting; the core would ignore it at best.
+    assert covered["managed_balancer"]["strategy"] == {"type": "leastPing"}
+    assert uncovered["managed_balancer"]["strategy"] == {"type": "random"}
+
+
+def test_prefer_fast_keeps_least_ping_under_burst_and_still_guards_the_empty_pick(tmp_path: Path, monkeypatch):
+    runtime, routing = _burst_scenario(tmp_path)
+    monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_PREFER", "fast")
+    monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_MAX_RTT", "450")
+
+    target = dns._select_target(runtime, ["my_proxy_1", "my_proxy_2"], routing)
+
+    # The fastest node, as before burst; maxRTT belongs to leastLoad only.
+    assert target["managed_balancer"]["strategy"] == {"type": "leastPing"}
+    assert target["managed_balancer"]["fallbackTag"] == "my_proxy_1"
+
+
+@pytest.mark.parametrize("raw", [None, "", "stable", "STABLE", "что-то ещё"])
+def test_prefer_defaults_to_the_steady_choice(tmp_path: Path, monkeypatch, raw):
+    runtime, routing = _burst_scenario(tmp_path)
+    monkeypatch.delenv("XKEEN_DNS_OVER_VLESS_MAX_RTT", raising=False)
+    if raw is None:
+        monkeypatch.delenv("XKEEN_DNS_OVER_VLESS_PREFER", raising=False)
+    else:
+        monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_PREFER", raw)
+
+    target = dns._select_target(runtime, ["my_proxy_1", "my_proxy_2"], routing)
+
+    assert target["managed_balancer"]["strategy"] == LEAST_LOAD_WITH_TOLERANCE
+
+
+def test_prefer_fast_leaves_a_cloned_least_ping_balancer_as_it_is(tmp_path: Path, monkeypatch):
+    configs, routing_path, _state = _scenario_config(tmp_path)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    source = next(
+        item for item in routing["routing"]["balancers"]
+        if (item.get("strategy") or {}).get("type") == "leastPing"
+    )
+    _write(configs / "07_observatory.json", {"burstObservatory": {"subjectSelector": [str(v) for v in source["selector"]]}})
+    runtime = dns._collect_runtime(str(configs), routing)
+    monkeypatch.setenv("XKEEN_DNS_OVER_VLESS_PREFER", " Fast ")
+
+    target = dns._select_target(runtime, source["tag"], routing)
+
+    assert target["managed_balancer"]["strategy"] == {"type": "leastPing"}

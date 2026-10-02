@@ -38,7 +38,6 @@ import {
     customContextMenuEl: null,
     customContextMenuCtx: null,
     customContextMenuCleanupByEditor: typeof WeakMap !== 'undefined' ? new WeakMap() : null,
-    customContextMenuClipboardShadow: '',
     yamlAssistByModel: typeof WeakMap !== 'undefined' ? new WeakMap() : null,
     snippetProvidersByModel: typeof WeakMap !== 'undefined' ? new WeakMap() : null,
     quickFixProvidersByModel: typeof WeakMap !== 'undefined' ? new WeakMap() : null,
@@ -1440,7 +1439,6 @@ import {
 
   async function _writeCustomContextMenuClipboardText(text) {
     const value = String(text ?? '');
-    _state.customContextMenuClipboardShadow = value;
     try {
       if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
         await navigator.clipboard.writeText(value);
@@ -1521,22 +1519,45 @@ import {
     return commandResult;
   }
 
+  // Returns the system clipboard text, or null when the browser will not hand
+  // it over. There is deliberately no "last text copied in this editor"
+  // fallback: it silently pasted stale text when the real clipboard held
+  // something copied in another program.
   async function _readCustomContextMenuClipboardText() {
     try {
       if (navigator.clipboard && typeof navigator.clipboard.readText === 'function') {
         const value = await navigator.clipboard.readText();
-        if (typeof value === 'string') {
-          _state.customContextMenuClipboardShadow = value;
-          return value;
-        }
+        if (typeof value === 'string') return value;
       }
     } catch (e) {}
     const pasted = _readClipboardViaExecCommand();
-    if (pasted) {
-      _state.customContextMenuClipboardShadow = pasted;
-      return pasted;
-    }
-    return String(_state.customContextMenuClipboardShadow || '');
+    if (pasted) return pasted;
+    return null;
+  }
+
+  function _notifyClipboardUnreadable() {
+    let insecure = false;
+    try {
+      insecure = window.isSecureContext === false
+        || !(navigator.clipboard && typeof navigator.clipboard.readText === 'function');
+    } catch (e) {}
+    const text = insecure
+      ? 'Браузер не даёт читать буфер обмена на странице без HTTPS. Вставьте сочетанием Ctrl+V.'
+      : 'Браузер не разрешил прочитать буфер обмена. Вставьте сочетанием Ctrl+V или разрешите сайту доступ к буферу.';
+    try {
+      if (XKeen.ui && typeof XKeen.ui.toast === 'function') return XKeen.ui.toast(text, 'info');
+    } catch (e) {}
+    try {
+      if (typeof window.showToast === 'function') return window.showToast(text, 'info');
+    } catch (e2) {}
+  }
+
+  function _customContextMenuModelVersion(editor) {
+    try {
+      const model = (editor && typeof editor.getModel === 'function') ? editor.getModel() : null;
+      if (model && typeof model.getVersionId === 'function') return model.getVersionId();
+    } catch (e) {}
+    return null;
   }
 
   async function runCustomContextMenuAction(editor, action, cfg) {
@@ -1576,7 +1597,9 @@ import {
       // while this user gesture is still active and apply the text directly;
       // this supports content copied from other editors or browser pages.
       const value = await _readCustomContextMenuClipboardText();
-      if (typeof value === 'string' && value.length) {
+      if (typeof value === 'string') {
+        // Readable but empty: there is simply nothing to paste.
+        if (!value.length) return false;
         const targetSelections = selections.length ? selections : _getCustomContextMenuSelections(editor);
         if (!targetSelections.length) return false;
         return _execCustomContextMenuEdits(editor, targetSelections.map((range) => ({ range, text: value, forceMoveMarkers: true })), 'xk-monaco-menu-paste');
@@ -1584,15 +1607,18 @@ import {
 
       // If the Clipboard API is unavailable/denied, retain Monaco's native
       // action as a final fallback (for example, runtimes that synthesize a
-      // paste event from the menu command).
+      // paste event from the menu command). It may report success without
+      // inserting anything, so only a changed document counts.
       if (_isCustomContextMenuActionSupported(editor, 'editor.action.clipboardPasteAction')) {
-        if (await _runCustomContextMenuEditorAction(editor, 'editor.action.clipboardPasteAction')) return true;
+        const versionBefore = _customContextMenuModelVersion(editor);
+        await _runCustomContextMenuEditorAction(editor, 'editor.action.clipboardPasteAction');
+        const versionAfter = _customContextMenuModelVersion(editor);
+        if (versionBefore != null && versionAfter !== versionBefore) return true;
       }
-      // Keep the shadow clipboard for text copied through this menu.
-      if (typeof value !== 'string') return false;
-      const targetSelections = selections.length ? selections : _getCustomContextMenuSelections(editor);
-      if (!targetSelections.length || !value.length) return false;
-      return _execCustomContextMenuEdits(editor, targetSelections.map((range) => ({ range, text: value, forceMoveMarkers: true })), 'xk-monaco-menu-paste');
+
+      // The clipboard could not be read. Say so rather than paste the wrong text.
+      _notifyClipboardUnreadable();
+      return false;
     }
 
     if (action === 'goToSymbol') return _runCustomContextMenuEditorAction(editor, 'editor.action.quickOutline');

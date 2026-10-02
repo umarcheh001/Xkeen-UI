@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, Optional
 
 from services.cores import detect_available_cores, detect_running_core
+from services.xray_observatory import KIND_BURST, KIND_PLAIN, LEAST_LOAD_EXPECTED, LEAST_LOAD_TOLERANCE
 from services.io.atomic import _atomic_write_json, _atomic_write_text
 from services.xray_config_files import jsonc_path_for
 from services import dns_client_capture
@@ -268,6 +269,35 @@ def watchdog_enabled() -> bool:
     return raw in {"1", "true", "yes", "on"}
 
 
+MAX_RTT_BOUNDS = (0, 60000)
+
+
+def max_rtt_ms() -> int:
+    """Upper bound on a node's average probe delay for the DNS balancer, 0 = no bound.
+
+    ``leastLoad`` prefers the steadiest node, and a far-away server is often
+    very steady: DNS then rides a node several times slower than the nearest
+    one.  The bound is the owner's call -- it depends on which servers they
+    have -- so it comes from the environment and is read on every apply.
+    The value is compared with the observatory's probe delay (a full request
+    through the tunnel, handshake included), not with the DNS answer time.
+    """
+    return _env_number("XKEEN_DNS_OVER_VLESS_MAX_RTT", 0, MAX_RTT_BOUNDS, int)
+
+
+def prefers_fast_node() -> bool:
+    """Whether the DNS balancer should take the fastest node instead of the steadiest.
+
+    Under ``burstObservatory`` the panel uses ``leastLoad``: it drops a dead or
+    flapping node within a probe cycle, but picks by steadiness, so DNS may run
+    several times slower than through the nearest server.  ``fast`` keeps
+    ``leastPing``: the quickest node, at the price of a dead one staying in use
+    until its whole sample has failed and a flapping one never being dropped.
+    Anything but ``fast`` means the steady choice.
+    """
+    return str(os.environ.get("XKEEN_DNS_OVER_VLESS_PREFER") or "").strip().lower() == "fast"
+
+
 def watchdog_settings() -> Dict[str, Any]:
     """Effective watchdog knobs: defaults unless the environment overrides them."""
     return {
@@ -375,23 +405,26 @@ def _collect_runtime(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, Any
     # tag -> inboundTag a loopback outbound re-injects traffic with, so a
     # fallback chain can be followed across the loopback hop.
     loopback_targets: Dict[str, str] = {}
-    # subjectSelector entries of observatory/burstObservatory: leastPing only
-    # works for outbounds an observatory actually probes.
-    observatory_selectors: list[str] = []
+    # subjectSelector entries per observatory kind.  With both sections present
+    # the core reads the plain one, so only its selectors count as "probed".
+    # Two sections of one kind do not add up either: the merged config keeps
+    # the later file's section, so that one replaces what an earlier file gave.
+    observatory_by_kind: Dict[str, list[str]] = {KIND_PLAIN: [], KIND_BURST: []}
+    observatory_present: set[str] = set()
 
     for name, obj in _iter_json_fragments(configs_dir):
         dns = obj.get("dns")
         if isinstance(dns, dict) and dns:
             dns_fragments.append(name)
-        for key in ("observatory", "burstObservatory"):
+        for key in (KIND_PLAIN, KIND_BURST):
             section = obj.get(key)
             if not isinstance(section, dict):
                 continue
+            observatory_present.add(key)
             raw = section.get("subjectSelector")
-            for value in raw if isinstance(raw, list) else []:
-                prefix = str(value).strip()
-                if prefix:
-                    observatory_selectors.append(prefix)
+            observatory_by_kind[key] = [
+                str(value).strip() for value in (raw if isinstance(raw, list) else []) if str(value).strip()
+            ]
         for item in obj.get("outbounds") if isinstance(obj.get("outbounds"), list) else []:
             if not isinstance(item, dict):
                 continue
@@ -422,6 +455,11 @@ def _collect_runtime(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, Any
 
     routing_obj = routing.get("routing") if isinstance(routing.get("routing"), dict) else {}
     balancers = [item for item in routing_obj.get("balancers", []) if isinstance(item, dict)]
+    observatory_kind = (
+        KIND_PLAIN if KIND_PLAIN in observatory_present
+        else KIND_BURST if KIND_BURST in observatory_present
+        else ""
+    )
     return {
         "outbounds": outbounds,
         "inbound_tags": inbound_tags,
@@ -429,7 +467,8 @@ def _collect_runtime(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, Any
         "dns_fragments": dns_fragments,
         "balancers": balancers,
         "loopback_targets": loopback_targets,
-        "observatory_selectors": observatory_selectors,
+        "observatory_selectors": observatory_by_kind.get(observatory_kind, []),
+        "observatory_kind": observatory_kind,
     }
 
 
@@ -763,12 +802,27 @@ def _build_target(
         "selector": list(candidate["selector"]),
         "strategy": copy.deepcopy(source.get("strategy") or {"type": "random"}),
     }
+    strategy = managed["strategy"]
+    if isinstance(strategy, dict) and _clean_tag(strategy.get("type")).lower() == "leastping":
+        live = [
+            item["tag"]
+            for item in _proxy_outbounds(runtime)
+            if any(item["tag"].startswith(prefix) for prefix in managed["selector"])
+        ]
+        upgraded = _probed_strategy(runtime, live)
+        # Only ever upgrade: an uncovered leastPing clone stays what the owner wrote.
+        if upgraded["type"] == "leastLoad":
+            managed["strategy"] = upgraded
     # Carry the fallback over only when the whole chain stays inside proxies.
     # A fallback that ends at a freedom outbound would send 127.0.0.53 back to
     # the router and can create a DNS loop/leak, so that one is still dropped.
     plan = _fallback_plan(runtime, routing if isinstance(routing, dict) else {}, source)
     if plan["kept"]:
         managed["fallbackTag"] = plan["tag"]
+    else:
+        guard = _guard_fallback_tag(runtime, managed["selector"])
+        if guard:
+            managed["fallbackTag"] = guard
     return {
         "kind": "balancer",
         "tag": BALANCER_TAG,
@@ -778,6 +832,30 @@ def _build_target(
         "fallback": plan,
         "managed_balancer": managed,
     }
+
+
+def _selector_members(runtime: Dict[str, Any], selector: Iterable[Any]) -> list[str]:
+    """Live proxy tags a balancer selector resolves to, in config order."""
+    prefixes = [_clean_tag(value) for value in selector if _clean_tag(value)]
+    return [
+        item["tag"]
+        for item in _proxy_outbounds(runtime)
+        if any(item["tag"].startswith(prefix) for prefix in prefixes)
+    ]
+
+
+def _guard_fallback_tag(runtime: Dict[str, Any], selector: Iterable[Any]) -> str:
+    """One of the balancer's own proxies, to stand in when the strategy picks nobody.
+
+    A balancer that returns no node and has no ``fallbackTag`` does not stop the
+    request: the core hands it to the default outbound, the first one of the
+    merged config.  Where that is a freedom outbound, DNS would leave past the
+    tunnel -- with every node cut by ``tolerance`` or simply dead.  Naming a
+    member keeps the request inside the proxies; if that node is down too, DNS
+    goes quiet, which is what the guard watches for.
+    """
+    members = _selector_members(runtime, selector)
+    return members[0] if members else ""
 
 
 def _stored_selection(state: Dict[str, Any]) -> list[str]:
@@ -836,7 +914,14 @@ def _route_drift(runtime: Dict[str, Any], routing: Dict[str, Any], source_tag: s
     snapshot = [str(value).strip() for value in managed.get("selector", []) if str(value).strip()]
     managed_fallback = _clean_tag(managed.get("fallbackTag"))
     plan = _fallback_plan(runtime, routing, source)
-    current_fallback = plan["tag"] if plan["kept"] else ""
+    if plan["kept"]:
+        current_fallback = plan["tag"]
+    elif not managed_fallback or managed_fallback in _selector_members(runtime, current):
+        # Either a clone made before the guard fallback existed, or the guard
+        # itself: any live member of the selector is as good as another.
+        current_fallback = managed_fallback
+    else:
+        current_fallback = _guard_fallback_tag(runtime, current)
     if current == snapshot and current_fallback == managed_fallback:
         return None
     return {
@@ -868,6 +953,27 @@ def _observatory_covers(runtime: Dict[str, Any], tags: Iterable[str]) -> bool:
     return all(any(str(tag).startswith(prefix) for prefix in prefixes) for tag in tags)
 
 
+def _probed_strategy(runtime: Dict[str, Any], tags: Iterable[str]) -> Dict[str, Any]:
+    """Health-aware strategy for outbounds an observatory actually probes.
+
+    Under ``burstObservatory`` a node counts as alive while any probe of its
+    sample succeeded, and failed probes never enter its average delay -- so
+    ``leastPing`` keeps choosing a dead or flapping node.  ``leastLoad`` can cut
+    a node by its share of failed probes, which is what DNS needs.
+    """
+    if not _observatory_covers(runtime, list(tags)):
+        return {"type": "random"}
+    if runtime.get("observatory_kind") == KIND_BURST and not prefers_fast_node():
+        settings: Dict[str, Any] = {"expected": LEAST_LOAD_EXPECTED, "tolerance": LEAST_LOAD_TOLERANCE}
+        limit = max_rtt_ms()
+        if limit > 0:
+            # Nodes over the bound are skipped; if that leaves nobody, the
+            # request goes to the fallbackTag, which stays inside the proxies.
+            settings["maxRTT"] = "%dms" % limit
+        return {"type": "leastLoad", "settings": settings}
+    return {"type": "leastPing"}
+
+
 def _build_combined_target(
     chosen: list[Dict[str, Any]], runtime: Dict[str, Any]
 ) -> Dict[str, Any]:
@@ -877,10 +983,11 @@ def _build_combined_target(
     proxies can only be combined by creating a balancer -- one the user does
     not otherwise have.  ``leastPing`` needs an observatory that actually
     probes these outbounds; without that coverage it would never pick a node,
-    so fall back to ``random``.
+    so fall back to ``random``.  Under ``burstObservatory`` the covered set
+    gets ``leastLoad`` instead, which can drop a node by its failed probes.
     """
     tags = [item["tag"] for item in chosen]
-    strategy = {"type": "leastPing"} if _observatory_covers(runtime, tags) else {"type": "random"}
+    strategy = _probed_strategy(runtime, tags)
     return {
         "kind": "balancer",
         "tag": BALANCER_TAG,
@@ -893,6 +1000,8 @@ def _build_combined_target(
             "tag": BALANCER_TAG,
             "selector": list(tags),
             "strategy": strategy,
+            # See _guard_fallback_tag: without it an empty pick goes to the default outbound.
+            "fallbackTag": tags[0],
         },
     }
 
@@ -1790,6 +1899,18 @@ def _owned_rule(rule: Any) -> bool:
     }
 
 
+def _rule_as_written(rule: Any) -> Any:
+    """The rule in the spelling the panel writes, for comparing with its own.
+
+    Xray has a single rule type, so ``"type": "field"`` says nothing and
+    configs tidied for newer cores drop it.  A managed rule that lost only
+    this key is still the panel's rule, not a hand-edited one.
+    """
+    if isinstance(rule, dict) and "type" not in rule:
+        return {"type": "field", **rule}
+    return rule
+
+
 def _direct_outbound_tag(runtime: Dict[str, Any]) -> str:
     """Tag of a freedom outbound, i.e. the one that leaves the tunnel."""
     for item in runtime.get("outbounds", []):
@@ -2011,6 +2132,7 @@ def _managed_presence(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, bo
                 declared_zones[key].append(zone)
     model = routing.get("routing") if isinstance(routing.get("routing"), dict) else {}
     rules = model.get("rules") if isinstance(model.get("rules"), list) else []
+    rules = [_rule_as_written(item) for item in rules]
     proxy_rule_obj = next((item for item in rules if _clean_tag(item.get("ruleTag")) == PROXY_RULE_TAG), None)
     local_rule_obj = next((item for item in rules if _clean_tag(item.get("ruleTag")) == LOCAL_RULE_TAG), None)
     direct_rule_obj = next((item for item in rules if _clean_tag(item.get("ruleTag")) == DIRECT_RULE_TAG), None)

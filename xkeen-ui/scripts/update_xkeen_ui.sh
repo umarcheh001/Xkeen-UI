@@ -770,6 +770,33 @@ tar_supports_exclude() {
   return 0
 }
 
+make_ui_backup() {
+  # $1 - archive to create. The panel keeps its state next to its code and
+  # goes on writing while tar reads the directory: SQLite side files appear
+  # and vanish every minute. GNU tar reports that with status 1 although the
+  # archive is complete, so only a higher status or an unreadable archive is
+  # a failed backup. The side files themselves are of no use for a rollback.
+  backup_rc=0
+  tar \
+    --exclude='*pycache*' \
+    --exclude='*.pyc' \
+    --exclude='*.pyo' \
+    --exclude='*.sqlite3-wal' \
+    --exclude='*.sqlite3-shm' \
+    --exclude='*.sqlite3-journal' \
+    -czf "$1" \
+    -C "$(dirname "$UI_DIR")" \
+    "$(basename "$UI_DIR")" >>"$LOG_FILE" 2>&1 || backup_rc=$?
+  if [ "$backup_rc" -eq 0 ]; then
+    return 0
+  fi
+  if [ "$backup_rc" -eq 1 ] && tar -tzf "$1" >/dev/null 2>&1; then
+    log "[!] Backup: files changed while being archived (the panel is running); the copy is complete."
+    return 0
+  fi
+  return "$backup_rc"
+}
+
 if [ "$ACTION" != "rollback" ]; then
   if [ "$CHANNEL" != "stable" ] && [ "$CHANNEL" != "main" ]; then
     echo "[!] Unsupported channel: $CHANNEL (use stable or main)." >&2
@@ -892,13 +919,7 @@ elif [ -d "$UI_DIR" ]; then
     write_status "failed" "backup" "Бэкап не создан: tar не поддерживает --exclude" "backup_tar_unsupported"
     exit 18
   fi
-  if tar \
-    --exclude='*pycache*' \
-    --exclude='*.pyc' \
-    --exclude='*.pyo' \
-    -czf "$backup_file" \
-    -C "$(dirname "$UI_DIR")" \
-    "$(basename "$UI_DIR")" >>"$LOG_FILE" 2>&1; then
+  if make_ui_backup "$backup_file"; then
     trim_backups "$BACKUP_KEEP"
   else
     rm -f "$backup_file" 2>/dev/null || true

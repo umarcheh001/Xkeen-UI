@@ -60,6 +60,7 @@ from services.xray_outbounds import (
     set_sockopt_mark,
 )
 from services.xray_subscriptions import (
+    _write_jsonc_sidecar_if_changed,
     build_xray_outbounds_nodes,
     list_subscriptions,
     normalize_xray_outbounds_node_latency,
@@ -71,6 +72,15 @@ from services.xray_subscriptions import (
 from services.xray_outbounds_runtime import (
     infer_active_xray_outbound,
     read_xray_outbound_runtime_log_sources,
+)
+from services.xray_observatory import (
+    KINDS as OBSERVATORY_KINDS,
+    OBSERVATORY_FILE,
+    apply_generate_request,
+    collect_catalog,
+    describe_config,
+    locate_section,
+    read_fragment,
 )
 
 
@@ -2117,12 +2127,62 @@ def create_xray_configs_blueprint(
         return jsonify({"ok": True, "existed": False, "files": files_written, "restarted": restarted}), 200
 
 
+    OBSERVATORY_JSONC_HEADER = "// Автосгенерировано панелью XKeen UI (обсерватория для балансировщиков)"
+    # First words of the headers this route wrote before it learned to keep comments.
+    OBSERVATORY_JSONC_OLD_HEADERS = ("// Автосгенерировано панелью XKeen UI", "// Этот файл хранится в UI")
+
+    def _observatory_file_in_effect() -> tuple[str, bool, list[str]]:
+        """The file holding the section the core reads, whether burst is needed, other holders.
+
+        The section may live in any fragment; the form has to read and edit that
+        one, or it shows empty fields and then writes a second section.  Sections
+        in the other files are the ones a save has to drop.
+        """
+        catalog = collect_catalog(XRAY_CONFIGS_DIR)
+        holder = locate_section(catalog)
+        file_name = holder["file"] if holder is not None else OBSERVATORY_FILE
+        others: list[str] = []
+        for item in catalog["sections"]:
+            if item["file"] != file_name and item["file"] not in others:
+                others.append(item["file"])
+        return file_name, bool(catalog["has_least_load"]), others
+
+    def _drop_old_observatory_headers(jsonc_path: str) -> None:
+        """Earlier saves left a two-line header; kept as is, it would pass for owner comments."""
+        try:
+            with open(jsonc_path, "r", encoding="utf-8") as f:
+                lines = f.read().splitlines(keepends=True)
+        except Exception:
+            return
+        kept = [line for line in lines if not line.lstrip().startswith(OBSERVATORY_JSONC_OLD_HEADERS)]
+        if len(kept) != len(lines):
+            _atomic_write_bytes(jsonc_path, "".join(kept).encode("utf-8"), mode=0o644)
+
+    def _drop_observatory_sections(file_name: str) -> None:
+        """Remove observatory sections from a fragment the form is not editing."""
+        path = os.path.join(XRAY_CONFIGS_DIR, file_name)
+        obj = read_fragment(path)
+        if obj is None:
+            return
+        trimmed = {key: value for key, value in obj.items() if key not in OBSERVATORY_KINDS}
+        if len(trimmed) == len(obj):
+            return
+        try:
+            snapshot_xray_config_before_overwrite(path)
+        except Exception:
+            pass
+        # Sidecar first: with none yet, the comments are still in the main file.
+        _write_jsonc_sidecar_if_changed(path, trimmed, header="", preserve_existing_comments=True)
+        pretty = json.dumps(trimmed, ensure_ascii=False, indent=2) + "\n"
+        _atomic_write_bytes(path, pretty.encode("utf-8"), mode=0o644)
+
     # --- API: Xray observatory config (read) ---
 
     @bp.get("/api/xray/observatory/config")
     def api_xray_observatory_config():
-        """Return parsed observatory settings for 07_observatory.json (if present)."""
-        dst_json = os.path.join(XRAY_CONFIGS_DIR, "07_observatory.json")
+        """Return parsed settings of the observatory section in effect (if any)."""
+        file_name, want_burst, _others = _observatory_file_in_effect()
+        dst_json = os.path.join(XRAY_CONFIGS_DIR, file_name)
         dst_jsonc = jsonc_path_for(dst_json)
         legacy_dst_jsonc = legacy_jsonc_path_for(dst_json)
 
@@ -2134,52 +2194,9 @@ def create_xray_configs_blueprint(
             exists = False
 
         if exists:
-            try:
-                with open(dst_json, "r", encoding="utf-8") as f:
-                    txt = f.read()
-                parsed = json.loads(txt) if txt.strip() else {}
-                if isinstance(parsed, dict):
-                    cfg_obj = parsed
-            except Exception:
-                cfg_obj = {}
+            cfg_obj = read_fragment(dst_json) or {}
 
-        obs: Dict[str, Any] = {}
-        try:
-            v = cfg_obj.get("observatory") if isinstance(cfg_obj, dict) else None
-            if isinstance(v, dict):
-                obs = v
-        except Exception:
-            obs = {}
-
-        def _str(v, default=""):
-            try:
-                s = str(v)
-                return s
-            except Exception:
-                return default
-
-        def _bool(v, default=True):
-            try:
-                if isinstance(v, bool):
-                    return v
-            except Exception:
-                pass
-            return default
-
-        def _list(v):
-            out: list[str] = []
-            if isinstance(v, list):
-                for x in v:
-                    if isinstance(x, str) and x.strip():
-                        out.append(x.strip())
-            return out
-
-        config = {
-            "subjectSelector": _list(obs.get("subjectSelector")),
-            "probeUrl": _str(obs.get("probeUrl"), ""),
-            "probeInterval": _str(obs.get("probeInterval"), ""),
-            "enableConcurrency": _bool(obs.get("enableConcurrency"), True),
-        }
+        config = describe_config(cfg_obj, want_burst=want_burst)
 
         # Also report where JSONC sidecar lives (for UI hints/debug), without exposing realpaths.
         jsonc_exists = False
@@ -2197,7 +2214,7 @@ def create_xray_configs_blueprint(
                     "ok": True,
                     "exists": bool(exists),
                     "dir": XRAY_CONFIGS_DIR,
-                    "file": "07_observatory.json",
+                    "file": file_name,
                     "jsonc": os.path.basename(dst_jsonc),
                     "jsonc_exists": bool(jsonc_exists),
                     "legacy_jsonc_exists": bool(legacy_jsonc_exists),
@@ -2212,7 +2229,10 @@ def create_xray_configs_blueprint(
 
     @bp.post("/api/xray/observatory/generate")
     def api_xray_observatory_generate():
-        """Generate/update 07_observatory.json (+ JSONC sidecar) from UI parameters.
+        """Generate/update the observatory section (+ JSONC sidecar) from UI parameters.
+
+        The section is edited in the file that holds it; 07_observatory.json is
+        used only when the directory has none.
 
         Payload:
           - subjectSelector: list[str] (required)
@@ -2258,7 +2278,8 @@ def create_xray_configs_blueprint(
         probe_interval = payload.get("probeInterval")
         enable_conc = payload.get("enableConcurrency")
 
-        dst_json = os.path.join(XRAY_CONFIGS_DIR, "07_observatory.json")
+        file_name, want_burst, other_files = _observatory_file_in_effect()
+        dst_json = os.path.join(XRAY_CONFIGS_DIR, file_name)
         dst_jsonc = jsonc_path_for(dst_json)
         legacy_dst_jsonc = legacy_jsonc_path_for(dst_json)
 
@@ -2272,45 +2293,31 @@ def create_xray_configs_blueprint(
 
         if existed and not overwrite:
             # No-op: return current config
-            return jsonify({"ok": True, "existed": True, "overwritten": False, "file": "07_observatory.json"}), 200
+            return jsonify({"ok": True, "existed": True, "overwritten": False, "file": file_name}), 200
 
         # Load existing JSON as base (preserve unknown keys), otherwise start minimal.
-        cfg_obj: Dict[str, Any] = {}
-        if existed:
-            try:
-                with open(dst_json, "r", encoding="utf-8") as f:
-                    txt = f.read()
-                parsed = json.loads(txt) if txt.strip() else {}
-                if isinstance(parsed, dict):
-                    cfg_obj = parsed
-            except Exception:
-                cfg_obj = {}
+        cfg_obj: Dict[str, Any] = (read_fragment(dst_json) or {}) if existed else {}
 
-        if not isinstance(cfg_obj, dict) or not cfg_obj:
-            cfg_obj = {}
+        cfg_obj = apply_generate_request(
+            cfg_obj,
+            subject=subject,
+            probe_url=probe_url,
+            probe_interval=probe_interval,
+            enable_concurrency=enable_conc,
+            want_burst=want_burst,
+        )
+        described = describe_config(cfg_obj, want_burst=want_burst)
 
-        obs = cfg_obj.get("observatory")
-        if not isinstance(obs, dict):
-            obs = {}
-
-        # Apply fields
-        obs["subjectSelector"] = subject
-        if isinstance(probe_url, str) and probe_url.strip():
-            obs["probeUrl"] = probe_url.strip()
-        elif "probeUrl" not in obs:
-            obs["probeUrl"] = "https://www.gstatic.com/generate_204"
-
-        if isinstance(probe_interval, str) and probe_interval.strip():
-            obs["probeInterval"] = probe_interval.strip()
-        elif "probeInterval" not in obs:
-            obs["probeInterval"] = "60s"
-
-        if isinstance(enable_conc, bool):
-            obs["enableConcurrency"] = enable_conc
-        elif "enableConcurrency" not in obs:
-            obs["enableConcurrency"] = True
-
-        cfg_obj["observatory"] = obs
+        # JSONC sidecar for UI, written before the main file: when there is no
+        # sidecar yet, the owner's comments are still in the main file and move over.
+        try:
+            _drop_old_observatory_headers(dst_jsonc)
+            _write_jsonc_sidecar_if_changed(
+                dst_json, cfg_obj, header=OBSERVATORY_JSONC_HEADER, preserve_existing_comments=True
+            )
+        except Exception:
+            # JSONC is optional; never fail the whole flow.
+            pass
 
         # Write JSON for Xray
         try:
@@ -2319,17 +2326,13 @@ def create_xray_configs_blueprint(
         except Exception:
             return error_response("failed_to_write_observatory_json", 500, ok=False)
 
-        # Write JSONC sidecar for UI (always rewrite to keep it in sync)
-        jsonc_text = (
-            "// Автосгенерировано панелью XKeen UI (leastPing)\n"
-            "// Этот файл хранится в UI‑каталоге JSONC (не в /opt/etc/xray/configs), чтобы Xray не подхватывал *.jsonc.\n"
-            + (json.dumps(cfg_obj, ensure_ascii=False, indent=2) + "\n")
-        )
-        try:
-            _atomic_write_bytes(dst_jsonc, jsonc_text.encode("utf-8"), mode=0o644)
-        except Exception:
-            # JSONC is optional; never fail the whole flow.
-            pass
+        # The form edits one section.  A second one elsewhere would either shadow
+        # it (the core reads the plain kind first) or probe for nothing.
+        for other in other_files:
+            try:
+                _drop_observatory_sections(other)
+            except Exception:
+                pass
 
         # Remove legacy JSONC inside configs dir so Xray won't parse it.
         try:
@@ -2344,14 +2347,9 @@ def create_xray_configs_blueprint(
                     "ok": True,
                     "existed": bool(existed),
                     "overwritten": True,
-                    "file": "07_observatory.json",
+                    "file": file_name,
                     "jsonc": os.path.basename(dst_jsonc),
-                    "config": {
-                        "subjectSelector": subject,
-                        "probeUrl": obs.get("probeUrl"),
-                        "probeInterval": obs.get("probeInterval"),
-                        "enableConcurrency": obs.get("enableConcurrency"),
-                    },
+                    "config": described,
                 }
             ),
             200,

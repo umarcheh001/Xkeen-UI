@@ -8,6 +8,7 @@ import {
   getXkeenModalApi,
   getXkeenStateApi,
   isXkeenTerminalPtyConnected,
+  loadXkeenCapabilities,
   openXkeenTerminal,
   getXkeenTerminalCapabilitiesApi,
   getXkeenTerminalCoreContext,
@@ -401,6 +402,10 @@ export function getTerminalCommandJobApi() {
 
 export function getTerminalCoreHttpApi() {
   return getXkeenCoreHttpApi();
+}
+
+export function loadTerminalCapabilities(options) {
+  return loadXkeenCapabilities(options);
 }
 
 export function getTerminalCapabilitiesApi() {

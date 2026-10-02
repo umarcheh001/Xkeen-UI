@@ -36,15 +36,15 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 | Module ID | Единиц | Размер | Routes | Background | UI surfaces | Removable |
 |---|---:|---:|---:|---:|---:|---|
-| `core` | 424 | 5.64 МБ | 76 | 4 | 35 | нет |
-| `engine.xray` | 120 | 3.35 МБ | 56 | 3 | 14 | да |
+| `core` | 427 | 5.66 МБ | 76 | 4 | 35 | нет |
+| `engine.xray` | 125 | 3.45 МБ | 56 | 3 | 14 | да |
 | `engine.mihomo` | 131 | 2.94 МБ | 88 | 4 | 6 | да |
-| `tool.editor` | 25 | 809.5 КБ | 0 | 0 | 2 | да |
-| `tool.terminal` | 49 | 497.0 КБ | 2 | 2 | 2 | да |
+| `tool.editor` | 25 | 812.2 КБ | 0 | 0 | 2 | да |
+| `tool.terminal` | 49 | 496.5 КБ | 2 | 2 | 2 | да |
 | `tool.files` | 85 | 972.8 КБ | 43 | 1 | 1 | да |
 | `tool.backups` | 8 | 107.0 КБ | 17 | 0 | 1 | да |
 | `integration.happ` | 22 | 306.5 КБ | 5 | 0 | 1 | да |
-| `tool.advanced-diagnostics` | 26 | 603.9 КБ | 26 | 0 | 2 | да |
+| `tool.advanced-diagnostics` | 26 | 606.6 КБ | 26 | 0 | 2 | да |
 
 ## Backend routes и регистрация
 
@@ -111,11 +111,11 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 | `engine.mihomo` | `tool.backups` | 1 | `xkeen-ui/routes/mihomo.py` |
 | `engine.mihomo` | `tool.editor` | 131 | `xkeen-ui/bootstrap_mihomo_env.py`<br>`xkeen-ui/mihomo_config_generator.py`<br>`xkeen-ui/mihomo_server_core.py` |
 | `engine.mihomo` | `tool.terminal` | 3 | `xkeen-ui/routes/mihomo.py`<br>`xkeen-ui/services/mihomo_dns.py`<br>`xkeen-ui/services/mihomo_runtime.py` |
-| `engine.xray` | `core` | 120 | `xkeen-ui/routes/routing/__init__.py`<br>`xkeen-ui/routes/routing/blueprint.py`<br>`xkeen-ui/routes/routing/config.py` |
+| `engine.xray` | `core` | 125 | `xkeen-ui/routes/routing/__init__.py`<br>`xkeen-ui/routes/routing/blueprint.py`<br>`xkeen-ui/routes/routing/config.py` |
 | `engine.xray` | `engine.mihomo` | 1 | `xkeen-ui/services/xray_subscriptions.py` |
 | `engine.xray` | `integration.happ` | 2 | `xkeen-ui/services/xray_subscriptions.py`<br>`xkeen-ui/static/js/features/outbounds.js` |
 | `engine.xray` | `tool.backups` | 5 | `xkeen-ui/routes/routing/config.py`<br>`xkeen-ui/routes/xray_configs.py`<br>`xkeen-ui/static/js/features/inbounds.js` |
-| `engine.xray` | `tool.editor` | 120 | `xkeen-ui/routes/routing/__init__.py`<br>`xkeen-ui/routes/routing/blueprint.py`<br>`xkeen-ui/routes/routing/config.py` |
+| `engine.xray` | `tool.editor` | 125 | `xkeen-ui/routes/routing/__init__.py`<br>`xkeen-ui/routes/routing/blueprint.py`<br>`xkeen-ui/routes/routing/config.py` |
 | `engine.xray` | `tool.files` | 3 | `xkeen-ui/routes/routing/dat.py`<br>`xkeen-ui/routes/routing/dat_files.py`<br>`xkeen-ui/services/geodat/runner.py` |
 | `engine.xray` | `tool.terminal` | 2 | `xkeen-ui/routes/routing/config.py`<br>`xkeen-ui/routes/xray_configs.py` |
 | `integration.happ` | `core` | 22 | `xkeen-ui/routes/happ_decryptor.py`<br>`xkeen-ui/services/happ_decryptor/__init__.py`<br>`xkeen-ui/services/happ_decryptor/engine.py` |

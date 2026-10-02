@@ -1,10 +1,10 @@
 import { ensurePanelModule, getPanelModuleApi } from './panel.module_loader.js';
 import {
-  getXkeenCoreHttpApi,
   getXkeenGithubRepoUrl,
   getXkeenLazyRuntimeApi,
   getXkeenStateApi,
   getXkeenTerminalRoot,
+  loadXkeenCapabilities,
   openXkeenTerminal,
   toastXkeen,
 } from '../features/xkeen_runtime.js';
@@ -15,10 +15,6 @@ function safe(fn) {
     try { console.error(error); } catch (e) {}
     return undefined;
   }
-}
-
-function getCoreHttp() {
-  return getXkeenCoreHttpApi();
 }
 
 function getRoutingBundleFeatureApi(name) {
@@ -528,19 +524,7 @@ export function initPanelTerminalCapabilityButtons() {
     }
   }
 
-  Promise.resolve().then(() => {
-    const http = getCoreHttp();
-    if (http && typeof http.fetchJSON === 'function') {
-      return http.fetchJSON('/api/capabilities', {
-        method: 'GET',
-        timeoutMs: 6000,
-        retry: 1,
-      }).catch(() => null);
-    }
-    return fetch('/api/capabilities', { cache: 'no-store' })
-      .then((response) => (response && response.ok) ? response.json() : null)
-      .catch(() => null);
-  })
+  loadXkeenCapabilities()
     .then((data) => apply(data))
     .catch(() => {
       // On error keep the server-rendered default terminal button.
