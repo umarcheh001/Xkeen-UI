@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from itertools import chain, repeat
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -279,7 +280,7 @@ def test_core_switch_modal_sets_loading_during_submit():
 
 
 def test_restart_waits_for_new_process_identity(monkeypatch):
-    identities = iter([('mihomo', (101,)), ('mihomo', (101,)), ('mihomo', (202,))])
+    identities = chain([('mihomo', (101,)), ('mihomo', (101,))], repeat(('mihomo', (202,))))
     monkeypatch.setattr(xkeen_service, '_xkeen_runtime_identity', lambda: next(identities))
     monkeypatch.setattr(
         xkeen_service,
@@ -315,7 +316,7 @@ def test_restart_is_not_declared_done_on_a_dying_process(monkeypatch):
     # Старый процесс умирает между двумя вызовами pidof: имя ядра ещё видно,
     # номеров процесса уже нет. Это не новый процесс, а пауза перед ним.
     seen: list[tuple[str, tuple[int, ...]]] = []
-    identities = iter([('xray', ()), ('', ()), ('xray', (202,)), ('xray', (202,))])
+    identities = chain([('xray', ()), ('', ())], repeat(('xray', (202,))))
 
     def _identity():
         current = next(identities)
@@ -327,3 +328,46 @@ def test_restart_is_not_declared_done_on_a_dying_process(monkeypatch):
 
     assert xkeen_service._wait_xkeen_restarted(('xray', (101,)), timeout=2) is True
     assert seen[-1] == ('xray', (202,))
+
+
+def test_restart_is_not_declared_done_on_a_process_that_does_not_last(monkeypatch):
+    # XKeen при запуске может поднять ядро, уронить и поднять снова. Процесс,
+    # проживший долю секунды, — ещё не «перезапущено».
+    clock = {'now': 0.0}
+    polls: list[tuple[str, tuple[int, ...]]] = []
+    identities = chain(
+        [('xray', (101,)), ('', ()), ('xray', (150,)), ('', ())],
+        repeat(('xray', (202,))),
+    )
+
+    def _identity():
+        current = next(identities)
+        polls.append(current)
+        return current
+
+    monkeypatch.setattr(xkeen_service, '_xkeen_runtime_identity', _identity)
+    monkeypatch.setattr(xkeen_service.time, 'monotonic', lambda: clock['now'])
+    monkeypatch.setattr(
+        xkeen_service.time, 'sleep', lambda seconds: clock.__setitem__('now', clock['now'] + seconds)
+    )
+
+    assert xkeen_service._wait_xkeen_restarted(('xray', (101,)), timeout=8) is True
+    # Короткоживущий 150 пропущен; новый процесс наблюдали не меньше секунды.
+    assert polls.count(('xray', (202,))) >= 5
+    assert clock['now'] >= 1.0
+
+
+def test_restart_gives_up_when_the_new_process_never_settles(monkeypatch):
+    clock = {'now': 0.0}
+    flapping = chain([('xray', (101,))], (('xray', (200 + n,)) for n in range(10_000)))
+
+    monkeypatch.setattr(xkeen_service, '_xkeen_runtime_identity', lambda: next(flapping))
+    monkeypatch.setattr(xkeen_service.time, 'monotonic', lambda: clock['now'])
+    monkeypatch.setattr(
+        xkeen_service.time, 'sleep', lambda seconds: clock.__setitem__('now', clock['now'] + seconds)
+    )
+
+    # Ядро «запущено», но каждый раз другое: по истечении срока верим имени процесса.
+    assert xkeen_service._wait_xkeen_restarted(('xray', (101,)), timeout=3) is True
+    assert clock['now'] >= 3.0
+

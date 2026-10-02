@@ -37,7 +37,7 @@
       ],
       "removable": false,
       "unit_count": 432,
-      "size_bytes": 6023344,
+      "size_bytes": 6026820,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
@@ -2310,7 +2310,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/xkeen.py",
-      "size_bytes": 8905,
+      "size_bytes": 9414,
       "depends_on": [
         "tool.terminal",
         "engine.mihomo"
@@ -5939,7 +5939,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_xkeen_service_control_fallback.py",
-      "size_bytes": 12366,
+      "size_bytes": 14379,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -6985,7 +6985,7 @@
       "module_id": "core",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/restart_log.js",
-      "size_bytes": 76928,
+      "size_bytes": 77882,
       "depends_on": [
         "engine.xray"
       ],
