@@ -20,6 +20,7 @@ import {
   getXkeenEditorToolbarMiniItems,
   getXkeenFilePath,
   getXkeenPageFlagsConfig,
+  getXkeenUiApi,
   getXkeenSettingsApi,
   setXkeenPageConfigValue,
 } from './xkeen_runtime.js';
@@ -301,7 +302,8 @@ let mihomoPanelModuleApi = null;
     if (isMihomoExpertModeEnabled()) return null;
     if (_mihomoQuickFixProvider) return _mihomoQuickFixProvider;
     if (_mihomoQuickFixProviderProxy) return _mihomoQuickFixProviderProxy;
-    const ensureCapability = window.XKeen?.ui?.editorCapabilities?.ensure;
+    const uiApi = getXkeenUiApi();
+    const ensureCapability = uiApi && uiApi.editorCapabilities && uiApi.editorCapabilities.ensure;
     if (!_mihomoQuickFixProviderPromise) {
       _mihomoQuickFixProviderPromise = Promise.resolve(
         typeof ensureCapability === 'function' ? ensureCapability('quick-fix') : true
@@ -311,7 +313,8 @@ let mihomoPanelModuleApi = null;
           .then(({ createMihomoQuickFixProvider }) => {
             _mihomoQuickFixProvider = createMihomoQuickFixProvider();
             try {
-              const ui = (window.XKeen = window.XKeen || {}).ui = (window.XKeen.ui || {});
+              const ui = getXkeenUiApi();
+              if (!ui) return _mihomoQuickFixProvider;
               ui.editorQuickFixProviders = ui.editorQuickFixProviders || {};
               ui.editorQuickFixProviders.mihomo = _mihomoQuickFixProvider;
             } catch (e) {}

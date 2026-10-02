@@ -27,6 +27,7 @@ import {
   getXkeenSettingsApi,
   getXkeenShowXrayPreflightErrorApi,
   getXkeenUiConfigShellApi,
+  getXkeenUiApi,
   getXkeenFilePath,
   getXkeenModalApi,
   isXkeenMipsRuntime,
@@ -855,7 +856,8 @@ import { iconHtml } from '../ui/operator_icons.js';
     if (isRoutingExpertModeEnabled()) return null;
     if (_routingQuickFixProvider) return _routingQuickFixProvider;
     if (_routingQuickFixProviderProxy) return _routingQuickFixProviderProxy;
-    const ensureCapability = window.XKeen?.ui?.editorCapabilities?.ensure;
+    const uiApi = getXkeenUiApi();
+    const ensureCapability = uiApi && uiApi.editorCapabilities && uiApi.editorCapabilities.ensure;
     if (!_routingQuickFixProviderPromise) {
       _routingQuickFixProviderPromise = Promise.resolve(
         typeof ensureCapability === 'function' ? ensureCapability('quick-fix') : true
@@ -867,7 +869,8 @@ import { iconHtml } from '../ui/operator_icons.js';
               getSemanticOptions: () => getRoutingSemanticValidationConfig().options,
             });
             try {
-              const ui = (window.XKeen = window.XKeen || {}).ui = (window.XKeen.ui || {});
+              const ui = getXkeenUiApi();
+              if (!ui) return _routingQuickFixProvider;
               ui.editorQuickFixProviders = ui.editorQuickFixProviders || {};
               ui.editorQuickFixProviders['xray-routing'] = _routingQuickFixProvider;
               ui.editorQuickFixProviders.xray = _routingQuickFixProvider;

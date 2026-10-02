@@ -86,7 +86,7 @@
       ],
       "removable": true,
       "unit_count": 120,
-      "size_bytes": 3517555,
+      "size_bytes": 3517638,
       "kind_counts": {
         "backend_route": 13,
         "backend_service": 17,
@@ -130,7 +130,7 @@
       ],
       "removable": true,
       "unit_count": 131,
-      "size_bytes": 3077494,
+      "size_bytes": 3077576,
       "kind_counts": {
         "app_runtime": 4,
         "backend_route": 2,
@@ -12591,7 +12591,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/mihomo_panel.js",
-      "size_bytes": 136683,
+      "size_bytes": 136765,
       "depends_on": [
         "core",
         "tool.editor"
@@ -15086,7 +15086,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/routing.js",
-      "size_bytes": 231906,
+      "size_bytes": 231989,
       "depends_on": [
         "core",
         "tool.editor",
