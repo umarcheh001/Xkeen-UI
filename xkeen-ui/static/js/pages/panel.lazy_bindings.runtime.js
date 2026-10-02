@@ -740,13 +740,16 @@ export function wirePanelLazyFeatureClicks() {
       '#cores-check-btn',
     ].join(', '));
     if (commandsAction && (!isPanelLazyFeatureReady('commandsList') || !isPanelLazyFeatureReady('coresStatus'))) {
+      // The handler lives on the button inside the row, and a click replayed
+      // on the row never reaches it: replay on what was actually pressed.
+      const commandsReplayTarget = raw.closest('.command-item-action') || commandsAction;
       event.preventDefault();
       event.stopImmediatePropagation();
       Promise.all([
         ensurePanelLazyFeature('commandsList'),
         ensurePanelLazyFeature('coresStatus'),
       ]).then((results) => {
-        if (results.every(Boolean)) fireDeferredClick(commandsAction);
+        if (results.every(Boolean)) fireDeferredClick(commandsReplayTarget);
       });
       return;
     }

@@ -37,7 +37,7 @@
       ],
       "removable": false,
       "unit_count": 427,
-      "size_bytes": 5933684,
+      "size_bytes": 5934728,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
@@ -7328,7 +7328,7 @@
       "module_id": "core",
       "kind": "frontend_javascript",
       "path": "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js",
-      "size_bytes": 33690,
+      "size_bytes": 33939,
       "depends_on": [
         "tool.terminal",
         "engine.xray",
@@ -7979,7 +7979,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/commands_pty_capability_probe.spec.mjs",
-      "size_bytes": 4507,
+      "size_bytes": 5302,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],

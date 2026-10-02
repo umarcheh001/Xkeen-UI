@@ -120,6 +120,24 @@ test.describe('Commands: PTY capability probe on a slow link', () => {
     await expect.poll(() => inputs.join(''), { timeout: 20_000 }).toContain('xkeen -i\r');
   });
 
+  test('a press that lands before the command list has loaded still runs the command', async ({ page }) => {
+    const link = { down: false, delayMs: 0 };
+    await mockCapabilities(page, link);
+    const inputs = await mockPty(page);
+
+    // Hold the command list module back, as a slow link to the router does.
+    // The press is then caught by the lazy-feature guard and replayed later.
+    await page.route(/\/commands_list[-.][^/]*\.js(\?|$)/, async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      try { await route.continue(); } catch (error) {}
+    });
+
+    await openCommands(page);
+    await commandRow(page).locator('.command-item-action').click();
+
+    await expect.poll(() => inputs.join(''), { timeout: 20_000 }).toContain('xkeen -i\r');
+  });
+
   test('a refused WebSocket is reported as a connection problem', async ({ page }) => {
     test.setTimeout(45_000);
     const link = { down: false, delayMs: 0 };
