@@ -37,7 +37,7 @@
       ],
       "removable": false,
       "unit_count": 432,
-      "size_bytes": 6027384,
+      "size_bytes": 6029044,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
@@ -3698,7 +3698,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_install_xk_geodat_prompt_contract.py",
-      "size_bytes": 594,
+      "size_bytes": 2254,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
