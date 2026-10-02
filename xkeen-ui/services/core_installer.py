@@ -186,11 +186,20 @@ class CoreInstaller:
     def _resolve(self, profile: CoreProfile, *, fresh: bool = False) -> dict[str, Any]:
         cache_key = f"{profile.engine_id}:{profile.profile_id}:{self.platform.machine}:{self.platform.opkg_arch}:{self.platform.endianness}"
         cached = None if fresh else self.state_store.get_release_cache(cache_key, max_age_s=self.release_cache_ttl_s)
+        stale_cached = self.state_store.get_release_cache(cache_key, max_age_s=0, allow_stale=True)
         if cached is not None:
             return cached
+        if not fresh and isinstance(stale_cached, dict) and stale_cached.get("installable"):
+            return {**stale_cached, "stale": True}
         release = self.release_resolver(profile, self.platform, timeout_s=self.resolve_timeout_s)
         if release.get("installable"):
             self.state_store.set_release_cache(cache_key, release)
+        elif (
+            str(release.get("reason") or "") == "github_unavailable"
+            and isinstance(stale_cached, dict)
+            and stale_cached.get("installable")
+        ):
+            return {**stale_cached, "stale": True}
         return release
 
     @staticmethod
@@ -318,12 +327,14 @@ class CoreInstaller:
             current_phase = "healthcheck"
             self._phase(operation_id, engine_id, current_phase)
             deadline = time.monotonic() + self.health_timeout_s
+            observed_core = None
             while True:
-                if self.running_core() != engine_id:
-                    raise CoreInstallError("healthcheck_failed", "Ядро не прошло проверку после перезапуска.")
+                observed_core = self.running_core()
                 if time.monotonic() >= deadline:
                     break
                 time.sleep(0.05)
+            if observed_core != engine_id:
+                raise CoreInstallError("healthcheck_failed", "Ядро не прошло проверку после перезапуска.")
             self.state_store.set_installed(
                 engine_id,
                 profile_id=profile.profile_id,

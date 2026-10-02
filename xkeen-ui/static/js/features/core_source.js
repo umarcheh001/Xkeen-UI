@@ -100,6 +100,7 @@ function renderProfiles(root, data, selectedProfileId) {
       releaseDate(release.stable?.published_at),
       release.asset?.name,
       release.checksum?.sha256 ? `SHA-256 ${release.checksum.sha256}` : '',
+      release.stale ? 'Последние проверенные данные · GitHub временно недоступен' : '',
     ].filter(Boolean).join(' · ');
     meta.textContent = `${profile.description} ${release.installable ? releaseMeta : releaseText(profile)}`;
     body.append(title, repo, meta);
@@ -193,13 +194,16 @@ export function initCoreSource(root) {
     text(root.querySelector('[data-core-source-installed]'), `Установлено: ${installed ? profileLabel(data.profiles, installed) : 'профиль не отмечен'} · ${installedVersion}`);
     text(root.querySelector('[data-core-source-selected]'), `Источник: ${profileLabel(data.profiles, selected)}`);
     const state = data.state || {};
+    const hasStaleRelease = (data.profiles || []).some((profile) => profile.release?.stale);
     const status = state.last_status === 'running'
       ? `Установка: ${Number.isFinite(Number(state.last_progress)) ? `${Math.round(Number(state.last_progress))}% · ` : ''}${state.last_phase_label || state.last_phase}`
       : state.last_status === 'rolled_back'
         ? `Откат: ${state.last_error || 'предыдущая версия восстановлена'}`
         : state.last_status === 'failed'
           ? `Ошибка установки: ${state.last_error || 'проверьте источник'}`
-          : 'Проверенные стабильные релизы';
+          : hasStaleRelease
+            ? 'Последние проверенные релизы · GitHub временно недоступен'
+            : 'Проверенные стабильные релизы';
     text(root.querySelector('[data-core-source-status]'), status);
     if (state.last_status === 'running' && state.last_operation_id && activeOperationId !== state.last_operation_id) startPolling(state.last_operation_id);
     text(sourceModal?.querySelector('[data-core-source-platform]'), `Архитектура: ${data.platform?.opkg_arch || data.platform?.machine || 'не определена'}`);

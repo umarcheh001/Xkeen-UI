@@ -411,6 +411,8 @@ def test_commands_panel_is_read_only_and_core_sources_are_module_owned():
     assert 'data-core-install-steps' in source_template
     assert 'operation.progress' in source_script
     assert 'phase_label' in source_script
+    assert 'release.stale' in source_script
+    assert 'GitHub временно недоступен' in source_script
     assert 'Контрольная сумма релиза не опубликована.' in source_script
     assert "setTimeout(() => poll(operationId), 700);" in source_script
 

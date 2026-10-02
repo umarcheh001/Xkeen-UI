@@ -181,7 +181,7 @@ class CoreProfileStateStore:
             self._write(payload)
             return deepcopy(current)
 
-    def get_release_cache(self, key: str, *, max_age_s: float) -> dict[str, Any] | None:
+    def get_release_cache(self, key: str, *, max_age_s: float, allow_stale: bool = False) -> dict[str, Any] | None:
         with self._lock:
             try:
                 with open(self.release_cache_path, "r", encoding="utf-8") as handle:
@@ -192,11 +192,12 @@ class CoreProfileStateStore:
             if not isinstance(entry, dict):
                 return None
             fetched_at = entry.get("fetched_at")
-            try:
-                if float(fetched_at) + max(0.0, float(max_age_s)) < time.time():
+            if not allow_stale:
+                try:
+                    if float(fetched_at) + max(0.0, float(max_age_s)) < time.time():
+                        return None
+                except (TypeError, ValueError):
                     return None
-            except (TypeError, ValueError):
-                return None
             release = entry.get("release")
             return deepcopy(release) if isinstance(release, dict) else None
 

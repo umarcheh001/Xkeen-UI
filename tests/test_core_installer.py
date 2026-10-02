@@ -153,6 +153,33 @@ def test_resolved_release_metadata_is_cached_per_profile_and_architecture(tmp_pa
     assert calls == ["official", "uwuray", "gfw-knocker", "jolymmiles", "patterniha"]
 
 
+def test_github_outage_uses_expired_verified_release_cache(tmp_path):
+    release = _release_for(b"new-xray")
+    install, store, _target = _installer(tmp_path, release=release)
+    cache_key = f"xray:official:{install.platform.machine}:{install.platform.opkg_arch}:{install.platform.endianness}"
+    store.set_release_cache(cache_key, release)
+    cache_path = tmp_path / "state" / "core-profiles" / "release-cache.json"
+    cache = json.loads(cache_path.read_text(encoding="utf-8"))
+    cache[cache_key]["fetched_at"] = time.time() - 3600
+    cache_path.write_text(json.dumps(cache), encoding="utf-8")
+    install.release_resolver = lambda *_args, **_kwargs: {
+        "installable": False,
+        "reason": "github_unavailable",
+        "stable": None,
+        "asset": None,
+        "checksum": None,
+    }
+
+    value = install.profiles("xray")
+    official = next(item for item in value["profiles"] if item["profile_id"] == "official")
+
+    assert official["release"]["installable"] is True
+    assert official["release"]["stale"] is True
+    prepared = install.prepare("xray")
+    assert prepared["release"]["installable"] is True
+    assert prepared["release"]["stale"] is True
+
+
 def test_bad_checksum_never_replaces_binary_or_creates_rollback_state(tmp_path):
     install, store, target = _installer(tmp_path, release=_release_for(b"new-xray", checksum="0" * 64))
     prepared = install.prepare("xray")
@@ -230,6 +257,29 @@ def test_healthcheck_observes_the_restarted_core_for_the_full_window(tmp_path):
 
     assert operation["status"] == "rolled_back"
     assert target.read_bytes() == b"old-xray"
+
+
+def test_healthcheck_tolerates_a_transient_process_gap_after_restart(tmp_path):
+    install, _store, target = _installer(tmp_path)
+    state = {"restarted": False, "checks_after_restart": 0}
+
+    def running_core():
+        if not state["restarted"]:
+            return "xray"
+        state["checks_after_restart"] += 1
+        return "xray" if state["checks_after_restart"] >= 3 else None
+
+    def restart(*_args, **_kwargs):
+        state["restarted"] = True
+        return True
+
+    install.running_core = running_core
+    install.restart = restart
+    prepared = install.prepare("xray")
+    operation = _wait_for_terminal(install, install.apply("xray", prepared["confirmation_id"])["operation_id"])
+
+    assert operation["status"] == "succeeded"
+    assert target.read_bytes() == b"new-xray"
 
 
 def test_rollback_preserves_source_selection_for_other_engine(tmp_path):
