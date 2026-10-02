@@ -188,9 +188,8 @@ def test_real_frontend_manifest_excludes_opposite_engine_entry():
     assert "js/pages/panel.routing.bundle.js" in manifest
     assert "js/pages/panel.mihomo.bundle.js" not in manifest
     assert "js/pages/mihomo_generator.entry.js" not in manifest
-    assert "static/frontend-build/assets/panel.mihomo.bundle-DyoOXfvB.js" not in files
-    # The current panel bootstrap statically imports this shared chunk.
-    assert any("mihomo_panel-" in name for name in files)
+    assert not any("panel.mihomo.bundle-" in name for name in files)
+    assert not any("mihomo_panel-" in name for name in files)
     assert "static/js/pages/mihomo_generator.entry.js" not in files
     assert "static/js/pages/panel.routing.bundle.js" not in files
     assert "static/js/pages/mihomo_generator.entry.js" not in bridge

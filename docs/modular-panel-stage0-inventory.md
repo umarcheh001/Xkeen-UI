@@ -36,7 +36,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 | Module ID | Единиц | Размер | Routes | Background | UI surfaces | Removable |
 |---|---:|---:|---:|---:|---:|---|
-| `core` | 427 | 5.68 МБ | 77 | 4 | 35 | нет |
+| `core` | 428 | 5.69 МБ | 77 | 4 | 35 | нет |
 | `engine.xray` | 125 | 3.45 МБ | 56 | 3 | 14 | да |
 | `engine.mihomo` | 128 | 2.89 МБ | 88 | 4 | 6 | да |
 | `tool.editor` | 25 | 812.2 КБ | 0 | 0 | 2 | да |

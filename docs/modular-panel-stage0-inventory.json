@@ -36,13 +36,13 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 427,
-      "size_bytes": 5953265,
+      "unit_count": 428,
+      "size_bytes": 5966274,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
         "backend_service": 54,
-        "backend_test": 179,
+        "backend_test": 180,
         "configuration": 10,
         "frontend_bundle": 9,
         "frontend_entrypoint": 2,
@@ -3764,6 +3764,26 @@
         "flask"
       ],
       "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_installer_profiles.py",
+      "size_bytes": 13009,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [
+        "XKEEN_UI_STATE_DIR"
+      ],
       "removable": false
     },
     {
