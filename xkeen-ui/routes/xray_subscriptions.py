@@ -376,7 +376,16 @@ def create_xray_subscriptions_blueprint(
 
     def _switch_subscriptions(action: str):
         payload = request.get_json(silent=True) or {}
-        run = subscription_pause.pause_all if action == "pause" else subscription_pause.resume_all
+        run = {
+            "pause": subscription_pause.pause_all,
+            "resume": subscription_pause.resume_all,
+            "delete_all": subscription_pause.delete_all,
+        }[action]
+        failure = {
+            "pause": "Не удалось приостановить подписки Xray.",
+            "resume": "Не удалось возобновить подписки Xray.",
+            "delete_all": "Не удалось удалить подписки Xray.",
+        }[action]
         try:
             result = run(
                 **_pause_paths(),
@@ -389,9 +398,7 @@ def create_xray_subscriptions_blueprint(
             return jsonify({"ok": False, "error": str(exc), "code": exc.code, **exc.details}), 409
         except Exception as exc:
             return exception_response(
-                "Не удалось приостановить подписки Xray."
-                if action == "pause"
-                else "Не удалось возобновить подписки Xray.",
+                failure,
                 500,
                 ok=False,
                 code=f"subscription_{action}_failed",
@@ -408,5 +415,9 @@ def create_xray_subscriptions_blueprint(
     @bp.post("/api/xray/subscriptions/resume")
     def api_resume_xray_subscriptions():
         return _switch_subscriptions("resume")
+
+    @bp.post("/api/xray/subscriptions/delete-all")
+    def api_delete_all_xray_subscriptions():
+        return _switch_subscriptions("delete_all")
 
     return bp
