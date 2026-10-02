@@ -191,6 +191,24 @@ let restartLogModuleApi = null;
       toastSuccess: 'Подписка Xray обновлена. xkeen перезапущен.',
       toastFailure: 'Подписка Xray обновлена, но перезапуск xkeen завершился ошибкой.',
     },
+    'dns-over-vless': {
+      label: 'DNS-over-VLESS',
+      successText: 'настройка применена, xkeen перезапущен',
+      failureText: 'настройка применена, но перезапуск xkeen завершился ошибкой',
+      bucket: 'routing',
+    },
+    'dns-over-vless-rollback': {
+      label: 'DNS-over-VLESS',
+      successText: 'настройка отменена, xkeen перезапущен',
+      failureText: 'настройка отменена, но перезапуск xkeen завершился ошибкой',
+      bucket: 'routing',
+    },
+    'dns-over-vless-watchdog-release': {
+      label: 'DNS-over-VLESS',
+      successText: 'сторож вернул DNS роутеру, xkeen перезапущен',
+      failureText: 'сторож вернул DNS роутеру, но перезапуск xkeen завершился ошибкой',
+      bucket: 'routing',
+    },
     'xray-subscriptions-batch': {
       label: 'Подписки Xray',
       successText: 'обновлены одной пачкой, xkeen перезапущен',
