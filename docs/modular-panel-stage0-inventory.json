@@ -129,14 +129,14 @@
         "mihomo"
       ],
       "removable": true,
-      "unit_count": 131,
-      "size_bytes": 3082012,
+      "unit_count": 128,
+      "size_bytes": 3033365,
       "kind_counts": {
         "app_runtime": 4,
         "backend_route": 2,
         "backend_service": 31,
         "backend_test": 44,
-        "configuration": 6,
+        "configuration": 3,
         "editor_schema": 1,
         "frontend_bundle": 1,
         "frontend_entrypoint": 1,
@@ -11935,69 +11935,6 @@
       "kind": "backend_test",
       "path": "tests/test_ui_settings_mihomo_hide_unavailable.py",
       "size_bytes": 6514,
-      "depends_on": [
-        "core",
-        "tool.editor"
-      ],
-      "starts_background_task": false,
-      "background_markers": [],
-      "registers_routes": false,
-      "routes": [],
-      "frontend_bundle": [],
-      "system_requirements": [
-        "xkeen",
-        "mihomo"
-      ],
-      "environment_variables": [],
-      "removable": true
-    },
-    {
-      "module_id": "engine.mihomo",
-      "kind": "configuration",
-      "path": "xkeen-ui/opt/etc/mihomo/backup/default_20260507_153927.yaml",
-      "size_bytes": 12,
-      "depends_on": [
-        "core",
-        "tool.editor"
-      ],
-      "starts_background_task": false,
-      "background_markers": [],
-      "registers_routes": false,
-      "routes": [],
-      "frontend_bundle": [],
-      "system_requirements": [
-        "xkeen",
-        "mihomo"
-      ],
-      "environment_variables": [],
-      "removable": true
-    },
-    {
-      "module_id": "engine.mihomo",
-      "kind": "configuration",
-      "path": "xkeen-ui/opt/etc/mihomo/backup/default_20260507_181828.yaml",
-      "size_bytes": 24466,
-      "depends_on": [
-        "core",
-        "tool.editor"
-      ],
-      "starts_background_task": false,
-      "background_markers": [],
-      "registers_routes": false,
-      "routes": [],
-      "frontend_bundle": [],
-      "system_requirements": [
-        "xkeen",
-        "mihomo"
-      ],
-      "environment_variables": [],
-      "removable": true
-    },
-    {
-      "module_id": "engine.mihomo",
-      "kind": "configuration",
-      "path": "xkeen-ui/opt/etc/mihomo/backup/default_20260507_184908.yaml",
-      "size_bytes": 24169,
       "depends_on": [
         "core",
         "tool.editor"
@@ -27005,7 +26942,7 @@
       {
         "from": "engine.mihomo",
         "to": "core",
-        "unit_count": 131,
+        "unit_count": 128,
         "examples": [
           "xkeen-ui/bootstrap_mihomo_env.py",
           "xkeen-ui/mihomo_config_generator.py",
@@ -27059,7 +26996,7 @@
       {
         "from": "engine.mihomo",
         "to": "tool.editor",
-        "unit_count": 131,
+        "unit_count": 128,
         "examples": [
           "xkeen-ui/bootstrap_mihomo_env.py",
           "xkeen-ui/mihomo_config_generator.py",
@@ -27481,7 +27418,7 @@
       {
         "from": "engine.mihomo",
         "to": "core",
-        "unit_count": 78,
+        "unit_count": 75,
         "examples": [
           "xkeen-ui/bootstrap_mihomo_env.py",
           "xkeen-ui/mihomo_config_generator.py",
@@ -27534,7 +27471,7 @@
       {
         "from": "engine.mihomo",
         "to": "tool.editor",
-        "unit_count": 78,
+        "unit_count": 75,
         "examples": [
           "xkeen-ui/bootstrap_mihomo_env.py",
           "xkeen-ui/mihomo_config_generator.py",
