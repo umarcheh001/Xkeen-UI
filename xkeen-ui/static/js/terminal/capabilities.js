@@ -2,7 +2,7 @@ import {
   getTerminalById,
   getTerminalCompatApi,
   getTerminalContext,
-  getTerminalCoreHttpApi,
+  loadTerminalCapabilities,
   publishTerminalCompatApi,
   publishXkeenCompatValue,
   setTerminalCapabilityState,
@@ -173,22 +173,10 @@ import { appendTerminalDebug } from '../features/terminal_debug.js';
       seededPty: seeded.pty,
       seededShell: seeded.shell,
     });
-    INIT_PROMISE = (async () => {
+    const run = (async () => {
       try {
-        const http = getTerminalCoreHttpApi();
-        let data = null;
-        appendTerminalDebug('terminal:capabilities:request-begin', { viaCoreHttp: !!(http && typeof http.fetchJSON === 'function') });
-        if (http && typeof http.fetchJSON === 'function') {
-          data = await http.fetchJSON('/api/capabilities', {
-            method: 'GET',
-            timeoutMs: 2500,
-            retry: 0,
-          });
-        } else {
-          const resp = await fetch('/api/capabilities', { cache: 'no-store' });
-          if (!resp.ok) throw new Error('http ' + resp.status);
-          data = await resp.json().catch(() => ({}));
-        }
+        appendTerminalDebug('terminal:capabilities:request-begin', { force: force });
+        const data = await loadTerminalCapabilities({ force: force });
         HAS_WS = !!(data && data.websocket);
         HAS_PTY = pickPtyCapability(data);
         SHELL_POLICY = pickShellPolicy(data);
@@ -205,8 +193,17 @@ import { appendTerminalDebug } from '../features/terminal_debug.js';
         });
       } catch (e) {
         const msg = e ? String(e.message || e) : 'unknown error';
-        appendTerminalDebug('terminal:capabilities:request-error', { error: msg, keepSeeded: true });
         const fallback = seedFromState();
+        appendTerminalDebug('terminal:capabilities:request-error', { error: msg, keepSeeded: fallback.known === true });
+        if (fallback.known !== true) {
+          // Nothing was known before and the request failed: that is "unknown",
+          // not "no PTY". Recording it as a refusal sent the first command of a
+          // slow session to the lite terminal. Leave the state alone and let
+          // the next caller ask again.
+          if (INIT_PROMISE === run) INIT_PROMISE = null;
+          INIT_DONE = false;
+          return HAS_WS;
+        }
         HAS_WS = (typeof fallback.ws === 'boolean') ? fallback.ws : false;
         HAS_PTY = (typeof fallback.pty === 'boolean') ? fallback.pty : false;
         SHELL_POLICY = fallback.shellPolicy ? normalizeShellPolicy(fallback.shellPolicy) : SHELL_POLICY;
@@ -247,7 +244,8 @@ import { appendTerminalDebug } from '../features/terminal_debug.js';
       });
       return HAS_WS;
     })();
-    return INIT_PROMISE;
+    INIT_PROMISE = run;
+    return run;
   }
 
   function wsNoticeText() {

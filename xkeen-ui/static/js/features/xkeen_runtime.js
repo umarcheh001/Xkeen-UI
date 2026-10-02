@@ -685,6 +685,65 @@ export function getXkeenCoreHttpApi() {
   }
 }
 
+// One shared answer for /api/capabilities. The terminal buttons, the command
+// list and the terminal itself used to ask separately, each with its own
+// timeout, and a single slow answer left them disagreeing about PTY.
+// A failed request is never remembered: the next caller simply asks again.
+function ensureXkeenCapabilitiesBucket() {
+  const xk = ensureXkeenRoot();
+  if (!xk) return null;
+  if (!xk.__capabilities || typeof xk.__capabilities !== 'object') {
+    xk.__capabilities = { data: null, pending: null };
+  }
+  return xk.__capabilities;
+}
+
+export function getXkeenKnownCapabilities() {
+  const bucket = ensureXkeenCapabilitiesBucket();
+  return bucket ? (bucket.data || null) : null;
+}
+
+export function loadXkeenCapabilities(options) {
+  const force = options === true || !!(options && options.force === true);
+  const bucket = ensureXkeenCapabilitiesBucket();
+  if (!bucket) return Promise.reject(new Error('capabilities: no runtime root'));
+  if (bucket.pending) return bucket.pending;
+  if (!force && bucket.data) return Promise.resolve(bucket.data);
+
+  const pending = (async () => {
+    const http = getXkeenCoreHttpApi();
+    let data = null;
+    if (http && typeof http.fetchJSON === 'function') {
+      data = await http.fetchJSON('/api/capabilities', {
+        method: 'GET',
+        timeoutMs: 8000,
+        retry: 1,
+      });
+    } else {
+      const resp = await fetch('/api/capabilities', { cache: 'no-store', credentials: 'same-origin' });
+      if (!resp.ok) throw new Error('http ' + resp.status);
+      data = await resp.json();
+    }
+    if (!data || typeof data !== 'object') throw new Error('capabilities: empty answer');
+    bucket.data = data;
+    return data;
+  })();
+
+  bucket.pending = pending;
+  const release = () => {
+    if (bucket.pending === pending) bucket.pending = null;
+  };
+  pending.then(release, release);
+  return pending;
+}
+
+export function pickXkeenPtyCapability(data) {
+  if (data && data.terminal && typeof data.terminal === 'object' && 'pty' in data.terminal) {
+    return !!data.terminal.pty;
+  }
+  return !!(data && data.websocket);
+}
+
 export function getXkeenCoreStorageApi() {
   try {
     const core = getXkeenCoreApi();
@@ -810,6 +869,69 @@ export function isXkeenTerminalPtyConnected() {
   } catch (e) {
     return false;
   }
+}
+
+function readXkeenPtyFailureReason(sawFailure) {
+  try {
+    const api = getXkeenTerminalApi();
+    const mode = (api && typeof api.getMode === 'function') ? String(api.getMode() || '') : '';
+    if (mode && mode !== 'pty') return 'lite';
+  } catch (e) {}
+  if (sawFailure) return 'failed';
+  try {
+    const ctx = getXkeenTerminalCoreContext();
+    const state = ctx && ctx.core && ctx.core.state ? ctx.core.state : null;
+    const ws = state ? state.ptyWs : null;
+    if (ws && ws.readyState === WebSocket.CONNECTING) return 'connecting';
+  } catch (e2) {}
+  return 'failed';
+}
+
+// Waits for the PTY WebSocket and, when it does not come up, says which of the
+// three different things happened: the terminal fell back to lite mode, the
+// handshake is still in flight, or the connection keeps failing.
+export function waitForXkeenPtyConnected(timeoutMs = 12000, intervalMs = 150) {
+  const deadline = Date.now() + Math.max(500, Number(timeoutMs) || 0);
+  let sawFailure = false;
+  const offs = [];
+  try {
+    const ctx = getXkeenTerminalCoreContext();
+    const events = (ctx && ctx.events && typeof ctx.events.on === 'function') ? ctx.events : null;
+    if (events) {
+      offs.push(events.on('pty:error', () => { sawFailure = true; }));
+      offs.push(events.on('pty:disconnected', (payload) => {
+        if (payload && payload.reason === 'onclose') sawFailure = true;
+      }));
+    }
+  } catch (e) {}
+
+  const finish = (result) => {
+    offs.forEach((off) => {
+      try { if (typeof off === 'function') off(); } catch (e) {}
+    });
+    return result;
+  };
+
+  return new Promise((resolve) => {
+    const tick = () => {
+      if (isXkeenTerminalPtyConnected()) return resolve(finish({ ok: true, reason: '' }));
+      const reason = readXkeenPtyFailureReason(sawFailure);
+      // Lite mode never connects PTY, so there is nothing to wait for.
+      if (reason === 'lite' || Date.now() > deadline) return resolve(finish({ ok: false, reason }));
+      setTimeout(tick, intervalMs);
+    };
+    tick();
+  });
+}
+
+export function describeXkeenPtyFailure(reason) {
+  if (reason === 'lite') {
+    return 'Терминал открылся в упрощённом режиме, а не в PTY. Команда не выполнена — нажмите ещё раз.';
+  }
+  if (reason === 'connecting') {
+    return 'PTY всё ещё подключается: роутер отвечает медленно. Команда не выполнена — дождитесь строки «Соединение установлено» в терминале и нажмите ещё раз.';
+  }
+  return 'PTY не подключился: WebSocket-соединение с роутером не устанавливается. Команда не выполнена — причина указана в окне терминала.';
 }
 
 export function focusXkeenTerminal() {
