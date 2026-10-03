@@ -1,0 +1,401 @@
+{
+  "schema_version": 1,
+  "generated_from": "scripts/generate_modular_panel_stage8_contract.py",
+  "stage": {
+    "id": "8.0",
+    "name": "Контракты и границы менеджера официальных модулей",
+    "status": "closed",
+    "closed_on": "2026-10-03"
+  },
+  "source_of_truth": {
+    "stage0_inventory": "docs/modular-panel-stage0-inventory.json",
+    "stage7_profiles": "docs/modular-panel-stage7-installer-profiles.md",
+    "module_registry": "xkeen-ui/services/module_registry.py",
+    "profile_installer": "xkeen-ui/scripts/module_profile_install.py",
+    "static_package_validator": "xkeen-ui/services/module_package_contract.py"
+  },
+  "modules": [
+    {
+      "id": "core",
+      "name": "Xkeen UI Core",
+      "version": "1.0.0",
+      "dependencies": [],
+      "conflicts": [],
+      "requires_restart": false,
+      "removable": false,
+      "can_disable": false
+    },
+    {
+      "id": "engine.xray",
+      "name": "Xray",
+      "version": "1.0.0",
+      "dependencies": [
+        "core",
+        "tool.editor"
+      ],
+      "conflicts": [],
+      "requires_restart": true,
+      "removable": true,
+      "can_disable": true
+    },
+    {
+      "id": "engine.mihomo",
+      "name": "Mihomo",
+      "version": "1.0.0",
+      "dependencies": [
+        "core",
+        "tool.editor"
+      ],
+      "conflicts": [],
+      "requires_restart": true,
+      "removable": true,
+      "can_disable": true
+    },
+    {
+      "id": "tool.editor",
+      "name": "Редакторы",
+      "version": "1.0.0",
+      "dependencies": [
+        "core"
+      ],
+      "conflicts": [],
+      "requires_restart": true,
+      "removable": true,
+      "can_disable": true
+    },
+    {
+      "id": "tool.terminal",
+      "name": "Терминал и команды",
+      "version": "1.0.0",
+      "dependencies": [
+        "core"
+      ],
+      "conflicts": [],
+      "requires_restart": true,
+      "removable": true,
+      "can_disable": true
+    },
+    {
+      "id": "tool.files",
+      "name": "Файловый менеджер",
+      "version": "1.0.0",
+      "dependencies": [
+        "core"
+      ],
+      "conflicts": [],
+      "requires_restart": true,
+      "removable": true,
+      "can_disable": true
+    },
+    {
+      "id": "tool.backups",
+      "name": "Резервные копии",
+      "version": "1.0.0",
+      "dependencies": [
+        "core"
+      ],
+      "conflicts": [],
+      "requires_restart": true,
+      "removable": true,
+      "can_disable": true
+    },
+    {
+      "id": "integration.happ",
+      "name": "Утилита ссылок подписок",
+      "version": "1.0.0",
+      "dependencies": [
+        "core"
+      ],
+      "conflicts": [],
+      "requires_restart": true,
+      "removable": true,
+      "can_disable": true
+    },
+    {
+      "id": "tool.advanced-diagnostics",
+      "name": "Расширенная диагностика",
+      "version": "1.0.0",
+      "dependencies": [
+        "core"
+      ],
+      "conflicts": [],
+      "requires_restart": true,
+      "removable": true,
+      "can_disable": true
+    }
+  ],
+  "profiles": {
+    "legacy-full": {
+      "module_ids": [
+        "core",
+        "engine.xray",
+        "engine.mihomo",
+        "tool.editor",
+        "tool.terminal",
+        "tool.files",
+        "tool.backups",
+        "integration.happ",
+        "tool.advanced-diagnostics"
+      ],
+      "transition_kind": "profile-transition",
+      "source": "Stage 7 installer/profile transaction"
+    },
+    "full": {
+      "module_ids": [
+        "core",
+        "engine.xray",
+        "engine.mihomo",
+        "tool.editor",
+        "tool.terminal",
+        "tool.files",
+        "tool.backups",
+        "integration.happ",
+        "tool.advanced-diagnostics"
+      ],
+      "transition_kind": "profile-transition",
+      "source": "Stage 7 installer/profile transaction"
+    },
+    "xray-minimal": {
+      "module_ids": [
+        "core",
+        "engine.xray",
+        "tool.editor"
+      ],
+      "transition_kind": "profile-transition",
+      "source": "Stage 7 installer/profile transaction"
+    },
+    "mihomo-minimal": {
+      "module_ids": [
+        "core",
+        "engine.mihomo",
+        "tool.editor"
+      ],
+      "transition_kind": "profile-transition",
+      "source": "Stage 7 installer/profile transaction"
+    },
+    "custom": {
+      "module_ids": [],
+      "transition_kind": "profile-transition",
+      "source": "Stage 7 installer/profile transaction"
+    }
+  },
+  "legacy_ownership": {
+    "install_root": "/opt/etc/xkeen-ui",
+    "managed_payload_roots": [
+      "core/",
+      "routes/",
+      "services/",
+      "static/",
+      "templates/",
+      "scripts/"
+    ],
+    "state_files": [
+      "install-managed.json",
+      "install-profile.json",
+      "module-installed.json",
+      "modules.json"
+    ],
+    "user_files": [
+      "branding.json",
+      "devtools.env",
+      "secret.key",
+      "terminal_theme.css",
+      "terminal_theme.json",
+      "ui-settings.json"
+    ],
+    "user_top_level": [
+      "bin",
+      "var",
+      "xray-jsonc"
+    ],
+    "user_prefixes": [
+      "opt/etc/mihomo/profiles/",
+      "opt/etc/mihomo/backup/"
+    ],
+    "ambiguous_files_default_to": "core",
+    "legacy_rule": "reuse Stage 7 owner(path); quarantine unknown managed files before removal",
+    "core_owned_runtime_maps": [
+      "xkeen-ui/services/module_registry.py",
+      "xkeen-ui/module-sizes.json"
+    ]
+  },
+  "topology": {
+    "payload_root": "modules/<module-id>/<version>/",
+    "active_pointer": "modules/<module-id>/current",
+    "registry": "modules/registry.json",
+    "transaction_root": "module-transactions/<operation-id>/",
+    "user_data_root": "var/ and declared core/engine config paths",
+    "pointer_switch": "atomic rename within one filesystem"
+  },
+  "catalog": {
+    "source": "https://github.com/umarcheh001/Xkeen-UI/releases/download/<version>/catalog.json",
+    "signature": "catalog.json.sig",
+    "channel_policy": {
+      "required": "stable",
+      "allowed": [
+        "stable"
+      ],
+      "branch_urls": false,
+      "user_urls": false,
+      "arbitrary_repositories": false
+    },
+    "required_fields": [
+      "id",
+      "version",
+      "channel",
+      "panel_api",
+      "module_api",
+      "min_core",
+      "architectures",
+      "requires",
+      "conflicts",
+      "requires_restart",
+      "archive",
+      "size",
+      "sha256",
+      "signing_key_id"
+    ],
+    "archive_assets": [
+      "xkeen-ui-panel-<version>.tar.gz",
+      "xkeen-module-<module-id>-<version>.tar.gz"
+    ]
+  },
+  "manifest": {
+    "required_fields": [
+      "schema_version",
+      "id",
+      "version",
+      "panel_api",
+      "module_api",
+      "requires",
+      "conflicts",
+      "min_core",
+      "architectures",
+      "channel",
+      "ownership",
+      "max_size",
+      "requires_restart"
+    ],
+    "forbidden_payloads": [
+      "absolute paths",
+      ".. path components",
+      "symlinks escaping the module root",
+      "install/uninstall shell hooks"
+    ],
+    "ownership_rule": "module archive may write only its declared module root and allow-listed paths"
+  },
+  "static_preflight": {
+    "validator": "xkeen-ui/services/module_package_contract.py",
+    "trusted_signing_key_ids": [
+      "release-2026"
+    ],
+    "catalog_source": "official GitHub Releases HTTPS endpoint only",
+    "archive_layout": {
+      "manifest_path": "module-manifest.json",
+      "payload_root": "payload/",
+      "allowed_entry_types": [
+        "directory",
+        "regular_file"
+      ],
+      "symlinks": false,
+      "ownership": "exact normalized payload file list"
+    },
+    "entry_points": [
+      "validate_catalog_source",
+      "validate_catalog_entry",
+      "validate_module_archive"
+    ]
+  },
+  "compatibility": {
+    "panel_api": "1",
+    "module_api": "1",
+    "manifest_schema_version": 1,
+    "catalog_schema_version": 1,
+    "version_format": "semver",
+    "architecture_source": "uname -m normalized to catalog architecture ids"
+  },
+  "operations": {
+    "module_only": [
+      "catalog",
+      "plan",
+      "stage",
+      "verify",
+      "pointer",
+      "registry",
+      "health",
+      "commit_or_rollback"
+    ],
+    "panel_update": [
+      "backup",
+      "stage_core",
+      "health",
+      "commit_or_full_rollback"
+    ],
+    "profile_transition": [
+      "stage7_profile_transaction",
+      "diff",
+      "backup",
+      "restart",
+      "health",
+      "rollback"
+    ],
+    "request_thread_policy": "never install inside the Flask request thread",
+    "post_restart_owner": "external init/service supervisor"
+  },
+  "acceptance_matrix": [
+    {
+      "id": "unknown-signing-key",
+      "operation": "catalog trust",
+      "expected": "reject before display or download"
+    },
+    {
+      "id": "checksum-mismatch",
+      "operation": "archive verification",
+      "expected": "reject before unpack and preserve active pointer"
+    },
+    {
+      "id": "unsupported-api",
+      "operation": "compatibility preflight",
+      "expected": "reject panel_api/module_api/min_core mismatch"
+    },
+    {
+      "id": "module-only-file-diff",
+      "operation": "module-only update",
+      "expected": "change selected versioned module, pointer and registry only"
+    },
+    {
+      "id": "panel-update-preserves-state",
+      "operation": "panel update",
+      "expected": "preserve profile, modules.json, config and enabled state"
+    },
+    {
+      "id": "profile-transition-separate-transaction",
+      "operation": "profile transition",
+      "expected": "use Stage 7 transaction path, never module-only path"
+    },
+    {
+      "id": "offline-cached-catalog",
+      "operation": "catalog fetch",
+      "expected": "use last successful cache and expose stale/error state"
+    },
+    {
+      "id": "archive-path-safety",
+      "operation": "manifest validation",
+      "expected": "reject traversal, absolute paths, symlink escape and hooks"
+    },
+    {
+      "id": "stable-release-reproducibility",
+      "operation": "release assets",
+      "expected": "rebuild the same catalog/archive/checksum from CI inputs"
+    }
+  ],
+  "deferred": [
+    "arbitrary GitHub repositories",
+    "user-provided archive URLs",
+    "marketplace and third-party publishing",
+    "delta or patch updates",
+    "automatic dependency removal or update",
+    "install/uninstall shell hooks",
+    "OCI registry and extra channels"
+  ]
+}

@@ -1,10 +1,13 @@
 # Этап 8: менеджер официальных модулей
 
-**Статус:** подготовка плана, реализация после Этапов 6 и 7<br>
+**Статус:** подэтап 8.0 закрыт 3 октября 2026 года; следующий — 8.1
+«Артефакты»<br>
 **Дата:** 2 октября 2026 года
 
 Этот документ фиксирует implementation contract для Этапа 8. Полный roadmap
 остаётся в [`README-modular-panel-plan.md`](../README-modular-panel-plan.md).
+Проверяемый baseline ownership, топологии, schema и acceptance matrix находится
+в [`modular-panel-stage8-contract.md`](modular-panel-stage8-contract.md).
 
 ## Решение
 

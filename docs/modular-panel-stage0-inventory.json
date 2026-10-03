@@ -36,13 +36,13 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 432,
-      "size_bytes": 6051870,
+      "unit_count": 435,
+      "size_bytes": 6082151,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
-        "backend_service": 55,
-        "backend_test": 182,
+        "backend_service": 56,
+        "backend_test": 184,
         "configuration": 10,
         "frontend_bundle": 9,
         "frontend_entrypoint": 2,
@@ -1887,6 +1887,24 @@
       "kind": "backend_service",
       "path": "xkeen-ui/services/mobile_routing.py",
       "size_bytes": 15942,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_service",
+      "path": "xkeen-ui/services/module_package_contract.py",
+      "size_bytes": 16476,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -4285,6 +4303,24 @@
     {
       "module_id": "core",
       "kind": "backend_test",
+      "path": "tests/test_modular_panel_stage8_contract.py",
+      "size_bytes": 6451,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
       "path": "tests/test_module_backend_gates.py",
       "size_bytes": 10910,
       "depends_on": [
@@ -4312,6 +4348,24 @@
       "kind": "backend_test",
       "path": "tests/test_module_capabilities.py",
       "size_bytes": 7465,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_module_package_contract.py",
+      "size_bytes": 7354,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
