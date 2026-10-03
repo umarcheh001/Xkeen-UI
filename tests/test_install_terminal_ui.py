@@ -54,15 +54,46 @@ def test_installer_exposes_optional_component_choices_without_child_prompt_noise
 
     assert 'choose_geodat_option() {' in text
     assert 'Просмотрщик DAT-файлов' in text
-    assert 'Установить xk-geodat? [Y/n]:' in text
+    assert 'ui_confirm_default_yes() {' in text
+    assert 'ui_confirm_default_yes "Установить xk-geodat?"' in text
     assert 'GEODAT_OPTION="1"' in text
     assert 'export XKEEN_GEODAT_INSTALL' in text
     assert 'if profile_has_module engine.xray && [ "${GEODAT_OPTION:-1}" = "1" ]; then' in text
     assert 'choose_happ_option() {' in text
     assert 'Режим разработчика для подписок' in text
     assert 'Компоненты загрузятся с GitHub.' in text
-    assert 'Установить? [y/N]:' in text
+    assert 'ui_confirm_default_yes "Установить?"' in text
+    happ = text[text.index('choose_happ_option() {'):text.index('\n}\n', text.index('choose_happ_option() {'))]
+    assert 'HAPP_OPTION="1"\n  if [ -t 0 ]' in happ
+    assert 'n|N|no|NO|No|н|Н|нет|НЕТ|Нет) HAPP_OPTION="0"' in happ
+    assert '[y/N]' not in happ
     assert 'export XKEEN_HAPP_DECRYPTOR_INSTALL' in text
+
+
+def test_installer_colours_default_yes_prompts_and_panel_url():
+    text = _text()
+
+    prompt = text[text.index('ui_confirm_default_yes() {'):text.index('\n}\n', text.index('ui_confirm_default_yes() {'))]
+    assert 'stty -echo < /dev/tty' in prompt
+    assert 'stty "$_ui_stty_mode" < /dev/tty' in prompt
+    assert "'      %s [%bY%b/%bn%b]: '" in prompt
+    assert '"$UI_GREEN" "$UI_RESET" "$UI_YELLOW" "$UI_RESET"' in prompt
+    assert "printf '%b%s%b' \"$UI_GREEN\" \"$UI_CONFIRM_ANSWER\"" in prompt
+    assert "printf '%b%s%b' \"$UI_YELLOW\" \"$UI_CONFIRM_ANSWER\"" in prompt
+    assert 'UI_CONFIRM_ANSWER' in prompt
+    assert 'printf \'      %bОткрыть:%b  %b%s%b\\n\'' in text
+    assert '"$UI_CYAN" "$PANEL_URL" "$UI_RESET"' in text
+
+
+def test_interrupted_coloured_prompt_restores_terminal_echo():
+    text = _text()
+
+    prompt = text[text.index('ui_confirm_default_yes() {'):text.index('\n}\n', text.index('ui_confirm_default_yes() {'))]
+    assert 'UI_CONFIRM_STTY_MODE="$_ui_stty_mode"' in prompt
+    assert 'UI_CONFIRM_STTY_MODE=""' in prompt
+    assert 'installer_on_interrupt() {' in text
+    assert 'stty "$UI_CONFIRM_STTY_MODE" < /dev/tty' in text
+    assert "trap 'installer_on_interrupt' HUP INT TERM" in text
 
 
 def test_installer_only_reports_success_after_service_health_check():

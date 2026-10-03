@@ -348,6 +348,48 @@ ui_step_warn() {
 }
 # --- ui-progress: end ----------------------------------------------------
 
+# В цветном TTY скрываем эхо на время ввода и печатаем выбор сами: тогда
+# ответ остаётся виден, но y/n несёт тот же смысловой цвет, что и подсказка.
+# Без цвета сохраняем обычное terminal echo, чтобы non-interactive и dumb
+# terminals не получали неожиданно скрытый ввод.
+ui_confirm_default_yes() {
+  _ui_prompt="$1"
+  UI_CONFIRM_ANSWER=""
+  UI_CONFIRM_STTY_MODE=""
+  _ui_stty_mode=""
+  _ui_echo_hidden=0
+
+  printf '      %s [%bY%b/%bn%b]: ' \
+    "$_ui_prompt" "$UI_GREEN" "$UI_RESET" "$UI_YELLOW" "$UI_RESET" >&3
+  if [ -n "$UI_RESET" ]; then
+    _ui_stty_mode="$(stty -g < /dev/tty 2>/dev/null || true)"
+    if [ -n "$_ui_stty_mode" ] && stty -echo < /dev/tty 2>/dev/null; then
+      UI_CONFIRM_STTY_MODE="$_ui_stty_mode"
+      _ui_echo_hidden=1
+    fi
+  fi
+  IFS= read -r UI_CONFIRM_ANSWER < /dev/tty || UI_CONFIRM_ANSWER=""
+  if [ "$_ui_echo_hidden" -eq 1 ]; then
+    stty "$_ui_stty_mode" < /dev/tty 2>/dev/null || stty echo < /dev/tty 2>/dev/null || true
+    UI_CONFIRM_STTY_MODE=""
+    case "$UI_CONFIRM_ANSWER" in
+      y|Y|yes|YES|Yes|д|Д|да|ДА|Да)
+        printf '%b%s%b' "$UI_GREEN" "$UI_CONFIRM_ANSWER" "$UI_RESET" >&3
+        ;;
+      n|N|no|NO|No|н|Н|нет|НЕТ|Нет)
+        printf '%b%s%b' "$UI_YELLOW" "$UI_CONFIRM_ANSWER" "$UI_RESET" >&3
+        ;;
+      '')
+        printf '%bY%b' "$UI_GREEN" "$UI_RESET" >&3
+        ;;
+      *)
+        printf '%b%s%b' "$UI_YELLOW" "$UI_CONFIRM_ANSWER" "$UI_RESET" >&3
+        ;;
+    esac
+  fi
+  printf '\n\n' >&3
+}
+
 choose_geodat_option() {
   case "${XKEEN_GEODAT_INSTALL:-}" in
     1)
@@ -371,12 +413,10 @@ choose_geodat_option() {
   if [ -t 0 ] && [ -r /dev/tty ]; then
     printf '  %bДополнение%b   Просмотрщик DAT-файлов\n' "$UI_BOLD" "$UI_RESET" >&3
     ui_info "Показывает содержимое GeoIP/GeoSite и помогает добавлять теги."
-    printf '      Установить xk-geodat? [Y/n]: ' >&3
-    IFS= read -r GEODAT_ANSWER < /dev/tty || GEODAT_ANSWER=""
-    case "$GEODAT_ANSWER" in
+    ui_confirm_default_yes "Установить xk-geodat?"
+    case "$UI_CONFIRM_ANSWER" in
       n|N|no|NO|No|н|Н|нет|НЕТ|Нет) GEODAT_OPTION="0" ;;
     esac
-    printf '\n' >&3
   fi
   XKEEN_GEODAT_INSTALL="$GEODAT_OPTION"
   export XKEEN_GEODAT_INSTALL
@@ -400,17 +440,15 @@ choose_happ_option() {
       ;;
   esac
 
-  HAPP_OPTION="0"
+  HAPP_OPTION="1"
   if [ -t 0 ] && [ -r /dev/tty ]; then
     printf '  %bДополнение%b   Режим разработчика для подписок\n' "$UI_BOLD" "$UI_RESET" >&3
     ui_info "Расширенная обработка ссылок при импорте подписок."
     ui_info "Компоненты загрузятся с GitHub."
-    printf '      Установить? [y/N]: ' >&3
-    IFS= read -r HAPP_ANSWER < /dev/tty || HAPP_ANSWER=""
-    case "$HAPP_ANSWER" in
-      y|Y|yes|YES|Yes|д|Д|да|ДА|Да) HAPP_OPTION="1" ;;
+    ui_confirm_default_yes "Установить?"
+    case "$UI_CONFIRM_ANSWER" in
+      n|N|no|NO|No|н|Н|нет|НЕТ|Нет) HAPP_OPTION="0" ;;
     esac
-    printf '\n' >&3
   fi
   XKEEN_HAPP_DECRYPTOR_INSTALL="$HAPP_OPTION"
   export XKEEN_HAPP_DECRYPTOR_INSTALL
@@ -511,6 +549,15 @@ installer_on_exit() {
   fi
 }
 
+installer_on_interrupt() {
+  if [ -n "${UI_CONFIRM_STTY_MODE:-}" ]; then
+    stty "$UI_CONFIRM_STTY_MODE" < /dev/tty 2>/dev/null || stty echo < /dev/tty 2>/dev/null || true
+    UI_CONFIRM_STTY_MODE=""
+  fi
+  INSTALL_ERROR_HINT="Операция прервана пользователем."
+  exit 130
+}
+
 prepare_install_log() {
   INSTALL_LOG_PARENT="$(dirname "$INSTALL_LOG")"
   if ! mkdir -p "$INSTALL_LOG_PARENT" 2>/dev/null || ! touch "$INSTALL_LOG" 2>/dev/null; then
@@ -533,7 +580,7 @@ log_install() {
 prepare_install_log
 trap 'installer_on_exit $?' 0
 ui_progress_start
-trap 'INSTALL_ERROR_HINT="Операция прервана пользователем."; exit 130' HUP INT TERM
+trap 'installer_on_interrupt' HUP INT TERM
 
 if [ -f "$UI_DIR/app.py" ] || [ -f "$UI_DIR/run_server.py" ]; then
   INSTALL_MODE="Обновление"
@@ -2773,7 +2820,7 @@ if [ "$INSTALL_MODE" = "Обновление" ]; then
 else
   ui_success "Xkeen UI установлена и запущена"
 fi
-printf '      %bОткрыть:%b  %s\n' "$UI_BOLD" "$UI_RESET" "$PANEL_URL" >&3
+printf '      %bОткрыть:%b  %b%s%b\n' "$UI_BOLD" "$UI_RESET" "$UI_CYAN" "$PANEL_URL" "$UI_RESET" >&3
 
 if [ "$WS_VERDICT" != "on" ]; then
   ui_warning "Терминал работает в lite-режиме: $WS_VERDICT_REASON."
