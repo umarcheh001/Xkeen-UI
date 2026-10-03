@@ -36,13 +36,13 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 436,
-      "size_bytes": 6100991,
+      "unit_count": 437,
+      "size_bytes": 6102127,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
         "backend_service": 56,
-        "backend_test": 185,
+        "backend_test": 186,
         "configuration": 10,
         "frontend_bundle": 9,
         "frontend_entrypoint": 2,
@@ -4080,6 +4080,24 @@
       "kind": "backend_test",
       "path": "tests/test_modular_panel_release_builder.py",
       "size_bytes": 15058,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_modular_panel_release_workflow.py",
+      "size_bytes": 1136,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],

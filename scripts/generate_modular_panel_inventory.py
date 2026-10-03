@@ -124,6 +124,8 @@ WORKTREE_MODULAR_PANEL_PATHS = frozenset(
         "tests/test_module_registry.py",
         "tests/test_module_package_contract.py",
         "tests/test_modular_panel_stage8_contract.py",
+        "tests/test_modular_panel_release_builder.py",
+        "tests/test_modular_panel_release_workflow.py",
         "tests/test_module_capabilities.py",
         "tests/test_module_backend_gates.py",
         "tests/test_modular_panel_stage4_1_contract.py",
