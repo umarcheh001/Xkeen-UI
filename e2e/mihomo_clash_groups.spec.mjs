@@ -115,6 +115,10 @@ async function setHiddenGroupsVisible(page, visible = true) {
     await page.locator('[aria-controls="xk-mihomo-parameters-menu"]').click();
     await expect(menu).toBeVisible();
   }
+  // The header moves this control into the parameters popover before the
+  // Mihomo control tab is ready. The temporary `data-control-ready="false"`
+  // state keeps the switch hidden even though it is already attached.
+  await expect(switchControl).toBeVisible();
   if ((await input.isChecked()) !== visible) {
     await switchControl.click();
   }
