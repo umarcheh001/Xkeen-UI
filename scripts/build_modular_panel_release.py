@@ -9,13 +9,109 @@ updater is introduced.
 from __future__ import annotations
 
 import argparse
+import gzip
+import hashlib
+import io
+import os
+import tarfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from pathlib import PurePosixPath
+from typing import Any, Mapping
 
 
 DEFAULT_ARCHITECTURE = "aarch64"
 DEFAULT_MIN_CORE = "1.0.0"
+
+
+class ReleaseBuildError(ValueError):
+    """A local release assembly input is unsafe or cannot be packaged."""
+
+
+def _safe_member_path(value: str) -> str:
+    if "\\" in str(value):
+        raise ReleaseBuildError(f"unsafe archive member path: {value!r}")
+    normalized = str(value).replace("\\", "/")
+    parsed = PurePosixPath(normalized)
+    if (
+        not normalized
+        or parsed.is_absolute()
+        or any(part in {"", ".", ".."} for part in parsed.parts)
+        or ":" in normalized
+    ):
+        raise ReleaseBuildError(f"unsafe archive member path: {value!r}")
+    return str(parsed)
+
+
+def _source_bytes(source: Path | bytes) -> tuple[bytes, int]:
+    if isinstance(source, bytes):
+        return source, 0o644
+    path = Path(source)
+    if path.is_symlink():
+        raise ReleaseBuildError(f"symlink source is forbidden: {path}")
+    if not path.is_file():
+        raise ReleaseBuildError(f"archive source is not a regular file: {path}")
+    try:
+        data = path.read_bytes()
+        mode = path.stat().st_mode
+    except OSError as error:
+        raise ReleaseBuildError(f"cannot read archive source: {path}") from error
+    executable = bool(mode & 0o111) or path.suffix.lower() in {".sh"}
+    return data, 0o755 if executable else 0o644
+
+
+def build_deterministic_tar(
+    output_path: Path,
+    files: Mapping[str, Path | bytes],
+    *,
+    epoch: int,
+) -> str:
+    """Write a reproducible gzip-compressed USTAR archive and return its SHA-256."""
+
+    if int(epoch) < 0:
+        raise ReleaseBuildError("source date epoch must be non-negative")
+    members: dict[str, tuple[bytes, int]] = {}
+    directories: set[str] = set()
+    for raw_name, source in files.items():
+        name = _safe_member_path(raw_name)
+        if name in members:
+            raise ReleaseBuildError(f"duplicate archive member path: {name}")
+        data, mode = _source_bytes(source)
+        members[name] = (data, mode)
+        parts = name.split("/")[:-1]
+        for index in range(1, len(parts) + 1):
+            directories.add("/".join(parts[:index]))
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with output_path.open("wb") as raw:
+            with gzip.GzipFile(filename="", mode="wb", fileobj=raw, mtime=int(epoch), compresslevel=9) as packed:
+                with tarfile.open(fileobj=packed, mode="w", format=tarfile.USTAR_FORMAT) as archive:
+                    for directory in sorted(directories):
+                        info = tarfile.TarInfo(directory)
+                        info.type = tarfile.DIRTYPE
+                        info.mode = 0o755
+                        info.mtime = int(epoch)
+                        info.uid = 0
+                        info.gid = 0
+                        info.uname = ""
+                        info.gname = ""
+                        archive.addfile(info)
+                    for name in sorted(members):
+                        data, mode = members[name]
+                        info = tarfile.TarInfo(name)
+                        info.size = len(data)
+                        info.mode = mode
+                        info.mtime = int(epoch)
+                        info.uid = 0
+                        info.gid = 0
+                        info.uname = ""
+                        info.gname = ""
+                        archive.addfile(info, io.BytesIO(data))
+    except OSError as error:
+        raise ReleaseBuildError(f"cannot write release archive: {output_path}") from error
+    return hashlib.sha256(output_path.read_bytes()).hexdigest()
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,4 +201,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
