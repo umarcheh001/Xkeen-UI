@@ -1,7 +1,7 @@
 # Этап 8: менеджер официальных модулей
 
-**Статус:** подэтап 8.0 закрыт 3 октября 2026 года; следующий — 8.1
-«Артефакты»<br>
+**Статус:** подэтапы 8.0 и 8.1 закрыты 3 октября 2026 года; следующий — 8.2
+«Trust и клиент каталога»<br>
 **Дата:** 2 октября 2026 года
 
 Этот документ фиксирует implementation contract для Этапа 8. Полный roadmap
@@ -40,10 +40,24 @@ Core не должен выполнять установку внутри Flask 
 
 ```text
 catalog.json
-catalog.json.sig
+catalog.json.sha256
+release-metadata.json
 xkeen-ui-panel-<version>.tar.gz
+xkeen-ui-panel-<version>.tar.gz.sha256
 xkeen-module-<module-id>-<version>.tar.gz
+xkeen-module-<module-id>-<version>.tar.gz.sha256
 ```
+
+Сборщик `scripts/build_modular_panel_release.py` создаёт этот набор из
+фиксированных `version`, `SOURCE_DATE_EPOCH` и source commit. USTAR/gzip
+метаданные нормализуются: POSIX-сортировка путей, uid/gid `0`, пустые owner
+names и фиксированный mtime. `release-2026` в 8.1 — согласованный trust id;
+Ed25519-подпись и `catalog.json.sig` остаются границей 8.2.
+
+Module archive имеет ровно два логических уровня: `module-manifest.json` и
+`payload/<ownership-path>`. State/user paths, bootstrap hooks и локальные
+бинарники не входят в module assets. Panel asset сохраняет `install.sh`,
+`uninstall.sh` и legacy runtime для bootstrap.
 
 Минимальная запись каталога:
 
@@ -104,7 +118,7 @@ Core выполняет тихий poll раз в сутки и поддержи
 ## Подэтапы и контрольные точки
 
 1. **8.0 Contracts:** ownership, topology, schema, compatibility и acceptance matrix.
-2. **8.1 Artifacts:** deterministic module/panel archives, catalog generation и CI release assets.
+2. **8.1 Artifacts:** закрыт; deterministic module/panel archives, catalog generation и CI release assets.
 3. **8.2 Trust:** allow-list, signatures, key rotation, cache/offline policy.
 4. **8.3 Updater:** preflight, safe unpack, backup, atomic switch, supervisor и rollback.
 5. **8.4 API:** list/plan/apply/status/cancel/recovery и operation log.
@@ -128,3 +142,9 @@ Core выполняет тихий poll раз в сутки и поддержи
 - [ ] новая версия модуля даёт одно dismissible уведомление;
 - [ ] архив с traversal/symlink/script hook не устанавливается;
 - [ ] stable release можно воспроизвести из CI и откатить документированной командой.
+
+Для локального воспроизводимого прогона:
+
+```powershell
+python .\scripts\build_modular_panel_release.py --root . --output-dir dist\modular-panel --version 1.0.0 --source-date-epoch 1700000000 --source-commit test-commit
+```

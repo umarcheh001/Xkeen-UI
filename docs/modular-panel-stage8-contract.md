@@ -50,6 +50,13 @@ Module-only update не меняет соседние модули, пользо
 Архив отклоняется до распаковки при неизвестном signing_key_id, SHA-256 mismatch, API mismatch, path traversal, абсолютном пути, symlink escape или наличии install/uninstall shell hooks.
 Статический preflight выполняет `services.module_package_contract`: source/catalog проверяются до скачивания, а `module-manifest.json` и точный allow-list `payload/` — до staging. Разрешены только directory и regular_file; symlink запрещён. Криптографическая Ed25519-проверка подписи остаётся границей подэтапа 8.2.
 
+## Release assets 8.1
+
+Сборщик `scripts/build_modular_panel_release.py` выпускает `xkeen-ui-panel-<version>.tar.gz`, `xkeen-module-<module-id>-<version>.tar.gz`, `catalog.json`, checksum sidecars `<asset>.sha256` и `release-metadata.json`.
+Module archive содержит только `module-manifest.json` и `payload/<ownership-path>`; bootstrap hooks остаются в panel asset и не попадают в module payload.
+Воспроизводимость фиксирует USTAR, POSIX-сортировку путей, uid/gid=0, пустые owner names и `SOURCE_DATE_EPOCH` для tar/gzip. Идентификатор `release-2026` пока является статическим trust boundary; криптографическая подпись вводится в 8.2.
+CI собирает и статически проверяет `dist/modular-panel/**` на каждом push. Публикация в GitHub Release разрешена только при `startsWith(github.ref, 'refs/tags/v')`, а список модульных upload assets читается из `release-metadata.json`. Legacy bootstrap archive `xkeen-ui-routing.tar.gz` сохраняется без изменения имени.
+
 ## Compatibility и операции
 
 Совместимость проверяется по `panel_api`, `module_api`, `min_core`, архитектуре, dependencies, conflicts и semver до скачивания/распаковки.

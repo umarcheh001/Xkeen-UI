@@ -160,6 +160,34 @@ def test_stage8_contract_generator_covers_boundaries_and_acceptance_matrix(tmp_p
         "archive-path-safety",
         "stable-release-reproducibility",
     ]
+    assert payload["release_assets"] == {
+        "builder": "scripts/build_modular_panel_release.py",
+        "panel_archive": "xkeen-ui-panel-<version>.tar.gz",
+        "module_archive": "xkeen-module-<module-id>-<version>.tar.gz",
+        "catalog": "catalog.json",
+        "checksums": "<asset>.sha256",
+        "metadata": "release-metadata.json",
+        "channel": "stable",
+        "signing_key_id": "release-2026",
+    }
+    assert payload["determinism"] == {
+        "tar_format": "ustar",
+        "member_order": "POSIX path ascending",
+        "uid_gid": 0,
+        "owner_names": "empty",
+        "mtime": "SOURCE_DATE_EPOCH",
+        "gzip_filename": "empty",
+        "gzip_mtime": "SOURCE_DATE_EPOCH",
+        "module_layout": ["module-manifest.json", "payload/<ownership-path>"],
+    }
+    assert payload["ci_publication"] == {
+        "workflow": ".github/workflows/build-user-archive.yml",
+        "push_validation": True,
+        "tag_condition": "startsWith(github.ref, 'refs/tags/v')",
+        "artifact_path": "dist/modular-panel/**",
+        "release_asset_source": "release-metadata.json",
+        "legacy_bootstrap_archive": "xkeen-ui-routing.tar.gz",
+    }
 
 
 def test_stage8_contract_snapshot_and_documentation_are_current(tmp_path):
@@ -173,9 +201,11 @@ def test_stage8_contract_snapshot_and_documentation_are_current(tmp_path):
     docs_index = DOCS_INDEX.read_text(encoding="utf-8")
     assert "Подэтап 8.0 —" in plan
     assert "Контракты и границы — закрыт" in plan
+    assert "Упаковка и release assets — закрыт" in plan
     assert "modular-panel-stage8-contract.json" in plan
     assert "modular-panel-stage8-contract.md" in docs_index
     assert "generate_modular_panel_stage8_contract.py" in docs_index
+    assert "build_modular_panel_release.py" in docs_index
 
 
 def test_stage8_contract_rejects_unsafe_or_non_official_sources():
@@ -187,5 +217,8 @@ def test_stage8_contract_rejects_unsafe_or_non_official_sources():
         "symlink escape",
         "arbitrary repositories",
         "install/uninstall shell hooks",
+        "xkeen-ui-panel-<version>.tar.gz",
+        "SOURCE_DATE_EPOCH",
+        "release-metadata.json",
     ):
         assert fragment in text

@@ -10,6 +10,10 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-03-modular-panel-stage8-1-release-assets-design.md`
 
+**Implementation status:** completed 4 October 2026. The checklist below records
+the approved execution plan; the implementation is covered by the release
+builder/workflow tests and the full Python suite.
+
 ## Global Constraints
 
 - Module archives contain exactly `module-manifest.json` and `payload/<manifest ownership paths>`.

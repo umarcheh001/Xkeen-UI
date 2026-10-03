@@ -1,7 +1,7 @@
 # План модульной архитектуры панели Xkeen UI
 
 **Статус:** Этапы 0, 1, 2, 3, 3R, 3R.1, 4, 5, 6 и 7, а также
-подэтап 8.0 закрыты; следующий — подэтап 8.1<br>
+подэтапы 8.0 и 8.1 закрыты; следующий — подэтап 8.2<br>
 **Дата:** 2 октября 2026 года
 **Область:** облегчение панели, профили установки и официальный каталог модулей
 
@@ -15,11 +15,14 @@ manifest и единый `page_context`. Подэтап 4.6 закрепил ser
 составных modal. Этап 4 закрыт. Этап 5 динамической frontend-загрузки закрыт
 1 октября 2026 года, а Этап 6 разделения редакторов закрыт 2 октября 2026
 года. Этап 7 профилей установщика закрыт 2 октября 2026 года. Подэтап 8.0 —
-Контракты и границы — закрыт 3 октября 2026 года; следующий — подэтап 8.1.
+Контракты и границы — закрыт 3 октября 2026 года. Подэтап 8.1 — Упаковка и
+release assets — также закрыт 3 октября 2026 года; следующий — подэтап 8.2.
 
 Этап 8 подготовлен как отдельный план после завершения Этапов 6 и 7. Подэтап
-8.0 закрыл статические контракты упаковки и обновления; последующая реализация
-не должна блокировать редактор и установщик.
+8.0 закрыл статические контракты упаковки и обновления, а 8.1 выпустил
+детерминированный builder panel/module assets, catalog/checksum metadata и CI
+publication boundary. Последующая реализация не должна блокировать редактор и
+установщик.
 
 Этап 6 разделения редакторов закрыт 2 октября 2026 года. `tool.editor`
 сохранился обязательной лёгкой зависимостью engines, а варианты
@@ -1634,12 +1637,19 @@ snapshot: `docs/modular-panel-stage8-contract.json`; человеческий к
 `scripts/generate_modular_panel_stage8_contract.py`. Пакет теперь можно
 проверить статически до написания updater.
 
-#### 8.1. Упаковка и release assets
+#### 8.1. Упаковка и release assets — закрыт
 
-Разделить build на единый panel archive и self-contained module archives,
-добавить deterministic tar, generated manifest/ownership, SHA-256 и CI
-release assets. Выход: один tagged release воспроизводимо публикует каталог,
-панель и модули.
+Закрыт 3 октября 2026 года. Добавлены `scripts/build_modular_panel_release.py`,
+детерминированные USTAR/gzip panel/module archives, `catalog.json`, SHA-256
+sidecars и `release-metadata.json`. Module archive содержит только
+`module-manifest.json` и allow-listed `payload/`; state, пользовательские
+конфигурации, локальный Happ binary и install/uninstall hooks не попадают в
+module asset. CI собирает и preflight-проверяет `dist/modular-panel/**` на
+каждом push, а tagged `v*` build добавляет список assets из metadata в GitHub
+Release. Legacy bootstrap archive `xkeen-ui-routing.tar.gz` сохранён без
+переименования. Контракт: `docs/modular-panel-stage8-contract.{json,md}`;
+design: `docs/superpowers/specs/2026-10-03-modular-panel-stage8-1-release-assets-design.md`;
+план: `docs/superpowers/plans/2026-10-03-modular-panel-stage8-1-release-assets.md`.
 
 #### 8.2. Trust и клиент каталога
 

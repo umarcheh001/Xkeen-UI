@@ -306,6 +306,37 @@
       "validate_module_archive"
     ]
   },
+  "release_assets": {
+    "builder": "scripts/build_modular_panel_release.py",
+    "panel_archive": "xkeen-ui-panel-<version>.tar.gz",
+    "module_archive": "xkeen-module-<module-id>-<version>.tar.gz",
+    "catalog": "catalog.json",
+    "checksums": "<asset>.sha256",
+    "metadata": "release-metadata.json",
+    "channel": "stable",
+    "signing_key_id": "release-2026"
+  },
+  "determinism": {
+    "tar_format": "ustar",
+    "member_order": "POSIX path ascending",
+    "uid_gid": 0,
+    "owner_names": "empty",
+    "mtime": "SOURCE_DATE_EPOCH",
+    "gzip_filename": "empty",
+    "gzip_mtime": "SOURCE_DATE_EPOCH",
+    "module_layout": [
+      "module-manifest.json",
+      "payload/<ownership-path>"
+    ]
+  },
+  "ci_publication": {
+    "workflow": ".github/workflows/build-user-archive.yml",
+    "push_validation": true,
+    "tag_condition": "startsWith(github.ref, 'refs/tags/v')",
+    "artifact_path": "dist/modular-panel/**",
+    "release_asset_source": "release-metadata.json",
+    "legacy_bootstrap_archive": "xkeen-ui-routing.tar.gz"
+  },
   "compatibility": {
     "panel_api": "1",
     "module_api": "1",

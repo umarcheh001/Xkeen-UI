@@ -3,6 +3,8 @@ name: Build user archive
 on:
   workflow_dispatch:
   push:
+    branches:
+      - "**"
     tags:
       - "v*"
 
@@ -192,6 +194,50 @@ jobs:
             dist/happ-decrypt-universal-linux-mipsle \
             > dist/SHA256SUMS
 
+      - name: Build modular panel release assets
+        env:
+          GITHUB_REF: ${{ github.ref }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            VERSION="${TAG#v}"
+          else
+            VERSION="0.0.0-dev.${GITHUB_SHA::12}"
+          fi
+          SOURCE_DATE_EPOCH="$(git show -s --format=%ct "${GITHUB_SHA}")"
+          python scripts/build_modular_panel_release.py \
+            --root . \
+            --output-dir dist/modular-panel \
+            --version "${VERSION}" \
+            --source-date-epoch "${SOURCE_DATE_EPOCH}" \
+            --source-commit "${GITHUB_SHA}"
+
+      - name: Validate modular panel release assets
+        run: |
+          PYTHONPATH=xkeen-ui python - <<'PY'
+          import json
+          from pathlib import Path
+
+          from services.module_package_contract import validate_catalog_entry, validate_module_archive
+
+          root = Path("dist/modular-panel")
+          catalog = json.loads((root / "catalog.json").read_text(encoding="utf-8"))
+          for entry in catalog["modules"]:
+              validate_catalog_entry(entry, platform_architecture="aarch64", core_version="1.0.0")
+              validate_module_archive(
+                  root / entry["archive"],
+                  entry,
+                  platform_architecture="aarch64",
+                  core_version="1.0.0",
+              )
+          metadata = json.loads((root / "release-metadata.json").read_text(encoding="utf-8"))
+          actual = {path.name for path in root.iterdir()}
+          if set(metadata["assets"]) != actual:
+              raise SystemExit(f"metadata asset mismatch: {sorted(actual ^ set(metadata['assets']))}")
+          print(f"validated {len(catalog['modules'])} module archives and {len(actual)} assets")
+          PY
+
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v6
         with:
@@ -212,9 +258,10 @@ jobs:
             dist/happ-decrypt-universal-linux-mipsle
             dist/happ-decrypt-universal-linux-mipsle.sha256
             dist/SHA256SUMS
+            dist/modular-panel/**
 
       - name: Ensure GitHub CLI is available
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/v')
         run: |
           if ! command -v gh >/dev/null 2>&1; then
             sudo apt-get update
@@ -222,7 +269,7 @@ jobs:
           fi
 
       - name: Create or update GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -245,6 +292,7 @@ jobs:
               dist/happ-decrypt-universal-linux-mipsle \
               dist/happ-decrypt-universal-linux-mipsle.sha256 \
               dist/SHA256SUMS \
+              $(python -c 'import json; from pathlib import Path; print(" ".join("dist/modular-panel/" + item for item in json.loads(Path("dist/modular-panel/release-metadata.json").read_text())["assets"]))') \
               --clobber
           else
             gh release create "$TAG" \
@@ -263,6 +311,7 @@ jobs:
               dist/happ-decrypt-universal-linux-mipsle \
               dist/happ-decrypt-universal-linux-mipsle.sha256 \
               dist/SHA256SUMS \
+              $(python -c 'import json; from pathlib import Path; print(" ".join("dist/modular-panel/" + item for item in json.loads(Path("dist/modular-panel/release-metadata.json").read_text())["assets"]))') \
               --title "$TAG" \
               --notes "Установочный архив панели, Android-приложение и бинарники вспомогательных утилит."
           fi

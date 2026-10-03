@@ -31,6 +31,7 @@ _IGNORED_FILE_NAMES = {".DS_Store", "BUILD.json"}
 _IGNORED_FILE_SUFFIXES = {".pyc", ".pyo", ".tmp"}
 _LOCAL_DECRYPTOR_PREFIXES = ("happ",)
 _LOCAL_DECRYPTOR_KEEP = {"README.happ-decryptor.txt"}
+_MODULE_EXCLUDED_FILES = {"install.sh", "uninstall.sh"}
 _KNOWN_PACKAGE_ROOTS = {
     "bin",
     "core",
@@ -92,6 +93,8 @@ def _source_bytes(source: Path | bytes) -> tuple[bytes, int]:
         mode = path.stat().st_mode
     except OSError as error:
         raise ReleaseBuildError(f"cannot read archive source: {path}") from error
+    if path.suffix.lower() in {".py", ".sh"} or data.startswith(b"#!"):
+        data = data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
     executable = bool(mode & 0o111) or path.suffix.lower() in {".sh"}
     return data, 0o755 if executable else 0o644
 
@@ -150,19 +153,38 @@ def build_deterministic_tar(
     return hashlib.sha256(output_path.read_bytes()).hexdigest()
 
 
-def _stage7_module() -> Any:
+def read_archive_members(path: Path) -> list[tarfile.TarInfo]:
+    """Read archive headers for tests and static release inspection."""
+
+    try:
+        with tarfile.open(path, "r:gz") as archive:
+            return archive.getmembers()
+    except (OSError, tarfile.TarError) as error:
+        raise ReleaseBuildError(f"cannot inspect release archive: {path}") from error
+
+
+def _stage7_module(root: Path | None = None) -> Any:
     global _STAGE7_MODULE
-    if _STAGE7_MODULE is not None:
+    stage7_path = (
+        Path(root).resolve() / PACKAGE_DIRNAME / "scripts" / "module_profile_install.py"
+        if root is not None
+        else _STAGE7_PATH
+    )
+    if _STAGE7_MODULE is not None and stage7_path == _STAGE7_PATH:
         return _STAGE7_MODULE
-    if not _STAGE7_PATH.is_file():
-        raise ReleaseBuildError(f"Stage 7 classifier is missing: {_STAGE7_PATH}")
-    spec = importlib.util.spec_from_file_location("xkeen_stage7_module_profile_install", _STAGE7_PATH)
+    if not stage7_path.is_file():
+        stage7_path = _STAGE7_PATH
+    if not stage7_path.is_file():
+        raise ReleaseBuildError(f"Stage 7 classifier is missing: {stage7_path}")
+    module_name = "xkeen_stage7_module_profile_install" + ("_root" if stage7_path != _STAGE7_PATH else "")
+    spec = importlib.util.spec_from_file_location(module_name, stage7_path)
     if spec is None or spec.loader is None:
         raise ReleaseBuildError("cannot load Stage 7 ownership classifier")
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
-    _STAGE7_MODULE = module
+    if stage7_path == _STAGE7_PATH:
+        _STAGE7_MODULE = module
     return module
 
 
@@ -173,8 +195,8 @@ def _is_ignored_package_path(relative: str) -> bool:
     name = path.name
     if name in _IGNORED_FILE_NAMES or path.suffix.lower() in _IGNORED_FILE_SUFFIXES:
         return True
-    if path.parts and path.parts[0] == "bin" and name.lower().startswith(_LOCAL_DECRYPTOR_PREFIXES):
-        return name not in _LOCAL_DECRYPTOR_KEEP
+    if len(path.parts) >= 2 and path.parts[0] == "bin" and path.parts[1].lower().startswith(_LOCAL_DECRYPTOR_PREFIXES):
+        return path.parts[1] not in _LOCAL_DECRYPTOR_KEEP
     return False
 
 
@@ -184,7 +206,7 @@ def build_module_ownership(root: Path) -> dict[str, tuple[str, ...]]:
     package = Path(root).resolve() / PACKAGE_DIRNAME
     if not package.is_dir():
         raise ReleaseBuildError(f"package root is missing: {package}")
-    stage7 = _stage7_module()
+    stage7 = _stage7_module(root)
     module_ids = tuple(stage7.MODULE_IDS)
     ownership: dict[str, list[str]] = {module_id: [] for module_id in module_ids}
     for source in sorted(package.rglob("*")):
@@ -192,6 +214,8 @@ def build_module_ownership(root: Path) -> dict[str, tuple[str, ...]]:
             continue
         relative = source.relative_to(package).as_posix()
         if _is_ignored_package_path(relative):
+            continue
+        if relative in _MODULE_EXCLUDED_FILES:
             continue
         if source.is_symlink():
             raise ReleaseBuildError(f"symlink source is forbidden: {source}")
@@ -217,19 +241,31 @@ def build_module_ownership(root: Path) -> dict[str, tuple[str, ...]]:
     return {module_id: tuple(sorted(paths)) for module_id, paths in ownership.items()}
 
 
-def _registry_definition(module_id: str) -> Any:
-    stage7 = _stage7_module()
-    try:
-        registry_path = Path(root := _STAGE7_PATH).parents[1] / "services" / "module_registry.py"
-        spec = importlib.util.spec_from_file_location("xkeen_release_module_registry", registry_path)
-        if spec is None or spec.loader is None:
-            raise ReleaseBuildError("cannot load module registry")
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[spec.name] = module
-        spec.loader.exec_module(module)
-        return next(item for item in module.MODULE_DEFINITIONS if item.id == module_id)
-    except (OSError, StopIteration) as error:
-        raise ReleaseBuildError(f"unknown registry module: {module_id}") from error
+def _registry_definition(root: Path, module_id: str) -> Any:
+    candidates = [
+        Path(root).resolve() / PACKAGE_DIRNAME / "services" / "module_registry.py",
+        _STAGE7_PATH.parents[1] / "services" / "module_registry.py",
+    ]
+    last_error: Exception | None = None
+    for registry_path in dict.fromkeys(candidates):
+        if not registry_path.is_file():
+            continue
+        try:
+            package_import_root = str(registry_path.parents[1])
+            if package_import_root not in sys.path:
+                sys.path.insert(0, package_import_root)
+            spec = importlib.util.spec_from_file_location(
+                "xkeen_release_module_registry_" + str(len(sys.modules)), registry_path
+            )
+            if spec is None or spec.loader is None:
+                raise ReleaseBuildError("cannot load module registry")
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[spec.name] = module
+            spec.loader.exec_module(module)
+            return next(item for item in module.MODULE_DEFINITIONS if item.id == module_id)
+        except Exception as error:
+            last_error = error
+    raise ReleaseBuildError(f"unknown registry module: {module_id}") from last_error
 
 
 def build_module_manifest(
@@ -242,7 +278,7 @@ def build_module_manifest(
 ) -> dict[str, Any]:
     """Build the Stage 8.0 manifest for one registry module."""
 
-    definition = _registry_definition(module_id)
+    definition = _registry_definition(root, module_id)
     ownership = build_module_ownership(root).get(module_id, ())
     if not ownership:
         raise ReleaseBuildError(f"module has no managed payload files: {module_id}")
@@ -290,6 +326,92 @@ def module_archive_spec(
     )
 
 
+def _built_asset(path: Path) -> BuiltAsset:
+    path = Path(path)
+    return BuiltAsset(
+        path=path,
+        sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
+        size=path.stat().st_size,
+    )
+
+
+def _write_checksum(asset: BuiltAsset) -> Path:
+    sidecar = asset.path.with_name(asset.path.name + ".sha256")
+    sidecar.write_text(f"{asset.sha256}  {asset.path.name}\n", encoding="utf-8", newline="\n")
+    return sidecar
+
+
+def _panel_members(root: Path) -> dict[str, Path]:
+    package = Path(root).resolve() / PACKAGE_DIRNAME
+    if not package.is_dir():
+        raise ReleaseBuildError(f"package root is missing: {package}")
+    stage7 = _stage7_module(root)
+    members: dict[str, Path] = {}
+    for source in sorted(package.rglob("*")):
+        if not source.is_file() and not source.is_symlink():
+            continue
+        relative = source.relative_to(package).as_posix()
+        if _is_ignored_package_path(relative):
+            continue
+        if source.is_symlink():
+            raise ReleaseBuildError(f"symlink source is forbidden: {source}")
+        if relative != "install.sh" and bool(stage7._user_owned(relative)):
+            continue
+        members[f"{PACKAGE_DIRNAME}/{relative}"] = source
+    return members
+
+
+def build_panel_archive(root: Path, output_dir: Path, *, version: str, epoch: int) -> BuiltAsset:
+    """Build the legacy-compatible panel payload without mutable runtime state."""
+
+    path = Path(output_dir) / f"xkeen-ui-panel-{version}.tar.gz"
+    build_deterministic_tar(path, _panel_members(root), epoch=epoch)
+    return _built_asset(path)
+
+
+def build_module_archive(
+    root: Path,
+    output_dir: Path,
+    module_id: str,
+    *,
+    version: str,
+    architecture: str,
+    min_core: str,
+    epoch: int,
+) -> BuiltAsset:
+    """Build one self-describing Stage 8 module tarball."""
+
+    spec = module_archive_spec(
+        root,
+        module_id,
+        version=version,
+        architecture=architecture,
+        min_core=min_core,
+    )
+    path = Path(output_dir) / spec.filename
+    build_deterministic_tar(path, dict(spec.members), epoch=epoch)
+    return _built_asset(path)
+
+
+def _catalog_entry(manifest: Mapping[str, Any], asset: BuiltAsset) -> dict[str, Any]:
+    return {
+        **manifest,
+        "archive": asset.path.name,
+        "size": asset.size,
+        "sha256": asset.sha256,
+        "signing_key_id": "release-2026",
+    }
+
+
+def _write_json(path: Path, payload: Mapping[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class ReleaseInputs:
     """Immutable inputs shared by local and CI release builds."""
@@ -308,7 +430,7 @@ class ArchiveSpec:
     """One deterministic tarball and the source members it must contain."""
 
     filename: str
-    members: tuple[tuple[str, Path], ...]
+    members: tuple[tuple[str, Path | bytes], ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -331,20 +453,111 @@ class ReleaseBundle:
     metadata_path: Path
 
 
-def build_release(inputs: ReleaseInputs) -> ReleaseBundle:
-    """Build the complete release bundle.
+def build_release(
+    inputs: ReleaseInputs | Path,
+    output_dir: Path | None = None,
+    *,
+    version: str | None = None,
+    source_date_epoch: int | None = None,
+    source_commit: str | None = None,
+    architecture: str = DEFAULT_ARCHITECTURE,
+    min_core: str = DEFAULT_MIN_CORE,
+) -> ReleaseBundle:
+    """Build panel/module archives, checksums, catalog and metadata."""
 
-    The assembly implementation is deliberately added in the following
-    incremental steps; keeping this entry point stable lets CI and tests adopt
-    the finished builder without a second interface change.
-    """
+    if isinstance(inputs, ReleaseInputs):
+        if output_dir is not None or version is not None or source_date_epoch is not None or source_commit is not None:
+            raise TypeError("ReleaseInputs cannot be combined with individual release arguments")
+    else:
+        if output_dir is None or version is None or source_date_epoch is None or source_commit is None:
+            raise TypeError("root, output_dir, version, source_date_epoch and source_commit are required")
+        inputs = ReleaseInputs(
+            root=Path(inputs),
+            output_dir=Path(output_dir),
+            version=version,
+            source_date_epoch=int(source_date_epoch),
+            source_commit=source_commit,
+            architecture=architecture,
+            min_core=min_core,
+        )
 
-    raise NotImplementedError("modular release assembly is not implemented yet")
+    root = Path(inputs.root).resolve()
+    output_dir = Path(inputs.output_dir).resolve()
+    if not root.is_dir():
+        raise ReleaseBuildError(f"release root is missing: {root}")
+    if not str(inputs.version).strip():
+        raise ReleaseBuildError("release version is required")
+    if not str(inputs.source_commit).strip():
+        raise ReleaseBuildError("source commit is required")
+    if int(inputs.source_date_epoch) < 0:
+        raise ReleaseBuildError("source date epoch must be non-negative")
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    panel = build_panel_archive(root, output_dir, version=inputs.version, epoch=inputs.source_date_epoch)
+    ownership = build_module_ownership(root)
+    modules: list[BuiltAsset] = []
+    catalog_entries: list[dict[str, Any]] = []
+    for module_id in sorted(module_id for module_id, paths in ownership.items() if paths):
+        asset = build_module_archive(
+            root,
+            output_dir,
+            module_id,
+            version=inputs.version,
+            architecture=inputs.architecture,
+            min_core=inputs.min_core,
+            epoch=inputs.source_date_epoch,
+        )
+        manifest = build_module_manifest(
+            root,
+            module_id,
+            version=inputs.version,
+            architecture=inputs.architecture,
+            min_core=inputs.min_core,
+        )
+        modules.append(asset)
+        catalog_entries.append(_catalog_entry(manifest, asset))
+
+    catalog_path = output_dir / "catalog.json"
+    _write_json(
+        catalog_path,
+        {
+            "schema_version": 1,
+            "release_version": inputs.version,
+            "channel": "stable",
+            "source_commit": inputs.source_commit,
+            "modules": catalog_entries,
+        },
+    )
+    catalog_asset = _built_asset(catalog_path)
+    sidecars = [_write_checksum(asset) for asset in (panel, *modules, catalog_asset)]
+    metadata_path = output_dir / "release-metadata.json"
+    metadata_assets = sorted(
+        [panel.path.name, *(asset.path.name for asset in modules), catalog_path.name, *(path.name for path in sidecars), metadata_path.name]
+    )
+    _write_json(
+        metadata_path,
+        {
+            "schema_version": 1,
+            "release_version": inputs.version,
+            "source_commit": inputs.source_commit,
+            "source_date_epoch": int(inputs.source_date_epoch),
+            "assets": metadata_assets,
+        },
+    )
+    return ReleaseBundle(
+        inputs=inputs,
+        panel=panel,
+        modules=tuple(modules),
+        catalog_path=catalog_path,
+        metadata_path=metadata_path,
+    )
 
 
-def write_release_bundle(inputs: ReleaseInputs) -> ReleaseBundle:
+def write_release_bundle(inputs: ReleaseInputs | ReleaseBundle) -> ReleaseBundle:
     """Build and return a release bundle for callers that prefer an action name."""
 
+    if isinstance(inputs, ReleaseBundle):
+        return inputs
     return build_release(inputs)
 
 
