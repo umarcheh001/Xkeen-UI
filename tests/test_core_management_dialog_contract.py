@@ -61,3 +61,11 @@ def test_core_management_actions_and_dialogs_keep_operator_spacing():
         "padding: 16px 18px",
     ):
         assert fragment in CSS
+
+
+def test_source_modal_uses_the_full_resizable_scroll_region():
+    assert ".xk-core-source-modal[data-core-source-modal] .modal-content" in CSS
+    assert "grid-template-rows: auto minmax(0, 1fr) auto;" in CSS
+    assert ".xk-core-source-modal[data-core-source-modal] .modal-body" in CSS
+    assert "max-height: none;" in CSS
+    assert "overflow: auto;" in CSS

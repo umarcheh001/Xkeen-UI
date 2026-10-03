@@ -23005,6 +23005,17 @@ body.panel-page #core-modal .xk-core-source-action .xk-action-icon { display: bl
 body.panel-page .xk-core-source-modal .modal-header { padding: 16px 18px 12px !important; }
 body.panel-page .xk-core-source-modal .modal-body { padding: 16px 18px !important; }
 body.panel-page .xk-core-source-modal .modal-actions { padding: 12px 18px 16px !important; }
+/* The source picker can be resized. Keep its header and footer content-sized
+ * while giving the profile list every pixel of the resized middle row. */
+body.panel-page .xk-core-source-modal[data-core-source-modal] .modal-content {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 0;
+}
+body.panel-page .xk-core-source-modal[data-core-source-modal] .modal-body {
+  min-height: 0;
+  max-height: none;
+  overflow: auto;
+}
 body.panel-page .xk-core-source-profiles { display: grid; gap: 8px; margin: 0; }
 body.panel-page .xk-core-source-profile {
   display: grid;
