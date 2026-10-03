@@ -11,8 +11,10 @@ from __future__ import annotations
 import argparse
 import gzip
 import hashlib
+import importlib.util
 import io
 import os
+import sys
 import tarfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,6 +24,39 @@ from typing import Any, Mapping
 
 DEFAULT_ARCHITECTURE = "aarch64"
 DEFAULT_MIN_CORE = "1.0.0"
+PACKAGE_DIRNAME = "xkeen-ui"
+_IGNORED_DIR_NAMES = {"__pycache__"}
+_IGNORED_FILE_NAMES = {".DS_Store", "BUILD.json"}
+_IGNORED_FILE_SUFFIXES = {".pyc", ".pyo", ".tmp"}
+_LOCAL_DECRYPTOR_PREFIXES = ("happ",)
+_LOCAL_DECRYPTOR_KEEP = {"README.happ-decryptor.txt"}
+_KNOWN_PACKAGE_ROOTS = {
+    "bin",
+    "core",
+    "middleware",
+    "opt",
+    "routes",
+    "scripts",
+    "services",
+    "static",
+    "templates",
+    "tools",
+    "utils",
+}
+_KNOWN_PACKAGE_FILES = {
+    "app.py",
+    "app_factory.py",
+    "bootstrap_mihomo_env.py",
+    "install.sh",
+    "mihomo_config_generator.py",
+    "mihomo_server_core.py",
+    "module-sizes.json",
+    "run_server.py",
+    "uninstall.sh",
+    "xkeen_mihomo_service.py",
+}
+_STAGE7_PATH = Path(__file__).resolve().parents[1] / PACKAGE_DIRNAME / "scripts" / "module_profile_install.py"
+_STAGE7_MODULE: Any | None = None
 
 
 class ReleaseBuildError(ValueError):
@@ -112,6 +147,68 @@ def build_deterministic_tar(
     except OSError as error:
         raise ReleaseBuildError(f"cannot write release archive: {output_path}") from error
     return hashlib.sha256(output_path.read_bytes()).hexdigest()
+
+
+def _stage7_module() -> Any:
+    global _STAGE7_MODULE
+    if _STAGE7_MODULE is not None:
+        return _STAGE7_MODULE
+    if not _STAGE7_PATH.is_file():
+        raise ReleaseBuildError(f"Stage 7 classifier is missing: {_STAGE7_PATH}")
+    spec = importlib.util.spec_from_file_location("xkeen_stage7_module_profile_install", _STAGE7_PATH)
+    if spec is None or spec.loader is None:
+        raise ReleaseBuildError("cannot load Stage 7 ownership classifier")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    _STAGE7_MODULE = module
+    return module
+
+
+def _is_ignored_package_path(relative: str) -> bool:
+    path = PurePosixPath(relative)
+    if any(part in _IGNORED_DIR_NAMES for part in path.parts):
+        return True
+    name = path.name
+    if name in _IGNORED_FILE_NAMES or path.suffix.lower() in _IGNORED_FILE_SUFFIXES:
+        return True
+    if path.parts and path.parts[0] == "bin" and name.lower().startswith(_LOCAL_DECRYPTOR_PREFIXES):
+        return name not in _LOCAL_DECRYPTOR_KEEP
+    return False
+
+
+def build_module_ownership(root: Path) -> dict[str, tuple[str, ...]]:
+    """Project managed package files into the official Stage 7 module owners."""
+
+    package = Path(root).resolve() / PACKAGE_DIRNAME
+    if not package.is_dir():
+        raise ReleaseBuildError(f"package root is missing: {package}")
+    stage7 = _stage7_module()
+    module_ids = tuple(stage7.MODULE_IDS)
+    ownership: dict[str, list[str]] = {module_id: [] for module_id in module_ids}
+    for source in sorted(package.rglob("*")):
+        if not source.is_file() and not source.is_symlink():
+            continue
+        relative = source.relative_to(package).as_posix()
+        if _is_ignored_package_path(relative):
+            continue
+        if source.is_symlink():
+            raise ReleaseBuildError(f"symlink source is forbidden: {source}")
+        if bool(stage7._user_owned(relative)):
+            continue
+        top_level = PurePosixPath(relative).parts[0]
+        if top_level not in _KNOWN_PACKAGE_ROOTS and relative not in _KNOWN_PACKAGE_FILES:
+            raise ReleaseBuildError(f"unclassified package path: {relative}")
+        if relative in _KNOWN_PACKAGE_FILES:
+            module_id = "core"
+        else:
+            module_id = str(stage7.owner(relative))
+            if module_id == "editor-full":
+                module_id = "tool.editor"
+        if module_id not in ownership:
+            raise ReleaseBuildError(f"unclassified module owner {module_id!r}: {relative}")
+        ownership[module_id].append(relative)
+    return {module_id: tuple(sorted(paths)) for module_id, paths in ownership.items()}
 
 
 @dataclass(frozen=True, slots=True)

@@ -104,3 +104,52 @@ def test_deterministic_tar_rejects_symlink_sources(tmp_path: Path) -> None:
 
     with pytest.raises(builder.ReleaseBuildError, match="symlink source is forbidden"):
         builder.build_deterministic_tar(tmp_path / "symlink.tar.gz", {"payload/source.txt": link}, epoch=0)
+
+
+def test_module_ownership_uses_stage7_boundaries_and_excludes_user_state(tmp_path: Path) -> None:
+    builder = _load_builder()
+    package = tmp_path / "xkeen-ui"
+    files = {
+        "services/module_registry.py": "core\n",
+        "routes/mihomo.py": "mihomo\n",
+        "routes/routing/__init__.py": "xray\n",
+        "static/js/pages/terminal.lazy.entry.js": "terminal\n",
+        "opt/etc/mihomo/templates/template.yaml": "template\n",
+        "modules.json": "{}\n",
+        "install-profile.json": "{}\n",
+        "opt/etc/mihomo/config.yaml": "user\n",
+        "opt/etc/mihomo/profiles/user.yaml": "user\n",
+        "bin/happ-decrypt-universal": "binary\n",
+        "bin/README.happ-decryptor.txt": "documentation\n",
+    }
+    for relative, content in files.items():
+        path = package / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+
+    ownership = builder.build_module_ownership(tmp_path)
+
+    assert ownership["core"] == ("bin/README.happ-decryptor.txt", "services/module_registry.py")
+    assert ownership["engine.mihomo"] == (
+        "opt/etc/mihomo/templates/template.yaml",
+        "routes/mihomo.py",
+    )
+    assert ownership["engine.xray"] == ("routes/routing/__init__.py",)
+    assert ownership["tool.terminal"] == ("static/js/pages/terminal.lazy.entry.js",)
+    all_paths = {path for paths in ownership.values() for path in paths}
+    assert "modules.json" not in all_paths
+    assert "install-profile.json" not in all_paths
+    assert "opt/etc/mihomo/config.yaml" not in all_paths
+    assert "opt/etc/mihomo/profiles/user.yaml" not in all_paths
+    assert "bin/happ-decrypt-universal" not in all_paths
+
+
+def test_module_ownership_rejects_unmanaged_top_level_paths(tmp_path: Path) -> None:
+    builder = _load_builder()
+    package = tmp_path / "xkeen-ui"
+    unknown = package / "untracked-root.txt"
+    unknown.parent.mkdir(parents=True, exist_ok=True)
+    unknown.write_text("must be classified\n", encoding="utf-8")
+
+    with pytest.raises(builder.ReleaseBuildError, match="unclassified package path"):
+        builder.build_module_ownership(tmp_path)
