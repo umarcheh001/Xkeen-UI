@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 import tarfile
 from pathlib import Path
@@ -152,3 +153,49 @@ def test_module_ownership_rejects_unmanaged_top_level_paths(tmp_path: Path) -> N
 
     with pytest.raises(builder.ReleaseBuildError, match="unclassified package path"):
         builder.build_module_ownership(tmp_path)
+
+
+def test_module_manifest_uses_registry_metadata_and_exact_ownership(tmp_path: Path) -> None:
+    builder = _load_builder()
+    package = tmp_path / "xkeen-ui"
+    source = package / "static/js/pages/terminal.lazy.entry.js"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_text("terminal\n", encoding="utf-8")
+
+    manifest = builder.build_module_manifest(
+        tmp_path,
+        "tool.terminal",
+        version="1.2.3",
+        architecture="aarch64",
+        min_core="1.0.0",
+    )
+
+    assert manifest == {
+        "schema_version": 1,
+        "id": "tool.terminal",
+        "version": "1.2.3",
+        "channel": "stable",
+        "panel_api": "1",
+        "module_api": "1",
+        "min_core": "1.0.0",
+        "architectures": ["aarch64"],
+        "requires": ["core"],
+        "conflicts": [],
+        "requires_restart": True,
+        "ownership": ["static/js/pages/terminal.lazy.entry.js"],
+        "max_size": len(source.read_bytes()),
+    }
+
+    spec = builder.module_archive_spec(
+        tmp_path,
+        "tool.terminal",
+        version="1.2.3",
+        architecture="aarch64",
+        min_core="1.0.0",
+    )
+    assert spec.filename == "xkeen-module-tool.terminal-1.2.3.tar.gz"
+    assert [name for name, _source in spec.members] == [
+        "module-manifest.json",
+        "payload/static/js/pages/terminal.lazy.entry.js",
+    ]
+    assert json.loads(dict(spec.members)["module-manifest.json"].decode("utf-8")) == manifest

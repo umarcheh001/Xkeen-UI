@@ -13,6 +13,7 @@ import gzip
 import hashlib
 import importlib.util
 import io
+import json
 import os
 import sys
 import tarfile
@@ -214,6 +215,79 @@ def build_module_ownership(root: Path) -> dict[str, tuple[str, ...]]:
             raise ReleaseBuildError(f"unclassified module owner {module_id!r}: {relative}")
         ownership[module_id].append(relative)
     return {module_id: tuple(sorted(paths)) for module_id, paths in ownership.items()}
+
+
+def _registry_definition(module_id: str) -> Any:
+    stage7 = _stage7_module()
+    try:
+        registry_path = Path(root := _STAGE7_PATH).parents[1] / "services" / "module_registry.py"
+        spec = importlib.util.spec_from_file_location("xkeen_release_module_registry", registry_path)
+        if spec is None or spec.loader is None:
+            raise ReleaseBuildError("cannot load module registry")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        return next(item for item in module.MODULE_DEFINITIONS if item.id == module_id)
+    except (OSError, StopIteration) as error:
+        raise ReleaseBuildError(f"unknown registry module: {module_id}") from error
+
+
+def build_module_manifest(
+    root: Path,
+    module_id: str,
+    *,
+    version: str,
+    architecture: str = DEFAULT_ARCHITECTURE,
+    min_core: str = DEFAULT_MIN_CORE,
+) -> dict[str, Any]:
+    """Build the Stage 8.0 manifest for one registry module."""
+
+    definition = _registry_definition(module_id)
+    ownership = build_module_ownership(root).get(module_id, ())
+    if not ownership:
+        raise ReleaseBuildError(f"module has no managed payload files: {module_id}")
+    package = Path(root).resolve() / PACKAGE_DIRNAME
+    max_size = sum((package / relative).stat().st_size for relative in ownership)
+    return {
+        "schema_version": 1,
+        "id": definition.id,
+        "version": str(version),
+        "channel": "stable",
+        "panel_api": "1",
+        "module_api": "1",
+        "min_core": str(min_core),
+        "architectures": [str(architecture)],
+        "requires": list(definition.dependencies),
+        "conflicts": list(definition.conflicts),
+        "requires_restart": bool(definition.requires_restart),
+        "ownership": list(ownership),
+        "max_size": max(1, max_size),
+    }
+
+
+def module_archive_spec(
+    root: Path,
+    module_id: str,
+    *,
+    version: str,
+    architecture: str = DEFAULT_ARCHITECTURE,
+    min_core: str = DEFAULT_MIN_CORE,
+) -> ArchiveSpec:
+    manifest = build_module_manifest(
+        root,
+        module_id,
+        version=version,
+        architecture=architecture,
+        min_core=min_core,
+    )
+    package = Path(root).resolve() / PACKAGE_DIRNAME
+    manifest_data = (json.dumps(manifest, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    members: list[tuple[str, Path | bytes]] = [("module-manifest.json", manifest_data)]
+    members.extend((f"payload/{relative}", package / relative) for relative in manifest["ownership"])
+    return ArchiveSpec(
+        filename=f"xkeen-module-{module_id}-{version}.tar.gz",
+        members=tuple(members),
+    )
 
 
 @dataclass(frozen=True, slots=True)
