@@ -202,7 +202,12 @@ def build_module_ownership(root: Path) -> dict[str, tuple[str, ...]]:
         if relative in _KNOWN_PACKAGE_FILES:
             module_id = "core"
         else:
-            module_id = str(stage7.owner(relative))
+            marker_owner = {
+                marker: module_id
+                for module_id, markers in stage7.INSTALL_MARKERS.items()
+                for marker in markers
+            }.get(relative)
+            module_id = str(marker_owner or stage7.owner(relative))
             if module_id == "editor-full":
                 module_id = "tool.editor"
         if module_id not in ownership:

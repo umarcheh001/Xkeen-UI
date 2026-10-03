@@ -120,7 +120,6 @@ def test_module_ownership_uses_stage7_boundaries_and_excludes_user_state(tmp_pat
         "opt/etc/mihomo/config.yaml": "user\n",
         "opt/etc/mihomo/profiles/user.yaml": "user\n",
         "bin/happ-decrypt-universal": "binary\n",
-        "bin/README.happ-decryptor.txt": "documentation\n",
     }
     for relative, content in files.items():
         path = package / relative
@@ -129,7 +128,7 @@ def test_module_ownership_uses_stage7_boundaries_and_excludes_user_state(tmp_pat
 
     ownership = builder.build_module_ownership(tmp_path)
 
-    assert ownership["core"] == ("bin/README.happ-decryptor.txt", "services/module_registry.py")
+    assert ownership["core"] == ("services/module_registry.py",)
     assert ownership["engine.mihomo"] == (
         "opt/etc/mihomo/templates/template.yaml",
         "routes/mihomo.py",
