@@ -623,6 +623,22 @@ import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from '
     }
   }
 
+  async function syncMihomoPanelConfig() {
+    const panel = getMihomoPanelApi();
+    if (!panel) return null;
+    const sync = typeof panel.markConfigChanged === 'function'
+      ? panel.markConfigChanged.bind(panel)
+      : (typeof panel.reloadFromDiskIfClean === 'function'
+        ? panel.reloadFromDiskIfClean.bind(panel)
+        : null);
+    if (!sync) return null;
+    const result = await sync();
+    if (result?.skipped === 'dirty') {
+      toastXkeen('config.yaml обновлён на роутере, но несохранённые правки оставлены в редакторе.', 'warning');
+    }
+    return result;
+  }
+
   async function open() {
     if (!busy) dropOperationNotice();
     providerSelectionTouched = false;
@@ -652,10 +668,7 @@ import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from '
     try {
       const result = await postAction('reconfigure');
       toastXkeen(`Настройки защищённого DNS применены${result?.probe?.latency_ms != null ? ` · ${result.probe.latency_ms} мс` : ''}`, 'success');
-      const panel = getMihomoPanelApi();
-      if (panel && typeof panel.reloadFromDiskIfClean === 'function') {
-        await panel.reloadFromDiskIfClean();
-      }
+      await syncMihomoPanelConfig();
       await refresh();
     } catch (error) {
       const data = error?.data || null;
@@ -707,10 +720,7 @@ import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from '
           : result?.recovered
           ? 'Старое состояние DNS очищено, текущий config.yaml сохранён.'
           : 'DNS Mihomo отключён, исходная конфигурация восстановлена.'), 'success');
-      const panel = getMihomoPanelApi();
-      if (panel && typeof panel.reloadFromDiskIfClean === 'function') {
-        await panel.reloadFromDiskIfClean();
-      }
+      await syncMihomoPanelConfig();
       await refresh();
     } catch (error) {
       const data = error?.data || null;

@@ -148,6 +148,9 @@ let mihomoPanelModuleApi = null;
   let _restartLogModulePromise = null;
   let _mihomoUiSettingsSyncWired = false;
   let _mihomoConfigChangeSyncWired = false;
+  // A DNS operation may update config.yaml before this editor is mounted.
+  // Keep that change queued until the Mihomo panel is ready to read it.
+  let _configReloadPending = false;
 
   function $(id) {
     return document.getElementById(id);
@@ -1544,6 +1547,10 @@ let mihomoPanelModuleApi = null;
 
 
   function refreshEditorIfAny() {
+    if (_configReloadPending) {
+      void reloadFromDiskIfClean().catch(() => {});
+    }
+
     // If Monaco is active, ensure layout (especially after tab/card open).
     if (_engine === 'monaco' && _monaco && typeof _monaco.layout === 'function') {
       try { _monaco.layout(); } catch (e) {}
@@ -1793,6 +1800,7 @@ let mihomoPanelModuleApi = null;
 
       const content = data.content || '';
       setEditorTextClean(content);
+      _configReloadPending = false;
       try {
         const savedView = loadSavedViewState(_engine);
         if (savedView) restoreCurrentViewState(savedView);
@@ -1841,6 +1849,7 @@ let mihomoPanelModuleApi = null;
       }
       const content = data.content || '';
       setEditorTextClean(content);
+      _configReloadPending = false;
       try {
         const savedView = loadSavedViewState(_engine);
         if (savedView) restoreCurrentViewState(savedView);
@@ -1862,10 +1871,21 @@ let mihomoPanelModuleApi = null;
   };
 
   async function reloadFromDiskIfClean() {
+    const textarea = $(IDS.textarea);
+    const editorMounted = !!(textarea && (_engine === 'monaco' ? _monaco : getSharedEditor()));
+    if (!editorMounted) {
+      _configReloadPending = true;
+      return { ok: false, skipped: 'not-mounted' };
+    }
     if (isEditorDirty()) return { ok: false, skipped: 'dirty' };
     const result = await loadLiveConfigIntoEditor();
     if (result.ok) setStatus('config.yaml обновлён после автоматической настройки API.', false, true);
     return result;
+  }
+
+  async function markConfigChanged() {
+    _configReloadPending = true;
+    return reloadFromDiskIfClean();
   }
 
   MP.saveConfig = async function saveConfig() {
@@ -2856,6 +2876,7 @@ let mihomoPanelModuleApi = null;
       }
       const content = data.content || '';
       setEditorTextClean(content);
+      _configReloadPending = false;
       setStatus('Шаблон ' + _chosenTemplateName + ' загружен в редактор. Не забудьте сохранить config.yaml.', false);
       bumpLastActivity('loaded');
       return true;
@@ -3537,6 +3558,9 @@ let mihomoPanelModuleApi = null;
         try { setEditorTextClean(''); } catch (e) {}
         try { setStatus('config.yaml пока не создан. Открыт пустой редактор.', false, true); } catch (e) {}
       }
+      if (_configReloadPending) {
+        try { void reloadFromDiskIfClean().catch(() => {}); } catch (e) {}
+      }
       try { MP.loadTemplatesList({ silent: true }); } catch (e) {}
     };
 
@@ -3578,6 +3602,7 @@ let mihomoPanelModuleApi = null;
   MP.setEditorText = setEditorText;
   MP.refreshEditor = refreshEditorIfAny;
   MP.reloadFromDiskIfClean = reloadFromDiskIfClean;
+  MP.markConfigChanged = markConfigChanged;
   MP.isEditorDirty = isEditorDirty;
 })();
 
@@ -3610,6 +3635,10 @@ export function onShowMihomoPanel(...args) {
 
 export function reloadMihomoPanelFromDiskIfClean(...args) {
   return callMihomoPanelApi('reloadFromDiskIfClean', ...args);
+}
+
+export function markMihomoPanelConfigChanged(...args) {
+  return callMihomoPanelApi('markConfigChanged', ...args);
 }
 
 export function saveMihomoPanel(...args) {
@@ -3696,6 +3725,7 @@ export const mihomoPanelApi = Object.freeze({
   getEditorText: getMihomoPanelEditorText,
   setEditorText: setMihomoPanelEditorText,
   reloadFromDiskIfClean: reloadMihomoPanelFromDiskIfClean,
+  markConfigChanged: markMihomoPanelConfigChanged,
   isEditorDirty: isMihomoPanelEditorDirty,
   dispose: disposeMihomoPanel,
 });

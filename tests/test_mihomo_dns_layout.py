@@ -83,3 +83,13 @@ def test_active_managed_dns_has_a_separate_reconfigure_action():
     assert "current?.can_reconfigure" in script
     assert "postAction('reconfigure')" in script
     assert "Настройки защищённого DNS применены" in script
+
+
+def test_dns_actions_queue_editor_reload_until_mihomo_panel_is_ready():
+    dns_script = (ROOT / "xkeen-ui/static/js/features/mihomo_dns.js").read_text(encoding="utf-8")
+    panel_script = (ROOT / "xkeen-ui/static/js/features/mihomo_panel.js").read_text(encoding="utf-8")
+
+    assert "markConfigChanged" in dns_script
+    assert "_configReloadPending" in panel_script
+    assert "skipped: 'not-mounted'" in panel_script
+    assert "reloadFromDiskIfClean" in panel_script
