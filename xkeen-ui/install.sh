@@ -348,30 +348,20 @@ ui_step_warn() {
 }
 # --- ui-progress: end ----------------------------------------------------
 
-# В цветном TTY скрываем эхо на время ввода и печатаем выбор сами: тогда
-# ответ остаётся виден, но y/n несёт тот же смысловой цвет, что и подсказка.
-# Без цвета сохраняем обычное terminal echo, чтобы non-interactive и dumb
-# terminals не получали неожиданно скрытый ввод.
+# Обычное terminal echo оставляет ответ видимым во время набора. После Enter
+# перерисовываем строку с цветом ответа, не меняя настройки терминала.
 ui_confirm_default_yes() {
   _ui_prompt="$1"
   UI_CONFIRM_ANSWER=""
-  UI_CONFIRM_STTY_MODE=""
-  _ui_stty_mode=""
-  _ui_echo_hidden=0
 
   printf '      %s [%bY%b/%bn%b]: ' \
     "$_ui_prompt" "$UI_GREEN" "$UI_RESET" "$UI_YELLOW" "$UI_RESET" >&3
-  if [ -n "$UI_RESET" ]; then
-    _ui_stty_mode="$(stty -g < /dev/tty 2>/dev/null || true)"
-    if [ -n "$_ui_stty_mode" ] && stty -echo < /dev/tty 2>/dev/null; then
-      UI_CONFIRM_STTY_MODE="$_ui_stty_mode"
-      _ui_echo_hidden=1
-    fi
-  fi
   IFS= read -r UI_CONFIRM_ANSWER < /dev/tty || UI_CONFIRM_ANSWER=""
-  if [ "$_ui_echo_hidden" -eq 1 ]; then
-    stty "$_ui_stty_mode" < /dev/tty 2>/dev/null || stty echo < /dev/tty 2>/dev/null || true
-    UI_CONFIRM_STTY_MODE=""
+  if [ -n "$UI_RESET" ]; then
+    # read already moved to the next line after Enter. Move back, clear that
+    # prompt row and write the result in its semantic colour.
+    printf '%b[1A\r%b[2K      %s [%bY%b/%bn%b]: ' \
+      "$UI_ESC" "$UI_ESC" "$_ui_prompt" "$UI_GREEN" "$UI_RESET" "$UI_YELLOW" "$UI_RESET" >&3
     case "$UI_CONFIRM_ANSWER" in
       y|Y|yes|YES|Yes|д|Д|да|ДА|Да)
         printf '%b%s%b' "$UI_GREEN" "$UI_CONFIRM_ANSWER" "$UI_RESET" >&3
@@ -387,7 +377,7 @@ ui_confirm_default_yes() {
         ;;
     esac
   fi
-  printf '\n\n' >&3
+  printf '\n' >&3
 }
 
 choose_geodat_option() {
@@ -550,10 +540,6 @@ installer_on_exit() {
 }
 
 installer_on_interrupt() {
-  if [ -n "${UI_CONFIRM_STTY_MODE:-}" ]; then
-    stty "$UI_CONFIRM_STTY_MODE" < /dev/tty 2>/dev/null || stty echo < /dev/tty 2>/dev/null || true
-    UI_CONFIRM_STTY_MODE=""
-  fi
   INSTALL_ERROR_HINT="Операция прервана пользователем."
   exit 130
 }

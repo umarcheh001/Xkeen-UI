@@ -70,29 +70,29 @@ def test_installer_exposes_optional_component_choices_without_child_prompt_noise
     assert 'export XKEEN_HAPP_DECRYPTOR_INSTALL' in text
 
 
-def test_installer_colours_default_yes_prompts_and_panel_url():
+def test_installer_keeps_confirmation_input_visible_and_colours_final_answer():
     text = _text()
 
     prompt = text[text.index('ui_confirm_default_yes() {'):text.index('\n}\n', text.index('ui_confirm_default_yes() {'))]
-    assert 'stty -echo < /dev/tty' in prompt
-    assert 'stty "$_ui_stty_mode" < /dev/tty' in prompt
+    assert 'stty -echo' not in prompt
+    assert 'IFS= read -r UI_CONFIRM_ANSWER < /dev/tty' in prompt
     assert "'      %s [%bY%b/%bn%b]: '" in prompt
     assert '"$UI_GREEN" "$UI_RESET" "$UI_YELLOW" "$UI_RESET"' in prompt
     assert "printf '%b%s%b' \"$UI_GREEN\" \"$UI_CONFIRM_ANSWER\"" in prompt
     assert "printf '%b%s%b' \"$UI_YELLOW\" \"$UI_CONFIRM_ANSWER\"" in prompt
+    assert "printf '%b[1A\\r%b[2K      %s" in prompt
+    assert '"$UI_ESC" "$UI_ESC" "$_ui_prompt"' in prompt
     assert 'UI_CONFIRM_ANSWER' in prompt
     assert 'printf \'      %bОткрыть:%b  %b%s%b\\n\'' in text
     assert '"$UI_CYAN" "$PANEL_URL" "$UI_RESET"' in text
 
 
-def test_interrupted_coloured_prompt_restores_terminal_echo():
+def test_interrupt_handler_does_not_leave_terminal_echo_disabled():
     text = _text()
 
-    prompt = text[text.index('ui_confirm_default_yes() {'):text.index('\n}\n', text.index('ui_confirm_default_yes() {'))]
-    assert 'UI_CONFIRM_STTY_MODE="$_ui_stty_mode"' in prompt
-    assert 'UI_CONFIRM_STTY_MODE=""' in prompt
+    assert 'stty -echo' not in text
+    assert 'UI_CONFIRM_STTY_MODE' not in text
     assert 'installer_on_interrupt() {' in text
-    assert 'stty "$UI_CONFIRM_STTY_MODE" < /dev/tty' in text
     assert "trap 'installer_on_interrupt' HUP INT TERM" in text
 
 
