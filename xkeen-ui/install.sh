@@ -500,7 +500,7 @@ PY
   fi
   XKEEN_UI_INSTALL_PROFILE="$PROFILE_CHOICE"
   export XKEEN_UI_INSTALL_PROFILE XKEEN_UI_INSTALL_MODULES
-  printf '  %bПрофиль:%b     %s\n' "$UI_DIM" "$UI_RESET" "$PROFILE_CHOICE" >&3
+  ui_line "$(printf '  %bПрофиль:%b     %s' \"$UI_DIM\" \"$UI_RESET\" \"$PROFILE_CHOICE\")"
 }
 
 profile_has_module() {

@@ -96,6 +96,14 @@ def test_interrupt_handler_does_not_leave_terminal_echo_disabled():
     assert "trap 'installer_on_interrupt' HUP INT TERM" in text
 
 
+def test_profile_status_uses_sticky_safe_output_while_progress_ticker_is_active():
+    text = _text()
+
+    profile_body = text[text.index('choose_panel_profile() {'):text.index('\n}\n', text.index('choose_panel_profile() {'))]
+    assert 'ui_line "$(printf \'  %bПрофиль:%b     %s\'' in profile_body
+    assert "printf '  %bПрофиль:%b     %s\\n'" not in profile_body
+
+
 def test_installer_only_reports_success_after_service_health_check():
     text = _text()
 
