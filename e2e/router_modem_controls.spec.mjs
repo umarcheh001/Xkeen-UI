@@ -104,3 +104,68 @@ test('offline modem keeps reset unavailable after a successful port probe', asyn
   await expect(tele2.locator('.xk-lte-control-status')).toContainText('не подключён');
   await expect(tele2.getByRole('button', { name: 'Перезапустить модем' })).toBeDisabled();
 });
+
+test('hung operation status times out and releases its modem controls', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.addInitScript(() => {
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = (input, options = {}) => {
+      if (!String(input).includes('/api/system/router/lte/operations/hung-operation')) {
+        return originalFetch(input, options);
+      }
+      return new Promise((resolve, reject) => {
+        options.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+      });
+    };
+  });
+  await page.route('**/api/system/router/lte/UsbQmi1/probe', route => route.fulfill({ json: {
+    modem: { id: 'UsbQmi1' }, preferred_transport: 'qmi',
+    transports: [{ kind: 'qmi', available: true }], sampled_at: 1,
+  } }));
+  await page.route('**/api/system/router/lte/UsbQmi1/reset', route => route.fulfill({ status: 202, json: {
+    operation_id: 'hung-operation', modem_id: 'UsbQmi1', status: 'queued', transport: 'qmi', before: { id: 'UsbQmi1' },
+  } }));
+  const { tele2 } = await openModems(page);
+  await tele2.getByRole('button', { name: 'Проверить управление' }).click();
+  await tele2.getByRole('button', { name: 'Перезапустить модем' }).click();
+  await page.locator('#confirm-modal-ok-btn').click();
+  await expect(tele2.locator('.xk-lte-control-status')).toContainText('Нет ответа', { timeout: 15_000 });
+  await expect(tele2.getByRole('button', { name: 'Проверить управление' })).toBeEnabled();
+  await expect(tele2.getByRole('button', { name: 'Перезапустить модем' })).toBeDisabled();
+});
+
+test('recovery refresh waits for an in-flight manual LTE refresh and reads fresh data', async ({ page }) => {
+  await page.route('**/api/system/router/lte/UsbQmi1/probe', route => route.fulfill({ json: {
+    modem: { id: 'UsbQmi1' }, preferred_transport: 'qmi',
+    transports: [{ kind: 'qmi', available: true }], sampled_at: 1,
+  } }));
+  await page.route('**/api/system/router/lte/UsbQmi1/reset', route => route.fulfill({ status: 202, json: {
+    operation_id: 'overlap-operation', modem_id: 'UsbQmi1', status: 'queued', transport: 'qmi', before: { id: 'UsbQmi1' },
+  } }));
+  await page.route('**/api/system/router/lte/operations/overlap-operation', route => route.fulfill({ json: {
+    operation_id: 'overlap-operation', modem_id: 'UsbQmi1', status: 'recovered', transport: 'qmi',
+    before: { id: 'UsbQmi1' }, after: { id: 'UsbQmi1', connected: true },
+  } }));
+  const { tele2 } = await openModems(page);
+  await page.unroute('**/api/system/router/lte');
+  let reads = 0;
+  let releaseManual;
+  await page.route('**/api/system/router/lte', async route => {
+    reads += 1;
+    if (reads === 1) await new Promise(resolve => { releaseManual = resolve; });
+    const version = reads === 1 ? 'stale' : 'fresh';
+    await route.fulfill({ json: {
+      ok: true, available: true, count: 2,
+      items: [modems[0], { ...modems[1], model: `${version} X20` }],
+    } });
+  });
+  await tele2.getByRole('button', { name: 'Проверить управление' }).click();
+  await page.locator('#xk-lte-action').click();
+  await expect.poll(() => reads).toBe(1);
+  await tele2.getByRole('button', { name: 'Перезапустить модем' }).click();
+  await page.locator('#confirm-modal-ok-btn').click();
+  await expect(tele2.locator('.xk-lte-control-status')).toContainText('Восстановлен');
+  releaseManual();
+  await expect(tele2.locator('header')).toContainText('fresh X20');
+  expect(reads).toBe(2);
+});

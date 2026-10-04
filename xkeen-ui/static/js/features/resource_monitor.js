@@ -4,6 +4,9 @@ const CLIENTS_ENDPOINT = "/api/system/router/clients";
 const LTE_ENDPOINT = "/api/system/router/lte";
 const LTE_OPERATION_POLL_MS = 1500;
 const LTE_OPERATION_MAX_POLLS = 90;
+const LTE_CONTROL_REQUEST_TIMEOUT_MS = 20000;
+const LTE_OPERATION_STATUS_TIMEOUT_MS = 5000;
+const LTE_OPERATION_DEADLINE_MS = 90000;
 const CHANNEL_ENDPOINT = "/api/system/router/channel-check";
 const DNS_DIAGNOSTICS_ENDPOINT = "/api/system/router/dns-diagnostics";
 const POLL_MS = 5000;
@@ -23,6 +26,7 @@ let processesLoaded = false;
 let clientsRequest = null;
 let clientsLoaded = false;
 let lteRequest = null;
+let ltePostOperationRefresh = null;
 const lteControls = new Map();
 let channelRequest = null;
 let interfaceFilter = "active";
@@ -884,7 +888,7 @@ function lteControlState(modemId) {
   if (!lteControls.has(modemId)) {
     lteControls.set(modemId, {
       probeAvailable: false, probeBusy: false, resetBusy: false,
-      operationId: null, pollCount: 0, pollTimer: 0, message: "", tone: "",
+      operationId: null, pollCount: 0, pollTimer: 0, deadlineAt: 0, message: "", tone: "",
     });
   }
   return lteControls.get(modemId);
@@ -921,11 +925,30 @@ function syncLteControlCard(modemId) {
   }
 }
 
-async function lteControlRequest(url, options = {}) {
-  const response = await fetch(url, { cache: "no-store", credentials: "same-origin", ...options });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(lteControlMessage(payload?.code));
-  return payload;
+async function lteControlRequest(url, options = {}, timeoutMs = LTE_CONTROL_REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController();
+  let expired = false;
+  const timeout = window.setTimeout(() => {
+    expired = true;
+    controller.abort();
+  }, timeoutMs);
+  try {
+    const response = await fetch(url, {
+      cache: "no-store", credentials: "same-origin", ...options, signal: controller.signal,
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(lteControlMessage(payload?.code));
+    return payload;
+  } catch (error) {
+    if (expired) {
+      const timeoutError = new Error("Нет ответа от роутера. Проверьте состояние модема.");
+      timeoutError.timedOut = true;
+      throw timeoutError;
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 async function probeLteModem(modemId) {
@@ -963,12 +986,15 @@ function finishLteOperation(modemId, operationId, payload) {
   state.operationId = null;
   state.resetBusy = false;
   state.probeAvailable = false;
+  state.deadlineAt = 0;
   const status = payload?.status;
   if (status === "recovered") {
     state.message = "Восстановлен · данные модема обновлены";
     state.tone = "success";
   } else if (status === "timed_out") {
-    state.message = "Возврат модема не подтвердился вовремя.";
+    state.message = payload?.requestTimedOut
+      ? payload.message
+      : "Возврат модема не подтвердился вовремя.";
     state.tone = "error";
   } else if (status === "failed") {
     state.message = payload?.message || lteControlMessage(payload?.code);
@@ -978,19 +1004,41 @@ function finishLteOperation(modemId, operationId, payload) {
     state.tone = "error";
   }
   syncLteControlCard(modemId);
-  void loadLte();
+  void refreshLteAfterOperation();
+}
+
+function refreshLteAfterOperation() {
+  if (ltePostOperationRefresh) return ltePostOperationRefresh;
+  const activeRefresh = lteRequest?.promise;
+  ltePostOperationRefresh = (async () => {
+    if (activeRefresh) await activeRefresh;
+    await loadLte();
+  })().finally(() => { ltePostOperationRefresh = null; });
+  return ltePostOperationRefresh;
 }
 
 async function pollLteOperation(modemId, operationId) {
   const state = lteControlState(modemId);
   if (state.operationId !== operationId) return;
+  if (Date.now() >= state.deadlineAt) {
+    finishLteOperation(modemId, operationId, { status: "timed_out" });
+    return;
+  }
   state.pollCount += 1;
   try {
-    const payload = await lteControlRequest(`${LTE_ENDPOINT}/operations/${encodeURIComponent(operationId)}`);
+    const payload = await lteControlRequest(
+      `${LTE_ENDPOINT}/operations/${encodeURIComponent(operationId)}`,
+      {},
+      Math.min(LTE_OPERATION_STATUS_TIMEOUT_MS, state.deadlineAt - Date.now()),
+    );
     if (state.operationId !== operationId) return;
     const status = payload?.status;
     if (status === "recovered" || status === "failed" || status === "timed_out") {
       finishLteOperation(modemId, operationId, payload);
+      return;
+    }
+    if (Date.now() >= state.deadlineAt) {
+      finishLteOperation(modemId, operationId, { status: "timed_out" });
       return;
     }
     state.message = status === "waiting_for_modem"
@@ -999,6 +1047,12 @@ async function pollLteOperation(modemId, operationId) {
     state.tone = "running";
     syncLteControlCard(modemId);
   } catch (error) {
+    if (error.timedOut) {
+      finishLteOperation(modemId, operationId, {
+        status: "timed_out", requestTimedOut: true, message: error.message,
+      });
+      return;
+    }
     if (state.pollCount >= LTE_OPERATION_MAX_POLLS) {
       finishLteOperation(modemId, operationId, { status: "failed", message: error.message });
       return;
@@ -1057,6 +1111,7 @@ async function resetLteModem(modemId, name) {
     if (!payload?.operation_id || payload.modem_id !== modemId) throw new Error(lteControlMessage());
     state.operationId = String(payload.operation_id);
     state.pollCount = 0;
+    state.deadlineAt = Date.now() + LTE_OPERATION_DEADLINE_MS;
     state.message = "Операция в очереди…";
     syncLteControlCard(modemId);
     void pollLteOperation(modemId, state.operationId);
@@ -1199,23 +1254,24 @@ function renderLte(payload) {
 }
 
 async function loadLte() {
-  if (lteRequest) return;
-  const controller = new AbortController();
-  lteRequest = controller;
-  setStage2Button("xk-lte-action", "Загрузка…", { busy: true, pressed: true });
-  const summary = byId("xk-lte-summary");
-  if (summary) summary.textContent = "Запрашиваем состояние модема…";
-  try {
-    const response = await fetch(LTE_ENDPOINT, { method: "GET", cache: "no-store", credentials: "same-origin", signal: controller.signal });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    renderLte(await response.json());
-  } catch (error) {
-    if (summary) summary.textContent = "Не удалось получить данные LTE";
-    setStage2Button("xk-lte-action", "Повторить", { pressed: false });
-  } finally {
-    if (lteRequest === controller) lteRequest = null;
-    if (byId("xk-lte-action")) byId("xk-lte-action").disabled = false;
-  }
+  if (lteRequest) return lteRequest.promise;
+  const current = { promise: null };
+  lteRequest = current;
+  current.promise = (async () => {
+    setStage2Button("xk-lte-action", "Загрузка…", { busy: true, pressed: true });
+    const summary = byId("xk-lte-summary");
+    if (summary) summary.textContent = "Запрашиваем состояние модема…";
+    try {
+      renderLte(await lteControlRequest(LTE_ENDPOINT, { method: "GET" }, 12000));
+    } catch (error) {
+      if (summary) summary.textContent = "Не удалось получить данные LTE";
+      setStage2Button("xk-lte-action", "Повторить", { pressed: false });
+    } finally {
+      if (lteRequest === current) lteRequest = null;
+      if (byId("xk-lte-action")) byId("xk-lte-action").disabled = false;
+    }
+  })();
+  return current.promise;
 }
 
 function renderIncidents(incidents) {
