@@ -1795,6 +1795,7 @@ def test_dns_runtime_diagnostics_exposes_upstream_routes_and_provider_freshness(
     assert all(item["route"] == "proxy" for item in diagnostics["upstreams"]["items"])
     assert {item["address"] for item in diagnostics["upstreams"]["items"]} >= {"8.8.8.8", "1.1.1.1"}
     assert diagnostics["provider_freshness"]["state"] == "unknown"
+    assert diagnostics["provider_freshness"]["reason"] == "Mihomo не сообщает панели путь к кэшу rule-provider."
 
 
 def test_http_contract_forwards_prefer_h3_and_exposes_read_only_diagnostics(tmp_path: Path, monkeypatch):

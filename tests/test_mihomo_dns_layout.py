@@ -90,6 +90,8 @@ def test_mihomo_dns_hardening_controls_are_visible_without_replacing_existing_wo
 
     assert MODAL.count('class="dt-switch xk-switch-bare xk-mini-switch mihomo-dns-option-switch"') == 3
     assert 'data-tooltip="' in MODAL
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in CSS[CSS.index(".mihomo-dns-runtime-status {"):]
+    assert "justify-content: center;" in CSS[CSS.index(".mihomo-dns-runtime-status > span {"):]
 
     script = (ROOT / "xkeen-ui/static/js/features/mihomo_dns.js").read_text(encoding="utf-8")
     assert "prefer_h3" in script

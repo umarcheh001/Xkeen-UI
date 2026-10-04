@@ -1134,7 +1134,7 @@ def _dns_provider_freshness(config_text: str, config_file: str = "") -> dict[str
         "state": "fresh" if items and all(item["state"] == "fresh" for item in items) else "unknown",
         "configured": len(items),
         "items": items,
-        "reason": "Mihomo cache path is not exposed by config" if any(item["age_s"] is None for item in items) else None,
+        "reason": "Mihomo не сообщает панели путь к кэшу rule-provider." if any(item["age_s"] is None for item in items) else None,
     }
 
 

@@ -15325,8 +15325,8 @@ body.panel-page #mihomo-dns-modal .mihomo-dns-state {
 }
 
 body.panel-page #mihomo-dns-modal .mihomo-dns-runtime-status {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
   min-width: 0;
 }
@@ -15334,6 +15334,9 @@ body.panel-page #mihomo-dns-modal .mihomo-dns-runtime-status {
 body.panel-page #mihomo-dns-modal .mihomo-dns-runtime-status > span {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  min-width: 0;
+  width: 100%;
   min-height: 28px;
   padding: 4px 8px;
   border: 1px solid var(--op-border);
@@ -15355,6 +15358,12 @@ body.panel-page #mihomo-dns-modal .mihomo-dns-runtime-status > [data-state="off"
   border-color: color-mix(in srgb, #f59e0b 42%, var(--op-border));
   color: #fbbf24;
   background: color-mix(in srgb, #d97706 10%, var(--op-surface-3));
+}
+
+@media (max-width: 560px) {
+  body.panel-page #mihomo-dns-modal .mihomo-dns-runtime-status {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 body.panel-page #mihomo-dns-modal .mihomo-dns-hardening {
