@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from types import SimpleNamespace
 
 import pytest
@@ -31,9 +32,10 @@ MODEMS = {
 
 
 class TransportDoubles:
-    def __init__(self, *, qmi_imei: str = "222222222222222"):
+    def __init__(self, *, qmi_imei: str = "222222222222222", reset_returncode: int = 0):
         self.argv: list[list[str]] = []
         self.qmi_imei = qmi_imei
+        self.reset_returncode = reset_returncode
 
     def devices(self):
         return {
@@ -50,7 +52,7 @@ class TransportDoubles:
             imei = self.qmi_imei if device.endswith("1") else "111111111111111"
             return SimpleNamespace(returncode=0, stdout=f"IMEI: '{imei}'\n", stderr="raw qmi stderr")
         if "--dms-set-operating-mode=reset" in argv:
-            return SimpleNamespace(returncode=0, stdout="", stderr="raw reset stderr")
+            return SimpleNamespace(returncode=self.reset_returncode, stdout="", stderr="raw reset stderr")
         raise AssertionError(f"unexpected argv: {argv!r}")
 
 
@@ -136,6 +138,23 @@ def test_probe_reports_transport_not_matched_when_qmi_imei_differs(rci_fetcher, 
     assert "transport_not_matched" in repr(result)
 
 
+def test_probe_hard_disables_reset_when_selected_rci_imei_is_absent(transports):
+    inventory = deepcopy(MODEMS)
+    inventory["items"][1].pop("imei")
+    service = ModemControlService(
+        rci_fetcher=lambda *_args, **_kwargs: inventory,
+        device_enumerator=transports.devices,
+        runner=transports.runner,
+    )
+
+    result = service.probe("UsbQmi1")
+
+    assert result["preferred_transport"] is None
+    assert all(item["available"] is False for item in result["transports"])
+    assert "transport_not_matched" in repr(result)
+    assert transports.argv == []
+
+
 def test_probe_reports_missing_qmi_tool_without_raw_exception(rci_fetcher):
     def missing_tool(_argv, **_kwargs):
         raise FileNotFoundError("/secret/qmicli execution details")
@@ -177,6 +196,28 @@ def test_probe_falls_back_to_tty_only_after_at_and_cgsn_imei_match(rci_fetcher, 
     assert all(command in {"AT", "AT+CGSN"} for _path, command, _kwargs in tty_calls)
 
 
+def test_probe_rejects_mismatched_tty_imei_without_positional_fallback(rci_fetcher, transports):
+    transports.qmi_imei = "999999999999999"
+    tty_calls = []
+
+    def tty_exchange(path, command, **kwargs):
+        tty_calls.append((path, command, kwargs))
+        return "AT\r\nOK\r\n" if command == "AT" else "AT+CGSN\r\n111111111111111\r\nOK\r\n"
+
+    service = ModemControlService(
+        rci_fetcher=rci_fetcher,
+        device_enumerator=transports.devices,
+        runner=transports.runner,
+        tty_exchange=tty_exchange,
+    )
+    result = service.probe("UsbQmi1")
+
+    assert result["preferred_transport"] is None
+    assert all(item["available"] is False for item in result["transports"])
+    assert "transport_not_matched" in repr(result)
+    assert all(command != "AT+RESET" for _path, command, _kwargs in tty_calls)
+
+
 def test_reset_requires_exact_confirmation_and_returns_safe_operation(service):
     with pytest.raises(ModemControlError) as exc_info:
         service.start_reset("UsbQmi1", confirmation="Beeline")
@@ -205,6 +246,111 @@ def test_reset_operation_state_has_terminal_contract_and_redacts_command_output(
     assert "raw reset stderr" not in repr(operation)
     assert "222222222222222" not in repr(operation)
     assert all(isinstance(call, list) for call in transports.argv)
+
+
+def test_worker_reset_targets_only_imei_matched_qmi_path(transports):
+    workers = []
+    now = [100.0]
+    service = ModemControlService(
+        rci_fetcher=lambda *_args, **_kwargs: MODEMS,
+        device_enumerator=transports.devices,
+        runner=transports.runner,
+        worker_starter=workers.append,
+        clock=lambda: now[0],
+        sleep=lambda seconds: now.__setitem__(0, now[0] + max(seconds, 1)),
+    )
+
+    accepted = service.start_reset("UsbQmi1", confirmation="UsbQmi1")
+    assert len(workers) == 1
+    workers[0]()
+
+    reset_calls = [call for call in transports.argv if "--dms-set-operating-mode=reset" in call]
+    assert reset_calls == [["qmicli", "-d", "/dev/cdc-wdm1", "--dms-set-operating-mode=reset"]]
+    assert service.status(accepted["operation_id"])["modem_id"] == "UsbQmi1"
+
+
+def test_worker_tty_reset_targets_only_imei_matched_tty_path(rci_fetcher, transports):
+    transports.qmi_imei = "999999999999999"
+    workers = []
+    tty_calls = []
+    now = [100.0]
+
+    def tty_exchange(path, command, **kwargs):
+        tty_calls.append((path, command, kwargs))
+        if path.endswith("1"):
+            if command == "AT+CGSN":
+                return "AT+CGSN\r\n222222222222222\r\nOK\r\n"
+            return "AT\r\nOK\r\n"
+        return "AT\r\nOK\r\n" if command == "AT" else "AT+CGSN\r\n111111111111111\r\nOK\r\n"
+
+    service = ModemControlService(
+        rci_fetcher=rci_fetcher,
+        device_enumerator=transports.devices,
+        runner=transports.runner,
+        tty_exchange=tty_exchange,
+        worker_starter=workers.append,
+        clock=lambda: now[0],
+        sleep=lambda seconds: now.__setitem__(0, now[0] + max(seconds, 1)),
+    )
+    accepted = service.start_reset("UsbQmi1", confirmation="UsbQmi1")
+    workers[0]()
+
+    reset_calls = [(path, command) for path, command, _kwargs in tty_calls if command == "AT+RESET"]
+    assert reset_calls == [("/dev/ttyUSB1", "AT+RESET")]
+    assert service.status(accepted["operation_id"])["modem_id"] == "UsbQmi1"
+
+
+def test_worker_marks_recovered_with_after_snapshot(transports):
+    workers = []
+    now = [100.0]
+    reads_after_reset = [0]
+
+    def runner(argv, **kwargs):
+        result = transports.runner(argv, **kwargs)
+        if "--dms-set-operating-mode=reset" in argv:
+            reads_after_reset[0] = 1
+        return result
+
+    def rci_fetcher(*_args, **_kwargs):
+        if reads_after_reset[0] == 1:
+            reads_after_reset[0] = 2
+            return {"available": False, "items": []}
+        return MODEMS
+
+    service = ModemControlService(
+        rci_fetcher=rci_fetcher,
+        device_enumerator=transports.devices,
+        runner=runner,
+        worker_starter=workers.append,
+        clock=lambda: now[0],
+        sleep=lambda seconds: now.__setitem__(0, now[0] + max(seconds, 1)),
+    )
+
+    accepted = service.start_reset("UsbQmi1", confirmation="UsbQmi1")
+    workers[0]()
+    operation = service.status(accepted["operation_id"])
+
+    assert operation["status"] == "recovered"
+    assert operation["after"]["id"] == "UsbQmi1"
+
+
+def test_worker_marks_failed_when_reset_command_returns_nonzero(transports):
+    transports.reset_returncode = 1
+    workers = []
+    service = ModemControlService(
+        rci_fetcher=lambda *_args, **_kwargs: MODEMS,
+        device_enumerator=transports.devices,
+        runner=transports.runner,
+        worker_starter=workers.append,
+    )
+
+    accepted = service.start_reset("UsbQmi1", confirmation="UsbQmi1")
+    workers[0]()
+    operation = service.status(accepted["operation_id"])
+
+    assert operation["status"] == "failed"
+    assert operation["after"] is None
+    assert operation["code"] == "modem_reset_failed"
 
 
 def test_status_unknown_operation_is_not_substituted(service):
