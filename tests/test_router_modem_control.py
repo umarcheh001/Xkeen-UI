@@ -155,6 +155,25 @@ def test_probe_hard_disables_reset_when_selected_rci_imei_is_absent(transports):
     assert transports.argv == []
 
 
+def test_reset_rejects_selected_rci_modem_without_imei_before_scheduling(transports):
+    inventory = deepcopy(MODEMS)
+    inventory["items"][1].pop("imei")
+    workers = []
+    service = ModemControlService(
+        rci_fetcher=lambda *_args, **_kwargs: inventory,
+        device_enumerator=transports.devices,
+        runner=transports.runner,
+        worker_starter=workers.append,
+    )
+
+    with pytest.raises(ModemControlError) as exc_info:
+        service.start_reset("UsbQmi1", confirmation="UsbQmi1")
+
+    assert exc_info.value.code == "transport_not_matched"
+    assert workers == []
+    assert transports.argv == []
+
+
 def test_probe_reports_missing_qmi_tool_without_raw_exception(rci_fetcher):
     def missing_tool(_argv, **_kwargs):
         raise FileNotFoundError("/secret/qmicli execution details")
@@ -216,6 +235,32 @@ def test_probe_rejects_mismatched_tty_imei_without_positional_fallback(rci_fetch
     assert all(item["available"] is False for item in result["transports"])
     assert "transport_not_matched" in repr(result)
     assert all(command != "AT+RESET" for _path, command, _kwargs in tty_calls)
+
+
+def test_reset_rejects_mismatched_tty_without_scheduling_or_reset(rci_fetcher, transports):
+    transports.qmi_imei = "999999999999999"
+    tty_calls = []
+    workers = []
+
+    def tty_exchange(path, command, **kwargs):
+        tty_calls.append((path, command))
+        return "AT\r\nOK\r\n" if command == "AT" else "AT+CGSN\r\n111111111111111\r\nOK\r\n"
+
+    service = ModemControlService(
+        rci_fetcher=rci_fetcher,
+        device_enumerator=transports.devices,
+        runner=transports.runner,
+        tty_exchange=tty_exchange,
+        worker_starter=workers.append,
+    )
+
+    with pytest.raises(ModemControlError) as exc_info:
+        service.start_reset("UsbQmi1", confirmation="UsbQmi1")
+
+    assert exc_info.value.code == "transport_not_matched"
+    assert workers == []
+    assert all(command != "AT+RESET" for _path, command in tty_calls)
+    assert not any("--dms-set-operating-mode=reset" in call for call in transports.argv)
 
 
 def test_reset_requires_exact_confirmation_and_returns_safe_operation(service):
@@ -297,6 +342,7 @@ def test_worker_tty_reset_targets_only_imei_matched_tty_path(rci_fetcher, transp
 
     reset_calls = [(path, command) for path, command, _kwargs in tty_calls if command == "AT+RESET"]
     assert reset_calls == [("/dev/ttyUSB1", "AT+RESET")]
+    assert not any("--dms-set-operating-mode=reset" in call for call in transports.argv)
     assert service.status(accepted["operation_id"])["modem_id"] == "UsbQmi1"
 
 
