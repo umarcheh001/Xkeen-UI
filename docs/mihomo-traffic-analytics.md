@@ -29,6 +29,25 @@ Mihomo не предоставляет готовую долговременну
 служебные запросы роутера и расхождение периодов двух источников. Интерфейс
 явно маркирует его как оценочный.
 
+## Сверка источников
+
+`summary.total_bytes` собирается на сервере по общему счётчику Keenetic, если
+он доступен, и по Mihomo только когда счётчика нет. Оценочный остаток равен
+общему трафику минус весь наблюдаемый трафик Mihomo. Этот итог используется
+карточками без фильтров, поэтому поток не может исчезнуть или быть учтён
+дважды только потому, что IP не нашёлся в списке клиентов.
+
+Если Mihomo прислал трафик для IP, которого нет в актуальном снимке Keenetic,
+он попадает в отдельную серию `unmatched_mihomo_bytes` и в
+`coverage.unmatched_mihomo_bytes`. Поля `matched_mihomo_bytes` и
+`unmatched_device_count` показывают качество сопоставления. Это подмножество
+трафика Mihomo, а не отдельное слагаемое: такой поток не добавляется повторно
+к `outside_bytes`.
+
+Для диагностики задержки источников снимок также содержит
+`coverage.source_age_seconds`, а усечённые ответы Mihomo отражаются в
+`quality.connections.truncated_samples`.
+
 ## Хранение и приватность
 
 - SQLite: `<UI_STATE_DIR>/mihomo-traffic.sqlite3`;
@@ -64,5 +83,6 @@ XKEEN_MIHOMO_TRAFFIC_DEMO=1 python3 xkeen-ui/run_server.py
 
 ```bash
 npm run traffic:simulate
+npm run traffic:mismatch
 npm run traffic:soak
 ```

@@ -19,7 +19,8 @@ let trafficFilters = { device: '', route: '' };
 const trafficVisibleSeries = new Set(['mihomo', 'outside']);
 const TRAFFIC_SERIES = Object.freeze({
   mihomo: { field: 'mihomo_bytes', label: 'Через Mihomo', tone: 'mihomo' },
-  outside: { field: 'outside_bytes', label: 'Вне Mihomo · оценка', tone: 'outside' },
+  outside: { field: 'outside_bytes', label: 'Оценочный остаток', tone: 'outside' },
+  unmatched: { field: 'unmatched_mihomo_bytes', label: 'Mihomo без пары', tone: 'unmatched' },
   download: { field: 'download_bytes', label: 'Загрузка', tone: 'download' },
   upload: { field: 'upload_bytes', label: 'Отдача', tone: 'upload' },
 });
@@ -156,16 +157,14 @@ function routeKey(item) {
 
 function deviceDownload(device) {
   const explicit = Number(device?.total_download);
-  return Number.isFinite(explicit)
-    ? Math.max(0, explicit)
-    : Math.max(0, Number(device?.mihomo_download) || 0) + Math.max(0, Number(device?.outside_download) || 0);
+  const observed = Math.max(0, Number(device?.mihomo_download) || 0) + Math.max(0, Number(device?.outside_download) || 0);
+  return Math.max(Number.isFinite(explicit) ? explicit : 0, observed, 0);
 }
 
 function deviceUpload(device) {
   const explicit = Number(device?.total_upload);
-  return Number.isFinite(explicit)
-    ? Math.max(0, explicit)
-    : Math.max(0, Number(device?.mihomo_upload) || 0) + Math.max(0, Number(device?.outside_upload) || 0);
+  const observed = Math.max(0, Number(device?.mihomo_upload) || 0) + Math.max(0, Number(device?.outside_upload) || 0);
+  return Math.max(Number.isFinite(explicit) ? explicit : 0, observed, 0);
 }
 
 function filteredTrafficView(payload = trafficPayload) {
@@ -192,6 +191,7 @@ function filteredTrafficView(payload = trafficPayload) {
         total_download: download,
         total_upload: upload,
         total_bytes: download + upload,
+        unmatched_mihomo_bytes: 0,
       };
     })
     .filter((device) => !selectedRoute || device.routes.length > 0);
@@ -210,9 +210,17 @@ function filteredTrafficView(payload = trafficPayload) {
       device_ips: [trafficFilters.device],
     };
   }).filter(Boolean);
+  if (!trafficFilters.device && !trafficFilters.route) {
+    return {
+      summary: { ...(payload?.summary || {}) },
+      devices,
+      routes,
+    };
+  }
   const summary = {
     mihomo_bytes: devices.reduce((total, item) => total + (Number(item?.mihomo_bytes) || 0), 0),
     outside_bytes: devices.reduce((total, item) => total + (Number(item?.outside_bytes) || 0), 0),
+    unmatched_mihomo_bytes: devices.reduce((total, item) => total + (Number(item?.unmatched_mihomo_bytes) || 0), 0),
     download_bytes: devices.reduce((total, item) => total + deviceDownload(item), 0),
     upload_bytes: devices.reduce((total, item) => total + deviceUpload(item), 0),
     device_count: devices.length,
@@ -230,7 +238,7 @@ function renderTrafficSummary(summary = {}) {
     ['Загрузка ↓', formatBytes(summary.download_bytes), 'neutral'],
     ['Отдача ↑', formatBytes(summary.upload_bytes), 'neutral'],
     ['Через Mihomo', formatBytes(summary.mihomo_bytes), 'positive'],
-    ['Вне Mihomo · оценка', formatBytes(summary.outside_bytes), summary.outside_bytes ? 'warning' : 'neutral'],
+    ['Оценочный остаток', formatBytes(summary.outside_bytes), summary.outside_bytes ? 'warning' : 'neutral'],
     ['Устройства / маршруты', `${summary.device_count || 0} / ${summary.route_count || 0}`, 'neutral'],
   ];
   target.innerHTML = cards.map(([label, value, tone]) => (
@@ -403,7 +411,7 @@ function renderTrafficDevices(devices = []) {
     return `<article class="xk-mihomo-traffic-device">
       <header><div><strong>${escapeHtml(device.name || device.ip || 'Устройство')}</strong><span>${escapeHtml(device.ip || '')}</span></div><em>${escapeHtml(formatBytes(total))}</em></header>
       <div class="xk-mihomo-device-split" role="img" aria-label="${escapeHtml(`Через Mihomo ${formatBytes(mihomo)}, вне Mihomo ${formatBytes(outside)}`)}"><i class="is-mihomo" style="width:${total ? mihomo * 100 / total : 0}%"></i><i class="is-outside" style="width:${total ? outside * 100 / total : 0}%"></i></div>
-      <div class="xk-mihomo-device-meta"><span>↓ <strong>${escapeHtml(formatBytes(deviceDownload(device)))}</strong></span><span>↑ <strong>${escapeHtml(formatBytes(deviceUpload(device)))}</strong></span><span>Через Mihomo <strong>${escapeHtml(formatBytes(mihomo))}</strong></span><span>Вне Mihomo · оценка <strong>${escapeHtml(formatBytes(outside))}</strong></span></div>
+      <div class="xk-mihomo-device-meta"><span>↓ <strong>${escapeHtml(formatBytes(deviceDownload(device)))}</strong></span><span>↑ <strong>${escapeHtml(formatBytes(deviceUpload(device)))}</strong></span><span>Через Mihomo <strong>${escapeHtml(formatBytes(mihomo))}</strong></span><span>Оценочный остаток <strong>${escapeHtml(formatBytes(outside))}</strong></span></div>
       <div class="xk-mihomo-device-routes">${routes.length ? routes.map((route) => routeBar(route, Math.max(mihomo, 1))).join('') : '<span class="xk-mihomo-traffic-empty">Маршруты ещё не накоплены.</span>'}</div>
     </article>`;
   }).join('') || '<div class="xk-mihomo-traffic-empty">Устройства появятся после накопления трафика.</div>';
@@ -438,11 +446,26 @@ function stateTone(value) {
   return 'neutral';
 }
 
+function formatAge(value) {
+  const seconds = Number(value);
+  if (!Number.isFinite(seconds)) return '—';
+  if (seconds < 60) return `${Math.max(0, Math.round(seconds))} с`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)} мин`;
+  return `${(seconds / 3600).toFixed(1)} ч`;
+}
+
 function renderTrafficQuality(payload) {
   const quality = payload?.quality || {};
   const connections = quality.connections || {};
   const clients = quality.clients || {};
   const storage = quality.storage || {};
+  const coverage = payload?.coverage || {};
+  const summary = payload?.summary || {};
+  const mihomoBytes = Number(summary.mihomo_bytes) || Number(quality.confirmed_bytes) || 0;
+  const unmatchedBytes = Number(coverage.unmatched_mihomo_bytes) || Number(summary.unmatched_mihomo_bytes) || 0;
+  const matchedBytes = Number(coverage.matched_mihomo_bytes);
+  const matchedValue = Number.isFinite(matchedBytes) ? matchedBytes : Math.max(0, mihomoBytes - unmatchedBytes);
+  const unmatchedDevices = Number(coverage.unmatched_device_count) || 0;
   const state = byId('mihomo-clash-traffic-quality-state');
   if (state) {
     state.textContent = stateCopy(quality.state || payload?.collection?.state);
@@ -452,6 +475,9 @@ function renderTrafficQuality(payload) {
     ['Классифицировано', quality.classification_percent == null ? '—' : `${quality.classification_percent}%`, quality.classification_percent >= 80 ? 'positive' : 'warning'],
     ['Mihomo API', `${stateCopy(connections.state)} · ${connections.errors || 0} ошибок`, stateTone(connections.state)],
     ['Keenetic', `${stateCopy(clients.state)} · ${clients.errors || 0} ошибок`, stateTone(clients.state)],
+    ['Сопоставлено', `${formatBytes(matchedValue)} / ${formatBytes(mihomoBytes)}`, unmatchedBytes ? 'warning' : 'positive'],
+    ['Без пары', unmatchedBytes ? `${formatBytes(unmatchedBytes)} · ${unmatchedDevices} устройств` : 'Нет', unmatchedBytes ? 'warning' : 'positive'],
+    ['Снимки источников', `Mihomo ${formatAge(coverage.source_age_seconds?.mihomo)} · Keenetic ${formatAge(coverage.source_age_seconds?.keenetic)}`, 'neutral'],
     ['Локальная база', formatBytes(storage.database_size_bytes), 'neutral'],
   ];
   const target = byId('mihomo-clash-traffic-quality');
@@ -463,7 +489,7 @@ function renderTrafficQuality(payload) {
     const truncated = Number(connections.truncated_samples) || 0;
     note.textContent = payload?.demo === true
       ? 'Синтетические данные предназначены только для проверки интерфейса и алгоритмов.'
-      : `Статистика VPN является наблюдаемой нижней границей: короткие соединения между снимками могут быть пропущены.${truncated ? ` Снимков с усечённым списком: ${truncated}.` : ''}`;
+      : `Статистика VPN является наблюдаемой нижней границей: короткие соединения между снимками могут быть пропущены.${unmatchedBytes ? ` Не сопоставлено с Keenetic: ${formatBytes(unmatchedBytes)} (${unmatchedDevices} устройств).` : ''}${truncated ? ` Снимков с усечённым списком: ${truncated}.` : ''}`;
   }
 }
 
@@ -507,7 +533,7 @@ function renderTraffic(payload) {
   const coverage = byId('mihomo-clash-traffic-coverage');
   if (coverage) {
     coverage.textContent = payload?.coverage?.keenetic_client_counters
-      ? 'Mihomo + общие счётчики Keenetic · выборочное наблюдение'
+      ? `${payload?.coverage?.unmatched_mihomo_bytes ? 'Есть Mihomo без пары · ' : ''}Mihomo + общие счётчики Keenetic · выборочное наблюдение`
       : 'Только трафик через Mihomo · выборочное наблюдение';
   }
 }

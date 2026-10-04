@@ -91,6 +91,39 @@ def test_collector_attributes_deltas_to_device_route_and_resource(tmp_path: Path
     assert payload["quality"]["storage"]["database_size_bytes"] > 0
 
 
+def test_collector_marks_mihomo_bytes_without_matching_client_identity(tmp_path: Path):
+    scenario = MihomoTrafficScenario()
+    scenario.add_device("192.0.2.10", "Ноутбук")
+    collector = MihomoTrafficAnalyticsCollector(
+        db_path=str(tmp_path / "traffic.sqlite3"),
+        connections_factory=scenario.connections_snapshot,
+        clients_factory=scenario.clients_snapshot,
+        clock=scenario.clock,
+    )
+    collector._sample_connections(scenario.clock())
+    collector._sample_clients(scenario.clock())
+    connection_id = scenario.transfer(
+        "192.0.2.10",
+        download=100 * 1024 * 1024,
+        route="AUTO",
+        node="VPN-A",
+        resource="mismatch.example",
+    )
+    scenario.connections[connection_id].device_ip = "unknown"
+    scenario.clock.advance(30)
+    collector._sample_connections(scenario.clock())
+    collector._sample_clients(scenario.clock())
+
+    payload = collector.summary(range_seconds=3600)
+
+    assert payload["summary"]["mihomo_bytes"] == 100 * 1024 * 1024
+    assert payload["summary"]["outside_bytes"] == 0
+    assert payload["summary"]["total_bytes"] == 100 * 1024 * 1024
+    assert payload["coverage"]["unmatched_mihomo_bytes"] == 100 * 1024 * 1024
+    assert payload["coverage"]["matched_mihomo_bytes"] == 0
+    assert payload["coverage"]["unmatched_device_count"] == 1
+
+
 def test_collector_does_not_count_existing_connections_on_first_snapshot(tmp_path: Path):
     clock = Clock()
     collector = MihomoTrafficAnalyticsCollector(

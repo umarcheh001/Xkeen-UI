@@ -102,6 +102,10 @@ function trafficPayload() {
       keenetic_client_counters: true,
       outside_estimated: true,
       outside_method: 'keenetic_total_minus_mihomo',
+      matched_mihomo_bytes: 900_000_000,
+      unmatched_mihomo_bytes: 0,
+      unmatched_device_count: 0,
+      source_age_seconds: { mihomo: 0, keenetic: 0 },
     },
     quality: {
       state: 'demo',
@@ -156,6 +160,33 @@ function emptyTrafficPayload() {
   };
 }
 
+function mismatchTrafficPayload() {
+  const payload = trafficPayload();
+  const unmatched = 100 * 1024 * 1024;
+  payload.summary = {
+    ...payload.summary,
+    mihomo_bytes: payload.summary.mihomo_bytes + unmatched,
+    outside_bytes: 0,
+    device_count: 3,
+  };
+  payload.devices.push({
+    ip: 'unknown', name: 'Неизвестное устройство', total_bytes: unmatched,
+    mihomo_bytes: unmatched, outside_bytes: 0,
+    total_download: 0, total_upload: 0,
+    mihomo_download: unmatched, mihomo_upload: 0,
+    outside_download: 0, outside_upload: 0,
+    unmatched_mihomo_bytes: unmatched,
+    routes: [{ route: 'AUTO', node: 'vpn-a', download: unmatched, upload: 0 }],
+  });
+  payload.coverage = {
+    ...payload.coverage,
+    matched_mihomo_bytes: 900 * 1024 * 1024,
+    unmatched_mihomo_bytes: unmatched,
+    unmatched_device_count: 1,
+  };
+  return payload;
+}
+
 
 async function openDiagnostics(page, viewport, analytics = trafficPayload()) {
   await page.setViewportSize(viewport);
@@ -203,18 +234,21 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
     await page.mouse.move(0, 0);
     // The last clicked button animates its background; read the state only
     // after the transition has settled instead of mid-way (rgba … 0.925).
-    await expect.poll(() => page.locator('[data-mihomo-traffic-series]').evaluateAll(
+    await expect.poll(() => page.locator('[data-mihomo-traffic-series][aria-pressed="true"]').evaluateAll(
       (buttons) => new Set(buttons.map((button) => getComputedStyle(button).backgroundColor)).size,
     )).toBe(1);
     const seriesState = await page.locator('[data-mihomo-traffic-series]').evaluateAll((buttons) => buttons.map((button) => ({
+      key: button.dataset.mihomoTrafficSeries,
       pressed: button.getAttribute('aria-pressed'),
       active: button.classList.contains('is-active'),
       background: getComputedStyle(button).backgroundColor,
       color: getComputedStyle(button).color,
     })));
-    expect(seriesState.every((item) => item.pressed === 'true' && item.active)).toBe(true);
-    expect(new Set(seriesState.map((item) => item.background)).size).toBe(1);
-    expect(new Set(seriesState.map((item) => item.color)).size).toBe(1);
+    expect(seriesState.filter((item) => item.key !== 'unmatched').every((item) => item.pressed === 'true' && item.active)).toBe(true);
+    expect(seriesState.find((item) => item.key === 'unmatched')).toMatchObject({ pressed: 'false', active: false });
+    const activeSeriesState = seriesState.filter((item) => item.key !== 'unmatched');
+    expect(new Set(activeSeriesState.map((item) => item.background)).size).toBe(1);
+    expect(new Set(activeSeriesState.map((item) => item.color)).size).toBe(1);
     if (viewport.width >= 800) {
       const hit = page.locator('#mihomo-clash-traffic-chart [data-chart-hit]');
       const box = await hit.boundingBox();
@@ -336,4 +370,14 @@ test('empty analytics keeps six desktop metrics compact and separates filters fr
   expect(layout.filterQualityGap).toBeGreaterThanOrEqual(20);
   expect(layout.qualityChartGap).toBeGreaterThanOrEqual(20);
   expect(layout.overflow).toBeLessThanOrEqual(1);
+});
+
+test('unmatched Mihomo bytes stay in the canonical total', async ({ page }) => {
+  await openDiagnostics(page, { width: 1440, height: 900 }, mismatchTrafficPayload());
+  const cards = page.locator('#mihomo-clash-traffic-summary .xk-mihomo-diagnostic-stat');
+  await expect(cards).toHaveCount(6);
+  await expect(cards.nth(0)).toContainText('1000 МБ');
+  await expect(cards.nth(3)).toContainText('1000 МБ');
+  await expect(page.locator('#mihomo-clash-traffic-devices')).toContainText('Неизвестное устройство');
+  await expect(page.locator('#mihomo-clash-traffic-quality')).toContainText('Без пары');
 });

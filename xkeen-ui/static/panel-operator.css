@@ -1966,6 +1966,7 @@ body.panel-page .xk-mihomo-traffic-series button i {
 }
 body.panel-page .xk-mihomo-traffic-series button[data-mihomo-traffic-series="mihomo"] i { background: var(--op-accent); }
 body.panel-page .xk-mihomo-traffic-series button[data-mihomo-traffic-series="outside"] i { background: var(--op-warning); }
+body.panel-page .xk-mihomo-traffic-series button[data-mihomo-traffic-series="unmatched"] i { background: var(--op-danger); }
 body.panel-page .xk-mihomo-traffic-series button[data-mihomo-traffic-series="download"] i { background: var(--op-info, #42a5e8); }
 body.panel-page .xk-mihomo-traffic-series button[data-mihomo-traffic-series="upload"] i { background: var(--op-danger); }
 body.panel-page .xk-mihomo-traffic-chart {
@@ -2070,6 +2071,7 @@ body.panel-page .xk-mihomo-traffic-chart-stat > header i {
 }
 body.panel-page .xk-mihomo-traffic-chart-stat[data-series="mihomo"] header i { background: var(--op-accent); }
 body.panel-page .xk-mihomo-traffic-chart-stat[data-series="outside"] header i { background: var(--op-warning); }
+body.panel-page .xk-mihomo-traffic-chart-stat[data-series="unmatched"] header i { background: var(--op-danger); }
 body.panel-page .xk-mihomo-traffic-chart-stat[data-series="download"] header i { background: var(--op-info, #42a5e8); }
 body.panel-page .xk-mihomo-traffic-chart-stat[data-series="upload"] header i { background: var(--op-danger); }
 body.panel-page .xk-mihomo-traffic-chart-stat dl {

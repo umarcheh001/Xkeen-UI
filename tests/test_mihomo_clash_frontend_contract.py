@@ -730,7 +730,7 @@ def test_diagnostics_traffic_analytics_exposes_devices_routes_and_history():
         "filteredTrafficView",
         "exportTraffic",
         "classification_percent",
-        "Вне Mihomo · оценка",
+        "Оценочный остаток",
         "Демо-режим: показаны синтетические устройства",
         ".xk-mihomo-traffic-svg",
         ".xk-mihomo-traffic-device",

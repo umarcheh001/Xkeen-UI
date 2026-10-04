@@ -100,6 +100,50 @@ def run_reference(database: Path) -> dict[str, Any]:
     }
 
 
+def run_mismatch(database: Path) -> dict[str, Any]:
+    """Exercise the identity-mismatch path used by the live collector."""
+    scenario = MihomoTrafficScenario()
+    scenario.add_device("192.168.1.24", "Ноутбук")
+    collector = _collector(scenario, database)
+    _baseline(collector, scenario)
+    connection_id = scenario.transfer(
+        "192.168.1.24",
+        download=100 * MIB,
+        route="AUTO",
+        node="VPN-A",
+        resource="mismatch.example",
+    )
+    assert connection_id is not None
+    scenario.connections[connection_id].device_ip = "unknown"
+    scenario.clock.advance(30)
+    collector._sample_connections(scenario.clock())
+    collector._sample_clients(scenario.clock())
+    collector._flush_pending()
+    payload = collector.summary(range_seconds=3600)
+    expected = {
+        "mihomo_bytes": 100 * MIB,
+        "outside_bytes": 0,
+        "total_bytes": 100 * MIB,
+        "unmatched_mihomo_bytes": 100 * MIB,
+        "unmatched_device_count": 1,
+    }
+    actual = {
+        "mihomo_bytes": payload["summary"]["mihomo_bytes"],
+        "outside_bytes": payload["summary"]["outside_bytes"],
+        "total_bytes": payload["summary"]["total_bytes"],
+        "unmatched_mihomo_bytes": payload["coverage"]["unmatched_mihomo_bytes"],
+        "unmatched_device_count": payload["coverage"]["unmatched_device_count"],
+    }
+    return {
+        "scenario": "mismatch",
+        "ok": actual == expected,
+        "expected": expected,
+        "actual": actual,
+        "analytics": payload,
+        "database": str(database),
+    }
+
+
 def run_soak(database: Path, *, days: int) -> dict[str, Any]:
     scenario = MihomoTrafficScenario()
     scenario.add_device("192.168.1.24", "Ноутбук")
@@ -192,7 +236,7 @@ def run_soak(database: Path, *, days: int) -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--scenario", choices=("reference", "soak"), default="reference")
+    parser.add_argument("--scenario", choices=("reference", "mismatch", "soak"), default="reference")
     parser.add_argument("--days", type=int, default=7)
     parser.add_argument("--database", type=Path)
     parser.add_argument("--output", type=Path)
@@ -201,11 +245,12 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="xkeen-traffic-lab-") as temporary:
         database = args.database or Path(temporary) / "mihomo-traffic.sqlite3"
         database.parent.mkdir(parents=True, exist_ok=True)
-        result = (
-            run_reference(database)
-            if args.scenario == "reference"
-            else run_soak(database, days=max(1, min(14, args.days)))
-        )
+        if args.scenario == "reference":
+            result = run_reference(database)
+        elif args.scenario == "mismatch":
+            result = run_mismatch(database)
+        else:
+            result = run_soak(database, days=max(1, min(14, args.days)))
         text = json.dumps(result, ensure_ascii=False, indent=2)
         if args.output:
             args.output.parent.mkdir(parents=True, exist_ok=True)

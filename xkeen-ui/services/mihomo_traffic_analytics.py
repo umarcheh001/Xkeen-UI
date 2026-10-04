@@ -219,10 +219,16 @@ class MihomoTrafficAnalyticsCollector:
                 pass
         return connection
 
+    @staticmethod
+    def _close_connection(connection: sqlite3.Connection) -> None:
+        """`sqlite3.Connection` contexts commit but do not close on Windows."""
+        connection.close()
+
     def _init_db(self) -> None:
         path = Path(self.db_path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        with self._connect() as connection:
+        connection = self._connect()
+        try:
             connection.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS traffic_route (
@@ -278,6 +284,9 @@ class MihomoTrafficAnalyticsCollector:
                 connection.execute(
                     "ALTER TABLE traffic_total ADD COLUMN mihomo_upload INTEGER NOT NULL DEFAULT 0"
                 )
+            connection.commit()
+        finally:
+            self._close_connection(connection)
         try:
             os.chmod(path, 0o600)
         except OSError:
@@ -491,7 +500,8 @@ class MihomoTrafficAnalyticsCollector:
             return
         route_rows = self._top_rows(routes, per_bucket=MAX_ROUTE_ROWS_PER_BUCKET)
         resource_rows = self._top_rows(resources, per_bucket=MAX_RESOURCE_ROWS_PER_BUCKET)
-        with self._connect() as connection:
+        connection = self._connect()
+        try:
             connection.executemany(
                 """
                 INSERT INTO traffic_route
@@ -564,13 +574,20 @@ class MihomoTrafficAnalyticsCollector:
                     """,
                     (bucket, bucket, MAX_RESOURCE_ROWS_PER_BUCKET),
                 )
+            connection.commit()
+        finally:
+            self._close_connection(connection)
 
     def _prune(self, now: int) -> None:
         cutoff = _bucket(now - self.retention_seconds)
         try:
-            with self._connect() as connection:
+            connection = self._connect()
+            try:
                 for table in ("traffic_route", "traffic_resource", "traffic_total"):
                     connection.execute(f"DELETE FROM {table} WHERE bucket < ?", (cutoff,))
+                connection.commit()
+            finally:
+                self._close_connection(connection)
         except sqlite3.DatabaseError:
             return
 
@@ -608,7 +625,8 @@ class MihomoTrafficAnalyticsCollector:
         now = int(self.clock())
         seconds = max(15 * 60, min(self.retention_seconds, int(range_seconds)))
         start = _bucket(now - seconds)
-        with self._connect() as connection:
+        connection = self._connect()
+        try:
             route_rows = connection.execute(
                 """
                 SELECT bucket, device_ip, device_name, route, node, download, upload
@@ -632,6 +650,8 @@ class MihomoTrafficAnalyticsCollector:
                 """,
                 (start,),
             ).fetchall()
+        finally:
+            self._close_connection(connection)
         pending_routes, pending_resources, pending_totals = self._pending_snapshot(start)
         route_rows.extend(pending_routes)
         resource_rows.extend(pending_resources)
@@ -641,9 +661,23 @@ class MihomoTrafficAnalyticsCollector:
             for row in total_rows
             if len(row) >= 10 and (_counter(row[8]) or _counter(row[9]))
         }
+        client_total_keys = {
+            (int(row[0]), str(row[1]))
+            for row in total_rows
+            if len(row) >= 8 and _counter(row[7])
+        }
 
         series: dict[int, dict[str, int]] = defaultdict(
-            lambda: {"mihomo_download": 0, "mihomo_upload": 0, "outside_download": 0, "outside_upload": 0}
+            lambda: {
+                "mihomo_download": 0,
+                "mihomo_upload": 0,
+                "outside_download": 0,
+                "outside_upload": 0,
+                "reported_download": 0,
+                "reported_upload": 0,
+                "unmatched_download": 0,
+                "unmatched_upload": 0,
+            }
         )
         devices: dict[str, dict[str, Any]] = {}
         routes: dict[tuple[str, str], dict[str, Any]] = {}
@@ -651,9 +685,14 @@ class MihomoTrafficAnalyticsCollector:
 
         for bucket, device_ip, device_name, route, node, download, upload in route_rows:
             down, up = _counter(download), _counter(upload)
-            if (int(bucket), str(device_ip)) not in total_mihomo_keys:
+            bucket_device_key = (int(bucket), str(device_ip))
+            unmatched = bucket_device_key not in client_total_keys
+            if bucket_device_key not in total_mihomo_keys:
                 series[int(bucket)]["mihomo_download"] += down
                 series[int(bucket)]["mihomo_upload"] += up
+            if unmatched:
+                series[int(bucket)]["unmatched_download"] += down
+                series[int(bucket)]["unmatched_upload"] += up
             device = devices.setdefault(
                 str(device_ip),
                 {
@@ -665,14 +704,19 @@ class MihomoTrafficAnalyticsCollector:
                     "outside_upload": 0,
                     "total_download": 0,
                     "total_upload": 0,
+                    "unmatched_mihomo_download": 0,
+                    "unmatched_mihomo_upload": 0,
                     "routes": {},
                 },
             )
             if device_name:
                 device["name"] = str(device_name)
-            if (int(bucket), str(device_ip)) not in total_mihomo_keys:
+            if bucket_device_key not in total_mihomo_keys:
                 device["mihomo_download"] += down
                 device["mihomo_upload"] += up
+            if unmatched:
+                device["unmatched_mihomo_download"] += down
+                device["unmatched_mihomo_upload"] += up
             route_key = (str(route), str(node))
             device_route = device["routes"].setdefault(
                 route_key,
@@ -732,6 +776,8 @@ class MihomoTrafficAnalyticsCollector:
             down, up = _counter(download), _counter(upload)
             outside_down, outside_up = _counter(outside_download), _counter(outside_upload)
             rci_samples += _counter(samples)
+            series[int(bucket)]["reported_download"] += down
+            series[int(bucket)]["reported_upload"] += up
             series[int(bucket)]["outside_download"] += outside_down
             series[int(bucket)]["outside_upload"] += outside_up
             series[int(bucket)]["mihomo_download"] += mihomo_download
@@ -747,6 +793,8 @@ class MihomoTrafficAnalyticsCollector:
                     "outside_upload": 0,
                     "total_download": 0,
                     "total_upload": 0,
+                    "unmatched_mihomo_download": 0,
+                    "unmatched_mihomo_upload": 0,
                     "routes": {},
                 },
             )
@@ -805,6 +853,9 @@ class MihomoTrafficAnalyticsCollector:
             device["mihomo_bytes"] = mihomo_total
             device["outside_bytes"] = outside_total
             device["total_bytes"] = max(reported_total, mihomo_total + outside_total)
+            device["unmatched_mihomo_bytes"] = (
+                device["unmatched_mihomo_download"] + device["unmatched_mihomo_upload"]
+            )
             device_items.append(device)
         device_items.sort(key=lambda item: item["total_bytes"], reverse=True)
 
@@ -842,14 +893,20 @@ class MihomoTrafficAnalyticsCollector:
         while cursor <= _bucket(now):
             item = series.get(cursor, {})
             mihomo = _counter(item.get("mihomo_download")) + _counter(item.get("mihomo_upload"))
-            outside = _counter(item.get("outside_download")) + _counter(item.get("outside_upload"))
-            download = _counter(item.get("mihomo_download")) + _counter(item.get("outside_download"))
-            upload = _counter(item.get("mihomo_upload")) + _counter(item.get("outside_upload"))
+            reported_download = _counter(item.get("reported_download"))
+            reported_upload = _counter(item.get("reported_upload"))
+            download = max(reported_download, _counter(item.get("mihomo_download")))
+            upload = max(reported_upload, _counter(item.get("mihomo_upload")))
+            outside = max(0, download - _counter(item.get("mihomo_download"))) + max(
+                0, upload - _counter(item.get("mihomo_upload"))
+            )
+            unmatched = _counter(item.get("unmatched_download")) + _counter(item.get("unmatched_upload"))
             series_items.append(
                 {
                     "at": cursor,
                     "mihomo_bytes": mihomo,
                     "outside_bytes": outside,
+                    "unmatched_mihomo_bytes": unmatched,
                     "download_bytes": download,
                     "upload_bytes": upload,
                     "total_bytes": download + upload,
@@ -859,24 +916,35 @@ class MihomoTrafficAnalyticsCollector:
 
         mihomo_download = sum(item["mihomo_download"] for item in device_items)
         mihomo_upload = sum(item["mihomo_upload"] for item in device_items)
-        outside_download = sum(item["outside_download"] for item in device_items)
-        outside_upload = sum(item["outside_upload"] for item in device_items)
         mihomo_bytes = mihomo_download + mihomo_upload
+        reported_download = sum(item["total_download"] for item in device_items)
+        reported_upload = sum(item["total_upload"] for item in device_items)
+        download_bytes = max(reported_download, mihomo_download)
+        upload_bytes = max(reported_upload, mihomo_upload)
+        outside_download = max(0, download_bytes - mihomo_download)
+        outside_upload = max(0, upload_bytes - mihomo_upload)
         outside_bytes = outside_download + outside_upload
-        total_bytes = mihomo_bytes + outside_bytes
+        unmatched_mihomo_bytes = sum(
+            _counter(item.get("unmatched_mihomo_bytes")) for item in device_items
+        )
+        matched_mihomo_bytes = max(0, mihomo_bytes - unmatched_mihomo_bytes)
+        total_bytes = download_bytes + upload_bytes
         database_size = 0
         for suffix in ("", "-wal", "-shm"):
             try:
                 database_size += max(0, os.path.getsize(f"{self.db_path}{suffix}"))
             except OSError:
                 pass
-        with self._connect() as connection:
+        connection = self._connect()
+        try:
             storage_rows = {
                 table: int(
                     connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
                 )
                 for table in ("traffic_route", "traffic_resource", "traffic_total")
             }
+        finally:
+            self._close_connection(connection)
         with self._lock:
             connection_age = (
                 max(0, now - self._last_connection_success_at)
@@ -937,7 +1005,7 @@ class MihomoTrafficAnalyticsCollector:
                 ),
                 "confirmed_bytes": mihomo_bytes,
                 "estimated_bytes": outside_bytes,
-                "unclassified_bytes": None if not rci_samples else 0,
+                "unclassified_bytes": unmatched_mihomo_bytes,
                 "connections": {
                     "state": connection_state,
                     "samples": self._connection_samples,
@@ -972,8 +1040,10 @@ class MihomoTrafficAnalyticsCollector:
                 "outside_bytes": outside_bytes,
                 "outside_download_bytes": outside_download,
                 "outside_upload_bytes": outside_upload,
-                "download_bytes": mihomo_download + outside_download,
-                "upload_bytes": mihomo_upload + outside_upload,
+                "unmatched_mihomo_bytes": unmatched_mihomo_bytes,
+                "matched_mihomo_bytes": matched_mihomo_bytes,
+                "download_bytes": download_bytes,
+                "upload_bytes": upload_bytes,
                 "total_bytes": total_bytes,
                 "device_count": len(device_items),
                 "route_count": len(route_items),
@@ -987,8 +1057,20 @@ class MihomoTrafficAnalyticsCollector:
                 "mihomo": True,
                 "keenetic_client_counters": rci_samples > 0,
                 "outside_estimated": True,
-                "outside_method": "keenetic_total_minus_mihomo",
+                "outside_method": "keenetic_total_minus_all_mihomo",
                 "mihomo_method": "connection_delta_sampling",
+                "matched_mihomo_bytes": matched_mihomo_bytes,
+                "unmatched_mihomo_bytes": unmatched_mihomo_bytes,
+                "unmatched_device_count": sum(
+                    1 for item in device_items if _counter(item.get("unmatched_mihomo_bytes"))
+                ),
+                "client_device_count": len(
+                    {str(row[1]) for row in total_rows if len(row) >= 8 and _counter(row[7])}
+                ),
+                "source_age_seconds": {
+                    "mihomo": connection_age,
+                    "keenetic": client_age,
+                },
                 "accuracy": "observed_lower_bound",
             },
             "collection": collection,
