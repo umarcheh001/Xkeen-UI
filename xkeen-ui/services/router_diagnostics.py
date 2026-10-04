@@ -437,18 +437,26 @@ def sample_router_lte(
 ) -> dict[str, Any]:
     """Probe optional modem branches on demand; LTE absence is not an error."""
     sampled_at = int(clock())
+    successful_fetch = False
     # Current KeeneticOS exposes UsbQmi/UsbLte radio metrics directly inside
     # show/interface.  Older releases may still have one of the dedicated
     # branches below.
     for path in ("show/interface", "show/lte", "show/modem", "show/usb/modem"):
         try:
             result = normalize_lte(rci_fetcher(path), sampled_at=sampled_at)
+            successful_fetch = True
             result["source"] = path
+            result["rci_available"] = True
             if result.get("available"):
                 return result
         except RciUnavailable:
             continue
-    return {"available": False, "sampled_at": sampled_at}
+    return {
+        "available": False,
+        "rci_available": successful_fetch,
+        "sampled_at": sampled_at,
+        "items": [],
+    }
 
 
 def _ping_numbers(output: str) -> list[float]:

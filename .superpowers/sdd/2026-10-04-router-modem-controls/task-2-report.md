@@ -51,6 +51,7 @@ Additional checks:
 - Inventory reads now return an availability flag. Recovery marks disappearance only after a successful `available=true` inventory; transient RCI errors cannot produce a false `recovered` result.
 - Worker execution has a `finally` release path and a terminal safe error for a missing target or unexpected worker failure, so the per-modem active slot cannot remain stuck.
 - Added an explicit injectable `sampler` constructor dependency while retaining `sample_router_lte` as the live default. The compatibility path for already-normalised test fixtures is bounded by the public snapshot sanitizer.
+- Public snapshots keep only bounded scalar fields and a bounded allowlist of carrier fields; arbitrary nested containers are omitted. A nonzero QMI probe has the stable public code `qmi_probe_failed`.
 - Added coverage for the `before` response, transient RCI failure, target cleanup, and sampler injection.
 
 Fix verification:
@@ -58,4 +59,16 @@ Fix verification:
 ```text
 python -m pytest -q tests/test_router_modem_control.py tests/test_router_diagnostics.py -k lte tests/test_system_resources.py -k router
 61 passed, 12 deselected in 0.46s
+```
+
+## Empty-inventory review fix
+
+`sample_router_lte` now emits `rci_available=true` after a successful RCI read even when normalization produces zero modems. The modem service uses that metadata to confirm a real disappearance; transport/RCI errors remain unavailable and cannot advance recovery. Public snapshots accept bounded scalar fields and a bounded carrier allowlist only, and `qmi_probe_failed` is the stable code for a nonzero QMI probe.
+
+```text
+python -m pytest -q tests/test_router_modem_control.py
+35 passed in 0.18s
+
+python -m pytest -q tests/test_router_diagnostics.py -k lte tests/test_system_resources.py -k router
+29 passed, 12 deselected in 0.38s
 ```

@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from pathlib import Path
 
 from services.router_diagnostics import (
+    RciUnavailable,
     channel_check,
     fetch_rci_json,
     normalize_internet_status,
@@ -329,6 +330,19 @@ def test_client_and_lte_samplers_use_current_keenetic_branches():
     assert [item["id"] for item in lte["items"]] == ["UsbQmi0", "UsbQmi1"]
     assert lte["technology"] == "4G+"
     assert requested == ["show/ip/hotspot", "show/interface"]
+
+
+def test_lte_sampler_marks_successful_empty_inventory_distinct_from_rci_failure():
+    def fetch(path):
+        if path == "show/interface":
+            return {}
+        raise RciUnavailable("unavailable")
+
+    result = sample_router_lte(rci_fetcher=fetch, clock=lambda: 42)
+
+    assert result["available"] is False
+    assert result["rci_available"] is True
+    assert result["items"] == []
 
 
 def test_lte_inventory_keeps_exact_modem_ids_and_identity_fields_for_control_plane():

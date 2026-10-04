@@ -148,15 +148,17 @@ def _safe_snapshot(raw: Mapping[str, Any]) -> dict[str, Any]:
     for key in allowed:
         if key not in raw or key in {"imei", "sim"}:
             continue
+        if key == "carriers":
+            continue
         value = raw[key]
         if isinstance(value, str):
             text = value[:_SNAPSHOT_LIMITS.get(key, 128)]
             text = IMEI_RE.sub("<redacted>", text)
             text = re.sub(r"/dev/[A-Za-z0-9._/-]+", "<redacted>", text)
             snapshot[key] = text
-        else:
+        elif isinstance(value, (bool, int, float)) or value is None:
             snapshot[key] = copy.deepcopy(value)
-    carriers = snapshot.get("carriers")
+    carriers = raw.get("carriers")
     if isinstance(carriers, list):
         carrier_keys = {
             "technology", "band", "bandwidth", "earfcn", "phy_cell_id",
@@ -269,6 +271,8 @@ class ModemControlService:
     def _inventory_available(result: Any) -> bool:
         if not isinstance(result, Mapping):
             return False
+        if result.get("rci_available") is True:
+            return True
         if "available" in result:
             return result.get("available") is True
         return bool(_modem_items(result))

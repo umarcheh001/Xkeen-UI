@@ -191,6 +191,22 @@ def test_probe_reports_missing_qmi_tool_without_raw_exception(rci_fetcher):
     assert "/secret" not in repr(result)
 
 
+def test_probe_maps_qmi_nonzero_to_stable_safe_code(transports):
+    def failed_probe(argv, **kwargs):
+        assert "--dms-get-ids" in argv
+        return SimpleNamespace(returncode=1, stdout="", stderr="private qmi details")
+
+    service = ModemControlService(
+        sampler=lambda: MODEMS,
+        device_enumerator=lambda: {"qmi": ["/dev/cdc-wdm1"], "tty": []},
+        runner=failed_probe,
+    )
+    result = service.probe("UsbQmi1")
+
+    assert result["code"] == "qmi_probe_failed"
+    assert "private qmi details" not in repr(result)
+
+
 def test_probe_falls_back_to_tty_only_after_at_and_cgsn_imei_match(rci_fetcher, transports):
     transports.qmi_imei = "999999999999999"
     tty_calls = []
@@ -383,6 +399,46 @@ def test_worker_marks_recovered_with_after_snapshot(transports):
 
     assert operation["status"] == "recovered"
     assert operation["after"]["id"] == "UsbQmi1"
+
+
+def test_default_sampler_recovers_after_successful_empty_inventory(transports):
+    workers = []
+    now = [100.0]
+    reset_started = [False]
+    empty_reads = [0]
+    payload = {
+        "UsbQmi1": {
+            "id": "UsbQmi1", "type": "UsbQmi", "description": "T2_STATIC",
+            "imei": "222222222222222", "operator": "Tele2", "rsrp": -73,
+        },
+    }
+
+    def fetch(path):
+        if not reset_started[0]:
+            return payload
+        empty_reads[0] += 1
+        if empty_reads[0] <= 5:
+            return {}
+        return payload
+
+    def runner(argv, **kwargs):
+        result = transports.runner(argv, **kwargs)
+        if "--dms-set-operating-mode=reset" in argv:
+            reset_started[0] = True
+        return result
+
+    service = ModemControlService(
+        rci_fetcher=fetch,
+        device_enumerator=transports.devices,
+        runner=runner,
+        worker_starter=workers.append,
+        clock=lambda: now[0],
+        sleep=lambda seconds: now.__setitem__(0, now[0] + max(seconds, 1)),
+    )
+    accepted = service.start_reset("UsbQmi1", confirmation="UsbQmi1")
+    workers[0]()
+
+    assert service.status(accepted["operation_id"])["status"] == "recovered"
 
 
 def test_worker_does_not_confirm_disappearance_after_transient_rci_failure(transports):
