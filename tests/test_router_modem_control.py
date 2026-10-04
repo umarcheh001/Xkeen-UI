@@ -70,6 +70,7 @@ def transports():
 def service(rci_fetcher, transports):
     return ModemControlService(
         rci_fetcher=rci_fetcher,
+        sampler=lambda: MODEMS,
         device_enumerator=transports.devices,
         runner=transports.runner,
         clock=lambda: 100.0,
@@ -282,6 +283,9 @@ def test_duplicate_active_reset_is_rejected(service):
 
 def test_reset_operation_state_has_terminal_contract_and_redacts_command_output(service, transports):
     accepted = service.start_reset("UsbQmi1", confirmation="UsbQmi1")
+    assert accepted["before"]["id"] == "UsbQmi1"
+    assert "imei" not in accepted["before"]
+    assert "222222222222222" not in repr(accepted["before"])
     operation = service.status(accepted["operation_id"])
 
     assert operation["status"] in {"queued", "running", "waiting_for_modem", "recovered", "failed", "timed_out"}
@@ -360,11 +364,12 @@ def test_worker_marks_recovered_with_after_snapshot(transports):
     def rci_fetcher(*_args, **_kwargs):
         if reads_after_reset[0] == 1:
             reads_after_reset[0] = 2
-            return {"available": False, "items": []}
+            return {"available": True, "items": []}
         return MODEMS
 
     service = ModemControlService(
         rci_fetcher=rci_fetcher,
+        sampler=lambda: rci_fetcher("show/interface"),
         device_enumerator=transports.devices,
         runner=runner,
         worker_starter=workers.append,
@@ -378,6 +383,59 @@ def test_worker_marks_recovered_with_after_snapshot(transports):
 
     assert operation["status"] == "recovered"
     assert operation["after"]["id"] == "UsbQmi1"
+
+
+def test_worker_does_not_confirm_disappearance_after_transient_rci_failure(transports):
+    workers = []
+    now = [100.0]
+    reads_after_reset = [0]
+
+    def runner(argv, **kwargs):
+        result = transports.runner(argv, **kwargs)
+        if "--dms-set-operating-mode=reset" in argv:
+            reads_after_reset[0] = 1
+        return result
+
+    def sampler():
+        if reads_after_reset[0] == 1:
+            reads_after_reset[0] = 2
+            return {"available": False, "items": [], "state": "unavailable"}
+        return MODEMS
+
+    service = ModemControlService(
+        sampler=sampler,
+        device_enumerator=transports.devices,
+        runner=runner,
+        worker_starter=workers.append,
+        clock=lambda: now[0],
+        sleep=lambda seconds: now.__setitem__(0, now[0] + max(seconds, 1)),
+    )
+    accepted = service.start_reset("UsbQmi1", confirmation="UsbQmi1")
+    workers[0]()
+
+    operation = service.status(accepted["operation_id"])
+    assert operation["status"] == "timed_out"
+
+
+def test_worker_releases_active_slot_when_target_disappears(transports):
+    workers = []
+    service = ModemControlService(
+        sampler=lambda: MODEMS,
+        device_enumerator=transports.devices,
+        runner=transports.runner,
+        worker_starter=workers.append,
+        clock=lambda: 100.0,
+        sleep=lambda _seconds: None,
+    )
+    accepted = service.start_reset("UsbQmi1", confirmation="UsbQmi1")
+    service._targets.pop(accepted["operation_id"])
+    workers[0]()
+
+    operation = service.status(accepted["operation_id"])
+    assert operation["status"] == "failed"
+    assert operation["code"] == "modem_operation_target_missing"
+    second = service.start_reset("UsbQmi1", confirmation="UsbQmi1")
+    assert second["operation_id"] != accepted["operation_id"]
 
 
 def test_worker_marks_failed_when_reset_command_returns_nonzero(transports):

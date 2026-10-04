@@ -44,3 +44,18 @@ Additional checks:
 - No route or frontend code was changed; routes must instantiate/inject this service in the next task.
 - The compatibility path for an injected already-normalised RCI fixture is kept internal and does not alter the shared router normalizer.
 - Real router reset was not executed in this task because the service is not exposed by a route yet; the later route/integration task should run a read-only probe first and limit reset validation to `T2_STATIC`.
+
+## Review fixes
+
+- `start_reset` now returns the redacted `before` snapshot alongside the operation id, modem id, status, and transport.
+- Inventory reads now return an availability flag. Recovery marks disappearance only after a successful `available=true` inventory; transient RCI errors cannot produce a false `recovered` result.
+- Worker execution has a `finally` release path and a terminal safe error for a missing target or unexpected worker failure, so the per-modem active slot cannot remain stuck.
+- Added an explicit injectable `sampler` constructor dependency while retaining `sample_router_lte` as the live default. The compatibility path for already-normalised test fixtures is bounded by the public snapshot sanitizer.
+- Added coverage for the `before` response, transient RCI failure, target cleanup, and sampler injection.
+
+Fix verification:
+
+```text
+python -m pytest -q tests/test_router_modem_control.py tests/test_router_diagnostics.py -k lte tests/test_system_resources.py -k router
+61 passed, 12 deselected in 0.46s
+```

@@ -37,6 +37,13 @@ RESET_TIMEOUT_SECONDS = 30.0
 RECOVERY_POLL_SECONDS = 1.0
 OPERATION_RETENTION_SECONDS = 15 * 60
 MAX_TTY_RESPONSE_BYTES = 2048
+_SNAPSHOT_LIMITS = {
+    "id": 64, "name": 96, "operator": 96, "technology": 32,
+    "connection_state": 32, "address": 64, "mask": 64, "band": 32,
+    "apn": 96, "base_station": 64, "enb_id": 32, "sector_id": 32,
+    "tac": 32, "phy_cell_id": 32, "model": 128, "manufacturer": 96,
+    "firmware": 256,
+}
 
 
 class ModemControlError(RuntimeError):
@@ -137,7 +144,18 @@ def _safe_snapshot(raw: Mapping[str, Any]) -> dict[str, Any]:
         "roaming", "base_station", "enb_id", "sector_id", "tac", "phy_cell_id",
         "earfcn", "distance", "model", "manufacturer", "firmware", "carriers",
     )
-    snapshot = {key: copy.deepcopy(raw[key]) for key in allowed if key in raw and key not in {"imei", "sim"}}
+    snapshot: dict[str, Any] = {}
+    for key in allowed:
+        if key not in raw or key in {"imei", "sim"}:
+            continue
+        value = raw[key]
+        if isinstance(value, str):
+            text = value[:_SNAPSHOT_LIMITS.get(key, 128)]
+            text = IMEI_RE.sub("<redacted>", text)
+            text = re.sub(r"/dev/[A-Za-z0-9._/-]+", "<redacted>", text)
+            snapshot[key] = text
+        else:
+            snapshot[key] = copy.deepcopy(value)
     carriers = snapshot.get("carriers")
     if isinstance(carriers, list):
         carrier_keys = {
@@ -145,7 +163,14 @@ def _safe_snapshot(raw: Mapping[str, Any]) -> dict[str, Any]:
             "downlink_frequency", "uplink_frequency",
         }
         snapshot["carriers"] = [
-            {key: copy.deepcopy(item[key]) for key in carrier_keys if key in item}
+            {
+                key: (
+                    IMEI_RE.sub("<redacted>", str(item[key])[:64])
+                    if isinstance(item[key], str)
+                    else copy.deepcopy(item[key])
+                )
+                for key in carrier_keys if key in item
+            }
             for item in carriers
             if isinstance(item, Mapping)
         ][:8]
@@ -219,11 +244,13 @@ class ModemControlService:
         clock: Callable[[], float] = time.time,
         sleep: Callable[[float], None] = time.sleep,
         worker_starter: Callable[[Callable[[], None]], Any] | None = None,
+        sampler: Callable[[], Mapping[str, Any]] | None = None,
     ):
         self._clock = clock
         self._sleep = sleep
         self._rci_fetcher = rci_fetcher
-        self._sampler = lambda: sample_router_lte(rci_fetcher=rci_fetcher, clock=clock)
+        self._sampler_explicit = sampler is not None
+        self._sampler = sampler or (lambda: sample_router_lte(rci_fetcher=rci_fetcher, clock=clock))
         self._device_enumerator = device_enumerator
         self._runner = runner
         self._tty_exchange = tty_exchange or _default_tty_exchange
@@ -238,30 +265,43 @@ class ModemControlService:
     def _start_thread(worker: Callable[[], None]) -> None:
         threading.Thread(target=worker, name="router-modem-reset", daemon=True).start()
 
-    def _inventory(self) -> dict[str, Any]:
+    @staticmethod
+    def _inventory_available(result: Any) -> bool:
+        if not isinstance(result, Mapping):
+            return False
+        if "available" in result:
+            return result.get("available") is True
+        return bool(_modem_items(result))
+
+    def _inventory(self) -> tuple[dict[str, Any], bool]:
         if self._direct_inventory_mode is True:
             try:
                 direct = self._rci_fetcher("show/interface")
-                return dict(direct) if isinstance(direct, Mapping) else {"available": False, "items": []}
+                value = dict(direct) if isinstance(direct, Mapping) else {"available": False, "items": []}
+                return value, self._inventory_available(value)
             except Exception:
-                return {"available": False, "items": []}
+                return {"available": False, "items": [], "state": "unavailable"}, False
         try:
             result = self._sampler()
             # Unit and integration seams may provide an already-normalised
             # inventory through the injected RCI fetcher.  Keep that fixture
             # shape compatible while the live path continues through the
             # shared sampler above.
-            if not _modem_items(result):
+            if not self._sampler_explicit and not _modem_items(result):
                 direct = self._rci_fetcher("show/interface")
                 if _modem_items(direct):
                     self._direct_inventory_mode = True
                     result = direct
         except Exception:
             result = {"available": False, "items": []}
-        return dict(result) if isinstance(result, Mapping) else {"available": False, "items": []}
+        value = dict(result) if isinstance(result, Mapping) else {"available": False, "items": []}
+        return value, self._inventory_available(value)
 
     def _selected_modem(self, modem_id: str) -> Mapping[str, Any]:
-        for item in _modem_items(self._inventory()):
+        inventory, available = self._inventory()
+        if not available:
+            raise ModemControlError("modem_not_found")
+        for item in _modem_items(inventory):
             if str(item.get("id") or "") == modem_id:
                 return item
         raise ModemControlError("modem_not_found")
@@ -364,6 +404,9 @@ class ModemControlService:
     def _finish(self, operation_id: str, *, status: str, code: str | None = None, after: Mapping[str, Any] | None = None) -> None:
         now = self._clock()
         self._replace(operation_id, status=status, code=code, after=after, finished_at=now)
+        self._release_operation_slot(operation_id)
+
+    def _release_operation_slot(self, operation_id: str) -> None:
         with self._lock:
             state = self._operations.get(operation_id)
             if state and self._active_by_modem.get(state.modem_id) == operation_id:
@@ -394,42 +437,45 @@ class ModemControlService:
             return False
 
     def _worker(self, operation_id: str) -> None:
-        with self._lock:
-            target = self._targets.get(operation_id)
-        if target is None:
-            return
-        self._replace(operation_id, status="running")
-        if not self._reset_target(target):
-            self._finish(operation_id, status="failed", code="modem_reset_failed")
-            return
-        self._replace(operation_id, status="waiting_for_modem")
-        deadline = self._clock() + RESET_TIMEOUT_SECONDS
-        seen_missing = False
-        last_now = self._clock()
-        for _attempt in range(128):
-            if self._clock() >= deadline:
-                break
-            try:
-                inventory = self._inventory()
-            except Exception:
-                inventory = {"items": []}
-            modem = next((item for item in _modem_items(inventory) if str(item.get("id") or "") == self._operation_modem(operation_id)), None)
-            if modem is None:
-                seen_missing = True
-            elif seen_missing:
-                self._finish(operation_id, status="recovered", after=_safe_snapshot(modem))
+        try:
+            with self._lock:
+                target = self._targets.get(operation_id)
+            if target is None:
+                self._finish(operation_id, status="failed", code="modem_operation_target_missing")
                 return
-            current_now = self._clock()
-            if current_now >= deadline:
-                break
-            self._sleep(min(RECOVERY_POLL_SECONDS, max(0.0, deadline - current_now)))
-            after_sleep = self._clock()
-            if not seen_missing and after_sleep <= last_now:
-                # A synchronous test worker may inject a no-op sleep.  Avoid
-                # spinning forever while retaining the same timeout result.
-                break
-            last_now = after_sleep
-        self._finish(operation_id, status="timed_out", code="modem_recovery_timeout")
+            self._replace(operation_id, status="running")
+            if not self._reset_target(target):
+                self._finish(operation_id, status="failed", code="modem_reset_failed")
+                return
+            self._replace(operation_id, status="waiting_for_modem")
+            deadline = self._clock() + RESET_TIMEOUT_SECONDS
+            seen_missing = False
+            last_now = self._clock()
+            for _attempt in range(128):
+                if self._clock() >= deadline:
+                    break
+                inventory, available = self._inventory()
+                modem = next((item for item in _modem_items(inventory) if str(item.get("id") or "") == self._operation_modem(operation_id)), None)
+                if available and modem is None:
+                    seen_missing = True
+                elif available and seen_missing and modem is not None:
+                    self._finish(operation_id, status="recovered", after=_safe_snapshot(modem))
+                    return
+                current_now = self._clock()
+                if current_now >= deadline:
+                    break
+                self._sleep(min(RECOVERY_POLL_SECONDS, max(0.0, deadline - current_now)))
+                after_sleep = self._clock()
+                if not seen_missing and after_sleep <= last_now:
+                    # A synchronous test worker may inject a no-op sleep.  Avoid
+                    # spinning forever while retaining the same timeout result.
+                    break
+                last_now = after_sleep
+            self._finish(operation_id, status="timed_out", code="modem_recovery_timeout")
+        except Exception:
+            self._finish(operation_id, status="failed", code="modem_operation_failed")
+        finally:
+            self._release_operation_slot(operation_id)
 
     def _operation_modem(self, operation_id: str) -> str:
         with self._lock:
@@ -469,7 +515,13 @@ class ModemControlService:
         except Exception as exc:
             self._finish(operation_id, status="failed", code="worker_start_failed")
             raise ModemControlError("worker_start_failed") from exc
-        return {"operation_id": operation_id, "modem_id": modem_id, "status": "queued", "transport": target.kind}
+        return {
+            "operation_id": operation_id,
+            "modem_id": modem_id,
+            "status": "queued",
+            "before": copy.deepcopy(state.before),
+            "transport": target.kind,
+        }
 
     def status(self, operation_id: str) -> dict[str, Any]:
         if not isinstance(operation_id, str) or not operation_id or len(operation_id) > 128:
