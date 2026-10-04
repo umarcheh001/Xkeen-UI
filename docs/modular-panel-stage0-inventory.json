@@ -36,20 +36,20 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 437,
-      "size_bytes": 6120599,
+      "unit_count": 440,
+      "size_bytes": 6175822,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
-        "backend_service": 56,
-        "backend_test": 186,
+        "backend_service": 57,
+        "backend_test": 187,
         "configuration": 10,
         "frontend_bundle": 9,
         "frontend_entrypoint": 2,
         "frontend_feature": 27,
         "frontend_javascript": 35,
         "frontend_runtime": 1,
-        "frontend_test": 37,
+        "frontend_test": 38,
         "frontend_ui": 17,
         "stylesheet": 5,
         "template": 31
@@ -361,7 +361,7 @@
       ],
       "removable": true,
       "unit_count": 26,
-      "size_bytes": 621181,
+      "size_bytes": 646583,
       "kind_counts": {
         "backend_route": 2,
         "backend_service": 8,
@@ -371,7 +371,7 @@
         "frontend_javascript": 2,
         "template": 1
       },
-      "route_count": 26,
+      "route_count": 29,
       "background_task_count": 0,
       "ui_surface_count": 2,
       "representative_paths": [
@@ -2015,6 +2015,29 @@
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_service",
+      "path": "xkeen-ui/services/router_modem_control.py",
+      "size_bytes": 23032,
+      "depends_on": [
+        "tool.advanced-diagnostics"
+      ],
+      "starts_background_task": true,
+      "background_markers": [
+        "daemon_thread",
+        "threading.Thread"
+      ],
       "registers_routes": false,
       "routes": [],
       "frontend_bundle": [],
@@ -4904,6 +4927,24 @@
       "kind": "backend_test",
       "path": "tests/test_restart_log_subscription_ux.py",
       "size_bytes": 12305,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_router_modem_control.py",
+      "size_bytes": 20929,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -8698,6 +8739,24 @@
     {
       "module_id": "core",
       "kind": "frontend_test",
+      "path": "e2e/router_modem_controls.spec.mjs",
+      "size_bytes": 9988,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "frontend_test",
       "path": "e2e/routing_schema.spec.mjs",
       "size_bytes": 24247,
       "depends_on": [],
@@ -9306,7 +9365,7 @@
       "module_id": "core",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/panel-operator.css",
-      "size_bytes": 737830,
+      "size_bytes": 739104,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -17378,7 +17437,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/system_resources.py",
-      "size_bytes": 5179,
+      "size_bytes": 10047,
       "depends_on": [
         "core"
       ],
@@ -17420,6 +17479,21 @@
           "method": "GET",
           "path": "/api/system/router/lte",
           "decorator": "bp.get"
+        },
+        {
+          "method": "GET",
+          "path": "/api/system/router/lte/operations/<operation_id>",
+          "decorator": "bp.get"
+        },
+        {
+          "method": "POST",
+          "path": "/api/system/router/lte/<modem_id>/probe",
+          "decorator": "bp.post"
+        },
+        {
+          "method": "POST",
+          "path": "/api/system/router/lte/<modem_id>/reset",
+          "decorator": "bp.post"
         }
       ],
       "frontend_bundle": [],
@@ -17695,7 +17769,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_service",
       "path": "xkeen-ui/services/router_diagnostics.py",
-      "size_bytes": 49057,
+      "size_bytes": 49252,
       "depends_on": [
         "core"
       ],
@@ -17733,7 +17807,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_resource_monitor_frontend.py",
-      "size_bytes": 6116,
+      "size_bytes": 6911,
       "depends_on": [
         "core"
       ],
@@ -17752,7 +17826,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_router_diagnostics.py",
-      "size_bytes": 19937,
+      "size_bytes": 21012,
       "depends_on": [
         "core"
       ],
@@ -17771,7 +17845,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_system_resources.py",
-      "size_bytes": 8494,
+      "size_bytes": 14912,
       "depends_on": [
         "core"
       ],
@@ -18161,7 +18235,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor.js",
-      "size_bytes": 66252,
+      "size_bytes": 78303,
       "depends_on": [
         "core"
       ],
@@ -22767,7 +22841,7 @@
     }
   ],
   "routes": {
-    "endpoint_count": 319,
+    "endpoint_count": 322,
     "files_with_routes": 54,
     "endpoint_files": [
       {
@@ -24268,6 +24342,21 @@
             "method": "GET",
             "path": "/api/system/router/lte",
             "decorator": "bp.get"
+          },
+          {
+            "method": "GET",
+            "path": "/api/system/router/lte/operations/<operation_id>",
+            "decorator": "bp.get"
+          },
+          {
+            "method": "POST",
+            "path": "/api/system/router/lte/<modem_id>/probe",
+            "decorator": "bp.post"
+          },
+          {
+            "method": "POST",
+            "path": "/api/system/router/lte/<modem_id>/reset",
+            "decorator": "bp.post"
           }
         ]
       },
@@ -27180,9 +27269,10 @@
       {
         "from": "core",
         "to": "tool.advanced-diagnostics",
-        "unit_count": 7,
+        "unit_count": 8,
         "examples": [
           "xkeen-ui/routes/__init__.py",
+          "xkeen-ui/services/router_modem_control.py",
           "tests/test_devtools_env_whitelist.py",
           "xkeen-ui/static/js/pages/panel.diagnostics.bundle.js",
           "xkeen-ui/static/js/features/compat/devtools.js",
@@ -27662,9 +27752,10 @@
       {
         "from": "core",
         "to": "tool.advanced-diagnostics",
-        "unit_count": 6,
+        "unit_count": 7,
         "examples": [
           "xkeen-ui/routes/__init__.py",
+          "xkeen-ui/services/router_modem_control.py",
           "xkeen-ui/static/js/pages/panel.diagnostics.bundle.js",
           "xkeen-ui/static/js/features/compat/devtools.js",
           "xkeen-ui/static/js/features/feature_access.js",
@@ -28136,9 +28227,10 @@
       {
         "from": "core",
         "to": "tool.advanced-diagnostics",
-        "unit_count": 6,
+        "unit_count": 7,
         "examples": [
           "xkeen-ui/routes/__init__.py",
+          "xkeen-ui/services/router_modem_control.py",
           "xkeen-ui/static/js/pages/panel.diagnostics.bundle.js",
           "xkeen-ui/static/js/features/compat/devtools.js",
           "xkeen-ui/static/js/features/feature_access.js",
@@ -28247,9 +28339,10 @@
       {
         "from": "core",
         "to": "tool.advanced-diagnostics",
-        "unit_count": 7,
+        "unit_count": 8,
         "examples": [
           "xkeen-ui/routes/__init__.py",
+          "xkeen-ui/services/router_modem_control.py",
           "tests/test_devtools_env_whitelist.py",
           "xkeen-ui/static/js/pages/panel.diagnostics.bundle.js",
           "xkeen-ui/static/js/features/compat/devtools.js",
@@ -28424,9 +28517,10 @@
         {
           "from": "core",
           "to": "tool.advanced-diagnostics",
-          "unit_count": 6,
+          "unit_count": 7,
           "examples": [
             "xkeen-ui/routes/__init__.py",
+            "xkeen-ui/services/router_modem_control.py",
             "xkeen-ui/static/js/pages/panel.diagnostics.bundle.js",
             "xkeen-ui/static/js/features/compat/devtools.js",
             "xkeen-ui/static/js/features/feature_access.js",
@@ -28527,7 +28621,7 @@
         },
         "tool.advanced-diagnostics": {
           "unit_count": 26,
-          "size_bytes": 621181
+          "size_bytes": 646583
         }
       },
       "next_stage": "Этапы 4, 5 и 6."
