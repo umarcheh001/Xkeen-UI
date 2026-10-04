@@ -84,9 +84,10 @@ def test_mihomo_dns_hardening_controls_are_visible_without_replacing_existing_wo
         "mihomo-dns-upstream-diagnostics",
         "mihomo-dns-upstream-results",
         "mihomo-dns-router-bypass-state",
-        "mihomo-dns-provider-freshness",
     ):
         assert f'id="{element_id}"' in MODAL, element_id
+
+    assert 'id="mihomo-dns-provider-freshness"' not in MODAL
 
     assert MODAL.count('class="dt-switch xk-switch-bare xk-mini-switch mihomo-dns-option-switch"') == 3
     assert 'data-tooltip="' in MODAL
@@ -99,6 +100,7 @@ def test_mihomo_dns_hardening_controls_are_visible_without_replacing_existing_wo
     assert "router_state" in script
     assert "client_state" in script
     assert "item.address" in script
+    assert "providerFreshness" not in script
 
 
 def test_active_managed_dns_has_a_separate_reconfigure_action():

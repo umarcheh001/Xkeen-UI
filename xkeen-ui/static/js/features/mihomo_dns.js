@@ -50,7 +50,6 @@ import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from '
     upstreamDiagnostics: 'mihomo-dns-upstream-diagnostics',
     upstreamResults: 'mihomo-dns-upstream-results',
     routerBypassState: 'mihomo-dns-router-bypass-state',
-    providerFreshness: 'mihomo-dns-provider-freshness',
   });
 
   const $ = (id) => document.getElementById(id);
@@ -417,7 +416,6 @@ import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from '
     const diagnostics = data?.dns_diagnostics || data || {};
     const bypass = diagnostics.bypass || {};
     const routerBypassState = $(IDS.routerBypassState);
-    const provider = $(IDS.providerFreshness);
     const results = $(IDS.upstreamResults);
     const setBadge = (element, state, text, tooltip) => {
       if (!element) return;
@@ -442,17 +440,6 @@ import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from '
           ? `Пути DNS на роутере проверены. ${clientNote}.`
           : (bypass.reasons || []).join(' · ') || clientNote,
       );
-    }
-    if (provider) {
-      const freshness = diagnostics.provider_freshness || {};
-      const state = String(freshness.state || 'unknown');
-      const text = freshness.state === 'fresh'
-        ? `Провайдеры: свежие (${freshness.configured || 0})`
-        : `Провайдеры: возраст неизвестен (${freshness.configured || 0})`;
-      const tooltip = freshness.state === 'fresh'
-        ? `Проверены ${freshness.configured || 0} rule-provider.`
-        : (freshness.reason || 'Mihomo не сообщил панели путь к кэшу rule-provider.');
-      setBadge(provider, state, text, tooltip);
     }
     if (!results) return;
     results.textContent = '';

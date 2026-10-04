@@ -15375,7 +15375,7 @@ body.panel-page #mihomo-dns-modal .mihomo-dns-hardening {
 
 body.panel-page #mihomo-dns-modal .mihomo-dns-hardening-summary {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
 }
 
@@ -15404,12 +15404,6 @@ body.panel-page #mihomo-dns-modal .mihomo-dns-hardening-summary > [data-state="u
 body.panel-page #mihomo-dns-modal .mihomo-dns-upstream-results > .is-warning {
   border-color: color-mix(in srgb, #f59e0b 42%, var(--op-border));
   color: #fbbf24;
-}
-
-@media (max-width: 560px) {
-  body.panel-page #mihomo-dns-modal .mihomo-dns-hardening-summary {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 body.panel-page #mihomo-dns-modal .mihomo-dns-upstream-results {

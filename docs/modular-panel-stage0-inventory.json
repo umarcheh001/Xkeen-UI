@@ -37,7 +37,7 @@
       ],
       "removable": false,
       "unit_count": 437,
-      "size_bytes": 6104498,
+      "size_bytes": 6104341,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
@@ -130,7 +130,7 @@
       ],
       "removable": true,
       "unit_count": 128,
-      "size_bytes": 3059882,
+      "size_bytes": 3059012,
       "kind_counts": {
         "app_runtime": 4,
         "backend_route": 2,
@@ -9304,7 +9304,7 @@
       "module_id": "core",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/panel-operator.css",
-      "size_bytes": 737748,
+      "size_bytes": 737591,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -11593,7 +11593,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_test",
       "path": "tests/test_mihomo_dns_layout.py",
-      "size_bytes": 4817,
+      "size_bytes": 4883,
       "depends_on": [
         "core",
         "tool.editor"
@@ -12696,7 +12696,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/mihomo_dns.js",
-      "size_bytes": 49001,
+      "size_bytes": 48241,
       "depends_on": [
         "core",
         "tool.editor"
@@ -13071,7 +13071,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_test",
       "path": "e2e/mihomo_clash_groups.spec.mjs",
-      "size_bytes": 75484,
+      "size_bytes": 75603,
       "depends_on": [
         "core",
         "tool.editor"
@@ -13260,7 +13260,7 @@
       "module_id": "engine.mihomo",
       "kind": "template",
       "path": "xkeen-ui/templates/panel/modals/mihomo.html",
-      "size_bytes": 37855,
+      "size_bytes": 37560,
       "depends_on": [
         "core",
         "tool.editor"
