@@ -65,6 +65,8 @@ python -m pytest -q tests/test_router_modem_control.py tests/test_router_diagnos
 
 `sample_router_lte` now emits `rci_available=true` after a successful RCI read even when normalization produces zero modems. The modem service uses that metadata to confirm a real disappearance; transport/RCI errors remain unavailable and cannot advance recovery. Public snapshots accept bounded scalar fields and a bounded carrier allowlist only, and `qmi_probe_failed` is the stable code for a nonzero QMI probe.
 
+The final snapshot hardening drops non-scalar carrier values instead of deep-copying them. Regression coverage verifies oversized, nested, path-like, and IMEI-like carrier data cannot reach probe or operation state.
+
 ```text
 python -m pytest -q tests/test_router_modem_control.py
 35 passed in 0.18s

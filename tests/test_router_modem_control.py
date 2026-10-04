@@ -108,6 +108,35 @@ def test_probe_selects_exact_rci_id_and_never_uses_browser_supplied_identity(ser
     assert "device" not in result["modem"]
 
 
+def test_probe_redacts_and_bounds_nested_carrier_payload(transports):
+    inventory = deepcopy(MODEMS)
+    inventory["items"][1]["carriers"] = [
+        {
+            "technology": "4G+",
+            "band": "B" * 500 + " SECRET-IMEI-222222222222222",
+            "earfcn": {"raw": "nested-private-value"},
+            "phy_cell_id": ["unexpected", "container"],
+            "downlink_frequency": 123,
+            "secret": {"raw": "must-not-leak"},
+        }
+    ]
+    service = ModemControlService(
+        sampler=lambda: inventory,
+        device_enumerator=transports.devices,
+        runner=transports.runner,
+    )
+
+    result = service.probe("UsbQmi1")
+    carrier = result["modem"]["carriers"][0]
+
+    assert len(carrier["band"]) <= 64
+    assert carrier["downlink_frequency"] == 123
+    assert "nested-private-value" not in repr(result)
+    assert "must-not-leak" not in repr(result)
+    assert "222222222222222" not in repr(result)
+    assert all(isinstance(value, (str, int, float, bool)) or value is None for value in carrier.values())
+
+
 def test_probe_rejects_unknown_modem_without_enumerating_devices(rci_fetcher, transports):
     service = ModemControlService(rci_fetcher=rci_fetcher, device_enumerator=transports.devices, runner=transports.runner)
 

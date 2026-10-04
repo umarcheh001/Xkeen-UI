@@ -164,18 +164,23 @@ def _safe_snapshot(raw: Mapping[str, Any]) -> dict[str, Any]:
             "technology", "band", "bandwidth", "earfcn", "phy_cell_id",
             "downlink_frequency", "uplink_frequency",
         }
-        snapshot["carriers"] = [
-            {
-                key: (
-                    IMEI_RE.sub("<redacted>", str(item[key])[:64])
-                    if isinstance(item[key], str)
-                    else copy.deepcopy(item[key])
-                )
-                for key in carrier_keys if key in item
-            }
-            for item in carriers
-            if isinstance(item, Mapping)
-        ][:8]
+        safe_carriers: list[dict[str, Any]] = []
+        for item in carriers[:8]:
+            if not isinstance(item, Mapping):
+                continue
+            safe_item: dict[str, Any] = {}
+            for key in carrier_keys:
+                value = item.get(key)
+                if isinstance(value, str):
+                    text = IMEI_RE.sub("<redacted>", value[:64])
+                    text = re.sub(r"/dev/[A-Za-z0-9._/-]+", "<redacted>", text)
+                    safe_item[key] = text
+                elif isinstance(value, (bool, int, float)) or value is None:
+                    safe_item[key] = value
+            if safe_item:
+                safe_carriers.append(safe_item)
+        if safe_carriers:
+            snapshot["carriers"] = safe_carriers
     return snapshot
 
 
