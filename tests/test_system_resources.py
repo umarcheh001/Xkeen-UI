@@ -201,6 +201,82 @@ def test_on_demand_router_routes_keep_rci_branches_separate(monkeypatch):
     assert channel.headers["Cache-Control"] == "no-store"
 
 
+def test_modem_reset_route_requires_exact_confirmation_and_no_store(monkeypatch):
+    from services.router_modem_control import ModemControlError
+
+    class FakeModemControl:
+        def start_reset(self, modem_id, confirmation):
+            assert modem_id == "UsbQmi1"
+            assert confirmation == "Beeline"
+            raise ModemControlError("modem_confirmation_mismatch")
+
+    monkeypatch.setattr(resource_routes, "MODEM_CONTROL_SERVICE", FakeModemControl())
+    app = Flask(__name__)
+    app.register_blueprint(create_system_resources_blueprint())
+
+    response = app.test_client().post(
+        "/api/system/router/lte/UsbQmi1/reset",
+        json={"confirmation": "Beeline"},
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["code"] == "modem_confirmation_mismatch"
+    assert response.headers["Cache-Control"] == "no-store"
+
+
+def test_modem_probe_and_operation_status_routes_are_scoped(monkeypatch):
+    class FakeModemControl:
+        def probe(self, modem_id):
+            assert modem_id == "UsbQmi1"
+            return {"modem": {"id": modem_id}, "transports": [], "preferred_transport": None}
+
+        def status(self, operation_id):
+            assert operation_id == "op-t2"
+            return {"operation_id": operation_id, "modem_id": "UsbQmi1", "status": "recovered"}
+
+    monkeypatch.setattr(resource_routes, "MODEM_CONTROL_SERVICE", FakeModemControl())
+    app = Flask(__name__)
+    app.register_blueprint(create_system_resources_blueprint())
+    client = app.test_client()
+
+    probe = client.post("/api/system/router/lte/UsbQmi1/probe")
+    status = client.get("/api/system/router/lte/operations/op-t2")
+
+    assert probe.status_code == 200
+    assert probe.get_json()["modem"]["id"] == "UsbQmi1"
+    assert status.status_code == 200
+    assert status.get_json()["modem_id"] == "UsbQmi1"
+    assert probe.headers["Cache-Control"] == "no-store"
+    assert status.headers["Cache-Control"] == "no-store"
+
+
+def test_modem_reset_route_returns_accepted_operation(monkeypatch):
+    class FakeModemControl:
+        def start_reset(self, modem_id, confirmation):
+            assert (modem_id, confirmation) == ("UsbQmi1", "UsbQmi1")
+            return {
+                "operation_id": "op-t2",
+                "modem_id": modem_id,
+                "status": "queued",
+                "before": {"id": modem_id, "operator": "Tele2"},
+                "transport": "qmi",
+            }
+
+    monkeypatch.setattr(resource_routes, "MODEM_CONTROL_SERVICE", FakeModemControl())
+    app = Flask(__name__)
+    app.register_blueprint(create_system_resources_blueprint())
+
+    response = app.test_client().post(
+        "/api/system/router/lte/UsbQmi1/reset",
+        json={"confirmation": "UsbQmi1"},
+    )
+
+    assert response.status_code == 202
+    assert response.get_json()["operation_id"] == "op-t2"
+    assert response.get_json()["transport"] == "qmi"
+    assert response.headers["Cache-Control"] == "no-store"
+
+
 def test_channel_route_rejects_invalid_target(monkeypatch):
     monkeypatch.setattr(resource_routes, "channel_check", lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("invalid target")))
     app = Flask(__name__)

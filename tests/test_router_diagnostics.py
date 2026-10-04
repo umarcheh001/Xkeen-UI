@@ -331,6 +331,20 @@ def test_client_and_lte_samplers_use_current_keenetic_branches():
     assert requested == ["show/ip/hotspot", "show/interface"]
 
 
+def test_lte_inventory_keeps_exact_modem_ids_and_identity_fields_for_control_plane():
+    payload = normalize_lte(
+        {
+            "UsbQmi0": {"id": "UsbQmi0", "type": "UsbQmi", "description": "BEELINE", "imei": "111111111111111", "operator": "Beeline", "rsrp": -111},
+            "UsbQmi1": {"id": "UsbQmi1", "type": "UsbQmi", "description": "T2_STATIC", "imei": "222222222222222", "operator": "Tele2", "rsrp": -73},
+        },
+        sampled_at=42,
+    )
+
+    assert [item["id"] for item in payload["items"]] == ["UsbQmi0", "UsbQmi1"]
+    assert payload["items"][1]["name"] == "T2_STATIC"
+    assert payload["items"][1]["imei"] == "222222222222222"
+
+
 def test_optional_metrics_normalizers_keep_signal_values():
     capabilities = normalize_capabilities({"model": "Hero", "version": "4.2", "components": ["WifiMaster0", "lte"]}, sampled_at=42)
     lte = normalize_lte({"modem": {"operator": "Test", "rsrp": -97, "rsrq": -11, "cinr": 18, "band": "B3"}}, sampled_at=42)
