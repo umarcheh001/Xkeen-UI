@@ -37,7 +37,7 @@
       ],
       "removable": false,
       "unit_count": 437,
-      "size_bytes": 6120255,
+      "size_bytes": 6120599,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
@@ -130,7 +130,7 @@
       ],
       "removable": true,
       "unit_count": 128,
-      "size_bytes": 3059012,
+      "size_bytes": 3068300,
       "kind_counts": {
         "app_runtime": 4,
         "backend_route": 2,
@@ -6111,7 +6111,7 @@
       "module_id": "core",
       "kind": "configuration",
       "path": "package.json",
-      "size_bytes": 2845,
+      "size_bytes": 2950,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -9306,7 +9306,7 @@
       "module_id": "core",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/panel-operator.css",
-      "size_bytes": 737591,
+      "size_bytes": 737830,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -11097,7 +11097,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_service",
       "path": "xkeen-ui/services/mihomo_traffic_analytics.py",
-      "size_bytes": 42074,
+      "size_bytes": 45477,
       "depends_on": [
         "core",
         "tool.editor"
@@ -11122,7 +11122,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_service",
       "path": "xkeen-ui/services/mihomo_traffic_simulator.py",
-      "size_bytes": 15638,
+      "size_bytes": 15974,
       "depends_on": [
         "core",
         "tool.editor"
@@ -11319,7 +11319,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_test",
       "path": "tests/test_mihomo_clash_frontend_contract.py",
-      "size_bytes": 31917,
+      "size_bytes": 31921,
       "depends_on": [
         "core",
         "tool.editor"
@@ -11896,7 +11896,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_test",
       "path": "tests/test_mihomo_traffic_analytics.py",
-      "size_bytes": 14668,
+      "size_bytes": 16015,
       "depends_on": [
         "core",
         "tool.editor"
@@ -12426,7 +12426,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/mihomo_clash/diagnostics.js",
-      "size_bytes": 34542,
+      "size_bytes": 36563,
       "depends_on": [
         "core",
         "tool.editor"
@@ -13052,7 +13052,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_test",
       "path": "e2e/mihomo_clash_diagnostics.spec.mjs",
-      "size_bytes": 17323,
+      "size_bytes": 19326,
       "depends_on": [
         "core",
         "tool.editor"
@@ -13283,7 +13283,7 @@
       "module_id": "engine.mihomo",
       "kind": "template",
       "path": "xkeen-ui/templates/panel/screens/mihomo.html",
-      "size_bytes": 56921,
+      "size_bytes": 57095,
       "depends_on": [
         "core",
         "tool.editor"
