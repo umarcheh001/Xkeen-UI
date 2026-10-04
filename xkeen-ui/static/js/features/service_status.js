@@ -1203,7 +1203,9 @@ let serviceStatusModuleApi = null;
 
         if (cores.length < 2) {
           setCoreModalStatus(
-            cores.length ? 'Доступно только одно ядро, переключение не требуется.' : 'Не найдено ни одного ядра.',
+            cores.length
+              ? 'Установлено одно ядро. Ниже можно выбрать форк или обновить текущую сборку.'
+              : 'Ядро не установлено. Ниже можно выбрать форк и установить сборку.',
             'hint'
           );
           confirmBtn.disabled = true;

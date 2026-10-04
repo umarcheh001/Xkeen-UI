@@ -25,11 +25,11 @@
               <button
                 id="xkeen-core-text"
                 type="button"
-                class="service-core-text{% if not multi_core %} hidden{% endif %}"
+                class="service-core-text{% if not (has_xray or has_mihomo) %} hidden{% endif %}"
                 data-loading="true"
                 aria-busy="true"
                 aria-disabled="true"
-                {% if not multi_core %}aria-hidden="true" tabindex="-1"{% endif %}
+                {% if not (has_xray or has_mihomo) %}aria-hidden="true" tabindex="-1"{% endif %}
               >Ядро</button>
             </div>
 

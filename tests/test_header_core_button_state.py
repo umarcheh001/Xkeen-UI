@@ -43,3 +43,19 @@ def test_click_handler_refuses_while_loading():
     block = block[:block.index("openXkeenCoreModal();") + len("openXkeenCoreModal();")]
     # Мышь гасит pointer-events, клавиатура доходит до обработчика.
     assert "aria-disabled" in block
+
+
+def test_one_engine_keeps_the_core_management_entry_point_visible():
+    button = core_button()
+    # Даже с одним установленным движком в этом модале доступны источники
+    # сборок и установка форков. Скрывать точку входа можно лишь без Xray и
+    # Mihomo вообще, а не при отсутствии второго ядра для переключения.
+    assert "{% if not (has_xray or has_mihomo) %}" in button
+
+
+def test_single_core_modal_points_to_fork_installation_controls():
+    branch_start = STATUS.index("if (cores.length < 2) {")
+    branch_end = STATUS.index("        setCoreModalStatus('', 'hint');", branch_start)
+    branch = STATUS[branch_start:branch_end]
+
+    assert "Ниже можно выбрать форк или обновить текущую сборку." in branch
