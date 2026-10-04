@@ -33,13 +33,19 @@ for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 900 });
     const errors = [];
     const resets = [];
+    const probeCsrf = [];
+    const resetCsrf = [];
     page.on('pageerror', error => errors.push(error.message));
-    await page.route('**/api/system/router/lte/UsbQmi1/probe', route => route.fulfill({ json: {
-      modem: { id: 'UsbQmi1', name: 'T2_STATIC' }, preferred_transport: 'qmi',
-      transports: [{ kind: 'qmi', available: true }], sampled_at: 1,
-    } }));
+    await page.route('**/api/system/router/lte/UsbQmi1/probe', route => {
+      probeCsrf.push(route.request().headers()['x-csrf-token'] || '');
+      return route.fulfill({ json: {
+        modem: { id: 'UsbQmi1', name: 'T2_STATIC' }, preferred_transport: 'qmi',
+        transports: [{ kind: 'qmi', available: true }], sampled_at: 1,
+      } });
+    });
     await page.route('**/api/system/router/lte/UsbQmi1/reset', route => {
       resets.push(route.request().postDataJSON());
+      resetCsrf.push(route.request().headers()['x-csrf-token'] || '');
       return route.fulfill({ status: 202, json: {
         operation_id: 'test-operation-1', modem_id: 'UsbQmi1', status: 'queued', transport: 'qmi', before: { id: 'UsbQmi1' },
       } });
@@ -65,6 +71,8 @@ for (const width of [1440, 390]) {
     await expect(tele2.getByRole('button', { name: 'Перезапустить модем' })).toBeDisabled();
     await expect(tele2.locator('.xk-lte-control-status')).toContainText('Восстановлен');
     expect(resets).toEqual([{ confirmation: 'UsbQmi1' }]);
+    expect(probeCsrf).toEqual([expect.stringMatching(/\S+/)]);
+    expect(resetCsrf).toEqual([expect.stringMatching(/\S+/)]);
     expect(polls).toBeGreaterThanOrEqual(2);
     await expect(beelineStatus).toBeEmpty();
     expect(errors).toEqual([]);

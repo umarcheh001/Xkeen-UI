@@ -37,7 +37,7 @@
       ],
       "removable": false,
       "unit_count": 440,
-      "size_bytes": 6175822,
+      "size_bytes": 6182018,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
@@ -361,7 +361,7 @@
       ],
       "removable": true,
       "unit_count": 26,
-      "size_bytes": 646583,
+      "size_bytes": 647773,
       "kind_counts": {
         "backend_route": 2,
         "backend_service": 8,
@@ -2029,7 +2029,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/router_modem_control.py",
-      "size_bytes": 23032,
+      "size_bytes": 25692,
       "depends_on": [
         "tool.advanced-diagnostics"
       ],
@@ -4944,7 +4944,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_router_modem_control.py",
-      "size_bytes": 20929,
+      "size_bytes": 24117,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -8740,7 +8740,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/router_modem_controls.spec.mjs",
-      "size_bytes": 9988,
+      "size_bytes": 10336,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -17807,7 +17807,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_resource_monitor_frontend.py",
-      "size_bytes": 6911,
+      "size_bytes": 7465,
       "depends_on": [
         "core"
       ],
@@ -18235,7 +18235,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor.js",
-      "size_bytes": 78303,
+      "size_bytes": 78939,
       "depends_on": [
         "core"
       ],
@@ -28621,7 +28621,7 @@
         },
         "tool.advanced-diagnostics": {
           "unit_count": 26,
-          "size_bytes": 646583
+          "size_bytes": 647773
         }
       },
       "next_stage": "Этапы 4, 5 и 6."

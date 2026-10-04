@@ -5,7 +5,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from services.router_modem_control import ModemControlError, ModemControlService, validate_modem_id
+from services.router_modem_control import (
+    MAX_OPERATION_ENTRIES,
+    OPERATION_RETENTION_SECONDS,
+    RESET_START_PROBE_DEADLINE_SECONDS,
+    ModemControlError,
+    ModemControlService,
+    validate_modem_id,
+)
 
 
 MODEMS = {
@@ -309,6 +316,43 @@ def test_reset_rejects_mismatched_tty_without_scheduling_or_reset(rci_fetcher, t
     assert not any("--dms-set-operating-mode=reset" in call for call in transports.argv)
 
 
+def test_reset_probe_stops_before_late_matching_transport_after_deadline(rci_fetcher):
+    now = [100.0]
+    workers = []
+    tty_paths = [f"/dev/ttyUSB{index}" for index in range(6)]
+    tty_calls = []
+
+    def runner(argv, **kwargs):
+        now[0] += float(kwargs["timeout"])
+        return SimpleNamespace(returncode=0, stdout="IMEI: '999999999999999'\n", stderr="")
+
+    def tty_exchange(path, command, *, timeout):
+        tty_calls.append((path, command, timeout))
+        now[0] += timeout
+        if path.endswith("5"):
+            return "AT\r\nOK\r\n" if command == "AT" else "AT+CGSN\r\n222222222222222\r\nOK\r\n"
+        return "AT\r\nOK\r\n" if command == "AT" else "AT+CGSN\r\n111111111111111\r\nOK\r\n"
+
+    service = ModemControlService(
+        rci_fetcher=rci_fetcher,
+        sampler=lambda: MODEMS,
+        device_enumerator=lambda: {"qmi": ["/dev/cdc-wdm0"], "tty": tty_paths},
+        runner=runner,
+        tty_exchange=tty_exchange,
+        clock=lambda: now[0],
+        worker_starter=workers.append,
+    )
+
+    with pytest.raises(ModemControlError) as exc_info:
+        service.start_reset("UsbQmi1", confirmation="UsbQmi1")
+
+    assert exc_info.value.code == "transport_not_matched"
+    assert workers == []
+    assert now[0] - 100.0 <= RESET_START_PROBE_DEADLINE_SECONDS
+    assert not any(path.endswith("5") for path, _command, _timeout in tty_calls)
+    assert all(timeout <= 3.0 for _path, _command, timeout in tty_calls)
+
+
 def test_reset_requires_exact_confirmation_and_returns_safe_operation(service):
     with pytest.raises(ModemControlError) as exc_info:
         service.start_reset("UsbQmi1", confirmation="Beeline")
@@ -551,18 +595,66 @@ def test_status_unknown_operation_is_not_substituted(service):
 
 def test_status_prunes_expired_operation(transports):
     now = [100.0]
+    transports.reset_returncode = 1
     service = ModemControlService(
         rci_fetcher=lambda *_args, **_kwargs: MODEMS,
         device_enumerator=transports.devices,
         runner=transports.runner,
         clock=lambda: now[0],
-        worker_starter=lambda _worker: None,
+        worker_starter=lambda worker: worker(),
     )
     accepted = service.start_reset("UsbQmi1", confirmation="UsbQmi1")
     now[0] += 901
 
     with pytest.raises(ModemControlError, match="operation_not_found"):
         service.status(accepted["operation_id"])
+
+
+def test_start_reset_prunes_terminal_entries_without_status_polling(transports):
+    now = [100.0]
+    transports.reset_returncode = 1
+    service = ModemControlService(
+        rci_fetcher=lambda *_args, **_kwargs: MODEMS,
+        device_enumerator=transports.devices,
+        runner=transports.runner,
+        clock=lambda: now[0],
+        worker_starter=lambda worker: worker(),
+    )
+
+    first = service.start_reset("UsbQmi1", confirmation="UsbQmi1")
+    assert service._operations[first["operation_id"]].status == "failed"
+    now[0] += OPERATION_RETENTION_SECONDS + 1
+
+    second = service.start_reset("UsbQmi1", confirmation="UsbQmi1")
+
+    assert first["operation_id"] not in service._operations
+    assert second["operation_id"] in service._operations
+    assert len(service._operations) == 1
+
+
+def test_operation_registry_stays_bounded_without_status_polling(transports):
+    workers = []
+    transports.reset_returncode = 1
+
+    def start_worker(worker):
+        if not workers:
+            workers.append(worker)
+            return
+        worker()
+
+    service = ModemControlService(
+        rci_fetcher=lambda *_args, **_kwargs: MODEMS,
+        device_enumerator=transports.devices,
+        runner=transports.runner,
+        worker_starter=start_worker,
+    )
+    active = service.start_reset("UsbQmi1", confirmation="UsbQmi1")
+
+    for _ in range(MAX_OPERATION_ENTRIES + 32):
+        service.start_reset("UsbQmi0", confirmation="UsbQmi0")
+
+    assert active["operation_id"] in service._operations
+    assert len(service._operations) <= MAX_OPERATION_ENTRIES
 
 
 def test_reset_times_out_when_exact_rci_modem_never_returns(transports):

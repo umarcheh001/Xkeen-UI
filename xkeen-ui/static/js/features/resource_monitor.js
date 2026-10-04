@@ -933,9 +933,21 @@ async function lteControlRequest(url, options = {}, timeoutMs = LTE_CONTROL_REQU
     controller.abort();
   }, timeoutMs);
   try {
-    const response = await fetch(url, {
+    let requestInit = {
       cache: "no-store", credentials: "same-origin", ...options, signal: controller.signal,
-    });
+    };
+    try {
+      const coreHttp = window.XKeen?.core?.http;
+      if (typeof coreHttp?.withCSRF === "function") {
+        requestInit = coreHttp.withCSRF(requestInit, requestInit.method || "GET");
+      } else if (String(requestInit.method || "GET").toUpperCase() !== "GET") {
+        const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
+        const headers = new Headers(requestInit.headers || {});
+        if (token && !headers.has("X-CSRF-Token")) headers.set("X-CSRF-Token", token);
+        requestInit.headers = headers;
+      }
+    } catch (error) {}
+    const response = await fetch(url, requestInit);
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(lteControlMessage(payload?.code));
     return payload;

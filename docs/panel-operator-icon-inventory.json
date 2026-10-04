@@ -383,7 +383,7 @@
           "accessible_label": "Подтвердить"
         },
         {
-          "location": "xkeen-ui/static/js/features/resource_monitor.js:L1412",
+          "location": "xkeen-ui/static/js/features/resource_monitor.js:L1424",
           "control_type": "runtime-action",
           "accessible_label": "Подтвердить"
         },
@@ -2897,7 +2897,7 @@
       "tabler_asset": "refresh",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/resource_monitor.js:L1234",
+          "location": "xkeen-ui/static/js/features/resource_monitor.js:L1246",
           "control_type": "runtime-action",
           "accessible_label": "Перезапустить"
         },
@@ -2994,7 +2994,7 @@
       "tabler_asset": "refresh-alert",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/resource_monitor.js:L1447",
+          "location": "xkeen-ui/static/js/features/resource_monitor.js:L1459",
           "control_type": "runtime-action",
           "accessible_label": "retry"
         }
@@ -3151,7 +3151,7 @@
           "accessible_label": "Поиск"
         },
         {
-          "location": "xkeen-ui/static/js/features/resource_monitor.js:L1233",
+          "location": "xkeen-ui/static/js/features/resource_monitor.js:L1245",
           "control_type": "runtime-action",
           "accessible_label": "Поиск"
         },

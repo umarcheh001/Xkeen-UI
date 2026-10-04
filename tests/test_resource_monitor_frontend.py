@@ -179,3 +179,16 @@ def test_lte_modem_controls_keep_reset_scoped_and_confirmed():
     assert "innerHTML" not in script
     assert "body.panel-page .xk-lte-controls" in css
     assert "body.panel-page .xk-lte-control-status" in css
+
+
+def test_lte_modem_mutations_send_the_shared_csrf_header():
+    script = SCRIPT.read_text(encoding="utf-8")
+    request_body = script.split("async function lteControlRequest", 1)[1].split(
+        "async function probeLteModem", 1
+    )[0]
+
+    assert "coreHttp?.withCSRF" in request_body
+    assert 'coreHttp.withCSRF(requestInit, requestInit.method || "GET")' in request_body
+    assert 'meta[name="csrf-token"]' in request_body
+    assert 'headers.has("X-CSRF-Token")' in request_body
+    assert 'headers.set("X-CSRF-Token", token)' in request_body
