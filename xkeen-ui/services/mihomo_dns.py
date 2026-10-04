@@ -1065,11 +1065,13 @@ def _dns_upstream_items(config_text: str) -> list[dict[str, Any]]:
         route = "direct" if fragment.strip().upper().startswith("DIRECT") else "proxy"
         parsed = urlsplit(base)
         scheme = parsed.scheme.lower() if parsed.scheme else "plain"
+        address = parsed.hostname or base.split("/", 1)[0]
         # Keep fragments useful to operators without exposing arbitrary long
         # YAML values in the panel.
         route_name = fragment.split("&", 1)[0].strip() if fragment else ("DIRECT" if route == "direct" else "")
         items.append({
             "server": value[:512],
+            "address": str(address)[:256],
             "scheme": scheme,
             "route": route,
             "route_name": route_name[:128] or None,
@@ -1193,18 +1195,33 @@ def diagnose_dns_runtime(
             risks = True
             reasons.append("Keenetic перехватывает транзитные DNS-запросы")
     if runtime.get("listener_configured") and dns_override is True and active_core in {"", "mihomo"} and not risks:
-        bypass_state = "safe" if all(value == "safe" for value in bypass_checks.values()) else "unknown"
+        router_state = "safe" if all(
+            bypass_checks[key] == "safe"
+            for key in ("provider_dns", "ipv6_provider_dns", "transit_dns")
+        ) else "unknown"
     elif risks:
-        bypass_state = "warning"
+        router_state = "warning"
     else:
-        bypass_state = "unknown"
+        router_state = "unknown"
         reasons.append("Не удалось подтвердить все пути DNS на этом стенде")
+
+    # DHCP/client-side DoH is intentionally outside the router's observable
+    # state. Keep this separate so a healthy router path is not presented as
+    # a router failure merely because individual clients are opaque.
+    client_state = "unknown"
+    client_reason = "DNS, DoH и DoT, заданные внутри клиентов, панель не видит"
+    bypass_state = "warning" if router_state == "warning" else (
+        "safe" if router_state == "safe" and bypass_checks["dhcp_direct_dns"] == "safe" else "unknown"
+    )
 
     upstream_items = _dns_upstream_items(str(config_text or ""))
     result: dict[str, Any] = {
         "schema_version": 1,
         "bypass": {
             "state": bypass_state,
+            "router_state": router_state,
+            "client_state": client_state,
+            "client_reason": client_reason,
             "checks": bypass_checks,
             "provider_dns": bypass_checks["provider_dns"],
             "ipv6_provider_dns": bypass_checks["ipv6_provider_dns"],

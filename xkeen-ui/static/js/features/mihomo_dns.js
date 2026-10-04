@@ -49,7 +49,7 @@ import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from '
     preferH3: 'mihomo-dns-prefer-h3',
     upstreamDiagnostics: 'mihomo-dns-upstream-diagnostics',
     upstreamResults: 'mihomo-dns-upstream-results',
-    bypassState: 'mihomo-dns-bypass-state',
+    routerBypassState: 'mihomo-dns-router-bypass-state',
     providerFreshness: 'mihomo-dns-provider-freshness',
   });
 
@@ -416,22 +416,43 @@ import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from '
   function renderDiagnostics(data) {
     const diagnostics = data?.dns_diagnostics || data || {};
     const bypass = diagnostics.bypass || {};
-    const bypassState = $(IDS.bypassState);
+    const routerBypassState = $(IDS.routerBypassState);
     const provider = $(IDS.providerFreshness);
     const results = $(IDS.upstreamResults);
-    if (bypassState) {
-      const state = String(bypass.state || 'unknown');
-      bypassState.dataset.state = state;
-      bypassState.textContent = state === 'safe'
-        ? 'Обход DNS: не найден'
-        : (state === 'warning' ? 'Обход DNS: требует внимания' : 'Обход DNS: не подтверждён');
+    const setBadge = (element, state, text, tooltip) => {
+      if (!element) return;
+      element.dataset.state = state;
+      element.textContent = text;
+      element.dataset.tooltip = tooltip;
+      element.title = tooltip;
+    };
+    if (routerBypassState) {
+      const state = String(bypass.router_state || bypass.state || 'unknown');
+      const clientState = String(bypass.client_state || 'unknown');
+      const clientNote = clientState === 'unknown'
+        ? (bypass.client_reason || 'Клиентские DNS нельзя подтвердить из панели.')
+        : 'Клиентский путь DNS проверен.';
+      setBadge(
+        routerBypassState,
+        state,
+        state === 'safe'
+          ? 'DNS роутера: защищён'
+          : (state === 'warning' ? 'DNS роутера: требует внимания' : 'DNS роутера: не подтверждён'),
+        state === 'safe'
+          ? `Пути DNS на роутере проверены. ${clientNote}.`
+          : (bypass.reasons || []).join(' · ') || clientNote,
+      );
     }
     if (provider) {
       const freshness = diagnostics.provider_freshness || {};
-      provider.dataset.state = String(freshness.state || 'unknown');
-      provider.textContent = freshness.state === 'fresh'
+      const state = String(freshness.state || 'unknown');
+      const text = freshness.state === 'fresh'
         ? `Провайдеры: свежие (${freshness.configured || 0})`
         : `Провайдеры: возраст неизвестен (${freshness.configured || 0})`;
+      const tooltip = freshness.state === 'fresh'
+        ? `Проверены ${freshness.configured || 0} rule-provider.`
+        : (freshness.reason || 'Mihomo не сообщил панели путь к кэшу rule-provider.');
+      setBadge(provider, state, text, tooltip);
     }
     if (!results) return;
     results.textContent = '';
@@ -445,7 +466,8 @@ import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from '
       items.forEach((item) => {
         const row = document.createElement('li');
         row.dataset.state = item.state || 'configured';
-        row.textContent = `${item.scheme || 'DNS'} · ${item.route === 'proxy' ? `через ${item.route_name || 'proxy-группу'}` : 'DIRECT'} · настроен (маршрут проверяется listener-пробой)`;
+        const address = item.address || item.server || 'endpoint';
+        row.textContent = `${String(item.scheme || 'DNS').toUpperCase()} · ${address} · ${item.route === 'proxy' ? `через ${item.route_name || 'proxy-группу'}` : 'DIRECT'} · настроен (маршрут проверяется listener-пробой)`;
         results.appendChild(row);
       });
     }

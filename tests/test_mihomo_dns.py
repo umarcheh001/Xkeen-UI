@@ -1771,6 +1771,8 @@ def test_dns_runtime_diagnostics_warn_about_unignored_ipv6_provider_dns():
     )
 
     assert diagnostics["bypass"]["state"] == "warning"
+    assert diagnostics["bypass"]["router_state"] == "warning"
+    assert diagnostics["bypass"]["client_state"] == "unknown"
     assert diagnostics["bypass"]["ipv6_provider_dns"] == "risk"
     assert any("IPv6" in reason for reason in diagnostics["bypass"]["reasons"])
 
@@ -1791,6 +1793,7 @@ def test_dns_runtime_diagnostics_exposes_upstream_routes_and_provider_freshness(
 
     assert diagnostics["upstreams"]["configured"] >= 1
     assert all(item["route"] == "proxy" for item in diagnostics["upstreams"]["items"])
+    assert {item["address"] for item in diagnostics["upstreams"]["items"]} >= {"8.8.8.8", "1.1.1.1"}
     assert diagnostics["provider_freshness"]["state"] == "unknown"
 
 

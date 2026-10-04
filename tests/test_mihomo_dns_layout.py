@@ -83,14 +83,20 @@ def test_mihomo_dns_hardening_controls_are_visible_without_replacing_existing_wo
         "mihomo-dns-prefer-h3",
         "mihomo-dns-upstream-diagnostics",
         "mihomo-dns-upstream-results",
-        "mihomo-dns-bypass-state",
+        "mihomo-dns-router-bypass-state",
         "mihomo-dns-provider-freshness",
     ):
         assert f'id="{element_id}"' in MODAL, element_id
 
+    assert MODAL.count('class="dt-switch xk-switch-bare xk-mini-switch mihomo-dns-option-switch"') == 3
+    assert 'data-tooltip="' in MODAL
+
     script = (ROOT / "xkeen-ui/static/js/features/mihomo_dns.js").read_text(encoding="utf-8")
     assert "prefer_h3" in script
     assert "/api/mihomo/dns/diagnostics" in script
+    assert "router_state" in script
+    assert "client_state" in script
+    assert "item.address" in script
 
 
 def test_active_managed_dns_has_a_separate_reconfigure_action():

@@ -15365,14 +15365,16 @@ body.panel-page #mihomo-dns-modal .mihomo-dns-hardening {
 }
 
 body.panel-page #mihomo-dns-modal .mihomo-dns-hardening-summary {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
 }
 
 body.panel-page #mihomo-dns-modal .mihomo-dns-hardening-summary > span {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  min-width: 0;
   min-height: 26px;
   padding: 4px 8px;
   border: 1px solid var(--op-border);
@@ -15393,6 +15395,12 @@ body.panel-page #mihomo-dns-modal .mihomo-dns-hardening-summary > [data-state="u
 body.panel-page #mihomo-dns-modal .mihomo-dns-upstream-results > .is-warning {
   border-color: color-mix(in srgb, #f59e0b 42%, var(--op-border));
   color: #fbbf24;
+}
+
+@media (max-width: 560px) {
+  body.panel-page #mihomo-dns-modal .mihomo-dns-hardening-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 body.panel-page #mihomo-dns-modal .mihomo-dns-upstream-results {
@@ -15434,7 +15442,7 @@ body.panel-page #mihomo-dns-modal .mihomo-dns-mode-picker {
   align-items: start;
 }
 
-body.panel-page #mihomo-dns-modal .mihomo-dns-h3-toggle {
+body.panel-page #mihomo-dns-modal .mihomo-dns-option-switch {
   grid-column: 1 / -1;
   margin: 0;
 }
@@ -15501,9 +15509,9 @@ body.panel-page #mihomo-dns-modal .mihomo-dns-sources {
   gap: 10px;
 }
 
-/* GeoSite opt-in follows the compact panel switch language instead of the
+/* DNS and GeoSite opt-ins follow the compact panel switch language instead of the
  * rounded blue pill used by legacy form controls. */
-body.panel-page #mihomo-dns-modal .mihomo-dns-geodata-toggle {
+body.panel-page #mihomo-dns-modal :is(.mihomo-dns-geodata-toggle, .mihomo-dns-option-switch) {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -15514,10 +15522,10 @@ body.panel-page #mihomo-dns-modal .mihomo-dns-geodata-toggle {
   background: transparent;
   color: var(--op-muted);
 }
-body.panel-page #mihomo-dns-modal .mihomo-dns-geodata-toggle:hover {
+body.panel-page #mihomo-dns-modal :is(.mihomo-dns-geodata-toggle, .mihomo-dns-option-switch):hover {
   background: transparent;
 }
-body.panel-page #mihomo-dns-modal .mihomo-dns-geodata-toggle .dt-switch-label {
+body.panel-page #mihomo-dns-modal :is(.mihomo-dns-geodata-toggle, .mihomo-dns-option-switch) .dt-switch-label {
   color: var(--op-muted);
   font-size: calc(11px * var(--xk-font-scale, 1));
   font-weight: 560;
@@ -15564,7 +15572,7 @@ body.panel-page #mihomo-dns-modal .mihomo-dns-provider-btn[aria-pressed="true"] 
 
 /* Keep the GeoSite switch visually consistent with the header auto-restart
  * control: a visible light thumb on the dark track and a clear indigo ON state. */
-body.panel-page #mihomo-dns-modal .mihomo-dns-geodata-toggle .dt-switch-slider {
+body.panel-page #mihomo-dns-modal :is(.mihomo-dns-geodata-toggle, .mihomo-dns-option-switch) .dt-switch-slider {
   width: 34px;
   min-width: 34px;
   height: 18px;
@@ -15573,7 +15581,7 @@ body.panel-page #mihomo-dns-modal .mihomo-dns-geodata-toggle .dt-switch-slider {
   border-color: rgba(96, 165, 250, 0.14) !important;
 }
 
-body.panel-page #mihomo-dns-modal .mihomo-dns-geodata-toggle .dt-switch-slider::after {
+body.panel-page #mihomo-dns-modal :is(.mihomo-dns-geodata-toggle, .mihomo-dns-option-switch) .dt-switch-slider::after {
   top: 1px;
   left: 1px;
   width: 14px;
@@ -15582,22 +15590,22 @@ body.panel-page #mihomo-dns-modal .mihomo-dns-geodata-toggle .dt-switch-slider::
   box-shadow: 0 1px 6px rgba(2, 8, 23, 0.28);
 }
 
-body.panel-page #mihomo-dns-modal .mihomo-dns-geodata-toggle input:checked + .dt-switch-slider {
+body.panel-page #mihomo-dns-modal :is(.mihomo-dns-geodata-toggle, .mihomo-dns-option-switch) input:checked + .dt-switch-slider {
   background: rgba(37, 99, 235, 0.96) !important;
   border-color: rgba(96, 165, 250, 0.4) !important;
 }
 
-body.panel-page #mihomo-dns-modal .mihomo-dns-geodata-toggle input:checked + .dt-switch-slider::after {
+body.panel-page #mihomo-dns-modal :is(.mihomo-dns-geodata-toggle, .mihomo-dns-option-switch) input:checked + .dt-switch-slider::after {
   transform: translateX(16px) !important;
   background: #f8fbff !important;
 }
 
-html[data-theme="light"] body.panel-page #mihomo-dns-modal .mihomo-dns-geodata-toggle .dt-switch-slider {
+html[data-theme="light"] body.panel-page #mihomo-dns-modal :is(.mihomo-dns-geodata-toggle, .mihomo-dns-option-switch) .dt-switch-slider {
   background: rgba(226, 232, 240, 0.95) !important;
   border-color: rgba(63, 111, 203, 0.14) !important;
 }
 
-html[data-theme="light"] body.panel-page #mihomo-dns-modal .mihomo-dns-geodata-toggle .dt-switch-slider::after {
+html[data-theme="light"] body.panel-page #mihomo-dns-modal :is(.mihomo-dns-geodata-toggle, .mihomo-dns-option-switch) .dt-switch-slider::after {
   background: #fff !important;
 }
 body.panel-page #mihomo-dns-modal .mihomo-dns-provider-btn:disabled {

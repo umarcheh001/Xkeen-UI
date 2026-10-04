@@ -32,8 +32,8 @@
             <ul id="mihomo-dns-details" class="routing-dns-over-vless-details"></ul>
             <div class="mihomo-dns-hardening" aria-label="Проверки защищённого DNS">
               <div class="mihomo-dns-hardening-summary">
-                <span id="mihomo-dns-bypass-state" data-state="unknown">Обход DNS: проверка</span>
-                <span id="mihomo-dns-provider-freshness" data-state="unknown">Провайдеры: возраст неизвестен</span>
+                <span id="mihomo-dns-router-bypass-state" data-state="unknown" data-tooltip="Проверяет обход на самом роутере: WAN DNS, IPv6 DNS, транзитный перехват и DNS override.">DNS роутера: проверка</span>
+                <span id="mihomo-dns-provider-freshness" data-state="unknown" data-tooltip="Возраст rule-provider неизвестен, если Mihomo не сообщает панели путь к своему кэшу.">Провайдеры: возраст неизвестен</span>
               </div>
               <button type="button" id="mihomo-dns-upstream-diagnostics" class="btn-secondary">Проверить upstream</button>
               <ul id="mihomo-dns-upstream-results" class="mihomo-dns-upstream-results" aria-live="polite"></ul>
@@ -49,13 +49,13 @@
                 <div class="mihomo-dns-field mihomo-dns-proxy-options">
                   <label for="mihomo-dns-proxy-group">Proxy-группа для DoH</label>
                   <select id="mihomo-dns-proxy-group"><option value="">Автоматический выбор</option></select>
-                  <label class="dt-switch xk-switch-bare xk-mini-switch mihomo-dns-geodata-toggle mihomo-dns-selector-toggle" title="Добавить в Mihomo отдельную группу DNS Proxy с выбранным маршрутом и DIRECT.">
+                  <label class="dt-switch xk-switch-bare xk-mini-switch mihomo-dns-option-switch" title="Добавить в Mihomo отдельную группу DNS Proxy с выбранным маршрутом и DIRECT.">
                     <input type="checkbox" id="mihomo-dns-selector-enable" aria-describedby="mihomo-dns-selector-hint">
                     <span class="dt-switch-slider" aria-hidden="true"></span>
                     <span class="dt-switch-label">Создать переключатель DNS Proxy</span>
                   </label>
                   <p id="mihomo-dns-selector-hint" class="modal-hint" role="status" aria-live="polite">После запуска позволит переключать DNS между выбранной группой и DIRECT.</p>
-                  <label class="dt-switch xk-switch-bare xk-mini-switch mihomo-dns-geodata-toggle mihomo-dns-selector-toggle" title="Направить домены из whitelist-yota в Yandex Safe DoT.">
+                  <label class="dt-switch xk-switch-bare xk-mini-switch mihomo-dns-option-switch" title="Направить домены из whitelist-yota в Yandex Safe DoT.">
                     <input type="checkbox" id="mihomo-dns-mobile-bs-enable" aria-describedby="mihomo-dns-mobile-bs-hint">
                     <span class="dt-switch-slider" aria-hidden="true"></span>
                     <span class="dt-switch-label">Мобильные БС → Яндекс DoT</span>
@@ -70,7 +70,7 @@
                   </select>
                   <p id="mihomo-dns-mode-hint" class="modal-hint">Совместимо с TProxy и большинством устройств LAN.</p>
                 </div>
-                <label class="dt-switch xk-switch-bare xk-mini-switch mihomo-dns-h3-toggle" title="Разрешить DoH через HTTP/3. UDP/443 должен быть доступен. Отключено по умолчанию.">
+                <label class="dt-switch xk-switch-bare xk-mini-switch mihomo-dns-option-switch" title="Разрешить DoH через HTTP/3. UDP/443 должен быть доступен. Отключено по умолчанию.">
                   <input type="checkbox" id="mihomo-dns-prefer-h3" aria-describedby="mihomo-dns-prefer-h3-hint">
                   <span class="dt-switch-slider" aria-hidden="true"></span>
                   <span class="dt-switch-label">Предпочитать DoH через HTTP/3</span>
