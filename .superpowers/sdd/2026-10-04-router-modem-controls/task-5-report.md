@@ -71,3 +71,23 @@ The 11 full-suite failures are outside this task's files and feature:
 
 No production fix was made for these environment or pre-existing contract
 issues. No live router reset was run.
+
+## Follow-up wording correction
+
+After review, the operator document was aligned with the shipped UI label
+`Проверить управление` (the backend concept remains a transport capability
+probe). It also now states that missing `qmicli` disables only the QMI path; a
+TTY transport that matches the RCI IMEI can still be returned as the AT
+fallback. `git diff --check` and the focused inventory/contract/module tests
+were rerun after this correction.
+
+The existing operator icon inventory was then regenerated with:
+
+```text
+python scripts/generate_operator_icon_inventory.py --output docs/panel-operator-icon-inventory.json
+```
+
+Its diff is computed usage data only: panel/resource-monitor line locators
+were shifted to the current source locations, including the modem control
+runtime action. No icon names, assets, or documented exceptions changed.
+The generator-backed test passed with `10 passed`.
