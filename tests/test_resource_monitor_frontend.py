@@ -157,3 +157,25 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
         ".xk-resource-interface-chip",
     ):
         assert fragment in css
+
+
+def test_lte_modem_controls_keep_reset_scoped_and_confirmed():
+    script = SCRIPT.read_text(encoding="utf-8")
+    css = CSS.read_text(encoding="utf-8")
+
+    for fragment in (
+        "encodeURIComponent(modemId)",
+        "${LTE_ENDPOINT}/${encodeURIComponent(modemId)}/probe",
+        "${LTE_ENDPOINT}/${encodeURIComponent(modemId)}/reset",
+        "${LTE_ENDPOINT}/operations/${encodeURIComponent(operationId)}",
+        "XKeen.ui.confirm({",
+        "danger: true",
+        'resetButton.disabled =',
+        'status === "recovered"',
+        'status === "failed"',
+        'status === "timed_out"',
+    ):
+        assert fragment in script
+    assert "innerHTML" not in script
+    assert "body.panel-page .xk-lte-controls" in css
+    assert "body.panel-page .xk-lte-control-status" in css

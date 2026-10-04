@@ -22910,6 +22910,15 @@ body.panel-page .xk-lte-state[data-state="offline"] { color: var(--op-danger); }
 body.panel-page .xk-lte-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); padding-top: 8px; }
 body.panel-page .xk-lte-metrics > div.is-wide { grid-column: span 2; }
 body.panel-page .xk-lte-metrics > div { padding-bottom: 3px; }
+body.panel-page .xk-lte-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; min-width: 0; padding: 8px 10px; border-top: 1px solid var(--op-border); }
+body.panel-page .xk-lte-controls > button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 28px; padding: 4px 8px; font-size: calc(9px * var(--xk-font-scale, 1)); }
+body.panel-page .xk-lte-controls > button svg { width: 13px; height: 13px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 1.8; }
+body.panel-page .xk-lte-controls > button:disabled { cursor: not-allowed; opacity: .48; }
+body.panel-page .xk-lte-control-status { min-width: 0; flex: 1 1 190px; color: var(--op-muted); font-size: calc(9px * var(--xk-font-scale, 1)); line-height: 1.3; overflow-wrap: anywhere; }
+body.panel-page .xk-lte-control-status[hidden] { display: none; }
+body.panel-page .xk-lte-control-status[data-state="running"] { color: var(--op-warning); }
+body.panel-page .xk-lte-control-status[data-state="error"] { color: var(--op-danger); }
+body.panel-page .xk-lte-control-status[data-state="success"] { color: var(--op-success); }
 body.panel-page .xk-incidents-list { display: grid; gap: 0; padding: 0 10px 8px; }
 body.panel-page .xk-incident-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; min-width: 0; padding: 6px 0; border-top: 1px solid var(--op-border); }
 body.panel-page .xk-incident-row strong { overflow: hidden; color: var(--op-data); font-size: calc(9px * var(--xk-font-scale, 1)); text-overflow: ellipsis; white-space: nowrap; }
@@ -22933,6 +22942,8 @@ body.panel-page .xk-incident-row[data-state="offline"] strong { color: var(--op-
   body.panel-page .xk-lte-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   body.panel-page .xk-lte-modem > header { align-items: flex-start; flex-direction: column; }
   body.panel-page .xk-lte-metrics > div.is-wide { grid-column: 1 / -1; }
+  body.panel-page .xk-lte-controls > button { flex: 1 1 140px; }
+  body.panel-page .xk-lte-control-status { flex-basis: 100%; }
 }
 
 /* A normal desktop panel keeps its compact, fully visible header.  On short
