@@ -388,17 +388,26 @@ def test_cores_updates_returns_stale_cache_while_refresh_runs_in_background(tmp_
     assert settled["refreshing"] is False
 
 
-def test_commands_panel_is_read_only_and_core_sources_are_module_owned():
+def test_commands_panel_exposes_official_core_updates_separately_from_fork_sources():
     template = compose_panel_template(ROOT)
     script = (ROOT / "xkeen-ui" / "static" / "js" / "features" / "cores_status.js").read_text(encoding="utf-8")
     source_template = (ROOT / "xkeen-ui" / "templates" / "panel" / "core_source.html").read_text(encoding="utf-8")
     source_script = (ROOT / "xkeen-ui" / "static" / "js" / "features" / "core_source.js").read_text(encoding="utf-8")
 
-    assert 'id="core-xray-update-btn"' not in template
-    assert 'id="core-mihomo-update-btn"' not in template
-    assert 'id="core-xray-prerelease-update-btn"' not in template
-    assert 'id="core-mihomo-prerelease-update-btn"' not in template
-    assert 'addEventListener(\'click\', async () => {\n        await runPrereleaseUpdate' not in script
+    for element_id in (
+        "core-xray-update-btn",
+        "core-mihomo-update-btn",
+        "core-xray-prerelease-release",
+        "core-mihomo-prerelease-release",
+        "core-xray-prerelease-update-btn",
+        "core-mihomo-prerelease-update-btn",
+    ):
+        assert f'id="{element_id}"' in template
+    assert "configurePrereleaseAction(xPreUpdateBtn" in script
+    assert "configurePrereleaseAction(mPreUpdateBtn" in script
+    assert "const preUpd = (payload && payload.prerelease_update_available)" in script
+    assert "runXkeenCommand('-ux')" in script
+    assert "runXkeenCommand('-um')" in script
     assert 'data-core-source' in source_template
     assert 'data-core-install-modal' in source_template
     assert 'data-core-source-action="prepare" data-tooltip="Проверить релиз и подготовить безопасную установку" disabled' in source_template
@@ -417,12 +426,15 @@ def test_commands_panel_is_read_only_and_core_sources_are_module_owned():
     assert "setTimeout(() => poll(operationId), 700);" in source_script
 
 
-def test_commands_lazy_runtime_does_not_reintroduce_legacy_install_buttons():
+def test_commands_lazy_runtime_replays_official_core_update_actions():
     lazy_runtime = (
         ROOT / "xkeen-ui" / "static" / "js" / "pages" / "panel.lazy_bindings.runtime.js"
     ).read_text(encoding="utf-8")
 
-    assert "#core-xray-update-btn" not in lazy_runtime
-    assert "#core-mihomo-update-btn" not in lazy_runtime
-    assert "#core-xray-prerelease-update-btn" not in lazy_runtime
-    assert "#core-mihomo-prerelease-update-btn" not in lazy_runtime
+    for selector in (
+        "#core-xray-update-btn",
+        "#core-mihomo-update-btn",
+        "#core-xray-prerelease-update-btn",
+        "#core-mihomo-prerelease-update-btn",
+    ):
+        assert selector in lazy_runtime

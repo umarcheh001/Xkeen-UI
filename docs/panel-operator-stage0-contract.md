@@ -20,15 +20,15 @@
 | Область | Зафиксировано |
 | --- | ---: |
 | Top-level views | 6 |
-| Collapsible/accordion contracts | 12 |
+| Collapsible/accordion contracts | 13 |
 | Editor engine selectors | 8 |
 | Editor engines | CodeMirror, Monaco |
-| Modal IDs | 51 |
-| Inline `style` attributes | 203 |
-| Уникальные DOM IDs | 1188 из 1188 |
-| `data-*` attributes | 562 |
-| Изначально скрытые runtime nodes с ID | 151 |
-| DOM IDs со статической ссылкой из JS | 1116 |
+| Modal IDs | 53 |
+| Inline `style` attributes | 209 |
+| Уникальные DOM IDs | 1354 из 1354 |
+| `data-*` attributes | 630 |
+| Изначально скрытые runtime nodes с ID | 169 |
+| DOM IDs со статической ссылкой из JS | 1268 |
 | Dark/light viewport baselines | 12 |
 
 Полные списки, начальные значения, locators и связи с JS-файлами хранятся в JSON snapshot. Любой дрейф заставляет тест inventory завершиться ошибкой до начала следующего визуального этапа.
@@ -78,12 +78,12 @@ Route-action `Mihomo Генератор` и modal-action `Поддержать` 
 
 ## Матрица modal families
 
-Все 50 ID распределены без остатка:
+Все 53 ID распределены без остатка:
 
 | Family | Количество | Обязательные состояния |
 | --- | ---: | --- |
-| Confirm / compact form | 22 | closed, open, validation error, narrow |
-| Editor / workbench | 6 | closed, open, loading, loaded, error, narrow |
+| Confirm / compact form | 24 | closed, open, validation error, narrow |
+| Editor / workbench | 7 | closed, open, loading, loaded, error, narrow |
 | Master / detail | 19 | closed, open, loading, loaded, empty, error, narrow |
 | Drawer / help | 3 | closed, open, loaded, narrow |
 
@@ -107,19 +107,19 @@ Route-action `Mihomo Генератор` и modal-action `Поддержать` 
 
 ## Классификация inline-style
 
-Все 203 атрибута классифицированы по декларациям, а не только по наличию слова `display`:
+Все 209 атрибутов классифицированы по декларациям, а не только по наличию слова `display`:
 
 | Категория атрибута | Количество | Правило миграции |
 | --- | ---: | --- |
-| State/visibility hook | 60 | оставить inline как runtime-контракт |
+| State/visibility hook | 66 | оставить inline как runtime-контракт |
 | Presentation/geometry | 140 | переносить в scoped CSS на соответствующих этапах |
 | Mixed state + presentation | 3 | сначала разделить; inline оставить только state/visibility |
 
-Всего зафиксировано 306 деклараций: 63 state/visibility и 243 presentation/geometry. К state/visibility относятся только исходные `display: none` и `visibility: hidden/collapse`; `display: flex/grid`, размеры, отступы, цвет, opacity и типографика относятся к presentation/geometry.
+Всего зафиксировано 312 деклараций: 69 state/visibility и 243 presentation/geometry. К state/visibility относятся только исходные `display: none` и `visibility: hidden/collapse`; `display: flex/grid`, размеры, отступы, цвет, opacity и типографика относятся к presentation/geometry.
 
 ## DOM и handler freeze
 
-Snapshot хранит полный список из 971 уникального `id`, 365 экземпляров `data-*`, 156 изначально скрытых ID и mapping 942 DOM-якорей на JS-файлы, где они упоминаются. Это позволяет сравнивать контракт до и после каждого следующего этапа.
+Snapshot хранит полный список из 1354 уникальных `id`, 630 экземпляров `data-*`, 169 изначально скрытых ID и mapping 1268 DOM-якорей на JS-файлы, где они упоминаются. Это позволяет сравнивать контракт до и после каждого следующего этапа.
 
 Особо защищены визуально скрытые, но runtime-доступные повторы:
 

@@ -28,6 +28,12 @@ SCREENS = {
             "commands-status-row",
             "core-xray-stable-release",
             "core-mihomo-stable-release",
+            "core-xray-update-btn",
+            "core-mihomo-update-btn",
+            "core-xray-prerelease-release",
+            "core-mihomo-prerelease-release",
+            "core-xray-prerelease-update-btn",
+            "core-mihomo-prerelease-update-btn",
         ),
     ),
     "files": (
