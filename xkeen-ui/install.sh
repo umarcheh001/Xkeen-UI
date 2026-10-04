@@ -19,6 +19,7 @@ INSTALL_UI_FD=3
 INSTALL_FINISHED=0
 INSTALL_STAGE="Подготовка"
 INSTALL_ERROR_HINT=""
+INSTALL_CURRENT_ACTION="Подготовка"
 
 UI_RESET=""
 UI_BOLD=""
@@ -302,6 +303,7 @@ ui_stage_plan() {
 }
 
 ui_step() {
+  INSTALL_CURRENT_ACTION="$1"
   UI_STEP_LABEL="$1"
   UI_STEP_AT=$(ui_now)
   UI_STEP_CURRENT=$(( UI_STEP_DONE + 1 ))
@@ -500,7 +502,7 @@ PY
   fi
   XKEEN_UI_INSTALL_PROFILE="$PROFILE_CHOICE"
   export XKEEN_UI_INSTALL_PROFILE XKEEN_UI_INSTALL_MODULES
-  ui_line "$(printf '  %bПрофиль:%b     %s' \"$UI_DIM\" \"$UI_RESET\" \"$PROFILE_CHOICE\")"
+  ui_line "$(printf '  %bПрофиль:%b     %s' "$UI_DIM" "$UI_RESET" "$PROFILE_CHOICE")"
 }
 
 profile_has_module() {
@@ -523,6 +525,7 @@ installer_on_exit() {
   trap - 0
   ui_progress_stop
   if [ "$INSTALL_STATUS" -ne 0 ] && [ "$INSTALL_FINISHED" -ne 1 ]; then
+    log_install "[!] Установка остановлена: код $INSTALL_STATUS, этап: $INSTALL_STAGE, действие: ${INSTALL_CURRENT_ACTION:-не определено}."
     if [ "${PROFILE_TRANSACTION_ACTIVE:-0}" -eq 1 ]; then
       "$PYTHON_BIN" "$INSTALL_PROFILE_HELPER" rollback --transaction "$PROFILE_TRANSACTION" || true
       [ -x "${INIT_SCRIPT:-}" ] && "$INIT_SCRIPT" restart 3>&- || true
@@ -534,6 +537,7 @@ installer_on_exit() {
     else
       ui_info "Не удалось завершить этап: $INSTALL_STAGE."
     fi
+    ui_info "Последнее действие: ${INSTALL_CURRENT_ACTION:-не определено} (код $INSTALL_STATUS)."
     ui_info "Подробности: $INSTALL_LOG"
     printf '\n' >&3
   fi
@@ -2274,7 +2278,7 @@ cleanup_legacy_xray_templates() {
   # и из-за этого зависать/не стартовать. Начиная с этого релиза шаблоны живут в $UI_DIR/templates/*.
   # Поэтому аккуратно убираем ТОЛЬКО наши встроенные шаблоны из /opt/etc/xray/templates/*.
 
-  LEGACY_ROOT="/opt/etc/xray/templates"
+  LEGACY_ROOT="${1:-/opt/etc/xray/templates}"
   [ -d "$LEGACY_ROOT" ] || return 0
 
   # remove built-in routing templates by name
@@ -2295,8 +2299,12 @@ cleanup_legacy_xray_templates() {
   rmdir "$LEGACY_ROOT" 2>/dev/null || true
 }
 
-# Убираем legacy шаблоны из /opt/etc/xray/templates (если они были установлены ранее)
-cleanup_legacy_xray_templates
+# Убираем legacy шаблоны из /opt/etc/xray/templates (если они были установлены ранее).
+# Эта уборка не влияет на работоспособность новой панели.
+if ! cleanup_legacy_xray_templates; then
+  log_install "[!] Не удалось очистить legacy-шаблоны Xray; установка продолжается."
+  ui_warning "Не удалось очистить старые шаблоны Xray; установка продолжается."
+fi
 
 
 # --- Шаблоны Mihomo ---

@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import shlex
+import shutil
 import subprocess
 from pathlib import Path
+
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -10,6 +14,19 @@ INSTALLER = ROOT / "xkeen-ui" / "install.sh"
 
 def _text() -> str:
     return INSTALLER.read_text(encoding="utf-8")
+
+
+def _shell() -> str:
+    shell = shutil.which("sh")
+    if shell is None:
+        pytest.skip("для проверки установщика нужна POSIX-оболочка sh")
+    return shell
+
+
+def _function(name: str) -> str:
+    text = _text()
+    start = text.index(name + "() {")
+    return text[start:text.index("\n}\n", start) + 3]
 
 
 def test_installer_is_valid_posix_shell_syntax():
@@ -102,6 +119,67 @@ def test_profile_status_uses_sticky_safe_output_while_progress_ticker_is_active(
     profile_body = text[text.index('choose_panel_profile() {'):text.index('\n}\n', text.index('choose_panel_profile() {'))]
     assert 'ui_line "$(printf \'  %bПрофиль:%b     %s\'' in profile_body
     assert "printf '  %bПрофиль:%b     %s\\n'" not in profile_body
+
+
+def test_profile_status_renders_without_literal_quotes():
+    """The interactive installer must show a clean profile status line."""
+
+    script = "\n".join(
+        (
+            "set -e",
+            f"SRC_DIR={shlex.quote(str(ROOT / 'xkeen-ui'))}",
+            "UI_DIR=/tmp/xkeen-profile-status-missing",
+            "PYTHON_BIN=python3",
+            'UI_DIM=""',
+            'UI_RESET=""',
+            "ui_line() { printf '%s\\n' \"$1\"; }",
+            "XKEEN_UI_INSTALL_PROFILE=full",
+            _function("choose_panel_profile"),
+            "choose_panel_profile",
+        )
+    )
+    proc = subprocess.run([_shell(), "-c", script], capture_output=True, text=True)
+
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout == "  Профиль:     full\n"
+
+
+def test_legacy_template_cleanup_uses_requested_directory_and_ignores_nonempty_dirs(tmp_path):
+    """Legacy cleanup cannot abort an update when a user file keeps a dir nonempty."""
+
+    legacy = tmp_path / "templates"
+    routing = legacy / "routing"
+    observatory = legacy / "observatory"
+    routing.mkdir(parents=True)
+    observatory.mkdir()
+    bundled = routing / "05_routing_base.jsonc"
+    foreign = routing / "user-template.jsonc"
+    bundled.write_text("bundled", encoding="utf-8")
+    foreign.write_text("user", encoding="utf-8")
+
+    script = "\n".join(
+        (
+            "set -e",
+            _function("cleanup_legacy_xray_templates"),
+            f"cleanup_legacy_xray_templates {shlex.quote(str(legacy))}",
+        )
+    )
+    proc = subprocess.run([_shell(), "-c", script], capture_output=True, text=True)
+
+    assert proc.returncode == 0, proc.stderr
+    assert not bundled.exists()
+    assert foreign.read_text(encoding="utf-8") == "user"
+
+
+def test_unexpected_installer_exit_reports_the_last_action_and_exit_code():
+    text = _text()
+    progress = text[text.index("ui_step() {"):text.index("\n}\n", text.index("ui_step() {"))]
+    trap_body = text[text.index("installer_on_exit() {"):text.index("\n}\n", text.index("installer_on_exit() {"))]
+
+    assert 'INSTALL_CURRENT_ACTION="$1"' in progress
+    assert 'log_install "[!] Установка остановлена: код $INSTALL_STATUS' in trap_body
+    assert 'ui_info "Последнее действие: ${INSTALL_CURRENT_ACTION:-не определено} (код $INSTALL_STATUS)."' in trap_body
+    assert "if ! cleanup_legacy_xray_templates; then" in text
 
 
 def test_installer_only_reports_success_after_service_health_check():
