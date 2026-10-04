@@ -295,6 +295,7 @@ def _dns_runtime_config(text: str) -> dict[str, Any]:
             "listener_configured": False,
             "mode": "",
             "fake_ip_range": "",
+            "prefer_h3": False,
         }
 
     body = section[2]
@@ -308,6 +309,7 @@ def _dns_runtime_config(text: str) -> dict[str, Any]:
     listen = nested_scalar("listen")
     mode = nested_scalar("enhanced-mode").lower()
     fake_ip_range = nested_scalar("fake-ip-range")
+    prefer_h3 = nested_scalar("prefer-h3").lower() in {"true", "yes", "on", "1"}
     normalized_listen = listen.rsplit("/", 1)[0].strip().lower()
     listener_configured = bool(
         dns_enabled
@@ -320,6 +322,7 @@ def _dns_runtime_config(text: str) -> dict[str, Any]:
         "listener_configured": listener_configured,
         "mode": mode,
         "fake_ip_range": fake_ip_range,
+        "prefer_h3": prefer_h3,
     }
 
 
@@ -1025,6 +1028,204 @@ def _domain_rule_provider_status(config_text: str) -> dict[str, dict[str, Any]]:
         }
         for name, url in DEFAULT_DOMAIN_RULE_PROVIDERS.items()
     }
+
+
+def _dns_upstream_items(config_text: str) -> list[dict[str, Any]]:
+    """Describe direct ``dns.nameserver`` entries without contacting them.
+
+    The protected DNS assistant deliberately sends public resolvers through
+    Mihomo.  A Python-side socket probe would bypass that route and give a
+    misleading result, so this helper only exposes the configured route and
+    transport.  The read-only diagnostic endpoint adds the local listener
+    probe separately.
+    """
+
+    section = _top_level_section(config_text, "dns")
+    if section is None:
+        return []
+    body = section[2]
+    lines = body.splitlines()
+    in_nameserver = False
+    items: list[dict[str, Any]] = []
+    for line in lines:
+        if re.match(r"^  nameserver[ \t]*:", line):
+            in_nameserver = True
+            continue
+        if in_nameserver and re.match(r"^  [A-Za-z0-9_.-]+[ \t]*:", line):
+            in_nameserver = False
+        if not in_nameserver:
+            continue
+        match = re.match(r"^    -[ \t]*(.+?)\s*$", line)
+        if not match:
+            continue
+        value = _strip_yaml_scalar(match.group(1))
+        if not value or value in {"[]", "{}"}:
+            continue
+        base, _, fragment = value.partition("#")
+        route = "direct" if fragment.strip().upper().startswith("DIRECT") else "proxy"
+        parsed = urlsplit(base)
+        scheme = parsed.scheme.lower() if parsed.scheme else "plain"
+        # Keep fragments useful to operators without exposing arbitrary long
+        # YAML values in the panel.
+        route_name = fragment.split("&", 1)[0].strip() if fragment else ("DIRECT" if route == "direct" else "")
+        items.append({
+            "server": value[:512],
+            "scheme": scheme,
+            "route": route,
+            "route_name": route_name[:128] or None,
+            "state": "configured",
+        })
+    return items[:MAX_DNS_SERVERS]
+
+
+def _dns_provider_freshness(config_text: str, config_file: str = "") -> dict[str, Any]:
+    """Return informational provider freshness without triggering downloads.
+
+    Mihomo may keep provider files in its own cache when no explicit ``path``
+    is present.  In that case age is intentionally reported as ``unknown``;
+    silently treating an absent mtime as fresh would hide stale lists.
+    """
+
+    section = _top_level_section(config_text, "rule-providers")
+    providers: list[dict[str, Any]] = []
+    if section:
+        current_name = ""
+        current: list[str] = []
+        for line in section[2].splitlines()[1:]:
+            match = re.match(r"^  ([^\s:#][^:]*):(?:\s*(.*))?$", line)
+            if match:
+                if current_name:
+                    providers.append({"name": current_name, "lines": current})
+                current_name = match.group(1).strip()
+                current = [str(match.group(2) or "")]
+            elif current_name:
+                current.append(line)
+        if current_name:
+            providers.append({"name": current_name, "lines": current})
+
+    items: list[dict[str, Any]] = []
+    for entry in providers[:32]:
+        joined = "\n".join(entry["lines"])
+        interval_match = re.search(r"(?m)^\s+interval\s*:\s*(\d+)", joined)
+        path_match = re.search(r"(?m)^\s+path\s*:\s*['\"]?([^\s'\"]+)", joined)
+        interval = int(interval_match.group(1)) if interval_match else None
+        path_value = path_match.group(1) if path_match else ""
+        resolved = ""
+        age_seconds = None
+        if path_value:
+            candidate = Path(path_value)
+            if not candidate.is_absolute() and config_file:
+                candidate = Path(config_file).parent / candidate
+            resolved = str(candidate)
+            try:
+                age_seconds = max(0, int(time.time() - candidate.stat().st_mtime))
+            except OSError:
+                age_seconds = None
+        items.append({
+            "name": str(entry["name"])[:128],
+            "interval_s": interval,
+            "path": resolved or None,
+            "age_s": age_seconds,
+            "state": "fresh" if age_seconds is not None and interval and age_seconds <= interval else "unknown",
+        })
+    return {
+        "state": "fresh" if items and all(item["state"] == "fresh" for item in items) else "unknown",
+        "configured": len(items),
+        "items": items,
+        "reason": "Mihomo cache path is not exposed by config" if any(item["age_s"] is None for item in items) else None,
+    }
+
+
+def diagnose_dns_runtime(
+    config_text: str | None = None,
+    *,
+    config_file: str = "",
+    ui_state_dir: str = "",
+    firmware_policy: Optional[dict[str, Any]] = None,
+    dns_override: Optional[bool] = None,
+    active_core: str = "",
+    status: Optional[dict[str, Any]] = None,
+    probe: bool = False,
+) -> dict[str, Any]:
+    """Build a read-only protected-DNS hardening report.
+
+    The report never changes Keenetic or Mihomo state.  ``bypass`` concerns
+    paths that can avoid the port-53 listener; ``upstreams`` is deliberately a
+    configuration matrix, while ``listener_probe`` is the only live probe and
+    tests the route actually used by LAN clients.
+    """
+
+    if config_text is None:
+        config_text = _read_text(config_file, "") or ""
+    supplied_status = status if isinstance(status, dict) else {}
+    policy = firmware_policy if isinstance(firmware_policy, dict) else supplied_status.get("keenetic_dns_policy")
+    runtime = _dns_runtime_config(str(config_text or ""))
+    if dns_override is None:
+        dns_override = supplied_status.get("dns_override")
+    if active_core == "":
+        active_core = str(supplied_status.get("active_core") or "")
+
+    reasons: list[str] = []
+    bypass_checks: dict[str, str] = {
+        "provider_dns": "unknown",
+        "ipv6_provider_dns": "unknown",
+        "transit_dns": "unknown",
+        "dhcp_direct_dns": "unknown",
+    }
+    risks = False
+    if isinstance(policy, dict):
+        provider_ignored = policy.get("provider_ignored")
+        bypass_checks["provider_dns"] = "safe" if provider_ignored is True else ("risk" if provider_ignored is False else "unknown")
+        if provider_ignored is False:
+            risks = True
+            reasons.append("DNS провайдера на WAN-интерфейсе не игнорируется")
+        interfaces = [item for item in policy.get("provider_interfaces") or [] if isinstance(item, dict)]
+        if interfaces:
+            ipv6_safe = all(item.get("ipv6_ignored") is True for item in interfaces)
+            ipv6_risk = any(item.get("ipv6_ignored") is False for item in interfaces)
+            bypass_checks["ipv6_provider_dns"] = "risk" if ipv6_risk else ("safe" if ipv6_safe else "unknown")
+            if ipv6_risk:
+                risks = True
+                reasons.append("IPv6 DNS провайдера на WAN-интерфейсе не игнорируется")
+        transit = policy.get("transit_intercept")
+        bypass_checks["transit_dns"] = "risk" if transit is True else ("safe" if transit is False else "unknown")
+        if transit is True:
+            risks = True
+            reasons.append("Keenetic перехватывает транзитные DNS-запросы")
+    if runtime.get("listener_configured") and dns_override is True and active_core in {"", "mihomo"} and not risks:
+        bypass_state = "safe" if all(value == "safe" for value in bypass_checks.values()) else "unknown"
+    elif risks:
+        bypass_state = "warning"
+    else:
+        bypass_state = "unknown"
+        reasons.append("Не удалось подтвердить все пути DNS на этом стенде")
+
+    upstream_items = _dns_upstream_items(str(config_text or ""))
+    result: dict[str, Any] = {
+        "schema_version": 1,
+        "bypass": {
+            "state": bypass_state,
+            "checks": bypass_checks,
+            "provider_dns": bypass_checks["provider_dns"],
+            "ipv6_provider_dns": bypass_checks["ipv6_provider_dns"],
+            "reasons": reasons,
+        },
+        "upstreams": {
+            "configured": len(upstream_items),
+            "items": upstream_items,
+            "state": "configured" if upstream_items else "empty",
+        },
+        "provider_freshness": _dns_provider_freshness(str(config_text or ""), config_file),
+        "prefer_h3": bool(runtime.get("prefer_h3")),
+        "listener": {
+            "configured": bool(runtime.get("listener_configured")),
+            "listen": runtime.get("listen") or None,
+            "mode": runtime.get("mode") or None,
+        },
+    }
+    if probe and runtime.get("listener_configured"):
+        result["listener_probe"] = _dns_probe(timeout=4.0)
+    return result
 
 
 def _render_domain_rule_provider(name: str, url: str, *, use_anchor: bool) -> str:
@@ -2016,6 +2217,7 @@ def _managed_dns_block(
     fake_ip: Any = None,
     dns_options: Any = None,
     mobile_bs: bool = False,
+    prefer_h3: bool = False,
 ) -> str:
     target = str(group or "").strip()
     if not target:
@@ -2105,7 +2307,7 @@ def _managed_dns_block(
         "  ipv6: false\n"
         f"  enhanced-mode: {normalized_mode}\n"
         "  cache-algorithm: arc\n"
-        "  prefer-h3: false\n"
+        f"  prefer-h3: {'true' if prefer_h3 is True else 'false'}\n"
         f"{fake_block}"
         "  use-hosts: true\n"
         "  use-system-hosts: true\n"
@@ -2226,6 +2428,7 @@ def build_enabled_config(
     direct_resolver: Any = None,
     direct_domains: Any = None,
     mobile_bs: bool = False,
+    prefer_h3: bool = False,
 ) -> tuple[str, str]:
     original = str(text or "")
     if not original.strip():
@@ -2299,6 +2502,7 @@ def build_enabled_config(
             fake_ip=fake_options,
             dns_options=portable_dns if (dns_options is not None or any(value is not None for value in explicit_dns.values())) else None,
             mobile_bs=mobile_bs,
+            prefer_h3=prefer_h3 is True,
         ),
     )
     return patched, selected
@@ -2948,6 +3152,14 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
     can_disable = bool(exact and state)
     can_reconfigure = bool(enabled and exact and state)
     can_enable = bool(not state and not has_dns and not has_begin and not has_end and core == "mihomo" and group and override is not None)
+    dns_diagnostics = diagnose_dns_runtime(
+        text,
+        config_file=config_file,
+        ui_state_dir=ui_state_dir,
+        firmware_policy=firmware_dns_policy,
+        dns_override=override,
+        active_core=core,
+    )
     return {
         "ok": True,
         "enabled": enabled,
@@ -2973,6 +3185,8 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
         "rule_providers": state.get("rule_providers") if isinstance(state.get("rule_providers"), list) else [],
         "mobile_bs": bool(state.get("mobile_bs")),
         "dns_options": dns_options,
+        "prefer_h3": bool(dns_diagnostics.get("prefer_h3")),
+        "dns_diagnostics": dns_diagnostics,
         # Keep the boolean for API compatibility. Unlike the old value it is
         # true for TProxy only after the selected CIDR reaches the live target.
         "fake_ip_available": bool(fake_ip_route["available"]),
@@ -3160,6 +3374,7 @@ def _reconfigure_managed_dns(
     direct_resolver: Any,
     direct_domains: Any,
     mobile_bs: bool,
+    prefer_h3: Optional[bool],
     repair_legacy_exclusion: bool,
 ) -> dict[str, Any]:
     """Rebuild an exact managed profile without losing its original snapshot."""
@@ -3218,6 +3433,11 @@ def _reconfigure_managed_dns(
                     details={"route": route, "repair": repair} if code == "fake_ip_repair_confirmation_required" else route,
                 )
 
+    effective_prefer_h3 = (
+        bool(_dns_runtime_config(current).get("prefer_h3"))
+        if prefer_h3 is None
+        else bool(prefer_h3)
+    )
     prepared, group = build_enabled_config(
         original,
         str(proxy_group or status.get("proxy_group") or ""),
@@ -3235,6 +3455,7 @@ def _reconfigure_managed_dns(
         direct_resolver=direct_resolver,
         direct_domains=direct_domains,
         mobile_bs=mobile_bs,
+        prefer_h3=effective_prefer_h3,
     )
     validation = validate_config(new_content=prepared) or ""
     if not _validation_ok(validation):
@@ -3422,6 +3643,7 @@ def apply_action(
     direct_resolver: Any = None,
     direct_domains: Any = None,
     mobile_bs: bool = False,
+    prefer_h3: Optional[bool] = None,
     repair_legacy_exclusion: bool = False,
 ) -> dict[str, Any]:
     normalized = str(action or "").strip().lower()
@@ -3463,6 +3685,7 @@ def apply_action(
                 direct_resolver=direct_resolver,
                 direct_domains=direct_domains,
                 mobile_bs=mobile_bs,
+                prefer_h3=prefer_h3,
                 repair_legacy_exclusion=repair_legacy_exclusion,
             )
 
@@ -3530,6 +3753,7 @@ def apply_action(
                 direct_resolver=direct_resolver,
                 direct_domains=direct_domains,
                 mobile_bs=mobile_bs,
+                prefer_h3=prefer_h3,
             )
             validation = validate_config(new_content=prepared) or ""
             if not _validation_ok(validation):
@@ -4025,6 +4249,7 @@ __all__ = [
     "MihomoDnsError",
     "apply_action",
     "build_enabled_config",
+    "diagnose_dns_runtime",
     "emergency_release",
     "get_status",
     "is_enabled",

@@ -30,6 +30,14 @@
             </div>
 
             <ul id="mihomo-dns-details" class="routing-dns-over-vless-details"></ul>
+            <div class="mihomo-dns-hardening" aria-label="Проверки защищённого DNS">
+              <div class="mihomo-dns-hardening-summary">
+                <span id="mihomo-dns-bypass-state" data-state="unknown">Обход DNS: проверка</span>
+                <span id="mihomo-dns-provider-freshness" data-state="unknown">Провайдеры: возраст неизвестен</span>
+              </div>
+              <button type="button" id="mihomo-dns-upstream-diagnostics" class="btn-secondary">Проверить upstream</button>
+              <ul id="mihomo-dns-upstream-results" class="mihomo-dns-upstream-results" aria-live="polite"></ul>
+            </div>
           </div>
 
           <div class="mihomo-dns-settings">
@@ -62,6 +70,12 @@
                   </select>
                   <p id="mihomo-dns-mode-hint" class="modal-hint">Совместимо с TProxy и большинством устройств LAN.</p>
                 </div>
+                <label class="dt-switch xk-switch-bare xk-mini-switch mihomo-dns-h3-toggle" title="Разрешить DoH через HTTP/3. UDP/443 должен быть доступен. Отключено по умолчанию.">
+                  <input type="checkbox" id="mihomo-dns-prefer-h3" aria-describedby="mihomo-dns-prefer-h3-hint">
+                  <span class="dt-switch-slider" aria-hidden="true"></span>
+                  <span class="dt-switch-label">Предпочитать DoH через HTTP/3</span>
+                </label>
+                <p id="mihomo-dns-prefer-h3-hint" class="modal-hint">Опция только для сетей, где UDP/443 не блокируется; при проблемах отключите.</p>
                 <div class="mihomo-dns-field mihomo-dns-portable-options mihomo-dns-tunnel-options">
                   <label for="mihomo-dns-tunnel-servers">DNS-серверы в туннеле</label>
                   <input id="mihomo-dns-tunnel-servers" type="text" value="https://8.8.8.8/dns-query, https://1.1.1.1/dns-query" autocomplete="off" spellcheck="false">

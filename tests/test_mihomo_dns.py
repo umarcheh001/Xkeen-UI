@@ -1635,6 +1635,8 @@ def test_http_contract_and_frontend(tmp_path: Path, monkeypatch):
     response = app.test_client().get("/api/mihomo/dns")
     assert response.status_code == 200
     assert response.get_json()["can_enable"] is True
+    assert response.get_json()["prefer_h3"] is False
+    assert "dns_diagnostics" in response.get_json()
 
     root = Path(__file__).resolve().parents[1]
     template = compose_panel_template(root)
@@ -1739,6 +1741,98 @@ def test_http_contract_forwards_portable_dns_options(tmp_path: Path, monkeypatch
 
     assert response.status_code == 200
     assert captured["dns_options"]["tunnel"] == ["https://9.9.9.9/dns-query"]
+
+
+def test_build_enabled_config_keeps_h3_off_by_default_and_supports_opt_in():
+    content, _ = dns.build_enabled_config(BASE)
+    assert "  prefer-h3: false\n" in content
+
+    opted_in, _ = dns.build_enabled_config(BASE, prefer_h3=True)
+    assert "  prefer-h3: true\n" in opted_in
+
+
+def test_dns_runtime_diagnostics_warn_about_unignored_ipv6_provider_dns():
+    content, _ = dns.build_enabled_config(BASE)
+    diagnostics = dns.diagnose_dns_runtime(
+        content,
+        firmware_policy={
+            "provider_ignored": False,
+            "provider_interfaces": [
+                {
+                    "name": "GigabitEthernet0",
+                    "ipv4_ignored": True,
+                    "ipv6_ignored": False,
+                },
+            ],
+            "transit_intercept": False,
+        },
+        dns_override=True,
+        active_core="mihomo",
+    )
+
+    assert diagnostics["bypass"]["state"] == "warning"
+    assert diagnostics["bypass"]["ipv6_provider_dns"] == "risk"
+    assert any("IPv6" in reason for reason in diagnostics["bypass"]["reasons"])
+
+
+def test_dns_runtime_diagnostics_exposes_upstream_routes_and_provider_freshness(tmp_path: Path):
+    content, _ = dns.build_enabled_config(
+        BASE,
+        mode="fake-ip",
+        rule_providers=["category_ru@domain"],
+    )
+    diagnostics = dns.diagnose_dns_runtime(
+        content,
+        firmware_policy={"provider_ignored": True, "transit_intercept": False},
+        dns_override=True,
+        active_core="mihomo",
+        config_file=str(tmp_path / "config.yaml"),
+    )
+
+    assert diagnostics["upstreams"]["configured"] >= 1
+    assert all(item["route"] == "proxy" for item in diagnostics["upstreams"]["items"])
+    assert diagnostics["provider_freshness"]["state"] == "unknown"
+
+
+def test_http_contract_forwards_prefer_h3_and_exposes_read_only_diagnostics(tmp_path: Path, monkeypatch):
+    import routes.mihomo as mihomo_routes
+    from routes.mihomo import create_mihomo_blueprint
+
+    config, state = _status_ready(tmp_path, monkeypatch)
+    monkeypatch.setattr(mihomo_routes, "get_mihomo_dns_status", dns.get_status)
+    monkeypatch.setattr(
+        mihomo_routes,
+        "diagnose_mihomo_dns",
+        lambda **_kwargs: {"ok": True, "schema_version": 1, "bypass": {"state": "safe"}},
+    )
+    captured: dict[str, object] = {}
+
+    def fake_apply(action, **kwargs):
+        captured.update(kwargs)
+        return {"ok": True, "enabled": True}
+
+    monkeypatch.setattr(mihomo_routes, "apply_mihomo_dns_action", fake_apply)
+    app = Flask("mihomo-dns-diagnostics")
+    app.register_blueprint(create_mihomo_blueprint(
+        MIHOMO_CONFIG_FILE=str(config),
+        MIHOMO_TEMPLATES_DIR=str(tmp_path / "templates"),
+        MIHOMO_DEFAULT_TEMPLATE=str(tmp_path / "templates" / "default.yaml"),
+        restart_xkeen=lambda **_kwargs: True,
+        ui_state_dir=str(state),
+    ))
+    client = app.test_client()
+
+    response = client.post("/api/mihomo/dns", json={
+        "confirmed": True,
+        "action": "enable",
+        "prefer_h3": True,
+    })
+    assert response.status_code == 200
+    assert captured["prefer_h3"] is True
+
+    diagnostics = client.post("/api/mihomo/dns/diagnostics", json={"confirmed": True})
+    assert diagnostics.status_code == 200
+    assert diagnostics.get_json()["bypass"]["state"] == "safe"
 
 
 # --- Тишина в журнале роутера ---------------------------------------------

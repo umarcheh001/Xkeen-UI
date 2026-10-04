@@ -78,6 +78,21 @@ def test_existing_runtime_hooks_remain_inside_the_modal():
         assert f'id="{element_id}"' in MODAL, element_id
 
 
+def test_mihomo_dns_hardening_controls_are_visible_without_replacing_existing_workflow():
+    for element_id in (
+        "mihomo-dns-prefer-h3",
+        "mihomo-dns-upstream-diagnostics",
+        "mihomo-dns-upstream-results",
+        "mihomo-dns-bypass-state",
+        "mihomo-dns-provider-freshness",
+    ):
+        assert f'id="{element_id}"' in MODAL, element_id
+
+    script = (ROOT / "xkeen-ui/static/js/features/mihomo_dns.js").read_text(encoding="utf-8")
+    assert "prefer_h3" in script
+    assert "/api/mihomo/dns/diagnostics" in script
+
+
 def test_active_managed_dns_has_a_separate_reconfigure_action():
     script = (ROOT / "xkeen-ui/static/js/features/mihomo_dns.js").read_text(encoding="utf-8")
     assert "current?.can_reconfigure" in script

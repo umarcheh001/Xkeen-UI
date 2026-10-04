@@ -84,6 +84,7 @@ from services.dns_guard import (
 from services.mihomo_dns import (
     MihomoDnsError,
     apply_action as apply_mihomo_dns_action,
+    diagnose_dns_runtime as diagnose_mihomo_dns,
     get_status as get_mihomo_dns_status,
 )
 from services.mihomo_xray_json import (
@@ -1518,6 +1519,39 @@ def create_mihomo_blueprint(
                 last_operation=last_operation,
             )
 
+    @bp.post("/api/mihomo/dns/diagnostics")
+    def api_mihomo_dns_diagnostics():
+        """Run bounded, read-only hardening diagnostics for protected DNS."""
+        data = request.get_json(silent=True) or {}
+        if data.get("confirmed") is not True:
+            return _api_error(
+                "Требуется подтверждение проверки DNS Mihomo.",
+                400,
+                ok=False,
+                code="mihomo_dns_confirmation_required",
+            )
+        try:
+            status = get_mihomo_dns_status(
+                config_file=MIHOMO_CONFIG_FILE,
+                ui_state_dir=ui_state_dir,
+            )
+            result = diagnose_mihomo_dns(
+                config_file=MIHOMO_CONFIG_FILE,
+                ui_state_dir=ui_state_dir,
+                status=status,
+                probe=True,
+            )
+            return jsonify({"ok": True, **result}), 200
+        except MihomoDnsError as exc:
+            return _api_error(str(exc), 409, ok=False, code=exc.code, details=exc.details)
+        except Exception:
+            return _api_error(
+                "Не удалось выполнить проверку защищённого DNS.",
+                500,
+                ok=False,
+                code="mihomo_dns_diagnostics_failed",
+            )
+
     @bp.post("/api/mihomo/dns")
     def api_mihomo_dns_apply():
         """Apply, restore, or softly release Mihomo DNS after confirmation."""
@@ -1531,6 +1565,7 @@ def create_mihomo_blueprint(
         rule_providers = data.get("rule_providers")
         dns_selector = data.get("dns_selector") is True
         mobile_bs = data.get("mobile_bs") is True
+        prefer_h3 = data.get("prefer_h3") if isinstance(data.get("prefer_h3"), bool) else None
         dns_options = data.get("dns_options") if isinstance(data.get("dns_options"), dict) else None
         # Accept the flat spelling used by the Xray DNS form as well.  Xray's
         # payload calls the local/direct fields singular (``local_resolver``
@@ -1595,6 +1630,7 @@ def create_mihomo_blueprint(
                 dns_selector=dns_selector,
                 dns_options=dns_options,
                 mobile_bs=mobile_bs,
+                prefer_h3=prefer_h3,
                 repair_legacy_exclusion=repair_legacy_exclusion,
             )
             return jsonify(result), 200

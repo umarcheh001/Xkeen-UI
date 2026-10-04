@@ -46,6 +46,11 @@ import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from '
     localDomains: 'mihomo-dns-local-domains',
     directServers: 'mihomo-dns-direct-servers',
     directDomains: 'mihomo-dns-direct-domains',
+    preferH3: 'mihomo-dns-prefer-h3',
+    upstreamDiagnostics: 'mihomo-dns-upstream-diagnostics',
+    upstreamResults: 'mihomo-dns-upstream-results',
+    bypassState: 'mihomo-dns-bypass-state',
+    providerFreshness: 'mihomo-dns-provider-freshness',
   });
 
   const $ = (id) => document.getElementById(id);
@@ -175,6 +180,7 @@ import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from '
       proxy_group: $(IDS.proxyGroup)?.value || current?.proxy_group || undefined,
       dns_selector: !!$(IDS.dnsSelectorEnable)?.checked,
       mobile_bs: !!$(IDS.mobileBsEnable)?.checked,
+      prefer_h3: !!$(IDS.preferH3)?.checked,
       dns_options: {
         tunnel: String($(IDS.tunnelServers)?.value || '').split(/[,\r\n]+/).map((item) => item.trim()).filter(Boolean),
         local_resolvers: String($(IDS.localServers)?.value || '').split(/[,\r\n]+/).map((item) => item.trim()).filter(Boolean),
@@ -258,6 +264,43 @@ import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from '
     const data = await response.json().catch(() => ({}));
     if (!response.ok || data.ok === false) throw Object.assign(new Error(data.error || `HTTP ${response.status}`), { data });
     return data;
+  }
+
+  async function runDiagnostics() {
+    const button = $(IDS.upstreamDiagnostics);
+    const results = $(IDS.upstreamResults);
+    if (busy || !button) return;
+    button.disabled = true;
+    button.textContent = 'Проверяем…';
+    if (results) results.textContent = '';
+    try {
+      const client = getXkeenCoreHttpApi();
+      let data;
+      if (client && typeof client.postJSON === 'function') {
+        data = await client.postJSON('/api/mihomo/dns/diagnostics', { confirmed: true }, { timeoutMs: 15000, retry: 0 });
+      } else {
+        const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+        const response = await fetch('/api/mihomo/dns/diagnostics', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
+          body: JSON.stringify({ confirmed: true }),
+        });
+        data = await response.json().catch(() => ({}));
+        if (!response.ok || data.ok === false) throw new Error(data.error || `HTTP ${response.status}`);
+      }
+      renderDiagnostics(data);
+      toastXkeen('Проверка DNS завершена', 'success');
+    } catch (error) {
+      if (results) {
+        const item = document.createElement('li');
+        item.className = 'is-warning';
+        item.textContent = String(error?.message || error || 'Проверка не выполнена.');
+        results.appendChild(item);
+      }
+    } finally {
+      button.disabled = busy;
+      button.textContent = 'Проверить upstream';
+    }
   }
 
   function addDetail(text, kind) {
@@ -370,6 +413,52 @@ import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from '
     element.textContent = known ? (value ? enabledText : disabledText) : `${enabledText.split(' · ')[0]} · неизвестно`;
   }
 
+  function renderDiagnostics(data) {
+    const diagnostics = data?.dns_diagnostics || data || {};
+    const bypass = diagnostics.bypass || {};
+    const bypassState = $(IDS.bypassState);
+    const provider = $(IDS.providerFreshness);
+    const results = $(IDS.upstreamResults);
+    if (bypassState) {
+      const state = String(bypass.state || 'unknown');
+      bypassState.dataset.state = state;
+      bypassState.textContent = state === 'safe'
+        ? 'Обход DNS: не найден'
+        : (state === 'warning' ? 'Обход DNS: требует внимания' : 'Обход DNS: не подтверждён');
+    }
+    if (provider) {
+      const freshness = diagnostics.provider_freshness || {};
+      provider.dataset.state = String(freshness.state || 'unknown');
+      provider.textContent = freshness.state === 'fresh'
+        ? `Провайдеры: свежие (${freshness.configured || 0})`
+        : `Провайдеры: возраст неизвестен (${freshness.configured || 0})`;
+    }
+    if (!results) return;
+    results.textContent = '';
+    const items = diagnostics.upstreams?.items || [];
+    if (!items.length) {
+      const empty = document.createElement('li');
+      empty.className = 'is-warning';
+      empty.textContent = 'Upstream DNS в конфигурации не найден.';
+      results.appendChild(empty);
+    } else {
+      items.forEach((item) => {
+        const row = document.createElement('li');
+        row.dataset.state = item.state || 'configured';
+        row.textContent = `${item.scheme || 'DNS'} · ${item.route === 'proxy' ? `через ${item.route_name || 'proxy-группу'}` : 'DIRECT'} · настроен (маршрут проверяется listener-пробой)`;
+        results.appendChild(row);
+      });
+    }
+    if (diagnostics.listener_probe) {
+      const probe = document.createElement('li');
+      probe.className = diagnostics.listener_probe.ok ? 'is-ok' : 'is-warning';
+      probe.textContent = diagnostics.listener_probe.ok
+        ? `Порт 53: ответ получен за ${diagnostics.listener_probe.latency_ms ?? '?'} мс.`
+        : `Порт 53: ${diagnostics.listener_probe.error || 'ответ не получен'}.`;
+      results.appendChild(probe);
+    }
+  }
+
   function render(data) {
     current = data || null;
     const badge = $(IDS.badge);
@@ -433,6 +522,8 @@ import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from '
     const selectorInfo = data?.dns_selector || {};
     if (dnsSelectorEnable && !busy) dnsSelectorEnable.checked = !!selectorInfo.enabled;
     if (mobileBsEnable && !busy) mobileBsEnable.checked = data?.mobile_bs === true;
+    const preferH3 = $(IDS.preferH3);
+    if (preferH3 && !busy) preferH3.checked = data?.prefer_h3 === true;
     if (!busy && !Array.isArray(dnsOptions.tunnel) && !tunnelServersTouched) {
       setDefaultTunnelServers(mode?.value || data?.mode || 'redir-host');
     }
@@ -474,6 +565,7 @@ import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from '
       geodataHint.classList.remove('is-warning', 'is-ok');
     }
     if (mode) mode.disabled = settingsLocked;
+    if (preferH3) preferH3.disabled = settingsLocked;
     if (geodataEnable) geodataEnable.disabled = settingsLocked;
     if (proxyGroup) proxyGroup.disabled = settingsLocked;
     [
@@ -533,6 +625,11 @@ import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from '
     }
 
     if (data) {
+      renderDiagnostics(data.dns_diagnostics || {});
+      const bypass = data.dns_diagnostics?.bypass;
+      if (bypass?.state === 'warning') {
+        (bypass.reasons || []).forEach((reason) => addDetail(`DNS bypass: ${reason}`, 'warn'));
+      }
       addDetail(`Активное ядро: ${data.active_core || 'не определено'}`, data.active_core === 'mihomo' ? 'ok' : 'warn');
       if (data.proxy_group) addDetail(`Защищённый маршрут: ${data.proxy_group}`, 'ok');
       if (data?.dns_selector?.enabled) {
@@ -607,6 +704,7 @@ import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from '
       update.hidden = true;
       update.disabled = true;
     }
+    renderDiagnostics({});
     setRuntimeState(IDS.listenerState, null, 'Mihomo :53 · включён', 'Mihomo :53 · выключен');
     setRuntimeState(IDS.overrideState, null, 'Keenetic override · включён', 'Keenetic override · выключен');
     paintOperationNotice();
@@ -746,6 +844,7 @@ import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from '
     }));
     $(IDS.apply)?.addEventListener('click', (event) => { event.preventDefault(); void apply(); });
     $(IDS.update)?.addEventListener('click', (event) => { event.preventDefault(); void reconfigure(); });
+    $(IDS.upstreamDiagnostics)?.addEventListener('click', (event) => { event.preventDefault(); void runDiagnostics(); });
     $(IDS.proxyGroup)?.addEventListener('change', () => {
       const hint = $(IDS.dnsSelectorHint);
       if (!hint || current?.dns_selector?.enabled || current?.dns_selector?.conflict) return;
