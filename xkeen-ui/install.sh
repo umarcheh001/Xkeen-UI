@@ -260,6 +260,18 @@ ui_line() {
   ui_release
 }
 
+# Prompts must temporarily own the terminal: the progress ticker otherwise
+# redraws its sticky block over the user's menu and typed answer.
+ui_input_begin() {
+  ui_hold
+  ui_sticky_clear
+}
+
+ui_input_end() {
+  ui_sticky_draw
+  ui_release
+}
+
 ui_progress_start() {
   UI_RUN_AT=$(ui_now)
   UI_OWNER_PID=$$
@@ -449,6 +461,7 @@ choose_happ_option() {
 choose_panel_profile() {
   INSTALL_PROFILE_HELPER="$SRC_DIR/scripts/module_profile_install.py"
   [ -f "$INSTALL_PROFILE_HELPER" ] || fail_install "В архиве нет helper профилей установки."
+  PROFILE_INPUT_ACTIVE=0
   PROFILE_CHOICE="${XKEEN_UI_INSTALL_PROFILE:-}"
   if [ -z "$PROFILE_CHOICE" ] && [ -f "$UI_DIR/modules.json" ]; then
     PROFILE_CHOICE="$("$PYTHON_BIN" - "$UI_DIR/modules.json" <<'PY'
@@ -463,16 +476,28 @@ PY
 )"
   fi
   if [ -z "$PROFILE_CHOICE" ] && [ -t 0 ] && [ -r /dev/tty ]; then
+    # The profile prompt runs while the stage ticker is active. Stop and clear
+    # the ticker before reading so it cannot overwrite the menu or the answer.
+    ui_input_begin
+    PROFILE_INPUT_ACTIVE=1
     printf '  %bПрофиль панели%b\n' "$UI_BOLD" "$UI_RESET" >&3
-    ui_info "1 Full  2 Xray Minimal  3 Mihomo Minimal  4 Custom"
-    printf '      Выбор [1]: ' >&3
-    IFS= read -r PROFILE_ANSWER < /dev/tty || PROFILE_ANSWER=""
-    case "$PROFILE_ANSWER" in
-      2) PROFILE_CHOICE="xray-minimal" ;;
-      3) PROFILE_CHOICE="mihomo-minimal" ;;
-      4) PROFILE_CHOICE="custom" ;;
-      *) PROFILE_CHOICE="full" ;;
-    esac
+    printf '      1) Full\n' >&3
+    printf '      2) Xray Minimal\n' >&3
+    printf '      3) Mihomo Minimal\n' >&3
+    printf '      4) Custom\n' >&3
+    while :; do
+      printf '      Выбор [1]: ' >&3
+      IFS= read -r PROFILE_ANSWER < /dev/tty || PROFILE_ANSWER=""
+      case "$PROFILE_ANSWER" in
+        ''|1) PROFILE_CHOICE="full"; break ;;
+        2) PROFILE_CHOICE="xray-minimal"; break ;;
+        3) PROFILE_CHOICE="mihomo-minimal"; break ;;
+        4) PROFILE_CHOICE="custom"; break ;;
+        *)
+          printf '      Введите число от 1 до 4.\n' >&3
+          ;;
+      esac
+    done
   fi
   [ -n "$PROFILE_CHOICE" ] || PROFILE_CHOICE="full"
   case "$PROFILE_CHOICE" in
@@ -494,6 +519,10 @@ PY
 )"
     fi
     if [ -z "${XKEEN_UI_INSTALL_MODULES:-}" ] && [ -t 0 ] && [ -r /dev/tty ]; then
+      if [ "$PROFILE_INPUT_ACTIVE" -ne 1 ]; then
+        ui_input_begin
+        PROFILE_INPUT_ACTIVE=1
+      fi
       ui_info "Модули: core, engine.xray, engine.mihomo, tool.editor, tool.terminal, tool.files, tool.backups, integration.happ, tool.advanced-diagnostics"
       printf '      ID через запятую: ' >&3
       IFS= read -r XKEEN_UI_INSTALL_MODULES < /dev/tty || XKEEN_UI_INSTALL_MODULES=""
@@ -502,6 +531,9 @@ PY
   fi
   XKEEN_UI_INSTALL_PROFILE="$PROFILE_CHOICE"
   export XKEEN_UI_INSTALL_PROFILE XKEEN_UI_INSTALL_MODULES
+  if [ "$PROFILE_INPUT_ACTIVE" -eq 1 ]; then
+    ui_input_end
+  fi
   ui_line "$(printf '  %bПрофиль:%b     %s' "$UI_DIM" "$UI_RESET" "$PROFILE_CHOICE")"
 }
 

@@ -144,6 +144,119 @@ def test_profile_status_renders_without_literal_quotes():
     assert proc.stdout == "  Профиль:     full\n"
 
 
+def test_profile_menu_pauses_progress_and_accepts_numbered_choice():
+    """The profile prompt must own the TTY while the progress ticker is active."""
+
+    if shutil.which("script") is None:
+        pytest.skip("для pseudo-TTY проверки нужна команда script")
+
+    events = Path("profile-menu-events.log")
+    script = "\n".join(
+        (
+            "set -eu",
+            "exec 3>&1",
+            f"SRC_DIR={shlex.quote(str(ROOT / 'xkeen-ui'))}",
+            "UI_DIR=/tmp/xkeen-profile-menu-missing",
+            "PYTHON_BIN=python3",
+            'UI_DIM=""',
+            'UI_RESET=""',
+            'UI_BOLD=""',
+            'UI_PROGRESS_TTY=1',
+            'UI_TICKER=123',
+            f"EVENTS={shlex.quote(str(events))}",
+            ": > \"$EVENTS\"",
+            'ui_hold() { printf "hold\\n" >> "$EVENTS"; }',
+            'ui_release() { printf "release\\n" >> "$EVENTS"; }',
+            'ui_sticky_clear() { printf "clear\\n" >> "$EVENTS"; }',
+            'ui_sticky_draw() { printf "draw\\n" >> "$EVENTS"; }',
+            'ui_info() { printf "info:%s\\n" "$1" >&3; }',
+            'ui_line() { printf "line:%s\\n" "$1" >> "$EVENTS"; }',
+            'fail_install() { printf "fail:%s\\n" "$1" >> "$EVENTS"; exit 1; }',
+            _function("ui_input_begin"),
+            _function("ui_input_end"),
+            _function("choose_panel_profile"),
+            "choose_panel_profile",
+            'printf "chosen:%s\\n" "$PROFILE_CHOICE" >> "$EVENTS"',
+            'cat "$EVENTS"',
+        )
+    )
+    try:
+        proc = subprocess.run(
+            ["script", "-qec", f"sh -c {shlex.quote(script)}", "/dev/null"],
+            input="3\n",
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    finally:
+        events.unlink(missing_ok=True)
+
+    output = proc.stdout.replace("\r\n", "\n")
+    assert proc.returncode == 0, proc.stderr
+    assert output.count("1) Full") == 1
+    assert output.count("2) Xray Minimal") == 1
+    assert output.count("3) Mihomo Minimal") == 1
+    assert output.count("4) Custom") == 1
+    assert "chosen:mihomo-minimal" in output
+    assert "hold\nclear\ndraw\nrelease\n" in output
+
+
+def test_custom_profile_keeps_progress_paused_until_modules_are_entered():
+    """Custom module input must stay above the ticker after choosing profile 4."""
+
+    if shutil.which("script") is None:
+        pytest.skip("для pseudo-TTY проверки нужна команда script")
+
+    events = Path("custom-profile-menu-events.log")
+    script = "\n".join(
+        (
+            "set -eu",
+            "exec 3>&1",
+            f"SRC_DIR={shlex.quote(str(ROOT / 'xkeen-ui'))}",
+            "UI_DIR=/tmp/xkeen-custom-profile-menu-missing",
+            "PYTHON_BIN=python3",
+            'UI_DIM=""',
+            'UI_RESET=""',
+            'UI_BOLD=""',
+            'UI_PROGRESS_TTY=1',
+            'UI_TICKER=123',
+            f"EVENTS={shlex.quote(str(events))}",
+            ": > \"$EVENTS\"",
+            'ui_hold() { printf "hold\\n" >> "$EVENTS"; }',
+            'ui_release() { printf "release\\n" >> "$EVENTS"; }',
+            'ui_sticky_clear() { printf "clear\\n" >> "$EVENTS"; }',
+            'ui_sticky_draw() { printf "draw\\n" >> "$EVENTS"; }',
+            'ui_info() { printf "info:%s\\n" "$1" >> "$EVENTS"; }',
+            'ui_line() { printf "line:%s\\n" "$1" >> "$EVENTS"; }',
+            'fail_install() { printf "fail:%s\\n" "$1" >> "$EVENTS"; exit 1; }',
+            _function("ui_input_begin"),
+            _function("ui_input_end"),
+            _function("choose_panel_profile"),
+            "choose_panel_profile",
+            'printf "chosen:%s modules:%s\\n" "$PROFILE_CHOICE" "$XKEEN_UI_INSTALL_MODULES" >> "$EVENTS"',
+            'cat "$EVENTS"',
+        )
+    )
+    try:
+        proc = subprocess.run(
+            ["script", "-qec", f"sh -c {shlex.quote(script)}", "/dev/null"],
+            input="4\ncore,tool.files\n",
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    finally:
+        events.unlink(missing_ok=True)
+
+    output = proc.stdout.replace("\r\n", "\n")
+    assert proc.returncode == 0, proc.stderr
+    assert "4) Custom" in output
+    assert "ID через запятую:" in output
+    assert "hold\nclear\ninfo:Модули:" in output
+    assert "draw\nrelease\nline:  Профиль:     custom" in output
+    assert "chosen:custom modules:core,tool.files" in output
+
+
 def test_legacy_template_cleanup_uses_requested_directory_and_ignores_nonempty_dirs(tmp_path):
     """Legacy cleanup cannot abort an update when a user file keeps a dir nonempty."""
 

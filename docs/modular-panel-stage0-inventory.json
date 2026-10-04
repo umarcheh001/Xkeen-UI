@@ -37,7 +37,7 @@
       ],
       "removable": false,
       "unit_count": 437,
-      "size_bytes": 6107932,
+      "size_bytes": 6113288,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
@@ -3695,7 +3695,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_install_terminal_ui.py",
-      "size_bytes": 7642,
+      "size_bytes": 12094,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -3709,6 +3709,7 @@
       "environment_variables": [
         "XKEEN_GEODAT_INSTALL",
         "XKEEN_HAPP_DECRYPTOR_INSTALL",
+        "XKEEN_UI_INSTALL_MODULES",
         "XKEEN_UI_INSTALL_PROFILE"
       ],
       "removable": false
@@ -6204,7 +6205,7 @@
       "module_id": "core",
       "kind": "configuration",
       "path": "xkeen-ui/install.sh",
-      "size_bytes": 107295,
+      "size_bytes": 108199,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
