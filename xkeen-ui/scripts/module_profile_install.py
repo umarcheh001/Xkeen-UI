@@ -12,6 +12,8 @@ import argparse
 import ast
 import json
 import os
+import posixpath
+import re
 import shutil
 import sys
 import tempfile
@@ -141,6 +143,9 @@ def owner(path: str) -> str:
             return "engine.mihomo"
         if any(token in p for token in ("xray", "routing/", "dns_over_vless", "geodat/")):
             return "engine.xray"
+    if p.startswith("static/js/patches/"):
+        # Loaded by a plain script tag of every page, whatever its name says.
+        return "core"
     if p.startswith("static/js/"):
         if any(token in p for token in ("monaco", "prettier", "diff_modal", "schema_quickfix", "schema_semantic")):
             return "editor-full"
@@ -324,6 +329,76 @@ def _include_python_dependencies(source: Path, selected_files: dict[str, Path]) 
                     queue.append(dependency)
 
 
+_JS_FROM_IMPORT = re.compile(r"""\bfrom\s*['"](\.{1,2}/[^'"]+)['"]""")
+_JS_BARE_IMPORT = re.compile(r"""^\s*import\s*['"](\.{1,2}/[^'"]+)['"]""", re.MULTILINE)
+_JS_DYNAMIC_IMPORT = re.compile(r"""\bimport\(\s*['"](\.{1,2}/[^'"]+)['"]\s*\)""")
+_TEMPLATE_STATIC_SCRIPT = re.compile(r"""filename\s*=\s*['"]([^'"]+\.m?js)['"]""")
+
+
+def _js_dependency(rel: str, specifier: str) -> str | None:
+    path = specifier.split("?", 1)[0].split("#", 1)[0]
+    dependency = posixpath.normpath(posixpath.join(posixpath.dirname(rel), path))
+    if not dependency.startswith("static/") or not dependency.endswith((".js", ".mjs")):
+        return None
+    return dependency
+
+
+def _include_js_dependencies(source: Path, selected_files: dict[str, Path]) -> None:
+    """Add every script that a page of this profile needs before it can start.
+
+    Pages load the source modules, and a module graph with one missing file
+    does not start at all. Ownership is decided by file name, so a script of
+    the panel core may import a file that the name rules give to a module
+    that is not selected.
+
+    The walk starts where a browser does: the bridge entries and the scripts
+    named by the templates. A static import is always installed. A dynamic
+    ``import()`` is followed only into a file that is selected anyway: that
+    is how an optional module stays out of a smaller profile.
+    """
+
+    queue = [
+        rel for rel in selected_files
+        if rel.startswith("static/frontend-build/assets/") and rel.endswith("-bridge.js")
+    ]
+    for rel in sorted(selected_files):
+        if not (rel.startswith("templates/") and rel.endswith(".html")):
+            continue
+        try:
+            markup = (source / rel).read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as error:
+            raise ProfileInstallError(f"invalid template payload {rel}: {error}") from error
+        for filename in _TEMPLATE_STATIC_SCRIPT.findall(markup):
+            script = "static/" + filename
+            if script in selected_files:
+                queue.append(script)
+
+    scanned = set()
+    while queue:
+        rel = queue.pop()
+        if rel in scanned:
+            continue
+        scanned.add(rel)
+        try:
+            text = (source / rel).read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as error:
+            raise ProfileInstallError(f"invalid script payload {rel}: {error}") from error
+        for specifier in _JS_FROM_IMPORT.findall(text) + _JS_BARE_IMPORT.findall(text):
+            dependency = _js_dependency(rel, specifier)
+            if not dependency or _user_owned(dependency) or not (source / dependency).is_file():
+                continue
+            if dependency not in selected_files:
+                selected_files[dependency] = source / dependency
+                compressed = dependency + ".gz"
+                if (source / compressed).is_file():
+                    selected_files[compressed] = source / compressed
+            queue.append(dependency)
+        for specifier in _JS_DYNAMIC_IMPORT.findall(text):
+            dependency = _js_dependency(rel, specifier)
+            if dependency and dependency in selected_files:
+                queue.append(dependency)
+
+
 def apply_profile(source: Path, target: Path, profile: str, *, module_ids=None, transaction_root=None) -> Path:
     source, target = Path(source).resolve(), Path(target).resolve()
     if source == target or source in target.parents or target in source.parents:
@@ -348,6 +423,7 @@ def apply_profile(source: Path, target: Path, profile: str, *, module_ids=None, 
             else owner(rel) in selected or (owner(rel) == "editor-full" and variant != "light"))
     }
     _include_python_dependencies(source, source_files)
+    _include_js_dependencies(source, source_files)
     missing_markers = {
         module: [marker for marker in INSTALL_MARKERS[module] if marker not in source_files]
         for module in selected
