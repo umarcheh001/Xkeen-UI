@@ -1,6 +1,12 @@
 from __future__ import annotations
 
+import base64
+import json
+import stat
+
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from services.module_catalog_client import (
     CATALOG_REDIRECT_HOSTS,
@@ -8,6 +14,7 @@ from services.module_catalog_client import (
     CatalogClientError,
     CatalogTransportError,
     FetchPolicy,
+    ModuleCatalogClient,
     UrlLibCatalogTransport,
     official_release_asset_url,
     parse_latest_release,
@@ -48,6 +55,83 @@ class _Opener:
     def open(self, request: object, timeout: float) -> _Response:
         self.urls.append(str(getattr(request, "full_url")))
         return self.responses.pop(0)
+
+
+class _CatalogTransport:
+    def __init__(self, responses: dict[str, bytes | Exception]):
+        self.responses = responses
+        self.calls: list[str] = []
+
+    def fetch_bytes(self, url: str, *, max_bytes: int, policy: FetchPolicy) -> bytes:
+        self.calls.append(url)
+        response = self.responses[url]
+        if isinstance(response, Exception):
+            raise response
+        assert len(response) <= max_bytes
+        return response
+
+
+def _public_pem(private_key: Ed25519PrivateKey) -> bytes:
+    return private_key.public_key().public_bytes(
+        serialization.Encoding.PEM,
+        serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+
+
+def _catalog_bytes(version: str) -> bytes:
+    document = {
+        "schema_version": 1,
+        "release_version": version,
+        "channel": "stable",
+        "source_commit": "a" * 40,
+        "modules": [
+            {
+                "id": "tool.files",
+                "version": version,
+                "channel": "stable",
+                "panel_api": "1",
+                "module_api": "1",
+                "min_core": "1.0.0",
+                "architectures": ["aarch64"],
+                "requires": ["core"],
+                "conflicts": [],
+                "requires_restart": True,
+                "archive": f"xkeen-module-tool.files-{version}.tar.gz",
+                "size": 3,
+                "sha256": "a" * 64,
+                "signing_key_id": "release-2026",
+            }
+        ],
+    }
+    return (json.dumps(document, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+
+
+def _signature_bytes(private_key: Ed25519PrivateKey, catalog_bytes: bytes) -> bytes:
+    return (
+        json.dumps(
+            {
+                "schema_version": 1,
+                "algorithm": "Ed25519",
+                "key_id": "release-2026",
+                "signature": base64.b64encode(private_key.sign(catalog_bytes)).decode("ascii"),
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n"
+    ).encode("utf-8")
+
+
+def _release_responses(private_key: Ed25519PrivateKey, version: str) -> dict[str, bytes]:
+    catalog_bytes = _catalog_bytes(version)
+    return {
+        LATEST_RELEASE_URL: json.dumps(
+            {"tag_name": f"v{version}", "draft": False, "prerelease": False},
+            sort_keys=True,
+        ).encode("utf-8"),
+        official_release_asset_url(version, "catalog.json"): catalog_bytes,
+        official_release_asset_url(version, "catalog.json.sig"): _signature_bytes(private_key, catalog_bytes),
+    }
 
 
 def test_official_release_asset_url_is_immutable_and_versioned() -> None:
@@ -146,3 +230,150 @@ def test_transport_enforces_response_byte_limit() -> None:
 
     with pytest.raises(CatalogTransportError, match="catalog_transport_too_large"):
         UrlLibCatalogTransport(opener=opener, timeout_s=1).fetch_bytes(initial, max_bytes=3, policy=RELEASE_POLICY)
+
+
+def test_client_returns_fresh_signature_verified_catalog_and_writes_private_cache(tmp_path) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    transport = _CatalogTransport(_release_responses(private_key, "1.2.3"))
+    client = ModuleCatalogClient(
+        tmp_path,
+        transport=transport,
+        now=lambda: 100.0,
+        keyring={"release-2026": _public_pem(private_key)},
+        platform_architecture="aarch64",
+        core_version="1.0.0",
+    )
+
+    snapshot = client.get_catalog()
+
+    assert snapshot.release_version == "1.2.3"
+    assert snapshot.freshness == "fresh"
+    assert snapshot.stale_reason is None
+    assert snapshot.catalog["modules"][0]["id"] == "tool.files"
+    assert transport.calls == [
+        LATEST_RELEASE_URL,
+        official_release_asset_url("1.2.3", "catalog.json"),
+        official_release_asset_url("1.2.3", "catalog.json.sig"),
+    ]
+    cache_path = tmp_path / "module-catalog" / "catalog-cache.json"
+    assert cache_path.is_file()
+    assert stat.S_IMODE(cache_path.stat().st_mode) == 0o600
+
+
+def test_client_returns_fresh_cache_without_network_request(tmp_path) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    clock = [100.0]
+    transport = _CatalogTransport(_release_responses(private_key, "1.2.3"))
+    client = ModuleCatalogClient(
+        tmp_path,
+        transport=transport,
+        now=lambda: clock[0],
+        keyring={"release-2026": _public_pem(private_key)},
+    )
+    client.get_catalog()
+    initial_calls = list(transport.calls)
+    clock[0] = 200.0
+
+    cached = client.get_catalog()
+
+    assert cached.freshness == "fresh"
+    assert cached.release_version == "1.2.3"
+    assert transport.calls == initial_calls
+
+
+def test_client_uses_expired_verified_cache_only_after_transport_failure(tmp_path) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    clock = [100.0]
+    transport = _CatalogTransport(_release_responses(private_key, "1.2.3"))
+    client = ModuleCatalogClient(
+        tmp_path,
+        transport=transport,
+        now=lambda: clock[0],
+        keyring={"release-2026": _public_pem(private_key)},
+    )
+    client.get_catalog()
+    clock[0] += 24 * 60 * 60 + 1
+    transport.responses = {
+        LATEST_RELEASE_URL: CatalogTransportError("catalog_transport_unavailable", "offline"),
+    }
+
+    stale = client.get_catalog()
+
+    assert stale.freshness == "stale"
+    assert stale.stale_reason == "catalog_transport_unavailable"
+
+
+def test_client_reports_catalog_unavailable_without_verified_cache(tmp_path) -> None:
+    transport = _CatalogTransport(
+        {LATEST_RELEASE_URL: CatalogTransportError("catalog_transport_unavailable", "offline")}
+    )
+    client = ModuleCatalogClient(tmp_path, transport=transport)
+
+    with pytest.raises(CatalogClientError) as raised:
+        client.get_catalog()
+
+    assert raised.value.code == "catalog_unavailable"
+
+
+def test_client_rejects_tampered_cache_instead_of_returning_it_offline(tmp_path) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    transport = _CatalogTransport(_release_responses(private_key, "1.2.3"))
+    client = ModuleCatalogClient(
+        tmp_path,
+        transport=transport,
+        now=lambda: 100.0,
+        keyring={"release-2026": _public_pem(private_key)},
+    )
+    client.get_catalog()
+    cache_path = tmp_path / "module-catalog" / "catalog-cache.json"
+    cache_path.write_text('{"schema_version":1,"catalog":"tampered"}\n', encoding="utf-8")
+    transport.responses = {
+        LATEST_RELEASE_URL: CatalogTransportError("catalog_transport_unavailable", "offline"),
+    }
+
+    with pytest.raises(CatalogClientError) as raised:
+        client.get_catalog(force_refresh=True)
+
+    assert raised.value.code == "catalog_cache_invalid"
+
+
+def test_client_does_not_hide_remote_signature_failure_with_cache(tmp_path) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    clock = [100.0]
+    transport = _CatalogTransport(_release_responses(private_key, "1.2.3"))
+    client = ModuleCatalogClient(
+        tmp_path,
+        transport=transport,
+        now=lambda: clock[0],
+        keyring={"release-2026": _public_pem(private_key)},
+    )
+    client.get_catalog()
+    clock[0] += 24 * 60 * 60 + 1
+    responses = _release_responses(private_key, "1.2.3")
+    responses[official_release_asset_url("1.2.3", "catalog.json")] = b"tampered-catalog"
+    transport.responses = responses
+
+    with pytest.raises(CatalogClientError) as raised:
+        client.get_catalog()
+
+    assert raised.value.code == "catalog_signature_invalid"
+
+
+def test_client_rejects_validly_signed_release_version_rollback(tmp_path) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    clock = [100.0]
+    transport = _CatalogTransport(_release_responses(private_key, "1.2.4"))
+    client = ModuleCatalogClient(
+        tmp_path,
+        transport=transport,
+        now=lambda: clock[0],
+        keyring={"release-2026": _public_pem(private_key)},
+    )
+    client.get_catalog()
+    clock[0] += 24 * 60 * 60 + 1
+    transport.responses = _release_responses(private_key, "1.2.3")
+
+    with pytest.raises(CatalogClientError) as raised:
+        client.get_catalog()
+
+    assert raised.value.code == "catalog_version_rollback"

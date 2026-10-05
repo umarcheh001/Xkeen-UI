@@ -2,15 +2,29 @@
 
 from __future__ import annotations
 
+import base64
 import io
+import json
+import math
+import os
 import socket
+import time
 import urllib.error
 import urllib.request
-from dataclasses import dataclass
-from typing import Any, BinaryIO, Mapping
+from dataclasses import dataclass, replace
+from pathlib import Path
+from typing import Any, BinaryIO, Callable, Literal, Mapping, Protocol
 from urllib.parse import urljoin, urlsplit
 
-from services.module_package_contract import ModulePackageContractError, validate_semver
+from services.io.atomic import _atomic_write_json
+from services.module_catalog_trust import CatalogTrustError, TRUSTED_CATALOG_PUBLIC_KEYS, verify_catalog_signature
+from services.module_package_contract import (
+    ModulePackageContractError,
+    compare_semver,
+    validate_catalog_document,
+    validate_catalog_source,
+    validate_semver,
+)
 
 
 OFFICIAL_REPOSITORY = "umarcheh001/Xkeen-UI"
@@ -23,6 +37,9 @@ CATALOG_REDIRECT_HOSTS = frozenset(
         "release-assets.githubusercontent.com",
     }
 )
+_MAX_DISCOVERY_BYTES = 1024 * 1024
+_MAX_CATALOG_BYTES = 1024 * 1024
+_MAX_SIGNATURE_BYTES = 16 * 1024
 
 
 class CatalogClientError(ValueError):
@@ -49,6 +66,24 @@ class FetchPolicy:
     initial_hosts: frozenset[str]
     redirect_hosts: frozenset[str]
     require_official_release_path: bool
+
+
+class CatalogTransport(Protocol):
+    def fetch_bytes(self, url: str, *, max_bytes: int, policy: FetchPolicy) -> bytes: ...
+
+    def stream_to(self, url: str, output: BinaryIO, *, max_bytes: int, policy: FetchPolicy) -> int: ...
+
+
+_API_POLICY = FetchPolicy(
+    initial_hosts=frozenset({"api.github.com"}),
+    redirect_hosts=frozenset({"api.github.com"}),
+    require_official_release_path=False,
+)
+_RELEASE_POLICY = FetchPolicy(
+    initial_hosts=frozenset({"github.com"}),
+    redirect_hosts=CATALOG_REDIRECT_HOSTS,
+    require_official_release_path=True,
+)
 
 
 class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -225,3 +260,194 @@ def parse_latest_release(payload: Mapping[str, Any]) -> str:
         return validate_semver(tag_name.removeprefix("v"), "catalog_release_version")
     except ModulePackageContractError as error:
         _fail(error.code, "latest release tag is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class CatalogSnapshot:
+    """A catalog accepted by the trust boundary and ready for a future updater."""
+
+    catalog: Mapping[str, Any]
+    catalog_bytes: bytes
+    signature_bytes: bytes
+    release_version: str
+    catalog_url: str
+    fetched_at: float
+    freshness: Literal["fresh", "stale"]
+    stale_reason: str | None
+
+
+class ModuleCatalogClient:
+    """Fetch an official release catalog and persist only verified bytes."""
+
+    def __init__(
+        self,
+        ui_state_dir: str | os.PathLike[str],
+        *,
+        transport: CatalogTransport | None = None,
+        now: Callable[[], float] = time.time,
+        cache_ttl_s: float = 24 * 60 * 60,
+        platform_architecture: str | None = None,
+        core_version: str | None = None,
+        keyring: Mapping[str, bytes] = TRUSTED_CATALOG_PUBLIC_KEYS,
+    ) -> None:
+        self._cache_path = Path(ui_state_dir).resolve() / "module-catalog" / "catalog-cache.json"
+        self._transport = transport or UrlLibCatalogTransport()
+        self._now = now
+        self._cache_ttl_s = float(cache_ttl_s)
+        self._platform_architecture = platform_architecture
+        self._core_version = core_version
+        self._keyring = keyring
+
+    @staticmethod
+    def _client_validation_error(error: CatalogTrustError | ModulePackageContractError) -> CatalogClientError:
+        return CatalogClientError(error.code, "catalog trust validation failed")
+
+    def _verified_snapshot(
+        self,
+        *,
+        catalog_bytes: bytes,
+        signature_bytes: bytes,
+        release_version: str,
+        catalog_url: str,
+        fetched_at: float,
+    ) -> CatalogSnapshot:
+        try:
+            validated_url = validate_catalog_source(catalog_url)
+            source_version = validated_url.removeprefix("https://github.com" + OFFICIAL_RELEASE_PATH_PREFIX)
+            source_version = source_version.removesuffix("/catalog.json").removeprefix("v")
+            if validate_semver(release_version, "catalog_release_version") != source_version:
+                raise CatalogClientError(
+                    "catalog_release_version_mismatch",
+                    "catalog release version does not match its immutable source URL",
+                )
+            signature = verify_catalog_signature(catalog_bytes, signature_bytes, keyring=self._keyring)
+            document = json.loads(catalog_bytes.decode("utf-8"))
+            catalog = validate_catalog_document(
+                document,
+                release_version=source_version,
+                signing_key_id=signature.key_id,
+                trusted_signing_key_ids=frozenset(self._keyring),
+                platform_architecture=self._platform_architecture,
+                core_version=self._core_version,
+            )
+        except CatalogClientError:
+            raise
+        except (CatalogTrustError, ModulePackageContractError) as error:
+            raise self._client_validation_error(error) from error
+        except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as error:
+            raise CatalogClientError("catalog_schema_invalid", "catalog content is not valid JSON") from error
+        return CatalogSnapshot(
+            catalog=catalog,
+            catalog_bytes=bytes(catalog_bytes),
+            signature_bytes=bytes(signature_bytes),
+            release_version=source_version,
+            catalog_url=validated_url,
+            fetched_at=float(fetched_at),
+            freshness="fresh",
+            stale_reason=None,
+        )
+
+    def _write_cache(self, snapshot: CatalogSnapshot) -> None:
+        record = {
+            "schema_version": 1,
+            "catalog": base64.b64encode(snapshot.catalog_bytes).decode("ascii"),
+            "signature": base64.b64encode(snapshot.signature_bytes).decode("ascii"),
+            "catalog_url": snapshot.catalog_url,
+            "release_version": snapshot.release_version,
+            "fetched_at": snapshot.fetched_at,
+        }
+        try:
+            _atomic_write_json(str(self._cache_path), record, mode=0o600)
+        except OSError as error:
+            raise CatalogClientError("catalog_cache_write_failed", "verified catalog cache could not be written") from error
+
+    def _read_cache(self) -> CatalogSnapshot | None:
+        if not self._cache_path.exists():
+            return None
+        try:
+            record = json.loads(self._cache_path.read_text(encoding="utf-8"))
+            if not isinstance(record, Mapping) or record.get("schema_version") != 1:
+                raise ValueError("unsupported cache record")
+            encoded_catalog = record["catalog"]
+            encoded_signature = record["signature"]
+            catalog_url = record["catalog_url"]
+            release_version = record["release_version"]
+            fetched_at = float(record["fetched_at"])
+            if (
+                not isinstance(encoded_catalog, str)
+                or not isinstance(encoded_signature, str)
+                or not isinstance(catalog_url, str)
+                or not isinstance(release_version, str)
+                or not math.isfinite(fetched_at)
+            ):
+                raise ValueError("invalid cache record")
+            catalog_bytes = base64.b64decode(encoded_catalog, validate=True)
+            signature_bytes = base64.b64decode(encoded_signature, validate=True)
+            return self._verified_snapshot(
+                catalog_bytes=catalog_bytes,
+                signature_bytes=signature_bytes,
+                release_version=release_version,
+                catalog_url=catalog_url,
+                fetched_at=fetched_at,
+            )
+        except (CatalogClientError, KeyError, OSError, TypeError, ValueError) as error:
+            raise CatalogClientError("catalog_cache_invalid", "verified catalog cache is invalid") from error
+
+    def _fetch_remote(self) -> CatalogSnapshot:
+        discovery_bytes = self._transport.fetch_bytes(
+            LATEST_RELEASE_URL,
+            max_bytes=_MAX_DISCOVERY_BYTES,
+            policy=_API_POLICY,
+        )
+        try:
+            discovery = json.loads(discovery_bytes.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise CatalogClientError("catalog_release_discovery_invalid", "latest release metadata is invalid") from error
+        release_version = parse_latest_release(discovery)
+        catalog_url = official_release_asset_url(release_version, "catalog.json")
+        signature_url = official_release_asset_url(release_version, "catalog.json.sig")
+        catalog_bytes = self._transport.fetch_bytes(
+            catalog_url,
+            max_bytes=_MAX_CATALOG_BYTES,
+            policy=_RELEASE_POLICY,
+        )
+        signature_bytes = self._transport.fetch_bytes(
+            signature_url,
+            max_bytes=_MAX_SIGNATURE_BYTES,
+            policy=_RELEASE_POLICY,
+        )
+        return self._verified_snapshot(
+            catalog_bytes=catalog_bytes,
+            signature_bytes=signature_bytes,
+            release_version=release_version,
+            catalog_url=catalog_url,
+            fetched_at=float(self._now()),
+        )
+
+    def get_catalog(self, *, force_refresh: bool = False) -> CatalogSnapshot:
+        """Return a fresh catalog or a verified stale cache after transport failure."""
+
+        cached: CatalogSnapshot | None = None
+        cache_error: CatalogClientError | None = None
+        try:
+            cached = self._read_cache()
+        except CatalogClientError as error:
+            cache_error = error
+        now = float(self._now())
+        if cached is not None and not force_refresh and max(0.0, now - cached.fetched_at) <= self._cache_ttl_s:
+            return cached
+        try:
+            snapshot = self._fetch_remote()
+        except CatalogTransportError as error:
+            if cached is not None:
+                return replace(cached, freshness="stale", stale_reason=error.code)
+            if cache_error is not None:
+                raise cache_error from error
+            raise CatalogClientError("catalog_unavailable", "catalog transport is unavailable") from error
+        if cached is not None and compare_semver(snapshot.release_version, cached.release_version) < 0:
+            raise CatalogClientError(
+                "catalog_version_rollback",
+                "catalog release version is older than the highest verified cache version",
+            )
+        self._write_cache(snapshot)
+        return snapshot
