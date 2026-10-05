@@ -112,6 +112,10 @@ def test_composition_declares_only_known_static_template_paths():
         "panel/slots/diagnostics_summary.html",
         "panel/slots/diagnostics_actions.html",
         "panel/slots/routing_focus.html",
+        "panel/slots/backups_inbounds_actions.html",
+        "panel/slots/backups_outbounds_actions.html",
+        "panel/slots/backups_xray_card.html",
+        "panel/slots/backups_routing_actions.html",
         "panel/slots/core_source_xray.html",
         "panel/slots/core_source_mihomo.html",
         "panel/modals/core_source_xray.html",
@@ -204,6 +208,38 @@ def test_core_source_surfaces_follow_the_engine_that_serves_them(tmp_path):
     full = render_panel(RENDER_FULL_MODULE_IDS, tmp_path / "order")
     for engine in ("xray", "mihomo"):
         assert full.index('id="core-modal"') < full.index(f'id="{engine}-core-source-modal"')
+
+
+BACKUP_SURFACE_IDS = (
+    "routing-backups-header",
+    "backups-table",
+    "routing-backup-btn",
+    "routing-restore-auto-btn",
+    "inbounds-backup-btn",
+    "inbounds-restore-auto-btn",
+    "outbounds-backup-btn",
+    "outbounds-restore-auto-btn",
+)
+
+
+def test_routing_backup_surfaces_follow_the_backups_module(tmp_path):
+    # Every one of these talks to the tool.backups API; without the module
+    # the card said "failed to load" and the buttons answered NOT FOUND.
+    def present(module_ids, name):
+        html = render_panel(module_ids, tmp_path / name)
+        found = {surface for surface in BACKUP_SURFACE_IDS if f'id="{surface}"' in html}
+        assert found in (set(), set(BACKUP_SURFACE_IDS)), name
+        return bool(found)
+
+    assert present(RENDER_FULL_MODULE_IDS, "full")
+    assert present(None, "legacy")
+    assert present(["core", "tool.editor", "engine.xray", "tool.backups"], "xray-backups")
+    assert not present(sorted(XRAY_MINIMAL_MODULE_IDS), "xray")
+    assert not present(["core", "tool.editor", "engine.mihomo", "tool.backups"], "mihomo-backups")
+    assert not present(
+        [module_id for module_id in RENDER_FULL_MODULE_IDS if module_id != "tool.backups"],
+        "full-without-backups",
+    )
 
 
 def test_legacy_and_full_html_keep_the_same_composed_surface_set(tmp_path):

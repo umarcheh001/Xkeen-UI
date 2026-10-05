@@ -1,0 +1,5 @@
+{% from "panel/macros.html" import op_icon %}
+                      <button id="routing-backup-btn" type="button" class="terminal-tool-btn"
+                              data-tooltip="Создать бэкап файла: {{ routing_name|e }}">{{ op_icon('archive') }}<span class="xk-action-label">Бэкап</span></button>
+                      <button id="routing-restore-auto-btn" type="button" class="terminal-tool-btn"
+                              data-tooltip="Восстановить авто-бэкап файла: {{ routing_name|e }}">{{ op_icon('restore') }}<span class="xk-action-label">Авто-бэкап</span></button>

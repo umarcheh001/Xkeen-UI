@@ -76,6 +76,12 @@ PANEL_COMPOSITION: tuple[PanelCompositionEntry, ...] = (
     PanelCompositionEntry("header_summary_partials", ("tool.advanced-diagnostics",), "panel/slots/diagnostics_summary.html"),
     PanelCompositionEntry("header_action_partials", ("tool.advanced-diagnostics",), "panel/slots/diagnostics_actions.html"),
     PanelCompositionEntry("control_partials", ("engine.xray",), "panel/slots/routing_focus.html"),
+    # The backup API belongs to tool.backups, so the routing screen gets its
+    # backup card and buttons only together with that module.
+    PanelCompositionEntry("routing_inbounds_action_partials", ("engine.xray", "tool.backups"), "panel/slots/backups_inbounds_actions.html"),
+    PanelCompositionEntry("routing_outbounds_action_partials", ("engine.xray", "tool.backups"), "panel/slots/backups_outbounds_actions.html"),
+    PanelCompositionEntry("routing_side_card_partials", ("engine.xray", "tool.backups"), "panel/slots/backups_xray_card.html"),
+    PanelCompositionEntry("routing_file_action_partials", ("engine.xray", "tool.backups"), "panel/slots/backups_routing_actions.html"),
     PanelCompositionEntry("screen_partials", ("engine.xray",), "panel/screens/routing.html"),
     PanelCompositionEntry("screen_partials", ("engine.mihomo",), "panel/screens/mihomo.html"),
     PanelCompositionEntry("screen_partials", ("core",), "panel/screens/xkeen.html"),
@@ -283,6 +289,10 @@ def _build_panel_page_context(active_module_ids: set[str] | None) -> dict[str, o
         "header_summary_partials": [],
         "header_action_partials": [],
         "control_partials": [],
+        "routing_inbounds_action_partials": [],
+        "routing_outbounds_action_partials": [],
+        "routing_side_card_partials": [],
+        "routing_file_action_partials": [],
         "core_source_control_partials": [],
         "pre_screen_modal_partials": [],
         "screen_partials": [],

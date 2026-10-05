@@ -101,6 +101,8 @@ def owner(path: str) -> str:
     if p.startswith("static/schemas/xray-"):
         return "engine.xray"
     if p.startswith("templates/panel/"):
+        if "/slots/backups_" in p:
+            return "tool.backups"
         if "/mihomo" in p or "core_source_mihomo" in p:
             return "engine.mihomo"
         if "/routing" in p or "/xray" in p or "core_source_xray" in p:

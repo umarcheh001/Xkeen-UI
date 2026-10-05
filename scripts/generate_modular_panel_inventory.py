@@ -420,6 +420,7 @@ class ModularPanelInventoryGenerator:
             name == "backups.py"
             or "/features/backups" in p
             or "/templates/backups.html" in p
+            or "/templates/panel/slots/backups_" in p
             or "/pages/backups." in p
             or "xray_backups.py" in p
             or "mihomo_backups.py" in p

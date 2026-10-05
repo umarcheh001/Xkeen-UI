@@ -1,0 +1,67 @@
+{% from "panel/macros.html" import op_icon %}
+    <!-- Backups list -->
+    <section class="card routing-side-card routing-side-card--backups">
+      <div class="commands-header" id="routing-backups-header" role="button" tabindex="0" aria-controls="routing-backups-body" aria-expanded="false">
+        <h2>Бэкапы Xray</h2>
+          <span id="routing-backups-arrow">▼</span>
+      </div>
+
+      <div id="routing-backups-body" style="display:none;">
+        <div class="xk-backups-intro">
+          <p class="routing-backups-path xk-card-desc">Все точки возврата Xray в одном месте. Каталог: <code>{{ backup_dir }}</code></p>
+          <div class="xk-backups-mode-tabs" aria-label="Тип бэкапов Xray">
+            <button id="backups-mode-snapshots-btn" class="xk-backups-mode-tab is-active" type="button" aria-pressed="true">Снимки</button>
+            <button id="backups-mode-history-btn" class="xk-backups-mode-tab" type="button" aria-pressed="false">История</button>
+          </div>
+        </div>
+
+        <div class="xk-backups-toolbar">
+          <span id="backups-mode-description" class="xk-backups-mode-description xk-card-desc">Rollback-снимки предыдущего состояния файлов.</span>
+          <div class="xk-backups-toolbar-actions">
+            <button
+              type="button"
+              id="backups-refresh-btn"
+              class="btn-secondary btn-icon xk-backups-toolbar-btn"
+              aria-label="Обновить список бэкапов"
+              data-tooltip="Обновить список бэкапов"
+            >{{ op_icon('refresh') }}</button>
+            <button
+              type="button"
+              id="backups-clear-snapshots-btn"
+              class="btn-secondary xk-backups-toolbar-btn xk-backups-clear-btn"
+              data-tooltip="Удалить все rollback-снимки. History-backup и auto-backup не затрагиваются."
+            >{{ op_icon('trash') }}<span class="xk-action-label">Очистить</span></button>
+          </div>
+        </div>
+
+        <table id="backups-table" data-mode="snapshots">
+          <thead>
+            <tr>
+              <th>Имя файла</th>
+              <th>Размер</th>
+              <th>Создан</th>
+              <th>Действия</th>
+            </tr>
+          </thead>
+          <tbody>
+          </tbody>
+        </table>
+
+        <div id="backups-status" class="status" role="status" aria-live="polite"></div>
+
+        <div class="xk-card-help-row xk-card-help-row--corner">
+          <details class="xk-card-help-popover">
+            <summary class="xk-card-help-trigger"
+                     aria-label="Подсказка по снимкам Xray"
+                     title="О снимках Xray"
+                     data-tooltip="О снимках Xray">
+              {{ op_icon('help', 'xk-card-help-icon') }}
+            </summary>
+            <div class="xk-card-help-panel">
+              Сюда попадают <b>snapshots</b> — rollback-копии <b>предыдущего</b> состояния каждого Xray-файла.
+              Снимок обновляется при сохранении конфига, а из списка ниже его можно быстро открыть или восстановить.
+            </div>
+          </details>
+        </div>
+      </div>
+    </section>

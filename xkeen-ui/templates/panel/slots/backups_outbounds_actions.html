@@ -1,0 +1,3 @@
+{% from "panel/macros.html" import op_icon %}
+        <button id="outbounds-backup-btn" class="btn-icon" aria-label="Backup" data-tooltip="Сделать бэкап {{ outbounds_name|e }}.">{{ op_icon('archive') }}<span class="xk-action-label">Бэкап</span></button>
+        <button id="outbounds-restore-auto-btn" class="btn-icon" aria-label="Restore" data-tooltip="Восстановить outbounds из автобэкапа.">{{ op_icon('restore') }}<span class="xk-action-label">Восст.</span></button>
