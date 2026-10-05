@@ -9,6 +9,7 @@ updater is introduced.
 from __future__ import annotations
 
 import argparse
+import ast
 import gzip
 import hashlib
 import importlib.util
@@ -71,6 +72,8 @@ _SEMVER_RE = re.compile(
 )
 _STAGE7_PATH = Path(__file__).resolve().parents[1] / PACKAGE_DIRNAME / "scripts" / "module_profile_install.py"
 _STAGE7_MODULE: Any | None = None
+_REGISTRY_MODULES: dict[Path, Any] = {}
+_OWNERSHIP_CACHE: dict[tuple[Any, ...], dict[str, tuple[str, ...]]] = {}
 
 
 class ReleaseBuildError(ValueError):
@@ -237,7 +240,17 @@ def build_module_ownership(root: Path) -> dict[str, tuple[str, ...]]:
     stage7 = _stage7_module(root)
     module_ids = tuple(stage7.MODULE_IDS)
     ownership: dict[str, list[str]] = {module_id: [] for module_id in module_ids}
-    for source in sorted(package.rglob("*")):
+    sources = sorted(package.rglob("*"))
+    # One release build asks for the ownership of every module in turn, and the
+    # import graph is not cheap to read: remember it while the tree is the same.
+    fingerprint: tuple[Any, ...] = (str(package),) + tuple(
+        (source.as_posix(), source.lstat().st_size, source.lstat().st_mtime_ns)
+        for source in sources
+        if source.is_file() or source.is_symlink()
+    )
+    if fingerprint in _OWNERSHIP_CACHE:
+        return dict(_OWNERSHIP_CACHE[fingerprint])
+    for source in sources:
         if not source.is_file() and not source.is_symlink():
             continue
         relative = source.relative_to(package).as_posix()
@@ -266,7 +279,159 @@ def build_module_ownership(root: Path) -> dict[str, tuple[str, ...]]:
         if module_id not in ownership:
             raise ReleaseBuildError(f"unclassified module owner {module_id!r}: {relative}")
         ownership[module_id].append(relative)
-    return {module_id: tuple(sorted(paths)) for module_id, paths in ownership.items()}
+    owner_of = {relative: module_id for module_id, paths in ownership.items() for relative in paths}
+    _close_ownership_over_imports(package, owner_of, stage7, _dependency_closures(root, module_ids))
+    closed: dict[str, list[str]] = {module_id: [] for module_id in module_ids}
+    for relative, module_id in owner_of.items():
+        closed[module_id].append(relative)
+    result = {module_id: tuple(sorted(paths)) for module_id, paths in closed.items()}
+    _OWNERSHIP_CACHE.clear()
+    _OWNERSHIP_CACHE[fingerprint] = result
+    return dict(result)
+
+
+def _dependency_closures(root: Path, module_ids: Sequence[str]) -> dict[str, frozenset[str]]:
+    """Each module with everything the registry says it depends on."""
+
+    direct = {
+        definition.id: tuple(definition.dependencies)
+        for definition in (_registry_definition(root, module_id) for module_id in module_ids)
+    }
+    closures: dict[str, frozenset[str]] = {}
+    for module_id in module_ids:
+        seen = {module_id}
+        queue = [module_id]
+        while queue:
+            for dependency in direct.get(queue.pop(), ()):
+                if dependency in direct and dependency not in seen:
+                    seen.add(dependency)
+                    queue.append(dependency)
+        closures[module_id] = frozenset(seen)
+    return closures
+
+
+def _javascript_import_edges(package: Path, owner_of: Mapping[str, str], stage7: Any) -> dict[str, tuple[str, ...]]:
+    """Static imports of the scripts a browser actually loads.
+
+    The walk starts where a page does: the page entries and the scripts named
+    by the templates. A dynamic ``import()`` only extends the walk, it is how
+    an optional module is loaded and is not a dependency by itself.
+    """
+
+    static: dict[str, set[str]] = {}
+    dynamic: dict[str, set[str]] = {}
+
+    def scan(relative: str) -> None:
+        try:
+            text = (package / relative).read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as error:
+            raise ReleaseBuildError(f"invalid script payload {relative}: {error}") from error
+        static[relative] = set()
+        dynamic[relative] = set()
+        for specifier in stage7._JS_FROM_IMPORT.findall(text) + stage7._JS_BARE_IMPORT.findall(text):
+            dependency = stage7._js_dependency(relative, specifier)
+            if dependency in owner_of:
+                static[relative].add(dependency)
+        for specifier in stage7._JS_DYNAMIC_IMPORT.findall(text):
+            dependency = stage7._js_dependency(relative, specifier)
+            if dependency in owner_of:
+                dynamic[relative].add(dependency)
+
+    queue = sorted(
+        relative for relative in owner_of
+        if relative.startswith("static/js/pages/") and relative.endswith(".entry.js")
+    )
+    for relative in sorted(owner_of):
+        if not (relative.startswith("templates/") and relative.endswith(".html")):
+            continue
+        try:
+            markup = (package / relative).read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as error:
+            raise ReleaseBuildError(f"invalid template payload {relative}: {error}") from error
+        for filename in stage7._TEMPLATE_STATIC_SCRIPT.findall(markup):
+            if "static/" + filename in owner_of:
+                queue.append("static/" + filename)
+    while queue:
+        relative = queue.pop()
+        if relative in static:
+            continue
+        scan(relative)
+        queue.extend(sorted(static[relative] | dynamic[relative]))
+    return {relative: tuple(sorted(targets)) for relative, targets in static.items() if targets}
+
+
+def _python_import_edges(package: Path, owner_of: Mapping[str, str]) -> dict[str, tuple[str, ...]]:
+    """Imports a Python file performs unconditionally when it is loaded.
+
+    An import under ``if`` or ``try``, or inside a function, is how the panel
+    reaches an optional module, so only plain module-level statements count.
+    """
+
+    edges: dict[str, tuple[str, ...]] = {}
+    for relative in sorted(owner_of):
+        if not relative.endswith(".py"):
+            continue
+        try:
+            tree = ast.parse((package / relative).read_text(encoding="utf-8"), filename=relative)
+        except (OSError, UnicodeError, SyntaxError):
+            # A placeholder file of a test tree: it imports nothing.
+            continue
+        current = relative.removesuffix("/__init__.py").removesuffix(".py").replace("/", ".")
+        if not relative.endswith("/__init__.py"):
+            current = current.rpartition(".")[0]
+        names: set[str] = set()
+        for node in tree.body:
+            if isinstance(node, ast.Import):
+                names.update(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                base = node.module or ""
+                if node.level:
+                    parts = current.split(".") if current else []
+                    base = ".".join(parts[: len(parts) - node.level + 1] + ([base] if base else []))
+                names.add(base)
+                names.update(base + "." + alias.name for alias in node.names if alias.name != "*")
+        targets = {
+            candidate
+            for name in names
+            for candidate in (name.replace(".", "/") + ".py", name.replace(".", "/") + "/__init__.py")
+            if candidate in owner_of and candidate != relative
+        }
+        if targets:
+            edges[relative] = tuple(sorted(targets))
+    return edges
+
+
+def _close_ownership_over_imports(
+    package: Path,
+    owner_of: dict[str, str],
+    stage7: Any,
+    closures: Mapping[str, frozenset[str]],
+) -> None:
+    """Move a file to a package that every unconditional importer can rely on.
+
+    Ownership is first decided by file name. A script or a Python file of one
+    package may still import a file that the name rules gave to a package the
+    importer does not depend on, and then the importer does not load at all
+    when that package is absent. Such a file moves to the deepest package both
+    sides depend on; in the worst case that is ``core``.
+    """
+
+    edges = {**_python_import_edges(package, owner_of), **_javascript_import_edges(package, owner_of, stage7)}
+    for _ in range(len(owner_of) + 1):
+        changed = False
+        for source in sorted(edges):
+            for target in edges[source]:
+                importer, owner = owner_of[source], owner_of[target]
+                if owner in closures[importer]:
+                    continue
+                shared = closures[importer] & closures[owner]
+                if not shared:
+                    raise ReleaseBuildError(f"no common package for {source} -> {target}")
+                owner_of[target] = max(shared, key=lambda module_id: (len(closures[module_id]), module_id))
+                changed = True
+        if not changed:
+            return
+    raise ReleaseBuildError("module ownership does not settle over the import graph")
 
 
 def _registry_definition(root: Path, module_id: str) -> Any:
@@ -279,6 +444,8 @@ def _registry_definition(root: Path, module_id: str) -> Any:
         if not registry_path.is_file():
             continue
         try:
+            if registry_path in _REGISTRY_MODULES:
+                return next(item for item in _REGISTRY_MODULES[registry_path].MODULE_DEFINITIONS if item.id == module_id)
             package_import_root = str(registry_path.parents[1])
             if package_import_root not in sys.path:
                 sys.path.insert(0, package_import_root)
@@ -290,6 +457,7 @@ def _registry_definition(root: Path, module_id: str) -> Any:
             module = importlib.util.module_from_spec(spec)
             sys.modules[spec.name] = module
             spec.loader.exec_module(module)
+            _REGISTRY_MODULES[registry_path] = module
             return next(item for item in module.MODULE_DEFINITIONS if item.id == module_id)
         except Exception as error:
             last_error = error

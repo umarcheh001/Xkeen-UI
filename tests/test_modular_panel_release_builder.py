@@ -170,6 +170,81 @@ def test_module_ownership_uses_stage7_boundaries_and_excludes_user_state(tmp_pat
     assert "bin/happ-decrypt-universal.assets/keytable.json" not in all_paths
 
 
+def _hard_import_violations(builder, root: Path) -> list[str]:
+    """Unconditional imports that leave the importer's package and its dependencies."""
+
+    package = root / "xkeen-ui"
+    ownership = builder.build_module_ownership(root)
+    owner_of = {path: module_id for module_id, paths in ownership.items() for path in paths}
+    stage7 = builder._stage7_module(root)
+    closures = builder._dependency_closures(root, tuple(ownership))
+    edges = {
+        **builder._python_import_edges(package, owner_of),
+        **builder._javascript_import_edges(package, owner_of, stage7),
+    }
+    return [
+        f"{owner_of[source]}:{source} -> {owner_of[target]}:{target}"
+        for source, targets in sorted(edges.items())
+        for target in targets
+        if owner_of[target] not in closures[owner_of[source]]
+    ]
+
+
+def test_module_ownership_follows_unconditional_imports(tmp_path: Path) -> None:
+    builder = _load_builder()
+    package = tmp_path / "xkeen-ui"
+    files = {
+        "services/module_registry.py": ["core"],
+        # A page script of the core imports a file that its name gives to Mihomo.
+        "static/js/pages/panel.entry.js": ["import './panel.mihomo_header.js';", "import('./terminal.lazy.entry.js');"],
+        "static/js/pages/panel.mihomo_header.js": ["export const header = 1;"],
+        "static/js/pages/terminal.lazy.entry.js": ["import '../terminal/core.js';"],
+        "static/js/terminal/core.js": ["export const terminal = 1;"],
+        # Two engines that both depend on the editor share a file.
+        "static/js/features/mihomo_panel.js": ["import './outbounds.js';"],
+        "static/js/features/outbounds.js": ["export const outbounds = 1;"],
+        "static/js/pages/panel.mihomo.bundle.entry.js": ["import '../features/mihomo_panel.js';"],
+        # Python: only a plain module-level import is unconditional.
+        "run_server.py": [
+            "from services.ws_pty import handle",
+            "if True:",
+            "    from services.xray_log_api import tail",
+        ],
+        "services/ws_pty.py": ["handle = None"],
+        "services/xray_log_api.py": ["tail = None"],
+        "routes/mihomo.py": ["def view():", "    from services.mihomo_backups import list_backups"],
+        "services/mihomo_backups.py": ["list_backups = None"],
+    }
+    for relative, lines in files.items():
+        path = package / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("".join(line + chr(10) for line in lines), encoding="utf-8")
+
+    ownership = builder.build_module_ownership(tmp_path)
+    owner_of = {path: module_id for module_id, paths in ownership.items() for path in paths}
+
+    assert owner_of["static/js/pages/panel.mihomo_header.js"] == "core"
+    assert owner_of["static/js/features/outbounds.js"] == "tool.editor"
+    assert owner_of["services/ws_pty.py"] == "core"
+    # Optional modules stay where the name rules put them.
+    assert owner_of["static/js/pages/terminal.lazy.entry.js"] == "tool.terminal"
+    assert owner_of["static/js/terminal/core.js"] == "tool.terminal"
+    assert owner_of["services/xray_log_api.py"] == "engine.xray"
+    assert owner_of["services/mihomo_backups.py"] == "tool.backups"
+    assert owner_of["static/js/features/mihomo_panel.js"] == "engine.mihomo"
+    assert _hard_import_violations(builder, tmp_path) == []
+
+
+def test_every_real_package_loads_with_only_its_registry_dependencies() -> None:
+    builder = _load_builder()
+
+    assert _hard_import_violations(builder, ROOT) == []
+    ownership = builder.build_module_ownership(ROOT)
+    assert all(ownership[module_id] for module_id in ownership)
+    paths = [path for module_paths in ownership.values() for path in module_paths]
+    assert len(paths) == len(set(paths))
+
+
 def test_module_ownership_rejects_unmanaged_top_level_paths(tmp_path: Path) -> None:
     builder = _load_builder()
     package = tmp_path / "xkeen-ui"
