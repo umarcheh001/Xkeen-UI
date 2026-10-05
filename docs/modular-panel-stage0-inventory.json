@@ -36,13 +36,13 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 474,
-      "size_bytes": 6473156,
+      "unit_count": 475,
+      "size_bytes": 6483438,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
         "backend_service": 67,
-        "backend_test": 206,
+        "backend_test": 207,
         "configuration": 10,
         "frontend_bundle": 9,
         "frontend_entrypoint": 2,
@@ -4972,6 +4972,24 @@
       "kind": "backend_test",
       "path": "tests/test_module_transactions_plan.py",
       "size_bytes": 13041,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_module_transactions_real_tree.py",
+      "size_bytes": 10282,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
