@@ -58,6 +58,7 @@ _KNOWN_PACKAGE_FILES = {
     "install.sh",
     "mihomo_config_generator.py",
     "mihomo_server_core.py",
+    "module-ownership.json",
     "module-sizes.json",
     "run_server.py",
     "uninstall.sh",
@@ -269,6 +270,7 @@ def build_module_ownership(root: Path) -> dict[str, tuple[str, ...]]:
     stage7 = _stage7_module(root)
     module_ids = tuple(stage7.MODULE_IDS)
     ownership: dict[str, list[str]] = {module_id: [] for module_id in module_ids}
+    precompressed: list[str] = []
     sources = sorted(package.rglob("*"))
     # One release build asks for the ownership of every module in turn, and the
     # import graph is not cheap to read: remember it while the tree is the same.
@@ -291,6 +293,12 @@ def build_module_ownership(root: Path) -> dict[str, tuple[str, ...]]:
             raise ReleaseBuildError(f"symlink source is forbidden: {source}")
         if bool(stage7._user_owned(relative)):
             continue
+        if relative.endswith(".gz") and (package / relative[:-3]).is_file():
+            # A precompressed copy is served instead of its source and must
+            # travel with it: it gets the owner of the source further down,
+            # once the import closure has settled, not one of its own name.
+            precompressed.append(relative)
+            continue
         top_level = PurePosixPath(relative).parts[0]
         if top_level not in _KNOWN_PACKAGE_ROOTS and relative not in _KNOWN_PACKAGE_FILES:
             raise ReleaseBuildError(f"unclassified package path: {relative}")
@@ -312,6 +320,9 @@ def build_module_ownership(root: Path) -> dict[str, tuple[str, ...]]:
         ownership[module_id].append(relative)
     owner_of = {relative: module_id for module_id, paths in ownership.items() for relative in paths}
     _close_ownership_over_imports(package, owner_of, stage7, _dependency_closures(root, module_ids))
+    for relative in precompressed:
+        if relative[:-3] in owner_of:
+            owner_of[relative] = owner_of[relative[:-3]]
     closed: dict[str, list[str]] = {module_id: [] for module_id in module_ids}
     for relative, module_id in owner_of.items():
         closed[module_id].append(relative)
@@ -319,6 +330,51 @@ def build_module_ownership(root: Path) -> dict[str, tuple[str, ...]]:
     _OWNERSHIP_CACHE.clear()
     _OWNERSHIP_CACHE[fingerprint] = result
     return dict(result)
+
+
+OWNERSHIP_MAP_FILENAME = "module-ownership.json"
+_FRONTEND_MANIFESTS = {
+    "bridge": "static/frontend-build/.vite/manifest.json",
+    "build": "static/frontend-build/.vite/manifest.build.json",
+}
+
+
+def build_ownership_map(root: Path) -> dict[str, Any]:
+    """What the module manager on a router needs to know about this build.
+
+    The installer of a reduced profile trims the frontend manifests to the
+    modules it installs, so the untrimmed ones travel here: a module installed
+    later needs its entries back.
+    """
+
+    package = Path(root).resolve() / PACKAGE_DIRNAME
+    frontend: dict[str, Any] = {}
+    for key, relative in _FRONTEND_MANIFESTS.items():
+        source = package / relative
+        try:
+            entries = json.loads(source.read_text(encoding="utf-8")) if source.is_file() else {}
+        except (OSError, ValueError) as error:
+            raise ReleaseBuildError(f"invalid frontend manifest {relative}: {error}") from error
+        if not isinstance(entries, dict):
+            raise ReleaseBuildError(f"invalid frontend manifest {relative}: not an object")
+        frontend[key] = entries
+    return {
+        "schema_version": 1,
+        "modules": {module_id: list(paths) for module_id, paths in build_module_ownership(root).items()},
+        "frontend": frontend,
+    }
+
+
+def write_ownership_map(root: Path) -> Path:
+    """Write the map into the package it describes and return its path."""
+
+    path = Path(root).resolve() / PACKAGE_DIRNAME / OWNERSHIP_MAP_FILENAME
+    if not path.exists():
+        # The map lists itself among the core files, so it has to be there
+        # before the tree is read.
+        path.write_bytes(b"{}\n")
+    _write_json(path, build_ownership_map(root))
+    return path
 
 
 def _dependency_closures(root: Path, module_ids: Sequence[str]) -> dict[str, frozenset[str]]:
@@ -795,6 +851,16 @@ def write_release_bundle(inputs: ReleaseInputs | ReleaseBundle) -> ReleaseBundle
     return build_release(inputs)
 
 
+def _ownership_map_root(argv: list[str] | None) -> Path | None:
+    """The root for ``--write-ownership-map``, a mode that needs no release inputs."""
+
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
+    parser.add_argument("--write-ownership-map", action="store_true")
+    args, _ = parser.parse_known_args(argv)
+    return args.root.resolve() if args.write_ownership_map else None
+
+
 def parse_args(argv: list[str] | None = None) -> ReleaseInputs:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
@@ -810,6 +876,11 @@ def parse_args(argv: list[str] | None = None) -> ReleaseInputs:
         help="catalog architecture id; repeat for several, default: all supported",
     )
     parser.add_argument("--min-core", default=DEFAULT_MIN_CORE)
+    parser.add_argument(
+        "--write-ownership-map",
+        action="store_true",
+        help="only write xkeen-ui/module-ownership.json under --root and exit",
+    )
     args = parser.parse_args(argv)
     return ReleaseInputs(
         root=args.root.resolve(),
@@ -823,6 +894,10 @@ def parse_args(argv: list[str] | None = None) -> ReleaseInputs:
 
 
 def main(argv: list[str] | None = None) -> int:
+    map_root = _ownership_map_root(argv)
+    if map_root is not None:
+        print(write_ownership_map(map_root))
+        return 0
     bundle = write_release_bundle(parse_args(argv))
     print(bundle.metadata_path)
     return 0
