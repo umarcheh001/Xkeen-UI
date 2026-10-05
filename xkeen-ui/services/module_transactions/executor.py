@@ -8,16 +8,18 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any, Callable
-
-from services.module_catalog_client import ModuleCatalogClient
-from services.module_package_contract import validate_module_archive
+from typing import TYPE_CHECKING, Any, Callable
 
 from .extract import extract_payload
 from .install_state import rebuild_frontend_manifests, state_file_updates
 from .journal import Journal
 from .plan import load_ownership_map
 from .state import ModuleTransactionError, pid_alive, read_status, write_status
+
+if TYPE_CHECKING:
+    # The catalog client needs the signature library. Undoing an interrupted
+    # operation at boot must not depend on it, so it is not imported here.
+    from services.module_catalog_client import ModuleCatalogClient
 
 
 class OperationCancelled(ModuleTransactionError):
@@ -73,7 +75,7 @@ def run_operation(
     journal: Journal,
     *,
     state_dir: Path,
-    client: ModuleCatalogClient,
+    client: "ModuleCatalogClient",
     architecture: str,
     restart: Callable[[], None],
     wait_healthy: Callable[[str], bool],
@@ -130,6 +132,8 @@ def run_operation(
                 )
             archive_path = client.download_verified_archive(snapshot, plan.module_id, journal.staging)
             enter("verifying")
+            from services.module_package_contract import validate_module_archive
+
             checked = validate_module_archive(
                 archive_path, entry, platform_architecture=architecture, core_version=plan.version
             )

@@ -71,6 +71,8 @@ fi
 
 echo "[*] Удаляю файлы UI..."
 rm -rf "$UI_DIR"
+# Копии незавершённой операции с модулем лежат рядом с панелью.
+rm -rf "$UI_DIR.module-transactions"
 
 echo "[*] Удаляю init-скрипт..."
 for script in "$INIT_SCRIPT" "$INIT_SCRIPT_DEFAULT" "$LEGACY_INIT_SCRIPT"; do

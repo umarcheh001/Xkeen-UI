@@ -29,8 +29,6 @@ PANEL_DIR = Path(__file__).resolve().parents[1]
 if str(PANEL_DIR) not in sys.path:
     sys.path.insert(0, str(PANEL_DIR))
 
-from services.module_catalog_client import ModuleCatalogClient  # noqa: E402
-from services.module_package_contract import detect_platform_architecture  # noqa: E402
 from services.module_transactions.executor import OperationCancelled, recover, run_operation, wait_for_panel  # noqa: E402
 from services.module_transactions.journal import Journal  # noqa: E402
 from services.module_transactions.state import (  # noqa: E402
@@ -54,7 +52,11 @@ def _health_timeout() -> float:
     return value if value > 0 else DEFAULT_HEALTH_TIMEOUT_S
 
 
-def _default_client(state_dir: Path, architecture: str, version: str) -> ModuleCatalogClient:
+def _default_client(state_dir: Path, architecture: str, version: str):
+    # Imported here: the catalog client needs the signature library, and
+    # ``recover`` at boot has to work even when that library is broken.
+    from services.module_catalog_client import ModuleCatalogClient
+
     return ModuleCatalogClient(state_dir, platform_architecture=architecture, core_version=version)
 
 
@@ -120,7 +122,13 @@ def _run(args, *, client_factory, architecture, on_step) -> int:
                 check_module=phase == "operation",
             )
 
-        resolved_architecture = architecture or detect_platform_architecture()
+        if architecture is None:
+            # Imported here: the package contract loads the signature library,
+            # which ``recover`` must not depend on.
+            from services.module_package_contract import detect_platform_architecture
+
+            architecture = detect_platform_architecture()
+        resolved_architecture = architecture
         result = run_operation(
             journal,
             state_dir=state_dir,

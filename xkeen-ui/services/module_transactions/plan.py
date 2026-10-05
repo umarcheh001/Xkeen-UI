@@ -12,8 +12,6 @@ from dataclasses import asdict, dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Mapping
 
-from services.module_package_contract import ModulePackageContractError, validate_semver
-
 from .state import ModuleTransactionError, transactions_root
 
 
@@ -101,6 +99,10 @@ def load_ownership_map(panel_root: Path) -> OwnershipMap:
 
 def read_panel_version(panel_root: Path) -> str:
     """The release the panel was built from; only such a build has a catalog."""
+
+    # Imported here, not at the top: the package contract loads the signature
+    # library, and undoing an interrupted operation at boot must not need it.
+    from services.module_package_contract import ModulePackageContractError, validate_semver
 
     try:
         build = json.loads((Path(panel_root) / "BUILD.json").read_text(encoding="utf-8"))

@@ -391,3 +391,32 @@ def test_launch_clears_a_dead_operation_first(stand) -> None:
     assert set(OWNERSHIP["tool.files"]) <= set(after)
     assert not set(OWNERSHIP["tool.terminal"]) & set(after)
     assert before["app.py"] == after["app.py"]
+
+
+def test_recover_works_when_the_signature_library_cannot_be_imported(stand) -> None:
+    """A broken Python dependency must not leave the panel half replaced at boot."""
+
+    before = snapshot(stand.panel.root)
+    journal = _prepare(stand)
+    _runner(stand, "run", "--fail-at", "state", operation_id=journal.meta()["operation_id"])
+    probe = (
+        "import importlib.abc, importlib.util, sys\n"
+        "class Block(importlib.abc.MetaPathFinder):\n"
+        "    def find_spec(self, name, path=None, target=None):\n"
+        "        if name.split('.')[0] == 'cryptography':\n"
+        "            raise ImportError('cryptography is broken on this router')\n"
+        "sys.meta_path.insert(0, Block())\n"
+        "spec = importlib.util.spec_from_file_location('module_transaction', sys.argv[1])\n"
+        "module = importlib.util.module_from_spec(spec)\n"
+        "spec.loader.exec_module(module)\n"
+        "raise SystemExit(module.main(['recover', '--panel-root', sys.argv[2], '--state-dir', sys.argv[3]]))\n"
+    )
+
+    done = subprocess.run(
+        [sys.executable, "-c", probe, str(SHIPPED), str(stand.panel.root), str(stand.panel.state)],
+        capture_output=True, text=True, timeout=60,
+    )
+
+    assert done.returncode == 0, done.stderr
+    assert changed_paths(before, snapshot(stand.panel.root)) <= BOOKKEEPING
+    assert read_status(stand.panel.state)["result"] == "rolled_back"

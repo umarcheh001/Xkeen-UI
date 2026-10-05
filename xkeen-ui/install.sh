@@ -2011,6 +2011,16 @@ mkdir -p "$UI_DIR" "$INIT_DIR" "$LOG_DIR" "$RUN_DIR" "$BACKUP_DIR" "$JSONC_DIR"
 # и пытаемся убрать legacy *.jsonc из XRAY_CONFIG_DIR.
 migrate_legacy_jsonc_files || true
 
+# Незавершённая установка модуля (её процесс погиб) оставляет часть файлов
+# заменённой. Сначала возвращаем прежние: раскладывать профиль поверх смеси
+# двух состояний нельзя. Если вернуть не удалось, ниже профиль всё равно
+# перезапишет все управляемые файлы из архива.
+if [ -d "$UI_DIR.module-transactions" ] && [ -f "$UI_DIR/scripts/module_transaction.py" ]; then
+  echo "[*] Завершаю прерванную операцию с модулем..."
+  "$PYTHON_BIN" "$UI_DIR/scripts/module_transaction.py" recover --panel-root "$UI_DIR" --state-dir "$UI_DIR" \
+    || echo "[!] Прерванную операцию с модулем не удалось отменить; файлы панели будут перезаписаны из архива."
+fi
+
 echo "[*] Копирую файлы панели в $UI_DIR..."
 PROFILE_TRANSACTION="$UI_DIR.profile-transaction-$$"
 # Флаг ставится до копирования: сигнал, пришедший во время работы helper,
@@ -2673,6 +2683,23 @@ start_service() {
   [ "$j" -gt 0 ] && audit_boot "[start] target became available after ${j}s wait"
   audit_boot "[start] target=$TARGET"
 
+  # >>> module-operation-recovery
+  # Установку или удаление модуля ведёт отдельный процесс. Если он погиб
+  # посреди работы (пропало питание), часть файлов панели уже заменена, и
+  # вернуть прежние некому, кроме нас: делаем это до запуска панели. Пока
+  # операция жива (она сама перезапускает панель через этот скрипт),
+  # recover ничего не трогает. Без незавершённой операции это одна
+  # проверка каталога — Python не стартует, загрузка не замедляется.
+  MODULE_TX_ROOT="$UI_DIR.module-transactions"
+  if [ -d "$MODULE_TX_ROOT" ] && [ -n "$(ls -A "$MODULE_TX_ROOT" 2>/dev/null)" ] \
+      && [ -f "$UI_DIR/scripts/module_transaction.py" ]; then
+    audit_boot "[start] unfinished module operation found, recovering"
+    "$PYTHON_BIN" "$UI_DIR/scripts/module_transaction.py" recover \
+      --panel-root "$UI_DIR" --state-dir "$UI_DIR" >/dev/null 2>&1 \
+      || audit_boot "[start] module operation recovery did not finish cleanly (non-fatal)"
+  fi
+  # <<< module-operation-recovery
+
   if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE" 2>/dev/null)" 2>/dev/null; then
     audit_boot "[start] already running, PID $(cat "$PID_FILE")"
     echo "Сервис уже запущен (PID $(cat "$PID_FILE"))."
@@ -2832,6 +2859,9 @@ if ! "$INIT_SCRIPT" restart 3>&- || ! "$INIT_SCRIPT" status 3>&-; then
 fi
 "$PYTHON_BIN" "$INSTALL_PROFILE_HELPER" commit --transaction "$PROFILE_TRANSACTION"
 PROFILE_TRANSACTION_ACTIVE=0
+# Панель поднялась на файлах из архива: копии прерванной операции с модулем
+# больше не нужны и не должны блокировать следующие.
+rm -rf "$UI_DIR.module-transactions"
 
 log_install "[=] Итог установки:"
 ui_step_done
