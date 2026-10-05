@@ -399,6 +399,28 @@ def _include_js_dependencies(source: Path, selected_files: dict[str, Path]) -> N
                 queue.append(dependency)
 
 
+TRANSACTION_SUFFIX = ".profile-transaction-"
+
+
+def _drop_older_transactions(target: Path, transaction_root) -> None:
+    """Keep one transaction per panel: the one that is about to start.
+
+    Every install leaves a full copy of the replaced files next to the panel
+    for manual recovery. Only the latest copy is of any use, and without this
+    each update would add another one to the router storage.
+    """
+
+    if not transaction_root:
+        return
+    current = Path(transaction_root).resolve()
+    prefix = target.name + TRANSACTION_SUFFIX
+    if current.parent != target.parent or not current.name.startswith(prefix):
+        return
+    for sibling in target.parent.glob(prefix + "*"):
+        if sibling != current and sibling.is_dir() and not sibling.is_symlink():
+            shutil.rmtree(sibling, ignore_errors=True)
+
+
 def apply_profile(source: Path, target: Path, profile: str, *, module_ids=None, transaction_root=None) -> Path:
     source, target = Path(source).resolve(), Path(target).resolve()
     if source == target or source in target.parents or target in source.parents:
@@ -445,6 +467,7 @@ def apply_profile(source: Path, target: Path, profile: str, *, module_ids=None, 
     managed.update(STATE_FILES)
     managed.update(rel for rel, _ in _files(target, source=False) if rel.startswith("static/") and rel.endswith(".gz"))
     touched = set(source_files) | managed
+    _drop_older_transactions(target, transaction_root)
     old_bytes = sum((target / rel).stat().st_size for rel in touched if (target / rel).is_file())
     new_bytes = sum(path.stat().st_size for path in source_files.values())
     required = old_bytes + new_bytes + max(new_bytes // 5, 1024 * 1024)
@@ -488,7 +511,9 @@ def apply_profile(source: Path, target: Path, profile: str, *, module_ids=None, 
         }})
         _write_json(target / "install-profile.json", {"schema_version": 1, "profile": profile, "module_ids": [module for module in MODULE_IDS if module in selected], "editor_variant": variant})
         _write_json(target / "install-managed.json", {"schema_version": 1, "paths": sorted(source_files)})
-    except Exception:
+    except BaseException:
+        # An interrupt (Ctrl+C, a closed SSH session) must not leave a panel
+        # that is half old and half new.
         rollback_profile(root)
         raise
     return root

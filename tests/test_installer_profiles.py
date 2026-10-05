@@ -291,6 +291,70 @@ def test_untrusted_managed_manifest_cannot_escape_install_root(tmp_path):
     assert outside.read_text(encoding="utf-8") == "user data"
 
 
+def test_repeated_updates_keep_only_the_latest_transaction(tmp_path):
+    helper = _module()
+    src = _source(tmp_path)
+    dest = tmp_path / "xkeen-ui"
+    neighbour = tmp_path / "xkeen-ui.profile-notes"
+    neighbour.mkdir()
+    (neighbour / "keep.txt").write_text("user", encoding="utf-8")
+
+    first = tmp_path / "xkeen-ui.profile-transaction-101"
+    helper.commit_profile(helper.apply_profile(src, dest, "full", transaction_root=first))
+    assert (first / "transaction.json").is_file()
+
+    second = tmp_path / "xkeen-ui.profile-transaction-202"
+    helper.commit_profile(helper.apply_profile(src, dest, "full", transaction_root=second))
+    third = tmp_path / "xkeen-ui.profile-transaction-303"
+    helper.commit_profile(helper.apply_profile(src, dest, "xray-minimal", transaction_root=third))
+
+    assert not first.exists()
+    assert not second.exists()
+    assert (third / "quarantine/routes/mihomo.py").is_file()
+    assert (neighbour / "keep.txt").read_text(encoding="utf-8") == "user"
+
+
+def test_rejected_update_keeps_the_previous_transaction(tmp_path, monkeypatch):
+    helper = _module()
+    src = _source(tmp_path)
+    dest = tmp_path / "xkeen-ui"
+    first = tmp_path / "xkeen-ui.profile-transaction-101"
+    helper.commit_profile(helper.apply_profile(src, dest, "full", transaction_root=first))
+    (src / "routes/mihomo.py").unlink()
+
+    with pytest.raises(helper.ProfileInstallError, match="markers"):
+        helper.apply_profile(src, dest, "full", transaction_root=tmp_path / "xkeen-ui.profile-transaction-202")
+
+    assert (first / "transaction.json").is_file()
+
+
+def test_interrupted_copy_restores_prior_files_and_profile(tmp_path, monkeypatch):
+    helper = _module()
+    src = _source(tmp_path)
+    dest = tmp_path / "installed"
+    helper.commit_profile(helper.apply_profile(src, dest, "full"))
+    old_state = (dest / "modules.json").read_bytes()
+    (src / "app.py").write_text("app = 'new'", encoding="utf-8")
+    real_copy = shutil.copy2
+    interrupted = []
+
+    def copy_until_interrupt(source, destination, *args, **kwargs):
+        if not interrupted and Path(source) == src / "routes/routing/blueprint.py":
+            interrupted.append(True)
+            raise KeyboardInterrupt
+        return real_copy(source, destination, *args, **kwargs)
+
+    monkeypatch.setattr(helper.shutil, "copy2", copy_until_interrupt)
+
+    with pytest.raises(KeyboardInterrupt):
+        helper.apply_profile(src, dest, "xray-minimal")
+
+    assert interrupted
+    assert (dest / "app.py").read_text(encoding="utf-8") == "app = None"
+    assert (dest / "routes/mihomo.py").is_file()
+    assert (dest / "modules.json").read_bytes() == old_state
+
+
 @pytest.mark.parametrize("profile,expected,excluded", [
     ("xray-minimal", "engine.xray", "engine.mihomo"),
     ("mihomo-minimal", "engine.mihomo", "engine.xray"),

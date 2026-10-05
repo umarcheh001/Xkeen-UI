@@ -558,7 +558,7 @@ installer_on_exit() {
   ui_progress_stop
   if [ "$INSTALL_STATUS" -ne 0 ] && [ "$INSTALL_FINISHED" -ne 1 ]; then
     log_install "[!] Установка остановлена: код $INSTALL_STATUS, этап: $INSTALL_STAGE, действие: ${INSTALL_CURRENT_ACTION:-не определено}."
-    if [ "${PROFILE_TRANSACTION_ACTIVE:-0}" -eq 1 ]; then
+    if [ "${PROFILE_TRANSACTION_ACTIVE:-0}" -eq 1 ] && [ -f "$PROFILE_TRANSACTION/transaction.json" ]; then
       "$PYTHON_BIN" "$INSTALL_PROFILE_HELPER" rollback --transaction "$PROFILE_TRANSACTION" || true
       [ -x "${INIT_SCRIPT:-}" ] && "$INIT_SCRIPT" restart 3>&- || true
       PROFILE_TRANSACTION_ACTIVE=0
@@ -1986,12 +1986,17 @@ migrate_legacy_jsonc_files || true
 
 echo "[*] Копирую файлы панели в $UI_DIR..."
 PROFILE_TRANSACTION="$UI_DIR.profile-transaction-$$"
+# Флаг ставится до копирования: сигнал, пришедший во время работы helper,
+# оболочка обрабатывает уже после него, и без флага новые файлы остались бы
+# без отката.
+PROFILE_TRANSACTION_ACTIVE=1
 if ! "$PYTHON_BIN" "$INSTALL_PROFILE_HELPER" apply \
     --source "$SRC_DIR" --target "$UI_DIR" --profile "$PROFILE_CHOICE" \
     --module-ids "${XKEEN_UI_INSTALL_MODULES:-}" --transaction "$PROFILE_TRANSACTION"; then
+  # Helper сам вернул прежние файлы; панель при этом не перезапускаем.
+  PROFILE_TRANSACTION_ACTIVE=0
   fail_install "Не удалось применить профиль установки. Проверьте свободное место и журнал."
 fi
-PROFILE_TRANSACTION_ACTIVE=1
 
 if [ -n "$MIHOMO_PRESERVE_DIR" ] && [ -d "$MIHOMO_PRESERVE_DIR" ]; then
   mkdir -p "$MIHOMO_ROOT"
