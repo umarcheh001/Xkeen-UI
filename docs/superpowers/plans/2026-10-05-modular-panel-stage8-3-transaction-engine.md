@@ -319,13 +319,14 @@ def state_file_updates(panel_root: Path, state_dir: Path, plan: Plan) -> dict[st
 
 # executor.py
 def run_operation(journal: Journal, *, state_dir: Path, client: ModuleCatalogClient, architecture: str,
-                  restart: Callable[[], None], wait_healthy: Callable[[str], bool]) -> str   # возвращает result
+                  restart: Callable[[], None], wait_healthy: Callable[[str], bool],
+                  on_step: Callable[[str], None] | None = None) -> str   # возвращает result
 def wait_for_panel(health_url: str, state_dir: Path, module_id: str, operation: str, *, timeout_s: float,
                    sleep: Callable[[float], None] = time.sleep) -> bool
 def recover(panel_root: Path, state_dir: Path) -> str | None   # result либо None, если делать нечего
 ```
 
-`run_operation` проходит шаги спецификации по порядку, перед каждым — `journal.set_step` и `write_status`. Переменная окружения `XKEEN_UI_MODULE_TX_FAIL_AT=<step>` завершает процесс `os._exit(70)` в начале шага (крючок для тестов обрыва, в коде помечен комментарием). Любое исключение до `applying` → каталог операции удаляется, итог `interrupted` c `error_code`. Исключение с `applying` и позже, либо `wait_healthy` вернул `False` → `journal.rollback()`, `restart()`, повторный `wait_healthy`; итог `rolled_back` (с `panel_unresponsive: true`, если панель не ответила) либо `rollback_failed` (каталог остаётся). `SIGTERM`: до `applying` — как исключение до `applying`, после — откат.
+`run_operation` проходит шаги спецификации по порядку, перед каждым — `journal.set_step` и `write_status`. `run_operation` принимает необязательный `on_step: Callable[[str], None]`, вызываемый в начале каждого шага; обрыв для тестов устраивает тестовый запускатель (Task 8), в продукте параметр не используется и переменных окружения для обрыва нет. Любое исключение до `applying` → каталог операции удаляется, итог `interrupted` c `error_code`. Исключение с `applying` и позже, либо `wait_healthy` вернул `False` → `journal.rollback()`, `restart()`, повторный `wait_healthy`; итог `rolled_back` (с `panel_unresponsive: true`, если панель не ответила) либо `rollback_failed` (каталог остаётся). `SIGTERM`: до `applying` — как исключение до `applying`, после — откат.
 
 - [ ] **Step 1: Failing tests.** Фикстура `panel`: временный корень с `BUILD.json` (`version: "2.10.0"`), картой и state-файлами; релиз-фикстура с подписанным каталогом и архивами через поддельный transport (помощники из `tests/test_module_catalog_client.py`).
 
@@ -373,7 +374,7 @@ def test_apply_profile_after_install_keeps_module(panel_from_installer, release)
 ```python
 @pytest.mark.parametrize("step", ["prepared", "downloading", "verifying", "applying", "state", "restarting", "health"])
 def test_kill_at_step_then_recover_restores_tree(panel, release, step):
-    run_cli(panel, env={"XKEEN_UI_MODULE_TX_FAIL_AT": step})          # код выхода 70
+    run_test_runner(panel, "--fail-at", step)                           # код выхода 70
     assert run_cli_recover(panel).returncode in (0, 1)
     assert snapshot(panel) == before and Journal.find(panel.root) is None
     assert read_status(panel.state)["result"] == ("interrupted" if step in EARLY else "rolled_back")
@@ -388,11 +389,12 @@ def test_run_refuses_when_self_update_lock_is_held(panel, release): ...         
 def test_ensure_idle_blocks_after_rollback_failed(panel): ...
 def test_launch_returns_id_and_status_reaches_committed(panel, release): ...    # ждать до 30 с
 def test_engine_does_not_import_flask_or_routes(): ...                          # AST по services/module_transactions/*.py и scripts/module_transaction.py
+def test_shipped_cli_has_no_test_hooks(): ...                                   # в тексте скрипта нет "keyring", "release-dir", "fail-at", "TESTING"
 def test_engine_files_belong_to_core_in_both_ownerships(): ...                  # stage7.owner(...) == "core" и build_module_ownership
 ```
 
 - [ ] **Step 2:** FAIL.
-- [ ] **Step 3: Implement.** Транспорт в CLI — всегда `UrlLibCatalogTransport`; для тестов CLI и стенда адрес релиза подменяется локальным HTTP-сервером через параметр `--test-release-base` и `--test-keyring`, которые CLI принимает только при `XKEEN_UI_MODULE_TX_TESTING=1`; оба параметра и переменная названы в docstring скрипта как непригодные для роутера.
+- [ ] **Step 3: Implement.** В поставляемом `scripts/module_transaction.py` тестовых параметров нет: транспорт — всегда `UrlLibCatalogTransport`, ключи — встроенные, обрыва по переменной окружения нет. Для тестов, стенда и приёмки есть отдельный запускатель `tests/support/module_transaction_runner.py` (в архив панели не входит): те же команды `run`/`recover`, плюс `--release-dir` (файловый transport поверх каталога с релизом), `--keyring` (тестовый открытый ключ) и `--fail-at <step>` (`os._exit(70)` через `on_step`). Он импортирует `services.module_transactions.executor` и ничего не дублирует.
 - [ ] **Step 4:** PASS; затем весь набор `python -m pytest tests/test_module_transactions_*.py tests/test_module_catalog_client.py -q`.
 - [ ] **Step 5: Commit** — «Установку модуля ведёт отдельный процесс, а прерванная операция доигрывается сама».
 
@@ -419,7 +421,7 @@ def test_engine_files_belong_to_core_in_both_ownerships(): ...                  
   fi
 ```
 
-Перед `apply` профиля — тот же вызов с `|| true` и строкой в журнал установки. После `"$INSTALL_PROFILE_HELPER" commit` — `rm -rf "$UI_DIR.module-transactions"`.
+Перед `apply` профиля — тот же вызов с `|| true` и строкой в журнал установки. После `"$INSTALL_PROFILE_HELPER" commit` — `rm -rf "$UI_DIR.module-transactions"`. В `xkeen-ui/uninstall.sh` рядом с удалением каталога панели — удаление `$UI_DIR.module-transactions` (тест на строку).
 
 - [ ] **Step 1: Failing tests:** текстовые проверки трёх вставок и их порядка (`recover` в установщике стоит до `apply`, уборка — после `commit`); под `linux_only` — исполняемый тест: вырезать `start_service` из сгенерированного init-скрипта не нужно, достаточно запустить фрагмент проверки каталога в `sh` с пустым и непустым каталогом и поддельным `python3`, записывающим свои аргументы.
 - [ ] **Step 2–4:** FAIL → правка → PASS; `sh -n xkeen-ui/install.sh`.
@@ -441,7 +443,8 @@ def test_engine_files_belong_to_core_in_both_ownerships(): ...                  
 @pytest.mark.parametrize("profile", ["xray-minimal", "mihomo-minimal"])
 def test_module_package_over_installer_profile_has_no_dangling_static_imports(profile, tmp_path):
     # apply_profile во временный корень; для каждого необязательного модуля вне профиля:
-    # installed | ownership[module] должно содержать цель каждого статического ребра от файлов модуля
+    # installed | ownership[module] должно содержать цель каждого статического ребра от файлов модуля:
+    # импорт JS, импорт Python на уровне модуля, а также include/extends/import/from шаблона со строковым именем
     assert dangling == {}
 ```
 
@@ -475,19 +478,19 @@ def test_module_package_over_installer_profile_has_no_dangling_static_imports(pr
   - `remove` → `committed`, дерево отличается от исходного только state-файлами.
   То же для `mihomo-minimal` с `engine.xray`.
 - [ ] **Step 2:** полный pytest из Bash; ожидание — прежние известные падения на Windows и ни одного нового.
-- [ ] **Step 3: Браузер.** `.tmp/smoke/run_module_tx.sh <профиль> <модуль>`: установленный профиль из `run_installed.sh` + локальный HTTP-релиз + `module_transaction.py run` с тестовыми параметрами и командой перезапуска стенда; затем проба `audit7.mjs`: вход, обход вкладок, ошибок консоли и 4xx/5xx нет, раздел модуля работает. Прогнать `xray-minimal` + `tool.terminal`, `xray-minimal` + `tool.backups`, `mihomo-minimal` + `engine.xray`. Порт стенда проверить до запуска; с полным e2e одновременно не гонять.
+- [ ] **Step 3: Браузер.** `.tmp/smoke/run_module_tx.sh <профиль> <модуль>`: установленный профиль из `run_installed.sh` + локальный HTTP-релиз + `module_transaction.py run` с тестовыми параметрами и командой перезапуска стенда; затем проба `audit7.mjs`: вход, обход вкладок, ошибок консоли и 4xx/5xx нет, раздел модуля работает. Прогнать циклом все двенадцать сочетаний «урезанный профиль + необязательный модуль вне профиля»: пять шаблонов подключают части через `page_context`, и статический сторож Task 10 их не видит. Порт стенда проверить до запуска; с полным e2e одновременно не гонять.
 - [ ] **Step 4:** `npm run frontend:build` и полный e2e; ориентир — 0 failed при 12 skipped.
 - [ ] **Step 5: Commit** теста — «Проверка: модуль из пакета работает поверх урезанной установки».
 
 ### Task 13: Приёмка на роутере (с пользователем)
 
-Нужны: роутер, разрешённый пользователем; сборка с semver-версией и картой; каталог и пакеты той же версии, доступные исполнителю. Настоящего релиза с подписью ещё нет, поэтому каталог раздаётся с ноутбука тестовыми параметрами CLI (`XKEEN_UI_MODULE_TX_TESTING=1`) — это оговаривается с пользователем до начала.
+Нужны: роутер, разрешённый пользователем; сборка с semver-версией и картой; каталог и пакеты той же версии, доступные исполнителю. Настоящего релиза с подписью ещё нет, поэтому на роутер временно копируются тестовый запускатель, каталог релиза и тестовый ключ; после приёмки они удаляются (сверка дерева панели с `git ls-tree`) — это оговаривается с пользователем до начала.
 
 - [ ] **Step 1:** слепок роутера; `git log <версия роутера>..HEAD` на чужие коммиты.
 - [ ] **Step 2:** установка `xray-minimal` через `install.sh` целиком; `install tool.terminal`; терминал открывается, статика модуля отдаётся с `Content-Encoding: gzip`.
 - [ ] **Step 3:** `remove tool.terminal`; панель чистая, в `status.json` `committed`, каталога операции нет.
 - [ ] **Step 4:** в пакет подложен файл модуля с синтаксической ошибкой в безусловно импортируемом месте → панель не отвечает → `rolled_back`, прежняя панель отвечает.
-- [ ] **Step 5:** `XKEEN_UI_MODULE_TX_FAIL_AT=applying`, перезагрузка роутера → после загрузки панель прежняя, в журнале запуска строка о восстановлении, загрузка не задержана.
+- [ ] **Step 5:** тестовый запускатель с `--fail-at applying`, перезагрузка роутера → после загрузки панель прежняя, в журнале запуска строка о восстановлении, загрузка не задержана.
 - [ ] **Step 6:** `install tool.terminal`, затем обновление панели `install.sh` той же версии → терминал на месте, профиль `custom`.
 - [ ] **Step 7:** повтор Step 2–3 на MIPS.
 - [ ] **Step 8:** пометить 8.3 закрытым в `README-modular-panel-plan.md`, слепки, коммит; обновить память проекта; пуш — по команде пользователя.
