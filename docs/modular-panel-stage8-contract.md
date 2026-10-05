@@ -56,6 +56,7 @@ Module-only update не меняет соседние модули, пользо
 Module archive содержит только `module-manifest.json` и `payload/<ownership-path>`; bootstrap hooks остаются в panel asset и не попадают в module payload.
 Воспроизводимость фиксирует USTAR, POSIX-сортировку путей, uid/gid=0, пустые owner names и `SOURCE_DATE_EPOCH` для tar/gzip. Идентификатор `release-2026` пока является статическим trust boundary; криптографическая подпись вводится в 8.2.
 CI собирает и статически проверяет `dist/modular-panel/**` на каждом push. Публикация в GitHub Release разрешена только при `startsWith(github.ref, 'refs/tags/v')`, а список модульных upload assets читается из `release-metadata.json`. Legacy bootstrap archive `xkeen-ui-routing.tar.gz` сохраняется без изменения имени.
+Версия релиза берётся из тега и обязана быть semver, поэтому теги выпускаются как `vX.Y.Z`, без буквенного суффикса (решение 5 октября 2026 года): на теге вида `v2.9.2a` сборщик останавливается с понятной ошибкой, и релиз не публикуется.
 
 ## Compatibility и операции
 
