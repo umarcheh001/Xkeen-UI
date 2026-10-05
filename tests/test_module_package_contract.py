@@ -10,6 +10,8 @@ import pytest
 
 from services.module_package_contract import (
     ModulePackageContractError,
+    compare_semver,
+    validate_catalog_document,
     validate_catalog_entry,
     validate_catalog_source,
     validate_module_archive,
@@ -87,6 +89,95 @@ def _catalog(*, size: int, sha256: str, **overrides: object) -> dict[str, object
     }
     entry.update(overrides)
     return entry
+
+
+def _catalog_document(*, modules: object | None = None, **overrides: object) -> dict[str, object]:
+    document: dict[str, object] = {
+        "schema_version": 1,
+        "release_version": "1.2.3",
+        "channel": "stable",
+        "source_commit": "a" * 40,
+        "modules": [
+            _catalog(
+                size=1,
+                sha256="a" * 64,
+            )
+        ]
+        if modules is None
+        else modules,
+    }
+    document.update(overrides)
+    return document
+
+
+def test_compare_semver_orders_prereleases_before_final_releases() -> None:
+    assert compare_semver("1.0.0-alpha", "1.0.0") == -1
+    assert compare_semver("1.0.0", "1.0.0-alpha") == 1
+    assert compare_semver("1.0.0", "1.0.0") == 0
+    assert compare_semver("1.0.1", "1.0.0") == 1
+
+
+def test_catalog_document_validates_top_level_and_entry_key_identity() -> None:
+    document = _catalog_document()
+
+    normalized = validate_catalog_document(
+        document,
+        release_version="1.2.3",
+        signing_key_id="release-2026",
+        platform_architecture="aarch64",
+        core_version="1.0.0",
+    )
+
+    assert normalized == document
+    assert normalized is not document
+    assert normalized["modules"] is not document["modules"]
+
+
+@pytest.mark.parametrize(
+    ("document", "release_version", "code"),
+    [
+        (_catalog_document(modules=[]), "1.2.3", "catalog_modules_empty"),
+        (_catalog_document(modules={}), "1.2.3", "catalog_modules_invalid"),
+        (_catalog_document(channel="preview"), "1.2.3", "catalog_channel_unsupported"),
+        (_catalog_document(release_version="1.2.4"), "1.2.3", "catalog_release_version_mismatch"),
+        (_catalog_document(source_commit=""), "1.2.3", "catalog_source_commit_invalid"),
+    ],
+)
+def test_catalog_document_rejects_invalid_top_level_shape(
+    document: dict[str, object], release_version: str, code: str
+) -> None:
+    with pytest.raises(ModulePackageContractError, match=code):
+        validate_catalog_document(
+            document,
+            release_version=release_version,
+            signing_key_id="release-2026",
+        )
+
+
+def test_catalog_document_rejects_duplicate_module_ids() -> None:
+    entry = _catalog(size=1, sha256="a" * 64)
+    document = _catalog_document(modules=[entry, dict(entry)])
+
+    with pytest.raises(ModulePackageContractError, match="catalog_module_duplicate"):
+        validate_catalog_document(
+            document,
+            release_version="1.2.3",
+            signing_key_id="release-2026",
+        )
+
+
+def test_catalog_document_rejects_entry_key_different_from_verified_envelope() -> None:
+    document = _catalog_document(
+        modules=[_catalog(size=1, sha256="a" * 64, signing_key_id="rotated-2027")]
+    )
+
+    with pytest.raises(ModulePackageContractError, match="catalog_signing_key_mismatch"):
+        validate_catalog_document(
+            document,
+            release_version="1.2.3",
+            signing_key_id="release-2026",
+            trusted_signing_key_ids={"release-2026", "rotated-2027"},
+        )
 
 
 def test_valid_official_module_archive_passes_static_preflight(tmp_path: Path):

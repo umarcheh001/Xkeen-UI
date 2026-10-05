@@ -13,7 +13,7 @@ import os
 import re
 import tarfile
 from pathlib import PurePosixPath
-from typing import Any, Mapping
+from typing import AbstractSet, Any, Mapping
 from urllib.parse import urlsplit
 
 from services.module_registry import MODULE_DEFINITIONS, MODULE_IDS
@@ -52,7 +52,9 @@ def _mapping(value: object, label: str) -> Mapping[str, Any]:
     return value
 
 
-def _semver(value: object, label: str) -> str:
+def validate_semver(value: object, label: str) -> str:
+    """Return a canonical SemVer string or raise a contract error."""
+
     normalized = str(value or "").strip()
     if not _SEMVER_RE.fullmatch(normalized):
         _fail(f"{label}_invalid", f"{label} must use semantic versioning", value=normalized)
@@ -71,16 +73,28 @@ def _semver_key(version: str) -> tuple[tuple[int, int, int], tuple[tuple[int, in
     return numeric, tuple(identifiers)
 
 
+def compare_semver(left: str, right: str) -> int:
+    """Compare two semantic versions using SemVer prerelease ordering."""
+
+    left_normalized = validate_semver(left, "left_version")
+    right_normalized = validate_semver(right, "right_version")
+    left_numeric, left_prerelease = _semver_key(left_normalized)
+    right_numeric, right_prerelease = _semver_key(right_normalized)
+    if left_numeric != right_numeric:
+        return -1 if left_numeric < right_numeric else 1
+    if left_prerelease is None and right_prerelease is None:
+        return 0
+    if left_prerelease is None:
+        return 1
+    if right_prerelease is None:
+        return -1
+    if left_prerelease == right_prerelease:
+        return 0
+    return -1 if left_prerelease < right_prerelease else 1
+
+
 def _semver_at_least(actual: str, required: str) -> bool:
-    actual_numeric, actual_prerelease = _semver_key(actual)
-    required_numeric, required_prerelease = _semver_key(required)
-    if actual_numeric != required_numeric:
-        return actual_numeric > required_numeric
-    if actual_prerelease is None:
-        return True
-    if required_prerelease is None:
-        return False
-    return actual_prerelease >= required_prerelease
+    return compare_semver(actual, required) >= 0
 
 
 def _string_list(value: object, label: str) -> list[str]:
@@ -122,7 +136,7 @@ def validate_catalog_source(source: str) -> str:
     if not parsed.path.startswith(OFFICIAL_CATALOG_PREFIX) or not parsed.path.endswith("/catalog.json"):
         _fail("catalog_source_not_official", "catalog source must point to an official release catalog")
     version = parsed.path[len(OFFICIAL_CATALOG_PREFIX) : -len("/catalog.json")]
-    _semver(version.removeprefix("v"), "catalog_release_version")
+    validate_semver(version.removeprefix("v"), "catalog_release_version")
     return parsed.geturl()
 
 
@@ -159,14 +173,14 @@ def validate_catalog_entry(
     module_id = str(entry["id"] or "").strip()
     if module_id not in MODULE_IDS:
         _fail("catalog_module_unknown", "module is not part of the official registry", module_id=module_id)
-    version = _semver(entry["version"], "catalog_version")
+    version = validate_semver(entry["version"], "catalog_version")
     if entry["channel"] != "stable":
         _fail("catalog_channel_unsupported", "only stable releases are accepted")
     if entry["panel_api"] != SUPPORTED_PANEL_API or entry["module_api"] != SUPPORTED_MODULE_API:
         _fail("catalog_api_unsupported", "catalog API versions are not supported")
-    min_core = _semver(entry["min_core"], "catalog_min_core")
+    min_core = validate_semver(entry["min_core"], "catalog_min_core")
     if core_version is not None:
-        normalized_core = _semver(core_version, "current_core_version")
+        normalized_core = validate_semver(core_version, "current_core_version")
         if not _semver_at_least(normalized_core, min_core):
             _fail(
                 "catalog_min_core_unsupported",
@@ -229,6 +243,75 @@ def validate_catalog_entry(
         "size": size,
         "sha256": sha256,
         "signing_key_id": signing_key_id,
+    }
+
+
+def validate_catalog_document(
+    document: Mapping[str, Any],
+    *,
+    release_version: str,
+    signing_key_id: str,
+    trusted_signing_key_ids: AbstractSet[str] | None = None,
+    platform_architecture: str | None = None,
+    core_version: str | None = None,
+) -> dict[str, Any]:
+    """Validate one signed stable catalog after its envelope is verified."""
+
+    catalog = _mapping(document, "catalog")
+    required = ("schema_version", "release_version", "channel", "source_commit", "modules")
+    missing = [field for field in required if field not in catalog]
+    if missing:
+        _fail("catalog_required_field", "catalog document is missing required fields", fields=missing)
+    if not isinstance(catalog["schema_version"], int) or isinstance(catalog["schema_version"], bool) or catalog["schema_version"] != 1:
+        _fail("catalog_schema_unsupported", "catalog schema is not supported")
+    normalized_release = validate_semver(catalog["release_version"], "catalog_release_version")
+    expected_release = validate_semver(release_version, "expected_release_version")
+    if normalized_release != expected_release:
+        _fail(
+            "catalog_release_version_mismatch",
+            "catalog release version does not match its immutable source URL",
+            catalog_release_version=normalized_release,
+            expected_release_version=expected_release,
+        )
+    if catalog["channel"] != "stable":
+        _fail("catalog_channel_unsupported", "only stable catalog releases are accepted")
+    source_commit = catalog["source_commit"]
+    if not isinstance(source_commit, str) or not source_commit.strip():
+        _fail("catalog_source_commit_invalid", "catalog source_commit must be a non-empty string")
+    modules = catalog["modules"]
+    if not isinstance(modules, list):
+        _fail("catalog_modules_invalid", "catalog modules must be a list")
+    if not modules:
+        _fail("catalog_modules_empty", "catalog modules must not be empty")
+
+    normalized_modules: list[dict[str, Any]] = []
+    seen_module_ids: set[str] = set()
+    for item in modules:
+        entry = validate_catalog_entry(
+            _mapping(item, "catalog"),
+            trusted_signing_key_ids=trusted_signing_key_ids,
+            platform_architecture=platform_architecture,
+            core_version=core_version,
+        )
+        if entry["id"] in seen_module_ids:
+            _fail("catalog_module_duplicate", "catalog contains duplicate module IDs", module_id=entry["id"])
+        if entry["signing_key_id"] != signing_key_id:
+            _fail(
+                "catalog_signing_key_mismatch",
+                "catalog entry key does not match the verified signature envelope",
+                module_id=entry["id"],
+                entry_signing_key_id=entry["signing_key_id"],
+                signing_key_id=signing_key_id,
+            )
+        seen_module_ids.add(entry["id"])
+        normalized_modules.append(entry)
+
+    return {
+        "schema_version": 1,
+        "release_version": normalized_release,
+        "channel": "stable",
+        "source_commit": source_commit.strip(),
+        "modules": normalized_modules,
     }
 
 
