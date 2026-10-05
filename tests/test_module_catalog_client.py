@@ -210,6 +210,18 @@ def test_validate_fetch_url_allows_only_known_https_redirect_hosts() -> None:
         validate_fetch_url("https://example.invalid/release-asset", policy=RELEASE_POLICY, redirected=True)
 
 
+@pytest.mark.parametrize(
+    "url",
+    (
+        "https://github.com/umarcheh001/Xkeen-UI/archive/refs/heads/main.zip",
+        "https://github.com/umarcheh001/Xkeen-UI/releases/download/v1.2.3/catalog.json?branch=main",
+    ),
+)
+def test_validate_fetch_url_rejects_mutable_github_redirects(url: str) -> None:
+    with pytest.raises(CatalogClientError, match="catalog_redirect_unsafe"):
+        validate_fetch_url(url, policy=RELEASE_POLICY, redirected=True)
+
+
 def test_transport_follows_only_approved_manual_redirects() -> None:
     initial = official_release_asset_url("1.2.3", "catalog.json")
     redirected = "https://objects.githubusercontent.com/release-asset?X-Amz-Signature=test"
@@ -228,12 +240,12 @@ def test_transport_follows_only_approved_manual_redirects() -> None:
 def test_transport_rejects_unsafe_or_excessive_redirects() -> None:
     initial = official_release_asset_url("1.2.3", "catalog.json")
     unsafe = _Opener([_Response(302, location="https://example.invalid/catalog.json")])
-    with pytest.raises(CatalogTransportError, match="catalog_redirect_unsafe"):
+    with pytest.raises(CatalogClientError, match="catalog_redirect_unsafe"):
         UrlLibCatalogTransport(opener=unsafe, timeout_s=1).fetch_bytes(initial, max_bytes=64, policy=RELEASE_POLICY)
 
     loop_url = "https://objects.githubusercontent.com/release-asset"
     looping = _Opener([_Response(302, location=loop_url) for _ in range(4)])
-    with pytest.raises(CatalogTransportError, match="catalog_redirect_limit"):
+    with pytest.raises(CatalogClientError, match="catalog_redirect_limit"):
         UrlLibCatalogTransport(opener=looping, timeout_s=1).fetch_bytes(initial, max_bytes=64, policy=RELEASE_POLICY)
 
 
@@ -370,6 +382,83 @@ def test_client_does_not_hide_remote_signature_failure_with_cache(tmp_path) -> N
         client.get_catalog()
 
     assert raised.value.code == "catalog_signature_invalid"
+
+
+@pytest.mark.parametrize(
+    ("locations", "code"),
+    (
+        (("https://example.invalid/catalog.json",), "catalog_redirect_unsafe"),
+        ((None,), "catalog_redirect_unsafe"),
+        (
+            (
+                "https://objects.githubusercontent.com/release-asset",
+                "https://objects.githubusercontent.com/release-asset",
+                "https://objects.githubusercontent.com/release-asset",
+                "https://objects.githubusercontent.com/release-asset",
+            ),
+            "catalog_redirect_limit",
+        ),
+        (("https://github.com/umarcheh001/Xkeen-UI/archive/refs/heads/main.zip",), "catalog_redirect_unsafe"),
+        (
+            ("https://github.com/umarcheh001/Xkeen-UI/releases/download/v1.2.3/catalog.json?branch=main",),
+            "catalog_redirect_unsafe",
+        ),
+    ),
+)
+def test_client_does_not_use_stale_cache_after_redirect_policy_failure(
+    tmp_path, locations: tuple[str | None, ...], code: str
+) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    clock = [100.0]
+    seed_transport = _CatalogTransport(_release_responses(private_key, "1.2.3"))
+    seed_client = ModuleCatalogClient(
+        tmp_path,
+        transport=seed_transport,
+        now=lambda: clock[0],
+        keyring={"release-2026": _public_pem(private_key)},
+    )
+    seed_client.get_catalog()
+    latest_release = _release_responses(private_key, "1.2.3")[LATEST_RELEASE_URL]
+    opener = _Opener(
+        [_Response(200, body=latest_release)]
+        + [_Response(302, location=location) for location in locations]
+    )
+    client = ModuleCatalogClient(
+        tmp_path,
+        transport=UrlLibCatalogTransport(opener=opener, timeout_s=1),
+        now=lambda: clock[0],
+        keyring={"release-2026": _public_pem(private_key)},
+    )
+
+    with pytest.raises(CatalogClientError) as raised:
+        client.get_catalog(force_refresh=True)
+
+    assert raised.value.code == code
+
+
+def test_client_rejects_future_dated_cache_instead_of_treating_it_as_fresh(tmp_path) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    clock = [100.0]
+    transport = _CatalogTransport(_release_responses(private_key, "1.2.3"))
+    client = ModuleCatalogClient(
+        tmp_path,
+        transport=transport,
+        now=lambda: clock[0],
+        keyring={"release-2026": _public_pem(private_key)},
+    )
+    client.get_catalog()
+    cache_path = tmp_path / "module-catalog" / "catalog-cache.json"
+    cache = json.loads(cache_path.read_text(encoding="utf-8"))
+    cache["fetched_at"] = clock[0] + 1
+    cache_path.write_text(json.dumps(cache), encoding="utf-8")
+    transport.responses = {
+        LATEST_RELEASE_URL: CatalogTransportError("catalog_transport_unavailable", "offline"),
+    }
+
+    with pytest.raises(CatalogClientError) as raised:
+        client.get_catalog()
+
+    assert raised.value.code == "catalog_cache_invalid"
 
 
 def test_client_rejects_validly_signed_release_version_rollback(tmp_path) -> None:

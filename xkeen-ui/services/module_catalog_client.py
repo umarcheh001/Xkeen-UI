@@ -150,14 +150,11 @@ class UrlLibCatalogTransport:
             location = self._response_header(response, "Location")
             self._close(response)
             if redirect_count == self._MAX_REDIRECTS:
-                raise CatalogTransportError("catalog_redirect_limit", "catalog response exceeded redirect limit")
+                _fail("catalog_redirect_limit", "catalog response exceeded redirect limit")
             if location is None:
-                raise CatalogTransportError("catalog_redirect_unsafe", "catalog redirect has no location")
-            try:
-                current_url = validate_fetch_url(urljoin(current_url, location), policy=policy, redirected=True)
-            except CatalogClientError as error:
-                raise CatalogTransportError(error.code, "catalog redirect is outside the allowed policy") from error
-        raise CatalogTransportError("catalog_redirect_limit", "catalog response exceeded redirect limit")
+                _fail("catalog_redirect_unsafe", "catalog redirect has no location")
+            current_url = validate_fetch_url(urljoin(current_url, location), policy=policy, redirected=True)
+        _fail("catalog_redirect_limit", "catalog response exceeded redirect limit")
 
     def stream_to(self, url: str, output: BinaryIO, *, max_bytes: int, policy: FetchPolicy) -> int:
         """Stream one accepted response and fail before exceeding ``max_bytes``."""
@@ -189,13 +186,13 @@ class UrlLibCatalogTransport:
         return output.getvalue()
 
 
-def _validate_release_path(path: str) -> None:
+def _validate_release_path(path: str, *, failure_code: str = "catalog_source_not_official") -> None:
     if not path.startswith(OFFICIAL_RELEASE_PATH_PREFIX):
-        _fail("catalog_source_not_official", "catalog source must use the official release path")
+        _fail(failure_code, "catalog source must use the official release path")
     release_and_asset = path[len(OFFICIAL_RELEASE_PATH_PREFIX) :]
     release_tag, separator, asset_name = release_and_asset.partition("/")
     if not separator or not release_tag.startswith("v") or not asset_name or "/" in asset_name or "\\" in asset_name:
-        _fail("catalog_source_not_official", "catalog source must name one immutable release asset")
+        _fail(failure_code, "catalog source must name one immutable release asset")
     try:
         validate_semver(release_tag.removeprefix("v"), "catalog_release_version")
     except ModulePackageContractError as error:
@@ -221,10 +218,14 @@ def validate_fetch_url(url: str, *, policy: FetchPolicy, redirected: bool = Fals
         or port not in (None, 443)
     ):
         _fail(failure_code, "catalog URL is outside the allowed HTTPS hosts")
-    if not redirected and policy.require_official_release_path:
+    if policy.require_official_release_path and not redirected:
         if parsed.query or parsed.fragment:
             _fail("catalog_source_not_official", "catalog source must not use mutable URL selectors")
         _validate_release_path(parsed.path)
+    elif policy.require_official_release_path and parsed.hostname.lower() == "github.com":
+        if parsed.query or parsed.fragment:
+            _fail("catalog_redirect_unsafe", "GitHub redirects must not use mutable URL selectors")
+        _validate_release_path(parsed.path, failure_code="catalog_redirect_unsafe")
     return parsed.geturl()
 
 
@@ -375,12 +376,15 @@ class ModuleCatalogClient:
             catalog_url = record["catalog_url"]
             release_version = record["release_version"]
             fetched_at = float(record["fetched_at"])
+            checked_at = float(self._now())
             if (
                 not isinstance(encoded_catalog, str)
                 or not isinstance(encoded_signature, str)
                 or not isinstance(catalog_url, str)
                 or not isinstance(release_version, str)
                 or not math.isfinite(fetched_at)
+                or not math.isfinite(checked_at)
+                or fetched_at > checked_at
             ):
                 raise ValueError("invalid cache record")
             catalog_bytes = base64.b64decode(encoded_catalog, validate=True)
@@ -436,7 +440,7 @@ class ModuleCatalogClient:
         except CatalogClientError as error:
             cache_error = error
         now = float(self._now())
-        if cached is not None and not force_refresh and max(0.0, now - cached.fetched_at) <= self._cache_ttl_s:
+        if cached is not None and not force_refresh and 0.0 <= now - cached.fetched_at <= self._cache_ttl_s:
             return cached
         try:
             snapshot = self._fetch_remote()

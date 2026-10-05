@@ -15,6 +15,7 @@ from services.module_package_contract import (
     validate_catalog_entry,
     validate_catalog_source,
     validate_module_archive,
+    validate_semver,
 )
 
 
@@ -115,6 +116,12 @@ def test_compare_semver_orders_prereleases_before_final_releases() -> None:
     assert compare_semver("1.0.0", "1.0.0-alpha") == 1
     assert compare_semver("1.0.0", "1.0.0") == 0
     assert compare_semver("1.0.1", "1.0.0") == 1
+
+
+@pytest.mark.parametrize("version", ("1.0.0-01", "1.0.0-alpha.002"))
+def test_validate_semver_rejects_numeric_prerelease_identifiers_with_leading_zero(version: str) -> None:
+    with pytest.raises(ModulePackageContractError, match="version_invalid"):
+        validate_semver(version, "version")
 
 
 def test_catalog_document_validates_top_level_and_entry_key_identity() -> None:

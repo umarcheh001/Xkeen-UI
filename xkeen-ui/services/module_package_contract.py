@@ -58,6 +58,11 @@ def validate_semver(value: object, label: str) -> str:
     normalized = str(value or "").strip()
     if not _SEMVER_RE.fullmatch(normalized):
         _fail(f"{label}_invalid", f"{label} must use semantic versioning", value=normalized)
+    _, separator, prerelease_and_build = normalized.partition("-")
+    if separator:
+        prerelease = prerelease_and_build.partition("+")[0]
+        if any(identifier.isdigit() and len(identifier) > 1 and identifier.startswith("0") for identifier in prerelease.split(".")):
+            _fail(f"{label}_invalid", f"{label} must use semantic versioning", value=normalized)
     return normalized
 
 
