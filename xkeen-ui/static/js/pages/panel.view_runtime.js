@@ -30,6 +30,9 @@ function getMihomoClashFeatureApi() {
 }
 
 const viewInitFlags = Object.create(null);
+// The other screens have no editor of their own; their dialogs ask for one
+// when they open.
+const VIEWS_WITH_EDITORS = new Set(['routing', 'mihomo', 'xkeen']);
 let mihomoConfigSubviewRuntimeBound = false;
 
 function bindMihomoConfigSubviewRuntime() {
@@ -79,7 +82,7 @@ export async function applyPanelViewRuntime(name) {
   // Screens create their editors during init and silently fall back to a
   // plain textarea when the editor helpers are not loaded yet. CodeMirror is
   // the engine every editor variant has; Monaco is still loaded on demand.
-  await ensurePanelEditorSupport('codemirror');
+  if (VIEWS_WITH_EDITORS.has(viewName)) await ensurePanelEditorSupport('codemirror');
 
   if (viewName === 'mihomo') {
     await initViewOnce('mihomo', () => {

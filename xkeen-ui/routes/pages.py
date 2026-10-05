@@ -179,7 +179,8 @@ PANEL_FRONTEND_MODULES: tuple[PanelFrontendModule, ...] = (
     PanelFrontendModule(
         "editor-runtime",
         ("tool.editor",),
-        "interaction",
+        # The screens with an editor ask for it before they initialise.
+        "view",
         (),
         ("json-editor-modal", "fm-editor-modal", "routing-editor", "mihomo-editor"),
         (),
@@ -188,7 +189,7 @@ PANEL_FRONTEND_MODULES: tuple[PanelFrontendModule, ...] = (
     PanelFrontendModule(
         "editor-codemirror",
         ("tool.editor",),
-        "interaction",
+        "view",
         (),
         (),
         (),
