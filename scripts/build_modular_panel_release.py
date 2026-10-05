@@ -21,10 +21,14 @@ import tarfile
 from dataclasses import dataclass
 from pathlib import Path
 from pathlib import PurePosixPath
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 
-DEFAULT_ARCHITECTURE = "aarch64"
+# The payload is Python, templates and static files: it does not depend on the
+# CPU. The catalog still has to name every router architecture the panel is
+# installed on, or the catalog client refuses the whole catalog there.
+SUPPORTED_ARCHITECTURES = ("aarch64", "mips", "mipsel")
+DEFAULT_ARCHITECTURES = SUPPORTED_ARCHITECTURES
 DEFAULT_MIN_CORE = "1.0.0"
 PACKAGE_DIRNAME = "xkeen-ui"
 _IGNORED_DIR_NAMES = {"__pycache__"}
@@ -71,6 +75,22 @@ _STAGE7_MODULE: Any | None = None
 
 class ReleaseBuildError(ValueError):
     """A local release assembly input is unsafe or cannot be packaged."""
+
+
+def normalize_architectures(architectures: Sequence[str]) -> list[str]:
+    """Return the sorted catalog architecture ids or refuse an unknown one."""
+
+    if isinstance(architectures, str):
+        architectures = (architectures,)
+    normalized = sorted({str(item).strip() for item in architectures})
+    if not normalized:
+        raise ReleaseBuildError("at least one catalog architecture is required")
+    unknown = [item for item in normalized if item not in SUPPORTED_ARCHITECTURES]
+    if unknown:
+        raise ReleaseBuildError(
+            f"unknown catalog architecture {unknown!r}: supported are {list(SUPPORTED_ARCHITECTURES)!r}"
+        )
+    return normalized
 
 
 def _safe_member_path(value: str) -> str:
@@ -281,7 +301,7 @@ def build_module_manifest(
     module_id: str,
     *,
     version: str,
-    architecture: str = DEFAULT_ARCHITECTURE,
+    architectures: Sequence[str] = DEFAULT_ARCHITECTURES,
     min_core: str = DEFAULT_MIN_CORE,
 ) -> dict[str, Any]:
     """Build the Stage 8.0 manifest for one registry module."""
@@ -300,7 +320,7 @@ def build_module_manifest(
         "panel_api": "1",
         "module_api": "1",
         "min_core": str(min_core),
-        "architectures": [str(architecture)],
+        "architectures": normalize_architectures(architectures),
         "requires": list(definition.dependencies),
         "conflicts": list(definition.conflicts),
         "requires_restart": bool(definition.requires_restart),
@@ -314,14 +334,14 @@ def module_archive_spec(
     module_id: str,
     *,
     version: str,
-    architecture: str = DEFAULT_ARCHITECTURE,
+    architectures: Sequence[str] = DEFAULT_ARCHITECTURES,
     min_core: str = DEFAULT_MIN_CORE,
 ) -> ArchiveSpec:
     manifest = build_module_manifest(
         root,
         module_id,
         version=version,
-        architecture=architecture,
+        architectures=architectures,
         min_core=min_core,
     )
     package = Path(root).resolve() / PACKAGE_DIRNAME
@@ -383,7 +403,7 @@ def build_module_archive(
     module_id: str,
     *,
     version: str,
-    architecture: str,
+    architectures: Sequence[str],
     min_core: str,
     epoch: int,
 ) -> BuiltAsset:
@@ -393,7 +413,7 @@ def build_module_archive(
         root,
         module_id,
         version=version,
-        architecture=architecture,
+        architectures=architectures,
         min_core=min_core,
     )
     path = Path(output_dir) / spec.filename
@@ -429,7 +449,7 @@ class ReleaseInputs:
     version: str
     source_date_epoch: int
     source_commit: str
-    architecture: str = DEFAULT_ARCHITECTURE
+    architectures: Sequence[str] = DEFAULT_ARCHITECTURES
     min_core: str = DEFAULT_MIN_CORE
 
 
@@ -468,7 +488,7 @@ def build_release(
     version: str | None = None,
     source_date_epoch: int | None = None,
     source_commit: str | None = None,
-    architecture: str = DEFAULT_ARCHITECTURE,
+    architectures: Sequence[str] = DEFAULT_ARCHITECTURES,
     min_core: str = DEFAULT_MIN_CORE,
 ) -> ReleaseBundle:
     """Build panel/module archives, checksums, catalog and metadata."""
@@ -485,7 +505,7 @@ def build_release(
             version=version,
             source_date_epoch=int(source_date_epoch),
             source_commit=source_commit,
-            architecture=architecture,
+            architectures=architectures,
             min_core=min_core,
         )
 
@@ -518,7 +538,7 @@ def build_release(
             output_dir,
             module_id,
             version=inputs.version,
-            architecture=inputs.architecture,
+            architectures=inputs.architectures,
             min_core=inputs.min_core,
             epoch=inputs.source_date_epoch,
         )
@@ -526,7 +546,7 @@ def build_release(
             root,
             module_id,
             version=inputs.version,
-            architecture=inputs.architecture,
+            architectures=inputs.architectures,
             min_core=inputs.min_core,
         )
         modules.append(asset)
@@ -583,7 +603,13 @@ def parse_args(argv: list[str] | None = None) -> ReleaseInputs:
     parser.add_argument("--version", required=True)
     parser.add_argument("--source-date-epoch", type=int, required=True)
     parser.add_argument("--source-commit", required=True)
-    parser.add_argument("--architecture", default=DEFAULT_ARCHITECTURE)
+    parser.add_argument(
+        "--architecture",
+        action="append",
+        dest="architectures",
+        choices=SUPPORTED_ARCHITECTURES,
+        help="catalog architecture id; repeat for several, default: all supported",
+    )
     parser.add_argument("--min-core", default=DEFAULT_MIN_CORE)
     args = parser.parse_args(argv)
     return ReleaseInputs(
@@ -592,7 +618,7 @@ def parse_args(argv: list[str] | None = None) -> ReleaseInputs:
         version=args.version,
         source_date_epoch=args.source_date_epoch,
         source_commit=args.source_commit,
-        architecture=args.architecture,
+        architectures=tuple(args.architectures or DEFAULT_ARCHITECTURES),
         min_core=args.min_core,
     )
 

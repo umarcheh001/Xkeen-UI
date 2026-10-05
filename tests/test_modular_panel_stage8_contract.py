@@ -147,7 +147,8 @@ def test_stage8_contract_generator_covers_boundaries_and_acceptance_matrix(tmp_p
         "manifest_schema_version": 1,
         "catalog_schema_version": 1,
         "version_format": "semver",
-        "architecture_source": "uname -m normalized to catalog architecture ids",
+        "architectures": ["aarch64", "mips", "mipsel"],
+        "architecture_source": "uname -m normalized to catalog architecture ids; MIPS byte order decides between mips and mipsel",
     }
     assert [item["id"] for item in payload["acceptance_matrix"]] == [
         "unknown-signing-key",

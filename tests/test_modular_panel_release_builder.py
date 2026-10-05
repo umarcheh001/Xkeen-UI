@@ -45,7 +45,7 @@ def test_release_builder_exposes_stable_input_and_asset_contract() -> None:
     assert inputs.version == "1.2.3"
     assert inputs.source_date_epoch == 1_700_000_000
     assert inputs.source_commit == "a" * 40
-    assert inputs.architecture == "aarch64"
+    assert inputs.architectures == ("aarch64", "mips", "mipsel")
     assert inputs.min_core == "1.0.0"
 
     for name in ("ArchiveSpec", "BuiltAsset", "ReleaseBundle"):
@@ -192,7 +192,7 @@ def test_module_manifest_uses_registry_metadata_and_exact_ownership(tmp_path: Pa
         tmp_path,
         "tool.terminal",
         version="1.2.3",
-        architecture="aarch64",
+        architectures=("aarch64",),
         min_core="1.0.0",
     )
 
@@ -216,7 +216,7 @@ def test_module_manifest_uses_registry_metadata_and_exact_ownership(tmp_path: Pa
         tmp_path,
         "tool.terminal",
         version="1.2.3",
-        architecture="aarch64",
+        architectures=("aarch64",),
         min_core="1.0.0",
     )
     assert spec.filename == "xkeen-module-tool.terminal-1.2.3.tar.gz"
@@ -225,6 +225,18 @@ def test_module_manifest_uses_registry_metadata_and_exact_ownership(tmp_path: Pa
         "payload/static/js/pages/terminal.lazy.entry.js",
     ]
     assert json.loads(dict(spec.members)["module-manifest.json"].decode("utf-8")) == manifest
+
+
+def test_catalog_architectures_are_sorted_and_limited_to_supported_routers() -> None:
+    builder = _load_builder()
+
+    assert builder.DEFAULT_ARCHITECTURES == ("aarch64", "mips", "mipsel")
+    assert builder.normalize_architectures(("mipsel", "aarch64", "mipsel")) == ["aarch64", "mipsel"]
+    assert builder.normalize_architectures("aarch64") == ["aarch64"]
+    with pytest.raises(builder.ReleaseBuildError, match="unknown catalog architecture"):
+        builder.normalize_architectures(("aarch64", "x86_64"))
+    with pytest.raises(builder.ReleaseBuildError, match="at least one"):
+        builder.normalize_architectures(())
 
 
 def test_panel_and_module_assets_have_release_names_and_static_preflight(tmp_path: Path) -> None:
@@ -247,7 +259,7 @@ def test_panel_and_module_assets_have_release_names_and_static_preflight(tmp_pat
         tmp_path / "dist",
         "tool.terminal",
         version="1.2.3",
-        architecture="aarch64",
+        architectures=("aarch64",),
         min_core="1.0.0",
         epoch=1_700_000_000,
     )
@@ -265,7 +277,7 @@ def test_panel_and_module_assets_have_release_names_and_static_preflight(tmp_pat
         tmp_path,
         "tool.terminal",
         version="1.2.3",
-        architecture="aarch64",
+        architectures=("aarch64",),
         min_core="1.0.0",
     )
     catalog_entry = {
@@ -391,13 +403,17 @@ def test_complete_bundle_is_reproducible_and_passes_static_preflight(tmp_path: P
     catalog = json.loads(first.catalog_path.read_text(encoding="utf-8"))
     assert len(catalog["modules"]) == 9
     for entry in catalog["modules"]:
-        result = validate_module_archive(
-            inputs.output_dir / entry["archive"],
-            entry,
-            platform_architecture="aarch64",
-            core_version="1.0.0",
-        )
-        assert result["id"] == entry["id"]
+        # The payload does not depend on the CPU: a MIPS router must find
+        # itself in the catalog just as an aarch64 one does.
+        assert entry["architectures"] == ["aarch64", "mips", "mipsel"]
+        for architecture in entry["architectures"]:
+            result = validate_module_archive(
+                inputs.output_dir / entry["archive"],
+                entry,
+                platform_architecture=architecture,
+                core_version="1.0.0",
+            )
+            assert result["id"] == entry["id"]
 
 
 def test_panel_asset_preserves_legacy_bootstrap_entrypoints(tmp_path: Path, panel_source_root: Path) -> None:

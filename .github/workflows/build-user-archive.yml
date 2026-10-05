@@ -236,14 +236,17 @@ jobs:
 
           root = Path("dist/modular-panel")
           catalog = json.loads((root / "catalog.json").read_text(encoding="utf-8"))
-          for entry in catalog["modules"]:
-              validate_catalog_entry(entry, platform_architecture="aarch64", core_version="1.0.0")
-              validate_module_archive(
-                  root / entry["archive"],
-                  entry,
-                  platform_architecture="aarch64",
-                  core_version="1.0.0",
-              )
+          # The payload does not depend on the CPU: every router architecture
+          # the panel installs on must find itself in the catalog.
+          for architecture in ("aarch64", "mips", "mipsel"):
+              for entry in catalog["modules"]:
+                  validate_catalog_entry(entry, platform_architecture=architecture, core_version="1.0.0")
+                  validate_module_archive(
+                      root / entry["archive"],
+                      entry,
+                      platform_architecture=architecture,
+                      core_version="1.0.0",
+                  )
           metadata = json.loads((root / "release-metadata.json").read_text(encoding="utf-8"))
           signature_path = root / "catalog.json.sig"
           is_tag = os.environ.get("GITHUB_REF", "").startswith("refs/tags/v")
