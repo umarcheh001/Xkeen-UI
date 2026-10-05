@@ -412,3 +412,43 @@ def write_release_directory(release: Release, directory: Path) -> Path:
 
 def set_mtime(path: Path, seconds: float) -> None:
     os.utime(path, (seconds, seconds))
+
+
+class DirectoryTransport:
+    """Release assets read from a directory by file name, as the test runner does."""
+
+    def __init__(self, directory: Path) -> None:
+        self.directory = Path(directory)
+
+    def _read(self, url: str) -> bytes:
+        try:
+            return (self.directory / url.rsplit("/", 1)[1]).read_bytes()
+        except OSError as error:
+            raise CatalogTransportError("catalog_transport_failed", "asset is missing") from error
+
+    def fetch_bytes(self, url: str, *, max_bytes: int, policy: FetchPolicy) -> bytes:
+        return self._read(url)
+
+    def stream_to(self, url: str, output, *, max_bytes: int, policy: FetchPolicy) -> int:
+        body = self._read(url)
+        output.write(body)
+        return len(body)
+
+
+def sign_release_directory(directory: Path) -> dict[str, bytes]:
+    """Sign ``catalog.json`` of a built release with a fresh key; returns the keyring."""
+
+    key = Ed25519PrivateKey.generate()
+    catalog_bytes = (Path(directory) / "catalog.json").read_bytes()
+    envelope = {
+        "schema_version": 1,
+        "algorithm": "Ed25519",
+        "key_id": "release-2026",
+        "signature": base64.b64encode(key.sign(catalog_bytes)).decode("ascii"),
+    }
+    (Path(directory) / "catalog.json.sig").write_text(
+        json.dumps(envelope, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8"
+    )
+    pem = key.public_key().public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
+    (Path(directory) / "keyring.json").write_text(json.dumps({"release-2026": pem.decode("ascii")}), encoding="utf-8")
+    return {"release-2026": pem}
