@@ -10,7 +10,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import platform
 import re
+import sys
 import tarfile
 from pathlib import PurePosixPath
 from typing import AbstractSet, Any, Mapping
@@ -23,6 +25,8 @@ from services.module_registry import MODULE_DEFINITIONS, MODULE_IDS
 SUPPORTED_PANEL_API = "1"
 SUPPORTED_MODULE_API = "1"
 MANIFEST_SCHEMA_VERSION = 1
+# The ids a catalog entry may name. The release builder keeps the same list.
+CATALOG_ARCHITECTURES = ("aarch64", "mips", "mipsel")
 OFFICIAL_CATALOG_PREFIX = "/umarcheh001/Xkeen-UI/releases/download/"
 _SEMVER_RE = re.compile(
     r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
@@ -44,6 +48,35 @@ class ModulePackageContractError(ValueError):
 
 def _fail(code: str, message: str, **details: Any) -> None:
     raise ModulePackageContractError(code, message, **details)
+
+
+def detect_platform_architecture(*, machine: str | None = None, byteorder: str | None = None) -> str:
+    """Return the catalog architecture id of the router the panel runs on.
+
+    ``uname -m`` answers ``mips`` on Keenetic routers of both byte orders, so
+    for MIPS the byte order of the running interpreter decides. A platform the
+    catalog is not built for is refused instead of being guessed.
+    """
+
+    if machine is None:
+        try:
+            machine = os.uname().machine
+        except (AttributeError, OSError):
+            machine = platform.machine()
+    normalized = str(machine or "").strip().lower()
+    order = str(byteorder if byteorder is not None else sys.byteorder).strip().lower()
+    if normalized in {"aarch64", "arm64"}:
+        return "aarch64"
+    if normalized in {"mipsel", "mipsle"}:
+        return "mipsel"
+    if normalized == "mips":
+        return "mipsel" if order == "little" else "mips"
+    _fail(
+        "platform_architecture_unsupported",
+        "the catalog is not built for this platform",
+        machine=normalized,
+        supported=list(CATALOG_ARCHITECTURES),
+    )
 
 
 def _mapping(value: object, label: str) -> Mapping[str, Any]:

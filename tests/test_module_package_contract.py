@@ -9,8 +9,10 @@ from pathlib import Path
 import pytest
 
 from services.module_package_contract import (
+    CATALOG_ARCHITECTURES,
     ModulePackageContractError,
     compare_semver,
+    detect_platform_architecture,
     validate_catalog_document,
     validate_catalog_entry,
     validate_catalog_source,
@@ -296,3 +298,34 @@ def test_archive_preflight_rejects_manifest_mismatch_and_hooks(tmp_path: Path):
     size, digest = _write_archive(missing_limit, manifest)
     with pytest.raises(ModulePackageContractError, match="manifest_required_field"):
         validate_module_archive(missing_limit, _catalog(size=size, sha256=digest))
+
+
+@pytest.mark.parametrize(
+    ("machine", "byteorder", "expected"),
+    [
+        ("aarch64", "little", "aarch64"),
+        ("arm64", "little", "aarch64"),
+        # Keenetic answers "mips" on both byte orders: the byte order decides.
+        ("mips", "little", "mipsel"),
+        ("mips", "big", "mips"),
+        ("mipsel", "big", "mipsel"),
+        ("mipsle", "little", "mipsel"),
+        ("MIPS", "little", "mipsel"),
+    ],
+)
+def test_platform_architecture_is_normalized_to_a_catalog_id(machine: str, byteorder: str, expected: str) -> None:
+    assert detect_platform_architecture(machine=machine, byteorder=byteorder) == expected
+    assert expected in CATALOG_ARCHITECTURES
+
+
+@pytest.mark.parametrize("machine", ["x86_64", "AMD64", "armv7l", "mips64", "mips64el", ""])
+def test_platform_architecture_outside_the_catalog_is_refused(machine: str) -> None:
+    with pytest.raises(ModulePackageContractError, match="platform_architecture_unsupported"):
+        detect_platform_architecture(machine=machine, byteorder="little")
+
+
+def test_detected_architecture_is_accepted_by_a_catalog_entry_for_every_router() -> None:
+    catalog = _catalog(size=1, sha256="a" * 64, architectures=list(CATALOG_ARCHITECTURES))
+    for machine, byteorder in (("aarch64", "little"), ("mips", "little"), ("mips", "big")):
+        architecture = detect_platform_architecture(machine=machine, byteorder=byteorder)
+        assert validate_catalog_entry(catalog, platform_architecture=architecture, core_version="1.0.0")

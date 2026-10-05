@@ -280,7 +280,7 @@ def build_contract(root: Path) -> dict[str, Any]:
             "catalog_schema_version": 1,
             "version_format": "semver",
             "architectures": ["aarch64", "mips", "mipsel"],
-            "architecture_source": "uname -m normalized to catalog architecture ids; MIPS byte order decides between mips and mipsel",
+            "architecture_source": "services.module_package_contract.detect_platform_architecture: uname -m normalized to catalog architecture ids; MIPS byte order decides between mips and mipsel",
         },
         "operations": {
             "module_only": ["catalog", "plan", "stage", "verify", "pointer", "registry", "health", "commit_or_rollback"],

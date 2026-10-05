@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from services.module_package_contract import validate_module_archive
+from services.module_package_contract import CATALOG_ARCHITECTURES, validate_module_archive
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -306,6 +306,8 @@ def test_catalog_architectures_are_sorted_and_limited_to_supported_routers() -> 
     builder = _load_builder()
 
     assert builder.DEFAULT_ARCHITECTURES == ("aarch64", "mips", "mipsel")
+    # The builder cannot import the panel services, so the list is mirrored.
+    assert builder.SUPPORTED_ARCHITECTURES == CATALOG_ARCHITECTURES
     assert builder.normalize_architectures(("mipsel", "aarch64", "mipsel")) == ["aarch64", "mipsel"]
     assert builder.normalize_architectures("aarch64") == ["aarch64"]
     with pytest.raises(builder.ReleaseBuildError, match="unknown catalog architecture"):
