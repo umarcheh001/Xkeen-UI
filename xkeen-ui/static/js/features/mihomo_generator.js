@@ -738,6 +738,14 @@ function initEngineToggle() {
   if (!previewEngineSelect) return;
   if (previewEngineSelect.dataset && previewEngineSelect.dataset.xkWired === '1') return;
 
+  // An editor variant without Monaco must not offer it here either.
+  try {
+    const capabilities = window.XKeen && XKeen.ui && XKeen.ui.editorCapabilities;
+    if (capabilities && typeof capabilities.markUnavailableEngines === 'function') {
+      capabilities.markUnavailableEngines(previewEngineSelect.querySelectorAll('option[value="monaco"]'));
+    }
+  } catch (e) {}
+
   // Initial value from settings/local fallback (async, non-blocking).
   (async () => {
     try {

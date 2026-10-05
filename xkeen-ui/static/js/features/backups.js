@@ -1030,6 +1030,13 @@ let backupsModuleApi = null;
     const sel = el('xray-snapshot-engine-select');
     if (sel && !(sel.dataset && sel.dataset.xkeenWired === '1')) {
       if (sel.dataset) sel.dataset.xkeenWired = '1';
+      // An editor variant without Monaco must not offer it here either.
+      try {
+        const capabilities = window.XKeen && XKeen.ui && XKeen.ui.editorCapabilities;
+        if (capabilities && typeof capabilities.markUnavailableEngines === 'function') {
+          capabilities.markUnavailableEngines(sel.querySelectorAll('option[value="monaco"]'));
+        }
+      } catch (e) {}
       sel.addEventListener('change', async () => {
         const ee = getEngineHelper();
         try {

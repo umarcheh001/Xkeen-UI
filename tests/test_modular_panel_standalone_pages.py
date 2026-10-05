@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 
 import pytest
@@ -108,3 +109,46 @@ def test_devtools_does_not_start_the_link_utility_card_without_its_markup():
     wiring = re.search(r"_wireDeferredModuleInit\('happDecryptor'[^\n]*", source)
     assert wiring and "requireTarget: true" in wiring.group(0)
     assert re.search(r"if \(!target\) \{\s*if \(cfg\.requireTarget\) return;", source)
+
+
+def _page_config(html: str) -> dict:
+    return json.loads(re.search(r"var pageConfig = (\{.*\});", html).group(1))
+
+
+@pytest.mark.parametrize("name", sorted(MODULE_SETS))
+def test_pages_with_an_editor_know_what_the_editor_variant_offers(name, tmp_path):
+    # Without the descriptor a page offered Monaco in the light variant and
+    # found out that its files are missing only by failing to load them.
+    module_ids = MODULE_SETS[name]
+    client = _app(module_ids, tmp_path).test_client()
+    full = module_ids is None or {"engine.xray", "engine.mihomo"} <= set(module_ids)
+
+    seen = 0
+    for path in ("/backups", "/mihomo_generator"):
+        response = client.get(path)
+        if response.status_code != 200:
+            continue
+        seen += 1
+        modules = _page_config(response.get_data(as_text=True))["frontendModules"]
+        assert modules["editor"]["variant"] == ("full" if full else "light"), f"{name}: {path}"
+        assert ("monaco" in modules["editor"]["capabilities"]) == full, f"{name}: {path}"
+        assert "codemirror" in modules["editor"]["capabilities"], f"{name}: {path}"
+        # A standalone page loads no panel bundles.
+        assert modules["bundles"] == [], f"{name}: {path}"
+        if module_ids is not None:
+            assert modules["activeModuleIds"] == sorted(module_ids), f"{name}: {path}"
+    if name in ("legacy", "full"):
+        assert seen == 2
+
+
+def test_standalone_pages_lock_the_engine_their_editor_variant_lacks():
+    static = ROOT / "xkeen-ui" / "static" / "js"
+    runtime = (static / "runtime" / "standalone_lazy.js").read_text(encoding="utf-8")
+    panel = (static / "pages" / "panel.lazy_bindings.runtime.js").read_text(encoding="utf-8")
+
+    label = "Monaco (нет в этом варианте редактора)"
+    assert label in runtime and label in panel
+    assert "markUnavailableEngines" in runtime
+    for feature in ("backups.js", "mihomo_generator.js"):
+        source = (static / "features" / feature).read_text(encoding="utf-8")
+        assert "capabilities.markUnavailableEngines(" in source, feature

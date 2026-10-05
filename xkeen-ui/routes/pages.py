@@ -485,6 +485,27 @@ def register_pages_routes(
         else None
     )
 
+    def _frontend_modules_descriptor() -> dict[str, object]:
+        editor_descriptor = module_activation.get("editor") if isinstance(module_activation, dict) else None
+        if not isinstance(editor_descriptor, dict):
+            editor_descriptor = {}
+        return build_panel_frontend_modules(
+            active_module_ids,
+            editor_variant=editor_descriptor.get("variant"),
+            editor_capabilities=editor_descriptor.get("capabilities"),
+        )
+
+    @app.context_processor
+    def _standalone_page_context() -> dict[str, object]:
+        # The pages outside the panel shell load no panel bundles, but their
+        # editors obey the same policy: what the installed variant offers.
+        descriptor = _frontend_modules_descriptor()
+        return {
+            "standalone_frontend_modules": {
+                key: descriptor[key] for key in ("version", "activeModuleIds", "editor")
+            }
+        }
+
     @app.get("/")
     def index():
         # machine info for conditional UI (e.g. hide Files tab on MIPS)
@@ -513,16 +534,7 @@ def register_pages_routes(
 
         _core_ui = _detect_panel_core_ui(active_module_ids)
         page_context = _build_panel_page_context(active_module_ids)
-        editor_descriptor = module_activation.get("editor") if isinstance(module_activation, dict) else None
-        panel_frontend_modules = build_panel_frontend_modules(
-            active_module_ids,
-            editor_variant=(editor_descriptor or {}).get("variant")
-            if isinstance(editor_descriptor, dict)
-            else None,
-            editor_capabilities=(editor_descriptor or {}).get("capabilities")
-            if isinstance(editor_descriptor, dict)
-            else None,
-        )
+        panel_frontend_modules = _frontend_modules_descriptor()
         _websocket_runtime = str(os.environ.get("XKEEN_WS_RUNTIME", "")).strip().lower() in {"1", "true", "yes", "on"}
         page_ctx = {
             "machine": _machine,
