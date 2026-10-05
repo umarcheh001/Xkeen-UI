@@ -982,10 +982,12 @@
           "path": "static/js/runtime/standalone_lazy.js",
           "globals": [
             "XKeen.runtime",
-            "XKeen.runtime.lazy",
+            "XKeen.ui",
             "XKeen.pageConfig",
             "XKeen.pageConfig.frontendModules",
-            "XKeen.pageConfig.frontendModules.editor"
+            "XKeen.pageConfig.frontendModules.editor",
+            "XKeen.runtime.lazy",
+            "XKeen.ui.editorCapabilities"
           ],
           "lazy_features": []
         },
@@ -1015,7 +1017,10 @@
         },
         {
           "path": "static/js/features/backups.js",
-          "globals": [],
+          "globals": [
+            "XKeen.ui",
+            "XKeen.ui.editorCapabilities"
+          ],
           "lazy_features": []
         }
       ],
@@ -2443,10 +2448,12 @@
           "path": "static/js/runtime/standalone_lazy.js",
           "globals": [
             "XKeen.runtime",
-            "XKeen.runtime.lazy",
+            "XKeen.ui",
             "XKeen.pageConfig",
             "XKeen.pageConfig.frontendModules",
-            "XKeen.pageConfig.frontendModules.editor"
+            "XKeen.pageConfig.frontendModules.editor",
+            "XKeen.runtime.lazy",
+            "XKeen.ui.editorCapabilities"
           ],
           "lazy_features": []
         },
@@ -2563,7 +2570,10 @@
         },
         {
           "path": "static/js/features/mihomo_generator.js",
-          "globals": [],
+          "globals": [
+            "XKeen.ui",
+            "XKeen.ui.editorCapabilities"
+          ],
           "lazy_features": []
         },
         {

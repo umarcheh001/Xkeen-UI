@@ -36,8 +36,8 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 477,
-      "size_bytes": 6530321,
+      "unit_count": 479,
+      "size_bytes": 6543523,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
@@ -49,7 +49,7 @@
         "frontend_feature": 28,
         "frontend_javascript": 35,
         "frontend_runtime": 2,
-        "frontend_test": 42,
+        "frontend_test": 44,
         "frontend_ui": 17,
         "stylesheet": 5,
         "template": 31
@@ -130,7 +130,7 @@
       ],
       "removable": true,
       "unit_count": 128,
-      "size_bytes": 3070084,
+      "size_bytes": 3070523,
       "kind_counts": {
         "app_runtime": 4,
         "backend_route": 2,
@@ -287,7 +287,7 @@
       "system_requirements": [],
       "removable": true,
       "unit_count": 12,
-      "size_bytes": 114912,
+      "size_bytes": 115362,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 2,
@@ -873,7 +873,7 @@
       "module_id": "core",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/pages.py",
-      "size_bytes": 23462,
+      "size_bytes": 23959,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -4704,7 +4704,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_modular_panel_standalone_pages.py",
-      "size_bytes": 4314,
+      "size_bytes": 6416,
       "depends_on": [
         "tool.backups"
       ],
@@ -8812,7 +8812,7 @@
       "module_id": "core",
       "kind": "frontend_runtime",
       "path": "xkeen-ui/static/js/runtime/standalone_lazy.js",
-      "size_bytes": 2122,
+      "size_bytes": 3278,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -9524,6 +9524,26 @@
     {
       "module_id": "core",
       "kind": "frontend_test",
+      "path": "e2e/standalone_pages_light_editor.spec.mjs",
+      "size_bytes": 3062,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [
+        "XKEEN_E2E_MODULE_PROFILE"
+      ],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "frontend_test",
       "path": "e2e/subscriptions_modal_layout.spec.mjs",
       "size_bytes": 93936,
       "depends_on": [],
@@ -9562,6 +9582,24 @@
       "kind": "frontend_test",
       "path": "e2e/top_level_back_before_bundle.spec.mjs",
       "size_bytes": 5202,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "frontend_test",
+      "path": "e2e/top_level_back_before_bundle_screens.spec.mjs",
+      "size_bytes": 6385,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -13499,7 +13537,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/mihomo_generator.js",
-      "size_bytes": 229649,
+      "size_bytes": 230024,
       "depends_on": [
         "core",
         "tool.editor"
@@ -13992,7 +14030,7 @@
       "module_id": "engine.mihomo",
       "kind": "template",
       "path": "xkeen-ui/templates/mihomo_generator.html",
-      "size_bytes": 85505,
+      "size_bytes": 85569,
       "depends_on": [
         "core",
         "tool.editor"
@@ -19203,7 +19241,7 @@
       "module_id": "tool.backups",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/backups.js",
-      "size_bytes": 58290,
+      "size_bytes": 58676,
       "depends_on": [
         "core",
         "engine.xray"
@@ -19276,7 +19314,7 @@
       "module_id": "tool.backups",
       "kind": "template",
       "path": "xkeen-ui/templates/backups.html",
-      "size_bytes": 5705,
+      "size_bytes": 5769,
       "depends_on": [
         "core"
       ],
