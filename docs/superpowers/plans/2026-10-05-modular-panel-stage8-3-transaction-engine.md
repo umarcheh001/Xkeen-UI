@@ -40,7 +40,7 @@
 
 | Файл | Ответственность |
 | --- | --- |
-| `scripts/build_modular_panel_release.py` (modify) | Владение `.gz`, `requires_files`, карта владения. |
+| `scripts/build_modular_panel_release.py` (modify) | Владение `.gz`, карта владения. |
 | `scripts/build_user_archive.py` (modify) | Запись карты в локальный архив. |
 | `.github/workflows/build-user-archive.yml` (modify) | Карта в bootstrap archive, пакеты из `package-root`. |
 | `xkeen-ui/services/module_catalog_client.py` (modify) | `get_release_catalog`. |
@@ -54,6 +54,7 @@
 | `xkeen-ui/services/module_transactions/launcher.py` (create) | Запуск исполнителя оторванным процессом. |
 | `xkeen-ui/scripts/module_transaction.py` (create) | CLI `run` / `recover` / `status`. |
 | `xkeen-ui/install.sh` (modify) | `recover` в init-скрипте и перед профилем, уборка после успеха. |
+| `xkeen-ui/static/js/pages/{backups,mihomo_generator}.screen.bootstrap.js` (modify) | Monaco по требованию. |
 | `scripts/generate_modular_panel_stage8_contract.py`, `docs/…stage8…`, `README-modular-panel-plan.md` (modify) | Правка контракта. |
 
 ---
@@ -67,7 +68,7 @@
 **Interfaces:**
 - Produces:
   - `build_module_ownership(root)` — как раньше, но `<имя>.gz` рядом с существующим `<имя>` получает владельца исходника после замыкания по импортам;
-  - `build_ownership_map(root: Path) -> dict` с ключами `schema_version` (1), `modules` (`{module_id: [paths]}`), `requires_files` (`{module_id: [paths]}`), `frontend` (`{"bridge": dict, "build": dict}`; пустые словари, если manifest нет);
+  - `build_ownership_map(root: Path) -> dict` с ключами `schema_version` (1), `modules` (`{module_id: [paths]}`), `frontend` (`{"bridge": dict, "build": dict}`; пустые словари, если manifest нет);
   - `write_ownership_map(root: Path) -> Path` — пишет `<root>/xkeen-ui/module-ownership.json` (UTF-8, LF, `sort_keys`, отступ 2);
   - CLI: `--write-ownership-map` — только записать карту и выйти.
   - `module-ownership.json` добавлен в `_KNOWN_PACKAGE_FILES` (владелец `core`) и присутствует в собственном списке `modules["core"]`.
@@ -80,13 +81,6 @@ def test_gz_follows_its_source_owner(release_tree):          # дерево-фи
     ownership = builder.build_module_ownership(release_tree)
     assert "static/js/pages/terminal.lazy.entry.js.gz" in ownership["tool.terminal"]
 
-def test_requires_files_lists_static_imports_outside_the_package(release_tree):
-    # backups-скрипт фикстуры статически импортирует файл core
-    data = builder.build_ownership_map(release_tree)
-    assert data["requires_files"]["tool.backups"] == ["static/js/ui/shared_dep.js"]
-    assert "static/js/ui/shared_dep.js" in data["modules"]["core"]
-
-def test_requires_files_is_transitive_and_excludes_own_files(release_tree): ...
 def test_map_contains_itself_and_full_frontend_manifests(release_tree):
     path = builder.write_ownership_map(release_tree)
     data = json.loads(path.read_text(encoding="utf-8"))
@@ -98,9 +92,9 @@ def test_map_is_deterministic(release_tree):
 ```
 
 - [ ] **Step 2:** `python -m pytest tests/test_modular_panel_ownership_map.py -q` → FAIL (`build_ownership_map` нет).
-- [ ] **Step 3: Implement.** `.gz`: в основном цикле `build_module_ownership` пропускать `relative.endswith(".gz")`, если `relative[:-3]` — файл пакета; после замыкания присвоить владельца исходника. `requires_files`: обход в ширину по `_python_import_edges` ∪ `_javascript_import_edges` от файлов модуля, результат — достигнутые файлы с другим владельцем, плюс их `.gz`, если есть в карте; отсортировано. Запись карты в `write_ownership_map` выполняется до расчёта, чтобы файл попал в собственный список (сначала создать пустой файл, посчитать, записать).
+- [ ] **Step 3: Implement.** `.gz`: в основном цикле `build_module_ownership` пропускать `relative.endswith(".gz")`, если `relative[:-3]` — файл пакета; после замыкания присвоить владельца исходника. Запись карты в `write_ownership_map` выполняется до расчёта, чтобы файл попал в собственный список (сначала создать пустой файл, посчитать, записать).
 - [ ] **Step 4:** тесты Task 1 и `tests/test_modular_panel_release_builder.py tests/test_modular_panel_stage8_contract.py` → PASS.
-- [ ] **Step 5: Замер на настоящем дереве** (нужен `npm run frontend:build`): `python scripts/build_modular_panel_release.py --root . --write-ownership-map`, проверить, что `requires_files` для `tool.backups` содержит `static/js/ui/monaco_loader.js`, для `engine.mihomo` — `static/js/pages/editor_monaco.shared.js`; затем удалить `xkeen-ui/module-ownership.json` из рабочего дерева (в репозиторий он не попадает, `.gitignore` не трогать) и убедиться, что `git status` чист.
+- [ ] **Step 5: Замер на настоящем дереве** (нужен `npm run frontend:build`): `python scripts/build_modular_panel_release.py --root . --write-ownership-map`, проверить, что в `modules` девять модулей, каждый файл ровно в одном, а оба manifest сборки лежат целиком; затем удалить `xkeen-ui/module-ownership.json` из рабочего дерева (в репозиторий он не попадает, `.gitignore` не трогать) и убедиться, что `git status` чист.
 - [ ] **Step 6: Commit** — «Сборщик записывает, какие файлы принадлежат каждому модулю панели».
 
 ### Task 2: Карта в архивах и пакеты из `package-root`
@@ -182,12 +176,11 @@ def test_release_catalog_rejects_non_semver_version(...)                 # catal
 @dataclass(frozen=True, slots=True)
 class OwnershipMap:
     modules: Mapping[str, tuple[str, ...]]
-    requires_files: Mapping[str, tuple[str, ...]]
     frontend: Mapping[str, Mapping[str, Any]]
 
 @dataclass(frozen=True, slots=True)
 class ArchiveSource:
-    module_id: str; archive: str; size: int; sha256: str; files: tuple[str, ...]
+    archive: str; size: int; sha256: str
 
 @dataclass(frozen=True, slots=True)
 class Plan:
@@ -196,7 +189,7 @@ class Plan:
     version: str
     files_add: tuple[str, ...]
     files_remove: tuple[str, ...]
-    archives: tuple[ArchiveSource, ...]
+    archive: ArchiveSource | None      # None для remove
     required_free_bytes: int
     restart_required: bool
     installed_after: tuple[str, ...]   # полный список установленных модулей после операции
@@ -228,19 +221,16 @@ def plan_from_json(data: Mapping[str, Any]) -> Plan
 | путь из `modules[module_id]` принадлежит пользователю (`_user_owned`-правила) | `module_ownership_conflict` |
 | `free_bytes < required_free_bytes` | `module_free_space` |
 
-`files_add` для `install`/`repair` = `modules[module_id]` + те пути из `requires_files[module_id]`, которых нет на диске. `archives`: основной пакет со всеми своими файлами и по одному `ArchiveSource` на модуль-владельца недостающих файлов (только недостающие). `files_remove` для `remove` = `modules[module_id]`, существующие на диске. `required_free_bytes` = Σ `size` архивов + `max_size` основной записи (если нет — `4 × size`) + Σ размеров заменяемых и удаляемых файлов, всё × 1.2. `free_bytes=None` → `shutil.disk_usage(transactions_root(panel_root).parent).free`. Правила пользовательских путей — скопировать константы из `module_profile_install.py` (тест сверяет их с оригиналом, чтобы не разошлись).
+`files_add` для `install`/`repair` = `modules[module_id]`. `archive` — запись модуля из каталога. `files_remove` для `remove` = `modules[module_id]`, существующие на диске. `required_free_bytes` = `size` архива + `max_size` записи (если нет — `4 × size`) + Σ размеров заменяемых и удаляемых файлов, всё × 1.2. `free_bytes=None` → `shutil.disk_usage(transactions_root(panel_root).parent).free`. Правила пользовательских путей — скопировать константы из `module_profile_install.py` (тест сверяет их с оригиналом, чтобы не разошлись).
 
 - [ ] **Step 1: Failing tests** — по одному на строку таблицы, плюс:
 
 ```python
-def test_install_adds_missing_dependency_files_from_owner_package(panel):
-    # requires_files["tool.backups"] = ["static/js/ui/monaco_loader.js"], файла на диске нет
+def test_install_plan_lists_exactly_the_module_files(panel):
     plan = build_plan("install", "tool.backups", **panel.kwargs)
-    assert "static/js/ui/monaco_loader.js" in plan.files_add
-    assert [(a.module_id, a.files) for a in plan.archives][1] == ("core", ("static/js/ui/monaco_loader.js",))
+    assert plan.files_add == panel.map.modules["tool.backups"] and plan.files_remove == ()
 
-def test_install_skips_dependency_files_already_on_disk(panel): ...     # len(plan.archives) == 1
-def test_remove_keeps_dependency_files(panel): ...                      # их нет в files_remove
+def test_remove_plan_lists_only_files_present_on_disk(panel): ...
 def test_plan_json_round_trip(panel): assert plan_from_json(plan_to_json(plan)) == plan
 def test_build_plan_writes_nothing(panel): ...                          # снимок дерева до и после равен
 def test_user_owned_rules_match_installer(): ...
@@ -435,34 +425,61 @@ def test_engine_files_belong_to_core_in_both_ownerships(): ...                  
 - [ ] **Step 2–4:** FAIL → правка → PASS; `sh -n xkeen-ui/install.sh`.
 - [ ] **Step 5: Commit** — «После обрыва питания роутер сам возвращает панель к состоянию до установки модуля», затем слепки отдельным коммитом.
 
-### Task 10: Контракт и документы
+### Task 10: Monaco по требованию на страницах копий и генератора
+
+**Files:**
+- Modify: `xkeen-ui/static/js/pages/backups.screen.bootstrap.js` (строка импорта `../ui/monaco_loader.js`), `xkeen-ui/static/js/pages/mihomo_generator.screen.bootstrap.js` (строка импорта `./editor_monaco.shared.js`), при необходимости `xkeen-ui/static/js/features/backups.js` и `mihomo_generator.js` (место `ensureEditorRuntime('monaco')`)
+- Test: `tests/test_module_packages_over_installer_profiles.py`, `e2e/standalone_pages_lazy_monaco.spec.mjs`
+
+**Interfaces:**
+- Consumes: существующий ленивый путь главной панели — `panel.editor.monaco.bundle.js` (`activate()`), `XKeen.ui.editorCapabilities.has/ensure`.
+- Produces: ни один из двух загрузочных скриптов не импортирует статически файлы с владельцем `editor-full`; при выборе Monaco страница зовёт тот же `ensure`, что главная панель; без Monaco в установке пункт Monaco в списке движков недоступен, страница остаётся на CodeMirror.
+
+- [ ] **Step 1: Failing test сборки** (пропускается без сборки фронтенда):
+
+```python
+@pytest.mark.parametrize("profile", ["xray-minimal", "mihomo-minimal"])
+def test_module_package_over_installer_profile_has_no_dangling_static_imports(profile, tmp_path):
+    # apply_profile во временный корень; для каждого необязательного модуля вне профиля:
+    # installed | ownership[module] должно содержать цель каждого статического ребра от файлов модуля
+    assert dangling == {}
+```
+
+Сейчас падает на двух связях из спецификации.
+- [ ] **Step 2: Failing e2e.** Страницы `/backups` и `/mihomo_generator`: при открытии нет сетевых запросов к `monaco_loader.js`, `monaco_shared.js` и `static/monaco-editor/`; после выбора Monaco в списке движков редактор Monaco виден; в варианте редактора `light` пункт Monaco недоступен, предпросмотр работает на CodeMirror.
+- [ ] **Step 3:** до правки прочитать `tests/test_frontend_migration_guardrails.py` (блок про `monaco_loader.js`) и `tests/test_modular_panel_stage6_editor_contract.py`; если тест автора закрепляет удаляемую строку импорта дословно — остановиться и сообщить пользователю.
+- [ ] **Step 4: Implement.** Убрать два статических импорта; в местах переключения движка использовать тот же вызов, что `routing.js` и `mihomo_panel.js` (не писать второй загрузчик). JS править с сохранением CRLF.
+- [ ] **Step 5:** `npm run frontend:build`; оба теста → PASS; `e2e/` спеки копий и генератора; пересобрать `docs/frontend-page-inventory.json` (`generate_frontend_inventory.py --json-out docs/frontend-page-inventory.json`) и слепки из Global Constraints.
+- [ ] **Step 6:** замер: `apply_profile` для `mihomo-minimal` до и после — записать, на сколько байт уменьшился набор.
+- [ ] **Step 7: Commit** — «Страницы копий и генератора Mihomo загружают Monaco только когда он нужен», слепки отдельным коммитом.
+
+### Task 11: Контракт и документы
 
 **Files:**
 - Modify: `scripts/generate_modular_panel_stage8_contract.py`, `docs/modular-panel-stage8-contract.{json,md}` (генератором), `tests/test_modular_panel_stage8_contract.py`, `docs/modular-panel-stage8-official-module-manager.md`, `README-modular-panel-plan.md`
 
 - [ ] **Step 1:** в тесте контракта заменить ожидания топологии: `payload_root` = `/opt/etc/xkeen-ui (ownership paths из manifest)`; нет ключей `active_pointer`, `pointer_switch`; `apply` = `journaled per-file replace with backup`; `registry` = `module-installed.json + module-ownership.json`; `transaction_root` = `/opt/etc/xkeen-ui.module-transactions/<operation-id>/`; строка `module-only-file-diff` — «change only manifest files of the selected module and state files»; новое правило `module_version_equals_panel_version`. → FAIL.
 - [ ] **Step 2:** правка генератора, `python scripts/generate_modular_panel_stage8_contract.py --root .` → PASS.
-- [ ] **Step 3:** в плане и описании Этапа 8 заменить абзацы о `modules/<id>/<version>/` и указателе на общий корень с журналом, добавить абзац о равенстве версий, о карте владения и о долге «установщик на карте пакетов» в 8.5. Подэтап 8.3 закрытым НЕ помечать — это после Task 12.
+- [ ] **Step 3:** в плане и описании Этапа 8 заменить абзацы о `modules/<id>/<version>/` и указателе на общий корень с журналом, добавить абзац о равенстве версий, о карте владения и о долге «установщик на карте пакетов» в 8.5. Подэтап 8.3 закрытым НЕ помечать — это после Task 13.
 - [ ] **Step 4: Commit** — «Описание менеджера модулей приведено к тому, как он на деле устроен».
 
-### Task 11: Проверка на настоящем дереве
+### Task 12: Проверка на настоящем дереве
 
 **Files:**
 - Test: `tests/test_module_transactions_real_tree.py` (пропускается без `xkeen-ui/static/frontend-build/.vite/manifest.json`)
 - Create (не в git): `.tmp/smoke/run_module_tx.sh`
 
 - [ ] **Step 1: Тест.** Собрать релиз `2.10.0` из копии дерева (со сжатием и картой), подписать тестовым ключом; `apply_profile(…, "xray-minimal")` во временный корень; для каждого из `tool.terminal`, `tool.files`, `tool.backups`, `integration.happ`, `tool.advanced-diagnostics`, `engine.mihomo`: `install` → `committed`, затем:
-  - ни одного оборванного статического импорта от файлов модуля (`_javascript_import_edges` ∪ `_python_import_edges` по карте);
   - в `manifest.json` есть записи мостов, чьи файлы теперь на диске;
   - каждый `.gz` не старше исходника;
-  - `remove` → `committed`, разница с исходным деревом ⊆ `requires_files[module]` ∪ state-файлы.
+  - `remove` → `committed`, дерево отличается от исходного только state-файлами.
   То же для `mihomo-minimal` с `engine.xray`.
 - [ ] **Step 2:** полный pytest из Bash; ожидание — прежние известные падения на Windows и ни одного нового.
 - [ ] **Step 3: Браузер.** `.tmp/smoke/run_module_tx.sh <профиль> <модуль>`: установленный профиль из `run_installed.sh` + локальный HTTP-релиз + `module_transaction.py run` с тестовыми параметрами и командой перезапуска стенда; затем проба `audit7.mjs`: вход, обход вкладок, ошибок консоли и 4xx/5xx нет, раздел модуля работает. Прогнать `xray-minimal` + `tool.terminal`, `xray-minimal` + `tool.backups`, `mihomo-minimal` + `engine.xray`. Порт стенда проверить до запуска; с полным e2e одновременно не гонять.
 - [ ] **Step 4:** `npm run frontend:build` и полный e2e; ориентир — 0 failed при 12 skipped.
 - [ ] **Step 5: Commit** теста — «Проверка: модуль из пакета работает поверх урезанной установки».
 
-### Task 12: Приёмка на роутере (с пользователем)
+### Task 13: Приёмка на роутере (с пользователем)
 
 Нужны: роутер, разрешённый пользователем; сборка с semver-версией и картой; каталог и пакеты той же версии, доступные исполнителю. Настоящего релиза с подписью ещё нет, поэтому каталог раздаётся с ноутбука тестовыми параметрами CLI (`XKEEN_UI_MODULE_TX_TESTING=1`) — это оговаривается с пользователем до начала.
 
