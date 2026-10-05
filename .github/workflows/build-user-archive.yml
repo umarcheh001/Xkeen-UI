@@ -106,6 +106,9 @@ jobs:
           packed = builder.precompress_static_assets(root)
           print(f"static precompressed: {packed.files} file(s), "
                 f"{packed.original_bytes} -> {packed.compressed_bytes} bytes")
+          # Карта «модуль → файлы» для менеджера модулей: после сжатия, чтобы
+          # в неё попали .gz, и до штампа, чтобы tree_sha256 её учёл.
+          print(builder.write_module_ownership_map(root, strict=True))
           builder.write_build_json(
               root,
               stamp=builder.BuildStamp(
@@ -206,8 +209,10 @@ jobs:
             VERSION="0.0.0-dev.${GITHUB_SHA::12}"
           fi
           SOURCE_DATE_EPOCH="$(git show -s --format=%ct "${GITHUB_SHA}")"
+          # Пакеты модулей режутся из того же дерева, что и основной архив:
+          # со сжатой статикой и с картой, которая это дерево описывает.
           python scripts/build_modular_panel_release.py \
-            --root . \
+            --root package-root \
             --output-dir dist/modular-panel \
             --version "${VERSION}" \
             --source-date-epoch "${SOURCE_DATE_EPOCH}" \

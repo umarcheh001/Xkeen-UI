@@ -406,6 +406,42 @@ def precompress_static_assets(root: Path) -> PrecompressResult:
     )
 
 
+MODULE_OWNERSHIP_FILENAME = "module-ownership.json"
+
+
+def write_module_ownership_map(package_root: Path, *, strict: bool = False) -> Optional[Path]:
+    """Положить в дерево панели карту «модуль → файлы» для менеджера модулей.
+
+    Карту считает сборщик пакетов модулей, чтобы архив панели и пакеты
+    описывали одно и то же. Локальная сборка без карты остаётся пригодной —
+    панель просто не сможет ставить и удалять модули, — поэтому сбой там
+    только предупреждение; в CI (strict) он останавливает выпуск.
+    """
+
+    import importlib.util
+
+    target = package_root / MODULE_OWNERSHIP_FILENAME
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "build_modular_panel_release", Path(__file__).resolve().parent / "build_modular_panel_release.py"
+        )
+        if spec is None or spec.loader is None:
+            raise RuntimeError("module package builder is missing")
+        release_builder = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = release_builder
+        spec.loader.exec_module(release_builder)
+        return Path(release_builder.write_ownership_map(package_root.parent))
+    except Exception as error:
+        try:
+            target.unlink()
+        except OSError:
+            pass
+        if strict:
+            raise
+        print(f"[!] {MODULE_OWNERSHIP_FILENAME} не записан ({error}); панель из этого архива не сможет ставить и удалять модули")
+        return None
+
+
 def write_build_json(dst_root: Path, *, stamp: BuildStamp, update_url: str) -> None:
     payload = {
         "version": str(stamp.version or "").strip(),
@@ -506,6 +542,9 @@ def main() -> int:
                 f"{packed.original_bytes} -> {packed.compressed_bytes} bytes "
                 f"(-{saved})"
             )
+        # После сжатия — карта перечисляет и .gz; до штампа — tree_sha256
+        # должен её учесть.
+        write_module_ownership_map(package_root)
         write_build_json(package_root, stamp=stamp, update_url=update_url)
 
         fd, temp_archive_raw = tempfile.mkstemp(
