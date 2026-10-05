@@ -2,7 +2,7 @@ let routingModuleApi = null;
 
 import { getRoutingShellApi as getRoutingShellModuleApi } from './routing_shell.js';
 import { getRoutingCardsApi as getRoutingCardsModuleApi } from './routing_cards.js';
-import { getBackupsApi as getBackupsModuleApi } from './backups.js';
+import { loadBackupsFeatureApi } from './backup_actions_loader.js';
 import {
   buildJsoncPointerMap,
   findDiagnosticMapping,
@@ -467,14 +467,6 @@ import { iconHtml } from '../ui/operator_icons.js';
   function getRoutingCardsFeatureApi() {
     try {
       const api = getRoutingCardsModuleApi();
-      return api && typeof api.init === 'function' ? api : null;
-    } catch (e) {}
-    return null;
-  }
-
-  function getBackupsFeatureApi() {
-    try {
-      const api = getBackupsModuleApi();
       return api && typeof api.init === 'function' ? api : null;
     } catch (e) {}
     return null;
@@ -4069,7 +4061,7 @@ function closeHelp() {
         toast(msg, false);
         // Refresh backups list (module)
         try {
-          const backupsApi = getBackupsFeatureApi();
+          const backupsApi = await loadBackupsFeatureApi();
           if (backupsApi) {
             if (typeof backupsApi.refresh === 'function') await backupsApi.refresh();
             else if (typeof backupsApi.load === 'function') await backupsApi.load();

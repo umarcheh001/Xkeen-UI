@@ -1,4 +1,4 @@
-import { getBackupsApi } from './backups.js';
+import { loadBackupsFeatureApi } from './backup_actions_loader.js';
 import { getRestartLogApi } from './restart_log.js';
 import { getRoutingApi } from './routing.js';
 import {
@@ -3087,7 +3087,7 @@ let outboundsModuleApi = null;
           if (backupsStatusEl) backupsStatusEl.textContent = '';
           try { if (typeof showToast === 'function') showToast(msg, false); } catch (e) {}
           try {
-            const backupsApi = getBackupsApi();
+            const backupsApi = await loadBackupsFeatureApi();
             if (backupsApi) {
               if (typeof backupsApi.refresh === 'function') await backupsApi.refresh();
               else if (typeof backupsApi.load === 'function') await backupsApi.load();
@@ -8908,14 +8908,15 @@ let outboundsModuleApi = null;
       safeInitStep('normalize-button', () => bindConfigAction('outbounds-normalize-btn', normalizeCurrentUrl));
       safeInitStep('backup-button', () => bindConfigAction('outbounds-backup-btn', backup, { kind: 'backup' }));
       safeInitStep('restore-button', () => bindConfigAction('outbounds-restore-auto-btn', () => {
-        try {
-          const backupsApi = getBackupsApi();
-          if (backupsApi && typeof backupsApi.restoreAuto === 'function') {
-            backupsApi.restoreAuto('outbounds', { confirmed: true });
-          } else {
-            if (typeof showToast === 'function') showToast('Модуль бэкапов не загружен.', true);
-          }
-        } catch (e) {}
+        loadBackupsFeatureApi().then((backupsApi) => {
+          try {
+            if (backupsApi && typeof backupsApi.restoreAuto === 'function') {
+              backupsApi.restoreAuto('outbounds', { confirmed: true });
+            } else {
+              if (typeof showToast === 'function') showToast('Модуль бэкапов не загружен.', true);
+            }
+          } catch (e) {}
+        });
       }, { kind: 'restoreAuto' }));
       safeInitStep('editor-button', () => bindConfigAction('outbounds-open-editor-btn', () => {
         try {

@@ -89,6 +89,20 @@ def test_loader_retries_every_bundle_under_a_fresh_url():
     assert source.count("moduleResults[normalized] = failed") == 2  # unknown key, broken start
 
 
+def test_routing_screen_loads_the_backups_feature_only_on_demand():
+    # tool.backups owns features/backups.js; a static import from the routing
+    # screen downloaded it in profiles that do not have the module at all.
+    features = PAGES.parent / "features"
+    for name in ("routing.js", "inbounds.js", "outbounds.js"):
+        source = (features / name).read_text(encoding="utf-8")
+        assert "from './backups.js'" not in source, name
+        assert "from './backup_actions_loader.js'" in source, name
+
+    loader = (features / "backup_actions_loader.js").read_text(encoding="utf-8")
+    assert "import('./backups.js')" in loader
+    assert "from './backups.js'" not in loader
+
+
 def test_panel_bootstrap_delegates_engine_bundles_to_loader():
     source = (PAGES / "panel.screen.bootstrap.js").read_text(encoding="utf-8")
 

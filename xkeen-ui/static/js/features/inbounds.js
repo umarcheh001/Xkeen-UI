@@ -1,4 +1,4 @@
-import { getBackupsApi } from './backups.js';
+import { loadBackupsFeatureApi } from './backup_actions_loader.js';
 import { getRestartLogApi } from './restart_log.js';
 import {
   getXkeenFilePath,
@@ -1127,7 +1127,7 @@ let inboundsModuleApi = null;
           if (backupsStatusEl) backupsStatusEl.textContent = '';
           try { if (typeof showToast === 'function') showToast(msg, false); } catch (e) {}
           try {
-            const backupsApi = getBackupsApi();
+            const backupsApi = await loadBackupsFeatureApi();
             if (backupsApi) {
               if (typeof backupsApi.refresh === 'function') await backupsApi.refresh();
               else if (typeof backupsApi.load === 'function') await backupsApi.load();
@@ -1177,14 +1177,15 @@ let inboundsModuleApi = null;
       bindConfigAction('inbounds-save-btn', save);
       bindConfigAction('inbounds-backup-btn', backup, { kind: 'backup' });
       bindConfigAction('inbounds-restore-auto-btn', () => {
-        try {
-          const backupsApi = getBackupsApi();
-          if (backupsApi && typeof backupsApi.restoreAuto === 'function') {
-            backupsApi.restoreAuto('inbounds', { confirmed: true });
-          } else {
-            if (typeof showToast === 'function') showToast('Модуль бэкапов не загружен.', true);
-          }
-        } catch (e) {}
+        loadBackupsFeatureApi().then((backupsApi) => {
+          try {
+            if (backupsApi && typeof backupsApi.restoreAuto === 'function') {
+              backupsApi.restoreAuto('inbounds', { confirmed: true });
+            } else {
+              if (typeof showToast === 'function') showToast('Модуль бэкапов не загружен.', true);
+            }
+          } catch (e) {}
+        });
       }, { kind: 'restoreAuto' });
       bindConfigAction('inbounds-open-editor-btn', () => {
         try {
