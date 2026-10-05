@@ -295,10 +295,10 @@ def test_untrusted_managed_manifest_cannot_escape_install_root(tmp_path):
     ("xray-minimal", "engine.xray", "engine.mihomo"),
     ("mihomo-minimal", "engine.mihomo", "engine.xray"),
 ])
-def test_minimal_package_imports_real_panel(tmp_path, profile, expected, excluded):
+def test_minimal_package_imports_real_panel(tmp_path, profile, expected, excluded, panel_source_root):
     helper = _module()
     installed = tmp_path / "installed"
-    helper.commit_profile(helper.apply_profile(ROOT / "xkeen-ui", installed, profile))
+    helper.commit_profile(helper.apply_profile(panel_source_root / "xkeen-ui", installed, profile))
     env = dict(os.environ, PYTHONPATH=str(installed), XKEEN_UI_STATE_DIR=str(installed))
     process = subprocess.run(
         [sys.executable, "-c", (
