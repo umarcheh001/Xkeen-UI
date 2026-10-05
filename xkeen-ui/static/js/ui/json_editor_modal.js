@@ -1,5 +1,3 @@
-import { getInboundsApi } from '../features/inbounds.js';
-import { getOutboundsApi } from '../features/outbounds.js';
 import { getRestartLogApi } from '../features/restart_log.js';
 import {
   attachXkeenEditorToolbar,
@@ -1354,13 +1352,18 @@ import {
 
       // Refresh related panels (modular)
       try {
+        // The Xray cards are asked for only here, and by a dynamic import: a
+        // static one made every page with this window load the whole Xray
+        // outbounds code, a Mihomo-only panel included.
         if (target === 'inbounds') {
+          const { getInboundsApi } = await import('../features/inbounds.js');
           const inboundsApi = getInboundsApi();
           if (inboundsApi && typeof inboundsApi.load === 'function') {
             await inboundsApi.load();
           }
         }
         if (target === 'outbounds') {
+          const { getOutboundsApi } = await import('../features/outbounds.js');
           const outboundsApi = getOutboundsApi();
           if (outboundsApi && typeof outboundsApi.load === 'function') {
             await outboundsApi.load();

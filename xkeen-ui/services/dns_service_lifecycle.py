@@ -76,7 +76,7 @@ def release_for_service_stop(
             restart_xkeen=restart_xkeen,
         )
     elif owner == "mihomo-dns":
-        from mihomo_server_core import save_config, validate_config
+        from services.mihomo_runtime import save_config, validate_config
 
         status = mihomo_dns.get_status(
             config_file=mihomo_config_file,

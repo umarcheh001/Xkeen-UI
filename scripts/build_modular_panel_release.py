@@ -68,9 +68,29 @@ _KNOWN_PACKAGE_FILES = {
 # importer of a file listed here already belongs to the same module.
 _PACKAGE_OWNER_OVERRIDES = {
     "mihomo_config_generator.py": "engine.mihomo",
+    # A facade over the Mihomo services; the core takes the config path and
+    # the save helpers straight from services/mihomo_runtime.py.
+    "mihomo_server_core.py": "engine.mihomo",
+    "services/mihomo_runtime.py": "core",
     "xkeen_mihomo_service.py": "engine.mihomo",
     "services/mihomo_backups.py": "engine.mihomo",
     "services/subscription_pause.py": "engine.xray",
+    # Import of Xray configs from GitHub and from a local file, the shell of
+    # the Xray config tabs and the window with the contents of a .dat file.
+    "static/js/features/compat/github.js": "engine.xray",
+    "static/js/features/compat/local_io.js": "engine.xray",
+    "static/js/features/github.js": "engine.xray",
+    "static/js/features/local_io.js": "engine.xray",
+    "static/js/pages/config_shell.shared.js": "engine.xray",
+    "static/js/ui/dat_contents_modal.js": "engine.xray",
+    # Schema helpers that only the editors import.
+    "static/js/ui/schema_diagnostic_format.js": "tool.editor",
+    "static/js/ui/yaml_schema.js": "tool.editor",
+    # Shared by every page in spite of the name.
+    "static/js/features/devtools_namespace.js": "core",
+    "static/js/features/xray_log_line_class.js": "core",
+    "static/js/pages/panel.mihomo_header.js": "core",
+    "static/js/pages/top_level_panel_mihomo.shared.js": "core",
 }
 # Mirrors services.module_package_contract, which the offline builder cannot
 # import before it has located the package root.

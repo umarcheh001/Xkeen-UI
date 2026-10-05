@@ -28,7 +28,9 @@ def _ensure_runtime_env() -> str:
 
     ensure_mihomo_root_env()
 
-    from mihomo_server_core import CONFIG_PATH
+    # The path lives in the runtime helper; the Mihomo facade re-exports it
+    # and belongs to the Mihomo module, which may not be installed.
+    from services.mihomo_runtime import CONFIG_PATH
 
     return CONFIG_PATH
 
@@ -824,7 +826,7 @@ def create_app(*, ws_runtime: bool = False):
 
     if "engine.mihomo" in active_modules:
         try:
-            from mihomo_server_core import save_config as _mihomo_save_config
+            from services.mihomo_runtime import save_config as _mihomo_save_config
             from services.mihomo_subscriptions import start_subscription_scheduler as start_mihomo_subscription_scheduler
 
             start_mihomo_subscription_scheduler(
@@ -891,7 +893,7 @@ def create_app(*, ws_runtime: bool = False):
             # currently owns port 53, it is the same LAN that loses DNS when
             # the active core stops answering.
             try:
-                from mihomo_server_core import save_config as _dns_guard_save_mihomo
+                from services.mihomo_runtime import save_config as _dns_guard_save_mihomo
             except Exception:
                 _dns_guard_save_mihomo = None
 
