@@ -37,7 +37,7 @@
       ],
       "removable": false,
       "unit_count": 441,
-      "size_bytes": 6186990,
+      "size_bytes": 6188186,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
@@ -130,7 +130,7 @@
       ],
       "removable": true,
       "unit_count": 128,
-      "size_bytes": 3068522,
+      "size_bytes": 3068528,
       "kind_counts": {
         "app_runtime": 4,
         "backend_route": 2,
@@ -4312,7 +4312,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_modular_panel_stage4_6_compatibility.py",
-      "size_bytes": 5271,
+      "size_bytes": 6467,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -13366,7 +13366,7 @@
       "module_id": "engine.mihomo",
       "kind": "template",
       "path": "xkeen-ui/templates/panel/screens/mihomo.html",
-      "size_bytes": 57157,
+      "size_bytes": 57163,
       "depends_on": [
         "core",
         "tool.editor"

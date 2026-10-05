@@ -134,6 +134,34 @@ def test_full_and_legacy_keep_the_same_public_dom_contract(tmp_path):
     assert _public_dom_contract(legacy) == _public_dom_contract(full)
 
 
+def test_registry_legacy_full_activation_keeps_the_full_dom_contract(tmp_path):
+    """Catch drift on the path an old installation really takes.
+
+    The page never receives ``None`` in production: without modules.json the
+    registry resolves ``legacy-full`` and hands over every installed module,
+    deliberately ignoring missing core binaries so no route disappears.
+    """
+
+    from services.module_registry import ModuleRegistry
+
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    activation = ModuleRegistry(
+        str(state_dir), which=lambda name: None, environ={}
+    ).runtime_activation()
+    assert activation["profile"] == "legacy-full"
+    assert activation["legacy_compatibility"] is True
+
+    contract = json.loads(SNAPSHOT.read_text(encoding="utf-8"))
+    profiles = {profile["id"]: profile for profile in contract["profiles"]}
+    assert set(activation["active_module_ids"]) == set(profiles["full"]["active_module_ids"])
+
+    legacy = render_panel(list(activation["active_module_ids"]), tmp_path / "legacy")
+    full = render_panel(profiles["full"]["active_module_ids"], tmp_path / "full")
+
+    assert _public_dom_contract(legacy) == _public_dom_contract(full)
+
+
 def test_panel_entrypoint_is_a_composition_root_not_a_surface_owner():
     """Catch a restored monolithic screen or modal directly in panel.html."""
 
