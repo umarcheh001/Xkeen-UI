@@ -220,12 +220,12 @@
     ]
   },
   "topology": {
-    "payload_root": "modules/<module-id>/<version>/",
-    "active_pointer": "modules/<module-id>/current",
-    "registry": "modules/registry.json",
-    "transaction_root": "module-transactions/<operation-id>/",
+    "payload_root": "/opt/etc/xkeen-ui (ownership paths from the module manifest)",
+    "apply": "journaled per-file replace with backup",
+    "registry": "module-installed.json + module-ownership.json",
+    "transaction_root": "/opt/etc/xkeen-ui.module-transactions/<operation-id>/",
     "user_data_root": "var/ and declared core/engine config paths",
-    "pointer_switch": "atomic rename within one filesystem"
+    "module_version": "equal to the installed panel release"
   },
   "catalog": {
     "source": "https://github.com/umarcheh001/Xkeen-UI/releases/download/<version>/catalog.json",
@@ -375,8 +375,9 @@
       "plan",
       "stage",
       "verify",
-      "pointer",
-      "registry",
+      "apply",
+      "state",
+      "restart",
       "health",
       "commit_or_rollback"
     ],
@@ -395,7 +396,7 @@
       "rollback"
     ],
     "request_thread_policy": "never install inside the Flask request thread",
-    "post_restart_owner": "external init/service supervisor"
+    "post_restart_owner": "detached module runner; the init script undoes an interrupted operation"
   },
   "acceptance_matrix": [
     {
@@ -406,7 +407,7 @@
     {
       "id": "checksum-mismatch",
       "operation": "archive verification",
-      "expected": "reject before unpack and preserve active pointer"
+      "expected": "reject before unpack and leave the panel tree untouched"
     },
     {
       "id": "unsupported-api",
@@ -416,7 +417,7 @@
     {
       "id": "module-only-file-diff",
       "operation": "module-only update",
-      "expected": "change selected versioned module, pointer and registry only"
+      "expected": "change only manifest files of the selected module and state files"
     },
     {
       "id": "panel-update-preserves-state",

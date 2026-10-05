@@ -32,9 +32,11 @@ Ed25519-ключ; catalog и archive проверяются до установ�
 | Profile transitions | installer + `POST /api/modules/profile` |
 | Advanced diagnostics | только опциональные сведения |
 
-Core не должен выполнять установку внутри Flask request thread. Supervisor
-должен уметь проверить HTTP health после рестарта и вернуть предыдущий pointer,
-если новый payload не запускается.
+Core не должен выполнять установку внутри Flask request thread. Операцию ведёт
+отдельный процесс `scripts/module_transaction.py`: он проверяет HTTP health
+после рестарта и возвращает прежние файлы, если новый payload не запускается.
+Операцию, прерванную обрывом питания, отменяет init-скрипт перед стартом
+панели.
 
 ## Артефакты release
 
@@ -88,11 +90,14 @@ allow-list. Абсолютные пути, `..`, symlink escape и файлы, �
 
 ### Module-only
 
-`GET catalog -> plan -> stage -> verify -> atomic pointer -> registry ->
-restart-if-needed -> health -> commit/rollback`.
+`GET catalog -> plan -> stage -> verify -> apply -> state -> restart ->
+health -> commit/rollback`.
 
-Операция меняет только `modules/<id>/<version>/`, pointer и registry. Она не
-перезаписывает конфигурацию пользователя, другие модули или ядра.
+Операция меняет только файлы модуля из его manifest и state-файлы. Файлы
+лежат в общем корне панели и заменяются под журналом с копией прежних; она не
+перезаписывает конфигурацию пользователя, другие модули или ядра. Модуль
+ставится из релиза той же версии, что и панель (решения Этапа 8.3 — в
+`docs/superpowers/specs/2026-10-05-modular-panel-stage8-3-transaction-engine-design.md`).
 
 ### Panel update
 

@@ -27,18 +27,21 @@ Legacy install root: `/opt/etc/xkeen-ui`. Managed payload roots: `core/`, `route
 State files, `secret.key`, runtime/config directories and Mihomo profiles/backups остаются пользовательскими данными.
 Неизвестные или неоднозначные файлы по умолчанию принадлежат `core` и перед удалением попадают в quarantine.
 
-## Топология будущих пакетов
+## Топология пакетов
 
 | Область | Контракт |
 | --- | --- |
-| `payload_root` | `modules/<module-id>/<version>/` |
-| `active_pointer` | `modules/<module-id>/current` |
-| `registry` | `modules/registry.json` |
-| `transaction_root` | `module-transactions/<operation-id>/` |
+| `payload_root` | `/opt/etc/xkeen-ui (ownership paths from the module manifest)` |
+| `apply` | `journaled per-file replace with backup` |
+| `registry` | `module-installed.json + module-ownership.json` |
+| `transaction_root` | `/opt/etc/xkeen-ui.module-transactions/<operation-id>/` |
 | `user_data_root` | `var/ and declared core/engine config paths` |
-| `pointer_switch` | `atomic rename within one filesystem` |
+| `module_version` | `equal to the installed panel release` |
 
-Module-only update не меняет соседние модули, пользовательские конфигурации, ядра или профиль. Profile transition остаётся отдельной транзакцией Stage 7.
+Файлы модуля лежат в общем корне панели по путям из manifest: панель загружает код, статику и шаблоны только оттуда. Замена ведётся под журналом — прежний файл сохраняется в каталоге операции, и по журналу дерево возвращается в исходное состояние после любой ошибки или обрыва питания (Stage 8.3).
+Какие файлы принадлежат модулю, панель знает из `module-ownership.json`: его пишет сборщик релиза, он лежит в panel archive и описывает то же дерево, из которого собраны module archives.
+Модуль ставится только из релиза, версия которого равна версии установленной панели; переход на новую версию происходит вместе с панелью.
+Module-only операция не меняет соседние модули, пользовательские конфигурации, ядра; профиль после неё становится `custom`. Profile transition остаётся отдельной транзакцией Stage 7.
 
 ## Catalog и manifest
 
@@ -68,11 +71,11 @@ Discovery ограничен `https://api.github.com/repos/umarcheh001/Xkeen-UI/
 ## Compatibility и операции
 
 Совместимость проверяется по `panel_api`, `module_api`, `min_core`, архитектуре, dependencies, conflicts и semver до скачивания/распаковки.
-Установка не выполняется внутри Flask request thread; post-restart health и rollback принадлежат внешнему init/service supervisor.
+Установка не выполняется внутри Flask request thread: её ведёт отдельный процесс `scripts/module_transaction.py`, он же проверяет запуск панели и откатывает. Прерванную операцию отменяет init-скрипт перед стартом панели.
 
 | Операция | Граница |
 | --- | --- |
-| module-only | versioned module payload, pointer, registry, optional restart |
+| module-only | файлы модуля из manifest, state-файлы, restart, health, commit или rollback |
 | panel update | core-owned payload, backup и полный rollback |
 | profile transition | Stage 7 transaction, diff, restart и rollback |
 
@@ -81,9 +84,9 @@ Discovery ограничен `https://api.github.com/repos/umarcheh001/Xkeen-UI/
 | ID | Operation | Expected result |
 | --- | --- | --- |
 | `unknown-signing-key` | catalog trust | reject before display or download |
-| `checksum-mismatch` | archive verification | reject before unpack and preserve active pointer |
+| `checksum-mismatch` | archive verification | reject before unpack and leave the panel tree untouched |
 | `unsupported-api` | compatibility preflight | reject panel_api/module_api/min_core mismatch |
-| `module-only-file-diff` | module-only update | change selected versioned module, pointer and registry only |
+| `module-only-file-diff` | module-only update | change only manifest files of the selected module and state files |
 | `panel-update-preserves-state` | panel update | preserve profile, modules.json, config and enabled state |
 | `profile-transition-separate-transaction` | profile transition | use Stage 7 transaction path, never module-only path |
 | `offline-cached-catalog` | catalog fetch | use last successful cache and expose stale/error state |

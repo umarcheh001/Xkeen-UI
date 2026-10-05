@@ -84,12 +84,12 @@ def build_contract(root: Path) -> dict[str, Any]:
         "core_owned_runtime_maps": ["xkeen-ui/services/module_registry.py", "xkeen-ui/module-sizes.json"],
     }
     topology = {
-        "payload_root": "modules/<module-id>/<version>/",
-        "active_pointer": "modules/<module-id>/current",
-        "registry": "modules/registry.json",
-        "transaction_root": "module-transactions/<operation-id>/",
+        "payload_root": "/opt/etc/xkeen-ui (ownership paths from the module manifest)",
+        "apply": "journaled per-file replace with backup",
+        "registry": "module-installed.json + module-ownership.json",
+        "transaction_root": "/opt/etc/xkeen-ui.module-transactions/<operation-id>/",
         "user_data_root": "var/ and declared core/engine config paths",
-        "pointer_switch": "atomic rename within one filesystem",
+        "module_version": "equal to the installed panel release",
     }
     catalog_fields = [
         "id",
@@ -116,7 +116,7 @@ def build_contract(root: Path) -> dict[str, Any]:
         {
             "id": "checksum-mismatch",
             "operation": "archive verification",
-            "expected": "reject before unpack and preserve active pointer",
+            "expected": "reject before unpack and leave the panel tree untouched",
         },
         {
             "id": "unsupported-api",
@@ -126,7 +126,7 @@ def build_contract(root: Path) -> dict[str, Any]:
         {
             "id": "module-only-file-diff",
             "operation": "module-only update",
-            "expected": "change selected versioned module, pointer and registry only",
+            "expected": "change only manifest files of the selected module and state files",
         },
         {
             "id": "panel-update-preserves-state",
@@ -283,11 +283,11 @@ def build_contract(root: Path) -> dict[str, Any]:
             "architecture_source": "services.module_package_contract.detect_platform_architecture: uname -m normalized to catalog architecture ids; MIPS byte order decides between mips and mipsel",
         },
         "operations": {
-            "module_only": ["catalog", "plan", "stage", "verify", "pointer", "registry", "health", "commit_or_rollback"],
+            "module_only": ["catalog", "plan", "stage", "verify", "apply", "state", "restart", "health", "commit_or_rollback"],
             "panel_update": ["backup", "stage_core", "health", "commit_or_full_rollback"],
             "profile_transition": ["stage7_profile_transaction", "diff", "backup", "restart", "health", "rollback"],
             "request_thread_policy": "never install inside the Flask request thread",
-            "post_restart_owner": "external init/service supervisor",
+            "post_restart_owner": "detached module runner; the init script undoes an interrupted operation",
         },
         "acceptance_matrix": acceptance,
         "deferred": [
@@ -340,7 +340,7 @@ def render_markdown(payload: dict[str, Any]) -> str:
             "State files, `secret.key`, runtime/config directories and Mihomo profiles/backups остаются пользовательскими данными.",
             "Неизвестные или неоднозначные файлы по умолчанию принадлежат `core` и перед удалением попадают в quarantine.",
             "",
-            "## Топология будущих пакетов",
+            "## Топология пакетов",
             "",
             "| Область | Контракт |",
             "| --- | --- |",
@@ -351,7 +351,10 @@ def render_markdown(payload: dict[str, Any]) -> str:
     lines.extend(
         [
             "",
-            "Module-only update не меняет соседние модули, пользовательские конфигурации, ядра или профиль. Profile transition остаётся отдельной транзакцией Stage 7.",
+            "Файлы модуля лежат в общем корне панели по путям из manifest: панель загружает код, статику и шаблоны только оттуда. Замена ведётся под журналом — прежний файл сохраняется в каталоге операции, и по журналу дерево возвращается в исходное состояние после любой ошибки или обрыва питания (Stage 8.3).",
+            "Какие файлы принадлежат модулю, панель знает из `module-ownership.json`: его пишет сборщик релиза, он лежит в panel archive и описывает то же дерево, из которого собраны module archives.",
+            "Модуль ставится только из релиза, версия которого равна версии установленной панели; переход на новую версию происходит вместе с панелью.",
+            "Module-only операция не меняет соседние модули, пользовательские конфигурации, ядра; профиль после неё становится `custom`. Profile transition остаётся отдельной транзакцией Stage 7.",
             "",
             "## Catalog и manifest",
             "",
@@ -381,11 +384,11 @@ def render_markdown(payload: dict[str, Any]) -> str:
             "## Compatibility и операции",
             "",
             "Совместимость проверяется по `panel_api`, `module_api`, `min_core`, архитектуре, dependencies, conflicts и semver до скачивания/распаковки.",
-            "Установка не выполняется внутри Flask request thread; post-restart health и rollback принадлежат внешнему init/service supervisor.",
+            "Установка не выполняется внутри Flask request thread: её ведёт отдельный процесс `scripts/module_transaction.py`, он же проверяет запуск панели и откатывает. Прерванную операцию отменяет init-скрипт перед стартом панели.",
             "",
             "| Операция | Граница |",
             "| --- | --- |",
-            "| module-only | versioned module payload, pointer, registry, optional restart |",
+            "| module-only | файлы модуля из manifest, state-файлы, restart, health, commit или rollback |",
             "| panel update | core-owned payload, backup и полный rollback |",
             "| profile transition | Stage 7 transaction, diff, restart и rollback |",
             "",

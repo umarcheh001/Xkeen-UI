@@ -85,12 +85,12 @@ def test_stage8_contract_generator_covers_boundaries_and_acceptance_matrix(tmp_p
 
     topology = payload["topology"]
     assert topology == {
-        "payload_root": "modules/<module-id>/<version>/",
-        "active_pointer": "modules/<module-id>/current",
-        "registry": "modules/registry.json",
-        "transaction_root": "module-transactions/<operation-id>/",
+        "payload_root": "/opt/etc/xkeen-ui (ownership paths from the module manifest)",
+        "apply": "journaled per-file replace with backup",
+        "registry": "module-installed.json + module-ownership.json",
+        "transaction_root": "/opt/etc/xkeen-ui.module-transactions/<operation-id>/",
         "user_data_root": "var/ and declared core/engine config paths",
-        "pointer_switch": "atomic rename within one filesystem",
+        "module_version": "equal to the installed panel release",
     }
 
     catalog = payload["catalog"]
@@ -247,3 +247,21 @@ def test_stage8_contract_rejects_unsafe_or_non_official_sources():
         "XKEEN_RELEASE_ED25519_PRIVATE_KEY",
     ):
         assert fragment in text
+
+
+def test_stage8_contract_describes_the_shared_root_transaction_engine() -> None:
+    payload = json.loads((ROOT / "docs" / "modular-panel-stage8-contract.json").read_text(encoding="utf-8"))
+    markdown = (ROOT / "docs" / "modular-panel-stage8-contract.md").read_text(encoding="utf-8")
+
+    matrix = {item["id"]: item["expected"] for item in payload["acceptance_matrix"]}
+    assert matrix["module-only-file-diff"] == "change only manifest files of the selected module and state files"
+    assert matrix["checksum-mismatch"] == "reject before unpack and leave the panel tree untouched"
+    operations = payload["operations"]
+    assert operations["module_only"] == [
+        "catalog", "plan", "stage", "verify", "apply", "state", "restart", "health", "commit_or_rollback",
+    ]
+    assert operations["post_restart_owner"] == "detached module runner; the init script undoes an interrupted operation"
+    assert "pointer" not in json.dumps(payload["topology"])
+    assert "modules/<module-id>" not in markdown
+    assert "module-ownership.json" in markdown
+    assert "xkeen-ui.module-transactions" in markdown
