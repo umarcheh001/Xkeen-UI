@@ -36,7 +36,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 | Module ID | Единиц | Размер | Routes | Background | UI surfaces | Removable |
 |---|---:|---:|---:|---:|---:|---|
-| `core` | 441 | 5.90 МБ | 77 | 4 | 35 | нет |
+| `core` | 443 | 5.91 МБ | 77 | 4 | 35 | нет |
 | `engine.xray` | 128 | 3.50 МБ | 60 | 3 | 14 | да |
 | `engine.mihomo` | 128 | 2.93 МБ | 89 | 4 | 6 | да |
 | `tool.editor` | 25 | 812.2 КБ | 0 | 0 | 2 | да |
@@ -82,15 +82,15 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 Уже существующие границы, пригодные для модульной загрузки:
 
-- `panel-core` → `xkeen-ui/static/js/pages/panel.entry.js`; файлов: 275; modules: `core`, `engine.mihomo`, `engine.xray`, `integration.happ`, `tool.advanced-diagnostics`, `tool.backups`, `tool.editor`, `tool.files`, `tool.terminal`.
-- `panel-routing` → `xkeen-ui/static/js/pages/panel.routing.bundle.js`; файлов: 66; modules: `core`, `engine.xray`, `integration.happ`, `tool.backups`, `tool.editor`.
+- `panel-core` → `xkeen-ui/static/js/pages/panel.entry.js`; файлов: 276; modules: `core`, `engine.mihomo`, `engine.xray`, `integration.happ`, `tool.advanced-diagnostics`, `tool.backups`, `tool.editor`, `tool.files`, `tool.terminal`.
+- `panel-routing` → `xkeen-ui/static/js/pages/panel.routing.bundle.js`; файлов: 67; modules: `core`, `engine.xray`, `integration.happ`, `tool.backups`, `tool.editor`.
 - `panel-mihomo` → `xkeen-ui/static/js/pages/panel.mihomo.bundle.js`; файлов: 23; modules: `core`, `engine.mihomo`, `engine.xray`, `tool.editor`.
-- `terminal-lazy` → `xkeen-ui/static/js/pages/terminal.lazy.entry.js`; файлов: 176; modules: `core`, `engine.mihomo`, `engine.xray`, `integration.happ`, `tool.advanced-diagnostics`, `tool.backups`, `tool.editor`, `tool.files`, `tool.terminal`.
+- `terminal-lazy` → `xkeen-ui/static/js/pages/terminal.lazy.entry.js`; файлов: 177; modules: `core`, `engine.mihomo`, `engine.xray`, `integration.happ`, `tool.advanced-diagnostics`, `tool.backups`, `tool.editor`, `tool.files`, `tool.terminal`.
 - `file-manager-lazy` → `xkeen-ui/static/js/pages/file_manager.lazy.entry.js`; файлов: 34; modules: `core`, `tool.files`.
-- `backups-page` → `xkeen-ui/static/js/pages/backups.entry.js`; файлов: 275; modules: `core`, `engine.mihomo`, `engine.xray`, `integration.happ`, `tool.advanced-diagnostics`, `tool.backups`, `tool.editor`, `tool.files`, `tool.terminal`.
-- `devtools-page` → `xkeen-ui/static/js/pages/devtools.entry.js`; файлов: 275; modules: `core`, `engine.mihomo`, `engine.xray`, `integration.happ`, `tool.advanced-diagnostics`, `tool.backups`, `tool.editor`, `tool.files`, `tool.terminal`.
-- `xkeen-page` → `xkeen-ui/static/js/pages/xkeen.entry.js`; файлов: 275; modules: `core`, `engine.mihomo`, `engine.xray`, `integration.happ`, `tool.advanced-diagnostics`, `tool.backups`, `tool.editor`, `tool.files`, `tool.terminal`.
-- `mihomo-generator-page` → `xkeen-ui/static/js/pages/mihomo_generator.entry.js`; файлов: 275; modules: `core`, `engine.mihomo`, `engine.xray`, `integration.happ`, `tool.advanced-diagnostics`, `tool.backups`, `tool.editor`, `tool.files`, `tool.terminal`.
+- `backups-page` → `xkeen-ui/static/js/pages/backups.entry.js`; файлов: 276; modules: `core`, `engine.mihomo`, `engine.xray`, `integration.happ`, `tool.advanced-diagnostics`, `tool.backups`, `tool.editor`, `tool.files`, `tool.terminal`.
+- `devtools-page` → `xkeen-ui/static/js/pages/devtools.entry.js`; файлов: 276; modules: `core`, `engine.mihomo`, `engine.xray`, `integration.happ`, `tool.advanced-diagnostics`, `tool.backups`, `tool.editor`, `tool.files`, `tool.terminal`.
+- `xkeen-page` → `xkeen-ui/static/js/pages/xkeen.entry.js`; файлов: 276; modules: `core`, `engine.mihomo`, `engine.xray`, `integration.happ`, `tool.advanced-diagnostics`, `tool.backups`, `tool.editor`, `tool.files`, `tool.terminal`.
+- `mihomo-generator-page` → `xkeen-ui/static/js/pages/mihomo_generator.entry.js`; файлов: 276; modules: `core`, `engine.mihomo`, `engine.xray`, `integration.happ`, `tool.advanced-diagnostics`, `tool.backups`, `tool.editor`, `tool.files`, `tool.terminal`.
 
 ## Обнаруженные архитектурные связи
 
@@ -100,7 +100,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 | `core` | `engine.xray` | 34 | `xkeen-ui/app.py`<br>`xkeen-ui/app_factory.py`<br>`xkeen-ui/routes/__init__.py` |
 | `core` | `integration.happ` | 5 | `xkeen-ui/routes/__init__.py`<br>`tests/test_check_keys_upstream.py`<br>`tests/test_module_backend_gates.py` |
 | `core` | `tool.advanced-diagnostics` | 8 | `xkeen-ui/routes/__init__.py`<br>`xkeen-ui/services/router_modem_control.py`<br>`tests/test_devtools_env_whitelist.py` |
-| `core` | `tool.backups` | 9 | `xkeen-ui/app_factory.py`<br>`xkeen-ui/routes/__init__.py`<br>`tests/test_backup_path_hardening.py` |
+| `core` | `tool.backups` | 10 | `xkeen-ui/app_factory.py`<br>`xkeen-ui/routes/__init__.py`<br>`tests/test_backup_path_hardening.py` |
 | `core` | `tool.editor` | 10 | `xkeen-ui/static/js/pages/panel.editor.bundle.js`<br>`xkeen-ui/static/js/pages/panel.editor.codemirror.bundle.js`<br>`xkeen-ui/static/js/pages/panel.editor.diff.bundle.js` |
 | `core` | `tool.files` | 7 | `xkeen-ui/routes/__init__.py`<br>`tests/test_filemanager_trash_policy.py`<br>`tests/test_module_backend_gates.py` |
 | `core` | `tool.terminal` | 16 | `xkeen-ui/app.py`<br>`xkeen-ui/app_factory.py`<br>`xkeen-ui/run_server.py` |
@@ -114,7 +114,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 | `engine.xray` | `core` | 128 | `xkeen-ui/routes/routing/__init__.py`<br>`xkeen-ui/routes/routing/blueprint.py`<br>`xkeen-ui/routes/routing/config.py` |
 | `engine.xray` | `engine.mihomo` | 1 | `xkeen-ui/services/xray_subscriptions.py` |
 | `engine.xray` | `integration.happ` | 2 | `xkeen-ui/services/xray_subscriptions.py`<br>`xkeen-ui/static/js/features/outbounds.js` |
-| `engine.xray` | `tool.backups` | 5 | `xkeen-ui/routes/routing/config.py`<br>`xkeen-ui/routes/xray_configs.py`<br>`xkeen-ui/static/js/features/inbounds.js` |
+| `engine.xray` | `tool.backups` | 2 | `xkeen-ui/routes/routing/config.py`<br>`xkeen-ui/routes/xray_configs.py` |
 | `engine.xray` | `tool.editor` | 128 | `xkeen-ui/routes/routing/__init__.py`<br>`xkeen-ui/routes/routing/blueprint.py`<br>`xkeen-ui/routes/routing/config.py` |
 | `engine.xray` | `tool.files` | 3 | `xkeen-ui/routes/routing/dat.py`<br>`xkeen-ui/routes/routing/dat_files.py`<br>`xkeen-ui/services/geodat/runner.py` |
 | `engine.xray` | `tool.terminal` | 2 | `xkeen-ui/routes/routing/config.py`<br>`xkeen-ui/routes/xray_configs.py` |

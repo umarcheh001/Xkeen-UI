@@ -149,7 +149,7 @@
         {
           "key": "editor-runtime",
           "moduleId": "tool.editor",
-          "loadMode": "interaction",
+          "loadMode": "view",
           "views": [],
           "domRoots": [
             "json-editor-modal",
@@ -164,7 +164,7 @@
         {
           "key": "editor-codemirror",
           "moduleId": "tool.editor",
-          "loadMode": "interaction",
+          "loadMode": "view",
           "views": [],
           "domRoots": [],
           "apiPrefixes": [],
@@ -353,7 +353,7 @@
         {
           "key": "editor-runtime",
           "moduleId": "tool.editor",
-          "loadMode": "interaction",
+          "loadMode": "view",
           "views": [],
           "domRoots": [
             "json-editor-modal",
@@ -368,7 +368,7 @@
         {
           "key": "editor-codemirror",
           "moduleId": "tool.editor",
-          "loadMode": "interaction",
+          "loadMode": "view",
           "views": [],
           "domRoots": [],
           "apiPrefixes": [],
@@ -476,7 +476,7 @@
         {
           "key": "editor-runtime",
           "moduleId": "tool.editor",
-          "loadMode": "interaction",
+          "loadMode": "view",
           "views": [],
           "domRoots": [
             "json-editor-modal",
@@ -491,7 +491,7 @@
         {
           "key": "editor-codemirror",
           "moduleId": "tool.editor",
-          "loadMode": "interaction",
+          "loadMode": "view",
           "views": [],
           "domRoots": [],
           "apiPrefixes": [],
@@ -560,7 +560,7 @@
         {
           "key": "editor-runtime",
           "moduleId": "tool.editor",
-          "loadMode": "interaction",
+          "loadMode": "view",
           "views": [],
           "domRoots": [
             "json-editor-modal",
@@ -575,7 +575,7 @@
         {
           "key": "editor-codemirror",
           "moduleId": "tool.editor",
-          "loadMode": "interaction",
+          "loadMode": "view",
           "views": [],
           "domRoots": [],
           "apiPrefixes": [],
