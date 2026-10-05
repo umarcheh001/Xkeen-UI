@@ -37,7 +37,7 @@
       ],
       "removable": false,
       "unit_count": 452,
-      "size_bytes": 6301395,
+      "size_bytes": 6305221,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
@@ -470,7 +470,7 @@
       "module_id": "core",
       "kind": "app_runtime",
       "path": "xkeen-ui/run_server.py",
-      "size_bytes": 7854,
+      "size_bytes": 8170,
       "depends_on": [
         "tool.terminal",
         "engine.mihomo"
@@ -4182,7 +4182,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_modular_panel_release_builder.py",
-      "size_bytes": 20328,
+      "size_bytes": 23838,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
