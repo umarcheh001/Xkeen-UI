@@ -1,8 +1,8 @@
 # План модульной архитектуры панели Xkeen UI
 
 **Статус:** Этапы 0, 1, 2, 3, 3R, 3R.1, 4, 5, 6 и 7, а также
-подэтапы 8.0 и 8.1 закрыты; следующий — подэтап 8.2<br>
-**Дата:** 2 октября 2026 года
+подэтапы 8.0, 8.1 и 8.2 закрыты; следующий — подэтап 8.3<br>
+**Дата:** 5 октября 2026 года
 **Область:** облегчение панели, профили установки и официальный каталог модулей
 
 **Текущий прогресс:** Этапы 0–3 и 3R, подэтапы 4.1, 4.2 и 4.3 закрыты;
@@ -16,12 +16,14 @@ manifest и единый `page_context`. Подэтап 4.6 закрепил ser
 1 октября 2026 года, а Этап 6 разделения редакторов закрыт 2 октября 2026
 года. Этап 7 профилей установщика закрыт 2 октября 2026 года. Подэтап 8.0 —
 Контракты и границы — закрыт 3 октября 2026 года. Подэтап 8.1 — Упаковка и
-release assets — также закрыт 3 октября 2026 года; следующий — подэтап 8.2.
+release assets — также закрыт 3 октября 2026 года. Подэтап 8.2 — Trust и
+клиент каталога — закрыт 5 октября 2026 года; следующий — подэтап 8.3.
 
 Этап 8 подготовлен как отдельный план после завершения Этапов 6 и 7. Подэтап
-8.0 закрыл статические контракты упаковки и обновления, а 8.1 выпустил
+8.0 закрыл статические контракты упаковки и обновления, 8.1 выпустил
 детерминированный builder panel/module assets, catalog/checksum metadata и CI
-publication boundary. Последующая реализация не должна блокировать редактор и
+publication boundary, а 8.2 добавил Ed25519 trust boundary, cache и клиент
+официального каталога. Последующая реализация не должна блокировать редактор и
 установщик.
 
 Этап 6 разделения редакторов закрыт 2 октября 2026 года. `tool.editor`
@@ -1651,11 +1653,19 @@ Release. Legacy bootstrap archive `xkeen-ui-routing.tar.gz` сохранён б�
 design: `docs/superpowers/specs/2026-10-03-modular-panel-stage8-1-release-assets-design.md`;
 план: `docs/superpowers/plans/2026-10-03-modular-panel-stage8-1-release-assets.md`.
 
-#### 8.2. Trust и клиент каталога
+#### 8.2. Trust и клиент каталога — закрыт
 
-Реализовать allow-listed HTTPS, Ed25519 signature verification, key IDs и
-ротацию, version comparison, кэш, stale/offline policy и отказ при изменении
-архива после подписи. Выход: core может получить только доверенный каталог.
+Закрыт 5 октября 2026 года. `services.module_catalog_trust` содержит embedded
+Ed25519 keyring и строгую проверку raw bytes `catalog.json`; tag-only CI signer
+`scripts/sign_modular_panel_catalog.py` читает private PEM только из
+`XKEEN_RELEASE_ED25519_PRIVATE_KEY`, выпускает `catalog.json.sig` и добавляет
+его в release metadata. `services.module_catalog_client` принимает только
+stable GitHub Release через allow-listed HTTPS/redirect policy, повторно
+верифицирует atomic cache, запрещает SemVer rollback и передаёт следующему
+подэтапу archive только после streaming size/SHA-256 проверки. Routes, UI,
+unpack и updater transaction остаются за границей 8.3. Design:
+`docs/superpowers/specs/2026-10-05-modular-panel-stage8-2-trust-catalog-design.md`;
+план: `docs/superpowers/plans/2026-10-05-modular-panel-stage8-2-trust-catalog.md`.
 
 #### 8.3. Transaction/updater engine
 
