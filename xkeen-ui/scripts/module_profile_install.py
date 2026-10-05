@@ -533,8 +533,20 @@ def rollback_profile(root: Path):
 
 
 def commit_profile(root: Path):
-    # Quarantine is retained for manual inspection and recovery on the router.
-    return Path(root)
+    """Drop the rollback copy once the service has started.
+
+    The copy of the replaced files is a full second panel on the router
+    storage and has no use after a successful start. Quarantine is retained
+    for manual inspection: it holds what the new profile no longer installs.
+    """
+
+    root = Path(root)
+    shutil.rmtree(root / "backup", ignore_errors=True)
+    (root / "transaction.json").unlink(missing_ok=True)
+    quarantine = root / "quarantine"
+    if not any(path.is_file() for path in quarantine.rglob("*")):
+        shutil.rmtree(root, ignore_errors=True)
+    return root
 
 
 def main(argv=None):

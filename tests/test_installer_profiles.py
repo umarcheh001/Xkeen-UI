@@ -300,11 +300,11 @@ def test_repeated_updates_keep_only_the_latest_transaction(tmp_path):
     (neighbour / "keep.txt").write_text("user", encoding="utf-8")
 
     first = tmp_path / "xkeen-ui.profile-transaction-101"
-    helper.commit_profile(helper.apply_profile(src, dest, "full", transaction_root=first))
+    helper.apply_profile(src, dest, "full", transaction_root=first)
     assert (first / "transaction.json").is_file()
 
     second = tmp_path / "xkeen-ui.profile-transaction-202"
-    helper.commit_profile(helper.apply_profile(src, dest, "full", transaction_root=second))
+    helper.apply_profile(src, dest, "full", transaction_root=second)
     third = tmp_path / "xkeen-ui.profile-transaction-303"
     helper.commit_profile(helper.apply_profile(src, dest, "xray-minimal", transaction_root=third))
 
@@ -319,13 +319,33 @@ def test_rejected_update_keeps_the_previous_transaction(tmp_path, monkeypatch):
     src = _source(tmp_path)
     dest = tmp_path / "xkeen-ui"
     first = tmp_path / "xkeen-ui.profile-transaction-101"
-    helper.commit_profile(helper.apply_profile(src, dest, "full", transaction_root=first))
+    helper.apply_profile(src, dest, "full", transaction_root=first)
     (src / "routes/mihomo.py").unlink()
 
     with pytest.raises(helper.ProfileInstallError, match="markers"):
         helper.apply_profile(src, dest, "full", transaction_root=tmp_path / "xkeen-ui.profile-transaction-202")
 
     assert (first / "transaction.json").is_file()
+
+
+def test_commit_drops_the_rollback_copy_and_keeps_quarantine(tmp_path):
+    helper = _module()
+    src = _source(tmp_path)
+    dest = tmp_path / "installed"
+
+    first = helper.apply_profile(src, dest, "full")
+    helper.commit_profile(first)
+    # Nothing was switched off: no reason to leave anything next to the panel.
+    assert not first.exists()
+
+    second = helper.apply_profile(src, dest, "xray-minimal")
+    assert (second / "backup/routes/mihomo.py").is_file()
+    helper.commit_profile(second)
+
+    assert not (second / "backup").exists()
+    assert not (second / "transaction.json").exists()
+    assert (second / "quarantine/routes/mihomo.py").is_file()
+    assert (dest / "routes/routing/blueprint.py").is_file()
 
 
 def test_interrupted_copy_restores_prior_files_and_profile(tmp_path, monkeypatch):
