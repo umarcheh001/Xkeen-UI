@@ -1071,18 +1071,24 @@ if [ ! -x "$PYTHON_BIN" ]; then
   fail_install "Python 3 не найден после установки."
 fi
 
-# --- Flask + gevent ---
+# --- Flask + cryptography + gevent ---
 
-echo "[*] Проверяю наличие Flask/gevent для Python3..."
+echo "[*] Проверяю наличие Flask/cryptography/gevent для Python3..."
 
-# Flask обязателен, gevent/geventwebsocket — опциональны (только для WebSocket-логов)
+# Flask и cryptography обязательны; gevent/geventwebsocket — опциональны (WebSocket-логи).
 
 NEED_FLASK=0
+NEED_CRYPTOGRAPHY=0
 NEED_GEVENT=0
 
 # Проверяем flask
 if ! "$PYTHON_BIN" -c "import flask" >/dev/null 2>&1; then
   NEED_FLASK=1
+fi
+
+# Проверяем cryptography: она образует fail-closed trust boundary каталога модулей.
+if ! "$PYTHON_BIN" -c "import cryptography" >/dev/null 2>&1; then
+  NEED_CRYPTOGRAPHY=1
 fi
 
 
@@ -1100,9 +1106,9 @@ fi
 
 ui_step_done
 ui_step "Библиотеки панели"
-if [ "$NEED_FLASK" -eq 1 ] || [ "$NEED_GEVENT" -eq 1 ]; then
+if [ "$NEED_FLASK" -eq 1 ] || [ "$NEED_CRYPTOGRAPHY" -eq 1 ] || [ "$NEED_GEVENT" -eq 1 ]; then
   ui_info "Настраиваю Python-зависимости панели..."
-  echo "[*] Flask и/или gevent не найдены. Пытаюсь установить зависимости через Entware и pip..."
+  echo "[*] Flask, cryptography и/или gevent не найдены. Пытаюсь установить зависимости через Entware и pip..."
 
   if command -v opkg >/dev/null 2>&1; then
     OPKG_BIN="$(command -v opkg)"
@@ -1116,11 +1122,11 @@ if [ "$NEED_FLASK" -eq 1 ] || [ "$NEED_GEVENT" -eq 1 ]; then
     echo "      export XKEEN_GEVENT_PIP_SPEC=${XKEEN_GEVENT_PIP_SPEC:-$GEVENT_PIP_SPEC}"
     if [ "$WANT_GEVENT" -eq 1 ]; then
       echo "      $PYTHON_BIN -m pip install --upgrade --index-url \"\$XKEEN_PIP_INDEX_URL\" pip setuptools wheel"
-      echo "      $PYTHON_BIN -m pip install --upgrade --index-url \"\$XKEEN_PIP_INDEX_URL\" flask"
+    echo "      $PYTHON_BIN -m pip install --upgrade --index-url \"\$XKEEN_PIP_INDEX_URL\" flask cryptography"
       echo "      $PYTHON_BIN -m pip install --upgrade --index-url \"\$XKEEN_PIP_INDEX_URL\" \"\$XKEEN_GEVENT_PIP_SPEC\" gevent-websocket"
     else
       echo "      $PYTHON_BIN -m pip install --upgrade --index-url \"\$XKEEN_PIP_INDEX_URL\" pip setuptools wheel"
-      echo "      $PYTHON_BIN -m pip install --upgrade --index-url \"\$XKEEN_PIP_INDEX_URL\" flask"
+      echo "      $PYTHON_BIN -m pip install --upgrade --index-url \"\$XKEEN_PIP_INDEX_URL\" flask cryptography"
     fi
     echo "    После этого запусти установщик ещё раз."
     fail_install "Не найден Entware (opkg), необходимый для Python-зависимостей."
@@ -1164,6 +1170,16 @@ if [ "$NEED_FLASK" -eq 1 ] || [ "$NEED_GEVENT" -eq 1 ]; then
     echo "[*] Flask уже доступен из $PYTHON_BIN, отдельная pip-установка не требуется."
   fi
 
+  if [ "$NEED_CRYPTOGRAPHY" -eq 1 ]; then
+    if ! pip_install_with_fallback "cryptography" cryptography; then
+      echo "[!] Не удалось установить cryptography через доступные pip-индексы."
+      echo "    Без неё каталог модулей нельзя проверить безопасно."
+      fail_install "Не удалось загрузить cryptography. Проверьте интернет-соединение или pip-зеркало."
+    fi
+  else
+    echo "[*] cryptography уже доступна из $PYTHON_BIN, отдельная pip-установка не требуется."
+  fi
+
   # pip может не суметь собрать gevent/gevent-websocket на слабых роутерах,
   # поэтому ошибка здесь НЕ фатальная — продолжаем установку без WebSocket.
   if [ "$WANT_GEVENT" -eq 1 ]; then
@@ -1196,6 +1212,12 @@ if ! "$PYTHON_BIN" -c "import flask" >/dev/null 2>&1; then
   echo "[!] Модуль flask по-прежнему не виден из $PYTHON_BIN."
   echo "    Без него панель не запустится. Завершаю установку."
   fail_install "Flask установлен некорректно, поэтому панель не сможет запуститься."
+fi
+
+if ! "$PYTHON_BIN" -c "import cryptography" >/dev/null 2>&1; then
+  echo "[!] Модуль cryptography по-прежнему не виден из $PYTHON_BIN."
+  echo "    Без него каталог модулей нельзя проверить безопасно. Завершаю установку."
+  fail_install "cryptography установлен некорректно, поэтому каталог модулей нельзя проверить."
 fi
 
 # gevent/geventwebsocket — опциональны: предупреждаем, но НЕ падаем.

@@ -16,6 +16,7 @@ from pathlib import PurePosixPath
 from typing import AbstractSet, Any, Mapping
 from urllib.parse import urlsplit
 
+from services.module_catalog_trust import TRUSTED_SIGNING_KEY_IDS
 from services.module_registry import MODULE_DEFINITIONS, MODULE_IDS
 
 
@@ -23,7 +24,6 @@ SUPPORTED_PANEL_API = "1"
 SUPPORTED_MODULE_API = "1"
 MANIFEST_SCHEMA_VERSION = 1
 OFFICIAL_CATALOG_PREFIX = "/umarcheh001/Xkeen-UI/releases/download/"
-TRUSTED_SIGNING_KEY_IDS = frozenset({"release-2026"})
 _SEMVER_RE = re.compile(
     r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
     r"(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"

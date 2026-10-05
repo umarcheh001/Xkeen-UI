@@ -10,6 +10,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 INSTALLER = ROOT / "xkeen-ui" / "install.sh"
+DEV_REQUIREMENTS = ROOT / "requirements-dev.txt"
 
 
 def _text() -> str:
@@ -43,6 +44,17 @@ def test_installer_is_valid_posix_shell_syntax():
     proc = subprocess.run(["sh", "-n", str(INSTALLER)], capture_output=True, text=True)
 
     assert proc.returncode == 0, proc.stderr
+
+
+def test_installer_treats_catalog_signature_verification_as_required_dependency():
+    requirements = DEV_REQUIREMENTS.read_text(encoding="utf-8")
+    installer = _text()
+
+    assert any(line.startswith("cryptography") for line in requirements.splitlines())
+    assert "NEED_CRYPTOGRAPHY=0" in installer
+    assert '"$PYTHON_BIN" -c "import cryptography"' in installer
+    assert 'pip_install_with_fallback "cryptography" cryptography' in installer
+    assert 'fail_install "cryptography установлен некорректно' in installer
 
 
 def test_installer_keeps_terminal_output_separate_from_diagnostics():
