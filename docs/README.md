@@ -75,6 +75,7 @@
 - `modular-panel-stage8-contract.json` — machine-readable contract закрытых подэтапов 8.0–8.1; пересобирается `scripts/generate_modular_panel_stage8_contract.py`.
 - `../scripts/build_modular_panel_release.py` — deterministic builder panel/module archives, catalog, checksums и release metadata подэтапа 8.1.
 - `superpowers/specs/2026-10-03-modular-panel-stage8-1-release-assets-design.md` и `superpowers/plans/2026-10-03-modular-panel-stage8-1-release-assets.md` — утверждённые design/implementation plan подэтапа 8.1.
+- `superpowers/specs/2026-10-05-modular-panel-stage8-2-trust-catalog-design.md` — утверждённый design trust boundary и клиента официального каталога для подэтапа 8.2.
 - `module-sizes.json` — generated runtime sizes модулей; обновляется `scripts/sync_module_sizes.py`.
 - `modular-panel-stage3r1-initial-html-baseline.json` — generated structural initial-HTML baseline до подэтапа 4.3.
 - `modular-panel-stage3r1-initial-html-baseline.md` — человекочитаемый baseline и команда воспроизведения.
