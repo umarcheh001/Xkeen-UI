@@ -37,7 +37,7 @@
       ],
       "removable": false,
       "unit_count": 447,
-      "size_bytes": 6213306,
+      "size_bytes": 6213966,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
@@ -3853,7 +3853,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_installer_profiles.py",
-      "size_bytes": 16322,
+      "size_bytes": 16982,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
