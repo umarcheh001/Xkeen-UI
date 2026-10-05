@@ -561,6 +561,17 @@
     return true;
   }
 
+  function isEditorCapabilityOffered(name) {
+    try {
+      const capabilities = window.XKeen && XKeen.ui && XKeen.ui.editorCapabilities;
+      // Pages without the module descriptor load everything themselves.
+      if (!capabilities || typeof capabilities.has !== 'function') return true;
+      return !!capabilities.has(name);
+    } catch (e) {
+      return true;
+    }
+  }
+
   function filterToolbarItems(target, items) {
     const caps = detectCapabilities(target);
     const raw = rawEditor(target);
@@ -569,6 +580,9 @@
     (items || []).forEach((item) => {
       if (!item) return;
       if (item.requiresDiffScope === true && !hasDiffScope) return;
+      // A variant without the diff viewer must not offer a button that
+      // does nothing when pressed.
+      if (item.requiresDiffScope === true && !isEditorCapabilityOffered('diff')) return;
       const id = normalizeCommandName(item.id || item.command || '');
       if (!item.command && !item.id) {
         out.push(item);

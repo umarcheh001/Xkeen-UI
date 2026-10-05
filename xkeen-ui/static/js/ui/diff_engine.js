@@ -251,4 +251,8 @@
   XKeen.ui.diff.applyTextToScope = applyTextToScope;
   XKeen.ui.diff.describeSource = describeSource;
   XKeen.ui.diff.logDiff = logDiff;
+
+  // Screens start before this file is loaded and could not register their
+  // scopes then; without this the Compare button opened nothing.
+  try { document.dispatchEvent(new CustomEvent('xkeen:diff-engine-ready')); } catch (e) {}
 })();

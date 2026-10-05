@@ -15,6 +15,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 import sys
 import tarfile
 from dataclasses import dataclass
@@ -57,6 +58,13 @@ _KNOWN_PACKAGE_FILES = {
     "uninstall.sh",
     "xkeen_mihomo_service.py",
 }
+# Mirrors services.module_package_contract, which the offline builder cannot
+# import before it has located the package root.
+_SEMVER_RE = re.compile(
+    r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
+    r"(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
+)
 _STAGE7_PATH = Path(__file__).resolve().parents[1] / PACKAGE_DIRNAME / "scripts" / "module_profile_install.py"
 _STAGE7_MODULE: Any | None = None
 
@@ -487,6 +495,13 @@ def build_release(
         raise ReleaseBuildError(f"release root is missing: {root}")
     if not str(inputs.version).strip():
         raise ReleaseBuildError("release version is required")
+    if not _SEMVER_RE.fullmatch(str(inputs.version)):
+        # The catalog client compares versions as semver. A tag such as
+        # v2.9.2a used to pass here and fail the preflight a step later.
+        raise ReleaseBuildError(
+            f"release version must be MAJOR.MINOR.PATCH, got {inputs.version!r}: "
+            "tag releases as vX.Y.Z, without a letter suffix"
+        )
     if not str(inputs.source_commit).strip():
         raise ReleaseBuildError("source commit is required")
     if int(inputs.source_date_epoch) < 0:

@@ -1,4 +1,9 @@
-import { ensurePanelModule, getPanelModuleApi, notifyPanelLoadFailure } from './panel.module_loader.js';
+import {
+  ensurePanelModule,
+  getPanelModuleApi,
+  isPanelEditorCapabilityActive,
+  notifyPanelLoadFailure,
+} from './panel.module_loader.js';
 import {
   getXkeenGithubRepoUrl,
   getXkeenLazyRuntimeApi,
@@ -576,6 +581,7 @@ function consumeReplayFlag(el) {
 
 export function wirePanelLazyFeatureClicks() {
   if (document.body && document.body.dataset && document.body.dataset.xkLazyFeatureClicks === '1') return;
+  markUnavailableEditorEngines();
 
   document.addEventListener('click', (event) => {
     const raw = event && event.target && typeof event.target.closest === 'function' ? event.target : null;
@@ -909,10 +915,30 @@ export const panelLazyBindingsRuntimeApi = Object.freeze({
   wireLazyFeatureClicks: wirePanelLazyFeatureClicks,
 });
 
+// An editor variant without Monaco still has the engine lists in its
+// markup; choosing Monaco there only produced a load error.
+export function markUnavailableEditorEngines(options) {
+  if (isPanelEditorCapabilityActive('monaco')) return;
+  const list = options || document.querySelectorAll(
+    'select[id$="engine-select"] option[value="monaco"]'
+  );
+  Array.from(list).forEach((option) => {
+    try {
+      if (option.disabled) return;
+      option.disabled = true;
+      option.textContent = 'Monaco (нет в этом варианте редактора)';
+      const select = option.parentElement;
+      if (select && select.value === 'monaco') select.value = 'codemirror';
+    } catch (error) {}
+  });
+}
+
 try {
   window.XKeen = window.XKeen || {};
   window.XKeen.ui = window.XKeen.ui || {};
   window.XKeen.ui.editorCapabilities = Object.freeze({
     ensure: ensurePanelEditorCapability,
+    has: isPanelEditorCapabilityActive,
+    markUnavailableEngines: markUnavailableEditorEngines,
   });
 } catch (error) {}

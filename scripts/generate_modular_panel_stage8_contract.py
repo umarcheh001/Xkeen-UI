@@ -368,6 +368,7 @@ def render_markdown(payload: dict[str, Any]) -> str:
             "Module archive содержит только `module-manifest.json` и `payload/<ownership-path>`; bootstrap hooks остаются в panel asset и не попадают в module payload.",
             "Воспроизводимость фиксирует USTAR, POSIX-сортировку путей, uid/gid=0, пустые owner names и `SOURCE_DATE_EPOCH` для tar/gzip.",
             f"CI собирает и статически проверяет `dist/modular-panel/**` на каждом push. На tag build `{ci_publication['catalog_signing']['script']}` добавляет `{release_assets['catalog_signature']}` в `release-metadata.json`; публикация в GitHub Release разрешена только при `{ci_publication['tag_condition']}`. Legacy bootstrap archive `xkeen-ui-routing.tar.gz` сохраняется без изменения имени.",
+            "Версия релиза берётся из тега и обязана быть semver, поэтому теги выпускаются как `vX.Y.Z`, без буквенного суффикса (решение 5 октября 2026 года): на теге вида `v2.9.2a` сборщик останавливается с понятной ошибкой, и релиз не публикуется.",
             "",
             "## Trust и клиент каталога 8.2",
             "",

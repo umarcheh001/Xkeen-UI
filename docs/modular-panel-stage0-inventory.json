@@ -36,20 +36,20 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 448,
-      "size_bytes": 6269189,
+      "unit_count": 452,
+      "size_bytes": 6284083,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
         "backend_service": 59,
-        "backend_test": 191,
+        "backend_test": 194,
         "configuration": 10,
         "frontend_bundle": 9,
         "frontend_entrypoint": 2,
         "frontend_feature": 28,
         "frontend_javascript": 35,
         "frontend_runtime": 1,
-        "frontend_test": 39,
+        "frontend_test": 40,
         "frontend_ui": 17,
         "stylesheet": 5,
         "template": 31
@@ -86,7 +86,7 @@
       ],
       "removable": true,
       "unit_count": 128,
-      "size_bytes": 3666419,
+      "size_bytes": 3666940,
       "kind_counts": {
         "backend_route": 13,
         "backend_service": 18,
@@ -130,7 +130,7 @@
       ],
       "removable": true,
       "unit_count": 128,
-      "size_bytes": 3068528,
+      "size_bytes": 3068802,
       "kind_counts": {
         "app_runtime": 4,
         "backend_route": 2,
@@ -175,7 +175,7 @@
       ],
       "removable": true,
       "unit_count": 25,
-      "size_bytes": 831711,
+      "size_bytes": 832798,
       "kind_counts": {
         "frontend_javascript": 3,
         "frontend_ui": 22
@@ -3870,6 +3870,24 @@
     {
       "module_id": "core",
       "kind": "backend_test",
+      "path": "tests/test_installer_profile_frontend_closure.py",
+      "size_bytes": 6493,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
       "path": "tests/test_installer_profiles.py",
       "size_bytes": 13692,
       "depends_on": [],
@@ -4181,6 +4199,24 @@
     {
       "module_id": "core",
       "kind": "backend_test",
+      "path": "tests/test_modular_panel_release_version.py",
+      "size_bytes": 2090,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
       "path": "tests/test_modular_panel_release_workflow.py",
       "size_bytes": 2119,
       "depends_on": [],
@@ -4410,6 +4446,24 @@
       "kind": "backend_test",
       "path": "tests/test_modular_panel_stage6_editor_contract.py",
       "size_bytes": 4220,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_modular_panel_stage6_lazy_diff_contract.py",
+      "size_bytes": 2918,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -7694,7 +7748,7 @@
       "module_id": "core",
       "kind": "frontend_javascript",
       "path": "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js",
-      "size_bytes": 34266,
+      "size_bytes": 35156,
       "depends_on": [
         "tool.terminal",
         "engine.xray",
@@ -8489,6 +8543,24 @@
       "kind": "frontend_test",
       "path": "e2e/dns_operation_recovery.spec.mjs",
       "size_bytes": 12216,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "frontend_test",
+      "path": "e2e/editor_compare_button.spec.mjs",
+      "size_bytes": 2503,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -13009,7 +13081,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/mihomo_panel.js",
-      "size_bytes": 137844,
+      "size_bytes": 138118,
       "depends_on": [
         "core",
         "tool.editor"
@@ -15696,7 +15768,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/routing.js",
-      "size_bytes": 232610,
+      "size_bytes": 233131,
       "depends_on": [
         "core",
         "tool.editor"
@@ -19025,7 +19097,7 @@
       "module_id": "tool.editor",
       "kind": "frontend_ui",
       "path": "xkeen-ui/static/js/ui/diff_engine.js",
-      "size_bytes": 9572,
+      "size_bytes": 9805,
       "depends_on": [
         "core"
       ],
@@ -19077,7 +19149,7 @@
       "module_id": "tool.editor",
       "kind": "frontend_ui",
       "path": "xkeen-ui/static/js/ui/editor_actions.js",
-      "size_bytes": 25398,
+      "size_bytes": 25974,
       "depends_on": [
         "core"
       ],
@@ -19241,7 +19313,7 @@
       "module_id": "tool.editor",
       "kind": "frontend_ui",
       "path": "xkeen-ui/static/js/ui/json_editor_modal.js",
-      "size_bytes": 47044,
+      "size_bytes": 47322,
       "depends_on": [
         "core",
         "engine.xray"
@@ -28846,7 +28918,7 @@
       "evidence": {
         "tool.editor": {
           "unit_count": 25,
-          "size_bytes": 831711
+          "size_bytes": 832798
         },
         "tool.terminal": {
           "unit_count": 49,

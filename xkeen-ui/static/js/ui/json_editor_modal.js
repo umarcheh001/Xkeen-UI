@@ -120,6 +120,12 @@ import {
     return String(payload.text || '');
   }
 
+  // The diff viewer is loaded on its first use, after this code has
+  // started, so the scope is registered when the viewer announces itself.
+  document.addEventListener('xkeen:diff-engine-ready', () => {
+    try { ensureJsonEditorDiffScopeRegistered(); } catch (e) {}
+  });
+
   function ensureJsonEditorDiffScopeRegistered() {
     if (_diffScopeRegistered) return true;
     const diff = getXkeenDiffApi();

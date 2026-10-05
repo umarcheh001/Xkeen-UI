@@ -186,7 +186,7 @@
           "accessible_label": "Применить"
         },
         {
-          "location": "xkeen-ui/static/js/features/routing.js:L4528",
+          "location": "xkeen-ui/static/js/features/routing.js:L4534",
           "control_type": "runtime-action",
           "accessible_label": "Применить"
         },
@@ -378,7 +378,7 @@
           "accessible_label": "Подтвердить"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_panel.js:L3014",
+          "location": "xkeen-ui/static/js/features/mihomo_panel.js:L3020",
           "control_type": "runtime-action",
           "accessible_label": "Подтвердить"
         },
@@ -419,12 +419,12 @@
           "accessible_label": "Раскрыть"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_panel.js:L1670",
+          "location": "xkeen-ui/static/js/features/mihomo_panel.js:L1676",
           "control_type": "runtime-action",
           "accessible_label": "Раскрыть"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_panel.js:L3498",
+          "location": "xkeen-ui/static/js/features/mihomo_panel.js:L3504",
           "control_type": "runtime-action",
           "accessible_label": "Раскрыть"
         },
@@ -611,7 +611,7 @@
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/static/js/features/routing.js:L2252",
+          "location": "xkeen-ui/static/js/features/routing.js:L2258",
           "control_type": "runtime-action",
           "accessible_label": "Закрыть"
         },
@@ -1028,7 +1028,7 @@
           "accessible_label": "Сравнить"
         },
         {
-          "location": "xkeen-ui/static/js/features/routing.js:L4920",
+          "location": "xkeen-ui/static/js/features/routing.js:L4926",
           "control_type": "runtime-action",
           "accessible_label": "Сравнить"
         },
@@ -1208,7 +1208,7 @@
           "accessible_label": "Скачать"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_panel.js:L3009",
+          "location": "xkeen-ui/static/js/features/mihomo_panel.js:L3015",
           "control_type": "runtime-action",
           "accessible_label": "Скачать"
         },
@@ -1446,7 +1446,7 @@
           "accessible_label": "Редактировать"
         },
         {
-          "location": "xkeen-ui/static/js/features/routing.js:L4839",
+          "location": "xkeen-ui/static/js/features/routing.js:L4845",
           "control_type": "runtime-action",
           "accessible_label": "Редактировать"
         },
@@ -1540,7 +1540,7 @@
       "tabler_asset": "sparkles",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/routing.js:L6374",
+          "location": "xkeen-ui/static/js/features/routing.js:L6386",
           "control_type": "runtime-action",
           "accessible_label": "Форматировать"
         },
@@ -1720,7 +1720,7 @@
       "tabler_asset": "help-circle",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/routing.js:L4792",
+          "location": "xkeen-ui/static/js/features/routing.js:L4798",
           "control_type": "runtime-action",
           "accessible_label": "Справка"
         },
@@ -1889,7 +1889,7 @@
           "accessible_label": "Информация"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_panel.js:L1352",
+          "location": "xkeen-ui/static/js/features/mihomo_panel.js:L1358",
           "control_type": "runtime-action",
           "accessible_label": "Информация"
         },
@@ -1904,7 +1904,7 @@
           "accessible_label": "Информация"
         },
         {
-          "location": "xkeen-ui/static/js/features/routing.js:L998",
+          "location": "xkeen-ui/static/js/features/routing.js:L1004",
           "control_type": "runtime-action",
           "accessible_label": "Информация"
         },
@@ -2076,7 +2076,7 @@
           "accessible_label": "Загрузка"
         },
         {
-          "location": "xkeen-ui/static/js/features/routing.js:L2262",
+          "location": "xkeen-ui/static/js/features/routing.js:L2268",
           "control_type": "runtime-action",
           "accessible_label": "Загрузка"
         },
@@ -2344,7 +2344,7 @@
           "accessible_label": "Открыть"
         },
         {
-          "location": "xkeen-ui/static/js/features/routing.js:L2472",
+          "location": "xkeen-ui/static/js/features/routing.js:L2478",
           "control_type": "runtime-action",
           "accessible_label": "Открыть"
         }
@@ -2541,7 +2541,7 @@
           "accessible_label": "Предпросмотр"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_panel.js:L3075",
+          "location": "xkeen-ui/static/js/features/mihomo_panel.js:L3081",
           "control_type": "runtime-action",
           "accessible_label": "Предпросмотр"
         },
@@ -2876,7 +2876,7 @@
           "accessible_label": "Заменить"
         },
         {
-          "location": "xkeen-ui/static/js/features/routing.js:L4727",
+          "location": "xkeen-ui/static/js/features/routing.js:L4733",
           "control_type": "runtime-action",
           "accessible_label": "Заменить"
         },
@@ -2943,7 +2943,7 @@
           "accessible_label": "Восстановить"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_panel.js:L3080",
+          "location": "xkeen-ui/static/js/features/mihomo_panel.js:L3086",
           "control_type": "runtime-action",
           "accessible_label": "Восстановить"
         },
@@ -3020,7 +3020,7 @@
           "accessible_label": "Сохранить"
         },
         {
-          "location": "xkeen-ui/static/js/features/routing.js:L6366",
+          "location": "xkeen-ui/static/js/features/routing.js:L6378",
           "control_type": "runtime-action",
           "accessible_label": "Сохранить"
         },
@@ -3213,7 +3213,7 @@
           "accessible_label": "Настройки"
         },
         {
-          "location": "xkeen-ui/static/js/features/routing.js:L4250",
+          "location": "xkeen-ui/static/js/features/routing.js:L4256",
           "control_type": "runtime-action",
           "accessible_label": "Настройки"
         },
@@ -3349,7 +3349,7 @@
       "tabler_asset": "template",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/mihomo_panel.js:L2839",
+          "location": "xkeen-ui/static/js/features/mihomo_panel.js:L2845",
           "control_type": "runtime-action",
           "accessible_label": "Шаблоны"
         },
@@ -3503,7 +3503,7 @@
           "accessible_label": "Удалить"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_panel.js:L3021",
+          "location": "xkeen-ui/static/js/features/mihomo_panel.js:L3027",
           "control_type": "runtime-action",
           "accessible_label": "Удалить"
         },
@@ -3635,7 +3635,7 @@
           "accessible_label": "Проверить"
         },
         {
-          "location": "xkeen-ui/static/js/features/routing.js:L6370",
+          "location": "xkeen-ui/static/js/features/routing.js:L6382",
           "control_type": "runtime-action",
           "accessible_label": "Проверить"
         },
