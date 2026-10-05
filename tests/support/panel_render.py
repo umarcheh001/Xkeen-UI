@@ -24,7 +24,7 @@ XRAY_MINIMAL_MODULE_IDS = ["core", "tool.editor", "engine.xray"]
 MIHOMO_MINIMAL_MODULE_IDS = ["core", "tool.editor", "engine.mihomo"]
 
 
-def render_panel(active_module_ids: list[str] | None, tmp_path: Path) -> str:
+def build_panel_app(active_module_ids: list[str] | None, tmp_path: Path) -> Flask:
     from routes.pages import register_pages_routes
     from routes.ui_assets import init_ui_assets_helpers, register_build_stamp_global
 
@@ -55,6 +55,10 @@ def render_panel(active_module_ids: list[str] | None, tmp_path: Path) -> str:
         COMMAND_GROUPS=[],
         GITHUB_REPO_URL="https://example.invalid/repo",
     )
-    response = app.test_client().get("/")
+    return app
+
+
+def render_panel(active_module_ids: list[str] | None, tmp_path: Path) -> str:
+    response = build_panel_app(active_module_ids, tmp_path).test_client().get("/")
     assert response.status_code == 200
     return response.get_data(as_text=True)

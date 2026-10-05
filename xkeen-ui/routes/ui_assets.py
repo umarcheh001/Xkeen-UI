@@ -983,7 +983,18 @@ def init_ui_assets_helpers(app: Flask) -> FrontendAssetHelper:
     app.extensions[_APP_EXTENSIONS_KEY] = helper
     app.add_template_global(helper.frontend_page_entry_url, name="frontend_page_entry_url")
     app.add_template_global(helper.frontend_page_config, name="frontend_page_config")
+    app.add_template_global(ui_endpoint_available, name="ui_endpoint_available")
     return helper
+
+
+def ui_endpoint_available(endpoint: str) -> bool:
+    """Tell a template whether a page of an optional module is registered.
+
+    Standalone pages link to each other, and `url_for` raises for an endpoint
+    whose module is off, which turned the whole page into a 500.
+    """
+
+    return str(endpoint or "") in current_app.view_functions
 
 
 def frontend_page_entry_url(entry_name: str) -> str:

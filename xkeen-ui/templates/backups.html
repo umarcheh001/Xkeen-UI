@@ -69,6 +69,7 @@
             data-xk-top-nav="1"
             title="Назад на главную панель"
           >← Назад</a>
+          {% if ui_endpoint_available('devtools_page') %}
           <a
             href="{{ url_for('devtools_page') }}"
             class="service-core-text xk-header-btn xk-header-btn-devtools"
@@ -85,6 +86,7 @@
             <span class="xk-update-dot" aria-hidden="true"></span>
             <span data-xk-update-label>Обновление</span>
           </a>
+          {% endif %}
           {% set logout_button_class = 'service-core-text xk-header-btn xk-header-btn-logout' %}
           {% include '_logout_button.html' %}
         </div>

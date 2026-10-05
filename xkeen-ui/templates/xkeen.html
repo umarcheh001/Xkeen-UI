@@ -65,6 +65,7 @@
             class="theme-toggle-btn theme-toggle-header"
             aria-label="Переключить тему"
           ><span class="theme-toggle-icon" aria-hidden="true">☀</span><span class="theme-toggle-text">Светлая тема</span></button>
+          {% if ui_endpoint_available('devtools_page') %}
           <a href="{{ url_for('devtools_page') }}" class="btn-link" data-xk-top-nav="1" title="DevTools">DevTools</a>
           <a
             href="{{ url_for('devtools_page') }}#dt-update-card"
@@ -76,6 +77,7 @@
             <span class="xk-update-dot" aria-hidden="true"></span>
             <span data-xk-update-label>Обновление</span>
           </a>
+          {% endif %}
           {% set logout_button_class = 'btn-link' %}
           {% include '_logout_button.html' %}
         </div>

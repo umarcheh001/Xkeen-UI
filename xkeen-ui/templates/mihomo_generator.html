@@ -1991,18 +1991,21 @@
             data-xk-top-nav="1"
             title="Назад на главную панель"
           >{{ op_icon('back') }}<span class="xk-action-label">Назад</span></a>
+          {% if ui_endpoint_available('devtools_page') %}
           <a
             href="{{ url_for('devtools_page') }}"
             class="service-core-text xk-header-btn xk-header-btn-devtools"
             data-xk-top-nav="1"
             title="DevTools"
           >DevTools</a>
+          {% endif %}
           <span
             id="xkeen-core-pill"
             class="service-core-text xk-header-btn xk-mg-header-btn-core"
             style="cursor: default;"
             title="Активное ядро XKeen"
           >Ядро: …</span>
+          {% if ui_endpoint_available('devtools_page') %}
           <a
             href="{{ url_for('devtools_page') }}#dt-update-card"
             id="xk-update-link"
@@ -2013,6 +2016,7 @@
             <span class="xk-update-dot" aria-hidden="true"></span>
             <span data-xk-update-label>Обновление</span>
           </a>
+          {% endif %}
           {% set logout_button_class = 'service-core-text xk-header-btn xk-header-btn-logout' %}
           {% include '_logout_button.html' %}
         </div>
