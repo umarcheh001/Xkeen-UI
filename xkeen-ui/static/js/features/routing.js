@@ -145,6 +145,12 @@ import { iconHtml } from '../ui/operator_icons.js';
     return String(payload.text || '');
   }
 
+  // The diff viewer is loaded on its first use, after this code has
+  // started, so the scope is registered when the viewer announces itself.
+  document.addEventListener('xkeen:diff-engine-ready', () => {
+    try { ensureRoutingDiffScopeRegistered(); } catch (e) {}
+  });
+
   function ensureRoutingDiffScopeRegistered() {
     if (_diffScopeRegistered) return true;
     const diff = getXkeenDiffApi();
@@ -6110,6 +6116,12 @@ function closeHelp() {
     const o2 = document.createElement('option');
     o2.value = 'monaco';
     o2.textContent = 'Monaco';
+    try {
+      const capabilities = (getXkeenUiApi() || {}).editorCapabilities;
+      if (capabilities && typeof capabilities.markUnavailableEngines === 'function') {
+        capabilities.markUnavailableEngines([o2]);
+      }
+    } catch (e) {}
 
     sel.appendChild(o1);
     sel.appendChild(o2);

@@ -1156,6 +1156,12 @@ let mihomoPanelModuleApi = null;
     return String(payload.content || '');
   }
 
+  // The diff viewer is loaded on its first use, after this code has
+  // started, so the scope is registered when the viewer announces itself.
+  document.addEventListener('xkeen:diff-engine-ready', () => {
+    try { ensureMihomoDiffScopeRegistered(); } catch (e) {}
+  });
+
   function ensureMihomoDiffScopeRegistered() {
     if (_diffScopeRegistered) return true;
     const diff = getXkeenDiffApi();
