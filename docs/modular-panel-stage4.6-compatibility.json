@@ -52,6 +52,38 @@
       "template": "panel/slots/routing_focus.html"
     },
     {
+      "collection": "routing_inbounds_action_partials",
+      "owners": [
+        "engine.xray",
+        "tool.backups"
+      ],
+      "template": "panel/slots/backups_inbounds_actions.html"
+    },
+    {
+      "collection": "routing_outbounds_action_partials",
+      "owners": [
+        "engine.xray",
+        "tool.backups"
+      ],
+      "template": "panel/slots/backups_outbounds_actions.html"
+    },
+    {
+      "collection": "routing_side_card_partials",
+      "owners": [
+        "engine.xray",
+        "tool.backups"
+      ],
+      "template": "panel/slots/backups_xray_card.html"
+    },
+    {
+      "collection": "routing_file_action_partials",
+      "owners": [
+        "engine.xray",
+        "tool.backups"
+      ],
+      "template": "panel/slots/backups_routing_actions.html"
+    },
+    {
       "collection": "screen_partials",
       "owners": [
         "engine.xray"

@@ -27,7 +27,14 @@ manifest-ами:
 Маршрут панели передаёт результат как единый `page_context`. `panel.html`,
 `panel/navigation.html`, `panel/header.html` и `panel/shell.html` больше не
 решают ownership самостоятельно: они перебирают уже отобранные коллекции.
-Первый доступный in-panel navigation view получает класс `active`.
+Первый доступный in-panel navigation view получает класс `active`, а его
+screen — единственный, который сервер отдаёт видимым (`page_context.initial_view`):
+без экрана routing страница не остаётся пустой до запуска скриптов.
+
+Карточка «Бэкапы Xray» и кнопки backup/restore экрана routing принадлежат
+`engine.xray AND tool.backups`: их API регистрирует только `tool.backups`,
+поэтому без него они не рендерятся (в том числе в Xray-minimal). Это четыре
+slot-partial `panel/slots/backups_*.html` внутри `screens/routing.html`.
 
 ## Профильный результат
 
@@ -45,10 +52,11 @@ manifest-ами:
 ## Статический source graph
 
 `scripts/panel_template_source.py` по-прежнему разворачивает literal Jinja
-includes. Для composition loops он также знает только восемь конкретных имён
-переменных (три `header_*_partial`, `control_partial`,
-`core_source_control_partial`, `pre_screen_modal_partial`, `screen_partial` и
-`modal_partial`) и раскрывает их через
+includes. Для composition loops он также знает только двенадцать конкретных
+имён переменных (три `header_*_partial`, `control_partial`, четыре
+`routing_*_partial` для backup-slots, `core_source_control_partial`,
+`pre_screen_modal_partial`, `screen_partial` и `modal_partial`) и раскрывает
+их через
 `DYNAMIC_COMPOSITION_INCLUDE_PATHS`. Отдельный
 `DYNAMIC_NAVIGATION_ITEMS` строит только Full/Legacy navigation для
 source-only inventory. Оба каталога сравниваются с runtime manifest в тестах,
@@ -75,6 +83,13 @@ Live smoke на локальном E2E fixture 1 октября подтверд
 Mihomo-only и core-only: у каждого набора в DOM остались только его views и
 module-owned shell surfaces; Full сохранил diagnostics modal перед screens.
 После проверки стенд возвращён в Legacy/Full.
+
+Аудит 5 октября добавил три guardrail: backup-surfaces следуют за
+`tool.backups`, сервер показывает первый доступный screen, а
+`tests/test_modular_panel_standalone_pages.py` проверяет, что `/`, `/xkeen`,
+`/mihomo_generator`, `/devtools` и `/backups` не отвечают `500` ни в одном
+наборе модулей (ссылка на DevTools рендерится только при зарегистрированном
+маршруте — `ui_endpoint_available`).
 
 ## Вне границ 4.5
 
