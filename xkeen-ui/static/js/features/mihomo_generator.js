@@ -12,6 +12,7 @@ import {
   getXkeenEditorToolbarIcons,
   getXkeenEditorToolbarMiniItems,
   getXkeenPageName,
+  getXkeenUiApi,
 } from './xkeen_runtime.js';
 import { iconHtml } from '../ui/operator_icons.js';
 
@@ -740,7 +741,7 @@ function initEngineToggle() {
 
   // An editor variant without Monaco must not offer it here either.
   try {
-    const capabilities = window.XKeen && XKeen.ui && XKeen.ui.editorCapabilities;
+    const capabilities = (getXkeenUiApi() || {}).editorCapabilities;
     if (capabilities && typeof capabilities.markUnavailableEngines === 'function') {
       capabilities.markUnavailableEngines(previewEngineSelect.querySelectorAll('option[value="monaco"]'));
     }

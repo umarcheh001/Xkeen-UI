@@ -181,7 +181,7 @@
       "tabler_asset": "rocket",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/mihomo_generator.js:L981",
+          "location": "xkeen-ui/static/js/features/mihomo_generator.js:L982",
           "control_type": "runtime-action",
           "accessible_label": "Применить"
         },
@@ -1813,12 +1813,12 @@
       "tabler_asset": "file-import",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/mihomo_generator.js:L3507",
+          "location": "xkeen-ui/static/js/features/mihomo_generator.js:L3508",
           "control_type": "runtime-action",
           "accessible_label": "Импортировать"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_generator.js:L3623",
+          "location": "xkeen-ui/static/js/features/mihomo_generator.js:L3624",
           "control_type": "runtime-action",
           "accessible_label": "Импортировать"
         },
@@ -1884,7 +1884,7 @@
           "accessible_label": "Информация"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_generator.js:L302",
+          "location": "xkeen-ui/static/js/features/mihomo_generator.js:L303",
           "control_type": "runtime-action",
           "accessible_label": "Информация"
         },
@@ -2536,7 +2536,7 @@
           "accessible_label": "Предпросмотр"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_generator.js:L4194",
+          "location": "xkeen-ui/static/js/features/mihomo_generator.js:L4195",
           "control_type": "runtime-action",
           "accessible_label": "Предпросмотр"
         },
@@ -2634,7 +2634,7 @@
           "accessible_label": "Обновить"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_generator.js:L1931",
+          "location": "xkeen-ui/static/js/features/mihomo_generator.js:L1932",
           "control_type": "runtime-action",
           "accessible_label": "Обновить"
         },
@@ -2866,7 +2866,7 @@
           "accessible_label": "Заменить"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_generator.js:L1300",
+          "location": "xkeen-ui/static/js/features/mihomo_generator.js:L1301",
           "control_type": "runtime-action",
           "accessible_label": "Заменить"
         },
@@ -3005,7 +3005,7 @@
       "tabler_asset": "device-floppy",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/mihomo_generator.js:L1922",
+          "location": "xkeen-ui/static/js/features/mihomo_generator.js:L1923",
           "control_type": "runtime-action",
           "accessible_label": "Сохранить"
         },
@@ -3488,12 +3488,12 @@
           "accessible_label": "Удалить"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_generator.js:L1768",
+          "location": "xkeen-ui/static/js/features/mihomo_generator.js:L1769",
           "control_type": "runtime-action",
           "accessible_label": "Удалить"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_generator.js:L2446",
+          "location": "xkeen-ui/static/js/features/mihomo_generator.js:L2447",
           "control_type": "runtime-action",
           "accessible_label": "Удалить"
         },
@@ -3630,7 +3630,7 @@
           "accessible_label": "Проверить"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_generator.js:L4385",
+          "location": "xkeen-ui/static/js/features/mihomo_generator.js:L4386",
           "control_type": "runtime-action",
           "accessible_label": "Проверить"
         },

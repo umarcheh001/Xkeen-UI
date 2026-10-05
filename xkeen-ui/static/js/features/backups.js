@@ -1032,7 +1032,7 @@ let backupsModuleApi = null;
       if (sel.dataset) sel.dataset.xkeenWired = '1';
       // An editor variant without Monaco must not offer it here either.
       try {
-        const capabilities = window.XKeen && XKeen.ui && XKeen.ui.editorCapabilities;
+        const capabilities = (getXkeenUiApi() || {}).editorCapabilities;
         if (capabilities && typeof capabilities.markUnavailableEngines === 'function') {
           capabilities.markUnavailableEngines(sel.querySelectorAll('option[value="monaco"]'));
         }
