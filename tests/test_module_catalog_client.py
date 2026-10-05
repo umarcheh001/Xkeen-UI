@@ -636,3 +636,131 @@ def test_client_rejects_unknown_module_before_downloading(tmp_path) -> None:
 
     assert raised.value.code == "catalog_module_unknown"
     assert transport.stream_calls == []
+
+
+def _release_client(tmp_path, private_key, transport) -> ModuleCatalogClient:
+    return ModuleCatalogClient(
+        tmp_path,
+        transport=transport,
+        now=lambda: 100.0,
+        keyring={"release-2026": _public_pem(private_key)},
+    )
+
+
+def test_release_catalog_is_fetched_by_exact_tag_and_cached(tmp_path) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    transport = _CatalogTransport(_release_responses(private_key, "1.2.3"))
+    client = _release_client(tmp_path, private_key, transport)
+
+    snapshot = client.get_release_catalog("1.2.3")
+
+    assert snapshot.release_version == "1.2.3"
+    assert snapshot.freshness == "fresh"
+    assert snapshot.catalog["modules"][0]["id"] == "tool.files"
+    expected_calls = [
+        official_release_asset_url("1.2.3", "catalog.json"),
+        official_release_asset_url("1.2.3", "catalog.json.sig"),
+    ]
+    assert transport.calls == expected_calls
+    cache_path = tmp_path / "module-catalog" / "catalog-1.2.3.json"
+    assert cache_path.is_file()
+
+    again = client.get_release_catalog("1.2.3")
+
+    assert again.catalog_bytes == snapshot.catalog_bytes
+    assert again.freshness == "fresh"
+    assert transport.calls == expected_calls
+
+
+def test_release_catalog_older_than_the_latest_cache_is_accepted(tmp_path) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    responses = _release_responses(private_key, "1.3.0")
+    responses.update(
+        {url: body for url, body in _release_responses(private_key, "1.2.3").items() if url != LATEST_RELEASE_URL}
+    )
+    client = _release_client(tmp_path, private_key, _CatalogTransport(responses))
+    assert client.get_catalog().release_version == "1.3.0"
+
+    snapshot = client.get_release_catalog("1.2.3")
+
+    assert snapshot.release_version == "1.2.3"
+    # The pinned request must not disturb what the update check remembers.
+    assert client.get_catalog().release_version == "1.3.0"
+
+
+def test_release_catalog_rejects_a_document_of_another_version(tmp_path) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    foreign = _catalog_bytes("1.3.0")
+    transport = _CatalogTransport(
+        {
+            official_release_asset_url("1.2.3", "catalog.json"): foreign,
+            official_release_asset_url("1.2.3", "catalog.json.sig"): _signature_bytes(private_key, foreign),
+        }
+    )
+    client = _release_client(tmp_path, private_key, transport)
+
+    with pytest.raises(CatalogClientError) as raised:
+        client.get_release_catalog("1.2.3")
+
+    assert raised.value.code == "catalog_release_version_mismatch"
+    assert not (tmp_path / "module-catalog" / "catalog-1.2.3.json").exists()
+
+
+def test_release_catalog_refetches_when_its_cache_file_is_corrupt(tmp_path) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    transport = _CatalogTransport(_release_responses(private_key, "1.2.3"))
+    client = _release_client(tmp_path, private_key, transport)
+    client.get_release_catalog("1.2.3")
+    cache_path = tmp_path / "module-catalog" / "catalog-1.2.3.json"
+    cache_path.write_text("{not json", encoding="utf-8")
+    calls_before = len(transport.calls)
+
+    snapshot = client.get_release_catalog("1.2.3")
+
+    assert snapshot.release_version == "1.2.3"
+    assert len(transport.calls) == calls_before + 2
+    assert json.loads(cache_path.read_text(encoding="utf-8"))["release_version"] == "1.2.3"
+
+
+def test_release_catalog_does_not_trust_a_cache_signed_by_someone_else(tmp_path) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    stranger = Ed25519PrivateKey.generate()
+    transport = _CatalogTransport(_release_responses(private_key, "1.2.3"))
+    client = _release_client(tmp_path, private_key, transport)
+    client.get_release_catalog("1.2.3")
+    cache_path = tmp_path / "module-catalog" / "catalog-1.2.3.json"
+    record = json.loads(cache_path.read_text(encoding="utf-8"))
+    forged = _catalog_bytes("1.2.3", archive_bytes=b"forged")
+    record["catalog"] = base64.b64encode(forged).decode("ascii")
+    record["signature"] = base64.b64encode(_signature_bytes(stranger, forged)).decode("ascii")
+    cache_path.write_text(json.dumps(record), encoding="utf-8")
+
+    snapshot = client.get_release_catalog("1.2.3")
+
+    assert snapshot.catalog["modules"][0]["sha256"] == hashlib.sha256(b"abc").hexdigest()
+
+
+def test_release_catalog_reports_transport_failure_without_a_cache(tmp_path) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    transport = _CatalogTransport(
+        {official_release_asset_url("1.2.3", "catalog.json"): CatalogTransportError("catalog_transport_failed", "offline")}
+    )
+    client = _release_client(tmp_path, private_key, transport)
+
+    with pytest.raises(CatalogClientError) as raised:
+        client.get_release_catalog("1.2.3")
+
+    assert raised.value.code == "catalog_unavailable"
+
+
+@pytest.mark.parametrize("version", ("2.9.2a", "v1.2.3", "1.2", "", "../1.2.3"))
+def test_release_catalog_rejects_a_version_that_is_not_semver(tmp_path, version: str) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    transport = _CatalogTransport({})
+    client = _release_client(tmp_path, private_key, transport)
+
+    with pytest.raises(CatalogClientError) as raised:
+        client.get_release_catalog(version)
+
+    assert raised.value.code == "catalog_release_version_invalid"
+    assert transport.calls == []

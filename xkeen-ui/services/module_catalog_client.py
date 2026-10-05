@@ -364,7 +364,7 @@ class ModuleCatalogClient:
             stale_reason=None,
         )
 
-    def _write_cache(self, snapshot: CatalogSnapshot) -> None:
+    def _write_cache(self, snapshot: CatalogSnapshot, path: Path | None = None) -> None:
         record = {
             "schema_version": 1,
             "catalog": base64.b64encode(snapshot.catalog_bytes).decode("ascii"),
@@ -374,15 +374,16 @@ class ModuleCatalogClient:
             "fetched_at": snapshot.fetched_at,
         }
         try:
-            _atomic_write_json(str(self._cache_path), record, mode=0o600)
+            _atomic_write_json(str(path or self._cache_path), record, mode=0o600)
         except OSError as error:
             raise CatalogClientError("catalog_cache_write_failed", "verified catalog cache could not be written") from error
 
-    def _read_cache(self) -> CatalogSnapshot | None:
-        if not self._cache_path.exists():
+    def _read_cache(self, path: Path | None = None) -> CatalogSnapshot | None:
+        cache_path = path or self._cache_path
+        if not cache_path.exists():
             return None
         try:
-            record = json.loads(self._cache_path.read_text(encoding="utf-8"))
+            record = json.loads(cache_path.read_text(encoding="utf-8"))
             if not isinstance(record, Mapping) or record.get("schema_version") != 1:
                 raise ValueError("unsupported cache record")
             encoded_catalog = record["catalog"]
@@ -471,6 +472,53 @@ class ModuleCatalogClient:
                 "catalog release version is older than the highest verified cache version",
             )
         self._write_cache(snapshot)
+        return snapshot
+
+    def get_release_catalog(self, release_version: str) -> CatalogSnapshot:
+        """Return the catalog of one exact release, the one a panel was built from.
+
+        A module is installed from the release of the running panel, which is
+        not necessarily the latest one. A published release never changes, so
+        its verified catalog is kept without an expiry and the rollback floor
+        of the update check does not apply to it.
+        """
+
+        try:
+            version = validate_semver(release_version, "catalog_release_version")
+        except ModulePackageContractError as error:
+            raise CatalogClientError(error.code, "release version is invalid") from error
+        cache_path = self._cache_path.with_name(f"catalog-{version}.json")
+        try:
+            cached = self._read_cache(cache_path)
+        except CatalogClientError:
+            # Unreadable or no longer verifiable: the release itself is still
+            # there, fetch it again instead of failing on a local file.
+            cached = None
+        if cached is not None and cached.release_version == version:
+            return cached
+        catalog_url = official_release_asset_url(version, "catalog.json")
+        signature_url = official_release_asset_url(version, "catalog.json.sig")
+        try:
+            catalog_bytes = self._transport.fetch_bytes(
+                catalog_url,
+                max_bytes=_MAX_CATALOG_BYTES,
+                policy=_RELEASE_POLICY,
+            )
+            signature_bytes = self._transport.fetch_bytes(
+                signature_url,
+                max_bytes=_MAX_SIGNATURE_BYTES,
+                policy=_RELEASE_POLICY,
+            )
+        except CatalogTransportError as error:
+            raise CatalogClientError("catalog_unavailable", "catalog transport is unavailable") from error
+        snapshot = self._verified_snapshot(
+            catalog_bytes=catalog_bytes,
+            signature_bytes=signature_bytes,
+            release_version=version,
+            catalog_url=catalog_url,
+            fetched_at=float(self._now()),
+        )
+        self._write_cache(snapshot, cache_path)
         return snapshot
 
     def download_verified_archive(
