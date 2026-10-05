@@ -1017,10 +1017,7 @@
         },
         {
           "path": "static/js/features/backups.js",
-          "globals": [
-            "XKeen.ui",
-            "XKeen.ui.editorCapabilities"
-          ],
+          "globals": [],
           "lazy_features": []
         }
       ],
@@ -2570,10 +2567,7 @@
         },
         {
           "path": "static/js/features/mihomo_generator.js",
-          "globals": [
-            "XKeen.ui",
-            "XKeen.ui.editorCapabilities"
-          ],
+          "globals": [],
           "lazy_features": []
         },
         {

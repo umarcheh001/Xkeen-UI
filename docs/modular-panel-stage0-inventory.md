@@ -42,7 +42,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 | `tool.editor` | 25 | 813.5 КБ | 0 | 0 | 2 | да |
 | `tool.terminal` | 49 | 496.5 КБ | 2 | 2 | 2 | да |
 | `tool.files` | 85 | 972.8 КБ | 43 | 1 | 1 | да |
-| `tool.backups` | 12 | 112.7 КБ | 17 | 0 | 1 | да |
+| `tool.backups` | 12 | 112.6 КБ | 17 | 0 | 1 | да |
 | `integration.happ` | 22 | 306.5 КБ | 5 | 0 | 1 | да |
 | `tool.advanced-diagnostics` | 26 | 632.9 КБ | 29 | 0 | 2 | да |
 
