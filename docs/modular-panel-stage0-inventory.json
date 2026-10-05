@@ -36,8 +36,8 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 475,
-      "size_bytes": 6497129,
+      "unit_count": 476,
+      "size_bytes": 6508320,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
@@ -49,7 +49,7 @@
         "frontend_feature": 28,
         "frontend_javascript": 35,
         "frontend_runtime": 2,
-        "frontend_test": 41,
+        "frontend_test": 42,
         "frontend_ui": 17,
         "stylesheet": 5,
         "template": 31
@@ -130,7 +130,7 @@
       ],
       "removable": true,
       "unit_count": 128,
-      "size_bytes": 3068806,
+      "size_bytes": 3070063,
       "kind_counts": {
         "app_runtime": 4,
         "backend_route": 2,
@@ -8293,7 +8293,7 @@
       "module_id": "core",
       "kind": "frontend_javascript",
       "path": "xkeen-ui/static/js/pages/top_level_backups_screen.js",
-      "size_bytes": 4224,
+      "size_bytes": 5481,
       "depends_on": [
         "tool.backups"
       ],
@@ -8319,7 +8319,7 @@
       "module_id": "core",
       "kind": "frontend_javascript",
       "path": "xkeen-ui/static/js/pages/top_level_devtools_screen.js",
-      "size_bytes": 3074,
+      "size_bytes": 4331,
       "depends_on": [
         "tool.advanced-diagnostics"
       ],
@@ -8417,7 +8417,7 @@
       "module_id": "core",
       "kind": "frontend_javascript",
       "path": "xkeen-ui/static/js/pages/top_level_screen_host.shared.js",
-      "size_bytes": 9052,
+      "size_bytes": 11270,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -8489,7 +8489,7 @@
       "module_id": "core",
       "kind": "frontend_javascript",
       "path": "xkeen-ui/static/js/pages/top_level_xkeen_screen.js",
-      "size_bytes": 2987,
+      "size_bytes": 4244,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -9518,6 +9518,24 @@
       "kind": "frontend_test",
       "path": "e2e/subscriptions_pause.spec.mjs",
       "size_bytes": 13696,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "frontend_test",
+      "path": "e2e/top_level_back_before_bundle.spec.mjs",
+      "size_bytes": 5202,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -13705,7 +13723,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_javascript",
       "path": "xkeen-ui/static/js/pages/top_level_mihomo_generator_screen.js",
-      "size_bytes": 3068,
+      "size_bytes": 4325,
       "depends_on": [
         "core",
         "tool.editor"

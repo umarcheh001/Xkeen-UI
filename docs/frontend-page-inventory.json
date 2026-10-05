@@ -56,6 +56,11 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/pages/top_level_nav.shared.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
           "path": "static/js/pages/top_level_backups_screen.js",
           "globals": [],
           "lazy_features": []
@@ -288,11 +293,6 @@
         },
         {
           "path": "static/js/pages/panel.core_ui_watch.runtime.js",
-          "globals": [],
-          "lazy_features": []
-        },
-        {
-          "path": "static/js/pages/top_level_nav.shared.js",
           "globals": [],
           "lazy_features": []
         },
@@ -664,6 +664,11 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/pages/top_level_nav.shared.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
           "path": "static/js/pages/top_level_backups_screen.js",
           "globals": [],
           "lazy_features": []
@@ -1012,11 +1017,6 @@
           "path": "static/js/features/backups.js",
           "globals": [],
           "lazy_features": []
-        },
-        {
-          "path": "static/js/pages/top_level_nav.shared.js",
-          "globals": [],
-          "lazy_features": []
         }
       ],
       "direct_init_globals": [],
@@ -1164,6 +1164,11 @@
           "globals": [
             "XKeen.pageConfig"
           ],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_nav.shared.js",
+          "globals": [],
           "lazy_features": []
         },
         {
@@ -1626,11 +1631,6 @@
           "lazy_features": []
         },
         {
-          "path": "static/js/pages/top_level_nav.shared.js",
-          "globals": [],
-          "lazy_features": []
-        },
-        {
           "path": "static/js/features/compat/devtools.js",
           "globals": [
             "XKeen.features"
@@ -1795,6 +1795,11 @@
           "globals": [
             "XKeen.pageConfig"
           ],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_nav.shared.js",
+          "globals": [],
           "lazy_features": []
         },
         {
@@ -2098,11 +2103,6 @@
         },
         {
           "path": "static/js/features/xkeen_texts.js",
-          "globals": [],
-          "lazy_features": []
-        },
-        {
-          "path": "static/js/pages/top_level_nav.shared.js",
           "globals": [],
           "lazy_features": []
         }
