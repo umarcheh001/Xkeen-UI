@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 import urllib.error
 import urllib.request
@@ -16,7 +17,7 @@ from .extract import extract_payload
 from .install_state import rebuild_frontend_manifests, state_file_updates
 from .journal import Journal
 from .plan import load_ownership_map
-from .state import ModuleTransactionError, write_status
+from .state import ModuleTransactionError, pid_alive, read_status, write_status
 
 
 class OperationCancelled(ModuleTransactionError):
@@ -207,3 +208,80 @@ def run_operation(
                 unresponsive = True
         journal.commit()
         return finish("rolled_back", error, panel_unresponsive=unresponsive)
+
+
+_UNTOUCHED_STEPS = frozenset({"prepared", "downloading", "verifying"})
+
+
+def recover(panel_root: Path, state_dir: Path) -> str | None:
+    """Finish an operation nobody is running any more; ``None`` when there is none.
+
+    Runs before the panel starts (the init script, the installer) and before
+    a new operation. An operation that was not confirmed counts as not done:
+    its changes are undone. The panel is neither restarted nor waited for
+    here - the caller is about to start it.
+    """
+
+    panel_root = Path(panel_root)
+    operation_dir = Journal.find(panel_root)
+    if operation_dir is None:
+        return None
+    try:
+        journal = Journal.open(operation_dir)
+        readable = True
+    except ModuleTransactionError:
+        journal = Journal.salvage(operation_dir, panel_root)
+        readable = False
+    meta = journal.meta()
+    pid = meta.get("pid")
+    if pid and pid != os.getpid() and pid_alive(pid):
+        # The runner restarts the panel through the init script, which calls
+        # this function: a live operation must not be undone under its feet.
+        return None
+
+    operation_id = meta.get("operation_id") or operation_dir.name
+    status = read_status(state_dir)
+    if status.get("operation_id") != operation_id:
+        status = {
+            "operation_id": operation_id,
+            "operation": journal.plan.operation if readable else None,
+            "module_id": journal.plan.module_id if readable else None,
+            "version": journal.plan.version if readable else None,
+            "error_code": None,
+            "error": None,
+            "started_at": meta.get("started_at"),
+            "log": [],
+        }
+    status["recovered"] = True
+    status["finished_at"] = time.time()
+    step = meta.get("step")
+
+    if readable and step == "committed":
+        journal.commit()
+        result = "committed"
+    elif readable and step in _UNTOUCHED_STEPS:
+        journal.commit()
+        result = "interrupted"
+    else:
+        try:
+            journal.rollback()
+        except ModuleTransactionError as failure:
+            status.update(
+                result="rollback_failed",
+                failed_path=failure.details.get("path"),
+                failed_error=failure.details.get("error"),
+            )
+            if not status.get("error_code"):
+                status["error_code"] = "operation_interrupted"
+            write_status(state_dir, status)
+            return "rollback_failed"
+        journal.commit()
+        # Without a readable record there is no telling how far it went.
+        result = "rolled_back" if readable else "interrupted"
+        status.pop("failed_path", None)
+        status.pop("failed_error", None)
+    if result != "committed" and not status.get("error_code"):
+        status["error_code"] = "operation_interrupted"
+    status["result"] = result
+    write_status(state_dir, status)
+    return result

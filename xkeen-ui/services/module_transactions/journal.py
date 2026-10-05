@@ -71,6 +71,20 @@ class Journal:
             raise ModuleTransactionError("operation_journal_invalid", "the operation record cannot be read") from error
         return cls(operation_dir, panel_root, plan, meta)
 
+    @classmethod
+    def salvage(cls, operation_dir: Path, panel_root: Path) -> "Journal":
+        """Open an operation whose record is unreadable, for the undo alone.
+
+        The undo needs only the action log and the kept copies, so a damaged
+        ``operation.json`` must not leave the panel half replaced.
+        """
+
+        plan = Plan(
+            operation="repair", module_id="", version="", files_add=(), files_remove=(),
+            archive=None, required_free_bytes=0, restart_required=False, installed_after=(),
+        )
+        return cls(Path(operation_dir), Path(panel_root), plan, {"schema_version": 1, "step": None, "pid": None})
+
     @staticmethod
     def find(panel_root: Path) -> Path | None:
         """The directory of the unfinished operation, if there is one."""

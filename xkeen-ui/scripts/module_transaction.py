@@ -1,0 +1,173 @@
+#!/usr/bin/env python3
+"""Run or finish one module operation of the panel, outside the panel process.
+
+    module_transaction.py run     --panel-root DIR --state-dir DIR --operation ID
+    module_transaction.py recover --panel-root DIR --state-dir DIR
+    module_transaction.py status  --state-dir DIR
+
+``run`` is started by the panel for an operation it has already planned.
+``recover`` is called by the init script and by the installer: it undoes an
+operation whose runner is gone (a power cut, a kill) and does nothing when
+there is none or when it is still running.
+
+Exit codes: 0 - done, undone cleanly, or nothing to do; 1 - the operation did
+not happen or its undo failed; 2 - wrong call.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import signal
+import subprocess
+import sys
+from pathlib import Path
+
+
+PANEL_DIR = Path(__file__).resolve().parents[1]
+if str(PANEL_DIR) not in sys.path:
+    sys.path.insert(0, str(PANEL_DIR))
+
+from services.module_catalog_client import ModuleCatalogClient  # noqa: E402
+from services.module_package_contract import detect_platform_architecture  # noqa: E402
+from services.module_transactions.executor import OperationCancelled, recover, run_operation, wait_for_panel  # noqa: E402
+from services.module_transactions.journal import Journal  # noqa: E402
+from services.module_transactions.state import (  # noqa: E402
+    ModuleTransactionError,
+    read_status,
+    transactions_root,
+    write_status,
+)
+from services.self_update.state import get_update_paths, try_acquire_lock  # noqa: E402
+
+
+DEFAULT_HEALTH_TIMEOUT_S = 120.0
+RESTART_TIMEOUT_S = 180.0
+
+
+def _health_timeout() -> float:
+    try:
+        value = float(os.environ.get("XKEEN_UI_MODULE_TX_HEALTH_TIMEOUT") or DEFAULT_HEALTH_TIMEOUT_S)
+    except ValueError:
+        return DEFAULT_HEALTH_TIMEOUT_S
+    return value if value > 0 else DEFAULT_HEALTH_TIMEOUT_S
+
+
+def _default_client(state_dir: Path, architecture: str, version: str) -> ModuleCatalogClient:
+    return ModuleCatalogClient(state_dir, platform_architecture=architecture, core_version=version)
+
+
+def _run(args, *, client_factory, architecture, on_step) -> int:
+    panel_root, state_dir = Path(args.panel_root), Path(args.state_dir)
+    operation_dir = transactions_root(panel_root) / args.operation
+    try:
+        journal = Journal.open(operation_dir)
+    except ModuleTransactionError:
+        print(f"module operation {args.operation} is not prepared in {operation_dir.parent}", file=sys.stderr)
+        return 2
+    meta = journal.meta()
+    plan = journal.plan
+
+    lock_file = get_update_paths(str(state_dir))["lock_file"]
+    acquired, _ = try_acquire_lock(lock_file)
+    if not acquired:
+        # A panel update or another operation owns the tree right now.
+        journal.commit()
+        write_status(
+            state_dir,
+            {
+                **read_status(state_dir),
+                "operation_id": meta.get("operation_id"),
+                "operation": plan.operation,
+                "module_id": plan.module_id,
+                "result": "interrupted",
+                "error_code": "operation_in_progress",
+                "error": "the panel tree is being changed by another operation",
+            },
+        )
+        return 1
+    try:
+        journal.set_pid(os.getpid())
+
+        def cancel(_signum, _frame) -> None:
+            raise OperationCancelled()
+
+        signal.signal(signal.SIGTERM, cancel)
+
+        restart_cmd = [str(part) for part in (meta.get("restart_cmd") or [])]
+        health_url = str(meta.get("health_url") or "")
+
+        def restart() -> None:
+            if not restart_cmd:
+                raise ModuleTransactionError("operation_restart_failed", "the operation has no restart command")
+            subprocess.run(
+                restart_cmd,
+                check=True,
+                timeout=RESTART_TIMEOUT_S,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+
+        def wait_healthy(phase: str) -> bool:
+            return wait_for_panel(
+                health_url,
+                state_dir,
+                plan.module_id,
+                plan.operation,
+                timeout_s=_health_timeout(),
+                check_module=phase == "operation",
+            )
+
+        resolved_architecture = architecture or detect_platform_architecture()
+        result = run_operation(
+            journal,
+            state_dir=state_dir,
+            client=client_factory(state_dir, resolved_architecture, plan.version),
+            architecture=resolved_architecture,
+            restart=restart,
+            wait_healthy=wait_healthy,
+            on_step=on_step,
+        )
+    finally:
+        try:
+            os.remove(lock_file)
+        except OSError:
+            pass
+    return 0 if result in ("committed", "rolled_back") else 1
+
+
+def _recover(args) -> int:
+    result = recover(Path(args.panel_root), Path(args.state_dir))
+    return 1 if result in ("interrupted", "rollback_failed") else 0
+
+
+def _status(args) -> int:
+    print(json.dumps(read_status(Path(args.state_dir)), ensure_ascii=False, indent=2))
+    return 0
+
+
+def main(argv=None, *, client_factory=None, architecture=None, on_step=None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    commands = parser.add_subparsers(dest="command", required=True)
+    run = commands.add_parser("run")
+    run.add_argument("--panel-root", required=True)
+    run.add_argument("--state-dir", required=True)
+    run.add_argument("--operation", required=True)
+    again = commands.add_parser("recover")
+    again.add_argument("--panel-root", required=True)
+    again.add_argument("--state-dir", required=True)
+    status = commands.add_parser("status")
+    status.add_argument("--state-dir", required=True)
+    args = parser.parse_args(argv)
+
+    if args.command == "run":
+        return _run(args, client_factory=client_factory or _default_client, architecture=architecture, on_step=on_step)
+    if args.command == "recover":
+        return _recover(args)
+    return _status(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
