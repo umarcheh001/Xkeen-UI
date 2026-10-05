@@ -3,6 +3,8 @@
 // The server announces only stable bundle keys. Import factories live here so
 // persisted module state can never turn into an executable browser specifier.
 
+import { toastXkeen } from '../features/xkeen_runtime.js';
+
 const BUNDLE_LOADERS = Object.freeze({
   'panel-core': () => Promise.resolve({}),
   'panel-routing': () => import('./panel.routing.bundle.js'),
@@ -17,13 +19,40 @@ const BUNDLE_LOADERS = Object.freeze({
   'editor-enhancements': () => import('./panel.editor.enhancements.bundle.js'),
 });
 
+// A browser keeps a failed module fetch in its module map, so importing the
+// same specifier again never reaches the network. A retry therefore asks for
+// the bundle entry under a fresh query string; the keys and files here mirror
+// BUNDLE_LOADERS.
+const BUNDLE_SOURCES = Object.freeze({
+  'panel-routing': './panel.routing.bundle.js',
+  'panel-mihomo': './panel.mihomo.bundle.js',
+  'terminal-lazy': './terminal.lazy.entry.js',
+  'file-manager-lazy': './file_manager.lazy.entry.js',
+  'diagnostics-panel': './panel.diagnostics.bundle.js',
+  'editor-runtime': './panel.editor.bundle.js',
+  'editor-codemirror': './panel.editor.codemirror.bundle.js',
+  'editor-monaco': './panel.editor.monaco.bundle.js',
+  'editor-diff': './panel.editor.diff.bundle.js',
+  'editor-enhancements': './panel.editor.enhancements.bundle.js',
+});
+
 const STYLE_URLS = Object.freeze({
   xterm: new URL('../../xterm/xterm.css', import.meta.url).href,
 });
 
+// The link to a router drops for a few seconds whenever the proxy core
+// restarts, so a bundle that failed to download is asked for again: twice on
+// its own, and then on every later request instead of staying dead until the
+// page is reloaded. A file deeper in the bundle that failed stays failed in
+// the browser, which is why the notice also mentions reloading the page.
+const LOAD_RETRY_DELAYS_MS = Object.freeze([1500, 4000]);
+const FAILURE_NOTICE_GAP_MS = 8000;
+
 const modulePromises = Object.create(null);
 const moduleResults = Object.create(null);
 const reportedFailures = new Set();
+const failureNoticeAt = Object.create(null);
+const loadAttempts = Object.create(null);
 const stylePromises = Object.create(null);
 
 function getPageConfig() {
@@ -84,6 +113,44 @@ function reportFailureOnce(key, error) {
   try { console.error('[XKeen] panel module failed:', normalized, error); } catch (secondaryError) {}
 }
 
+export function notifyPanelLoadFailure(key) {
+  const normalized = String(key || '');
+  const now = Date.now();
+  if (failureNoticeAt[normalized] && (now - failureNoticeAt[normalized]) < FAILURE_NOTICE_GAP_MS) return;
+  failureNoticeAt[normalized] = now;
+  try {
+    toastXkeen('Не удалось загрузить часть панели. Проверьте связь с роутером и повторите действие; если не поможет — обновите страницу.', 'error');
+  } catch (error) {}
+}
+
+function wait(delayMs) {
+  return new Promise((resolve) => { setTimeout(resolve, delayMs); });
+}
+
+function importBundle(key, load) {
+  const attempt = loadAttempts[key] || 0;
+  loadAttempts[key] = attempt + 1;
+  const source = BUNDLE_SOURCES[key];
+  if (!attempt || !source) return load();
+  const url = new URL(source, import.meta.url);
+  url.searchParams.set('xk-retry', String(attempt));
+  return import(/* @vite-ignore */ url.href);
+}
+
+async function loadWithRetry(key, load) {
+  let lastError = null;
+  for (let attempt = 0; attempt <= LOAD_RETRY_DELAYS_MS.length; attempt += 1) {
+    if (attempt > 0) await wait(LOAD_RETRY_DELAYS_MS[attempt - 1]);
+    try {
+      await ensurePanelModuleStyles(key);
+      return await importBundle(key, load);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
 function ensureModuleStyle(cssKey) {
   const key = String(cssKey || '');
   const href = STYLE_URLS[key];
@@ -103,7 +170,11 @@ function ensureModuleStyle(cssKey) {
     link.href = href;
     link.dataset.xkModuleCss = key;
     link.addEventListener('load', () => resolve(true), { once: true });
-    link.addEventListener('error', () => reject(new Error(`failed to load module stylesheet: ${key}`)), { once: true });
+    link.addEventListener('error', () => {
+      // A dead link left in the page would pass for a loaded stylesheet.
+      link.remove();
+      reject(new Error(`failed to load module stylesheet: ${key}`));
+    }, { once: true });
     document.head.appendChild(link);
   }).catch((error) => {
     delete stylePromises[key];
@@ -161,19 +232,23 @@ export async function ensurePanelModule(key, reason = '') {
     return failed;
   }
 
-  modulePromises[normalized] = Promise.resolve()
-    .then(() => ensurePanelModuleStyles(normalized))
-    .then(() => load())
-    .then((mod) => activateBundle(normalized, descriptor, mod, reason))
-    .then((loaded) => {
+  modulePromises[normalized] = loadWithRetry(normalized, load)
+    .then((mod) => activateBundle(normalized, descriptor, mod, reason).then((loaded) => {
       moduleResults[normalized] = loaded;
       return loaded;
-    })
-    .catch((error) => {
+    }, (error) => {
+      // The code arrived and broke while starting: asking again would run a
+      // half-initialised bundle twice, so this failure stays.
       const failed = result('failed', normalized);
       moduleResults[normalized] = failed;
       reportFailureOnce(normalized, error);
+      notifyPanelLoadFailure(normalized);
       return failed;
+    }), (error) => {
+      // Nothing was cached, the next request downloads the bundle again.
+      reportFailureOnce(normalized, error);
+      notifyPanelLoadFailure(normalized);
+      return result('failed', normalized);
     })
     .finally(() => {
       delete modulePromises[normalized];

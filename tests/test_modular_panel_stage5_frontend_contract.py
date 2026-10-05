@@ -73,6 +73,22 @@ def test_loader_uses_a_local_allowlist_not_server_import_specifiers():
     assert "frontendModules" in source
 
 
+def test_loader_retries_every_bundle_under_a_fresh_url():
+    # A browser remembers a failed module fetch, so a retry must use another
+    # URL; a bundle missing from the retry table would stay dead after a
+    # dropped link until the page is reloaded.
+    source = (PAGES / "panel.module_loader.js").read_text(encoding="utf-8")
+
+    loaders = dict(re.findall(r"'([a-z-]+)': \(\) => import\('([^']+)'\)", source))
+    retry_block = source.split("const BUNDLE_SOURCES = Object.freeze({", 1)[1].split("});", 1)[0]
+    sources = dict(re.findall(r"'([a-z-]+)': '([^']+)'", retry_block))
+
+    assert loaders and sources == loaders
+    assert "url.searchParams.set('xk-retry'" in source
+    assert "moduleResults[normalized] = failed" in source
+    assert source.count("moduleResults[normalized] = failed") == 2  # unknown key, broken start
+
+
 def test_panel_bootstrap_delegates_engine_bundles_to_loader():
     source = (PAGES / "panel.screen.bootstrap.js").read_text(encoding="utf-8")
 

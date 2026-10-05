@@ -1,4 +1,4 @@
-import { ensurePanelModule, getPanelModuleApi } from './panel.module_loader.js';
+import { ensurePanelModule, getPanelModuleApi, notifyPanelLoadFailure } from './panel.module_loader.js';
 import {
   getXkeenGithubRepoUrl,
   getXkeenLazyRuntimeApi,
@@ -263,6 +263,9 @@ export function ensurePanelLazyFeature(name, options = null) {
       })
       .catch((error) => {
         try { console.error('[XKeen] panel lazy feature failed:', key, error); } catch (secondaryError) {}
+        // The press that asked for this feature is dropped by the callers,
+        // so say why nothing happened.
+        notifyPanelLoadFailure(key);
         panelFeatureReady[key] = false;
         return false;
       })
