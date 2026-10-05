@@ -36,13 +36,13 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 443,
-      "size_bytes": 6196562,
+      "unit_count": 444,
+      "size_bytes": 6201755,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
         "backend_service": 57,
-        "backend_test": 188,
+        "backend_test": 189,
         "configuration": 10,
         "frontend_bundle": 9,
         "frontend_entrypoint": 2,
@@ -3818,6 +3818,24 @@
       "kind": "backend_test",
       "path": "tests/test_installer_precompressed_mtimes.py",
       "size_bytes": 2861,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_installer_profile_frontend_closure.py",
+      "size_bytes": 5193,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
