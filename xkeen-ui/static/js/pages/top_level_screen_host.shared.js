@@ -1,4 +1,5 @@
 import { ensureXkeenRoot } from '../features/xkeen_runtime.js';
+import { wireTopLevelNavigation } from './top_level_nav.shared.js';
 
 const MOUNT_ID = 'xk-top-level-screen-mount';
 const GLOBAL_BODY_NODE_IDS = new Set(['xk-tooltip-portal']);
@@ -292,7 +293,65 @@ export function attachScreenRoot(snapshot) {
     mount.appendChild(root);
   }
   root.hidden = false;
+  // The markup of a screen is shown before its scripts arrive, and on a router
+  // that takes seconds. Its navigation links must work from the first moment:
+  // an unwired "Back" is a plain link and reloads the whole panel from scratch.
+  try { wireTopLevelNavigation(root); } catch (error) {}
   return true;
+}
+
+// A screen shows its markup at once and starts its scripts after that. The
+// router runs transitions one after another, so a screen that made it wait
+// for those scripts also made the user wait to leave: "Back" did nothing
+// until scripts nobody needed any more had finished loading. The start of a
+// screen therefore runs beside the router, and this keeps track of whether
+// the visit it belongs to is still the current one.
+export function createScreenActivationTracker() {
+  let visit = 0;
+  let active = false;
+  let pending = null;
+
+  return {
+    // Runs `work(isCurrent)` without making the caller wait for it.
+    start(work, onFailure) {
+      visit += 1;
+      active = true;
+      const ticket = visit;
+      const isCurrent = () => active && ticket === visit;
+      const run = Promise.resolve()
+        .then(() => work(isCurrent))
+        .catch((error) => {
+          if (isCurrent() && typeof onFailure === 'function') onFailure(error);
+        })
+        .then(() => {
+          if (pending === run) pending = null;
+        });
+      pending = run;
+      return run;
+    },
+    // The screen is being left; true when its start has not finished yet.
+    leave() {
+      const unfinished = !!pending;
+      active = false;
+      visit += 1;
+      return unfinished;
+    },
+    isActive() {
+      return active;
+    },
+  };
+}
+
+// What the router did when a screen failed to start while it still waited
+// for it: load the page the ordinary way.
+export function recoverScreenActivationFailure(context, error) {
+  try { console.error('[XKeen] top-level screen failed to start', error); } catch (secondaryError) {}
+  try {
+    const router = context && context.router;
+    if (router && typeof router.hardNavigate === 'function' && context.route) {
+      router.hardNavigate(context.route, true);
+    }
+  } catch (secondaryError) {}
 }
 
 export function detachScreenRoot(snapshot) {
