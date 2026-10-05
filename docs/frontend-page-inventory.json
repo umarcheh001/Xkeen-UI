@@ -974,9 +974,13 @@
           "lazy_features": []
         },
         {
-          "path": "static/js/ui/monaco_loader.js",
+          "path": "static/js/runtime/standalone_lazy.js",
           "globals": [
-            "XKeen.monacoLoader"
+            "XKeen.runtime",
+            "XKeen.runtime.lazy",
+            "XKeen.pageConfig",
+            "XKeen.pageConfig.frontendModules",
+            "XKeen.pageConfig.frontendModules.editor"
           ],
           "lazy_features": []
         },
@@ -1099,6 +1103,8 @@
         "XKeen.ui.applyTheme",
         "XKeen.ui.initThemeToggle",
         "XKeen.ui.syncThemeToggleButtons",
+        "XKeen.pageConfig.frontendModules",
+        "XKeen.pageConfig.frontendModules.editor",
         "XKeen.ui.showGlobalXkeenSpinner",
         "XKeen.ui.hideGlobalXkeenSpinner",
         "XKeen.ui.showXrayPreflightError",
@@ -2434,53 +2440,14 @@
           "lazy_features": []
         },
         {
-          "path": "static/js/pages/editor_monaco.shared.js",
-          "globals": [],
-          "lazy_features": []
-        },
-        {
-          "path": "static/js/ui/monaco_loader.js",
+          "path": "static/js/runtime/standalone_lazy.js",
           "globals": [
-            "XKeen.monacoLoader"
+            "XKeen.runtime",
+            "XKeen.runtime.lazy",
+            "XKeen.pageConfig",
+            "XKeen.pageConfig.frontendModules",
+            "XKeen.pageConfig.frontendModules.editor"
           ],
-          "lazy_features": []
-        },
-        {
-          "path": "static/js/ui/monaco_shared.js",
-          "globals": [
-            "XKeen.ui",
-            "XKeen.ui.monacoShared",
-            "XKeen.monacoLoader",
-            "XKeen.monacoLoader.ensureMonaco",
-            "XKeen.ui.settings",
-            "XKeen.ui.toast",
-            "XKeen.ui.editorEngine"
-          ],
-          "lazy_features": []
-        },
-        {
-          "path": "static/js/vendor/monaco_github_themes.js",
-          "globals": [],
-          "lazy_features": []
-        },
-        {
-          "path": "static/js/vendor/codemirror_json_schema.js",
-          "globals": [],
-          "lazy_features": []
-        },
-        {
-          "path": "static/js/ui/schema_semantic_validation.js",
-          "globals": [],
-          "lazy_features": []
-        },
-        {
-          "path": "static/js/ui/yaml_schema.js",
-          "globals": [],
-          "lazy_features": []
-        },
-        {
-          "path": "static/js/ui/schema_diagnostic_format.js",
-          "globals": [],
           "lazy_features": []
         },
         {
@@ -2722,7 +2689,9 @@
         "XKeen.ui.operatorIcons.html",
         "XKeen.ui.diff.openForScope",
         "XKeen.ui.editorLinks",
-        "XKeen.monacoLoader.ensureMonaco",
+        "XKeen.pageConfig",
+        "XKeen.pageConfig.frontendModules",
+        "XKeen.pageConfig.frontendModules.editor",
         "XKeen.core.dom",
         "XKeen.core.storage",
         "XKeen.ui.modal",
@@ -2735,8 +2704,7 @@
         "XKeen.util.commandJob",
         "XKeen.ui.showGlobalXkeenSpinner",
         "XKeen.ui.hideGlobalXkeenSpinner",
-        "XKeen.ui.showXrayPreflightError",
-        "XKeen.pageConfig"
+        "XKeen.ui.showXrayPreflightError"
       ],
       "all_bootstrap_lazy_features": [],
       "lazy_runtime_inventory": null
