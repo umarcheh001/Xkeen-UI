@@ -37,7 +37,7 @@
       ],
       "removable": false,
       "unit_count": 452,
-      "size_bytes": 6305221,
+      "size_bytes": 6305385,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
@@ -175,7 +175,7 @@
       ],
       "removable": true,
       "unit_count": 25,
-      "size_bytes": 832798,
+      "size_bytes": 833048,
       "kind_counts": {
         "frontend_javascript": 3,
         "frontend_ui": 22
@@ -422,7 +422,7 @@
       "module_id": "core",
       "kind": "app_runtime",
       "path": "xkeen-ui/app_factory.py",
-      "size_bytes": 34708,
+      "size_bytes": 34867,
       "depends_on": [
         "engine.mihomo",
         "engine.xray",
@@ -1590,7 +1590,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/dns_service_lifecycle.py",
-      "size_bytes": 3951,
+      "size_bytes": 3956,
       "depends_on": [
         "engine.mihomo"
       ],
@@ -19313,7 +19313,7 @@
       "module_id": "tool.editor",
       "kind": "frontend_ui",
       "path": "xkeen-ui/static/js/ui/json_editor_modal.js",
-      "size_bytes": 47322,
+      "size_bytes": 47572,
       "depends_on": [
         "core",
         "engine.xray"
@@ -28918,7 +28918,7 @@
       "evidence": {
         "tool.editor": {
           "unit_count": 25,
-          "size_bytes": 832798
+          "size_bytes": 833048
         },
         "tool.terminal": {
           "unit_count": 49,
