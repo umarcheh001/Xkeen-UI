@@ -7,8 +7,8 @@ import pytest
 
 from services.router_modem_control import (
     MAX_OPERATION_ENTRIES,
+    MODEM_PROBE_DEADLINE_SECONDS,
     OPERATION_RETENTION_SECONDS,
-    RESET_START_PROBE_DEADLINE_SECONDS,
     ModemControlError,
     ModemControlService,
     validate_modem_id,
@@ -227,6 +227,34 @@ def test_probe_reports_missing_qmi_tool_without_raw_exception(rci_fetcher):
     assert "/secret" not in repr(result)
 
 
+def test_probe_stops_tty_fallback_before_browser_request_timeout(rci_fetcher):
+    now = [100.0]
+    tty_paths = [f"/dev/ttyUSB{index}" for index in range(8)]
+    tty_calls = []
+
+    def missing_tool(_argv, **_kwargs):
+        raise FileNotFoundError("qmicli")
+
+    def tty_exchange(path, command, *, timeout):
+        tty_calls.append((path, command, timeout))
+        now[0] += timeout
+        return "AT\r\nOK\r\n" if command == "AT" else "AT+CGSN\r\n111111111111111\r\nOK\r\n"
+
+    service = ModemControlService(
+        rci_fetcher=rci_fetcher,
+        device_enumerator=lambda: {"qmi": ["/dev/cdc-wdm1"], "tty": tty_paths},
+        runner=missing_tool,
+        tty_exchange=tty_exchange,
+        clock=lambda: now[0],
+    )
+
+    result = service.probe("UsbQmi1")
+
+    assert result["code"] == "qmi_tool_missing"
+    assert now[0] - 100.0 <= MODEM_PROBE_DEADLINE_SECONDS
+    assert not any(path.endswith("7") for path, _command, _timeout in tty_calls)
+
+
 def test_probe_maps_qmi_nonzero_to_stable_safe_code(transports):
     def failed_probe(argv, **kwargs):
         assert "--dms-get-ids" in argv
@@ -348,7 +376,7 @@ def test_reset_probe_stops_before_late_matching_transport_after_deadline(rci_fet
 
     assert exc_info.value.code == "transport_not_matched"
     assert workers == []
-    assert now[0] - 100.0 <= RESET_START_PROBE_DEADLINE_SECONDS
+    assert now[0] - 100.0 <= MODEM_PROBE_DEADLINE_SECONDS
     assert not any(path.endswith("5") for path, _command, _timeout in tty_calls)
     assert all(timeout <= 3.0 for _path, _command, timeout in tty_calls)
 

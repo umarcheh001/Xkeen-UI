@@ -33,10 +33,10 @@ IMEI_RE = re.compile(r"(?<!\d)(\d{14,17})(?!\d)")
 TERMINAL_STATES = frozenset({"recovered", "failed", "timed_out"})
 
 PROBE_TIMEOUT_SECONDS = 3.0
-# The reset endpoint is called synchronously before a background operation is
-# queued. Keep that identity check comfortably below the browser request
-# timeout even when the router exposes many stale transport candidates.
-RESET_START_PROBE_DEADLINE_SECONDS = 12.0
+# Both the probe endpoint and reset preflight run synchronously in the browser
+# request. Keep identity checks below the browser timeout even when the router
+# exposes many stale transport candidates.
+MODEM_PROBE_DEADLINE_SECONDS = 12.0
 RESET_TIMEOUT_SECONDS = 30.0
 RECOVERY_POLL_SECONDS = 1.0
 OPERATION_RETENTION_SECONDS = 15 * 60
@@ -410,7 +410,10 @@ class ModemControlService:
 
     def probe(self, modem_id: str) -> dict[str, Any]:
         modem_id = validate_modem_id(modem_id)
-        return self._probe_internal(modem_id)[0]
+        return self._probe_internal(
+            modem_id,
+            deadline=self._clock() + MODEM_PROBE_DEADLINE_SECONDS,
+        )[0]
 
     def _replace(self, operation_id: str, **changes: Any) -> None:
         with self._lock:
@@ -555,7 +558,7 @@ class ModemControlService:
             raise ModemControlError("modem_confirmation_mismatch")
         probe, target = self._probe_internal(
             modem_id,
-            deadline=self._clock() + RESET_START_PROBE_DEADLINE_SECONDS,
+            deadline=self._clock() + MODEM_PROBE_DEADLINE_SECONDS,
         )
         if target is None:
             raise ModemControlError(str(probe.get("code") or "transport_not_matched"))
@@ -607,6 +610,7 @@ class ModemControlService:
 
 __all__ = [
     "MAX_OPERATION_ENTRIES",
+    "MODEM_PROBE_DEADLINE_SECONDS",
     "ModemControlError",
     "ModemControlProbe",
     "ModemControlService",
