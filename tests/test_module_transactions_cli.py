@@ -455,3 +455,53 @@ def test_recover_after_a_reboot_ignores_a_reused_pid(stand, monkeypatch) -> None
 
     assert recover(stand.panel.root, stand.panel.state) == "rolled_back"
     assert changed_paths(before, snapshot(stand.panel.root)) <= BOOKKEEPING
+
+
+def _shipped(stand, command: str, *, state: bool = True) -> subprocess.CompletedProcess:
+    args = [sys.executable, str(SHIPPED), command, "--panel-root", str(stand.panel.root)]
+    if state:
+        args += ["--state-dir", str(stand.panel.state)]
+    return subprocess.run(args, capture_output=True, text=True, timeout=120)
+
+
+def test_busy_answers_three_only_while_an_operation_is_carried(stand) -> None:
+    assert _shipped(stand, "busy", state=False).returncode == 0
+
+    journal = _prepare(stand)
+    # Recorded a moment ago: its runner may not have reported yet.
+    assert _shipped(stand, "busy", state=False).returncode == 3
+
+    journal.set_pid(_other_live_pid())
+    journal.set_step("applying")
+    assert _shipped(stand, "busy", state=False).returncode == 3
+
+
+def test_busy_does_not_hold_the_installer_for_a_dead_operation(stand) -> None:
+    journal = _prepare(stand)
+    _runner(stand, "run", "--fail-at", "applying", operation_id=journal.meta()["operation_id"])
+
+    assert _shipped(stand, "busy", state=False).returncode == 0
+
+
+def test_forget_drops_the_leftovers_and_closes_the_record(stand) -> None:
+    journal = _prepare(stand)
+    _runner(stand, "run", "--fail-at", "state", operation_id=journal.meta()["operation_id"])
+    assert read_status(stand.panel.state)["result"] == "running"
+
+    assert _shipped(stand, "forget").returncode == 0
+
+    assert not transactions_root(stand.panel.root).exists()
+    status = read_status(stand.panel.state)
+    assert status["result"] == "interrupted"
+    assert status["error_code"] == "operation_superseded"
+    assert status["finished_at"]
+
+
+def test_forget_keeps_the_record_of_a_finished_operation(stand) -> None:
+    journal = _prepare(stand)
+    assert _runner(stand, "run", operation_id=journal.meta()["operation_id"]).returncode == 0
+    finished = read_status(stand.panel.state)
+
+    assert _shipped(stand, "forget").returncode == 0
+
+    assert read_status(stand.panel.state) == finished

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import tarfile
 from pathlib import Path, PurePosixPath
@@ -52,6 +53,9 @@ def extract_payload(archive: Path, destination: Path, only: Collection[str]) -> 
                 target.parent.mkdir(parents=True, exist_ok=True)
                 with stream, open(target, "wb") as output:
                     shutil.copyfileobj(stream, output)
+                # Only the executable bit is taken from the archive: a script
+                # of the module has to stay runnable, nothing else is trusted.
+                os.chmod(target, 0o755 if member.mode & 0o111 else 0o644)
                 extracted.append(relative)
     except ModuleTransactionError:
         raise

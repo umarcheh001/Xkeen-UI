@@ -4,6 +4,8 @@
     module_transaction.py run     --panel-root DIR --state-dir DIR --operation ID
     module_transaction.py recover --panel-root DIR --state-dir DIR
     module_transaction.py status  --state-dir DIR
+    module_transaction.py busy    --panel-root DIR
+    module_transaction.py forget  --panel-root DIR --state-dir DIR
 
 ``run`` is started by the panel for an operation it has already planned.
 ``recover`` is called by the init script and by the installer: it undoes an
@@ -13,7 +15,10 @@ there is none or when it is still running.
 Exit codes of ``run``: 0 - done or undone cleanly; 1 - the operation did not
 happen or its undo failed; 2 - wrong call. ``recover`` answers 1 only when
 the previous files could not be put back: an operation cancelled cleanly is
-not a failure.
+not a failure. ``busy`` answers 3 while an operation is being carried and 0
+otherwise: the installer asks before it lays its own files. ``forget`` is for
+the installer that has just replaced every managed file from its archive:
+whatever an operation left behind no longer describes the panel.
 """
 
 from __future__ import annotations
@@ -21,9 +26,11 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 
@@ -43,6 +50,7 @@ from services.self_update.state import get_update_paths, try_acquire_lock  # noq
 
 
 DEFAULT_HEALTH_TIMEOUT_S = 120.0
+BUSY_EXIT_CODE = 3
 RESTART_TIMEOUT_S = 180.0
 
 
@@ -159,6 +167,33 @@ def _recover(args) -> int:
     return 1 if result == "rollback_failed" else 0
 
 
+def _busy(args) -> int:
+    operation_dir = Journal.find(Path(args.panel_root))
+    if operation_dir is None:
+        return 0
+    try:
+        return BUSY_EXIT_CODE if Journal.open(operation_dir).busy() else 0
+    except ModuleTransactionError:
+        return 0
+
+
+def _forget(args) -> int:
+    panel_root, state_dir = Path(args.panel_root), Path(args.state_dir)
+    shutil.rmtree(transactions_root(panel_root), ignore_errors=True)
+    status = read_status(state_dir)
+    if status.get("result") in ("running", "rollback_failed"):
+        status.update(
+            result="interrupted",
+            error_code="operation_superseded",
+            error="the panel files were replaced from the panel archive",
+            finished_at=time.time(),
+        )
+        status.pop("failed_path", None)
+        status.pop("failed_error", None)
+        write_status(state_dir, status)
+    return 0
+
+
 def _status(args) -> int:
     print(json.dumps(read_status(Path(args.state_dir)), ensure_ascii=False, indent=2))
     return 0
@@ -176,12 +211,21 @@ def main(argv=None, *, client_factory=None, architecture=None, on_step=None) -> 
     again.add_argument("--state-dir", required=True)
     status = commands.add_parser("status")
     status.add_argument("--state-dir", required=True)
+    busy = commands.add_parser("busy")
+    busy.add_argument("--panel-root", required=True)
+    forget = commands.add_parser("forget")
+    forget.add_argument("--panel-root", required=True)
+    forget.add_argument("--state-dir", required=True)
     args = parser.parse_args(argv)
 
     if args.command == "run":
         return _run(args, client_factory=client_factory or _default_client, architecture=architecture, on_step=on_step)
     if args.command == "recover":
         return _recover(args)
+    if args.command == "busy":
+        return _busy(args)
+    if args.command == "forget":
+        return _forget(args)
     return _status(args)
 
 

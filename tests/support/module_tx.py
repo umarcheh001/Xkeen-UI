@@ -8,6 +8,7 @@ writes. The release is what GitHub would serve for the same version.
 from __future__ import annotations
 
 import base64
+import gzip
 import hashlib
 import io
 import json
@@ -245,7 +246,10 @@ def module_archive(module_id: str, version: str, ownership: Mapping[str, tuple[s
         "max_size": 1 << 20,
     }
     buffer = io.BytesIO()
-    with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
+    # The gzip header carries the time of packing. The same archive is built
+    # once for the catalog and once to be served: without a fixed time the two
+    # differ whenever a second ticks over in between, and the checksum fails.
+    with gzip.GzipFile(fileobj=buffer, mode="wb", mtime=0) as packed, tarfile.open(fileobj=packed, mode="w") as archive:
         def add(name: str, payload: bytes) -> None:
             info = tarfile.TarInfo(name)
             info.size = len(payload)

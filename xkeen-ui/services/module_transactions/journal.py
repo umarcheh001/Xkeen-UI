@@ -26,6 +26,10 @@ _GZIP_SUFFIX = ".gz"
 # A confirmed operation is renamed to this suffix before its directory is
 # removed: whatever a power cut leaves of it is rubbish, not an operation.
 _DONE_SUFFIX = ".done"
+# The panel records an operation and only then starts its runner, which
+# writes its pid a moment later. For that long the operation has no owner on
+# record and still must not be taken for an abandoned one.
+_START_GRACE_S = 30.0
 
 
 def current_boot_id() -> str | None:
@@ -35,6 +39,14 @@ def current_boot_id() -> str | None:
         return Path("/proc/sys/kernel/random/boot_id").read_text(encoding="ascii").strip() or None
     except (OSError, ValueError):
         return None
+
+
+def _plain(relative: str) -> bool:
+    """Whether the path names something under the panel root and nothing else."""
+
+    if not relative or "\\" in relative or ":" in relative:
+        return False
+    return all(part not in {"", ".", ".."} for part in relative.split("/"))
 
 
 class Journal:
@@ -63,6 +75,10 @@ class Journal:
             "step": "prepared",
             "pid": None,
             "started_at": time.time(),
+            # The wall clock of a router jumps when the time is synchronised;
+            # the time since boot does not, and it is the same for every process.
+            "boot_id": current_boot_id(),
+            "created_uptime": time.monotonic(),
         }
         journal = cls(operation_dir, panel_root, plan, meta)
         journal.staging.mkdir()
@@ -149,6 +165,23 @@ class Journal:
         recorded = self._meta.get("boot_id")
         return not recorded or recorded == current_boot_id()
 
+    def starting(self) -> bool:
+        """Whether the runner of a just recorded operation may not have reported yet."""
+
+        if self._meta.get("pid") or self._meta.get("step") != "prepared":
+            return False
+        created = self._meta.get("created_uptime")
+        if isinstance(created, bool) or not isinstance(created, (int, float)):
+            return False
+        if self._meta.get("boot_id") != current_boot_id():
+            return False
+        return 0 <= time.monotonic() - created < _START_GRACE_S
+
+    def busy(self) -> bool:
+        """Whether somebody still carries this operation, or is about to."""
+
+        return self.runner_alive() or self.starting()
+
     def flush(self) -> None:
         """Ask the system to put everything written so far on the storage.
 
@@ -227,6 +260,9 @@ class Journal:
             self._keep(relative, target)
         temporary = target.with_name(target.name + _TEMP_SUFFIX)
         temporary.write_bytes(payload)
+        if existed:
+            # A file the user closed for others stays closed.
+            shutil.copymode(target, temporary)
         os.replace(temporary, target)
 
     def align_precompressed(self) -> None:
@@ -263,6 +299,10 @@ class Journal:
         for action in reversed(actions):
             kind, relative = action.get("kind"), action.get("path")
             if not isinstance(relative, str) or kind not in {"add", "replace", "remove", "state", "mkdir"}:
+                continue
+            if not _plain(relative):
+                # The log is read back from the storage: a damaged line must
+                # not send the undo outside the panel directory.
                 continue
             try:
                 if kind == "mkdir":
@@ -323,7 +363,7 @@ class Journal:
 
     def _target(self, relative: str) -> Path:
         parts = relative.split("/")
-        if not relative or "\\" in relative or ":" in relative or any(part in {"", ".", ".."} for part in parts):
+        if not _plain(relative):
             self._unsafe(relative, "the path leaves the panel directory")
         current = self.panel_root
         for part in parts[:-1]:

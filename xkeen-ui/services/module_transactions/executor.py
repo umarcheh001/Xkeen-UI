@@ -247,15 +247,19 @@ def run_operation(
 
 
 _UNTOUCHED_STEPS = frozenset({"prepared", "downloading", "verifying"})
+# From these steps on the panel may already run on the files of the operation.
+_RESTARTED_STEPS = frozenset({"restarting", "health", "rolling_back"})
 
 
-def recover(panel_root: Path, state_dir: Path) -> str | None:
+def recover(panel_root: Path, state_dir: Path, *, panel_running: bool = False) -> str | None:
     """Finish an operation nobody is running any more; ``None`` when there is none.
 
     Runs before the panel starts (the init script, the installer) and before
     a new operation. An operation that was not confirmed counts as not done:
     its changes are undone. The panel is neither restarted nor waited for
-    here - the caller is about to start it.
+    here - the caller is about to start it. A caller that is the running
+    panel says so with ``panel_running``: the status then tells whether the
+    panel has to be restarted to match the files that were put back.
     """
 
     panel_root = Path(panel_root)
@@ -270,7 +274,7 @@ def recover(panel_root: Path, state_dir: Path) -> str | None:
         journal = Journal.salvage(operation_dir, panel_root)
         readable = False
     meta = journal.meta()
-    if meta.get("pid") != os.getpid() and journal.runner_alive():
+    if meta.get("pid") != os.getpid() and journal.busy():
         # The runner restarts the panel through the init script, which calls
         # this function: a live operation must not be undone under its feet.
         return None
@@ -317,6 +321,8 @@ def recover(panel_root: Path, state_dir: Path) -> str | None:
         result = "rolled_back" if readable else "interrupted"
         status.pop("failed_path", None)
         status.pop("failed_error", None)
+        if panel_running and (not readable or step in _RESTARTED_STEPS):
+            status["restart_required"] = True
     if result != "committed" and not status.get("error_code"):
         status["error_code"] = "operation_interrupted"
     status["result"] = result

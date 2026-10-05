@@ -2016,6 +2016,16 @@ migrate_legacy_jsonc_files || true
 # двух состояний нельзя. Если вернуть не удалось, ниже профиль всё равно
 # перезапишет все управляемые файлы из архива.
 if [ -d "$UI_DIR.module-transactions" ] && [ -f "$UI_DIR/scripts/module_transaction.py" ]; then
+  # Живую операцию не ждём и не прерываем: она сама перезапускает панель и
+  # при неудаче возвращает прежние файлы — поверх этого раскладывать нельзя.
+  # Отказ безопасен: до этой строки установщик файлов панели не менял.
+  # Прежняя версия скрипта команды busy не знает и отвечает кодом 2.
+  MODULE_TX_BUSY=0
+  "$PYTHON_BIN" "$UI_DIR/scripts/module_transaction.py" busy --panel-root "$UI_DIR" >/dev/null 2>&1 \
+    || MODULE_TX_BUSY=$?
+  if [ "$MODULE_TX_BUSY" -eq 3 ]; then
+    fail_install "Сейчас идёт установка или удаление модуля панели. Дождитесь её завершения и запустите установку снова."
+  fi
   echo "[*] Завершаю прерванную операцию с модулем..."
   "$PYTHON_BIN" "$UI_DIR/scripts/module_transaction.py" recover --panel-root "$UI_DIR" --state-dir "$UI_DIR" \
     || echo "[!] Прерванную операцию с модулем не удалось отменить; файлы панели будут перезаписаны из архива."
@@ -2694,8 +2704,23 @@ start_service() {
   if [ -d "$MODULE_TX_ROOT" ] && [ -n "$(ls -A "$MODULE_TX_ROOT" 2>/dev/null)" ] \
       && [ -f "$UI_DIR/scripts/module_transaction.py" ]; then
     audit_boot "[start] unfinished module operation found, recovering"
+    # Ждём не дольше двух минут: зависший накопитель не должен оставить
+    # роутер без панели и задержать остальные скрипты загрузки. Прерванный
+    # возврат файлов безопасен — следующий запуск продолжит его с начала.
     "$PYTHON_BIN" "$UI_DIR/scripts/module_transaction.py" recover \
-      --panel-root "$UI_DIR" --state-dir "$UI_DIR" >/dev/null 2>&1 \
+      --panel-root "$UI_DIR" --state-dir "$UI_DIR" >/dev/null 2>&1 &
+    MODULE_TX_PID=$!
+    MODULE_TX_WAIT=0
+    MODULE_TX_LIMIT="${XKEEN_UI_MODULE_TX_RECOVER_TIMEOUT:-120}"
+    while kill -0 "$MODULE_TX_PID" 2>/dev/null && [ "$MODULE_TX_WAIT" -lt "$MODULE_TX_LIMIT" ]; do
+      sleep 1
+      MODULE_TX_WAIT=$((MODULE_TX_WAIT + 1))
+    done
+    if kill -0 "$MODULE_TX_PID" 2>/dev/null; then
+      kill -9 "$MODULE_TX_PID" 2>/dev/null || true
+      audit_boot "[start] module operation recovery timed out after ${MODULE_TX_WAIT}s (non-fatal)"
+    fi
+    wait "$MODULE_TX_PID" 2>/dev/null \
       || audit_boot "[start] module operation recovery did not finish cleanly (non-fatal)"
   fi
   # <<< module-operation-recovery
@@ -2860,7 +2885,12 @@ fi
 "$PYTHON_BIN" "$INSTALL_PROFILE_HELPER" commit --transaction "$PROFILE_TRANSACTION"
 PROFILE_TRANSACTION_ACTIVE=0
 # Панель поднялась на файлах из архива: копии прерванной операции с модулем
-# больше не нужны и не должны блокировать следующие.
+# больше не нужны и не должны блокировать следующие. Заодно закрываем её
+# запись о ходе: иначе панель вечно показывала бы «выполняется».
+if [ -f "$UI_DIR/scripts/module_transaction.py" ]; then
+  "$PYTHON_BIN" "$UI_DIR/scripts/module_transaction.py" forget --panel-root "$UI_DIR" --state-dir "$UI_DIR" \
+    >/dev/null 2>&1 || true
+fi
 rm -rf "$UI_DIR.module-transactions"
 
 log_install "[=] Итог установки:"

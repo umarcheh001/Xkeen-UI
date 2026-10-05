@@ -74,4 +74,15 @@ def new_operation_id(now: float | None = None) -> str:
 
 
 def pid_alive(pid: object) -> bool:
-    return bool(_pid_is_running(pid))
+    """Whether the process still runs; one that only waits to be collected does not."""
+
+    if not _pid_is_running(pid):
+        return False
+    try:
+        stat = Path(f"/proc/{int(pid)}/stat").read_text(encoding="ascii", errors="replace")
+    except (OSError, ValueError, TypeError):
+        # No /proc here (or the process is gone by now, and the next look says so).
+        return True
+    # "<pid> (<name>) <state> ...": the name may hold spaces and brackets.
+    state = stat.rpartition(")")[2].split()
+    return not state or state[0] != "Z"

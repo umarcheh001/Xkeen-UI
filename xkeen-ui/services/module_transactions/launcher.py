@@ -10,8 +10,10 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Sequence
 
 from services.self_update.state import get_update_paths, read_lock
 
@@ -31,7 +33,7 @@ def ensure_idle(panel_root: Path, state_dir: Path) -> None:
     operation_dir = Journal.find(Path(panel_root))
     if operation_dir is not None:
         try:
-            running = Journal.open(operation_dir).runner_alive()
+            running = Journal.open(operation_dir).busy()
         except ModuleTransactionError:
             running = False
         if running:
@@ -61,6 +63,13 @@ def launch(
     """Record the operation and start its runner; returns the operation id."""
 
     panel_root, state_dir = Path(panel_root), Path(state_dir)
+    if panel_root.resolve() != state_dir.resolve():
+        # The plan is read from the state directory and written to the panel
+        # root: apart, the operation would change one set of records by another.
+        raise ModuleTransactionError(
+            "operation_state_dir_mismatch",
+            "module operations need the panel state to live in the panel directory",
+        )
     ensure_idle(panel_root, state_dir)
     # Whatever a dead runner left behind is undone before a new plan is laid.
     if recover(panel_root, state_dir) == "rollback_failed":
@@ -107,7 +116,7 @@ def launch(
         # A session of its own: stopping the panel must not take the runner along.
         options["start_new_session"] = True
     try:
-        subprocess.Popen(command, **options)
+        runner = subprocess.Popen(command, **options)
     except OSError as error:
         journal.commit()
         write_status(
@@ -115,4 +124,37 @@ def launch(
             {**read_status(state_dir), "result": "interrupted", "error_code": "operation_start_failed", "error": str(error)},
         )
         raise ModuleTransactionError("operation_start_failed", "the module runner could not be started") from error
+    # A runner that ends while the panel lives must not linger as a process
+    # nobody collected: its pid would keep looking busy.
+    threading.Thread(target=runner.wait, name="module-operation-reaper", daemon=True).start()
     return operation_id
+
+
+def observe_status(panel_root: Path, state_dir: Path) -> dict[str, Any]:
+    """The status for the panel to show, settled when the runner is gone.
+
+    The file alone says ``running`` for ever after the runner was killed:
+    nobody is left to write the outcome. The panel is the one that looks, so
+    it finishes such an operation here instead of waiting for its next start.
+    """
+
+    panel_root, state_dir = Path(panel_root), Path(state_dir)
+    status = read_status(state_dir)
+    if status.get("result") != "running":
+        return status
+    operation_dir = Journal.find(panel_root)
+    if operation_dir is None:
+        # The record of the operation is gone (the installer cleared it).
+        status.update(result="interrupted", finished_at=time.time())
+        if not status.get("error_code"):
+            status["error_code"] = "operation_interrupted"
+        write_status(state_dir, status)
+        return status
+    try:
+        busy = Journal.open(operation_dir).busy()
+    except ModuleTransactionError:
+        busy = False
+    if busy:
+        return status
+    recover(panel_root, state_dir, panel_running=True)
+    return read_status(state_dir)
