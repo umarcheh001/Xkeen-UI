@@ -222,6 +222,13 @@ def test_validate_fetch_url_rejects_mutable_github_redirects(url: str) -> None:
         validate_fetch_url(url, policy=RELEASE_POLICY, redirected=True)
 
 
+def test_validate_fetch_url_rejects_github_redirect_to_a_different_release_asset() -> None:
+    redirected = "https://github.com/umarcheh001/Xkeen-UI/releases/download/v1.2.3/other.json"
+
+    with pytest.raises(CatalogClientError, match="catalog_redirect_unsafe"):
+        validate_fetch_url(redirected, policy=RELEASE_POLICY, redirected=True)
+
+
 def test_transport_follows_only_approved_manual_redirects() -> None:
     initial = official_release_asset_url("1.2.3", "catalog.json")
     redirected = "https://objects.githubusercontent.com/release-asset?X-Amz-Signature=test"
@@ -235,6 +242,20 @@ def test_transport_follows_only_approved_manual_redirects() -> None:
 
     assert result == b"catalog"
     assert opener.urls == [initial, redirected]
+
+
+def test_transport_allows_github_redirect_only_to_the_requested_release_asset() -> None:
+    initial = official_release_asset_url("1.2.3", "catalog.json")
+    opener = _Opener([_Response(302, location=initial), _Response(200, body=b"catalog")])
+
+    result = UrlLibCatalogTransport(opener=opener, timeout_s=1).fetch_bytes(
+        initial,
+        max_bytes=64,
+        policy=RELEASE_POLICY,
+    )
+
+    assert result == b"catalog"
+    assert opener.urls == [initial, initial]
 
 
 def test_transport_rejects_unsafe_or_excessive_redirects() -> None:
@@ -384,6 +405,20 @@ def test_client_does_not_hide_remote_signature_failure_with_cache(tmp_path) -> N
     assert raised.value.code == "catalog_signature_invalid"
 
 
+def test_client_rejects_discovery_redirect_outside_the_exact_latest_endpoint(tmp_path) -> None:
+    redirected = "https://api.github.com/repos/umarcheh001/Xkeen-UI/releases/123"
+    client = ModuleCatalogClient(
+        tmp_path,
+        transport=UrlLibCatalogTransport(opener=_Opener([_Response(302, location=redirected)]), timeout_s=1),
+        now=lambda: 100.0,
+    )
+
+    with pytest.raises(CatalogClientError) as raised:
+        client.get_catalog()
+
+    assert raised.value.code == "catalog_redirect_unsafe"
+
+
 @pytest.mark.parametrize(
     ("locations", "code"),
     (
@@ -399,6 +434,7 @@ def test_client_does_not_hide_remote_signature_failure_with_cache(tmp_path) -> N
             "catalog_redirect_limit",
         ),
         (("https://github.com/umarcheh001/Xkeen-UI/archive/refs/heads/main.zip",), "catalog_redirect_unsafe"),
+        (("https://github.com/umarcheh001/Xkeen-UI/releases/download/v1.2.3/other.json",), "catalog_redirect_unsafe"),
         (
             ("https://github.com/umarcheh001/Xkeen-UI/releases/download/v1.2.3/catalog.json?branch=main",),
             "catalog_redirect_unsafe",

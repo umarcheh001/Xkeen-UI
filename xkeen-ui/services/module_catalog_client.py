@@ -78,7 +78,7 @@ class CatalogTransport(Protocol):
 
 _API_POLICY = FetchPolicy(
     initial_hosts=frozenset({"api.github.com"}),
-    redirect_hosts=frozenset({"api.github.com"}),
+    redirect_hosts=frozenset(),
     require_official_release_path=False,
 )
 _RELEASE_POLICY = FetchPolicy(
@@ -133,6 +133,7 @@ class UrlLibCatalogTransport:
 
     def _open_response(self, url: str, *, policy: FetchPolicy) -> Any:
         current_url = validate_fetch_url(url, policy=policy)
+        expected_github_release_path = urlsplit(current_url).path if policy.require_official_release_path else None
         for redirect_count in range(self._MAX_REDIRECTS + 1):
             try:
                 response = self._opener.open(urllib.request.Request(current_url), timeout=self._timeout_s)
@@ -153,7 +154,12 @@ class UrlLibCatalogTransport:
                 _fail("catalog_redirect_limit", "catalog response exceeded redirect limit")
             if location is None:
                 _fail("catalog_redirect_unsafe", "catalog redirect has no location")
-            current_url = validate_fetch_url(urljoin(current_url, location), policy=policy, redirected=True)
+            current_url = validate_fetch_url(
+                urljoin(current_url, location),
+                policy=policy,
+                redirected=True,
+                expected_github_release_path=expected_github_release_path,
+            )
         _fail("catalog_redirect_limit", "catalog response exceeded redirect limit")
 
     def stream_to(self, url: str, output: BinaryIO, *, max_bytes: int, policy: FetchPolicy) -> int:
@@ -199,7 +205,13 @@ def _validate_release_path(path: str, *, failure_code: str = "catalog_source_not
         _fail(error.code, "catalog source release version is invalid")
 
 
-def validate_fetch_url(url: str, *, policy: FetchPolicy, redirected: bool = False) -> str:
+def validate_fetch_url(
+    url: str,
+    *,
+    policy: FetchPolicy,
+    redirected: bool = False,
+    expected_github_release_path: str | None = None,
+) -> str:
     """Validate an initial official URL or an already-resolved HTTPS redirect."""
 
     try:
@@ -226,6 +238,8 @@ def validate_fetch_url(url: str, *, policy: FetchPolicy, redirected: bool = Fals
         if parsed.query or parsed.fragment:
             _fail("catalog_redirect_unsafe", "GitHub redirects must not use mutable URL selectors")
         _validate_release_path(parsed.path, failure_code="catalog_redirect_unsafe")
+        if parsed.path != expected_github_release_path:
+            _fail("catalog_redirect_unsafe", "GitHub redirects must preserve the requested release asset")
     return parsed.geturl()
 
 
