@@ -200,8 +200,9 @@ test.describe('Operator Console Stage 4 commands', () => {
     await expect(page.locator('#core-pill-xray')).toBeHidden();
     await expect(page.locator('#core-pill-mihomo')).toBeVisible();
     await expect(page.locator('#core-mihomo-stable-release')).toBeVisible();
-    await expect(page.locator('#core-mihomo-update-btn')).toHaveCount(0);
-    await expect(page.locator('#core-mihomo-prerelease-update-btn')).toHaveCount(0);
+    // The buttons are always in the markup; a current core must not offer them.
+    await expect(page.locator('#core-mihomo-update-btn')).toBeHidden();
+    await expect(page.locator('#core-mihomo-prerelease-update-btn')).toBeHidden();
   });
 
 });

@@ -223,12 +223,12 @@ test.describe('Operator Console Stage 5 editor workbench contract', () => {
   }
 
 
-  test('all 53 static windows resolve to one of the four shared modal frames', async ({ page }) => {
+  test('all 57 static windows resolve to one of the four shared modal frames', async ({ page }) => {
     await openPanel(page, 'dark');
 
     const frames = await page.evaluate(() => {
       const expectedCounts = {
-        'confirm-compact-form': 24,
+        'confirm-compact-form': 28,
         'editor-workbench': 7,
         'master-detail': 19,
         'drawer-help': 3,
@@ -261,7 +261,7 @@ test.describe('Operator Console Stage 5 editor workbench contract', () => {
       return { expectedCounts, viewport: window.innerHeight, records };
     });
 
-    expect(frames.records).toHaveLength(53);
+    expect(frames.records).toHaveLength(57);
     const counts = Object.fromEntries(Object.keys(frames.expectedCounts).map((family) => [
       family,
       frames.records.filter((record) => record.family === family).length,

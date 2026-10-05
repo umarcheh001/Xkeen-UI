@@ -14,11 +14,13 @@ const SNAPSHOT_MASKS = {
 // Маска рисуется по фактическому боксу элемента, поэтому строка «проверено: HH:MM»
 // (она же «проверяем...», «проверка не выполнена» или пустая) меняла ширину маски
 // от прогона к прогону и открывала соседние пиксели. Фиксируем геометрию, чтобы
-// маска всегда закрывала один и тот же прямоугольник.
+// маска всегда закрывала один и тот же прямоугольник. Высота тоже задана: у пустой
+// строки она нулевая, и маска не рисовалась вовсе.
 const STABLE_MASK_GEOMETRY = `
   #cores-checked-at {
     display: inline-block !important;
     width: 190px !important;
+    min-height: 16px !important;
     overflow: hidden !important;
     white-space: nowrap !important;
   }
@@ -133,11 +135,57 @@ test.describe('Operator Console I5 accessibility and responsive contract', () =>
   });
 
   test('visual regression snapshots cover representative views and editor modal', async ({ page }) => {
+    // Полоса ядер на вкладке «Команды» зависит от машины: какие ядра найдены
+    // и ответил ли GitHub. Эталон снимается с заданного ответа, а не с сети.
+    await page.route('**/api/cores/versions', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          cores: {
+            xray: { installed: true, version: '26.6.1' },
+            mihomo: { installed: true, version: '1.19.30' },
+          },
+        }),
+      });
+    });
+    await page.route('**/api/cores/updates*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          refreshing: false,
+          stale: false,
+          latest: {
+            xray: { ok: true, stable: { tag: 'v26.6.1', url: 'https://example.test/xray' } },
+            mihomo: { ok: true, stable: { tag: 'v1.19.30', url: 'https://example.test/mihomo' } },
+          },
+          installed: {
+            xray: { installed: true, version: '26.6.1' },
+            mihomo: { installed: true, version: '1.19.30' },
+          },
+          update_available: { xray: false, mihomo: false },
+          prerelease_update_available: { xray: false, mihomo: false },
+        }),
+      });
+    });
     await openPanel(page, 'dark');
     await freezeAnimations(page);
     for (const view of TOP_LEVEL_VIEWS) {
       await selectPanelView(page, view);
       await expect(page.locator(`#view-${view}`)).toBeVisible();
+      if (view === 'commands') {
+        // Полоса ядер заполняется после ответа сервера: снимаем уже заполненную.
+        await expect(page.locator('#core-xray-stable-release')).toBeVisible();
+        await expect(page.locator('#core-mihomo-stable-release')).toBeVisible();
+      }
+      if (view === 'files') {
+        // Код вкладки подгружается по нажатию. Без этого ожидания незапустившийся
+        // файловый менеджер выглядел как расхождение эталона на 16 тысяч точек.
+        await expect(page.locator('#view-files .fm-bookmarks-control').first()).toBeVisible();
+      }
       await expect(page.locator(`#view-${view}`)).toHaveScreenshot(`i5-${view}-dark-desktop.png`, {
         animations: 'disabled',
         caret: 'hide',
