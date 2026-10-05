@@ -10,7 +10,7 @@ from .errors import HappDecryptorError
 
 
 def _unsupported() -> HappDecryptorError:
-    return HappDecryptorError("unsupported_platform", "Для архитектуры этого роутера движок Happ не собирается.")
+    return HappDecryptorError("unsupported_platform", "Для архитектуры этого роутера движок не собирается.")
 
 
 def _asset(platform: Callable[[], dict[str, Any]] | None) -> str:
@@ -78,7 +78,7 @@ def update_keys(bin_path: str | None = None, *, fetch=None, run=None) -> dict[st
 def install_uploaded_keys(bin_path: str | None, uploads: list[tuple[str, bytes]], *, run=None) -> dict[str, Any]:
     """Key files uploaded by hand: crypt5-keys.json, legacy_keys.json or decrypt.js."""
     if not uploads:
-        raise HappDecryptorError("no_files", "Выберите файл ключей Happ.")
+        raise HappDecryptorError("no_files", "Выберите файл ключей.")
     files: dict[str, bytes] = {}
     for filename, data in uploads:
         name, content = keys.classify_key_upload(filename, data)

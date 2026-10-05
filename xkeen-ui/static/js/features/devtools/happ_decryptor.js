@@ -1,6 +1,6 @@
 import { getDevtoolsSharedApi, setDevtoolsNamespaceApi } from '../devtools_namespace.js';
 
-// DevTools → «Декриптор Happ»: engine and key status, install, key update,
+// DevTools → «Утилита ссылок подписок»: engine and key status, install, key update,
 // manual upload (engine or key files) and a link check.
 (() => {
   'use strict';
@@ -166,13 +166,13 @@ import { getDevtoolsSharedApi, setDevtoolsNamespaceApi } from '../devtools_names
       setTone('dt-happ-engine', 'dt-value', 'ok', version.label);
       setText('dt-happ-engine-sub', [arch, version.commit].filter(Boolean).join(' · '));
     } else if (st.kind === 'node') {
-      setTone('dt-happ-engine', 'dt-value', 'warn', 'старый Node‑декриптор');
+      setTone('dt-happ-engine', 'dt-value', 'warn', 'старый Node‑скрипт');
       setText('dt-happ-engine-sub', 'нужен node — установите движок');
     } else if (st.kind === 'native') {
       setTone('dt-happ-engine', 'dt-value', 'bad', 'движок не запускается');
       setText('dt-happ-engine-sub', 'переустановите движок');
     } else if (st.kind === 'other') {
-      setTone('dt-happ-engine', 'dt-value', 'warn', 'сторонний декриптор');
+      setTone('dt-happ-engine', 'dt-value', 'warn', 'сторонняя программа');
       setText('dt-happ-engine-sub', '');
     } else {
       setTone('dt-happ-engine', 'dt-value', 'neutral', 'не найден');
@@ -213,7 +213,7 @@ import { getDevtoolsSharedApi, setDevtoolsNamespaceApi } from '../devtools_names
 
     const install = byId('dt-happ-install');
     if (install) {
-      install.textContent = installed ? 'Переустановить движок' : 'Установить декриптор';
+      install.textContent = installed ? 'Переустановить движок' : 'Установить утилиту';
       install.className = installed ? 'btn-secondary' : 'xkeen-ctrl-btn';
     }
     const updateKeys = byId('dt-happ-update-keys');
@@ -275,11 +275,11 @@ import { getDevtoolsSharedApi, setDevtoolsNamespaceApi } from '../devtools_names
         renderStatus(data.status);
         if (!quiet) setStatusLine('Статус обновлён.', 'ok');
       } else if (!quiet) {
-        setStatusLine(String((data && data.hint) || 'Не удалось получить статус декриптора.'), 'bad');
+        setStatusLine(String((data && data.hint) || 'Не удалось получить статус утилиты.'), 'bad');
       }
       return data;
     } catch (error) {
-      if (!quiet) setStatusLine('Не удалось получить статус декриптора: ' + String((error && error.message) || error), 'bad');
+      if (!quiet) setStatusLine('Не удалось получить статус утилиты: ' + String((error && error.message) || error), 'bad');
       return null;
     }
   }
@@ -287,16 +287,16 @@ import { getDevtoolsSharedApi, setDevtoolsNamespaceApi } from '../devtools_names
   async function install() {
     const installed = !!(state.status && state.status.installed);
     const confirmed = await confirmAction({
-      title: installed ? 'Переустановить движок' : 'Установить декриптор Happ',
+      title: installed ? 'Переустановить движок' : 'Установить утилиту ссылок',
       message: installed
         ? 'Скачать движок заново из релиза Xkeen-UI? Текущий файл сохранится как .bak, ключи останутся на месте.'
-        : 'Скачать движок из релиза Xkeen-UI и ключи Happ из репозитория LeeeeT/happ-decryptor на GitHub?',
+        : 'Скачать движок из релиза Xkeen-UI и ключи из открытого репозитория на GitHub?',
       okText: installed ? 'Переустановить' : 'Установить',
       cancelText: 'Отмена',
     });
     if (!confirmed) return;
     const data = await runAction(
-      installed ? 'Переустанавливаю движок…' : 'Устанавливаю движок и ключи Happ…',
+      installed ? 'Переустанавливаю движок…' : 'Устанавливаю движок и ключи…',
       () => postJSON(ROUTES.install, installed ? { keys: false } : {}),
     );
     if (data && data.ok && data.keys) state.missingKeyFormat = '';
@@ -308,13 +308,13 @@ import { getDevtoolsSharedApi, setDevtoolsNamespaceApi } from '../devtools_names
 
   async function updateKeys() {
     const confirmed = await confirmAction({
-      title: 'Обновить ключи Happ',
-      message: 'Скачать ключи Happ из репозитория LeeeeT/happ-decryptor по коммиту из манифеста? Перед заменой их проверит движок.',
+      title: 'Обновить ключи',
+      message: 'Скачать ключи из открытого репозитория на GitHub по коммиту из манифеста? Перед заменой их проверит движок.',
       okText: 'Обновить',
       cancelText: 'Отмена',
     });
     if (!confirmed) return;
-    const data = await runAction('Скачиваю ключи Happ…', () => postJSON(ROUTES.keys, {}));
+    const data = await runAction('Скачиваю ключи…', () => postJSON(ROUTES.keys, {}));
     if (data && data.ok) state.missingKeyFormat = '';
     applyResult(data, (d) => 'Ключи обновлены: ' + (describeKeys(d.keys).replace(/^ключи: /, '') || 'готово') + '.');
   }

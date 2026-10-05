@@ -36,7 +36,7 @@ def _wants_install(env, stdin, out) -> bool:
     if choice in ("0", "1"):
         return choice == "1"
     if stdin is None or not stdin.isatty():
-        _say(out, f"пропущено: без терминала ключи Happ не скачиваются. Поставить можно в панели или с {INSTALL_ENV}=1.")
+        _say(out, f"пропущено: без терминала ключи не скачиваются. Поставить можно в панели или с {INSTALL_ENV}=1.")
         return False
 
     print("", file=out)
@@ -92,13 +92,13 @@ def main(argv=None, *, env=None, stdin=None, out=None, installer=None, bin_path=
             from services.happ_decryptor import service
 
             installer = service.install_all
-        _say(out, "устанавливаю движок и ключи Happ…")
+        _say(out, "устанавливаю движок и ключи…")
         _report(out, installer())
     except Exception as exc:  # noqa: BLE001
         if HappDecryptorError is not None and isinstance(exc, HappDecryptorError):
             _say(out, f"не установлен: {exc.hint}")
         else:
-            _say(out, f"не удалось установить декриптор Happ ({type(exc).__name__}) — пропуск")
+            _say(out, f"не удалось установить утилиту ссылок ({type(exc).__name__}) — пропуск")
     return 0
 
 

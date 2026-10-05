@@ -187,7 +187,7 @@ def _published_sha256(fetch: Fetch, base: str, asset: str, work_dir: str) -> str
             return digest
     raise HappDecryptorError(
         "checksum_missing",
-        "В релизе нет контрольной суммы движка Happ — без неё установка не выполняется.",
+        "В релизе нет контрольной суммы движка — без неё установка не выполняется.",
     )
 
 
@@ -232,7 +232,7 @@ def install_engine(
     run = run or run_command
     expected_arch = asset[len(ASSET_PREFIX):] if asset.startswith(ASSET_PREFIX) else ""
     if not expected_arch:
-        raise HappDecryptorError("unsupported_platform", "Для архитектуры этого роутера движок Happ не собирается.")
+        raise HappDecryptorError("unsupported_platform", "Для архитектуры этого роутера движок не собирается.")
 
     directory = os.path.dirname(bin_path) or "."
     os.makedirs(directory, exist_ok=True)
@@ -254,7 +254,7 @@ def install_engine(
             if _sha256_file(candidate) != _published_sha256(fetch, base, asset, directory):
                 raise HappDecryptorError(
                     "checksum_mismatch",
-                    "Скачанный движок Happ не совпал с контрольной суммой релиза — установка остановлена.",
+                    "Скачанный движок не совпал с контрольной суммой релиза — установка остановлена.",
                 )
 
         arch = elf_arch(candidate)
@@ -269,7 +269,7 @@ def install_engine(
         os.chmod(candidate, 0o755)
         version = version_of(candidate, run)
         if version is None:
-            raise HappDecryptorError("sanity_failed", "Движок Happ не запустился на этом роутере.")
+            raise HappDecryptorError("sanity_failed", "Движок не запустился на этом роутере.")
 
         backup = None
         if os.path.exists(bin_path):
@@ -280,7 +280,7 @@ def install_engine(
         except OSError as exc:
             if backup:
                 os.replace(backup, bin_path)
-            raise HappDecryptorError("install_failed", "Не удалось поставить движок Happ на место.") from exc
+            raise HappDecryptorError("install_failed", "Не удалось поставить движок на место.") from exc
         _remove_old_emulator_files(assets_dir_for(bin_path))
         return {"path": bin_path, "asset": asset, "version": version, "backup": backup}
     finally:
@@ -304,7 +304,7 @@ def verify_keys_with_engine(bin_path: str, staging_dir: str, run: Run) -> None:
     """Raise unless the engine reads every present key file without errors."""
     report = selftest(bin_path, staging_dir, run)
     if not report:
-        raise HappDecryptorError("keys_check_failed", "Движок Happ не смог проверить ключи.")
+        raise HappDecryptorError("keys_check_failed", "Движок не смог проверить ключи.")
     formats = set(report.get("formats") or [])
     required: list[str] = []
     any_present = False
@@ -314,19 +314,19 @@ def verify_keys_with_engine(bin_path: str, staging_dir: str, run: Run) -> None:
             continue
         any_present = True
         if rep.get("error") or rep.get("invalid"):
-            raise HappDecryptorError("keys_check_failed", "Движок Happ не принял часть ключей — файлы не установлены.")
+            raise HappDecryptorError("keys_check_failed", "Движок не принял часть ключей — файлы не установлены.")
         required.extend(needs)
     missing = [f for f in required if f not in formats]
     if not any_present or missing:
-        raise HappDecryptorError("keys_check_failed", "Движок Happ не принял ключи — файлы не установлены.")
+        raise HappDecryptorError("keys_check_failed", "Движок не принял ключи — файлы не установлены.")
 
 
 _CHECK_HINTS = {
     "unknown_key": (
-        "Для этой ссылки нет ключа — Happ выпустил новые ключи. Нажмите «Обновить ключи»; "
-        "если в happ-decryptor их ещё нет — загрузите файл ключей вручную."
+        "Для этой ссылки нет ключа — вышли новые ключи. Нажмите «Обновить ключи»; "
+        "если в репозитории их ещё нет — загрузите файл ключей вручную."
     ),
-    "no_keys": "Ключи Happ не установлены — нажмите «Обновить ключи» или загрузите файл ключей.",
+    "no_keys": "Ключи не установлены — нажмите «Обновить ключи» или загрузите файл ключей.",
     "bad_link": "Ссылка повреждена или обрезана — скопируйте её заново.",
     "corrupt": "Ссылка не расшифровалась: она повреждена или ключ не подходит.",
 }
@@ -339,7 +339,7 @@ def check_link(bin_path: str, link: str, run: Run) -> dict[str, str]:
     if not link.lower().startswith("happ://"):
         raise HappDecryptorError("bad_link", "Вставьте ссылку вида happ://crypt….")
     if detect_kind(bin_path) != "native":
-        raise HappDecryptorError("not_installed", "Движок Happ не установлен — сначала установите декриптор.")
+        raise HappDecryptorError("not_installed", "Движок не установлен — сначала установите утилиту.")
 
     _rc, out, _err = _safe_run(run, [bin_path, "-json", "-assets", assets_dir_for(bin_path), link])
     try:
@@ -347,7 +347,7 @@ def check_link(bin_path: str, link: str, run: Run) -> dict[str, str]:
     except ValueError:
         report = None
     if not isinstance(report, dict):
-        raise HappDecryptorError("check_failed", "Движок Happ не смог проверить ссылку.")
+        raise HappDecryptorError("check_failed", "Движок не смог проверить ссылку.")
     if report.get("ok"):
         return {
             "format": str(report.get("format") or ""),
@@ -358,7 +358,7 @@ def check_link(bin_path: str, link: str, run: Run) -> dict[str, str]:
     code = str(report.get("error") or "")
     hint = _CHECK_HINTS.get(code)
     if hint is None:
-        raise HappDecryptorError("check_failed", "Движок Happ не смог проверить ссылку.")
+        raise HappDecryptorError("check_failed", "Движок не смог проверить ссылку.")
     marker = _MARKER_RE.search(str(report.get("message") or ""))
     if code == "unknown_key" and marker:
         hint = f"Для этой ссылки нет ключа (маркер {marker.group(1)}) — " + hint.split(" — ", 1)[1]

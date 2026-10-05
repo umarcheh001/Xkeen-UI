@@ -576,9 +576,14 @@ def register_pages_routes(
 
         @app.get("/devtools")
         def devtools_page():
+            # The card's API is registered only together with its module.
+            page_ctx = {
+                "devtools_link_utility_card": active_module_ids is None
+                or "integration.happ" in active_module_ids,
+            }
             # Avoid stale cached HTML holding on to old static asset versions
             try:
-                resp = make_response(render_template("devtools.html"))
+                resp = make_response(render_template("devtools.html", **page_ctx))
                 return _no_cache(resp)
             except Exception:
-                return render_template("devtools.html")
+                return render_template("devtools.html", **page_ctx)

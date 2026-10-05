@@ -17,7 +17,7 @@ from services.happ_decryptor import engine, keys, service
 from services.happ_decryptor.errors import HappDecryptorError
 from services.request_limits import PayloadTooLargeError, read_uploaded_file_bytes_limited
 
-_INTERNAL_HINT = "Не удалось выполнить действие с декриптором Happ. Подробности смотрите в журнале панели."
+_INTERNAL_HINT = "Не удалось выполнить действие с утилитой ссылок подписок. Подробности смотрите в журнале панели."
 
 
 def create_happ_decryptor_blueprint(

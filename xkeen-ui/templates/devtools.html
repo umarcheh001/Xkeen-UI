@@ -250,16 +250,17 @@
         <div class="dt-zone-head" aria-hidden="true">Система</div>
         <div class="dt-zone" role="group" aria-label="Система">
 
+          {% if devtools_link_utility_card %}
           <details class="card dt-collapsible" id="dt-happ-decryptor-card" data-xk-section="service happ decryptor dt-happ-decryptor-card" open>
             <summary class="dt-collapsible-summary">
-              <h2 style="margin:0;">Декриптор Happ</h2>
+              <h2 style="margin:0;">Утилита ссылок подписок</h2>
               <span class="dt-collapsible-icon" aria-hidden="true">▾</span>
             </summary>
             <div class="dt-collapsible-body">
 
               <div class="small" style="margin-bottom:10px; opacity:0.9;">
                 Расшифровывает ссылки подписок <code>happ://crypt…</code> прямо на роутере.
-                Движок — из релиза Xkeen‑UI, ключи Happ — из репозитория LeeeeT/happ-decryptor, только по кнопке.
+                Движок — из релиза Xkeen‑UI, ключи — из открытого репозитория на GitHub, только по кнопке.
               </div>
 
               <div class="dt-update-verdict-row" style="margin-bottom:10px;">
@@ -292,15 +293,15 @@
               </div>
 
               <div id="dt-happ-alert" class="dt-alert" style="display:none; margin:10px 0 0 0;">
-                Кнопка скачает движок из релиза Xkeen‑UI (с проверкой контрольной суммы) и ключи Happ
+                Кнопка скачает движок из релиза Xkeen‑UI (с проверкой контрольной суммы) и ключи
                 с GitHub по закреплённому коммиту. Без интернета — загрузите файлы вручную.
               </div>
 
-              <div class="dt-update-actions" aria-label="Happ decryptor actions" style="margin-top:12px;">
-                <button type="button" id="dt-happ-install" class="xkeen-ctrl-btn">Установить декриптор</button>
-                <button type="button" id="dt-happ-update-keys" class="btn-secondary" style="display:none;" title="Скачать ключи Happ по коммиту из манифеста.">Обновить ключи</button>
+              <div class="dt-update-actions" aria-label="Действия утилиты ссылок" style="margin-top:12px;">
+                <button type="button" id="dt-happ-install" class="xkeen-ctrl-btn">Установить утилиту</button>
+                <button type="button" id="dt-happ-update-keys" class="btn-secondary" style="display:none;" title="Скачать ключи по коммиту из манифеста.">Обновить ключи</button>
                 <button type="button" id="dt-happ-upload" class="btn-secondary" title="Движок или файлы ключей: crypt5-keys.json, legacy_keys.json, decrypt.js.">Загрузить файл…</button>
-                <button type="button" id="dt-happ-refresh" class="btn-secondary" title="Обновить статус декриптора.">Обновить</button>
+                <button type="button" id="dt-happ-refresh" class="btn-secondary" title="Обновить статус утилиты.">Обновить</button>
                 <input type="file" id="dt-happ-upload-input" multiple hidden>
               </div>
 
@@ -313,7 +314,7 @@
                 </summary>
                 <div class="dt-collapsible-body">
                   <div class="dt-happ-check-row">
-                    <input id="dt-happ-check-link" class="xray-log-filter" type="text" inputmode="url" placeholder="happ://crypt…" aria-label="Ссылка Happ">
+                    <input id="dt-happ-check-link" class="xray-log-filter" type="text" inputmode="url" placeholder="happ://crypt…" aria-label="Ссылка подписки">
                     <button type="button" id="dt-happ-check-run" class="btn-secondary">Проверить</button>
                   </div>
                   <div id="dt-happ-check-result" class="small" style="margin-top:10px; display:none;"></div>
@@ -322,6 +323,7 @@
 
             </div>
           </details>
+          {% endif %}
 
           <details class="card dt-logging-card dt-collapsible" id="dt-logging-card" data-xk-section="logging dt-logging-card" open>
             <summary class="dt-collapsible-summary">

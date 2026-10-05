@@ -76,17 +76,17 @@ class Manifest:
 
 
 def _bad_manifest(detail: str) -> HappDecryptorError:
-    return HappDecryptorError("bad_manifest", f"Манифест ключей Happ не подходит: {detail}.")
+    return HappDecryptorError("bad_manifest", f"Манифест ключей не подходит: {detail}.")
 
 
 def _bad_key_file(detail: str) -> HappDecryptorError:
-    return HappDecryptorError("bad_key_file", f"Файл ключей Happ не подходит: {detail}.")
+    return HappDecryptorError("bad_key_file", f"Файл ключей не подходит: {detail}.")
 
 
 def _unrecognized() -> HappDecryptorError:
     return HappDecryptorError(
         "unrecognized_key_file",
-        "Это не файл ключей Happ: подходят crypt5-keys.json, legacy_keys.json или decrypt.js из happ-decryptor.",
+        "Это не файл ключей: подходят crypt5-keys.json, legacy_keys.json или decrypt.js из репозитория ключей.",
     )
 
 

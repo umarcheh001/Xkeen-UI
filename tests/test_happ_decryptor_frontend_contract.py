@@ -1,4 +1,4 @@
-"""DevTools card «Декриптор Happ» and the links to it from subscription errors."""
+"""DevTools card «Утилита ссылок подписок» and the links to it from subscription errors."""
 
 from __future__ import annotations
 

@@ -2917,7 +2917,7 @@ if [ "$GEODAT_VERDICT" = "off" ]; then
   ui_warning "xk-geodat не установился; основная панель продолжит работать."
 fi
 if [ "${HAPP_OPTION:-0}" = "1" ] && [ ! -x "$UI_DIR/bin/happ-decrypt-universal" ]; then
-  ui_warning "Декриптор Happ не установился; его можно добавить позже из DevTools."
+  ui_warning "Режим разработчика для подписок не установился; его можно добавить позже из DevTools."
 fi
 if [ "${PORT_UPDATE_WARNING:-0}" -eq 1 ]; then
   ui_warning "Проверьте порт панели в DevTools после первого входа."

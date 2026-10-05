@@ -150,6 +150,7 @@ let devtoolsInitialized = false;
     const cfg = opts && typeof opts === 'object' ? opts : {};
     const target = document.getElementById(targetId);
     if (!target) {
+      if (cfg.requireTarget) return;
       if (typeof cfg.idleDelay === 'number') _scheduleModuleInit(stateKey, namespaceKey, initArg, cfg.idleDelay);
       return;
     }
@@ -205,7 +206,7 @@ let devtoolsInitialized = false;
     try { _initModuleOnce('logs', 'devtoolsLogs', { deferInitialFetch: true }); } catch (e) {}
 
     try { _wireDeferredModuleInit('update', 'devtoolsUpdate', 'dt-update-card', undefined, { hash: '#dt-update-card', idleDelay: 700 }); } catch (e) {}
-    try { _wireDeferredModuleInit('happDecryptor', 'devtoolsHappDecryptor', 'dt-happ-decryptor-card', undefined, { hash: '#dt-happ-decryptor-card', idleDelay: 900 }); } catch (e) {}
+    try { _wireDeferredModuleInit('happDecryptor', 'devtoolsHappDecryptor', 'dt-happ-decryptor-card', undefined, { hash: '#dt-happ-decryptor-card', idleDelay: 900, requireTarget: true }); } catch (e) {}
     try { _wireDeferredModuleInit('env', 'devtoolsEnv', 'dt-env-card', undefined, { idleDelay: 1200 }); } catch (e) {}
     try { _wireDeferredModuleInit('terminalTheme', 'devtoolsTerminalTheme', 'dt-terminal-theme-card', undefined, { hash: '#dt-terminal-theme-card', idleDelay: 1800 }); } catch (e) {}
 

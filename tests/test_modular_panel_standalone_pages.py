@@ -9,6 +9,7 @@ import pytest
 from tests.support.panel_render import (
     FULL_MODULE_IDS,
     MIHOMO_MINIMAL_MODULE_IDS,
+    ROOT,
     XRAY_MINIMAL_MODULE_IDS,
     build_panel_app,
 )
@@ -84,3 +85,26 @@ def test_standalone_pages_link_to_devtools_only_when_it_is_registered(name, tmp_
         links = re.findall(r'href="/devtools[^"]*"', html)
         assert bool(links) == has_devtools, f"{name}: {path}"
         assert ('id="xk-update-link"' in html) == has_devtools, f"{name}: {path}"
+
+
+@pytest.mark.parametrize("name", sorted(MODULE_SETS))
+def test_devtools_shows_the_link_utility_card_only_with_its_module(name, tmp_path):
+    # The card's API exists only with integration.happ; without the module the
+    # page drew dead buttons and asked for a status that answered 404.
+    module_ids = MODULE_SETS[name]
+    response = _app(module_ids, tmp_path).test_client().get("/devtools")
+    if response.status_code != 200:
+        return
+    html = response.get_data(as_text=True)
+    assert ('id="dt-happ-decryptor-card"' in html) == _has(module_ids, "integration.happ")
+    assert 'id="dt-update-card"' in html
+    assert 'id="dt-logging-card"' in html
+
+
+def test_devtools_does_not_start_the_link_utility_card_without_its_markup():
+    source = (
+        ROOT / "xkeen-ui" / "static" / "js" / "features" / "devtools.js"
+    ).read_text(encoding="utf-8")
+    wiring = re.search(r"_wireDeferredModuleInit\('happDecryptor'[^\n]*", source)
+    assert wiring and "requireTarget: true" in wiring.group(0)
+    assert re.search(r"if \(!target\) \{\s*if \(cfg\.requireTarget\) return;", source)
