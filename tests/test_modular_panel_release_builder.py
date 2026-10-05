@@ -384,6 +384,7 @@ def test_complete_bundle_is_reproducible_and_passes_static_preflight(tmp_path: P
     first_files = sorted(path.name for path in inputs.output_dir.iterdir())
     second_files = sorted(path.name for path in second.inputs.output_dir.iterdir())
     assert first_files == second_files
+    assert "catalog.json.sig" not in first_files
     for name in first_files:
         assert (inputs.output_dir / name).read_bytes() == (second.inputs.output_dir / name).read_bytes()
 
