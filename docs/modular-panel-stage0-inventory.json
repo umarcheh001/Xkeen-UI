@@ -36,13 +36,13 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 459,
-      "size_bytes": 6352817,
+      "unit_count": 463,
+      "size_bytes": 6384782,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
-        "backend_service": 62,
-        "backend_test": 198,
+        "backend_service": 64,
+        "backend_test": 200,
         "configuration": 10,
         "frontend_bundle": 9,
         "frontend_entrypoint": 2,
@@ -1984,6 +1984,42 @@
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_transactions/__init__.py",
       "size_bytes": 309,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_service",
+      "path": "xkeen-ui/services/module_transactions/extract.py",
+      "size_bytes": 2847,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_service",
+      "path": "xkeen-ui/services/module_transactions/journal.py",
+      "size_bytes": 11162,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -4722,6 +4758,42 @@
       "environment_variables": [
         "XKEEN_UI_MODULE_SAFE_MODE"
       ],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_module_transactions_extract.py",
+      "size_bytes": 4167,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_module_transactions_journal.py",
+      "size_bytes": 13789,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
       "removable": false
     },
     {
