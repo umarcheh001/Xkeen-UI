@@ -37,7 +37,7 @@
       ],
       "removable": false,
       "unit_count": 476,
-      "size_bytes": 6508320,
+      "size_bytes": 6509785,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
@@ -130,7 +130,7 @@
       ],
       "removable": true,
       "unit_count": 128,
-      "size_bytes": 3070063,
+      "size_bytes": 3070084,
       "kind_counts": {
         "app_runtime": 4,
         "backend_route": 2,
@@ -326,7 +326,7 @@
       ],
       "removable": true,
       "unit_count": 22,
-      "size_bytes": 313892,
+      "size_bytes": 313887,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 6,
@@ -365,7 +365,7 @@
       ],
       "removable": true,
       "unit_count": 26,
-      "size_bytes": 647903,
+      "size_bytes": 648131,
       "kind_counts": {
         "backend_route": 2,
         "backend_service": 8,
@@ -873,7 +873,7 @@
       "module_id": "core",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/pages.py",
-      "size_bytes": 23193,
+      "size_bytes": 23462,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -1664,7 +1664,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/happ_links.py",
-      "size_bytes": 25314,
+      "size_bytes": 25349,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -3804,7 +3804,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_happ_links_native_engine.py",
-      "size_bytes": 5805,
+      "size_bytes": 5821,
       "depends_on": [
         "engine.xray"
       ],
@@ -4699,7 +4699,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_modular_panel_standalone_pages.py",
-      "size_bytes": 3205,
+      "size_bytes": 4314,
       "depends_on": [
         "tool.backups"
       ],
@@ -6809,7 +6809,7 @@
       "module_id": "core",
       "kind": "configuration",
       "path": "xkeen-ui/install.sh",
-      "size_bytes": 113297,
+      "size_bytes": 113333,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -12768,7 +12768,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_test",
       "path": "tests/test_mihomo_xray_json_route.py",
-      "size_bytes": 13344,
+      "size_bytes": 13365,
       "depends_on": [
         "core",
         "tool.editor",
@@ -17478,7 +17478,7 @@
       "module_id": "integration.happ",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/happ_decryptor.py",
-      "size_bytes": 5010,
+      "size_bytes": 5029,
       "depends_on": [
         "core"
       ],
@@ -17542,7 +17542,7 @@
       "module_id": "integration.happ",
       "kind": "backend_service",
       "path": "xkeen-ui/services/happ_decryptor/engine.py",
-      "size_bytes": 15253,
+      "size_bytes": 15186,
       "depends_on": [
         "core",
         "engine.xray"
@@ -17585,7 +17585,7 @@
       "module_id": "integration.happ",
       "kind": "backend_service",
       "path": "xkeen-ui/services/happ_decryptor/keys.py",
-      "size_bytes": 13387,
+      "size_bytes": 13393,
       "depends_on": [
         "core"
       ],
@@ -17606,7 +17606,7 @@
       "module_id": "integration.happ",
       "kind": "backend_service",
       "path": "xkeen-ui/services/happ_decryptor/service.py",
-      "size_bytes": 3699,
+      "size_bytes": 3689,
       "depends_on": [
         "core"
       ],
@@ -17698,7 +17698,7 @@
       "module_id": "integration.happ",
       "kind": "backend_test",
       "path": "tests/test_happ_decryptor_frontend_contract.py",
-      "size_bytes": 2938,
+      "size_bytes": 2959,
       "depends_on": [
         "core"
       ],
@@ -17867,7 +17867,7 @@
       "module_id": "integration.happ",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/devtools/happ_decryptor.js",
-      "size_bytes": 17505,
+      "size_bytes": 17489,
       "depends_on": [
         "core",
         "tool.advanced-diagnostics"
@@ -17924,7 +17924,7 @@
       "module_id": "integration.happ",
       "kind": "frontend_test",
       "path": "e2e/devtools_happ_decryptor.spec.mjs",
-      "size_bytes": 5779,
+      "size_bytes": 5800,
       "depends_on": [
         "core"
       ],
@@ -17962,7 +17962,7 @@
       "module_id": "integration.happ",
       "kind": "frontend_ui",
       "path": "xkeen-ui/static/js/ui/happ_decryptor_link.js",
-      "size_bytes": 1027,
+      "size_bytes": 1048,
       "depends_on": [
         "core"
       ],
@@ -18570,7 +18570,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/devtools.js",
-      "size_bytes": 8007,
+      "size_bytes": 8065,
       "depends_on": [
         "core"
       ],
@@ -18595,7 +18595,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/devtools/env.js",
-      "size_bytes": 80054,
+      "size_bytes": 80117,
       "depends_on": [
         "core"
       ],
@@ -18997,7 +18997,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "template",
       "path": "xkeen-ui/templates/devtools.html",
-      "size_bytes": 57441,
+      "size_bytes": 57548,
       "depends_on": [
         "core"
       ],
@@ -29382,7 +29382,7 @@
         },
         "tool.advanced-diagnostics": {
           "unit_count": 26,
-          "size_bytes": 647903
+          "size_bytes": 648131
         }
       },
       "next_stage": "Этапы 4, 5 и 6."
