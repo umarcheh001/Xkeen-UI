@@ -212,8 +212,8 @@ def test_module_ownership_follows_unconditional_imports(tmp_path: Path) -> None:
         ],
         "services/ws_pty.py": ["handle = None"],
         "services/xray_log_api.py": ["tail = None"],
-        "routes/mihomo.py": ["def view():", "    from services.mihomo_backups import list_backups"],
-        "services/mihomo_backups.py": ["list_backups = None"],
+        "routes/mihomo.py": ["def view():", "    from services.backups import list_backups"],
+        "services/backups.py": ["list_backups = None"],
     }
     for relative, lines in files.items():
         path = package / relative
@@ -230,7 +230,7 @@ def test_module_ownership_follows_unconditional_imports(tmp_path: Path) -> None:
     assert owner_of["static/js/pages/terminal.lazy.entry.js"] == "tool.terminal"
     assert owner_of["static/js/terminal/core.js"] == "tool.terminal"
     assert owner_of["services/xray_log_api.py"] == "engine.xray"
-    assert owner_of["services/mihomo_backups.py"] == "tool.backups"
+    assert owner_of["services/backups.py"] == "tool.backups"
     assert owner_of["static/js/features/mihomo_panel.js"] == "engine.mihomo"
     assert _hard_import_violations(builder, tmp_path) == []
 
@@ -243,6 +243,83 @@ def test_every_real_package_loads_with_only_its_registry_dependencies() -> None:
     assert all(ownership[module_id] for module_id in ownership)
     paths = [path for module_paths in ownership.values() for path in module_paths]
     assert len(paths) == len(set(paths))
+
+
+def _imported_panel_files(source: Path, known: set[str]) -> set[str]:
+    """Panel files a Python file imports anywhere, a function body included."""
+
+    import ast
+
+    names: set[str] = set()
+    for node in ast.walk(ast.parse(source.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Import):
+            names.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and not node.level:
+            names.add(node.module or "")
+            names.update((node.module or "") + "." + alias.name for alias in node.names)
+    return {
+        candidate
+        for name in names
+        for candidate in (name.replace(".", "/") + ".py", name.replace(".", "/") + "/__init__.py")
+        if candidate in known
+    }
+
+
+def test_explicit_package_owners_are_imported_only_by_their_own_module() -> None:
+    # The import closure follows unconditional imports only. A file that is
+    # handed to a module by name must not be reached from another package even
+    # by an import inside a function: nothing would move it back.
+    builder = _load_builder()
+    package = ROOT / "xkeen-ui"
+    ownership = builder.build_module_ownership(ROOT)
+    owner_of = {path: module_id for module_id, paths in ownership.items() for path in paths}
+    closures = builder._dependency_closures(ROOT, tuple(ownership))
+
+    assert builder._PACKAGE_OWNER_OVERRIDES
+    strangers = []
+    for target, module_id in builder._PACKAGE_OWNER_OVERRIDES.items():
+        assert owner_of[target] == module_id, target
+        for source in sorted(path for path in owner_of if path.endswith(".py") and path != target):
+            if target in _imported_panel_files(package / source, {target}) and module_id not in closures[owner_of[source]]:
+                strangers.append(f"{owner_of[source]}:{source} -> {module_id}:{target}")
+    assert strangers == []
+
+
+def test_server_entry_imports_optional_handlers_only_for_active_modules() -> None:
+    import ast
+
+    tree = ast.parse((ROOT / "xkeen-ui" / "run_server.py").read_text(encoding="utf-8"))
+    gated = {
+        "handle_pty_request": "tool.terminal",
+        "start_pty_cleanup_loop": "tool.terminal",
+        "handle_mihomo_clash_connections_request": "engine.mihomo",
+        "handle_mihomo_clash_logs_request": "engine.mihomo",
+        "handle_mihomo_clash_telemetry_request": "engine.mihomo",
+        "MIHOMO_CONFIG_FILE": "engine.mihomo",
+        "MIHOMO_ROOT": "engine.mihomo",
+    }
+    parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+
+    def under_module_condition(node: ast.AST, module_id: str) -> bool:
+        current = node
+        while current in parents:
+            parent = parents[current]
+            if isinstance(parent, ast.If) and current in parent.body and module_id in ast.unparse(parent.test):
+                return True
+            current = parent
+        return False
+
+    imported = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                name = alias.asname or alias.name
+                if name in gated:
+                    imported.add(name)
+                    assert under_module_condition(node, gated[name]), f"unconditional import of {name}"
+        elif isinstance(node, ast.Name) and node.id in gated and isinstance(node.ctx, ast.Load):
+            assert under_module_condition(node, gated[node.id]), f"{node.id} is used at line {node.lineno} without its module"
+    assert imported == set(gated)
 
 
 def test_module_ownership_rejects_unmanaged_top_level_paths(tmp_path: Path) -> None:

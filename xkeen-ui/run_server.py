@@ -67,13 +67,18 @@ from app import (
     _unsubscribe_ws,
 )
 _ACTIVE_MODULES = set(app.extensions.get("xkeen.module_activation", {}).get("active_module_ids", []))
-from services.ws_pty import handle_pty_request, start_cleanup_loop as start_pty_cleanup_loop
-from services.mihomo_clash_ws import (
-    handle_mihomo_clash_connections_request,
-    handle_mihomo_clash_logs_request,
-    handle_mihomo_clash_telemetry_request,
-)
-from services.mihomo_runtime import CONFIG_PATH as MIHOMO_CONFIG_FILE, MIHOMO_ROOT
+# The handlers of an optional module are imported only when the module is
+# active: every use below stands under the same condition, and the server must
+# start when the files of that module are not installed.
+if "tool.terminal" in _ACTIVE_MODULES:
+    from services.ws_pty import handle_pty_request, start_cleanup_loop as start_pty_cleanup_loop
+if "engine.mihomo" in _ACTIVE_MODULES:
+    from services.mihomo_clash_ws import (
+        handle_mihomo_clash_connections_request,
+        handle_mihomo_clash_logs_request,
+        handle_mihomo_clash_telemetry_request,
+    )
+    from services.mihomo_runtime import CONFIG_PATH as MIHOMO_CONFIG_FILE, MIHOMO_ROOT
 from services.ws_wsgi import (
     redact_ws_query_string,
     handle_xray_logs_request,

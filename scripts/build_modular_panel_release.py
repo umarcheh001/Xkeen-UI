@@ -63,6 +63,15 @@ _KNOWN_PACKAGE_FILES = {
     "uninstall.sh",
     "xkeen_mihomo_service.py",
 }
+# Files whose name does not tell which module they serve. Without these the
+# import closure below drags what they import into the core package. Every
+# importer of a file listed here already belongs to the same module.
+_PACKAGE_OWNER_OVERRIDES = {
+    "mihomo_config_generator.py": "engine.mihomo",
+    "xkeen_mihomo_service.py": "engine.mihomo",
+    "services/mihomo_backups.py": "engine.mihomo",
+    "services/subscription_pause.py": "engine.xray",
+}
 # Mirrors services.module_package_contract, which the offline builder cannot
 # import before it has located the package root.
 _SEMVER_RE = re.compile(
@@ -265,7 +274,9 @@ def build_module_ownership(root: Path) -> dict[str, tuple[str, ...]]:
         top_level = PurePosixPath(relative).parts[0]
         if top_level not in _KNOWN_PACKAGE_ROOTS and relative not in _KNOWN_PACKAGE_FILES:
             raise ReleaseBuildError(f"unclassified package path: {relative}")
-        if relative in _KNOWN_PACKAGE_FILES:
+        if relative in _PACKAGE_OWNER_OVERRIDES:
+            module_id = _PACKAGE_OWNER_OVERRIDES[relative]
+        elif relative in _KNOWN_PACKAGE_FILES:
             module_id = "core"
         else:
             marker_owner = {
