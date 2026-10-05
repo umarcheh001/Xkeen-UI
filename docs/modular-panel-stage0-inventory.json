@@ -36,13 +36,13 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 467,
-      "size_bytes": 6424566,
+      "unit_count": 470,
+      "size_bytes": 6451437,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
-        "backend_service": 66,
-        "backend_test": 202,
+        "backend_service": 67,
+        "backend_test": 204,
         "configuration": 10,
         "frontend_bundle": 9,
         "frontend_entrypoint": 2,
@@ -2001,7 +2001,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_transactions/executor.py",
-      "size_bytes": 7824,
+      "size_bytes": 10770,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -2055,7 +2055,25 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_transactions/journal.py",
-      "size_bytes": 11162,
+      "size_bytes": 11816,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_service",
+      "path": "xkeen-ui/services/module_transactions/launcher.py",
+      "size_bytes": 4378,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -4799,6 +4817,30 @@
     {
       "module_id": "core",
       "kind": "backend_test",
+      "path": "tests/test_module_transactions_cli.py",
+      "size_bytes": 15114,
+      "depends_on": [],
+      "starts_background_task": true,
+      "background_markers": [
+        "daemon_thread",
+        "threading.Thread"
+      ],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [
+        "XKEEN_UI_MODULE_TX_HEALTH_TIMEOUT",
+        "XKEEN_UI_UPDATE_DIR"
+      ],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
       "path": "tests/test_module_transactions_executor.py",
       "size_bytes": 17191,
       "depends_on": [],
@@ -4822,6 +4864,24 @@
       "kind": "backend_test",
       "path": "tests/test_module_transactions_extract.py",
       "size_bytes": 4167,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_module_transactions_guardrails.py",
+      "size_bytes": 3779,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
