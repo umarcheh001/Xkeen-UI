@@ -1,6 +1,6 @@
 import './shell.shared.js';
 import './editor.shared.js';
-import './editor_monaco.shared.js';
+import '../runtime/standalone_lazy.js';
 import './codemirror6.shared.js';
 import '../core/xk_dom.js';
 import '../core/xk_http.js';
