@@ -36,13 +36,13 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 452,
-      "size_bytes": 6305385,
+      "unit_count": 453,
+      "size_bytes": 6309695,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
         "backend_service": 59,
-        "backend_test": 194,
+        "backend_test": 195,
         "configuration": 10,
         "frontend_bundle": 9,
         "frontend_entrypoint": 2,
@@ -4176,6 +4176,24 @@
       "environment_variables": [
         "XKEEN_RELEASE_ED25519_PRIVATE_KEY"
       ],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_modular_panel_ownership_map.py",
+      "size_bytes": 4310,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
       "removable": false
     },
     {
