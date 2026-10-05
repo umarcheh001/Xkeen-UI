@@ -390,15 +390,16 @@ class ModuleCatalogClient:
             catalog_url = record["catalog_url"]
             release_version = record["release_version"]
             fetched_at = float(record["fetched_at"])
-            checked_at = float(self._now())
+            # A timestamp ahead of the clock is not a reason to drop the cache:
+            # a router boots with its clock behind until NTP answers. Such a
+            # record is never fresh (see get_catalog) and only serves as a
+            # stale fallback, so a forged date cannot hide a newer catalog.
             if (
                 not isinstance(encoded_catalog, str)
                 or not isinstance(encoded_signature, str)
                 or not isinstance(catalog_url, str)
                 or not isinstance(release_version, str)
                 or not math.isfinite(fetched_at)
-                or not math.isfinite(checked_at)
-                or fetched_at > checked_at
             ):
                 raise ValueError("invalid cache record")
             catalog_bytes = base64.b64decode(encoded_catalog, validate=True)

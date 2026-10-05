@@ -472,7 +472,7 @@ def test_client_does_not_use_stale_cache_after_redirect_policy_failure(
     assert raised.value.code == code
 
 
-def test_client_rejects_future_dated_cache_instead_of_treating_it_as_fresh(tmp_path) -> None:
+def test_client_never_treats_future_dated_cache_as_fresh(tmp_path) -> None:
     private_key = Ed25519PrivateKey.generate()
     clock = [100.0]
     transport = _CatalogTransport(_release_responses(private_key, "1.2.3"))
@@ -487,14 +487,60 @@ def test_client_rejects_future_dated_cache_instead_of_treating_it_as_fresh(tmp_p
     cache = json.loads(cache_path.read_text(encoding="utf-8"))
     cache["fetched_at"] = clock[0] + 1
     cache_path.write_text(json.dumps(cache), encoding="utf-8")
+    transport.calls.clear()
+
+    # A forged or early date must not keep an old catalog "fresh": the client
+    # still asks the network.
+    snapshot = client.get_catalog()
+
+    assert transport.calls[0] == LATEST_RELEASE_URL
+    assert snapshot.freshness == "fresh"
+    assert snapshot.fetched_at == clock[0]
+
+
+def test_client_serves_future_dated_cache_as_stale_when_offline(tmp_path) -> None:
+    # A router boots with its clock behind until NTP answers, and it has no
+    # network at that moment either: the verified cache is still the answer.
+    private_key = Ed25519PrivateKey.generate()
+    clock = [1_800_000_000.0]
+    transport = _CatalogTransport(_release_responses(private_key, "1.2.3"))
+    client = ModuleCatalogClient(
+        tmp_path,
+        transport=transport,
+        now=lambda: clock[0],
+        keyring={"release-2026": _public_pem(private_key)},
+    )
+    client.get_catalog()
+    clock[0] = 1_577_836_800.0
     transport.responses = {
         LATEST_RELEASE_URL: CatalogTransportError("catalog_transport_unavailable", "offline"),
     }
 
+    snapshot = client.get_catalog()
+
+    assert snapshot.freshness == "stale"
+    assert snapshot.stale_reason == "catalog_transport_unavailable"
+    assert snapshot.release_version == "1.2.3"
+
+
+def test_client_keeps_rollback_floor_with_a_future_dated_cache(tmp_path) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    clock = [1_800_000_000.0]
+    transport = _CatalogTransport(_release_responses(private_key, "1.2.4"))
+    client = ModuleCatalogClient(
+        tmp_path,
+        transport=transport,
+        now=lambda: clock[0],
+        keyring={"release-2026": _public_pem(private_key)},
+    )
+    client.get_catalog()
+    clock[0] = 1_577_836_800.0
+    transport.responses = _release_responses(private_key, "1.2.3")
+
     with pytest.raises(CatalogClientError) as raised:
         client.get_catalog()
 
-    assert raised.value.code == "catalog_cache_invalid"
+    assert raised.value.code == "catalog_version_rollback"
 
 
 def test_client_rejects_validly_signed_release_version_rollback(tmp_path) -> None:
