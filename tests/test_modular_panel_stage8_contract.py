@@ -165,10 +165,24 @@ def test_stage8_contract_generator_covers_boundaries_and_acceptance_matrix(tmp_p
         "panel_archive": "xkeen-ui-panel-<version>.tar.gz",
         "module_archive": "xkeen-module-<module-id>-<version>.tar.gz",
         "catalog": "catalog.json",
+        "catalog_signature": "catalog.json.sig",
         "checksums": "<asset>.sha256",
         "metadata": "release-metadata.json",
         "channel": "stable",
         "signing_key_id": "release-2026",
+    }
+    assert payload["trust_client"] == {
+        "algorithm": "Ed25519",
+        "signature_asset": "catalog.json.sig",
+        "discovery": "https://api.github.com/repos/umarcheh001/Xkeen-UI/releases/latest",
+        "cache_ttl_seconds": 86400,
+        "allowed_redirect_hosts": [
+            "github.com",
+            "objects.githubusercontent.com",
+            "release-assets.githubusercontent.com",
+        ],
+        "stale_fallback": "transport failures only",
+        "anti_rollback": "highest verified release version",
     }
     assert payload["determinism"] == {
         "tar_format": "ustar",
@@ -184,6 +198,11 @@ def test_stage8_contract_generator_covers_boundaries_and_acceptance_matrix(tmp_p
         "workflow": ".github/workflows/build-user-archive.yml",
         "push_validation": True,
         "tag_condition": "startsWith(github.ref, 'refs/tags/v')",
+        "catalog_signing": {
+            "script": "scripts/sign_modular_panel_catalog.py",
+            "private_key_environment": "XKEEN_RELEASE_ED25519_PRIVATE_KEY",
+            "tag_only": True,
+        },
         "artifact_path": "dist/modular-panel/**",
         "release_asset_source": "release-metadata.json",
         "legacy_bootstrap_archive": "xkeen-ui-routing.tar.gz",
@@ -202,10 +221,12 @@ def test_stage8_contract_snapshot_and_documentation_are_current(tmp_path):
     assert "Подэтап 8.0 —" in plan
     assert "Контракты и границы — закрыт" in plan
     assert "Упаковка и release assets — закрыт" in plan
+    assert "Trust и клиент каталога — закрыт" in plan
     assert "modular-panel-stage8-contract.json" in plan
     assert "modular-panel-stage8-contract.md" in docs_index
     assert "generate_modular_panel_stage8_contract.py" in docs_index
     assert "build_modular_panel_release.py" in docs_index
+    assert "sign_modular_panel_catalog.py" in docs_index
 
 
 def test_stage8_contract_rejects_unsafe_or_non_official_sources():
@@ -220,5 +241,8 @@ def test_stage8_contract_rejects_unsafe_or_non_official_sources():
         "xkeen-ui-panel-<version>.tar.gz",
         "SOURCE_DATE_EPOCH",
         "release-metadata.json",
+        "Ed25519",
+        "catalog.json.sig",
+        "XKEEN_RELEASE_ED25519_PRIVATE_KEY",
     ):
         assert fragment in text

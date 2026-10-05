@@ -46,6 +46,9 @@ e2e/.auth/
 # Local assistant / editor state
 .claude/
 
+# Local release signing keys. Never commit private key material.
+/.secrets/
+
 # Local audit working notes
 /README_AUDIT_CHECKLIST_CURRENT.md
 /docs/README_AUDIT_CHECKLIST_CURRENT.md

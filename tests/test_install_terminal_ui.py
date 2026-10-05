@@ -10,6 +10,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 INSTALLER = ROOT / "xkeen-ui" / "install.sh"
+DEV_REQUIREMENTS = ROOT / "requirements-dev.txt"
 
 
 def _text() -> str:
@@ -29,10 +30,31 @@ def _function(name: str) -> str:
     return text[start:text.index("\n}\n", start) + 3]
 
 
+def _require_gnu_script() -> str:
+    script_bin = shutil.which("script")
+    if script_bin is None:
+        pytest.skip("для pseudo-TTY проверки нужна команда script")
+    probe = subprocess.run([script_bin, "-qec", "true", "/dev/null"], capture_output=True, text=True, check=False)
+    if probe.returncode != 0:
+        pytest.skip("для pseudo-TTY проверки нужен GNU script с поддержкой -c")
+    return script_bin
+
+
 def test_installer_is_valid_posix_shell_syntax():
     proc = subprocess.run(["sh", "-n", str(INSTALLER)], capture_output=True, text=True)
 
     assert proc.returncode == 0, proc.stderr
+
+
+def test_installer_treats_catalog_signature_verification_as_required_dependency():
+    requirements = DEV_REQUIREMENTS.read_text(encoding="utf-8")
+    installer = _text()
+
+    assert any(line.startswith("cryptography") for line in requirements.splitlines())
+    assert "NEED_CRYPTOGRAPHY=0" in installer
+    assert '"$PYTHON_BIN" -c "import cryptography"' in installer
+    assert 'pip_install_with_fallback "cryptography" cryptography' in installer
+    assert 'fail_install "cryptography установлен некорректно' in installer
 
 
 def test_installer_keeps_terminal_output_separate_from_diagnostics():
@@ -147,8 +169,7 @@ def test_profile_status_renders_without_literal_quotes():
 def test_profile_menu_pauses_progress_and_accepts_numbered_choice():
     """The profile prompt must own the TTY while the progress ticker is active."""
 
-    if shutil.which("script") is None:
-        pytest.skip("для pseudo-TTY проверки нужна команда script")
+    script_bin = _require_gnu_script()
 
     events = Path("profile-menu-events.log")
     script = "\n".join(
@@ -182,7 +203,7 @@ def test_profile_menu_pauses_progress_and_accepts_numbered_choice():
     )
     try:
         proc = subprocess.run(
-            ["script", "-qec", f"sh -c {shlex.quote(script)}", "/dev/null"],
+            [script_bin, "-qec", f"sh -c {shlex.quote(script)}", "/dev/null"],
             input="3\n",
             capture_output=True,
             text=True,
@@ -204,8 +225,7 @@ def test_profile_menu_pauses_progress_and_accepts_numbered_choice():
 def test_custom_profile_keeps_progress_paused_until_modules_are_entered():
     """Custom module input must stay above the ticker after choosing profile 4."""
 
-    if shutil.which("script") is None:
-        pytest.skip("для pseudo-TTY проверки нужна команда script")
+    script_bin = _require_gnu_script()
 
     events = Path("custom-profile-menu-events.log")
     script = "\n".join(
@@ -239,7 +259,7 @@ def test_custom_profile_keeps_progress_paused_until_modules_are_entered():
     )
     try:
         proc = subprocess.run(
-            ["script", "-qec", f"sh -c {shlex.quote(script)}", "/dev/null"],
+            [script_bin, "-qec", f"sh -c {shlex.quote(script)}", "/dev/null"],
             input="4\ncore,tool.files\n",
             capture_output=True,
             text=True,

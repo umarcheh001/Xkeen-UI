@@ -5,7 +5,7 @@
 ## Основные документы
 
 - `README_frontend_migration_plan.md` — текущий статус закрытого migration scope и список guardrails, которые нельзя откатывать.
-- `../README-modular-panel-plan.md` — план модульной панели; Этапы 0–7 и подэтапы 8.0–8.1 закрыты, следующий — 8.2.
+- `../README-modular-panel-plan.md` — план модульной панели; Этапы 0–7 и подэтапы 8.0–8.2 закрыты, следующий — 8.3.
 - `frontend-target-architecture.md` — целевой архитектурный контракт фронтенда в текущем репозитории.
 - `frontend-feature-api.md` — правила для feature API, registry и compat-слоя.
 - `config-schema-ux-roadmap.md` — roadmap по развитию UX вокруг схем Xray JSON и Mihomo YAML: schema enrichment, semantic validation, snippets, quick fixes и guided flows.
@@ -27,7 +27,7 @@
 ## Недавние закрытые инициативы
 
 - `modular-panel-stage7-installer-profiles.md` — закрытый Этап 7: профили установщика, состав единого архива, переходы, rollback и API профилей.
-- `modular-panel-stage8-contract.md` — закрытые подэтапы 8.0–8.1: ownership legacy-файлов, deterministic release assets, schema/catalog/manifest, compatibility, CI publication и acceptance matrix.
+- `modular-panel-stage8-contract.md` — закрытые подэтапы 8.0–8.2: ownership legacy-файлов, deterministic release assets, Ed25519 catalog trust, cache, compatibility, CI publication и acceptance matrix.
 - `modular-panel-stage0-inventory.md` — закрытый Этап 0 модульной панели: границы `core`/engines/tools, routes, background tasks, frontend bundles, UI surfaces и cross-module coupling.
 - `modular-panel-stage1-module-registry.md` — закрытый Этап 1: базовый Module Registry, состояние `modules.json`, миграции и API.
 - `modular-panel-stage2-capabilities.md` — закрытый Этап 2: расширенный `/api/capabilities` с module projection и frontend mapping.
@@ -72,9 +72,11 @@
 - `modular-panel-stage4.1-contract.json` — machine-readable contract подэтапа 4.1; пересобирается `scripts/generate_modular_panel_stage4_1_contract.py`.
 - `modular-panel-stage4.6-compatibility.json` — machine-readable compatibility contract закрытого Этапа 4; пересобирается `scripts/generate_modular_panel_stage4_6_compatibility.py`.
 - `modular-panel-stage5-frontend-loading.json` — machine-readable contract закрытого Этапа 5; пересобирается `scripts/generate_modular_panel_stage5_frontend_loading.py`.
-- `modular-panel-stage8-contract.json` — machine-readable contract закрытых подэтапов 8.0–8.1; пересобирается `scripts/generate_modular_panel_stage8_contract.py`.
+- `modular-panel-stage8-contract.json` — machine-readable contract закрытых подэтапов 8.0–8.2; пересобирается `scripts/generate_modular_panel_stage8_contract.py`.
 - `../scripts/build_modular_panel_release.py` — deterministic builder panel/module archives, catalog, checksums и release metadata подэтапа 8.1.
+- `../scripts/sign_modular_panel_catalog.py` — tag-only Ed25519 signer `catalog.json` и updater release metadata подэтапа 8.2.
 - `superpowers/specs/2026-10-03-modular-panel-stage8-1-release-assets-design.md` и `superpowers/plans/2026-10-03-modular-panel-stage8-1-release-assets.md` — утверждённые design/implementation plan подэтапа 8.1.
+- `superpowers/specs/2026-10-05-modular-panel-stage8-2-trust-catalog-design.md` и `superpowers/plans/2026-10-05-modular-panel-stage8-2-trust-catalog.md` — закрытый trust boundary, CI signing и клиент официального каталога подэтапа 8.2.
 - `module-sizes.json` — generated runtime sizes модулей; обновляется `scripts/sync_module_sizes.py`.
 - `modular-panel-stage3r1-initial-html-baseline.json` — generated structural initial-HTML baseline до подэтапа 4.3.
 - `modular-panel-stage3r1-initial-html-baseline.md` — человекочитаемый baseline и команда воспроизведения.

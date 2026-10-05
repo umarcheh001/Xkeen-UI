@@ -311,10 +311,24 @@
     "panel_archive": "xkeen-ui-panel-<version>.tar.gz",
     "module_archive": "xkeen-module-<module-id>-<version>.tar.gz",
     "catalog": "catalog.json",
+    "catalog_signature": "catalog.json.sig",
     "checksums": "<asset>.sha256",
     "metadata": "release-metadata.json",
     "channel": "stable",
     "signing_key_id": "release-2026"
+  },
+  "trust_client": {
+    "algorithm": "Ed25519",
+    "signature_asset": "catalog.json.sig",
+    "discovery": "https://api.github.com/repos/umarcheh001/Xkeen-UI/releases/latest",
+    "cache_ttl_seconds": 86400,
+    "allowed_redirect_hosts": [
+      "github.com",
+      "objects.githubusercontent.com",
+      "release-assets.githubusercontent.com"
+    ],
+    "stale_fallback": "transport failures only",
+    "anti_rollback": "highest verified release version"
   },
   "determinism": {
     "tar_format": "ustar",
@@ -333,6 +347,11 @@
     "workflow": ".github/workflows/build-user-archive.yml",
     "push_validation": true,
     "tag_condition": "startsWith(github.ref, 'refs/tags/v')",
+    "catalog_signing": {
+      "script": "scripts/sign_modular_panel_catalog.py",
+      "private_key_environment": "XKEEN_RELEASE_ED25519_PRIVATE_KEY",
+      "tag_only": true
+    },
     "artifact_path": "dist/modular-panel/**",
     "release_asset_source": "release-metadata.json",
     "legacy_bootstrap_archive": "xkeen-ui-routing.tar.gz"

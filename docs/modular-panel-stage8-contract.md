@@ -48,15 +48,21 @@ Module-only update не меняет соседние модули, пользо
 
 Обязательные manifest keys: `schema_version`, `id`, `version`, `panel_api`, `module_api`, `requires`, `conflicts`, `min_core`, `architectures`, `channel`, `ownership`, `max_size`, `requires_restart`.
 Архив отклоняется до распаковки при неизвестном signing_key_id, SHA-256 mismatch, API mismatch, path traversal, абсолютном пути, symlink escape или наличии install/uninstall shell hooks.
-Статический preflight выполняет `services.module_package_contract`: source/catalog проверяются до скачивания, а `module-manifest.json` и точный allow-list `payload/` — до staging. Разрешены только directory и regular_file; symlink запрещён. Криптографическая Ed25519-проверка подписи остаётся границей подэтапа 8.2.
+Статический preflight выполняет `services.module_package_contract`: source/catalog проверяются до скачивания, а `module-manifest.json` и точный allow-list `payload/` — до staging. Разрешены только directory и regular_file; symlink запрещён.
 
 ## Release assets 8.1
 
 Сборщик `scripts/build_modular_panel_release.py` выпускает `xkeen-ui-panel-<version>.tar.gz`, `xkeen-module-<module-id>-<version>.tar.gz`, `catalog.json`, checksum sidecars `<asset>.sha256` и `release-metadata.json`.
 Module archive содержит только `module-manifest.json` и `payload/<ownership-path>`; bootstrap hooks остаются в panel asset и не попадают в module payload.
-Воспроизводимость фиксирует USTAR, POSIX-сортировку путей, uid/gid=0, пустые owner names и `SOURCE_DATE_EPOCH` для tar/gzip. Идентификатор `release-2026` пока является статическим trust boundary; криптографическая подпись вводится в 8.2.
-CI собирает и статически проверяет `dist/modular-panel/**` на каждом push. Публикация в GitHub Release разрешена только при `startsWith(github.ref, 'refs/tags/v')`, а список модульных upload assets читается из `release-metadata.json`. Legacy bootstrap archive `xkeen-ui-routing.tar.gz` сохраняется без изменения имени.
+Воспроизводимость фиксирует USTAR, POSIX-сортировку путей, uid/gid=0, пустые owner names и `SOURCE_DATE_EPOCH` для tar/gzip.
+CI собирает и статически проверяет `dist/modular-panel/**` на каждом push. На tag build `scripts/sign_modular_panel_catalog.py` добавляет `catalog.json.sig` в `release-metadata.json`; публикация в GitHub Release разрешена только при `startsWith(github.ref, 'refs/tags/v')`. Legacy bootstrap archive `xkeen-ui-routing.tar.gz` сохраняется без изменения имени.
 Версия релиза берётся из тега и обязана быть semver, поэтому теги выпускаются как `vX.Y.Z`, без буквенного суффикса (решение 5 октября 2026 года): на теге вида `v2.9.2a` сборщик останавливается с понятной ошибкой, и релиз не публикуется.
+
+## Trust и клиент каталога 8.2
+
+Core принимает только raw bytes `catalog.json`, проверенные `Ed25519` envelope `catalog.json.sig` с already-embedded key ID `release-2026`. Private key доступен только tag CI через environment `XKEEN_RELEASE_ED25519_PRIVATE_KEY` и не входит в assets.
+Discovery ограничен `https://api.github.com/repos/umarcheh001/Xkeen-UI/releases/latest`; принимается только published stable `v<semver>` release. Client сам строит immutable GitHub Releases URLs, принимает HTTPS redirects только на `github.com`, `objects.githubusercontent.com`, `release-assets.githubusercontent.com` и отвергает user URLs/branch selectors.
+Последний проверенный catalog cache хранится atomically с правами `0600`: до `86400` секунд он fresh, а stale fallback разрешён только при transport failures only. `highest verified release version` запрещает downgrade. Archive bytes streamed во temporary file и сверяются по exact size/SHA-256 перед передачей будущему updater; unpack и transaction остаются 8.3.
 
 ## Compatibility и операции
 

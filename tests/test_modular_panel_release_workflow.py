@@ -27,3 +27,19 @@ def test_release_workflow_does_not_create_github_release_on_branch_pushes() -> N
     release_source = source[release_step:]
     assert "if: startsWith(github.ref, 'refs/tags/v')" in release_source
     assert "gh release create" in release_source
+
+
+def test_release_workflow_signs_and_verifies_catalog_only_for_tags() -> None:
+    source = WORKFLOW.read_text(encoding="utf-8")
+    builder_index = source.index("python scripts/build_modular_panel_release.py")
+    signer_index = source.index("      - name: Sign modular panel catalog")
+    validation_index = source.index("      - name: Validate modular panel release assets")
+    signer_source = source[signer_index:validation_index]
+    validation_source = source[validation_index:source.index("      - name: Upload workflow artifact", validation_index)]
+
+    assert builder_index < signer_index < validation_index
+    assert "if: startsWith(github.ref, 'refs/tags/v')" in signer_source
+    assert "scripts/sign_modular_panel_catalog.py" in signer_source
+    assert "XKEEN_RELEASE_ED25519_PRIVATE_KEY: ${{ secrets.XKEEN_RELEASE_ED25519_PRIVATE_KEY }}" in signer_source
+    assert "verify_catalog_signature" in validation_source
+    assert "catalog.json.sig" in validation_source

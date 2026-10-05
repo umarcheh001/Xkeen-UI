@@ -11,6 +11,8 @@ from __future__ import annotations
 import importlib.util
 import posixpath
 import re
+import shutil
+import stat
 import sys
 from pathlib import Path
 
@@ -38,11 +40,40 @@ def _helper():
 
 
 @pytest.fixture(scope="module", params=PROFILES)
-def installed(request, tmp_path_factory):
+def installed(request, tmp_path_factory, profile_source):
     target = tmp_path_factory.mktemp(request.param) / "panel"
     helper = _helper()
-    helper.commit_profile(helper.apply_profile(SOURCE, target, request.param))
+    helper.commit_profile(helper.apply_profile(profile_source, target, request.param))
     return request.param, target
+
+
+@pytest.fixture(scope="module")
+def profile_source(tmp_path_factory) -> Path:
+    """Preserve generated frontend assets while excluding local Mihomo state."""
+
+    destination = tmp_path_factory.mktemp("profile-source") / "xkeen-ui"
+
+    def ignore_runtime_mihomo_state(directory: str, names: list[str]) -> set[str]:
+        relative = Path(directory).relative_to(SOURCE)
+        ignored = {
+            name
+            for name in names
+            if not stat.S_ISREG((Path(directory) / name).lstat().st_mode)
+            and not stat.S_ISDIR((Path(directory) / name).lstat().st_mode)
+            and not stat.S_ISLNK((Path(directory) / name).lstat().st_mode)
+        }
+        if relative == Path("opt/etc/mihomo"):
+            ignored.update({"config.yaml", "profiles"})
+        return ignored
+
+    shutil.copytree(SOURCE, destination, symlinks=True, ignore=ignore_runtime_mihomo_state)
+    return destination
+
+
+def test_profile_source_keeps_frontend_assets_without_local_mihomo_state(profile_source: Path):
+    assert (profile_source / "static/frontend-build/assets/panel-bridge.js").is_file()
+    assert not (profile_source / "opt/etc/mihomo/config.yaml").exists()
+    assert not (profile_source / "opt/etc/mihomo/mihomo-api.sock").exists()
 
 
 def _resolve(rel: str, specifier: str) -> str | None:

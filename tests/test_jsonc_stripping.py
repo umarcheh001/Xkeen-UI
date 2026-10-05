@@ -150,10 +150,10 @@ def _char_by_char(s: str) -> str:
 def _median_seconds(fn, payload: str, repeats: int = 5, iterations: int = 3) -> float:
     samples: list[float] = []
     for _ in range(repeats):
-        started = time.perf_counter()
+        started = time.process_time()
         for _ in range(iterations):
             fn(payload)
-        elapsed = (time.perf_counter() - started) / iterations
+        elapsed = (time.process_time() - started) / iterations
         samples.append(elapsed)
     return float(statistics.median(samples))
 

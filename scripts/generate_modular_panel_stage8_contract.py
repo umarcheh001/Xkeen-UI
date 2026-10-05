@@ -231,10 +231,24 @@ def build_contract(root: Path) -> dict[str, Any]:
             "panel_archive": "xkeen-ui-panel-<version>.tar.gz",
             "module_archive": "xkeen-module-<module-id>-<version>.tar.gz",
             "catalog": "catalog.json",
+            "catalog_signature": "catalog.json.sig",
             "checksums": "<asset>.sha256",
             "metadata": "release-metadata.json",
             "channel": "stable",
             "signing_key_id": "release-2026",
+        },
+        "trust_client": {
+            "algorithm": "Ed25519",
+            "signature_asset": "catalog.json.sig",
+            "discovery": "https://api.github.com/repos/umarcheh001/Xkeen-UI/releases/latest",
+            "cache_ttl_seconds": 24 * 60 * 60,
+            "allowed_redirect_hosts": [
+                "github.com",
+                "objects.githubusercontent.com",
+                "release-assets.githubusercontent.com",
+            ],
+            "stale_fallback": "transport failures only",
+            "anti_rollback": "highest verified release version",
         },
         "determinism": {
             "tar_format": "ustar",
@@ -250,6 +264,11 @@ def build_contract(root: Path) -> dict[str, Any]:
             "workflow": ".github/workflows/build-user-archive.yml",
             "push_validation": True,
             "tag_condition": "startsWith(github.ref, 'refs/tags/v')",
+            "catalog_signing": {
+                "script": "scripts/sign_modular_panel_catalog.py",
+                "private_key_environment": "XKEEN_RELEASE_ED25519_PRIVATE_KEY",
+                "tag_only": True,
+            },
             "artifact_path": "dist/modular-panel/**",
             "release_asset_source": "release-metadata.json",
             "legacy_bootstrap_archive": "xkeen-ui-routing.tar.gz",
@@ -287,6 +306,9 @@ def render_markdown(payload: dict[str, Any]) -> str:
     ownership = payload["legacy_ownership"]
     catalog = payload["catalog"]
     manifest = payload["manifest"]
+    release_assets = payload["release_assets"]
+    trust_client = payload["trust_client"]
+    ci_publication = payload["ci_publication"]
     lines = [
         "# Этап 8.0: контракты и границы",
         "",
@@ -338,15 +360,21 @@ def render_markdown(payload: dict[str, Any]) -> str:
             "",
             "Обязательные manifest keys: " + ", ".join(f"`{key}`" for key in manifest["required_fields"]) + ".",
             "Архив отклоняется до распаковки при неизвестном signing_key_id, SHA-256 mismatch, API mismatch, path traversal, абсолютном пути, symlink escape или наличии install/uninstall shell hooks.",
-            "Статический preflight выполняет `services.module_package_contract`: source/catalog проверяются до скачивания, а `module-manifest.json` и точный allow-list `payload/` — до staging. Разрешены только directory и regular_file; symlink запрещён. Криптографическая Ed25519-проверка подписи остаётся границей подэтапа 8.2.",
+            "Статический preflight выполняет `services.module_package_contract`: source/catalog проверяются до скачивания, а `module-manifest.json` и точный allow-list `payload/` — до staging. Разрешены только directory и regular_file; symlink запрещён.",
             "",
             "## Release assets 8.1",
             "",
-            f"Сборщик `{payload['release_assets']['builder']}` выпускает `{payload['release_assets']['panel_archive']}`, `{payload['release_assets']['module_archive']}`, `{payload['release_assets']['catalog']}`, checksum sidecars `{payload['release_assets']['checksums']}` и `{payload['release_assets']['metadata']}`.",
+            f"Сборщик `{release_assets['builder']}` выпускает `{release_assets['panel_archive']}`, `{release_assets['module_archive']}`, `{release_assets['catalog']}`, checksum sidecars `{release_assets['checksums']}` и `{release_assets['metadata']}`.",
             "Module archive содержит только `module-manifest.json` и `payload/<ownership-path>`; bootstrap hooks остаются в panel asset и не попадают в module payload.",
-            "Воспроизводимость фиксирует USTAR, POSIX-сортировку путей, uid/gid=0, пустые owner names и `SOURCE_DATE_EPOCH` для tar/gzip. Идентификатор `release-2026` пока является статическим trust boundary; криптографическая подпись вводится в 8.2.",
-            "CI собирает и статически проверяет `dist/modular-panel/**` на каждом push. Публикация в GitHub Release разрешена только при `startsWith(github.ref, 'refs/tags/v')`, а список модульных upload assets читается из `release-metadata.json`. Legacy bootstrap archive `xkeen-ui-routing.tar.gz` сохраняется без изменения имени.",
+            "Воспроизводимость фиксирует USTAR, POSIX-сортировку путей, uid/gid=0, пустые owner names и `SOURCE_DATE_EPOCH` для tar/gzip.",
+            f"CI собирает и статически проверяет `dist/modular-panel/**` на каждом push. На tag build `{ci_publication['catalog_signing']['script']}` добавляет `{release_assets['catalog_signature']}` в `release-metadata.json`; публикация в GitHub Release разрешена только при `{ci_publication['tag_condition']}`. Legacy bootstrap archive `xkeen-ui-routing.tar.gz` сохраняется без изменения имени.",
             "Версия релиза берётся из тега и обязана быть semver, поэтому теги выпускаются как `vX.Y.Z`, без буквенного суффикса (решение 5 октября 2026 года): на теге вида `v2.9.2a` сборщик останавливается с понятной ошибкой, и релиз не публикуется.",
+            "",
+            "## Trust и клиент каталога 8.2",
+            "",
+            f"Core принимает только raw bytes `{release_assets['catalog']}`, проверенные `{trust_client['algorithm']}` envelope `{trust_client['signature_asset']}` с already-embedded key ID `{release_assets['signing_key_id']}`. Private key доступен только tag CI через environment `{ci_publication['catalog_signing']['private_key_environment']}` и не входит в assets.",
+            f"Discovery ограничен `{trust_client['discovery']}`; принимается только published stable `v<semver>` release. Client сам строит immutable GitHub Releases URLs, принимает HTTPS redirects только на {', '.join(f'`{host}`' for host in trust_client['allowed_redirect_hosts'])} и отвергает user URLs/branch selectors.",
+            f"Последний проверенный catalog cache хранится atomically с правами `0600`: до `{trust_client['cache_ttl_seconds']}` секунд он fresh, а stale fallback разрешён только при {trust_client['stale_fallback']}. `{trust_client['anti_rollback']}` запрещает downgrade. Archive bytes streamed во temporary file и сверяются по exact size/SHA-256 перед передачей будущему updater; unpack и transaction остаются 8.3.",
             "",
             "## Compatibility и операции",
             "",

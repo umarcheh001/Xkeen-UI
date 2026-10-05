@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import importlib
+import os
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -58,6 +61,37 @@ def isolated_runtime_env(tmp_path, monkeypatch):
         "state_dir": state_dir,
         "log_dir": log_dir,
     }
+
+
+@pytest.fixture
+def panel_source_root(tmp_path) -> Path:
+    """Copy the Git-visible panel source without local router runtime state."""
+
+    result = subprocess.run(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "xkeen-ui"],
+        cwd=ROOT,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError("cannot list the Git-visible panel source")
+
+    destination_root = tmp_path / "panel-source"
+    for raw_path in result.stdout.split(b"\0"):
+        if not raw_path:
+            continue
+        relative = Path(raw_path.decode("utf-8", errors="surrogateescape"))
+        source = ROOT / relative
+        if source.is_symlink():
+            target = os.readlink(source)
+            destination = destination_root / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.symlink_to(target)
+        elif source.is_file():
+            destination = destination_root / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination)
+    return destination_root
 
 
 @pytest.fixture

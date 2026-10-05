@@ -36,13 +36,13 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 447,
-      "size_bytes": 6216430,
+      "unit_count": 452,
+      "size_bytes": 6290357,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
-        "backend_service": 57,
-        "backend_test": 191,
+        "backend_service": 59,
+        "backend_test": 194,
         "configuration": 10,
         "frontend_bundle": 9,
         "frontend_entrypoint": 2,
@@ -1907,8 +1907,44 @@
     {
       "module_id": "core",
       "kind": "backend_service",
+      "path": "xkeen-ui/services/module_catalog_client.py",
+      "size_bytes": 23786,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_service",
+      "path": "xkeen-ui/services/module_catalog_trust.py",
+      "size_bytes": 4481,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_service",
       "path": "xkeen-ui/services/module_package_contract.py",
-      "size_bytes": 16476,
+      "size_bytes": 20587,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -3722,7 +3758,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_install_terminal_ui.py",
-      "size_bytes": 12094,
+      "size_bytes": 12981,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -3835,7 +3871,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_installer_profile_frontend_closure.py",
-      "size_bytes": 5193,
+      "size_bytes": 6493,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -3853,7 +3889,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_installer_profiles.py",
-      "size_bytes": 16982,
+      "size_bytes": 17014,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -4125,8 +4161,28 @@
     {
       "module_id": "core",
       "kind": "backend_test",
+      "path": "tests/test_modular_panel_catalog_signer.py",
+      "size_bytes": 4567,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [
+        "XKEEN_RELEASE_ED25519_PRIVATE_KEY"
+      ],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
       "path": "tests/test_modular_panel_release_builder.py",
-      "size_bytes": 15058,
+      "size_bytes": 15443,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -4162,7 +4218,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_modular_panel_release_workflow.py",
-      "size_bytes": 1136,
+      "size_bytes": 2119,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -4173,7 +4229,9 @@
         "python3",
         "flask"
       ],
-      "environment_variables": [],
+      "environment_variables": [
+        "XKEEN_RELEASE_ED25519_PRIVATE_KEY"
+      ],
       "removable": false
     },
     {
@@ -4423,7 +4481,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_modular_panel_stage8_contract.py",
-      "size_bytes": 7870,
+      "size_bytes": 8889,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -4434,7 +4492,9 @@
         "python3",
         "flask"
       ],
-      "environment_variables": [],
+      "environment_variables": [
+        "XKEEN_RELEASE_ED25519_PRIVATE_KEY"
+      ],
       "removable": false
     },
     {
@@ -4503,8 +4563,44 @@
     {
       "module_id": "core",
       "kind": "backend_test",
+      "path": "tests/test_module_catalog_client.py",
+      "size_bytes": 22065,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_module_catalog_trust.py",
+      "size_bytes": 4322,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
       "path": "tests/test_module_package_contract.py",
-      "size_bytes": 7354,
+      "size_bytes": 10770,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -6170,7 +6266,7 @@
       "module_id": "core",
       "kind": "configuration",
       "path": ".github/workflows/build-user-archive.yml",
-      "size_bytes": 12634,
+      "size_bytes": 13728,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -6181,7 +6277,9 @@
         "python3",
         "flask"
       ],
-      "environment_variables": [],
+      "environment_variables": [
+        "XKEEN_RELEASE_ED25519_PRIVATE_KEY"
+      ],
       "removable": false
     },
     {
@@ -6288,7 +6386,7 @@
       "module_id": "core",
       "kind": "configuration",
       "path": "requirements-dev.txt",
-      "size_bytes": 127,
+      "size_bytes": 152,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -6324,7 +6422,7 @@
       "module_id": "core",
       "kind": "configuration",
       "path": "xkeen-ui/install.sh",
-      "size_bytes": 108687,
+      "size_bytes": 110141,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],

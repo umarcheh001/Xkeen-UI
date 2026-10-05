@@ -26,6 +26,11 @@ def _load_builder():
     return module
 
 
+def test_panel_source_root_excludes_ignored_runtime_files(panel_source_root: Path) -> None:
+    assert (panel_source_root / "xkeen-ui" / "app.py").is_file()
+    assert not (panel_source_root / "xkeen-ui" / "opt/etc/mihomo/config.yaml").exists()
+
+
 def test_release_builder_exposes_stable_input_and_asset_contract() -> None:
     builder = _load_builder()
 
@@ -356,10 +361,10 @@ def test_release_builder_cli_loads_registry_without_test_runner_pythonpath(tmp_p
     assert (tmp_path / "dist" / "release-metadata.json").is_file()
 
 
-def test_complete_bundle_is_reproducible_and_passes_static_preflight(tmp_path: Path) -> None:
+def test_complete_bundle_is_reproducible_and_passes_static_preflight(tmp_path: Path, panel_source_root: Path) -> None:
     builder = _load_builder()
     inputs = builder.ReleaseInputs(
-        root=ROOT,
+        root=panel_source_root,
         output_dir=tmp_path / "first",
         version="1.0.0",
         source_date_epoch=1_700_000_000,
@@ -368,7 +373,7 @@ def test_complete_bundle_is_reproducible_and_passes_static_preflight(tmp_path: P
     first = builder.build_release(inputs)
     second = builder.build_release(
         builder.ReleaseInputs(
-            root=ROOT,
+            root=panel_source_root,
             output_dir=tmp_path / "second",
             version=inputs.version,
             source_date_epoch=inputs.source_date_epoch,
@@ -379,6 +384,7 @@ def test_complete_bundle_is_reproducible_and_passes_static_preflight(tmp_path: P
     first_files = sorted(path.name for path in inputs.output_dir.iterdir())
     second_files = sorted(path.name for path in second.inputs.output_dir.iterdir())
     assert first_files == second_files
+    assert "catalog.json.sig" not in first_files
     for name in first_files:
         assert (inputs.output_dir / name).read_bytes() == (second.inputs.output_dir / name).read_bytes()
 
@@ -394,9 +400,9 @@ def test_complete_bundle_is_reproducible_and_passes_static_preflight(tmp_path: P
         assert result["id"] == entry["id"]
 
 
-def test_panel_asset_preserves_legacy_bootstrap_entrypoints(tmp_path: Path) -> None:
+def test_panel_asset_preserves_legacy_bootstrap_entrypoints(tmp_path: Path, panel_source_root: Path) -> None:
     builder = _load_builder()
-    panel = builder.build_panel_archive(ROOT, tmp_path, version="1.0.0", epoch=1_700_000_000)
+    panel = builder.build_panel_archive(panel_source_root, tmp_path, version="1.0.0", epoch=1_700_000_000)
 
     with tarfile.open(panel.path, "r:gz") as archive:
         names = {member.name for member in archive.getmembers()}
