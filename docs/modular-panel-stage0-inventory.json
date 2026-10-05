@@ -36,13 +36,13 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 476,
-      "size_bytes": 6509785,
+      "unit_count": 477,
+      "size_bytes": 6530321,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
         "backend_service": 67,
-        "backend_test": 207,
+        "backend_test": 208,
         "configuration": 10,
         "frontend_bundle": 9,
         "frontend_entrypoint": 2,
@@ -2001,7 +2001,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_transactions/executor.py",
-      "size_bytes": 12178,
+      "size_bytes": 12645,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -2019,7 +2019,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_transactions/extract.py",
-      "size_bytes": 2847,
+      "size_bytes": 3088,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -2055,7 +2055,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_transactions/journal.py",
-      "size_bytes": 15260,
+      "size_bytes": 16955,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -2073,10 +2073,13 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_transactions/launcher.py",
-      "size_bytes": 4358,
+      "size_bytes": 6176,
       "depends_on": [],
-      "starts_background_task": false,
-      "background_markers": [],
+      "starts_background_task": true,
+      "background_markers": [
+        "daemon_thread",
+        "threading.Thread"
+      ],
       "registers_routes": false,
       "routes": [],
       "frontend_bundle": [],
@@ -2109,7 +2112,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_transactions/state.py",
-      "size_bytes": 2230,
+      "size_bytes": 2744,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -4015,7 +4018,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_installer_module_transaction_recovery.py",
-      "size_bytes": 6242,
+      "size_bytes": 8164,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -4026,7 +4029,9 @@
         "python3",
         "flask"
       ],
-      "environment_variables": [],
+      "environment_variables": [
+        "XKEEN_UI_MODULE_TX_RECOVER_TIMEOUT"
+      ],
       "removable": false
     },
     {
@@ -4854,7 +4859,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_transactions_cli.py",
-      "size_bytes": 18145,
+      "size_bytes": 20102,
       "depends_on": [],
       "starts_background_task": true,
       "background_markers": [
@@ -4965,6 +4970,26 @@
         "flask"
       ],
       "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_module_transactions_loose_ends.py",
+      "size_bytes": 9741,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [
+        "XKEEN_UI_UPDATE_DIR"
+      ],
       "removable": false
     },
     {
@@ -6809,7 +6834,7 @@
       "module_id": "core",
       "kind": "configuration",
       "path": "xkeen-ui/install.sh",
-      "size_bytes": 113333,
+      "size_bytes": 115514,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -6838,6 +6863,7 @@
         "XKEEN_UI_INIT_SCRIPT",
         "XKEEN_UI_INSTALL_MODULES",
         "XKEEN_UI_INSTALL_PROFILE",
+        "XKEEN_UI_MODULE_TX_RECOVER_TIMEOUT",
         "XKEEN_UI_PORT",
         "XKEEN_UI_PYTHONPYCACHEPREFIX",
         "XKEEN_UI_UPDATE_CHANNEL",
