@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import stat
 
@@ -58,9 +59,11 @@ class _Opener:
 
 
 class _CatalogTransport:
-    def __init__(self, responses: dict[str, bytes | Exception]):
+    def __init__(self, responses: dict[str, bytes | Exception], *, stream_responses: dict[str, bytes | Exception] | None = None):
         self.responses = responses
         self.calls: list[str] = []
+        self.stream_responses = stream_responses or {}
+        self.stream_calls: list[str] = []
 
     def fetch_bytes(self, url: str, *, max_bytes: int, policy: FetchPolicy) -> bytes:
         self.calls.append(url)
@@ -70,6 +73,14 @@ class _CatalogTransport:
         assert len(response) <= max_bytes
         return response
 
+    def stream_to(self, url: str, output, *, max_bytes: int, policy: FetchPolicy) -> int:
+        self.stream_calls.append(url)
+        response = self.stream_responses[url]
+        if isinstance(response, Exception):
+            raise response
+        output.write(response)
+        return len(response)
+
 
 def _public_pem(private_key: Ed25519PrivateKey) -> bytes:
     return private_key.public_key().public_bytes(
@@ -78,7 +89,7 @@ def _public_pem(private_key: Ed25519PrivateKey) -> bytes:
     )
 
 
-def _catalog_bytes(version: str) -> bytes:
+def _catalog_bytes(version: str, *, archive_bytes: bytes = b"abc") -> bytes:
     document = {
         "schema_version": 1,
         "release_version": version,
@@ -97,8 +108,8 @@ def _catalog_bytes(version: str) -> bytes:
                 "conflicts": [],
                 "requires_restart": True,
                 "archive": f"xkeen-module-tool.files-{version}.tar.gz",
-                "size": 3,
-                "sha256": "a" * 64,
+                "size": len(archive_bytes),
+                "sha256": hashlib.sha256(archive_bytes).hexdigest(),
                 "signing_key_id": "release-2026",
             }
         ],
@@ -122,8 +133,10 @@ def _signature_bytes(private_key: Ed25519PrivateKey, catalog_bytes: bytes) -> by
     ).encode("utf-8")
 
 
-def _release_responses(private_key: Ed25519PrivateKey, version: str) -> dict[str, bytes]:
-    catalog_bytes = _catalog_bytes(version)
+def _release_responses(
+    private_key: Ed25519PrivateKey, version: str, *, archive_bytes: bytes = b"abc"
+) -> dict[str, bytes]:
+    catalog_bytes = _catalog_bytes(version, archive_bytes=archive_bytes)
     return {
         LATEST_RELEASE_URL: json.dumps(
             {"tag_name": f"v{version}", "draft": False, "prerelease": False},
@@ -377,3 +390,78 @@ def test_client_rejects_validly_signed_release_version_rollback(tmp_path) -> Non
         client.get_catalog()
 
     assert raised.value.code == "catalog_version_rollback"
+
+
+def test_client_downloads_only_trusted_archive_bytes(tmp_path) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    archive_bytes = b"abc"
+    archive_url = official_release_asset_url("1.2.3", "xkeen-module-tool.files-1.2.3.tar.gz")
+    transport = _CatalogTransport(
+        _release_responses(private_key, "1.2.3", archive_bytes=archive_bytes),
+        stream_responses={archive_url: archive_bytes},
+    )
+    client = ModuleCatalogClient(
+        tmp_path / "state",
+        transport=transport,
+        now=lambda: 100.0,
+        keyring={"release-2026": _public_pem(private_key)},
+    )
+    snapshot = client.get_catalog()
+
+    archive_path = client.download_verified_archive(snapshot, "tool.files", tmp_path / "downloads")
+
+    assert archive_path.name == "xkeen-module-tool.files-1.2.3.tar.gz"
+    assert archive_path.read_bytes() == archive_bytes
+    assert transport.stream_calls == [archive_url]
+
+
+@pytest.mark.parametrize(
+    ("archive_bytes", "code"),
+    [
+        (b"abcd", "catalog_archive_size_mismatch"),
+        (b"xyz", "catalog_archive_checksum_mismatch"),
+    ],
+)
+def test_client_removes_partial_archive_when_bytes_do_not_match_catalog(
+    tmp_path, archive_bytes: bytes, code: str
+) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    expected_archive = b"abc"
+    archive_url = official_release_asset_url("1.2.3", "xkeen-module-tool.files-1.2.3.tar.gz")
+    transport = _CatalogTransport(
+        _release_responses(private_key, "1.2.3", archive_bytes=expected_archive),
+        stream_responses={archive_url: archive_bytes},
+    )
+    client = ModuleCatalogClient(
+        tmp_path / "state",
+        transport=transport,
+        now=lambda: 100.0,
+        keyring={"release-2026": _public_pem(private_key)},
+    )
+    snapshot = client.get_catalog()
+    downloads = tmp_path / "downloads"
+
+    with pytest.raises(CatalogClientError) as raised:
+        client.download_verified_archive(snapshot, "tool.files", downloads)
+
+    assert raised.value.code == code
+    assert list(downloads.glob("*.part")) == []
+    assert not (downloads / "xkeen-module-tool.files-1.2.3.tar.gz").exists()
+
+
+def test_client_rejects_unknown_module_before_downloading(tmp_path) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    transport = _CatalogTransport(_release_responses(private_key, "1.2.3"))
+    client = ModuleCatalogClient(
+        tmp_path,
+        transport=transport,
+        now=lambda: 100.0,
+        keyring={"release-2026": _public_pem(private_key)},
+    )
+    snapshot = client.get_catalog()
+
+    with pytest.raises(CatalogClientError) as raised:
+        client.download_verified_archive(snapshot, "tool.terminal", tmp_path / "downloads")
+
+    assert raised.value.code == "catalog_module_unknown"
+    assert transport.stream_calls == []

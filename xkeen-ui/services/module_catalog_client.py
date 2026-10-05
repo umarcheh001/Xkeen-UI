@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import io
 import json
 import math
 import os
 import socket
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -451,3 +453,89 @@ class ModuleCatalogClient:
             )
         self._write_cache(snapshot)
         return snapshot
+
+    def download_verified_archive(
+        self,
+        snapshot: CatalogSnapshot,
+        module_id: str,
+        destination_dir: str | os.PathLike[str],
+    ) -> Path:
+        """Stream one trusted module asset and return it only after byte verification."""
+
+        entry = next(
+            (
+                candidate
+                for candidate in snapshot.catalog.get("modules", [])
+                if isinstance(candidate, Mapping) and candidate.get("id") == module_id
+            ),
+            None,
+        )
+        if entry is None:
+            raise CatalogClientError("catalog_module_unknown", "module does not exist in the trusted catalog")
+        archive_name = entry.get("archive")
+        expected_size = entry.get("size")
+        expected_digest = entry.get("sha256")
+        if (
+            not isinstance(archive_name, str)
+            or not isinstance(expected_size, int)
+            or isinstance(expected_size, bool)
+            or expected_size <= 0
+            or not isinstance(expected_digest, str)
+        ):
+            raise CatalogClientError("catalog_schema_invalid", "trusted catalog archive entry is invalid")
+        archive_url = official_release_asset_url(snapshot.release_version, archive_name)
+        destination = Path(destination_dir)
+        destination.mkdir(parents=True, exist_ok=True)
+        final_path = destination / archive_name
+        descriptor, temporary_name = tempfile.mkstemp(prefix=f".{archive_name}.", suffix=".part", dir=destination)
+        temporary_path = Path(temporary_name)
+        digest = hashlib.sha256()
+        written = 0
+
+        class HashingWriter:
+            def __init__(self, handle: Any):
+                self._handle = handle
+
+            def write(self, data: bytes) -> int:
+                nonlocal written
+                chunk = bytes(data)
+                digest.update(chunk)
+                written += len(chunk)
+                return self._handle.write(chunk)
+
+        try:
+            with os.fdopen(descriptor, "wb") as handle:
+                try:
+                    self._transport.stream_to(
+                        archive_url,
+                        HashingWriter(handle),
+                        max_bytes=expected_size + 1,
+                        policy=_RELEASE_POLICY,
+                    )
+                except CatalogTransportError as error:
+                    if error.code == "catalog_transport_too_large":
+                        raise CatalogClientError(
+                            "catalog_archive_size_mismatch",
+                            "module archive exceeds its trusted size",
+                        ) from error
+                    raise CatalogClientError("catalog_archive_unavailable", "module archive could not be downloaded") from error
+                handle.flush()
+                os.fsync(handle.fileno())
+            if written != expected_size:
+                raise CatalogClientError("catalog_archive_size_mismatch", "module archive size does not match the catalog")
+            if digest.hexdigest() != expected_digest:
+                raise CatalogClientError(
+                    "catalog_archive_checksum_mismatch",
+                    "module archive checksum does not match the catalog",
+                )
+            os.replace(temporary_path, final_path)
+            return final_path
+        except CatalogClientError:
+            raise
+        except OSError as error:
+            raise CatalogClientError("catalog_archive_unavailable", "module archive could not be staged") from error
+        finally:
+            try:
+                temporary_path.unlink()
+            except FileNotFoundError:
+                pass
