@@ -1,5 +1,5 @@
 {% from "panel/macros.html" import op_icon %}
-<div id="view-commands" class="view-section" style="display:none;" data-xk-section="commands">
+<div id="view-commands" class="view-section"{{ ' style="display:none;"'|safe if page_context.initial_view != 'commands' else '' }} data-xk-section="commands">
   <!-- XKeen commands -->
 <section class="card commands-card">
   <div class="commands-hero">

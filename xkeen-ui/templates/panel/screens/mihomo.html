@@ -1,5 +1,5 @@
 {% from "panel/macros.html" import op_icon %}
-<div id="view-mihomo" class="view-section" style="display:none;" data-xk-section="mihomo">
+<div id="view-mihomo" class="view-section"{{ ' style="display:none;"'|safe if page_context.initial_view != 'mihomo' else '' }} data-xk-section="mihomo">
   <div class="xk-mihomo-workspace-head">
     <div class="xk-mihomo-workspace-tabs" role="tablist" aria-label="Рабочая область Mihomo">
       <button type="button" class="xk-mihomo-workspace-tab is-active" id="mihomo-clash-tab-control" data-mihomo-clash-subview="control" role="tab" aria-selected="true" aria-controls="mihomo-clash-panel-control">

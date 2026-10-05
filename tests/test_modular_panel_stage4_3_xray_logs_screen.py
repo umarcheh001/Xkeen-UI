@@ -70,7 +70,7 @@ def _render_screen(has_xray: bool) -> str:
         "{% endif %}"
     )
     with app.test_request_context():
-        return app.jinja_env.from_string(template).render(has_xray=has_xray)
+        return app.jinja_env.from_string(template).render(has_xray=has_xray, page_context={})
 
 
 def test_xray_logs_screen_renders_only_with_engine_xray():

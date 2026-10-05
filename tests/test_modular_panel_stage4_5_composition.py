@@ -242,6 +242,23 @@ def test_routing_backup_surfaces_follow_the_backups_module(tmp_path):
     )
 
 
+def test_server_shows_the_first_available_screen(tmp_path):
+    # Only the routing screen used to be visible in the markup, so a set
+    # without it relied on scripts to show anything at all.
+    def visible(module_ids, name):
+        html = render_panel(module_ids, tmp_path / name)
+        roots = re.findall(r'<div id="view-([a-z-]+)" class="view-section"( style="display:none;")? data-xk-section', html)
+        assert roots, name
+        return [view for view, hidden in roots if not hidden]
+
+    assert visible(RENDER_FULL_MODULE_IDS, "full") == ["routing"]
+    assert visible(None, "legacy") == ["routing"]
+    assert visible(sorted(XRAY_MINIMAL_MODULE_IDS), "xray") == ["routing"]
+    assert visible(sorted(MIHOMO_MINIMAL_MODULE_IDS), "mihomo") == ["mihomo"]
+    assert visible(["core"], "core") == ["xkeen"]
+    assert visible(["core", "tool.terminal", "tool.files"], "tools") == ["xkeen"]
+
+
 def test_legacy_and_full_html_keep_the_same_composed_surface_set(tmp_path):
     full = render_panel(RENDER_FULL_MODULE_IDS, tmp_path / "full")
     legacy = render_panel(None, tmp_path / "legacy")

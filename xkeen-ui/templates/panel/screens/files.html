@@ -1,5 +1,5 @@
 {% from "panel/macros.html" import op_icon %}
-<div id="view-files" class="view-section" style="display:none;" data-xk-section="files">
+<div id="view-files" class="view-section"{{ ' style="display:none;"'|safe if page_context.initial_view != 'files' else '' }} data-xk-section="files">
   <section class="card fm-card" aria-labelledby="fm-title" data-fm-workspace="1">
     <div class="fm-header">
       <h2 id="fm-title">Файловый менеджер</h2>

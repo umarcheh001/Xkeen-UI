@@ -1,5 +1,5 @@
 {% from "panel/macros.html" import op_icon %}
-<div id="view-xkeen" class="view-section" style="display:none;" data-xk-section="xkeen">
+<div id="view-xkeen" class="view-section"{{ ' style="display:none;"'|safe if page_context.initial_view != 'xkeen' else '' }} data-xk-section="xkeen">
   <!-- XKeen: порты и исключения -->
       <section class="card commands-card">
         <div class="commands-header" data-xk-toggle="xkeen-settings" role="button" tabindex="0" aria-controls="xkeen-body" aria-expanded="true">

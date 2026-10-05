@@ -1,5 +1,5 @@
 {% from "panel/macros.html" import op_icon %}
-    <div id="view-xray-logs" class="view-section" style="display:none;" data-xk-section="xray-logs">
+    <div id="view-xray-logs" class="view-section"{{ ' style="display:none;"'|safe if page_context.initial_view != 'xray-logs' else '' }} data-xk-section="xray-logs">
       <section class="card log-card xk-logs-live-card" aria-labelledby="xray-logs-title">
         <div class="log-header-row">
           <h2 id="xray-logs-title">Логи Xray онлайн <span id="xray-log-lamp" class="xray-log-lamp" data-state="unknown" title="Статус логов Xray неизвестен"></span></h2>

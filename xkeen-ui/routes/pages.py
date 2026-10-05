@@ -321,6 +321,12 @@ def _build_panel_page_context(active_module_ids: set[str] | None) -> dict[str, o
             active_view_selected = True
         navigation_items.append(item)
     context["navigation_items"] = navigation_items
+    # Every screen but routing is hidden in its markup unless it is this one,
+    # so a set without routing is not blank before scripts run.  Routing
+    # needs no switch: it leads the navigation whenever it is composed.
+    context["initial_view"] = next(
+        (item["view"] for item in navigation_items if item["active"]), None
+    )
     return context
 
 
