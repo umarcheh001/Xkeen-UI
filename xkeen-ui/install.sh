@@ -1117,7 +1117,7 @@ if [ "$NEED_FLASK" -eq 1 ] || [ "$NEED_CRYPTOGRAPHY" -eq 1 ] || [ "$NEED_GEVENT"
   else
     echo "[!] Не найден пакетный менеджер opkg Entware."
     echo "    Поставь зависимости вручную:"
-    echo "      opkg update && opkg install python3 python3-pip"
+    echo "      opkg update && opkg install python3 python3-pip python3-cryptography"
     echo "      export XKEEN_PIP_INDEX_URL=${XKEEN_PIP_INDEX_URL:-$PIP_FALLBACK_INDEX_DEFAULT}"
     echo "      export XKEEN_GEVENT_PIP_SPEC=${XKEEN_GEVENT_PIP_SPEC:-$GEVENT_PIP_SPEC}"
     if [ "$WANT_GEVENT" -eq 1 ]; then
@@ -1171,8 +1171,13 @@ if [ "$NEED_FLASK" -eq 1 ] || [ "$NEED_CRYPTOGRAPHY" -eq 1 ] || [ "$NEED_GEVENT"
   fi
 
   if [ "$NEED_CRYPTOGRAPHY" -eq 1 ]; then
-    if ! pip_install_with_fallback "cryptography" cryptography; then
-      echo "[!] Не удалось установить cryptography через доступные pip-индексы."
+    # Сначала пакет Entware: он собран под каждую архитектуру роутеров. В PyPI
+    # готовых сборок cryptography под MIPS нет, и pip пошёл бы собирать её из
+    # исходников, для чего на роутере нужен Rust.
+    if "$OPKG_BIN" install python3-cryptography && "$PYTHON_BIN" -c "import cryptography" >/dev/null 2>&1; then
+      echo "[*] cryptography установлена пакетом Entware python3-cryptography."
+    elif ! pip_install_with_fallback "cryptography" cryptography; then
+      echo "[!] Не удалось установить cryptography ни пакетом Entware, ни через доступные pip-индексы."
       echo "    Без неё каталог модулей нельзя проверить безопасно."
       fail_install "Не удалось загрузить cryptography. Проверьте интернет-соединение или pip-зеркало."
     fi

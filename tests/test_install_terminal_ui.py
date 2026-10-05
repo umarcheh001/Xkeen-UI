@@ -57,6 +57,18 @@ def test_installer_treats_catalog_signature_verification_as_required_dependency(
     assert 'fail_install "cryptography установлен некорректно' in installer
 
 
+def test_installer_tries_the_entware_cryptography_package_before_pip():
+    installer = _text()
+
+    # PyPI has no cryptography builds for MIPS routers; Entware does.
+    package = installer.index('"$OPKG_BIN" install python3-cryptography')
+    pip = installer.index('pip_install_with_fallback "cryptography" cryptography')
+    assert package < pip
+    between = installer[package:pip]
+    assert '"$PYTHON_BIN" -c "import cryptography"' in between
+    assert "elif !" in between
+
+
 def test_installer_keeps_terminal_output_separate_from_diagnostics():
     text = _text()
 
