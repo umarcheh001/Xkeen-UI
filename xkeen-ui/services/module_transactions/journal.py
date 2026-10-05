@@ -18,11 +18,23 @@ from typing import Any, Mapping
 from services.io.atomic import _atomic_write_json
 
 from .plan import Plan, plan_from_json, plan_to_json
-from .state import ModuleTransactionError, transactions_root
+from .state import ModuleTransactionError, pid_alive, transactions_root
 
 
 _TEMP_SUFFIX = ".xk-tx-new"
 _GZIP_SUFFIX = ".gz"
+# A confirmed operation is renamed to this suffix before its directory is
+# removed: whatever a power cut leaves of it is rubbish, not an operation.
+_DONE_SUFFIX = ".done"
+
+
+def current_boot_id() -> str | None:
+    """An identifier that changes with every boot of the router, if the system has one."""
+
+    try:
+        return Path("/proc/sys/kernel/random/boot_id").read_text(encoding="ascii").strip() or None
+    except (OSError, ValueError):
+        return None
 
 
 class Journal:
@@ -91,10 +103,28 @@ class Journal:
 
         root = transactions_root(Path(panel_root))
         try:
-            candidates = sorted(path for path in root.iterdir() if path.is_dir())
+            candidates = sorted(
+                path for path in root.iterdir() if path.is_dir() and not path.name.endswith(_DONE_SUFFIX)
+            )
         except OSError:
             return None
         return candidates[-1] if candidates else None
+
+    @staticmethod
+    def sweep(panel_root: Path) -> None:
+        """Remove what an interrupted confirmation left behind."""
+
+        root = transactions_root(Path(panel_root))
+        try:
+            leftovers = [path for path in root.iterdir() if path.name.endswith(_DONE_SUFFIX)]
+        except OSError:
+            return
+        for path in leftovers:
+            shutil.rmtree(path, ignore_errors=True)
+        try:
+            root.rmdir()
+        except OSError:
+            pass
 
     def meta(self) -> dict[str, Any]:
         return dict(self._meta)
@@ -105,10 +135,49 @@ class Journal:
 
     def set_pid(self, pid: int) -> None:
         self._meta["pid"] = int(pid)
+        # A process id alone lies after a reboot: the number may belong to
+        # some long-lived daemon by then.
+        self._meta["boot_id"] = current_boot_id()
         self._save()
 
+    def runner_alive(self) -> bool:
+        """Whether the process that carries this operation still exists."""
+
+        pid = self._meta.get("pid")
+        if not pid or not pid_alive(pid):
+            return False
+        recorded = self._meta.get("boot_id")
+        return not recorded or recorded == current_boot_id()
+
+    def flush(self) -> None:
+        """Ask the system to put everything written so far on the storage.
+
+        Copies of the previous files are about to be dropped or relied on;
+        a file that exists only in the page cache is lost with the power.
+        """
+
+        sync = getattr(os, "sync", None)
+        if sync is not None:
+            try:
+                sync()
+            except OSError:
+                pass
+
     def commit(self) -> None:
-        shutil.rmtree(self.dir, ignore_errors=True)
+        # One rename takes the directory out of sight of ``find``. Removing
+        # it file by file first would leave, after a power cut, an action
+        # log without its record - and the next start would undo a
+        # confirmed operation by it.
+        done = self.dir.with_name(self.dir.name + _DONE_SUFFIX)
+        try:
+            os.replace(self.dir, done)
+        except OSError:
+            done = self.dir
+            try:
+                self._log.unlink()
+            except OSError:
+                pass
+        shutil.rmtree(done, ignore_errors=True)
         try:
             # The parent is only a holder of operations; leave no empty shell.
             self.dir.parent.rmdir()
@@ -184,7 +253,14 @@ class Journal:
     def rollback(self) -> None:
         """Put back everything the log mentions; safe to run again after a failure."""
 
-        for action in reversed(self._actions()):
+        actions = self._actions()
+        logged = {action.get("path") for action in actions}
+        # A copy in ``backup/`` is the previous file whatever the log says:
+        # a damaged or missing log line must not cost the user that file.
+        for relative in self._kept_paths():
+            if relative not in logged:
+                actions.insert(0, {"kind": "replace", "path": relative})
+        for action in reversed(actions):
             kind, relative = action.get("kind"), action.get("path")
             if not isinstance(relative, str) or kind not in {"add", "replace", "remove", "state", "mkdir"}:
                 continue
@@ -208,7 +284,12 @@ class Journal:
                     # Announced but never started: the original is untouched.
                     continue
                 target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(kept, temporary)
+                try:
+                    # A link needs no free space; the undo often runs exactly
+                    # because the storage is full.
+                    os.link(kept, temporary)
+                except OSError:
+                    shutil.copy2(kept, temporary)
                 os.replace(temporary, target)
             except OSError as error:
                 raise ModuleTransactionError(
@@ -225,6 +306,17 @@ class Journal:
 
     def _kept(self, relative: str) -> Path:
         return (self.backup / "files").joinpath(*relative.split("/"))
+
+    def _kept_paths(self) -> list[str]:
+        root = self.backup / "files"
+        try:
+            return sorted(
+                path.relative_to(root).as_posix()
+                for path in root.rglob("*")
+                if path.is_file() and not path.name.endswith(_TEMP_SUFFIX)
+            )
+        except OSError:
+            return []
 
     def _unsafe(self, relative: str, reason: str) -> None:
         raise ModuleTransactionError("operation_target_unsafe", reason, path=relative)

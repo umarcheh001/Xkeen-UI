@@ -408,3 +408,81 @@ def test_wait_for_panel_gives_up_when_nothing_listens(tmp_path: Path) -> None:
 
     assert wait_for_panel("http://127.0.0.1:9/api/auth/status", panel.state, "tool.terminal", "install",
                           timeout_s=0.2, sleep=lambda _seconds: None) is False
+
+
+# -- находки итоговой проверки ветки ---------------------------------------
+
+
+def test_cancel_after_the_panel_is_confirmed_does_not_undo_the_operation(tmp_path: Path) -> None:
+    panel = make_panel(tmp_path)
+
+    def cancel(current: str) -> None:
+        if current == "committed":
+            raise OperationCancelled()
+
+    result, journal, recorder = _run(panel, make_release(), "install", "tool.terminal", on_step=cancel)
+
+    assert result == "committed"
+    assert not journal.dir.exists()
+    assert set(OWNERSHIP["tool.terminal"]) <= set(snapshot(panel.root))
+    assert panel.read_json("module-installed.json")["modules"]["tool.terminal"] is True
+    assert read_status(panel.state)["result"] == "committed"
+    assert recorder.restarts == 1
+
+
+def test_shield_is_raised_before_confirming_and_before_undoing(tmp_path: Path) -> None:
+    calls: list[str] = []
+    panel = make_panel(tmp_path / "first")
+    _run(panel, make_release(), "install", "tool.terminal", shield=lambda: calls.append("shield"))
+    assert calls == ["shield"]
+
+    calls.clear()
+    other = make_panel(tmp_path / "second")
+    result, _, _ = _run(
+        other, make_release(), "install", "tool.terminal", Recorder([False, True]), shield=lambda: calls.append("shield")
+    )
+    assert result == "rolled_back"
+    assert calls == ["shield"]
+
+
+def test_status_write_failure_after_confirmation_keeps_the_result(tmp_path: Path, monkeypatch) -> None:
+    from services.module_transactions import executor as executor_module
+
+    panel = make_panel(tmp_path)
+    real_write = executor_module.write_status
+
+    def write_until_committed(state_dir, status):
+        if status.get("step") == "committed":
+            raise OSError("No space left on device")
+        return real_write(state_dir, status)
+
+    monkeypatch.setattr(executor_module, "write_status", write_until_committed)
+
+    result, journal, recorder = _run(panel, make_release(), "install", "tool.terminal")
+
+    assert result == "committed"
+    assert not journal.dir.exists()
+    assert set(OWNERSHIP["tool.terminal"]) <= set(snapshot(panel.root))
+    assert recorder.restarts == 1
+
+
+def test_everything_is_flushed_before_the_restart_and_before_confirming(tmp_path: Path, monkeypatch) -> None:
+    from services.module_transactions import journal as journal_module
+
+    panel = make_panel(tmp_path)
+    order: list[str] = []
+    monkeypatch.setattr(journal_module.os, "sync", lambda: order.append("sync"), raising=False)
+    recorder = Recorder()
+    real_restart = recorder.restart
+
+    def restart() -> None:
+        order.append("restart")
+        real_restart()
+
+    recorder.restart = restart
+
+    result, _, _ = _run(panel, make_release(), "install", "tool.terminal", recorder)
+
+    assert result == "committed"
+    assert order.index("sync") < order.index("restart")
+    assert "sync" in order[order.index("restart"):]

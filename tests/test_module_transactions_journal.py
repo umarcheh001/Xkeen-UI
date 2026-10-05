@@ -337,3 +337,118 @@ def test_commit_removes_operation_directory(tmp_path: Path) -> None:
     assert Journal.find(panel.root) is None
     assert panel.path("services/ws_pty.py").read_bytes() == b"new services/ws_pty.py"
     assert set(OWNERSHIP["tool.terminal"]) <= set(snapshot(panel.root))
+
+
+# -- находки итоговой проверки ветки ---------------------------------------
+
+
+def test_power_loss_inside_commit_does_not_undo_a_confirmed_operation(tmp_path: Path, monkeypatch) -> None:
+    """Подтверждение удаляет каталог по частям; обрыв посреди него не должен запускать откат."""
+
+    from services.module_transactions.executor import recover
+
+    panel = make_panel(tmp_path)
+    journal = _install_journal(tmp_path, panel)
+    for relative in journal.plan.files_add:
+        journal.apply_file(relative, _staged(tmp_path, relative))
+    journal.write_state_file("modules.json", b'{"changed": true}\n')
+    after = snapshot(panel.root)
+
+    def power_cut(path, *args, **kwargs):
+        # The record of the operation is gone, the action log is still there.
+        target = Path(path) / "operation.json"
+        if target.exists():
+            target.unlink()
+        raise KeyboardInterrupt("power cut")
+
+    monkeypatch.setattr(journal_module.shutil, "rmtree", power_cut)
+    with pytest.raises(KeyboardInterrupt):
+        journal.commit()
+    monkeypatch.undo()
+
+    assert Journal.find(panel.root) is None
+    assert recover(panel.root, panel.state) is None
+    assert snapshot(panel.root) == after
+    assert not transactions_root(panel.root).exists()
+
+
+def test_rollback_needs_no_free_space_when_backups_are_links(tmp_path: Path, monkeypatch) -> None:
+    panel = make_panel(tmp_path, installed=("core", "tool.editor", "engine.xray", "tool.terminal"))
+    before = snapshot(panel.root)
+    journal = _install_journal(tmp_path, panel, operation="repair")
+    for relative in journal.plan.files_add:
+        journal.apply_file(relative, _staged(tmp_path, relative))
+    linked = journal.backup / "files" / Path(*journal.plan.files_add[0].split("/"))
+    if linked.stat().st_nlink < 2:
+        pytest.skip("this filesystem keeps backups as copies")
+
+    def disk_is_full(*_args, **_kwargs):
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    monkeypatch.setattr(journal_module.shutil, "copy2", disk_is_full)
+    journal.rollback()
+    monkeypatch.undo()
+
+    assert snapshot(panel.root) == before
+
+
+def test_damaged_line_in_the_middle_of_the_log_does_not_lose_previous_files(tmp_path: Path) -> None:
+    panel = make_panel(tmp_path, installed=("core", "tool.editor", "engine.xray", "tool.terminal"))
+    before = snapshot(panel.root)
+    journal = _install_journal(tmp_path, panel, operation="repair")
+    for relative in journal.plan.files_add:
+        journal.apply_file(relative, _staged(tmp_path, relative))
+    journal.write_state_file("modules.json", b'{"changed": true}\n')
+    log = journal.dir / "actions.log"
+    lines = log.read_bytes().split(b"\n")
+    lines[0] = b'{"kind": "repl\x00\x00'
+    lines[2] = b"garbage"
+    log.write_bytes(b"\n".join(lines))
+
+    Journal.open(journal.dir).rollback()
+
+    assert snapshot(panel.root) == before
+
+
+def test_previous_files_come_back_even_without_any_log(tmp_path: Path) -> None:
+    panel = make_panel(tmp_path, installed=("core", "tool.editor", "engine.xray", "tool.terminal"))
+    before = snapshot(panel.root)
+    journal = _install_journal(tmp_path, panel, operation="remove")
+    for relative in journal.plan.files_remove:
+        journal.remove_file(relative)
+    (journal.dir / "actions.log").unlink()
+
+    Journal.open(journal.dir).rollback()
+
+    assert snapshot(panel.root) == before
+
+
+def test_flush_asks_the_system_to_write_everything_down(tmp_path: Path, monkeypatch) -> None:
+    panel = make_panel(tmp_path)
+    journal = _install_journal(tmp_path, panel)
+    calls = []
+    monkeypatch.setattr(journal_module.os, "sync", lambda: calls.append("sync"), raising=False)
+
+    journal.flush()
+
+    assert calls == ["sync"]
+
+
+def test_runner_is_dead_after_a_reboot_even_if_its_pid_is_taken(tmp_path: Path, monkeypatch) -> None:
+    panel = make_panel(tmp_path)
+    journal = _install_journal(tmp_path, panel)
+    monkeypatch.setattr(journal_module, "current_boot_id", lambda: "boot-one")
+    journal.set_pid(os.getpid())
+
+    assert journal.meta()["boot_id"] == "boot-one"
+    assert Journal.open(journal.dir).runner_alive() is True
+
+    monkeypatch.setattr(journal_module, "current_boot_id", lambda: "boot-two")
+
+    assert Journal.open(journal.dir).runner_alive() is False
+
+
+def test_runner_without_a_pid_is_not_alive(tmp_path: Path) -> None:
+    panel = make_panel(tmp_path)
+
+    assert _install_journal(tmp_path, panel).runner_alive() is False

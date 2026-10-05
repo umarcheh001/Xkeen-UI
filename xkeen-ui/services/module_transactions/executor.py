@@ -80,7 +80,15 @@ def run_operation(
     restart: Callable[[], None],
     wait_healthy: Callable[[str], bool],
     on_step: Callable[[str], None] | None = None,
+    shield: Callable[[], None] | None = None,
 ) -> str:
+    """Run the planned operation; ``shield`` is called once nothing may interrupt it.
+
+    From the moment the panel is confirmed, and from the moment an undo
+    starts, a cancel request can only do harm: the runner uses ``shield``
+    to stop listening to termination signals there.
+    """
+
     plan = journal.plan
     meta = journal.meta()
     status: dict[str, Any] = {
@@ -112,8 +120,20 @@ def run_operation(
             status["error_code"] = _code(error)
             status["error"] = getattr(error, "message", None) or str(error)
         status.update(extra)
-        write_status(state_dir, status)
+        try:
+            write_status(state_dir, status)
+        except OSError:
+            # The outcome is what happened to the files, not whether the
+            # note about it could be written (a full storage, for one).
+            pass
         return result
+
+    def raise_shield() -> None:
+        if shield is not None:
+            try:
+                shield()
+            except Exception:
+                pass
 
     # Nothing in the panel changes until "applying": a failure here needs no undo.
     try:
@@ -167,6 +187,8 @@ def run_operation(
             if not target.is_file() or target.read_bytes() != content:
                 journal.write_state_file(relative, content)
 
+        # The new files must be on the storage before anything relies on them.
+        journal.flush()
         enter("restarting")
         restarted = True
         restart()
@@ -174,11 +196,8 @@ def run_operation(
         enter("health")
         if not wait_healthy("operation"):
             raise ModuleTransactionError("operation_health_failed", "the panel did not come up after the operation")
-
-        enter("committed")
-        journal.commit()
-        return finish("committed")
     except Exception as error:
+        raise_shield()
         status["step"] = "rolling_back"
         status["log"].append({"step": "rolling_back", "at": time.time()})
         try:
@@ -210,8 +229,21 @@ def run_operation(
                 unresponsive = not wait_healthy("rollback")
             except Exception:
                 unresponsive = True
+        journal.flush()
         journal.commit()
         return finish("rolled_back", error, panel_unresponsive=unresponsive)
+
+    # The panel answered on the new files: the operation is done. Nothing
+    # below may turn it back - not a cancel request, not a status that
+    # cannot be written, not a power cut halfway through the cleanup.
+    raise_shield()
+    try:
+        enter("committed")
+    except Exception:
+        status["step"] = "committed"
+    journal.flush()
+    journal.commit()
+    return finish("committed")
 
 
 _UNTOUCHED_STEPS = frozenset({"prepared", "downloading", "verifying"})
@@ -227,6 +259,7 @@ def recover(panel_root: Path, state_dir: Path) -> str | None:
     """
 
     panel_root = Path(panel_root)
+    Journal.sweep(panel_root)
     operation_dir = Journal.find(panel_root)
     if operation_dir is None:
         return None
@@ -237,8 +270,7 @@ def recover(panel_root: Path, state_dir: Path) -> str | None:
         journal = Journal.salvage(operation_dir, panel_root)
         readable = False
     meta = journal.meta()
-    pid = meta.get("pid")
-    if pid and pid != os.getpid() and pid_alive(pid):
+    if meta.get("pid") != os.getpid() and journal.runner_alive():
         # The runner restarts the panel through the init script, which calls
         # this function: a live operation must not be undone under its feet.
         return None
@@ -279,6 +311,7 @@ def recover(panel_root: Path, state_dir: Path) -> str | None:
                 status["error_code"] = "operation_interrupted"
             write_status(state_dir, status)
             return "rollback_failed"
+        journal.flush()
         journal.commit()
         # Without a readable record there is no telling how far it went.
         result = "rolled_back" if readable else "interrupted"

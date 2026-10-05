@@ -18,7 +18,7 @@ from services.self_update.state import get_update_paths, read_lock
 from .executor import recover
 from .journal import Journal
 from .plan import Plan
-from .state import ModuleTransactionError, new_operation_id, pid_alive, read_status, write_status
+from .state import ModuleTransactionError, new_operation_id, read_status, write_status
 
 
 def _default_script() -> Path:
@@ -31,10 +31,10 @@ def ensure_idle(panel_root: Path, state_dir: Path) -> None:
     operation_dir = Journal.find(Path(panel_root))
     if operation_dir is not None:
         try:
-            pid = Journal.open(operation_dir).meta().get("pid")
+            running = Journal.open(operation_dir).runner_alive()
         except ModuleTransactionError:
-            pid = None
-        if pid and pid_alive(pid):
+            running = False
+        if running:
             raise ModuleTransactionError("operation_in_progress", "a module operation is already running")
         if read_status(state_dir).get("result") == "rollback_failed":
             # The tree is a mix of two states; nothing may be laid over it.

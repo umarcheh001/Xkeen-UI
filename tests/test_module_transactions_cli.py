@@ -150,7 +150,9 @@ def test_kill_at_step_then_recover_restores_tree(stand, step: str) -> None:
 
     recovered = _runner(stand, "recover")
 
-    assert recovered.returncode == (1 if step in EARLY else 0), recovered.stderr
+    # A cleanly cancelled operation is not a failure: only an undo that could
+    # not be finished is reported with a non-zero code.
+    assert recovered.returncode == 0, recovered.stderr
     assert changed_paths(before, snapshot(stand.panel.root)) <= BOOKKEEPING
     assert Journal.find(stand.panel.root) is None
     assert not transactions_root(stand.panel.root).exists()
@@ -420,3 +422,36 @@ def test_recover_works_when_the_signature_library_cannot_be_imported(stand) -> N
     assert done.returncode == 0, done.stderr
     assert changed_paths(before, snapshot(stand.panel.root)) <= BOOKKEEPING
     assert read_status(stand.panel.state)["result"] == "rolled_back"
+
+
+# -- находки итоговой проверки ветки ---------------------------------------
+
+
+def test_run_refuses_an_operation_that_already_started(stand) -> None:
+    journal = _prepare(stand)
+    operation_id = journal.meta()["operation_id"]
+    _runner(stand, "run", "--fail-at", "state", operation_id=operation_id)
+    half_done = snapshot(stand.panel.root)
+    kept = sorted(path.name for path in (journal.backup / "files").rglob("*") if path.is_file())
+
+    again = _runner(stand, "run", operation_id=operation_id)
+
+    assert again.returncode == 2, again.stderr
+    assert "already started" in again.stderr
+    assert snapshot(stand.panel.root) == half_done
+    assert sorted(path.name for path in (journal.backup / "files").rglob("*") if path.is_file()) == kept
+
+
+def test_recover_after_a_reboot_ignores_a_reused_pid(stand, monkeypatch) -> None:
+    from services.module_transactions import journal as journal_module
+
+    before = snapshot(stand.panel.root)
+    journal = _prepare(stand)
+    _runner(stand, "run", "--fail-at", "state", operation_id=journal.meta()["operation_id"])
+    reopened = Journal.open(journal.dir)
+    monkeypatch.setattr(journal_module, "current_boot_id", lambda: "before-the-power-cut")
+    reopened.set_pid(_other_live_pid())
+    monkeypatch.setattr(journal_module, "current_boot_id", lambda: "after-the-power-cut")
+
+    assert recover(stand.panel.root, stand.panel.state) == "rolled_back"
+    assert changed_paths(before, snapshot(stand.panel.root)) <= BOOKKEEPING

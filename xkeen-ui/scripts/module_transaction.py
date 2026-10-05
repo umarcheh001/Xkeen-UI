@@ -10,8 +10,10 @@
 operation whose runner is gone (a power cut, a kill) and does nothing when
 there is none or when it is still running.
 
-Exit codes: 0 - done, undone cleanly, or nothing to do; 1 - the operation did
-not happen or its undo failed; 2 - wrong call.
+Exit codes of ``run``: 0 - done or undone cleanly; 1 - the operation did not
+happen or its undo failed; 2 - wrong call. ``recover`` answers 1 only when
+the previous files could not be put back: an operation cancelled cleanly is
+not a failure.
 """
 
 from __future__ import annotations
@@ -70,6 +72,11 @@ def _run(args, *, client_factory, architecture, on_step) -> int:
         return 2
     meta = journal.meta()
     plan = journal.plan
+    if meta.get("step") != "prepared" or meta.get("pid"):
+        # Starting it over would treat files this operation already laid
+        # as the previous ones and throw the real copies away.
+        print(f"module operation {args.operation} already started; use recover", file=sys.stderr)
+        return 2
 
     lock_file = get_update_paths(str(state_dir))["lock_file"]
     acquired, _ = try_acquire_lock(lock_file)
@@ -137,6 +144,7 @@ def _run(args, *, client_factory, architecture, on_step) -> int:
             restart=restart,
             wait_healthy=wait_healthy,
             on_step=on_step,
+            shield=lambda: signal.signal(signal.SIGTERM, signal.SIG_IGN),
         )
     finally:
         try:
@@ -148,7 +156,7 @@ def _run(args, *, client_factory, architecture, on_step) -> int:
 
 def _recover(args) -> int:
     result = recover(Path(args.panel_root), Path(args.state_dir))
-    return 1 if result in ("interrupted", "rollback_failed") else 0
+    return 1 if result == "rollback_failed" else 0
 
 
 def _status(args) -> int:
