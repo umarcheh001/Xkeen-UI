@@ -113,6 +113,20 @@ test('offline modem keeps reset unavailable after a successful port probe', asyn
   await expect(tele2.getByRole('button', { name: 'Перезапустить модем' })).toBeDisabled();
 });
 
+test('missing QMI tool explains how to install the required package', async ({ page }) => {
+  await page.route('**/api/system/router/lte/UsbQmi1/probe', route => route.fulfill({ json: {
+    modem: { id: 'UsbQmi1', name: 'T2_STATIC' }, preferred_transport: null,
+    transports: [{ kind: 'qmi', available: false }], code: 'qmi_tool_missing', sampled_at: 1,
+  } }));
+  const { tele2 } = await openModems(page);
+
+  await tele2.getByRole('button', { name: 'Проверить управление' }).click();
+
+  await expect(tele2.locator('.xk-lte-control-status')).toContainText('Установите пакет qmi-utils');
+  await expect(tele2.locator('.xk-lte-control-status')).toContainText('opkg install qmi-utils');
+  await expect(tele2.getByRole('button', { name: 'Перезапустить модем' })).toBeDisabled();
+});
+
 test('hung operation status times out and releases its modem controls', async ({ page }) => {
   test.setTimeout(60_000);
   await page.addInitScript(() => {

@@ -898,7 +898,7 @@ function lteControlMessage(code) {
   const messages = {
     modem_not_found: "Модем больше не найден. Обновите данные.",
     transport_not_matched: "Управляющий порт этого модема не найден.",
-    qmi_tool_missing: "QMI-инструмент на роутере недоступен.",
+    qmi_tool_missing: "QMI-инструмент на роутере недоступен. Установите пакет qmi-utils: opkg update && opkg install qmi-utils. Затем повторите проверку.",
     qmi_probe_timeout: "Проверка QMI превысила время ожидания.",
     qmi_probe_failed: "Проверка QMI завершилась ошибкой.",
     modem_operation_in_progress: "Перезапуск этого модема уже выполняется.",

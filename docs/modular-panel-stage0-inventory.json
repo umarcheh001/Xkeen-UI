@@ -37,7 +37,7 @@
       ],
       "removable": false,
       "unit_count": 440,
-      "size_bytes": 6183057,
+      "size_bytes": 6183891,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
@@ -361,7 +361,7 @@
       ],
       "removable": true,
       "unit_count": 26,
-      "size_bytes": 647773,
+      "size_bytes": 647903,
       "kind_counts": {
         "backend_route": 2,
         "backend_service": 8,
@@ -8740,7 +8740,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/router_modem_controls.spec.mjs",
-      "size_bytes": 10336,
+      "size_bytes": 11170,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -18235,7 +18235,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor.js",
-      "size_bytes": 78939,
+      "size_bytes": 79069,
       "depends_on": [
         "core"
       ],
@@ -28621,7 +28621,7 @@
         },
         "tool.advanced-diagnostics": {
           "unit_count": 26,
-          "size_bytes": 647773
+          "size_bytes": 647903
         }
       },
       "next_stage": "Этапы 4, 5 и 6."
