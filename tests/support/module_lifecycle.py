@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from services.module_registry import ModuleRegistry
 from services.module_transactions.executor import recover
 from services.module_transactions.launcher import launch, observe_status
+from services.module_transactions.plan import Plan
 from tests.support.module_tx import ARCHITECTURE
 
 
@@ -37,6 +38,31 @@ class StaticCatalogRecorder:
             freshness="fresh",
             stale_reason=None,
         )
+
+
+class LaunchRecorder:
+    def __init__(self) -> None:
+        self.plans: list[Plan] = []
+        self.kwargs: list[dict] = []
+
+    def __call__(self, plan: Plan, **kwargs) -> str:
+        self.plans.append(plan)
+        self.kwargs.append(kwargs)
+        return "20261006T120000Z-abcdef"
+
+
+def status_record(**overrides):
+    return {
+        "operation_id": "20261006T120000Z-abcdef",
+        "operation": "install",
+        "module_id": "tool.terminal",
+        "step": "prepared",
+        "result": "running",
+        "error_code": None,
+        "error": None,
+        "log": [],
+        **overrides,
+    }
 
 
 def make_service(panel, release, *, registry=None, **overrides):

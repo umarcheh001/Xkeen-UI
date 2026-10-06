@@ -7,7 +7,9 @@ the detached Stage 8.3 transaction runner.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 
@@ -375,3 +377,55 @@ class ModuleLifecycleService:
     def plan(self, operation: str, module_id: str) -> dict[str, Any]:
         _plan, payload = self._plan_and_payload(operation, module_id)
         return payload
+
+    def apply(
+        self,
+        operation: str,
+        module_id: str,
+        plan_id: str,
+    ) -> dict[str, Any]:
+        if not isinstance(plan_id, str) or re.fullmatch(
+            r"[0-9a-f]{64}", plan_id
+        ) is None:
+            raise ModuleLifecycleError(
+                "module_plan_id_invalid",
+                "plan_id must be a lowercase SHA-256 digest",
+                status=400,
+            )
+
+        plan, payload = self._plan_and_payload(operation, module_id)
+        if plan is None or not payload["applicable"]:
+            raise ModuleLifecycleError(
+                "module_plan_stale",
+                "the reviewed module plan is no longer applicable",
+                status=409,
+                blockers=payload["blockers"],
+            )
+        if not hmac.compare_digest(payload["plan_id"], plan_id):
+            raise ModuleLifecycleError(
+                "module_plan_stale",
+                "the reviewed module plan is stale",
+                status=409,
+            )
+
+        try:
+            operation_id = self._launch_operation(
+                plan,
+                panel_root=self.panel_root,
+                state_dir=self.state_dir,
+                health_url=self.health_url,
+                restart_cmd=self.restart_cmd,
+            )
+        except ModuleTransactionError as error:
+            _raise_domain(error)
+        return {
+            "ok": True,
+            "operation_id": operation_id,
+            "status": self._observe_operation(self.panel_root, self.state_dir),
+        }
+
+    def status(self) -> dict[str, Any]:
+        return {
+            "ok": True,
+            **self._observe_operation(self.panel_root, self.state_dir),
+        }

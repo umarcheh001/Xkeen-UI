@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import replace
 from types import SimpleNamespace
@@ -10,7 +11,12 @@ from services.module_catalog_client import CatalogTransportError, official_relea
 from services.module_lifecycle import ModuleLifecycleError, _plan_digest
 from services.module_registry import ModuleRegistry
 from services.module_transactions.plan import build_plan
-from tests.support.module_lifecycle import StaticCatalogRecorder, make_service
+from tests.support.module_lifecycle import (
+    LaunchRecorder,
+    StaticCatalogRecorder,
+    make_service,
+    status_record,
+)
 from tests.support.module_tx import (
     ARCHITECTURE,
     OWNERSHIP,
@@ -215,3 +221,128 @@ def test_plan_digest_covers_transaction_and_dependency_changes(tmp_path):
     assert _plan_digest(replace(plan, files_add=plan.files_add[:-1]), dependencies) != original
     assert _plan_digest(replace(plan, installed_after=plan.installed_after + ("tool.files",)), dependencies) != original
     assert _plan_digest(plan, {**dependencies, "missing": ["core"]}) != original
+
+
+def test_apply_rebuilds_and_launches_only_the_reviewed_server_plan(tmp_path):
+    panel = make_panel(tmp_path)
+    launcher = LaunchRecorder()
+    service, _ = make_service(
+        panel,
+        make_release(),
+        launch_operation=launcher,
+        observe_operation=lambda _root, _state: status_record(),
+    )
+    preview = service.plan("install", "tool.terminal")
+
+    payload = service.apply("install", "tool.terminal", preview["plan_id"])
+
+    assert payload == {
+        "ok": True,
+        "operation_id": "20261006T120000Z-abcdef",
+        "status": status_record(),
+    }
+    assert len(launcher.plans) == 1
+    assert launcher.plans[0].module_id == "tool.terminal"
+    assert launcher.plans[0].files_add == tuple(sorted(OWNERSHIP["tool.terminal"]))
+    assert launcher.kwargs == [
+        {
+            "panel_root": panel.root,
+            "state_dir": panel.state,
+            "health_url": "http://127.0.0.1:8088/login",
+            "restart_cmd": ("xkeen", "-restart"),
+        }
+    ]
+
+
+def test_apply_rejects_plan_when_installed_state_changed(tmp_path):
+    panel = make_panel(tmp_path)
+    launcher = LaunchRecorder()
+    service, _ = make_service(panel, make_release(), launch_operation=launcher)
+    preview = service.plan("install", "tool.terminal")
+    installed = panel.read_json("module-installed.json")
+    installed["modules"]["tool.terminal"] = True
+    panel.path("module-installed.json").write_text(
+        json.dumps(installed), encoding="utf-8"
+    )
+
+    with pytest.raises(ModuleLifecycleError) as raised:
+        service.apply("install", "tool.terminal", preview["plan_id"])
+
+    assert (raised.value.code, raised.value.status) == ("module_plan_stale", 409)
+    assert launcher.plans == []
+
+
+@pytest.mark.parametrize("plan_id", [None, "", "A" * 64, "a" * 63, "x" * 64])
+def test_apply_rejects_malformed_plan_digest(tmp_path, plan_id):
+    launcher = LaunchRecorder()
+    service, _ = make_service(
+        make_panel(tmp_path), make_release(), launch_operation=launcher
+    )
+
+    with pytest.raises(ModuleLifecycleError) as raised:
+        service.apply("install", "tool.terminal", plan_id)
+
+    assert (raised.value.code, raised.value.status) == (
+        "module_plan_id_invalid",
+        400,
+    )
+    assert launcher.plans == []
+
+
+def test_apply_rejects_plan_that_rebuilds_with_blockers(tmp_path):
+    panel = make_panel(tmp_path)
+    launcher = LaunchRecorder()
+    catalog = catalog_document()
+    recorder = StaticCatalogRecorder(catalog)
+    service, _ = make_service(
+        panel,
+        make_release(),
+        launch_operation=launcher,
+        catalog_factory=lambda _version, _architecture: recorder,
+    )
+    preview = service.plan("install", "tool.terminal")
+    entries = {item["id"]: item for item in catalog["modules"]}
+    entries["tool.terminal"]["requires"].append("engine.mihomo")
+
+    with pytest.raises(ModuleLifecycleError) as raised:
+        service.apply("install", "tool.terminal", preview["plan_id"])
+
+    assert (raised.value.code, raised.value.status) == ("module_plan_stale", 409)
+    assert raised.value.details["blockers"][0]["code"] == "module_dependency_missing"
+    assert launcher.plans == []
+
+
+def test_apply_preserves_launcher_domain_error(tmp_path):
+    from services.module_transactions.state import ModuleTransactionError
+
+    def refuse(_plan, **_kwargs):
+        raise ModuleTransactionError(
+            "operation_in_progress", "a module operation is already running"
+        )
+
+    service, _ = make_service(
+        make_panel(tmp_path), make_release(), launch_operation=refuse
+    )
+    preview = service.plan("install", "tool.terminal")
+
+    with pytest.raises(ModuleLifecycleError) as raised:
+        service.apply("install", "tool.terminal", preview["plan_id"])
+
+    assert (raised.value.code, raised.value.status) == ("operation_in_progress", 409)
+
+
+def test_status_preserves_observed_log_error_and_recovery_fields(tmp_path):
+    observed = status_record(
+        result="rollback_failed",
+        error_code="operation_rollback_failed",
+        error="restore failed",
+        log=[{"step": "download"}, {"step": "rollback"}],
+        recovery={"available": True, "action": "retry"},
+    )
+    service, _ = make_service(
+        make_panel(tmp_path),
+        make_release(),
+        observe_operation=lambda _root, _state: observed,
+    )
+
+    assert service.status() == {"ok": True, **observed}
