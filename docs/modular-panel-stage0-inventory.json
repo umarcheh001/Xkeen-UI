@@ -37,7 +37,7 @@
       ],
       "removable": false,
       "unit_count": 487,
-      "size_bytes": 6625535,
+      "size_bytes": 6627704,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
@@ -2386,7 +2386,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/self_update/state.py",
-      "size_bytes": 15202,
+      "size_bytes": 15894,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -6068,7 +6068,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_self_update_status_recovery.py",
-      "size_bytes": 8261,
+      "size_bytes": 9738,
       "depends_on": [],
       "starts_background_task": true,
       "background_markers": [
