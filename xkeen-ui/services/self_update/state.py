@@ -26,6 +26,8 @@ from services.io.atomic import _atomic_write_json
 
 _LOCK_GUARDS: Dict[str, threading.Lock] = {}
 _LOCK_GUARDS_MUTEX = threading.Lock()
+_LOCK_TRANSFER_TIMEOUT_SEC = 1.0
+_LOCK_GUARD_RETRY_SEC = 0.01
 
 
 def _thread_lock(path: str) -> threading.Lock:
@@ -33,27 +35,38 @@ def _thread_lock(path: str) -> threading.Lock:
         return _LOCK_GUARDS.setdefault(os.path.abspath(path), threading.Lock())
 
 
-def _acquire_process_guard(path: str) -> int | None:
-    try:
-        fd = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
-        if os.name == "nt":
-            import msvcrt
-
-            if os.fstat(fd).st_size == 0:
-                os.write(fd, b"0")
-            os.lseek(fd, 0, os.SEEK_SET)
-            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
-        else:
-            import fcntl
-
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        return fd
-    except (OSError, ImportError):
+def _acquire_process_guard(path: str, *, timeout_sec: float = 0.0) -> int | None:
+    deadline = time.monotonic() + max(0.0, timeout_sec)
+    while True:
+        fd: int | None = None
         try:
-            os.close(fd)
-        except (OSError, UnboundLocalError):
-            pass
-        return None
+            fd = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
+            if os.name == "nt":
+                import msvcrt
+
+                if os.fstat(fd).st_size == 0:
+                    os.write(fd, b"0")
+                os.lseek(fd, 0, os.SEEK_SET)
+                msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return fd
+        except ImportError:
+            if fd is not None:
+                os.close(fd)
+            return None
+        except OSError:
+            if fd is not None:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return None
+            time.sleep(min(_LOCK_GUARD_RETRY_SEC, remaining))
 
 
 def _release_process_guard(fd: int) -> None:
@@ -311,10 +324,14 @@ def transfer_lock(lock_file: str, previous_pid: int) -> bool:
 
     directory = os.path.dirname(lock_file) or "."
     os.makedirs(directory, exist_ok=True)
+    deadline = time.monotonic() + _LOCK_TRANSFER_TIMEOUT_SEC
     thread_guard = _thread_lock(lock_file)
-    if not thread_guard.acquire(blocking=False):
+    if not thread_guard.acquire(timeout=_LOCK_TRANSFER_TIMEOUT_SEC):
         return False
-    guard_fd = _acquire_process_guard(lock_file + ".guard")
+    guard_fd = _acquire_process_guard(
+        lock_file + ".guard",
+        timeout_sec=max(0.0, deadline - time.monotonic()),
+    )
     if guard_fd is None:
         thread_guard.release()
         return False

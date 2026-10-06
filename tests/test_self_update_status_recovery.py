@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import threading
@@ -107,6 +108,49 @@ class SelfUpdateStatusRecoveryTests(unittest.TestCase):
                 self.assertFalse(any(thread.is_alive() for thread in threads))
                 self.assertEqual(outcomes.count(True), 1)
                 self.assertEqual(outcomes.count(False), 1)
+
+    def test_lock_transfer_waits_for_short_lived_process_guard(self):
+        state = _reload("services.self_update.state")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            lock_file = Path(tmp) / "lock"
+            ready_file = Path(tmp) / "guard-ready"
+            lock_file.write_text(
+                json.dumps({"pid": os.getpid(), "created_ts": time.time()}),
+                encoding="utf-8",
+            )
+            script = """
+import os
+import sys
+import time
+
+guard_path, ready_path = sys.argv[1:3]
+fd = os.open(guard_path, os.O_CREAT | os.O_RDWR, 0o600)
+if os.name == "nt":
+    import msvcrt
+    if os.fstat(fd).st_size == 0:
+        os.write(fd, b"0")
+    os.lseek(fd, 0, os.SEEK_SET)
+    msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+else:
+    import fcntl
+    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+with open(ready_path, "w", encoding="utf-8") as marker:
+    marker.write("ready")
+time.sleep(0.25)
+"""
+            blocker = subprocess.Popen(
+                [sys.executable, "-c", script, str(lock_file) + ".guard", str(ready_file)]
+            )
+            try:
+                deadline = time.monotonic() + 5
+                while not ready_file.exists() and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                self.assertTrue(ready_file.exists())
+
+                self.assertTrue(state.transfer_lock(str(lock_file), os.getpid()))
+            finally:
+                blocker.wait(timeout=5)
 
     def test_reconcile_runtime_status_marks_stale_runner_as_failed(self):
         state = _reload("services.self_update.state")
