@@ -522,19 +522,19 @@
               "accessible_name": false
             },
             {
-              "control": "control@13749",
+              "control": "control@13842",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@14169",
+              "control": "control@14262",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@15390",
+              "control": "control@15483",
               "icons": [
                 "processes"
               ],
@@ -550,7 +550,7 @@
               "accessible_name": false
             },
             {
-              "control": "control@16774",
+              "control": "control@16867",
               "icons": [],
               "icon_only": false,
               "accessible_name": false

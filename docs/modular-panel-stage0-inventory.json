@@ -37,7 +37,7 @@
       ],
       "removable": false,
       "unit_count": 483,
-      "size_bytes": 6585905,
+      "size_bytes": 6550335,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
@@ -365,7 +365,7 @@
       ],
       "removable": true,
       "unit_count": 26,
-      "size_bytes": 648880,
+      "size_bytes": 636798,
       "kind_counts": {
         "backend_route": 2,
         "backend_service": 8,
@@ -375,7 +375,7 @@
         "frontend_javascript": 2,
         "template": 1
       },
-      "route_count": 29,
+      "route_count": 27,
       "background_task_count": 0,
       "ui_surface_count": 2,
       "representative_paths": [
@@ -2237,15 +2237,12 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/router_modem_control.py",
-      "size_bytes": 25784,
+      "size_bytes": 14885,
       "depends_on": [
         "tool.advanced-diagnostics"
       ],
-      "starts_background_task": true,
-      "background_markers": [
-        "daemon_thread",
-        "threading.Thread"
-      ],
+      "starts_background_task": false,
+      "background_markers": [],
       "registers_routes": false,
       "routes": [],
       "frontend_bundle": [],
@@ -5571,7 +5568,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_router_modem_control.py",
-      "size_bytes": 25064,
+      "size_bytes": 6477,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -9480,7 +9477,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/router_modem_controls.spec.mjs",
-      "size_bytes": 11170,
+      "size_bytes": 4746,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -10197,7 +10194,7 @@
       "module_id": "core",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/panel-operator.css",
-      "size_bytes": 739104,
+      "size_bytes": 739308,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -10449,7 +10446,7 @@
       "module_id": "core",
       "kind": "template",
       "path": "xkeen-ui/templates/panel/modals/diagnostics.html",
-      "size_bytes": 20029,
+      "size_bytes": 20165,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -18266,7 +18263,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/system_resources.py",
-      "size_bytes": 10047,
+      "size_bytes": 7421,
       "depends_on": [
         "core"
       ],
@@ -18310,18 +18307,8 @@
           "decorator": "bp.get"
         },
         {
-          "method": "GET",
-          "path": "/api/system/router/lte/operations/<operation_id>",
-          "decorator": "bp.get"
-        },
-        {
           "method": "POST",
           "path": "/api/system/router/lte/<modem_id>/probe",
-          "decorator": "bp.post"
-        },
-        {
-          "method": "POST",
-          "path": "/api/system/router/lte/<modem_id>/reset",
           "decorator": "bp.post"
         }
       ],
@@ -18637,7 +18624,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_resource_monitor_frontend.py",
-      "size_bytes": 7465,
+      "size_bytes": 7423,
       "depends_on": [
         "core"
       ],
@@ -18675,7 +18662,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_system_resources.py",
-      "size_bytes": 14912,
+      "size_bytes": 12017,
       "depends_on": [
         "core"
       ],
@@ -19066,7 +19053,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor.js",
-      "size_bytes": 79069,
+      "size_bytes": 72550,
       "depends_on": [
         "core"
       ],
@@ -23740,7 +23727,7 @@
     }
   ],
   "routes": {
-    "endpoint_count": 322,
+    "endpoint_count": 320,
     "files_with_routes": 54,
     "endpoint_files": [
       {
@@ -25243,18 +25230,8 @@
             "decorator": "bp.get"
           },
           {
-            "method": "GET",
-            "path": "/api/system/router/lte/operations/<operation_id>",
-            "decorator": "bp.get"
-          },
-          {
             "method": "POST",
             "path": "/api/system/router/lte/<modem_id>/probe",
-            "decorator": "bp.post"
-          },
-          {
-            "method": "POST",
-            "path": "/api/system/router/lte/<modem_id>/reset",
             "decorator": "bp.post"
           }
         ]
@@ -29529,7 +29506,7 @@
         },
         "tool.advanced-diagnostics": {
           "unit_count": 26,
-          "size_bytes": 648880
+          "size_bytes": 636798
         }
       },
       "next_stage": "Этапы 4, 5 и 6."

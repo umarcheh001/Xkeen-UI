@@ -22895,6 +22895,7 @@ body.panel-page .xk-stage2-metrics > div { min-width: 0; padding-top: 7px; borde
 body.panel-page .xk-stage2-metrics dt { color: var(--op-muted); font-size: calc(8px * var(--xk-font-scale, 1)); }
 body.panel-page .xk-stage2-metrics dd { margin: 3px 0 0; overflow: hidden; color: var(--op-data); font: 600 calc(9px * var(--xk-font-scale, 1))/1.2 var(--op-font-mono); text-overflow: ellipsis; white-space: nowrap; }
 body.panel-page .xk-lte-modems { display: grid; gap: 8px; padding: 0 10px 10px; }
+body.panel-page .xk-lte-safety-note { margin: 0; padding: 7px 10px; border-bottom: 1px solid var(--op-border); color: var(--op-muted); font-size: calc(9px * var(--xk-font-scale, 1)); line-height: 1.35; }
 body.panel-page .xk-lte-modems > .xk-stage2-status { padding-inline: 0; }
 body.panel-page .xk-lte-modem { min-width: 0; overflow: hidden; border: 1px solid var(--op-border); border-radius: var(--op-radius); background: var(--op-surface); }
 body.panel-page .xk-lte-modem[data-primary="true"] { border-color: var(--op-accent-border); box-shadow: inset 2px 0 0 var(--op-accent); }

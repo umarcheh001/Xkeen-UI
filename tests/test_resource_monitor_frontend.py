@@ -159,25 +159,21 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
         assert fragment in css
 
 
-def test_lte_modem_controls_keep_reset_scoped_and_confirmed():
+def test_lte_modem_controls_keep_probe_but_explain_reset_is_disabled():
     script = SCRIPT.read_text(encoding="utf-8")
+    template = TEMPLATE
     css = CSS.read_text(encoding="utf-8")
 
-    for fragment in (
-        "encodeURIComponent(modemId)",
-        "${LTE_ENDPOINT}/${encodeURIComponent(modemId)}/probe",
-        "${LTE_ENDPOINT}/${encodeURIComponent(modemId)}/reset",
-        "${LTE_ENDPOINT}/operations/${encodeURIComponent(operationId)}",
-        "XKeen.ui.confirm({",
-        "danger: true",
-        'resetButton.disabled =',
-        'status === "recovered"',
-        'status === "failed"',
-        'status === "timed_out"',
-    ):
-        assert fragment in script
+    assert 'data-lte-action="probe"' in script
+    assert "Проверить управление" in script
+    assert "Перезапуск из панели отключён" in template
+    assert 'data-lte-action="reset"' not in script
+    assert "/reset" not in script
+    assert "operationId" not in script
+    assert "pollLteOperation" not in script
     assert "innerHTML" not in script
     assert "body.panel-page .xk-lte-controls" in css
+    assert "body.panel-page .xk-lte-safety-note" in css
     assert "body.panel-page .xk-lte-control-status" in css
 
 

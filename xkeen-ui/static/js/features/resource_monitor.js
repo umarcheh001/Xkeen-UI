@@ -2,11 +2,7 @@ const ENDPOINT = "/api/system/resources";
 const PROCESS_ENDPOINT = "/api/system/processes";
 const CLIENTS_ENDPOINT = "/api/system/router/clients";
 const LTE_ENDPOINT = "/api/system/router/lte";
-const LTE_OPERATION_POLL_MS = 1500;
-const LTE_OPERATION_MAX_POLLS = 90;
 const LTE_CONTROL_REQUEST_TIMEOUT_MS = 20000;
-const LTE_OPERATION_STATUS_TIMEOUT_MS = 5000;
-const LTE_OPERATION_DEADLINE_MS = 90000;
 const CHANNEL_ENDPOINT = "/api/system/router/channel-check";
 const DNS_DIAGNOSTICS_ENDPOINT = "/api/system/router/dns-diagnostics";
 const POLL_MS = 5000;
@@ -26,7 +22,6 @@ let processesLoaded = false;
 let clientsRequest = null;
 let clientsLoaded = false;
 let lteRequest = null;
-let ltePostOperationRefresh = null;
 const lteControls = new Map();
 let channelRequest = null;
 let interfaceFilter = "active";
@@ -887,8 +882,7 @@ async function loadClients() {
 function lteControlState(modemId) {
   if (!lteControls.has(modemId)) {
     lteControls.set(modemId, {
-      probeAvailable: false, probeBusy: false, resetBusy: false,
-      operationId: null, pollCount: 0, pollTimer: 0, deadlineAt: 0, message: "", tone: "",
+      probeAvailable: false, probeBusy: false, message: "", tone: "",
     });
   }
   return lteControls.get(modemId);
@@ -901,10 +895,8 @@ function lteControlMessage(code) {
     qmi_tool_missing: "QMI-инструмент на роутере недоступен. Установите пакет qmi-utils: opkg update && opkg install qmi-utils. Затем повторите проверку.",
     qmi_probe_timeout: "Проверка QMI превысила время ожидания.",
     qmi_probe_failed: "Проверка QMI завершилась ошибкой.",
-    modem_operation_in_progress: "Перезапуск этого модема уже выполняется.",
-    modem_recovery_timeout: "Возврат модема не подтвердился вовремя.",
   };
-  return messages[code] || "Не удалось выполнить действие с модемом.";
+  return messages[code] || "Не удалось проверить управляющий порт.";
 }
 
 function syncLteControlCard(modemId) {
@@ -913,11 +905,8 @@ function syncLteControlCard(modemId) {
   if (!card) return;
   const state = lteControlState(modemId);
   const probeButton = card.querySelector('[data-lte-action="probe"]');
-  const resetButton = card.querySelector('[data-lte-action="reset"]');
   const status = card.querySelector(".xk-lte-control-status");
-  const busy = state.probeBusy || state.resetBusy || Boolean(state.operationId);
-  if (probeButton) probeButton.disabled = busy || !modemId;
-  if (resetButton) resetButton.disabled = busy || !state.probeAvailable || card.dataset.connected !== "true";
+  if (probeButton) probeButton.disabled = state.probeBusy || !modemId;
   if (status) {
     status.textContent = state.message;
     status.dataset.state = state.tone;
@@ -965,7 +954,7 @@ async function lteControlRequest(url, options = {}, timeoutMs = LTE_CONTROL_REQU
 
 async function probeLteModem(modemId) {
   const state = lteControlState(modemId);
-  if (state.probeBusy || state.resetBusy || state.operationId) return;
+  if (state.probeBusy) return;
   state.probeBusy = true;
   state.probeAvailable = false;
   state.message = "Проверяем управляющий порт…";
@@ -976,7 +965,7 @@ async function probeLteModem(modemId) {
     const available = Boolean(payload?.preferred_transport && payload?.transports?.some((transport) => transport.kind === payload.preferred_transport && transport.available === true));
     state.probeAvailable = available && state.connected;
     state.message = !state.connected
-      ? "Модем не подключён. Перезапуск недоступен."
+      ? "Модем не подключён."
       : available
       ? `${payload.preferred_transport === "qmi" ? "QMI" : "AT"} доступен · ${modemId}`
       : lteControlMessage(payload?.code);
@@ -986,152 +975,6 @@ async function probeLteModem(modemId) {
     state.tone = "error";
   } finally {
     state.probeBusy = false;
-    syncLteControlCard(modemId);
-  }
-}
-
-function finishLteOperation(modemId, operationId, payload) {
-  const state = lteControlState(modemId);
-  if (state.operationId !== operationId) return;
-  window.clearTimeout(state.pollTimer);
-  state.pollTimer = 0;
-  state.operationId = null;
-  state.resetBusy = false;
-  state.probeAvailable = false;
-  state.deadlineAt = 0;
-  const status = payload?.status;
-  if (status === "recovered") {
-    state.message = "Восстановлен · данные модема обновлены";
-    state.tone = "success";
-  } else if (status === "timed_out") {
-    state.message = payload?.requestTimedOut
-      ? payload.message
-      : "Возврат модема не подтвердился вовремя.";
-    state.tone = "error";
-  } else if (status === "failed") {
-    state.message = payload?.message || lteControlMessage(payload?.code);
-    state.tone = "error";
-  } else {
-    state.message = lteControlMessage();
-    state.tone = "error";
-  }
-  syncLteControlCard(modemId);
-  void refreshLteAfterOperation();
-}
-
-function refreshLteAfterOperation() {
-  if (ltePostOperationRefresh) return ltePostOperationRefresh;
-  const activeRefresh = lteRequest?.promise;
-  ltePostOperationRefresh = (async () => {
-    if (activeRefresh) await activeRefresh;
-    await loadLte();
-  })().finally(() => { ltePostOperationRefresh = null; });
-  return ltePostOperationRefresh;
-}
-
-async function pollLteOperation(modemId, operationId) {
-  const state = lteControlState(modemId);
-  if (state.operationId !== operationId) return;
-  if (Date.now() >= state.deadlineAt) {
-    finishLteOperation(modemId, operationId, { status: "timed_out" });
-    return;
-  }
-  state.pollCount += 1;
-  try {
-    const payload = await lteControlRequest(
-      `${LTE_ENDPOINT}/operations/${encodeURIComponent(operationId)}`,
-      {},
-      Math.min(LTE_OPERATION_STATUS_TIMEOUT_MS, state.deadlineAt - Date.now()),
-    );
-    if (state.operationId !== operationId) return;
-    const status = payload?.status;
-    if (status === "recovered" || status === "failed" || status === "timed_out") {
-      finishLteOperation(modemId, operationId, payload);
-      return;
-    }
-    if (Date.now() >= state.deadlineAt) {
-      finishLteOperation(modemId, operationId, { status: "timed_out" });
-      return;
-    }
-    state.message = status === "waiting_for_modem"
-      ? "Ожидаем возвращения модема…"
-      : status === "running" ? "Перезапуск модема…" : "Операция в очереди…";
-    state.tone = "running";
-    syncLteControlCard(modemId);
-  } catch (error) {
-    if (error.timedOut) {
-      finishLteOperation(modemId, operationId, {
-        status: "timed_out", requestTimedOut: true, message: error.message,
-      });
-      return;
-    }
-    if (state.pollCount >= LTE_OPERATION_MAX_POLLS) {
-      finishLteOperation(modemId, operationId, { status: "failed", message: error.message });
-      return;
-    }
-    state.message = "Повторяем запрос состояния операции…";
-    state.tone = "running";
-    syncLteControlCard(modemId);
-  }
-  if (state.pollCount >= LTE_OPERATION_MAX_POLLS) {
-    finishLteOperation(modemId, operationId, { status: "timed_out" });
-    return;
-  }
-  state.pollTimer = window.setTimeout(() => void pollLteOperation(modemId, operationId), LTE_OPERATION_POLL_MS);
-}
-
-async function resetLteModem(modemId, name) {
-  const state = lteControlState(modemId);
-  if (!state.probeAvailable || state.probeBusy || state.resetBusy || state.operationId) return;
-  state.resetBusy = true;
-  syncLteControlCard(modemId);
-  const confirm = window.XKeen?.ui?.confirm;
-  if (typeof confirm !== "function") {
-    state.message = "Окно подтверждения недоступно.";
-    state.tone = "error";
-    state.resetBusy = false;
-    syncLteControlCard(modemId);
-    return;
-  }
-  let confirmed = false;
-  try {
-    confirmed = await XKeen.ui.confirm({
-      title: "Перезапуск модема",
-      message: `Перезапустить ${name} (${modemId})?`,
-      details: "Связь через этот модем временно прервётся.",
-      okText: "Перезапустить",
-      cancelText: "Отмена",
-      danger: true,
-    });
-  } catch (error) {
-    confirmed = false;
-  }
-  if (!confirmed) {
-    state.resetBusy = false;
-    syncLteControlCard(modemId);
-    return;
-  }
-  state.message = "Запускаем перезапуск…";
-  state.tone = "running";
-  syncLteControlCard(modemId);
-  try {
-    const payload = await lteControlRequest(`${LTE_ENDPOINT}/${encodeURIComponent(modemId)}/reset`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ confirmation: modemId }),
-    });
-    if (!payload?.operation_id || payload.modem_id !== modemId) throw new Error(lteControlMessage());
-    state.operationId = String(payload.operation_id);
-    state.pollCount = 0;
-    state.deadlineAt = Date.now() + LTE_OPERATION_DEADLINE_MS;
-    state.message = "Операция в очереди…";
-    syncLteControlCard(modemId);
-    void pollLteOperation(modemId, state.operationId);
-  } catch (error) {
-    state.resetBusy = false;
-    state.probeAvailable = false;
-    state.message = error.message || lteControlMessage();
-    state.tone = "error";
     syncLteControlCard(modemId);
   }
 }
@@ -1208,10 +1051,10 @@ function renderLte(payload) {
       card.dataset.connected = connected ? "true" : "false";
       const controlState = lteControlState(modemId);
       controlState.connected = connected;
-      if (!connected && !controlState.operationId && !controlState.resetBusy) {
+      if (!connected) {
         controlState.probeAvailable = false;
         if (!controlState.message) {
-          controlState.message = "Модем не подключён. Перезапуск недоступен.";
+          controlState.message = "Модем не подключён.";
           controlState.tone = "error";
         }
       }
@@ -1243,15 +1086,13 @@ function renderLte(payload) {
       const controls = document.createElement("div");
       controls.className = "xk-lte-controls";
       const probeButton = lteControlButton("probe", "Проверить управление", "search");
-      const resetButton = lteControlButton("reset", "Перезапустить модем", "restart");
       const controlStatus = document.createElement("span");
       controlStatus.className = "xk-lte-control-status";
       controlStatus.setAttribute("role", "status");
       controlStatus.setAttribute("aria-live", "polite");
       controlStatus.hidden = true;
       probeButton.addEventListener("click", () => void probeLteModem(modemId));
-      resetButton.addEventListener("click", () => void resetLteModem(modemId, item.name || modemId));
-      controls.append(probeButton, resetButton, controlStatus);
+      controls.append(probeButton, controlStatus);
       if (!modemId) {
         const state = lteControlState(modemId);
         state.message = "Идентификатор модема недоступен.";

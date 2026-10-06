@@ -1,168 +1,58 @@
-# Управление LTE-модемами из диагностики роутера
+# LTE modem controls: read-only transport diagnostics
 
-## Цель
+## Status
 
-Расширить существующий блок `LTE / модемы` в модальном окне диагностики
-роутера. Оператор должен видеть, доступен ли безопасный транспорт управления
-конкретным модемом, запускать его перезагрузку только после явного
-подтверждения и получать результат восстановления. Функция предназначена для
-модемов, уже найденных KeeneticOS через RCI, включая `T2_STATIC` (`UsbQmi1`).
+The original reset design was superseded after an authorised hardware run on a
+Keenetic router showed that QMI operating-mode reset can leave both USB modems
+in USB reinitialisation. The UI and API intentionally provide no modem reset.
 
-Это не отдельный веб-сервис и не замена системному LTE-интерфейсу KeeneticOS.
-Существующий экран остаётся источником состояния радио, сети и SIM; новый
-контур добавляет только диагностику транспорта и контролируемый reset.
+## Goal
 
-## Границы
+Expose useful, modem-specific diagnostics in `Диагностика роутера → LTE /
+модемы` without changing modem state or duplicating the connection screen.
 
-Включено:
+## User-visible behaviour
 
-- привязка операции к одной карточке RCI-модема;
-- read-only probe доступных QMI и AT-транспортов;
-- QMI reset через `qmicli --dms-set-operating-mode=reset`;
-- AT fallback через `AT+RESET` только для подтверждённого порта;
-- снимок LTE-состояния до операции, отслеживание возврата модема и итоговый
-  снимок;
-- единичная фоновая операция с polling из уже открытой модалки;
-- backend, frontend, unit и browser-regression тесты.
+- `Обновить` reads current LTE inventory via RCI.
+- `Проверить управление` establishes whether a safe QMI or AT transport can
+  be identified for the exact RCI modem id.
+- The section explains that panel reset is disabled because Keenetic manages
+  the USB modem lifecycle. Recovery actions belong in the Keenetic web UI.
+- A missing `qmi-utils` package is explained inline, including the install
+  command; the panel does not install packages itself.
 
-Не включено:
+## Transport contract
 
-- установка `qmi-utils`, `libqmi`, `uhttpd_kn` или изменение прав на устройства;
-- запуск отдельного HTTP-сервера, CGI, автозапуск Entware-службы или порт 8080;
-- произвольное выполнение shell-команд из браузера;
-- изменение APN, режима сети, band-lock, PIN или профиля оператора;
-- reset нескольких модемов одной кнопкой.
+1. Browser supplies only a strict `modem_id`.
+2. Backend re-reads RCI inventory and finds the exact item.
+3. QMI candidates are queried with fixed `qmicli --dms-get-ids` arguments and
+   accepted only on IMEI match.
+4. TTY candidates are queried with `AT` and `AT+CGSN`, also requiring the
+   exact IMEI match.
+5. Paths, IMEI values, command output and stderr remain private. Probe has a
+   bounded wall-clock deadline.
 
-## Почему не переносится исходный скрипт целиком
+## API
 
-Скрипты из вложений являются полезным референсом низкоуровневых команд, но
-ожидают единственный модем: первый `/dev/cdc-wdm*`, либо фиксированный
-`/dev/ttyUSB1` и `wwan0`. При двух USB-модемах это способно затронуть не ту
-карточку. Они также создают самостоятельный неаутентифицированный CGI-сервис.
-Панель уже имеет защищённый backend и модальное окно, поэтому transport logic
-переносится в него, а отдельный веб-сервис не создаётся.
-
-## Сопоставление модема и транспорта
-
-`services/router_modem_control.py` будет изолированным адаптером управления.
-Он получает normalised modem из `sample_router_lte()` и формирует immutable
-`ModemControlProbe`.
-
-1. Входной `modem_id` проходит строгую валидацию: ASCII идентификатор длиной
-   до 64 символов из `[A-Za-z0-9_.-]`.
-2. Backend повторно считывает RCI LTE inventory и ищет именно этот `id`. Нельзя
-   доверять модели, IMEI или имени, присланным браузером.
-3. Для каждого `/dev/cdc-wdm*` допускается короткий read-only запрос
-   `qmicli --dms-get-ids`. Его IMEI должен совпасть с IMEI RCI-карточки. Только
-   после этого endpoint считается QMI-транспортом данного модема.
-4. Для TTY-кандидата backend задаёт безопасные настройки порта, посылает
-   `AT` и `AT+CGSN`, затем принимает порт только при ответе `OK` и совпадении
-   IMEI с RCI. Порядок `/dev/ttyUSB*` не является идентификатором модема.
-5. Если RCI не дал IMEI или ни один транспорт не доказал совпадение, reset
-   недоступен. UI показывает причину, а не предлагает небезопасный fallback.
-
-QMI имеет приоритет. TTY доступен только как запасной transport для конкретной
-модели и только после описанной проверки. Отсутствие `qmicli`, устройства,
-прав чтения/записи или несовпадение IMEI не являются ошибкой панели: они
-возвращаются как `available: false` с коротким машинным кодом причины.
-
-## API и операция
-
-Существующий `GET /api/system/router/lte` остаётся неизменным.
-
-Новые маршруты под `system_resources`:
-
+- `GET /api/system/router/lte`
 - `POST /api/system/router/lte/<modem_id>/probe`
-  возвращает read-only capability probe: привязанный modem snapshot, доступные
-  transports, предпочтительный transport и безопасный текст статуса.
-- `POST /api/system/router/lte/<modem_id>/reset`
-  принимает JSON `{ "confirmation": "<modem_id>" }`. Несовпадение отклоняется
-  с `400 modem_confirmation_mismatch`. При доступном транспорте создаётся
-  операция и возвращается `202` с `operation_id`, `before`, `transport` и
-  статусом `queued`.
-- `GET /api/system/router/lte/operations/<operation_id>`
-  возвращает только операцию текущего процесса: `queued`, `running`,
-  `waiting_for_modem`, `recovered`, `failed` или `timed_out`, а также `before`,
-  `after`, `started_at`, `finished_at` и безопасный `message`.
 
-Операции живут в ограниченном in-memory реестре не более 15 минут. На один
-`modem_id` допускается только одна активная операция; повторный reset получает
-`409 modem_operation_in_progress`. В operation state не записываются сырые
-выводы `qmicli`/TTY, IMEI, SIM-идентификаторы или произвольные команды.
+No reset route, operation registry, browser confirmation flow or operation
+polling endpoint exists.
 
-После отправки команды worker ждёт исчезновения/возврата нужного modem id в
-RCI и опрашивает состояние ограниченное время. Успех означает, что RCI снова
-видит именно выбранный modem id; отсутствие сети не трактуется как ошибка
-сброса, а отражается в итоговом snapshot. Timeout сообщает, что команда была
-отправлена, но восстановление не подтвердилось за выделенное время.
+## Safety rationale
 
-## UI
+`qmicli --dms-set-operating-mode=reset` requests a modem power cycle. It is
+not a safe generic reset primitive for Keenetic-managed multi-modem hardware:
+the router owns USB re-enumeration and WAN recovery, and the observed device
+did not return reliably after this command. The panel must not send this QMI
+command or an `AT+RESET` fallback.
 
-`resource_monitor.js` продолжит создавать LTE-карточки из API, добавив к
-каждой самостоятельную область управления:
+## Verification
 
-- нейтральная кнопка с иконкой проверки транспорта и краткий статус;
-- кнопка reset с иконкой refresh, disabled пока probe не подтвердил transport;
-- inline статус операции: выбранный QMI/TTY transport, ожидание возврата,
-  итог без технического вывода;
-- стандартный confirmation dialog с названием и RCI id модема. Подтверждение
-  отправляет точный id в backend, а не информацию из DOM как источник истины.
-
-Кнопка reset не отображается как доступная для неподтверждённого, офлайн или
-неидентифицированного транспорта. Главная кнопка секции `Обновить` сохраняет
-только текущую задачу: обновить RCI LTE-состояние. Новые controls не дублируют
-«Соединения», поскольку показывают control-plane конкретного USB-модема и
-результат его перезапуска, а не список сетевых сессий.
-
-## Ошибки и безопасность
-
-- Используются фиксированные argv для subprocess; shell, `sh -c` и вводимые
-  пользователем части команд запрещены.
-- Все пути устройств берутся из контролируемого enumerator и проверяются как
-  character devices. Браузер не может передать путь.
-- QMI и TTY probes имеют короткие timeout. Ошибки нормализуются в коды вроде
-  `qmi_tool_missing`, `transport_not_matched`, `modem_not_found` и
-  `modem_reset_failed`; сырые stderr не возвращаются.
-- Любой reset требует существующего RCI modem id и совпадения confirmation.
-- UI явно сообщает, что связь выбранного модема кратко прервётся. Другие
-  модемы не попадают в область операции.
-
-## Проверка
-
-Unit-тесты:
-
-- нормализация, валидация modem id и поиск RCI-карточки;
-- QMI/TTY допускаются только при совпавшем IMEI;
-- QMI имеет приоритет, TTY остаётся fallback;
-- reset отклоняется без transport, при неверном подтверждении и при
-  параллельной операции;
-- безопасные route responses и lifecycle operation state.
-
-Frontend-тесты:
-
-- карточка рисует controls только для подтверждённого transport;
-- confirmation и polling используют modem id;
-- состояния disabled, running, recovered и failed не изменяют другую
-  LTE-карточку.
-
-Роутерный прогон после реализации:
-
-1. Read-only probe `T2_STATIC` и сверка найденного IMEI с RCI.
-2. Проверка, что кнопка и API указывают только `T2_STATIC`.
-3. Согласованный reset `T2_STATIC` через подтверждённый QMI transport.
-4. Poll до возврата `UsbQmi1`, затем сравнение итоговой сети, адреса и
-   доступности со снимком до reset.
-5. Не выполнять reset Beeline-модема.
-
-## Затрагиваемые файлы
-
-- `xkeen-ui/services/router_modem_control.py` — новый isolated transport и
-  operation service;
-- `xkeen-ui/services/router_diagnostics.py` — использование текущего LTE
-  inventory без дублирования normalizer;
-- `xkeen-ui/routes/system_resources.py` — три scoped route;
-- `xkeen-ui/static/js/features/resource_monitor.js` — карточка, confirmation,
-  polling и safe rendering;
-- `xkeen-ui/static/panel-operator.css` — компактные control/status states;
-- `tests/test_router_modem_control.py`, `tests/test_system_resources.py`,
-  `tests/test_resource_monitor_frontend.py` и focused Playwright coverage.
+- Unit tests cover strict ids, selected-modem matching, QMI priority, TTY
+  fallback, time bounds, error redaction and absence of reset service methods.
+- Route tests cover the read-only probe and assert the legacy reset path is
+  absent.
+- Browser tests cover desktop and mobile probe flow, absence of reset controls,
+  safety copy and absence of horizontal overflow.
