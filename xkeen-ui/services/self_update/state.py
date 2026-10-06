@@ -242,6 +242,24 @@ def try_acquire_lock(lock_file: str) -> Tuple[bool, Dict[str, Any]]:
     return False, info
 
 
+def transfer_lock(lock_file: str, previous_pid: int) -> bool:
+    """Transfer an existing live lock to this process without unlocking it."""
+
+    info = read_lock(lock_file)
+    try:
+        expected = int(previous_pid)
+        recorded = int(info.get("pid"))
+    except (TypeError, ValueError):
+        return False
+    if not info.get("exists") or recorded != expected:
+        return False
+    try:
+        _atomic_write_json(lock_file, _lock_payload())
+    except Exception:
+        return False
+    return True
+
+
 def reconcile_runtime_status(status_file: str, lock_file: str) -> Tuple[Dict[str, Any], Dict[str, Any], bool]:
     """Finalize stale `running` status when the runner is no longer alive.
 
@@ -277,7 +295,13 @@ def reconcile_runtime_status(status_file: str, lock_file: str) -> Tuple[Dict[str
     return failed, lock_info, True
 
 
-def release_lock(lock_file: str) -> None:
+def release_lock(lock_file: str, *, owner_pid: int | None = None) -> None:
+    if owner_pid is not None:
+        try:
+            if int(read_lock(lock_file).get("pid")) != int(owner_pid):
+                return
+        except (TypeError, ValueError):
+            return
     try:
         os.remove(lock_file)
     except FileNotFoundError:

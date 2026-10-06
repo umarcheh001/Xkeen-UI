@@ -105,6 +105,30 @@ def test_available_maps_exact_release_transport_failure_to_503(tmp_path):
     assert raised.value.details == {}
 
 
+def test_available_maps_invalid_trusted_catalog_to_503(tmp_path):
+    class InvalidCatalog:
+        def get_release_catalog(self, _version):
+            from services.module_catalog_client import CatalogClientError
+
+            raise CatalogClientError(
+                "catalog_signature_invalid", "catalog signature is invalid"
+            )
+
+    service, _ = make_service(
+        make_panel(tmp_path),
+        make_release(),
+        catalog_factory=lambda _version, _architecture: InvalidCatalog(),
+    )
+
+    with pytest.raises(ModuleLifecycleError) as raised:
+        service.available()
+
+    assert (raised.value.code, raised.value.status) == (
+        "catalog_signature_invalid",
+        503,
+    )
+
+
 def test_plan_returns_single_module_file_and_dependency_diff(tmp_path):
     panel = make_panel(tmp_path)
     service, _ = make_service(panel, make_release())
@@ -345,7 +369,33 @@ def test_status_preserves_observed_log_error_and_recovery_fields(tmp_path):
         observe_operation=lambda _root, _state: observed,
     )
 
-    assert service.status() == {"ok": True, **observed}
+    assert service.status() == {
+        "ok": True,
+        **{key: value for key, value in observed.items() if key != "recovery"},
+        "error": "the module operation could not be rolled back",
+    }
+
+
+def test_status_redacts_internal_paths_and_unrecognized_fields(tmp_path):
+    observed = status_record(
+        result="rollback_failed",
+        error_code="operation_rollback_failed",
+        error="cannot restore C:\\secret\\backup",
+        failed_path="services/private.py",
+        failed_error="permission denied at C:\\secret\\backup",
+    )
+    service, _ = make_service(
+        make_panel(tmp_path),
+        make_release(),
+        observe_operation=lambda _root, _state: observed,
+    )
+
+    payload = service.status()
+
+    assert payload["error"] == "the module operation could not be rolled back"
+    assert "failed_path" not in payload
+    assert "failed_error" not in payload
+    assert "secret" not in json.dumps(payload)
 
 
 def test_cancel_delegates_exact_operation_id(tmp_path):

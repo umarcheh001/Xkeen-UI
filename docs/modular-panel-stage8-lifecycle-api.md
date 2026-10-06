@@ -52,7 +52,9 @@ update, поэтому `update_available` всегда `false`; переход �
 Cancel отправляет `SIGTERM` только когда operation id совпадает с journal и
 status, status равен `running`, PID жив и Linux
 `/proc/<pid>/cmdline` указывает на `module_transaction.py run` с тем же id.
-Несовпадающий или исчезнувший процесс не получает сигнал. Итог отмены
+Linux pidfd удерживает проверенный процесс между чтением cmdline и сигналом,
+поэтому повторно использованный PID не может получить отмену. Несовпадающий
+или исчезнувший процесс не получает сигнал. Итог отмены
 определяет transaction runner: ранняя отмена завершается как interrupted,
 после начала mutation выполняется rollback, а защищённый commit может
 завершиться штатно.
@@ -63,6 +65,10 @@ recovery с `panel_running=True`. Он сохраняет `restart_required`, н
 активной module transaction, self-update lock, abandoned journal и
 `rollback_failed`, затем вызывает существующий restart boundary с source
 `module-lifecycle`.
+
+Launcher атомарно захватывает общий с self-update lock до проверки journal и
+передаёт владение detached runner без окна unlock. Поэтому два apply или apply
+одновременно с panel update не могут создать параллельные транзакции.
 
 ## Ошибки
 

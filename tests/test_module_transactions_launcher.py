@@ -123,6 +123,46 @@ def test_request_cancel_maps_process_exit_race(tmp_path):
     assert raised.value.code == "operation_not_running"
 
 
+def test_request_cancel_uses_pidfd_to_prevent_linux_pid_reuse(tmp_path):
+    panel, _journal = _operation(tmp_path)
+    calls = []
+
+    request_cancel(
+        panel.root,
+        panel.state,
+        OPERATION_ID,
+        read_cmdline=lambda _pid: _runner_argv(),
+        terminate=lambda _pid, _sig: pytest.fail("pid kill fallback is unsafe"),
+        platform_name="posix",
+        open_process=lambda pid: calls.append(("open", pid)) or 42,
+        signal_process=lambda fd, sig: calls.append(("signal", fd, sig)),
+        close_process=lambda fd: calls.append(("close", fd)),
+    )
+
+    assert calls == [
+        ("open", os.getpid()),
+        ("signal", 42, signal.SIGTERM),
+        ("close", 42),
+    ]
+
+
+def test_request_cancel_refuses_linux_when_pidfd_is_unavailable(tmp_path):
+    panel, _journal = _operation(tmp_path)
+
+    with pytest.raises(ModuleTransactionError) as raised:
+        request_cancel(
+            panel.root,
+            panel.state,
+            OPERATION_ID,
+            read_cmdline=lambda _pid: _runner_argv(),
+            platform_name="posix",
+            open_process=lambda _pid: None,
+            terminate=lambda _pid, _sig: pytest.fail("must not signal by PID"),
+        )
+
+    assert raised.value.code == "operation_process_mismatch"
+
+
 def test_ensure_restartable_refuses_live_operation(tmp_path):
     panel, _journal = _operation(tmp_path)
 

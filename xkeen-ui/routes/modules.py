@@ -9,6 +9,7 @@ from flask import Blueprint, jsonify, request
 from routes.common.errors import error_response, exception_response
 from services.module_lifecycle import ModuleLifecycleError, ModuleLifecycleService
 from services.module_registry import MODULE_IDS, PROFILE_PRESETS, ModuleRegistry, ModuleRegistryError
+from services.request_limits import PayloadTooLargeError, read_request_json_limited
 
 
 _MAX_PATCH_BYTES = 8 * 1024
@@ -72,13 +73,15 @@ def create_modules_blueprint(
         required: set[str],
     ):
         try:
-            if request.content_length and int(request.content_length) > _MAX_PATCH_BYTES:
-                return None, error_response(
-                    "payload too large", 400, ok=False, code="payload_too_large"
-                )
-        except (TypeError, ValueError):
-            pass
-        payload = request.get_json(silent=True)
+            payload = read_request_json_limited(
+                request,
+                max_bytes=_MAX_PATCH_BYTES,
+                default=None,
+            )
+        except PayloadTooLargeError:
+            return None, error_response(
+                "payload too large", 400, ok=False, code="payload_too_large"
+            )
         if not isinstance(payload, dict):
             return None, error_response(
                 "payload must be an object",

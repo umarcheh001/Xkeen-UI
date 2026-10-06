@@ -182,6 +182,27 @@ def test_lifecycle_body_validation_rejects_payload_over_8_kib(app_with_lifecycle
     assert service.calls == []
 
 
+def test_lifecycle_body_validation_bounds_stream_without_content_length(
+    app_with_lifecycle,
+):
+    client, service = app_with_lifecycle
+    body = json.dumps(
+        {"operation": "install", "module_id": "tool.terminal", "padding": "x" * 8192}
+    )
+
+    response = client.open(
+        "/api/modules/operations/plan",
+        method="POST",
+        data=body,
+        content_type="application/json",
+        environ_overrides={"CONTENT_LENGTH": "", "wsgi.input_terminated": True},
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["code"] == "payload_too_large"
+    assert service.calls == []
+
+
 def test_lifecycle_domain_error_preserves_safe_code_status_and_details(
     app_with_lifecycle,
 ):

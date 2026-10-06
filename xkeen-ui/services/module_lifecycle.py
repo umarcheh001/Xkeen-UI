@@ -47,6 +47,33 @@ _PLAN_BLOCKERS = frozenset(
         "module_free_space",
     }
 )
+_PUBLIC_STATUS_FIELDS = frozenset(
+    {
+        "operation_id",
+        "operation",
+        "module_id",
+        "version",
+        "step",
+        "result",
+        "error_code",
+        "error",
+        "started_at",
+        "finished_at",
+        "log",
+        "recovered",
+        "restart_required",
+        "panel_unresponsive",
+    }
+)
+_PUBLIC_STATUS_ERRORS = {
+    "operation_cancelled": "the module operation was cancelled",
+    "operation_health_failed": "the panel did not become healthy after the module operation",
+    "operation_in_progress": "another panel operation is already running",
+    "operation_interrupted": "the module operation was interrupted",
+    "operation_restart_failed": "the panel could not be restarted",
+    "operation_rollback_failed": "the module operation could not be rolled back",
+    "operation_start_failed": "the module operation runner could not be started",
+}
 
 
 class ModuleLifecycleError(Exception):
@@ -68,10 +95,8 @@ class ModuleLifecycleError(Exception):
 
 
 def _domain_status(code: str) -> int:
-    if code in {"catalog_unavailable", "catalog_archive_unavailable"} or code.startswith(
-        "catalog_transport_"
-    ):
-        return 503
+    if code.startswith("catalog_"):
+        return 409 if code == "catalog_module_unknown" else 503
     if code in {"module_not_found", "operation_not_found"}:
         return 404
     if code.endswith("_invalid") or code in {
@@ -149,6 +174,27 @@ def _plan_digest(plan: Plan, dependency_diff: Mapping[str, Any]) -> str:
         separators=(",", ":"),
     ).encode("utf-8")
     return hashlib.sha256(canonical).hexdigest()
+
+
+def _public_status(status: Mapping[str, Any]) -> dict[str, Any]:
+    payload = {
+        key: value
+        for key, value in status.items()
+        if key in _PUBLIC_STATUS_FIELDS and key != "log"
+    }
+    raw_log = status.get("log")
+    payload["log"] = [
+        {key: entry[key] for key in ("step", "at") if key in entry}
+        for entry in raw_log
+        if isinstance(entry, Mapping)
+    ] if isinstance(raw_log, list) else []
+    error_code = payload.get("error_code")
+    payload["error"] = (
+        _PUBLIC_STATUS_ERRORS.get(str(error_code), "module operation failed")
+        if error_code
+        else None
+    )
+    return payload
 
 
 class ModuleLifecycleService:
@@ -433,13 +479,17 @@ class ModuleLifecycleService:
         return {
             "ok": True,
             "operation_id": operation_id,
-            "status": self._observe_operation(self.panel_root, self.state_dir),
+            "status": _public_status(
+                self._observe_operation(self.panel_root, self.state_dir)
+            ),
         }
 
     def status(self) -> dict[str, Any]:
         return {
             "ok": True,
-            **self._observe_operation(self.panel_root, self.state_dir),
+            **_public_status(
+                self._observe_operation(self.panel_root, self.state_dir)
+            ),
         }
 
     def cancel(self, operation_id: str) -> dict[str, Any]:
@@ -462,7 +512,9 @@ class ModuleLifecycleService:
             )
         except ModuleTransactionError as error:
             _raise_domain(error)
-        observed = self._observe_operation(self.panel_root, self.state_dir)
+        observed = _public_status(
+            self._observe_operation(self.panel_root, self.state_dir)
+        )
         if result is None and observed.get("result") == "running":
             raise ModuleLifecycleError(
                 "operation_in_progress",
