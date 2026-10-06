@@ -48,6 +48,7 @@ def test_request_cancel_signals_only_matching_module_runner(tmp_path):
         OPERATION_ID,
         read_cmdline=lambda _pid: _runner_argv(),
         terminate=lambda pid, sig: signals.append((pid, sig)),
+        platform_name="nt",
     )
 
     assert signals == [(os.getpid(), signal.SIGTERM)]
@@ -118,6 +119,7 @@ def test_request_cancel_maps_process_exit_race(tmp_path):
             OPERATION_ID,
             read_cmdline=lambda _pid: _runner_argv(),
             terminate=lambda _pid, _sig: (_ for _ in ()).throw(ProcessLookupError()),
+            platform_name="nt",
         )
 
     assert raised.value.code == "operation_not_running"
