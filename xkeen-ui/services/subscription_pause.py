@@ -16,11 +16,11 @@ from __future__ import annotations
 import os
 import threading
 import time
-import uuid
 from typing import Any, Callable, Dict, List, Optional
 
 from services import dns_over_vless as dov
 from services import xray_subscriptions as subs
+from services import xray_transactions
 from services.io.atomic import _atomic_write_json
 
 RECORD_FILENAME = "xray_subscriptions_pause.json"
@@ -275,50 +275,17 @@ def plan(*, ui_state_dir: str, xray_configs_dir: str, routing_file: str) -> Dict
 # --- undoing a half-done change --------------------------------------------------
 
 
-class _Guard:
+def _Guard(ui_state_dir: str, xray_configs_dir: str) -> xray_transactions.MemoryGuard:
     """Byte copy of everything a pause or resume may rewrite."""
-
-    def __init__(self, ui_state_dir: str, xray_configs_dir: str):
-        jsonc_dir = os.path.dirname(subs.jsonc_path_for(subs._config_fragment_path(xray_configs_dir, subs.ROUTING_FILE)))
-        self._dirs = [path for path in dict.fromkeys([xray_configs_dir, jsonc_dir]) if path and os.path.isdir(path)]
-        self._snap: Dict[str, Optional[bytes]] = {}
-        for directory in self._dirs:
-            for name in os.listdir(directory):
-                path = os.path.join(directory, name)
-                if os.path.isfile(path):
-                    self._snap[path] = self._read(path)
-        for path in (
+    jsonc_dir = os.path.dirname(subs.jsonc_path_for(subs._config_fragment_path(xray_configs_dir, subs.ROUTING_FILE)))
+    return xray_transactions.MemoryGuard(
+        dirs=[xray_configs_dir, jsonc_dir],
+        paths=[
             subs.subscription_state_path(ui_state_dir),
             dov._state_path(ui_state_dir),
             _record_path(ui_state_dir),
-        ):
-            self._snap[path] = self._read(path)
-
-    @staticmethod
-    def _read(path: str) -> Optional[bytes]:
-        try:
-            with open(path, "rb") as handle:
-                return handle.read()
-        except FileNotFoundError:
-            return None
-
-    def restore(self) -> None:
-        for directory in self._dirs:
-            for name in os.listdir(directory):
-                path = os.path.join(directory, name)
-                if os.path.isfile(path) and path not in self._snap:
-                    os.remove(path)
-        for path, data in self._snap.items():
-            if data is None:
-                try:
-                    os.remove(path)
-                except FileNotFoundError:
-                    pass
-            elif self._read(path) != data:
-                temp = f"{path}.{uuid.uuid4().hex}.tmp"
-                with open(temp, "wb") as handle:
-                    handle.write(data)
-                os.replace(temp, path)
+        ],
+    )
 
 
 def _restart(restart_xkeen: Callable[..., Any], source: str) -> bool:
@@ -390,9 +357,19 @@ def _switch(
         before_kinds = _with_kinds(before["selection"], _usable(view["runtime"], view["routing"]))
         outlook = _pause_outlook(ui_state_dir, xray_configs_dir, view) if pausing else {}
 
+        notes = {"warning": ""}
+
         def _apply_files() -> Dict[str, Any]:
             operation = subs.pause_subscriptions if pausing else subs.resume_subscriptions
             return operation(ui_state_dir, xray_configs_dir=xray_configs_dir, snapshot=snapshot)
+
+        def _confirm(guard: xray_transactions.MemoryGuard) -> None:
+            # Перед перезапуском, а не после: ядро, которое не поднялось на
+            # отклонённом конфиге, оставило бы сеть без прокси.
+            try:
+                notes["warning"] = subs._confirm_live_config(guard, xray_configs_dir)
+            except subs.SubscriptionConfigRejected as exc:
+                raise PauseError(str(exc), code="xray_config_rejected", details={"rolled_back": True})
 
         def _finish(*, restarts: int, restarted: bool, round_trip: bool) -> Dict[str, Any]:
             after = _brief(_dns_now(ui_state_dir, xray_configs_dir, routing_file))
@@ -416,6 +393,7 @@ def _switch(
                 "restarted": bool(restarted),
                 "restarts": restarts,
                 "dns": _dns_result(before, after, round_trip=round_trip, restored=restore),
+                "warning": notes["warning"],
             }
 
         # One restart, DNS untouched: nothing to protect, or the route survives.
@@ -425,6 +403,7 @@ def _switch(
             try:
                 _apply_files()
                 if dns_idle or _intact(_dns_now(ui_state_dir, xray_configs_dir, routing_file)):
+                    _confirm(guard)
                     restarted = _restart(restart_xkeen, source)
                     return _finish(restarts=1, restarted=restarted, round_trip=False)
             except Exception:
@@ -473,6 +452,7 @@ def _switch(
                 dov.apply_action("enable", target_tag=target, **dns_args)
                 restarted = True
             else:
+                _confirm(guard)
                 restarted = _restart(restart_xkeen, source)
             restarts += 1
         except Exception as exc:

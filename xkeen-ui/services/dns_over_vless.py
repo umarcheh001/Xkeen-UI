@@ -37,6 +37,7 @@ from services.io.atomic import _atomic_write_json, _atomic_write_text
 from services.xray_config_files import jsonc_path_for
 from services import dns_client_capture
 from services import firmware_resolvers
+from services import xray_transactions
 from utils.firmware import ndmc_path as _resolve_ndmc, run_ndmc
 from utils.jsonc import strip_json_comments_text
 from services.keenetic_rci import fetch_rci_json
@@ -2499,9 +2500,7 @@ def _port_53_bind_probe() -> bool:
 
 
 def _xray_binary() -> str:
-    if os.path.exists("/opt/sbin/xray"):
-        return "/opt/sbin/xray"
-    return str(shutil.which("xray") or "")
+    return xray_transactions.xray_binary()
 
 
 def _core_supports_dns_rules() -> bool:
@@ -2547,52 +2546,26 @@ def _stage_and_test(configs_dir: str, replacements: Dict[str, Optional[Dict[str,
     if not xray:
         raise DnsOverVlessError("Не найден бинарник Xray для обязательной проверки.", code="xray_missing")
     try:
-        with tempfile.TemporaryDirectory(prefix="xkeen-dns-vless-") as tmpdir:
-            for name in os.listdir(configs_dir):
-                src = os.path.join(configs_dir, name)
-                dst = os.path.join(tmpdir, name)
-                if os.path.isdir(src) and not os.path.islink(src):
-                    # Backups are not part of the Xray confdir model.
-                    if name == "backups":
-                        continue
-                    shutil.copytree(src, dst, symlinks=True)
-                else:
-                    shutil.copy2(src, dst, follow_symlinks=False)
-            for name, obj in replacements.items():
-                path = os.path.join(tmpdir, os.path.basename(name))
-                if obj is None:
-                    try:
-                        os.remove(path)
-                    except FileNotFoundError:
-                        pass
-                else:
-                    _atomic_write_json(path, obj)
-            env = os.environ.copy()
-            asset_dir = str(os.environ.get("XRAY_LOCATION_ASSET") or "/opt/etc/xray/dat")
-            if os.path.isdir(asset_dir):
-                env["XRAY_LOCATION_ASSET"] = asset_dir
-                env["xray.location.asset"] = asset_dir
-            proc = subprocess.run(
-                [xray, "-test", "-confdir", tmpdir],
-                capture_output=True,
-                text=True,
-                timeout=max(10, int(os.environ.get("XKEEN_XRAY_TEST_TIMEOUT", "30"))),
-                check=False,
-                env=env,
-            )
-            if proc.returncode != 0:
-                raise DnsOverVlessError(
-                    "Xray отклонил подготовленную конфигурацию; ничего не изменено.",
-                    code="xray_preflight_failed",
-                    details=(proc.stderr or proc.stdout or "").strip()[-4000:],
-                )
-            return {"ok": True, "stdout": (proc.stdout or "").strip()[-1000:]}
-    except DnsOverVlessError:
-        raise
-    except subprocess.TimeoutExpired as exc:
-        raise DnsOverVlessError("Проверка Xray превысила таймаут; ничего не изменено.", code="xray_preflight_timeout") from exc
+        verdict = xray_transactions.check_staged(configs_dir, replacements, xray=xray, prefix="xkeen-dns-vless-")
     except Exception as exc:
         raise DnsOverVlessError("Не удалось проверить подготовленную конфигурацию Xray.", code="xray_preflight_failed", details=str(exc)) from exc
+    if verdict.get("ok") is True:
+        return {"ok": True, "stdout": str(verdict.get("stdout") or "")}
+    if verdict.get("ok") is False:
+        raise DnsOverVlessError(
+            "Xray отклонил подготовленную конфигурацию; ничего не изменено.",
+            code="xray_preflight_failed",
+            details=str(verdict.get("details") or ""),
+        )
+    # Здесь, в отличие от подписок, непроверенное не пишется: функция забирает
+    # у прошивки порт 53, и ошибка в конфиге оставила бы сеть без DNS.
+    if verdict.get("reason") == "timeout":
+        raise DnsOverVlessError("Проверка Xray превысила таймаут; ничего не изменено.", code="xray_preflight_timeout")
+    raise DnsOverVlessError(
+        "Не удалось проверить подготовленную конфигурацию Xray.",
+        code="xray_preflight_failed",
+        details=str(verdict.get("details") or ""),
+    )
 
 
 def _write_routing_preserving_comments(
@@ -2622,8 +2595,7 @@ def _write_routing_preserving_comments(
 
 # Снимок нужен только для отката внутри операции, которая его сделала; после
 # неё его никто не читает.  Без чистки каталоги копились с каждым включением.
-TRANSACTIONS_KEEP = 10
-_TXID_RE = re.compile(r"^\d{8}-\d{6}-[0-9a-f]{8}$")
+TRANSACTIONS_KEEP = xray_transactions.TRANSACTIONS_KEEP
 
 
 def _transactions_dir(ui_state_dir: str) -> str:
@@ -2631,46 +2603,15 @@ def _transactions_dir(ui_state_dir: str) -> str:
 
 
 def _prune_transactions(ui_state_dir: str, keep: int = TRANSACTIONS_KEEP) -> None:
-    root = _transactions_dir(ui_state_dir)
-    try:
-        names = sorted(name for name in os.listdir(root) if _TXID_RE.match(name))
-    except OSError:
-        return
-    for name in names[:-keep] if keep > 0 else names:
-        shutil.rmtree(os.path.join(root, name), ignore_errors=True)
+    xray_transactions.prune_transactions(_transactions_dir(ui_state_dir), keep)
 
 
 def _snapshot(paths: Iterable[str], ui_state_dir: str) -> tuple[str, Dict[str, Any]]:
-    txid = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8]
-    directory = os.path.join(_transactions_dir(ui_state_dir), txid)
-    os.makedirs(directory, exist_ok=True)
-    manifest: Dict[str, Any] = {"id": txid, "created_at": int(time.time()), "files": []}
-    for idx, path in enumerate(paths):
-        exists = os.path.isfile(path)
-        item: Dict[str, Any] = {"path": path, "exists": exists, "backup": ""}
-        if exists:
-            backup = os.path.join(directory, f"{idx:02d}-{os.path.basename(path)}")
-            shutil.copy2(path, backup)
-            item["backup"] = backup
-        manifest["files"].append(item)
-    _atomic_write_json(os.path.join(directory, "manifest.json"), manifest)
-    _prune_transactions(ui_state_dir)
-    return directory, manifest
+    return xray_transactions.snapshot(paths, _transactions_dir(ui_state_dir), keep=TRANSACTIONS_KEEP)
 
 
 def _restore_snapshot(manifest: Dict[str, Any]) -> None:
-    for item in manifest.get("files", []):
-        path = str(item.get("path") or "")
-        if not path:
-            continue
-        if item.get("exists"):
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            shutil.copy2(str(item.get("backup") or ""), path)
-        else:
-            try:
-                os.remove(path)
-            except FileNotFoundError:
-                pass
+    xray_transactions.restore_snapshot(manifest)
 
 
 def _wait_for_xray(timeout: float = 12.0) -> bool:

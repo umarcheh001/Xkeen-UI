@@ -28,6 +28,7 @@ from typing import Any, Callable, Dict, Iterable, List, Tuple
 from urllib.parse import parse_qs, unquote, urlparse
 
 from services import happ_links, happ_payloads
+from services import xray_transactions
 from services.io.atomic import _atomic_write_json, _atomic_write_text
 from services.subscription_schedule import plan_alignment
 from services.url_policy import URLPolicy, env_flag, is_url_allowed
@@ -1049,6 +1050,39 @@ def delete_subscription(
     remove_file: bool = True,
     restart_xkeen: RestartCallback | None = None,
 ) -> Dict[str, Any]:
+    guard = _operation_guard(ui_state_dir, xray_configs_dir)
+    try:
+        return _delete_subscription_guarded(
+            ui_state_dir,
+            sub_id,
+            guard=guard,
+            xray_configs_dir=xray_configs_dir,
+            snapshot=snapshot,
+            remove_file=remove_file,
+            restart_xkeen=restart_xkeen,
+        )
+    except KeyError:
+        raise
+    except Exception:
+        # Половина удаления хуже неудавшегося: запись без файла или файл без
+        # записи.  Возвращаем всё, включая состояние.
+        try:
+            guard.restore()
+        except Exception:
+            pass
+        raise
+
+
+def _delete_subscription_guarded(
+    ui_state_dir: str,
+    sub_id: str,
+    *,
+    guard: xray_transactions.MemoryGuard,
+    xray_configs_dir: str,
+    snapshot: SnapshotCallback | None,
+    remove_file: bool,
+    restart_xkeen: RestartCallback | None,
+) -> Dict[str, Any]:
     removed: Dict[str, Any] | None = None
     remaining_state: Dict[str, Any] = {"subscriptions": []}
     previous_state: Dict[str, Any] = {"subscriptions": []}
@@ -1122,6 +1156,10 @@ def delete_subscription(
         if routing_jsonc_path:
             snapshot_cleanup_paths.append(routing_jsonc_path)
 
+    preflight_warning = ""
+    if output_removed or observatory_changed or routing_changed or outbounds_changed:
+        preflight_warning = _confirm_live_config(guard, xray_configs_dir)
+
     snapshots_removed = _remove_config_snapshots_for_paths(xray_configs_dir, snapshot_cleanup_paths)
 
     restarted = False
@@ -1145,6 +1183,7 @@ def delete_subscription(
         "baseline_restored": restored_baseline,
         "snapshots_removed": snapshots_removed,
         "restarted": restarted,
+        "warning": preflight_warning,
     }
 
 
@@ -1582,6 +1621,58 @@ _UNSUPPORTED_CLIENT_PLACEHOLDER_NAMES = frozenset(
 )
 _SUBSCRIPTION_HTML_RE = re.compile(r"(?is)^\s*(?:<!doctype html|<html\b)")
 _SUBSCRIPTION_CLIENT_INSTALL_RE = re.compile(r"(?i)\b(?:happ|incy)://")
+
+
+class SubscriptionConfigRejected(RuntimeError):
+    """Ядро отклонило конфиг, который получился после операции; она отменена."""
+
+
+def _operation_guard(ui_state_dir: str, xray_configs_dir: str) -> xray_transactions.MemoryGuard:
+    """Слепок всего, что может переписать одна операция над подписками."""
+    try:
+        jsonc_dir = os.path.dirname(jsonc_path_for(_config_fragment_path(xray_configs_dir, ROUTING_FILE)))
+    except Exception:
+        jsonc_dir = ""
+    return xray_transactions.MemoryGuard(
+        dirs=[xray_configs_dir, jsonc_dir],
+        paths=[subscription_state_path(ui_state_dir)],
+    )
+
+
+def _check_live_config(xray_configs_dir: str) -> Dict[str, Any]:
+    if not env_flag("XKEEN_SUBSCRIPTIONS_PREFLIGHT", True):
+        return {"ok": None, "reason": "disabled", "details": ""}
+    return xray_transactions.check_confdir(xray_configs_dir)
+
+
+PREFLIGHT_ALREADY_BROKEN_WARNING = (
+    "Xray отклонял конфигурацию ещё до этой операции: изменения сохранены, "
+    "но ядро с такими файлами не запустится. Проверьте свои файлы конфигурации."
+)
+
+
+def _confirm_live_config(guard: xray_transactions.MemoryGuard, xray_configs_dir: str) -> str:
+    """Спросить ядро о том, что операция оставила на диске.
+
+    Отказ отменяет операцию -- но только если виновата она.  Каталог, который
+    ядро не принимало и до неё (владелец сам сломал свой файл), не повод
+    запрещать обновлять и удалять подписки: тогда изменения остаются, а
+    вызывающий получает предупреждение.  Ядро, которое спросить не удалось,
+    ничего не отменяет: медленный роутер не должен откатывать работу.
+    """
+    verdict = _check_live_config(xray_configs_dir)
+    if verdict.get("ok") is not False:
+        return ""
+    after = guard.retake()
+    guard.restore()
+    if _check_live_config(xray_configs_dir).get("ok") is False:
+        after.restore()
+        return PREFLIGHT_ALREADY_BROKEN_WARNING
+    lines = [line.strip() for line in str(verdict.get("details") or "").splitlines() if line.strip()]
+    reason = " ".join(lines[-2:])[-400:]
+    raise SubscriptionConfigRejected(
+        "Xray отклонил новую конфигурацию, изменения отменены." + (f" Причина: {reason}" if reason else "")
+    )
 
 
 class SubscriptionPlaceholderError(RuntimeError):
@@ -5990,6 +6081,8 @@ def refresh_subscription(
     source_count = 0
     filtered_out_count = 0
     preview_nodes: List[Dict[str, Any]] = []
+    guard: xray_transactions.MemoryGuard | None = None
+    sub_before_writes: Dict[str, Any] = {}
     node_latency: Dict[str, Dict[str, Any]] = _prune_node_latency_map(sub.get("node_latency"), _normalize_last_nodes(sub.get("last_nodes")))
     node_tcp_latency: Dict[str, Dict[str, Any]] = _prune_node_latency_map(
         sub.get("node_tcp_latency"), _normalize_last_nodes(sub.get("last_nodes"))
@@ -6116,6 +6209,10 @@ def refresh_subscription(
         tags = [str(ob.get("tag") or "").strip() for ob in outbounds if isinstance(ob, dict) and ob.get("tag")]
         output_obj = {"outbounds": outbounds}
         output_snapshot = _subscription_output_snapshot(snapshot)
+        # Слепок -- перед первой записью, а не перед скачиванием: за время
+        # сетевого запроса владелец мог сохранить свой файл в редакторе.
+        guard = _operation_guard(ui_state_dir, xray_configs_dir)
+        sub_before_writes = copy.deepcopy(sub)
         changed = _write_subscription_output_if_changed(output_path, output_obj, snapshot=output_snapshot)
         current_file_hash = str(manual_overrides.get("current_hash") or "").strip() if isinstance(manual_overrides, dict) else ""
         previous_output_hash = str(sub.get("last_hash") or "").strip()
@@ -6236,6 +6333,12 @@ def refresh_subscription(
         if not rebuild_stats.get("has_runtime_targets"):
             _clear_subscription_managed_baselines(ui_state_dir)
 
+        if changed or observatory_changed or routing_changed or outbounds_changed:
+            preflight_warning = _confirm_live_config(guard, xray_configs_dir)
+            if preflight_warning:
+                warnings = warnings + [preflight_warning]
+                sub["last_warnings"] = warnings
+
         sub.update(
             {
                 "last_changed": bool(changed),
@@ -6292,6 +6395,17 @@ def refresh_subscription(
             }
         )
     except Exception as exc:
+        if guard is not None:
+            # Запись уже началась: на диске не должно остаться ни фрагмента без
+            # маршрутизации, ни конфига, который отклонило ядро.  Запись о
+            # подписке тоже возвращается -- иначе в ней остались бы теги узлов,
+            # которых в конфиге больше нет.
+            try:
+                guard.restore()
+            except Exception:
+                pass
+            sub.clear()
+            sub.update(sub_before_writes)
         interval = _clamp_interval(sub.get("interval_hours") or DEFAULT_INTERVAL_HOURS)
         retry_seconds = _refresh_error_retry_seconds(interval)
         fetch_warnings = [str(item) for item in fetch_meta.get("warnings", []) if str(item or "").strip()]
