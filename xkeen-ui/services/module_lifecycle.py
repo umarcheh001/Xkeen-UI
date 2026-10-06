@@ -74,6 +74,17 @@ _PUBLIC_STATUS_ERRORS = {
     "operation_rollback_failed": "the module operation could not be rolled back",
     "operation_start_failed": "the module operation runner could not be started",
 }
+_CATALOG_COMPATIBILITY_ERRORS = frozenset(
+    {
+        "catalog_api_unsupported",
+        "catalog_architecture_unsupported",
+        "catalog_channel_unsupported",
+        "catalog_min_core_unsupported",
+        "catalog_module_unknown",
+        "catalog_release_version_mismatch",
+        "catalog_schema_unsupported",
+    }
+)
 
 
 class ModuleLifecycleError(Exception):
@@ -96,7 +107,7 @@ class ModuleLifecycleError(Exception):
 
 def _domain_status(code: str) -> int:
     if code.startswith("catalog_"):
-        return 409 if code == "catalog_module_unknown" else 503
+        return 409 if code in _CATALOG_COMPATIBILITY_ERRORS else 503
     if code in {"module_not_found", "operation_not_found"}:
         return 404
     if code.endswith("_invalid") or code in {

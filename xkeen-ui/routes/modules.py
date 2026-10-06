@@ -7,9 +7,9 @@ from typing import Any, Callable
 from flask import Blueprint, jsonify, request
 
 from routes.common.errors import error_response, exception_response
+from services import request_limits
 from services.module_lifecycle import ModuleLifecycleError, ModuleLifecycleService
 from services.module_registry import MODULE_IDS, PROFILE_PRESETS, ModuleRegistry, ModuleRegistryError
-from services.request_limits import PayloadTooLargeError, read_request_json_limited
 
 
 _MAX_PATCH_BYTES = 8 * 1024
@@ -73,12 +73,12 @@ def create_modules_blueprint(
         required: set[str],
     ):
         try:
-            payload = read_request_json_limited(
+            payload = request_limits.read_request_json_limited(
                 request,
                 max_bytes=_MAX_PATCH_BYTES,
                 default=None,
             )
-        except PayloadTooLargeError:
+        except request_limits.PayloadTooLargeError:
             return None, error_response(
                 "payload too large", 400, ok=False, code="payload_too_large"
             )

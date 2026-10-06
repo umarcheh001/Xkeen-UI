@@ -7,6 +7,7 @@ from flask import Flask
 
 from routes.modules import create_modules_blueprint
 from services.module_lifecycle import ModuleLifecycleError
+from services.request_limits import install_request_size_guards
 
 
 class RegistryFake:
@@ -247,3 +248,21 @@ def test_missing_lifecycle_service_only_disables_new_routes():
     unavailable = client.get("/api/modules/installed")
     assert unavailable.status_code == 503
     assert unavailable.get_json()["code"] == "module_lifecycle_unavailable"
+
+
+def test_lifecycle_json_remains_readable_after_production_size_guard():
+    service = LifecycleFake()
+    app = Flask(__name__)
+    app.config["TESTING"] = True
+    install_request_size_guards(app)
+    app.register_blueprint(
+        create_modules_blueprint(RegistryFake(), lifecycle_service=service)
+    )
+
+    response = app.test_client().post(
+        "/api/modules/operations/plan",
+        json={"operation": "install", "module_id": "tool.terminal"},
+    )
+
+    assert response.status_code == 200
+    assert service.calls == [("plan", "install", "tool.terminal")]

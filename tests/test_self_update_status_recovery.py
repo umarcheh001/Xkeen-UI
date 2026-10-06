@@ -5,6 +5,7 @@ import json
 import os
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -46,6 +47,32 @@ class SelfUpdateStatusRecoveryTests(unittest.TestCase):
             self.assertTrue(refreshed["exists"])
             self.assertTrue(refreshed["alive"])
             self.assertFalse(refreshed["stale"])
+
+    def test_concurrent_stale_lock_takeover_has_one_winner(self):
+        state = _reload("services.self_update.state")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            lock_file = Path(tmp) / "lock"
+            lock_file.write_text(
+                json.dumps({"pid": -1, "created_ts": time.time()}),
+                encoding="utf-8",
+            )
+            barrier = threading.Barrier(8)
+            results = []
+
+            def acquire():
+                barrier.wait()
+                results.append(state.try_acquire_lock(str(lock_file))[0])
+
+            threads = [threading.Thread(target=acquire) for _ in range(8)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=5)
+
+            self.assertFalse(any(thread.is_alive() for thread in threads))
+            self.assertEqual(results.count(True), 1)
+            self.assertEqual(results.count(False), 7)
 
     def test_reconcile_runtime_status_marks_stale_runner_as_failed(self):
         state = _reload("services.self_update.state")

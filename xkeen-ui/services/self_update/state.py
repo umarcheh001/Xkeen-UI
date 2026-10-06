@@ -15,12 +15,65 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 import glob
 from typing import Any, Dict, List, Optional, Tuple
 
 from services.io import read_json
 from services.io.atomic import _atomic_write_json
+
+
+_LOCK_GUARDS: Dict[str, threading.Lock] = {}
+_LOCK_GUARDS_MUTEX = threading.Lock()
+
+
+def _thread_lock(path: str) -> threading.Lock:
+    with _LOCK_GUARDS_MUTEX:
+        return _LOCK_GUARDS.setdefault(os.path.abspath(path), threading.Lock())
+
+
+def _acquire_process_guard(path: str) -> int | None:
+    try:
+        fd = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
+        if os.name == "nt":
+            import msvcrt
+
+            if os.fstat(fd).st_size == 0:
+                os.write(fd, b"0")
+            os.lseek(fd, 0, os.SEEK_SET)
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return fd
+    except (OSError, ImportError):
+        try:
+            os.close(fd)
+        except (OSError, UnboundLocalError):
+            pass
+        return None
+
+
+def _release_process_guard(fd: int) -> None:
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            os.lseek(fd, 0, os.SEEK_SET)
+            msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(fd, fcntl.LOCK_UN)
+    except (OSError, ImportError):
+        pass
+    finally:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
 
 
 def _is_dir_writable(path: str) -> bool:
@@ -212,9 +265,27 @@ def try_acquire_lock(lock_file: str) -> Tuple[bool, Dict[str, Any]]:
 
     Returns (acquired, lock_info).
     """
-    os.makedirs(os.path.dirname(lock_file) or ".", exist_ok=True)
-    payload = _lock_payload()
-    for attempt in range(2):
+    directory = os.path.dirname(lock_file) or "."
+    os.makedirs(directory, exist_ok=True)
+    thread_guard = _thread_lock(lock_file)
+    if not thread_guard.acquire(blocking=False):
+        return False, {"exists": True, "alive": True, "stale": False}
+    guard_fd = _acquire_process_guard(lock_file + ".guard")
+    if guard_fd is None:
+        thread_guard.release()
+        return False, {"exists": True, "alive": True, "stale": False}
+    try:
+        info = read_lock(lock_file)
+        if info.get("exists") and not info.get("stale"):
+            return False, info
+        if info.get("stale"):
+            try:
+                os.remove(lock_file)
+            except FileNotFoundError:
+                pass
+            except OSError:
+                return False, read_lock(lock_file)
+        payload = _lock_payload()
         try:
             fd = os.open(lock_file, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
             try:
@@ -224,22 +295,15 @@ def try_acquire_lock(lock_file: str) -> Tuple[bool, Dict[str, Any]]:
             info = {"exists": True, **payload, "age_sec": 0.0, "alive": True, "stale": False}
             return True, info
         except FileExistsError:
-            info = read_lock(lock_file)
-            if attempt == 0 and info.get("stale"):
-                try:
-                    os.remove(lock_file)
-                    continue
-                except Exception:
-                    pass
-            return False, info
+            return False, read_lock(lock_file)
         except Exception:
             # If lock cannot be created due to FS errors, treat as locked to be safe.
             info = read_lock(lock_file)
             info["exists"] = True
             return False, info
-    info = read_lock(lock_file)
-    info["exists"] = True
-    return False, info
+    finally:
+        _release_process_guard(guard_fd)
+        thread_guard.release()
 
 
 def transfer_lock(lock_file: str, previous_pid: int) -> bool:

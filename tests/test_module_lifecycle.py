@@ -129,6 +129,31 @@ def test_available_maps_invalid_trusted_catalog_to_503(tmp_path):
     )
 
 
+def test_available_maps_release_compatibility_failure_to_409(tmp_path):
+    class IncompatibleCatalog:
+        def get_release_catalog(self, _version):
+            from services.module_catalog_client import CatalogClientError
+
+            raise CatalogClientError(
+                "catalog_architecture_unsupported",
+                "module architecture is not supported",
+            )
+
+    service, _ = make_service(
+        make_panel(tmp_path),
+        make_release(),
+        catalog_factory=lambda _version, _architecture: IncompatibleCatalog(),
+    )
+
+    with pytest.raises(ModuleLifecycleError) as raised:
+        service.available()
+
+    assert (raised.value.code, raised.value.status) == (
+        "catalog_architecture_unsupported",
+        409,
+    )
+
+
 def test_plan_returns_single_module_file_and_dependency_diff(tmp_path):
     panel = make_panel(tmp_path)
     service, _ = make_service(panel, make_release())
