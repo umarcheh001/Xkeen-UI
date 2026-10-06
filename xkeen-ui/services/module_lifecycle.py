@@ -16,7 +16,12 @@ from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 from services.module_package_contract import detect_platform_architecture
 from services.module_registry import MODULE_IDS, ModuleRegistry
 from services.module_transactions.executor import recover
-from services.module_transactions.launcher import launch, observe_status
+from services.module_transactions.launcher import (
+    ensure_restartable,
+    launch,
+    observe_status,
+    request_cancel,
+)
 from services.module_transactions.plan import (
     OPERATIONS,
     Plan,
@@ -159,7 +164,8 @@ class ModuleLifecycleService:
         launch_operation: Callable[..., str] = launch,
         observe_operation: Callable[[Path, Path], dict[str, Any]] = observe_status,
         recover_operation: Callable[..., str | None] = recover,
-        cancel_operation: Callable[..., None] | None = None,
+        cancel_operation: Callable[..., None] = request_cancel,
+        ensure_restartable_operation: Callable[[Path, Path], None] = ensure_restartable,
     ) -> None:
         self.module_registry = module_registry
         self.panel_root = Path(panel_root)
@@ -174,6 +180,7 @@ class ModuleLifecycleService:
         self._observe_operation = observe_operation
         self._recover_operation = recover_operation
         self._cancel_operation = cancel_operation
+        self._ensure_restartable = ensure_restartable_operation
 
     def _release_context(self):
         try:
@@ -429,3 +436,55 @@ class ModuleLifecycleService:
             "ok": True,
             **self._observe_operation(self.panel_root, self.state_dir),
         }
+
+    def cancel(self, operation_id: str) -> dict[str, Any]:
+        try:
+            self._cancel_operation(self.panel_root, self.state_dir, operation_id)
+        except ModuleTransactionError as error:
+            _raise_domain(error)
+        return {
+            "ok": True,
+            "operation_id": operation_id,
+            "cancel_requested": True,
+        }
+
+    def recover(self) -> dict[str, Any]:
+        try:
+            result = self._recover_operation(
+                self.panel_root,
+                self.state_dir,
+                panel_running=True,
+            )
+        except ModuleTransactionError as error:
+            _raise_domain(error)
+        observed = self._observe_operation(self.panel_root, self.state_dir)
+        if result is None and observed.get("result") == "running":
+            raise ModuleLifecycleError(
+                "operation_in_progress",
+                "a module operation is already running",
+                status=409,
+            )
+        return {"ok": True, "recovery_result": result, **observed}
+
+    def restart(self) -> dict[str, Any]:
+        try:
+            self._ensure_restartable(self.panel_root, self.state_dir)
+        except ModuleTransactionError as error:
+            _raise_domain(error)
+        try:
+            dispatched = self._restart_panel is not None and self._restart_panel(
+                "module-lifecycle"
+            )
+        except Exception as error:
+            raise ModuleLifecycleError(
+                "module_restart_failed",
+                "the panel restart could not be dispatched",
+                status=503,
+            ) from error
+        if not dispatched:
+            raise ModuleLifecycleError(
+                "module_restart_failed",
+                "the panel restart could not be dispatched",
+                status=503,
+            )
+        return {"ok": True, "restart_requested": True}

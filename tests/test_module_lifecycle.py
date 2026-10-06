@@ -346,3 +346,137 @@ def test_status_preserves_observed_log_error_and_recovery_fields(tmp_path):
     )
 
     assert service.status() == {"ok": True, **observed}
+
+
+def test_cancel_delegates_exact_operation_id(tmp_path):
+    calls = []
+    service, _ = make_service(
+        make_panel(tmp_path),
+        make_release(),
+        cancel_operation=lambda root, state, operation_id: calls.append(
+            (root, state, operation_id)
+        ),
+    )
+
+    payload = service.cancel("20261006T120000Z-abcdef")
+
+    assert payload == {
+        "ok": True,
+        "operation_id": "20261006T120000Z-abcdef",
+        "cancel_requested": True,
+    }
+    assert calls == [
+        (
+            service.panel_root,
+            service.state_dir,
+            "20261006T120000Z-abcdef",
+        )
+    ]
+
+
+def test_recovery_never_restarts_implicitly(tmp_path):
+    panel = make_panel(tmp_path)
+    restarts = []
+    observed = status_record(result="rolled_back", restart_required=True)
+    service, _ = make_service(
+        panel,
+        make_release(),
+        recover_operation=lambda _root, _state, *, panel_running: "rolled_back",
+        observe_operation=lambda _root, _state: observed,
+        restart_panel=lambda source: restarts.append(source) or True,
+    )
+
+    payload = service.recover()
+
+    assert payload == {"ok": True, "recovery_result": "rolled_back", **observed}
+    assert payload["restart_required"] is True
+    assert restarts == []
+
+
+def test_recovery_maps_live_runner_refusal(tmp_path):
+    from services.module_transactions.state import ModuleTransactionError
+
+    def refuse(_root, _state, *, panel_running):
+        assert panel_running is True
+        raise ModuleTransactionError(
+            "operation_in_progress", "a module operation is already running"
+        )
+
+    service, _ = make_service(
+        make_panel(tmp_path), make_release(), recover_operation=refuse
+    )
+
+    with pytest.raises(ModuleLifecycleError) as raised:
+        service.recover()
+
+    assert (raised.value.code, raised.value.status) == ("operation_in_progress", 409)
+
+
+def test_restart_runs_guard_before_existing_restart_boundary(tmp_path):
+    calls = []
+
+    def guard(root, state):
+        calls.append(("guard", root, state))
+
+    def restart(source):
+        calls.append(("restart", source))
+        return True
+
+    service, _ = make_service(
+        make_panel(tmp_path),
+        make_release(),
+        ensure_restartable_operation=guard,
+        restart_panel=restart,
+    )
+
+    assert service.restart() == {"ok": True, "restart_requested": True}
+    assert calls == [
+        ("guard", service.panel_root, service.state_dir),
+        ("restart", "module-lifecycle"),
+    ]
+
+
+def test_restart_maps_guard_domain_error(tmp_path):
+    from services.module_transactions.state import ModuleTransactionError
+
+    def refuse(_root, _state):
+        raise ModuleTransactionError(
+            "operation_recovery_required", "recover the abandoned operation"
+        )
+
+    service, _ = make_service(
+        make_panel(tmp_path),
+        make_release(),
+        ensure_restartable_operation=refuse,
+    )
+
+    with pytest.raises(ModuleLifecycleError) as raised:
+        service.restart()
+
+    assert (raised.value.code, raised.value.status) == (
+        "operation_recovery_required",
+        409,
+    )
+
+
+@pytest.mark.parametrize("failure", [False, RuntimeError("restart unavailable")])
+def test_restart_maps_false_or_exceptional_dispatch_to_503(tmp_path, failure):
+    def restart(_source):
+        if isinstance(failure, Exception):
+            raise failure
+        return failure
+
+    service, _ = make_service(
+        make_panel(tmp_path),
+        make_release(),
+        ensure_restartable_operation=lambda _root, _state: None,
+        restart_panel=restart,
+    )
+
+    with pytest.raises(ModuleLifecycleError) as raised:
+        service.restart()
+
+    assert (raised.value.code, raised.value.status) == (
+        "module_restart_failed",
+        503,
+    )

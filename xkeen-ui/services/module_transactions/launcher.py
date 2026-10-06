@@ -8,12 +8,13 @@ then reads its status file.
 from __future__ import annotations
 
 import os
+import signal
 import subprocess
 import sys
 import threading
 import time
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 
 from services.self_update.state import get_update_paths, read_lock
 
@@ -47,6 +48,98 @@ def ensure_idle(panel_root: Path, state_dir: Path) -> None:
     lock = read_lock(get_update_paths(str(state_dir))["lock_file"])
     if lock.get("exists") and lock.get("alive"):
         raise ModuleTransactionError("operation_in_progress", "the panel is being updated")
+
+
+def _read_proc_cmdline(pid: int) -> tuple[str, ...]:
+    """Read a Linux process command line without guessing on failure."""
+
+    try:
+        raw = Path(f"/proc/{int(pid)}/cmdline").read_bytes()
+    except (OSError, TypeError, ValueError):
+        return ()
+    return tuple(
+        part.decode("utf-8", errors="surrogateescape")
+        for part in raw.split(b"\0")
+        if part
+    )
+
+
+def _is_expected_runner(argv: Sequence[str], operation_id: str) -> bool:
+    names = [Path(part).name for part in argv]
+    try:
+        operation_index = argv.index("--operation")
+    except ValueError:
+        return False
+    return (
+        "module_transaction.py" in names
+        and "run" in argv
+        and operation_index + 1 < len(argv)
+        and argv[operation_index + 1] == operation_id
+    )
+
+
+def request_cancel(
+    panel_root: Path,
+    state_dir: Path,
+    operation_id: str,
+    *,
+    terminate: Callable[[int, int], None] = os.kill,
+    read_cmdline: Callable[[int], tuple[str, ...]] = _read_proc_cmdline,
+) -> None:
+    """Ask the exact live runner for an operation to cancel itself."""
+
+    operation_dir = Journal.find(Path(panel_root))
+    if operation_dir is None:
+        raise ModuleTransactionError("operation_not_found", "the module operation does not exist")
+    journal = Journal.open(operation_dir)
+    meta = journal.meta()
+    if meta.get("operation_id") != operation_id:
+        raise ModuleTransactionError("operation_not_found", "the module operation does not exist")
+
+    status = read_status(Path(state_dir))
+    if status.get("operation_id") != operation_id:
+        raise ModuleTransactionError("operation_not_found", "the module operation does not exist")
+    if status.get("result") != "running" or not journal.runner_alive():
+        raise ModuleTransactionError("operation_not_running", "the module operation is not running")
+
+    pid = meta.get("pid")
+    if isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0:
+        raise ModuleTransactionError("operation_not_running", "the module operation is not running")
+    argv = read_cmdline(pid)
+    if argv:
+        if not _is_expected_runner(argv, operation_id):
+            raise ModuleTransactionError(
+                "operation_process_mismatch",
+                "the recorded process is not the module operation runner",
+            )
+    elif os.name != "nt":
+        raise ModuleTransactionError(
+            "operation_process_mismatch",
+            "the module operation runner identity cannot be verified",
+        )
+
+    try:
+        terminate(pid, signal.SIGTERM)
+    except ProcessLookupError as error:
+        raise ModuleTransactionError(
+            "operation_not_running", "the module operation is not running"
+        ) from error
+    except OSError as error:
+        raise ModuleTransactionError(
+            "operation_cancel_failed", "the module operation could not be cancelled"
+        ) from error
+
+
+def ensure_restartable(panel_root: Path, state_dir: Path) -> None:
+    """Refuse an explicit restart while panel files need transaction recovery."""
+
+    panel_root, state_dir = Path(panel_root), Path(state_dir)
+    ensure_idle(panel_root, state_dir)
+    if Journal.find(panel_root) is not None:
+        raise ModuleTransactionError(
+            "operation_recovery_required",
+            "the interrupted module operation must be recovered before restart",
+        )
 
 
 def launch(
