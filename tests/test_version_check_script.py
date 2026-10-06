@@ -52,6 +52,7 @@ def _run_version_check(
     legacy_cache_entries: dict[str, str] | None = None,
     curl_payloads: dict[str, str] | None = None,
     offline: bool = True,
+    extra_env: dict[str, str] | None = None,
 ) -> str:
     project_dir = tmp_path / "xkeen-ui"
     tools_dir = project_dir / "tools"
@@ -109,6 +110,8 @@ def _run_version_check(
     env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
     env["XKEEN_UI_CACHE_DIR"] = str(cache_dir)
     env["XKEEN_UI_CACHE_NS"] = cache_ns
+    env.pop("XKEEN_UI_GITHUB_TOKEN", None)
+    env.update(extra_env or {})
 
     args = [SH_PATH, str(script_dst)]
     if offline:
@@ -188,3 +191,34 @@ def test_version_check_ignores_legacy_cached_bad_ui_version(tmp_path: Path) -> N
 
     assert "1.7.7" in output
     assert "7.7" not in output.replace("1.7.7", "")
+
+
+def test_version_check_reads_the_latest_version_from_the_web_redirect_not_the_api(tmp_path: Path) -> None:
+    output = _run_version_check(
+        tmp_path,
+        "xkeen-ui",
+        build_info={"version": "v1.7.7", "repo": "umarcheh001/Xkeen-UI"},
+        curl_payloads={
+            "https://github.com/umarcheh001/Xkeen-UI/releases/latest":
+                "HTTP/2 302\r\nlocation: https://github.com/umarcheh001/Xkeen-UI/releases/tag/v1.8.0\r\n",
+            "https://api.github.com/repos/umarcheh001/Xkeen-UI/releases/latest":
+                '{"tag_name":"v9.9.9"}',
+        },
+        offline=False,
+    )
+
+    assert "1.8.0" in output
+    assert "9.9.9" not in output
+
+
+def test_version_check_sends_the_configured_token_to_the_api(tmp_path: Path) -> None:
+    output = _run_version_check(
+        tmp_path,
+        "xkeen-ui",
+        build_info={"version": "v1.7.7", "repo": "umarcheh001/Xkeen-UI"},
+        curl_payloads={"Authorization: Bearer secret-token": '{"url":"https://example.test","tag_name":"v1.8.0"}'},
+        offline=False,
+        extra_env={"XKEEN_UI_GITHUB_TOKEN": "secret-token"},
+    )
+
+    assert "1.8.0" in output

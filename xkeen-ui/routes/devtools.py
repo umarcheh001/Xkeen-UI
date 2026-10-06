@@ -364,7 +364,12 @@ def create_devtools_blueprint(
 
         try:
             if ch == "stable":
-                gh_res, stale = github_get_latest_release(repo, wait_seconds=wait_seconds, force_refresh=force_refresh)
+                gh_res, stale = github_get_latest_release(
+                    repo,
+                    wait_seconds=wait_seconds,
+                    force_refresh=force_refresh,
+                    cache_dir=ui_state_dir,
+                )
             elif ch == "main":
                 gh_res, stale = github_get_latest_main(repo, branch=branch, wait_seconds=wait_seconds, force_refresh=force_refresh)
             else:

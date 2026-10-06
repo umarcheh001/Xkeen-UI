@@ -78,6 +78,7 @@ def _installer(
         downloader=lambda *_args, **_kwargs: archive,
         run_command=lambda *_args, **_kwargs: preflight,
         health_timeout_s=0.1,
+        latest_tag_resolver=lambda *_args, **_kwargs: None,
     )
     return install, store, target
 
@@ -160,7 +161,7 @@ def test_github_outage_uses_expired_verified_release_cache(tmp_path):
     store.set_release_cache(cache_key, release)
     cache_path = tmp_path / "state" / "core-profiles" / "release-cache.json"
     cache = json.loads(cache_path.read_text(encoding="utf-8"))
-    cache[cache_key]["fetched_at"] = time.time() - 3600
+    cache[cache_key]["fetched_at"] = time.time() - 24 * 3600
     cache_path.write_text(json.dumps(cache), encoding="utf-8")
     install.release_resolver = lambda *_args, **_kwargs: {
         "installable": False,
@@ -188,7 +189,7 @@ def test_expired_release_cache_refreshes_when_github_is_available(tmp_path):
     store.set_release_cache(cache_key, cached_release)
     cache_path = tmp_path / "state" / "core-profiles" / "release-cache.json"
     cache = json.loads(cache_path.read_text(encoding="utf-8"))
-    cache[cache_key]["fetched_at"] = time.time() - 3600
+    cache[cache_key]["fetched_at"] = time.time() - 24 * 3600
     cache_path.write_text(json.dumps(cache), encoding="utf-8")
     install.release_resolver = lambda *_args, **_kwargs: fresh_release
 
@@ -332,3 +333,123 @@ def test_prepare_rejects_inactive_core(tmp_path):
         install.prepare("xray")
 
     assert exc_info.value.code == "inactive_core"
+
+
+def _age_release_cache(tmp_path, seconds: float) -> None:
+    cache_path = tmp_path / "state" / "core-profiles" / "release-cache.json"
+    cache = json.loads(cache_path.read_text(encoding="utf-8"))
+    for entry in cache.values():
+        entry["fetched_at"] = time.time() - seconds
+    cache_path.write_text(json.dumps(cache), encoding="utf-8")
+
+
+def test_release_metadata_an_hour_old_is_served_without_asking_github(tmp_path):
+    calls = []
+    release = _release_for(b"new-xray")
+    install, _store, _target = _installer(tmp_path, release=release)
+    install.release_resolver = lambda *args, **kwargs: calls.append(args[0].profile_id) or release
+    install.profiles("xray")
+    _age_release_cache(tmp_path, 3600)
+    calls.clear()
+
+    install.profiles("xray")
+
+    assert calls == []
+
+
+def test_release_that_cannot_be_installed_is_not_requested_again_on_every_page_load(tmp_path):
+    calls = []
+    missing = {"installable": False, "reason": "asset_missing", "stable": None, "asset": None, "checksum": None}
+    install, _store, _target = _installer(tmp_path)
+    install.release_resolver = lambda *args, **kwargs: calls.append(args[0].profile_id) or dict(missing)
+
+    install.profiles("xray")
+    first = install.profiles("xray")
+
+    assert len(calls) == 5
+    assert first["profiles"][0]["release"]["reason"] == "asset_missing"
+
+
+def test_release_that_cannot_be_installed_is_checked_again_after_a_short_while(tmp_path):
+    calls = []
+    missing = {"installable": False, "reason": "asset_missing", "stable": None, "asset": None, "checksum": None}
+    install, _store, _target = _installer(tmp_path)
+    install.release_resolver = lambda *args, **kwargs: calls.append(args[0].profile_id) or dict(missing)
+    install.profiles("xray")
+    _age_release_cache(tmp_path, 3600)
+    calls.clear()
+
+    install.profiles("xray")
+
+    assert len(calls) == 5
+
+
+def test_github_outage_result_is_never_stored(tmp_path):
+    calls = []
+    outage = {"installable": False, "reason": "github_unavailable", "stable": None, "asset": None, "checksum": None}
+    install, _store, _target = _installer(tmp_path)
+    install.release_resolver = lambda *args, **kwargs: calls.append(args[0].profile_id) or dict(outage)
+
+    install.profiles("xray")
+    install.profiles("xray")
+
+    assert len(calls) == 10
+
+
+def test_expired_stable_release_is_confirmed_by_tag_without_the_api(tmp_path):
+    calls = []
+    tag_checks = []
+    release = _release_for(b"new-xray")
+    install, _store, _target = _installer(tmp_path, release=release)
+    install.release_resolver = lambda *args, **kwargs: calls.append(args[0].profile_id) or release
+    install.latest_tag_resolver = lambda repo, **_kwargs: tag_checks.append(repo) or "v26.3.27"
+    install.profiles("xray")
+    _age_release_cache(tmp_path, 24 * 3600)
+    calls.clear()
+
+    value = install.profiles("xray")
+    install.profiles("xray")
+
+    assert calls == []
+    assert tag_checks == [
+        "XTLS/Xray-core",
+        "MakostaDev/UwuRay",
+        "GFW-knocker/Xray-core",
+        "Jolymmiles/Xray-core",
+        "patterniha/Xray-core",
+    ]
+    assert value["profiles"][0]["release"]["stale"] is False
+
+
+def test_expired_stable_release_is_fetched_again_when_the_tag_has_moved(tmp_path):
+    calls = []
+    release = _release_for(b"new-xray")
+    install, _store, _target = _installer(tmp_path, release=release)
+    install.release_resolver = lambda *args, **kwargs: calls.append(args[0].profile_id) or release
+    install.latest_tag_resolver = lambda repo, **_kwargs: "v26.4.0" if repo == "XTLS/Xray-core" else "v26.3.27"
+    install.profiles("xray")
+    _age_release_cache(tmp_path, 24 * 3600)
+    calls.clear()
+
+    install.profiles("xray")
+
+    assert calls == ["official"]
+
+
+def test_prerelease_sources_are_not_confirmed_by_the_stable_tag(tmp_path):
+    calls = []
+    tag_checks = []
+    release = {**_release_for(b"new-mihomo"), "binary_name": "mihomo"}
+    install, _store, _target = _installer(tmp_path, release=release)
+    install.release_resolver = lambda *args, **kwargs: calls.append(args[0].profile_id) or release
+    install.latest_tag_resolver = lambda repo, **_kwargs: tag_checks.append(repo) or "v26.3.27"
+    install.profiles("mihomo")
+    _age_release_cache(tmp_path, 24 * 3600)
+    calls.clear()
+
+    install.profiles("mihomo")
+
+    prerelease_ids = [item.profile_id for item in profiles.list_profiles("mihomo") if item.release_policy == "prerelease_allowed"]
+    prerelease_repos = [item.repo for item in profiles.list_profiles("mihomo") if item.release_policy == "prerelease_allowed"]
+    assert prerelease_ids and calls == prerelease_ids
+    assert not set(tag_checks) & set(prerelease_repos)

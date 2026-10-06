@@ -48,6 +48,8 @@ KEYS_WITHOUT_DEFAULT = frozenset(
     {
         "XKEEN_UI_PANEL_SECTIONS_WHITELIST",
         "XKEEN_UI_DEVTOOLS_SECTIONS_WHITELIST",
+        # A personal secret: there is nothing to show until the owner sets it.
+        "XKEEN_UI_GITHUB_TOKEN",
     }
 )
 
@@ -197,3 +199,18 @@ def test_dns_watchdog_defaults_match_runtime_constants():
     assert _default_effective_value("XKEEN_DNS_OVER_VLESS_WATCHDOG_RESTARTS", state) == str(
         dns_over_vless.WATCHDOG_RESTART_ATTEMPTS
     )
+
+
+def test_github_token_is_editable_but_never_shown_back(tmp_path, monkeypatch):
+    from services.devtools.env import get_env_items
+
+    monkeypatch.setenv("XKEEN_UI_GITHUB_TOKEN", "ghp_secret_value")
+
+    rows = [row for row in get_env_items(str(tmp_path)) if _row_key(row) == "XKEEN_UI_GITHUB_TOKEN"]
+
+    assert len(rows) == 1
+    assert "ghp_secret_value" not in repr(rows[0])
+
+
+def _row_key(row) -> str:
+    return row["key"] if isinstance(row, dict) else row.key

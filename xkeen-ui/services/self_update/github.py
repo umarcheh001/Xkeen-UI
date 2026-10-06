@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import threading
 import time
 import urllib.error
@@ -21,32 +20,21 @@ import urllib.request
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from typing import Any, Dict, List, Optional, Tuple
 
+from services import github_client
+from services.io.atomic import _atomic_write_json
 from services.net import NET_EXECUTOR
 
 
 def _cfg_github_api_base() -> str:
-    base = os.environ.get("XKEEN_UI_GITHUB_API_BASE", "https://api.github.com") or "https://api.github.com"
-    return str(base).rstrip("/")
+    return github_client.api_base()
 
 
 def _cfg_user_agent() -> str:
-    ua = os.environ.get("XKEEN_UI_HTTP_USER_AGENT", "xkeen-ui") or "xkeen-ui"
-    return str(ua)
+    return github_client.user_agent()
 
 
 def _cfg_github_web_base() -> str:
-    base = (os.environ.get("XKEEN_UI_GITHUB_WEB_BASE") or "").strip()
-    if base:
-        return str(base).rstrip("/")
-
-    api_base = _cfg_github_api_base()
-    parsed = urllib.parse.urlsplit(api_base)
-    if parsed.scheme and parsed.netloc:
-        host = parsed.netloc
-        if host == "api.github.com":
-            host = "github.com"
-        return f"{parsed.scheme}://{host}".rstrip("/")
-    return "https://github.com"
+    return github_client.web_base()
 
 
 def _cfg_api_timeout() -> float:
@@ -60,9 +48,9 @@ def _cfg_api_timeout() -> float:
 def _cfg_rel_ttl() -> int:
     """Cache TTL in seconds for GitHub update checks."""
     try:
-        return max(5, int(os.environ.get("XKEEN_UI_UPDATE_CHECK_CACHE_TTL", "60") or 60))
+        return max(5, int(os.environ.get("XKEEN_UI_UPDATE_CHECK_CACHE_TTL", "300") or 300))
     except Exception:
-        return 60
+        return 300
 
 
 def _cfg_max_body_chars() -> int:
@@ -153,29 +141,77 @@ _NO_REDIRECT_OPENER = urllib.request.build_opener(_NoRedirectHandler)
 
 
 def _req_json(url: str, *, timeout: Optional[float] = None) -> Tuple[Any, Dict[str, Any]]:
-    """Blocking JSON GET with minimal headers. Returns (parsed_json, meta)."""
-    headers = {
-        "User-Agent": _cfg_user_agent(),
-        "Accept": "application/vnd.github+json",
-    }
-    req = urllib.request.Request(url, headers=headers, method="GET")
-    meta: Dict[str, Any] = {"url": url}
+    """Blocking JSON GET of a GitHub API URL. Returns (parsed_json, meta)."""
     tmo = _cfg_api_timeout() if (timeout is None) else float(timeout)
-    with urllib.request.urlopen(req, timeout=float(tmo)) as resp:
-        raw = resp.read().decode("utf-8", errors="replace")
-        meta["status"] = int(getattr(resp, "status", 200) or 200)
+    return github_client.api_get_json(url, timeout=float(tmo))
+
+
+# ---------------------------------------------------------------------------
+# Stored result of the last successful release check
+# ---------------------------------------------------------------------------
+
+_DISK_CACHE_NAME = "update_check_cache.json"
+# Details taken from the web fallback carry no release notes; they are
+# replaced by the API answer once this much time has passed.
+_WEB_DETAILS_MAX_AGE_S = 3600.0
+_DISK_LOCK = threading.Lock()
+
+
+def _disk_cache_path(cache_dir: Optional[str]) -> Optional[str]:
+    directory = str(cache_dir or "").strip()
+    return os.path.join(directory, _DISK_CACHE_NAME) if directory else None
+
+
+def _disk_cache_read(cache_dir: Optional[str], repo: str) -> Optional[Dict[str, Any]]:
+    """Return {"ts": float, "data": result} stored for repo, or None."""
+    path = _disk_cache_path(cache_dir)
+    if not path:
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+        entry = payload["repos"][repo]
+        ts = float(entry["ts"])
+        data = entry["data"]
+    except (OSError, ValueError, TypeError, KeyError):
+        return None
+    if not isinstance(data, dict) or not isinstance(data.get("latest"), dict):
+        return None
+    return {"ts": ts, "data": data}
+
+
+def _disk_cache_write(cache_dir: Optional[str], repo: str, data: Dict[str, Any]) -> None:
+    path = _disk_cache_path(cache_dir)
+    if not path or not bool(data.get("ok")) or not isinstance(data.get("latest"), dict):
+        return
+    with _DISK_LOCK:
         try:
-            meta["etag"] = resp.headers.get("ETag")
-        except Exception:
-            meta["etag"] = None
-        # Rate limit headers (best-effort)
+            with open(path, "r", encoding="utf-8") as handle:
+                payload = json.load(handle)
+        except (OSError, ValueError, TypeError):
+            payload = {}
+        if not isinstance(payload, dict) or not isinstance(payload.get("repos"), dict):
+            payload = {"version": 1, "repos": {}}
+        payload["repos"][repo] = {"ts": time.time(), "data": data}
         try:
-            meta["ratelimit_remaining"] = resp.headers.get("X-RateLimit-Remaining")
-            meta["ratelimit_limit"] = resp.headers.get("X-RateLimit-Limit")
-            meta["ratelimit_reset"] = resp.headers.get("X-RateLimit-Reset")
-        except Exception:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            _atomic_write_json(path, payload, mode=0o600)
+        except OSError:
             pass
-        return json.loads(raw), meta
+
+
+def _stored_details_for_tag(cache_dir: Optional[str], repo: str, tag: str) -> Optional[Dict[str, Any]]:
+    """Stored release details if they still describe ``tag``."""
+    entry = _disk_cache_read(cache_dir, repo)
+    if entry is None:
+        return None
+    data = entry["data"]
+    if str((data.get("latest") or {}).get("tag") or "") != tag:
+        return None
+    meta = data.get("meta") if isinstance(data.get("meta"), dict) else {}
+    if meta.get("source") == "github_web_fallback" and time.time() - entry["ts"] > _WEB_DETAILS_MAX_AGE_S:
+        return None
+    return dict(data)
 
 
 def _pick_asset(assets: List[Dict[str, Any]], *, prefer_name: str) -> Optional[Dict[str, Any]]:
@@ -333,11 +369,7 @@ def _req_no_redirect(url: str, *, timeout: Optional[float] = None, headers: Opti
 
 
 def _extract_release_tag(url: str) -> Optional[str]:
-    path = urllib.parse.urlsplit(str(url or "")).path or ""
-    match = re.search(r"/releases/tag/([^/?#]+)/?$", path)
-    if not match:
-        return None
-    return urllib.parse.unquote(match.group(1))
+    return github_client.release_tag_from_url(url)
 
 
 def _release_download_url(repo: str, asset_name: str) -> str:
@@ -450,12 +482,35 @@ def _fetch_latest_release_from_web(repo: str, *, fallback_meta: Optional[Dict[st
     return {"ok": True, "error": None, "latest": latest, "meta": meta}
 
 
-def _fetch_latest_release(repo: str) -> Dict[str, Any]:
-    """Blocking fetch latest release from GitHub. Returns stable dict."""
+def _latest_tag_without_api(repo: str) -> Optional[str]:
+    try:
+        return github_client.latest_release_tag(repo, timeout=_cfg_api_timeout())
+    except Exception:  # noqa: BLE001 - an unknown tag simply means "ask the API"
+        return None
+
+
+def _fetch_latest_release(repo: str, cache_dir: Optional[str] = None) -> Dict[str, Any]:
+    """Blocking fetch latest release from GitHub. Returns stable dict.
+
+    The latest tag is read from the web redirect first, which is not a GitHub
+    API request. The API is asked for details only when that tag is new.
+    """
     repo = (repo or "").strip()
     if not repo or "/" not in repo:
         return {"ok": False, "error": "invalid_repo", "latest": None, "meta": {"repo": repo}}
 
+    tag = _latest_tag_without_api(repo)
+    if tag:
+        stored = _stored_details_for_tag(cache_dir, repo, tag)
+        if stored is not None:
+            return stored
+
+    result = _fetch_latest_release_details(repo)
+    _disk_cache_write(cache_dir, repo, result)
+    return result
+
+
+def _fetch_latest_release_details(repo: str) -> Dict[str, Any]:
     url = f"{_cfg_github_api_base()}/repos/{repo}/releases/latest"
     try:
         data, meta = _req_json(url, timeout=_cfg_api_timeout())
@@ -491,7 +546,13 @@ def _fetch_latest_release(repo: str) -> Dict[str, Any]:
         return {"ok": False, "error": "network_error", "latest": None, "meta": merged_meta}
 
 
-def github_get_latest_release(repo: str, *, wait_seconds: float = 2.0, force_refresh: bool = False) -> Tuple[Dict[str, Any], bool]:
+def github_get_latest_release(
+    repo: str,
+    *,
+    wait_seconds: float = 2.0,
+    force_refresh: bool = False,
+    cache_dir: Optional[str] = None,
+) -> Tuple[Dict[str, Any], bool]:
     """Get latest release for repo with caching and a short UI-friendly wait.
 
     Returns:
@@ -505,8 +566,13 @@ def github_get_latest_release(repo: str, *, wait_seconds: float = 2.0, force_ref
     repo = (repo or "").strip()
     now = time.time()
 
-    # Serve fresh cache immediately.
+    # Serve fresh cache immediately. After a panel restart the stored result of
+    # the last successful check takes the place of the in-memory one.
     cached = _REL_CACHE.get(repo)
+    if cached is None:
+        cached = _disk_cache_read(cache_dir, repo)
+        if cached is not None:
+            _REL_CACHE[repo] = cached
     if not force_refresh and cached and (now - float(cached.get("ts") or 0.0)) < _cfg_rel_ttl():
         return dict(cached.get("data") or {"ok": False, "error": "cache_empty", "latest": None, "meta": {"repo": repo}}), False
 
@@ -514,7 +580,7 @@ def github_get_latest_release(repo: str, *, wait_seconds: float = 2.0, force_ref
     with _LOCK:
         fut = _REL_FUTURES.get(repo)
         if fut is None or getattr(fut, "done", lambda: True)():
-            fut = NET_EXECUTOR.submit(_fetch_latest_release, repo)
+            fut = NET_EXECUTOR.submit(_fetch_latest_release, repo, cache_dir)
             _REL_FUTURES[repo] = fut
 
     # Wait briefly for the result.
@@ -585,13 +651,16 @@ def _fetch_latest_main(repo: str, branch: Optional[str] = None) -> Dict[str, Any
     # Resolve branch: explicit -> env -> repo.default_branch -> main/master fallback
     br = (branch or os.environ.get('XKEEN_UI_UPDATE_BRANCH') or '').strip() or None
     default_branch = None
-    try:
-        repo_data, repo_meta = _req_json(f"{_cfg_github_api_base()}/repos/{repo}", timeout=_cfg_api_timeout())
-        meta['repo_meta'] = repo_meta
-        if isinstance(repo_data, dict):
-            default_branch = repo_data.get('default_branch')
-    except Exception as e:
-        meta['repo_meta_error'] = str(e)[:200]
+    # The repository is asked for its default branch only when no branch is
+    # known: that question is one more GitHub API request.
+    if not br:
+        try:
+            repo_data, repo_meta = _req_json(f"{_cfg_github_api_base()}/repos/{repo}", timeout=_cfg_api_timeout())
+            meta['repo_meta'] = repo_meta
+            if isinstance(repo_data, dict):
+                default_branch = repo_data.get('default_branch')
+        except Exception as e:
+            meta['repo_meta_error'] = str(e)[:200]
 
     if not br:
         br = str(default_branch or 'main').strip()

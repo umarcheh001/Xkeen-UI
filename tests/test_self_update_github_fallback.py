@@ -110,7 +110,8 @@ class SelfUpdateGithubFallbackTests(unittest.TestCase):
 
         with patch.object(github, "_req_json", fake_req_json):
             with patch.object(github, "_fetch_latest_release_from_web", fake_web_fallback):
-                result = github._fetch_latest_release("umarcheh001/Xkeen-UI")
+                with patch.object(github, "_latest_tag_without_api", lambda repo: None):
+                    result = github._fetch_latest_release("umarcheh001/Xkeen-UI")
 
         self.assertTrue(result["ok"])
         self.assertEqual(result["latest"]["tag"], "v1.7.3")

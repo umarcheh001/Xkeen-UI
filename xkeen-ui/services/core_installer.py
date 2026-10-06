@@ -28,6 +28,7 @@ from services.core_profiles import (
     profile_view,
     resolve_release,
 )
+from services.github_client import latest_release_tag
 from services.io.atomic import _atomic_write_json
 
 
@@ -66,6 +67,11 @@ _PHASE_LABELS = {
 # one more often than this would burn the anonymous GitHub API budget while a
 # router is offline; explicit installation preparation still bypasses it.
 _STALE_REVALIDATION_COOLDOWN_S = 900.0
+# The list is rendered on every panel load. A verified release stays valid for
+# hours; a release that cannot be installed yet (assets still uploading, no
+# checksum) is looked at again sooner, but not on every load.
+_RELEASE_CACHE_TTL_S = 6 * 3600.0
+_UNAVAILABLE_RELEASE_CACHE_TTL_S = 900.0
 
 
 class CoreInstaller:
@@ -86,7 +92,8 @@ class CoreInstaller:
         run_command: Callable[..., tuple[int, str]] | None = None,
         health_timeout_s: float = 10.0,
         resolve_timeout_s: float = 8.0,
-        release_cache_ttl_s: float = 300.0,
+        release_cache_ttl_s: float = _RELEASE_CACHE_TTL_S,
+        latest_tag_resolver: Callable[..., str | None] = latest_release_tag,
     ):
         self.state_store = state_store
         self.binary_paths = {str(key): os.path.abspath(str(value)) for key, value in binary_paths.items()}
@@ -101,6 +108,8 @@ class CoreInstaller:
         self.health_timeout_s = max(0.1, float(health_timeout_s))
         self.resolve_timeout_s = max(1.0, float(resolve_timeout_s))
         self.release_cache_ttl_s = max(0.0, float(release_cache_ttl_s))
+        self.unavailable_cache_ttl_s = min(self.release_cache_ttl_s, _UNAVAILABLE_RELEASE_CACHE_TTL_S)
+        self.latest_tag_resolver = latest_tag_resolver
         self._plans: dict[str, dict[str, Any]] = {}
         self._operations: dict[str, dict[str, Any]] = {}
         self._stale_revalidation_until: dict[str, float] = {}
@@ -190,27 +199,50 @@ class CoreInstaller:
 
     def _resolve(self, profile: CoreProfile, *, fresh: bool = False) -> dict[str, Any]:
         cache_key = f"{profile.engine_id}:{profile.profile_id}:{self.platform.machine}:{self.platform.opkg_arch}:{self.platform.endianness}"
-        cached = None if fresh else self.state_store.get_release_cache(cache_key, max_age_s=self.release_cache_ttl_s)
+        if not fresh:
+            recent = self.state_store.get_release_cache(cache_key, max_age_s=self.unavailable_cache_ttl_s)
+            if recent is not None:
+                return recent
+            cached = self.state_store.get_release_cache(cache_key, max_age_s=self.release_cache_ttl_s)
+            if cached is not None and cached.get("installable"):
+                return cached
         stale_cached = self.state_store.get_release_cache(cache_key, max_age_s=0, allow_stale=True)
-        if cached is not None:
-            return cached
-        if not fresh and isinstance(stale_cached, dict) and stale_cached.get("installable"):
+        has_verified_stale = isinstance(stale_cached, dict) and bool(stale_cached.get("installable"))
+        if not fresh and has_verified_stale:
             now = time.monotonic()
             with self._guard:
                 retry_after = self._stale_revalidation_until.get(cache_key, 0.0)
                 if now < retry_after:
                     return {**stale_cached, "stale": True}
                 self._stale_revalidation_until[cache_key] = now + _STALE_REVALIDATION_COOLDOWN_S
+            if self._stable_tag_unchanged(profile, stale_cached):
+                confirmed = {**stale_cached, "stale": False, "fetched_at": time.time()}
+                self.state_store.set_release_cache(cache_key, confirmed)
+                return confirmed
         release = self.release_resolver(profile, self.platform, timeout_s=self.resolve_timeout_s)
+        reason = str(release.get("reason") or "")
         if release.get("installable"):
             self.state_store.set_release_cache(cache_key, release)
-        elif (
-            str(release.get("reason") or "") == "github_unavailable"
-            and isinstance(stale_cached, dict)
-            and stale_cached.get("installable")
-        ):
-            return {**stale_cached, "stale": True}
+        elif reason == "github_unavailable":
+            if has_verified_stale:
+                return {**stale_cached, "stale": True}
+        elif reason != "unsupported_arch":
+            self.state_store.set_release_cache(cache_key, release)
         return release
+
+    def _stable_tag_unchanged(self, profile: CoreProfile, cached: dict[str, Any]) -> bool:
+        """Confirm a cached stable release by its tag, without a GitHub API request."""
+        if profile.release_policy != "stable_only":
+            return False
+        stable = cached.get("stable")
+        cached_tag = str(stable.get("tag") or "").strip() if isinstance(stable, dict) else ""
+        if not cached_tag:
+            return False
+        try:
+            latest_tag = self.latest_tag_resolver(profile.repo, timeout=self.resolve_timeout_s)
+        except Exception:  # noqa: BLE001 - any failure means "ask the API as before"
+            return False
+        return bool(latest_tag) and str(latest_tag).strip() == cached_tag
 
     @staticmethod
     def _public_release(release: dict[str, Any]) -> dict[str, Any]:

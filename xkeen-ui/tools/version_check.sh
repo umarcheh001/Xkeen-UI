@@ -46,6 +46,43 @@ http_get() {
   fi
 }
 
+# Запрос к GitHub API. Необязательный токен XKEEN_UI_GITHUB_TOKEN поднимает
+# лимит и уходит только на api.github.com.
+github_api_get() {
+  url="$1"
+  timeout="${2:-10}"
+
+  if [ -z "$XKEEN_UI_GITHUB_TOKEN" ]; then
+    http_get "$url" "$timeout"
+    return $?
+  fi
+
+  if has_cmd curl; then
+    curl -fsL --connect-timeout 4 --max-time "$timeout" \
+      -H "Authorization: Bearer $XKEEN_UI_GITHUB_TOKEN" "$url" 2>/dev/null
+  elif has_cmd wget; then
+    wget -q -O - --timeout="$timeout" \
+      --header="Authorization: Bearer $XKEEN_UI_GITHUB_TOKEN" "$url" 2>/dev/null
+  else
+    return 1
+  fi
+}
+
+# Тег последнего стабильного релиза из перенаправления
+# github.com/<repo>/releases/latest — это не запрос к API.
+github_latest_tag_from_web() {
+  repo="$1"
+  timeout="${2:-10}"
+
+  has_cmd curl || return 1
+
+  curl -fsI --connect-timeout 4 --max-time "$timeout" \
+    "https://github.com/${repo}/releases/latest" 2>/dev/null | \
+    tr -d '\r' | \
+    sed -n 's#^[Ll]ocation:[[:space:]]*.*/releases/tag/\([^/?[:space:]]*\).*#\1#p' | \
+    head -n 1
+}
+
 read_cache() {
   key="$1"
   cache_file="$CACHE_DIR/${CACHE_SCHEMA}_${key}"
@@ -160,7 +197,16 @@ get_github_latest() {
     return 0
   fi
 
-  json=$(http_get "https://api.github.com/repos/${repo}/releases/latest" 12)
+  # Сначала без GitHub API: его анонимный лимит — 60 запросов в час на адрес.
+  tag=$(github_latest_tag_from_web "$repo" 12)
+  ver=$(extract_version "$tag")
+  if [ -n "$ver" ]; then
+    write_cache "$cache_key" "$ver"
+    printf '%s' "$ver"
+    return 0
+  fi
+
+  json=$(github_api_get "https://api.github.com/repos/${repo}/releases/latest" 12)
   if [ -n "$json" ]; then
     tag=$(printf '%s' "$json" | tr ',' '\n' | \
       sed -n 's/^[[:space:]]*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/p' | \
@@ -173,7 +219,7 @@ get_github_latest() {
     fi
   fi
 
-  json=$(http_get "https://api.github.com/repos/${repo}/tags?per_page=1" 12)
+  json=$(github_api_get "https://api.github.com/repos/${repo}/tags?per_page=1" 12)
   if [ -n "$json" ]; then
     tag=$(printf '%s' "$json" | tr ',' '\n' | \
       sed -n 's/^[[:space:]]*"name":[[:space:]]*"\([^"]*\)".*/\1/p' | \

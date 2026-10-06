@@ -686,8 +686,8 @@ let updateNotifierModuleApi = null;
             return;
           }
 
-          // If still flagged, verify quickly even if interval hasn't elapsed.
-          _checkOnce({ silent: true }).catch(() => {});
+          // Still flagged: keep the badge. GitHub is asked again by the regular
+          // interval below, not on every page load.
         })().catch(() => {});
       } catch (e) {}
     } else {

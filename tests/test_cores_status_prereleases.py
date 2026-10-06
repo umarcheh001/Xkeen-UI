@@ -167,11 +167,11 @@ def test_pick_release_selects_latest_release_within_each_channel():
 
 
 def test_github_latest_release_network_failure_does_not_log_exception(monkeypatch):
-    def fail_urlopen(_req, timeout):
+    def fail_latest_tag(_repo, *, timeout):
         raise urllib.error.URLError("Temporary failure in name resolution")
 
     logged = []
-    monkeypatch.setattr(cores_status.urllib.request, "urlopen", fail_urlopen)
+    monkeypatch.setattr(cores_status.github_client, "latest_release_tag", fail_latest_tag)
     monkeypatch.setattr(
         cores_status,
         "log_route_exception",
@@ -186,11 +186,11 @@ def test_github_latest_release_network_failure_does_not_log_exception(monkeypatc
 
 
 def test_github_latest_release_unexpected_failure_still_logs_exception(monkeypatch):
-    def fail_urlopen(_req, timeout):
+    def fail_latest_tag(_repo, *, timeout):
         raise ValueError("bad payload")
 
     logged = []
-    monkeypatch.setattr(cores_status.urllib.request, "urlopen", fail_urlopen)
+    monkeypatch.setattr(cores_status.github_client, "latest_release_tag", fail_latest_tag)
     monkeypatch.setattr(
         cores_status,
         "log_route_exception",
@@ -438,3 +438,162 @@ def test_commands_lazy_runtime_replays_official_core_update_actions():
         "#core-mihomo-prerelease-update-btn",
     ):
         assert selector in lazy_runtime
+
+
+def _write_cores_cache(tmp_path, *, age_s: float, ttl_s: int = 60, prerelease=None):
+    cores_status._write_json_atomic(
+        str(tmp_path / "cores_updates_cache.json"),
+        {
+            "format_version": cores_status._CACHE_FORMAT_VERSION,
+            "checked_ts": time.time() - age_s,
+            "ttl_s": ttl_s,
+            "stale": False,
+            "data": {
+                "ok": True,
+                "latest": {
+                    core: {
+                        "ok": True,
+                        "tag": "v1.0.0",
+                        "url": "https://example.test/old",
+                        "stable": {"tag": "v1.0.0", "url": "https://example.test/old"},
+                        "prerelease": prerelease,
+                    }
+                    for core in ("xray", "mihomo")
+                },
+            },
+        },
+        str(tmp_path),
+    )
+
+
+def test_release_snapshot_reads_the_stable_tag_from_the_web_when_the_api_refuses(monkeypatch):
+    api_calls = []
+
+    def refuse(url, *, timeout):
+        api_calls.append(url)
+        raise cores_status.github_client.GitHubRateLimited(time.time() + 600)
+
+    monkeypatch.setattr(cores_status.github_client, "api_get_json", refuse)
+    monkeypatch.setattr(cores_status.github_client, "latest_release_tag", lambda repo, *, timeout: "v26.9.1")
+
+    data = cores_status._github_release_snapshot("XTLS/Xray-core", timeout_s=0.1)
+
+    assert len(api_calls) == 1
+    assert data["ok"] is True
+    assert data["partial"] is True
+    assert data["stable"]["tag"] == "v26.9.1"
+    assert data["stable"]["url"] == "https://github.com/XTLS/Xray-core/releases/tag/v26.9.1"
+    assert data["prerelease"] is None
+
+
+def test_failed_refresh_keeps_the_versions_already_known(tmp_path, monkeypatch):
+    client = _make_cores_status_client(tmp_path)
+    _mock_installed_cores(monkeypatch)
+    _write_cores_cache(tmp_path, age_s=7200)
+    monkeypatch.setattr(
+        cores_status,
+        "_latest_release_or_skip",
+        lambda repo, *, installed, timeout_s: {
+            "ok": False,
+            "repo": repo,
+            "tag": None,
+            "url": None,
+            "stable": None,
+            "prerelease": None,
+            "error": "request_failed",
+            "meta": {},
+            "skipped": False,
+        },
+    )
+
+    client.get("/api/cores/updates")
+    settled = _wait_for_background_refresh(client)
+
+    assert settled["refreshing"] is False
+    assert settled["stale"] is True
+    assert settled["latest"]["xray"]["stable"]["tag"] == "v1.0.0"
+    assert settled["latest"]["mihomo"]["stable"]["tag"] == "v1.0.0"
+    assert settled["update_available"]["xray"] is False
+
+
+def test_stable_only_answer_keeps_the_prerelease_already_known(tmp_path, monkeypatch):
+    client = _make_cores_status_client(tmp_path)
+    _mock_installed_cores(monkeypatch)
+    _write_cores_cache(tmp_path, age_s=7200, prerelease={"tag": "v1.1.0-rc1", "url": "https://example.test/rc"})
+    monkeypatch.setattr(
+        cores_status,
+        "_latest_release_or_skip",
+        lambda repo, *, installed, timeout_s: {
+            "ok": True,
+            "repo": repo,
+            "tag": "v1.0.5",
+            "url": "https://example.test/new",
+            "stable": {"tag": "v1.0.5", "url": "https://example.test/new"},
+            "prerelease": None,
+            "partial": True,
+            "error": None,
+            "meta": None,
+            "skipped": False,
+        },
+    )
+
+    client.get("/api/cores/updates")
+    settled = _wait_for_background_refresh(client)
+
+    assert settled["latest"]["xray"]["stable"]["tag"] == "v1.0.5"
+    assert settled["latest"]["xray"]["prerelease"]["tag"] == "v1.1.0-rc1"
+
+
+def test_check_button_does_not_ask_github_again_right_after_a_check(tmp_path, monkeypatch):
+    client = _make_cores_status_client(tmp_path)
+    _mock_installed_cores(monkeypatch)
+    _write_cores_cache(tmp_path, age_s=10, ttl_s=21600)
+    calls = []
+    monkeypatch.setattr(
+        cores_status,
+        "_latest_release_or_skip",
+        lambda repo, *, installed, timeout_s: calls.append(repo) or {"ok": True, "repo": repo},
+    )
+
+    payload = client.get("/api/cores/updates?force=1").get_json()
+    time.sleep(0.1)
+
+    assert payload["refreshing"] is False
+    assert payload["latest"]["xray"]["stable"]["tag"] == "v1.0.0"
+    assert calls == []
+
+
+def test_check_button_asks_github_once_the_last_check_is_old_enough(tmp_path, monkeypatch):
+    client = _make_cores_status_client(tmp_path)
+    _mock_installed_cores(monkeypatch)
+    _write_cores_cache(tmp_path, age_s=600, ttl_s=21600)
+
+    calls = []
+
+    def fake(repo, *, installed, timeout_s):
+        calls.append(repo)
+        return {
+            "ok": True,
+            "repo": repo,
+            "tag": "v2.0.0",
+            "url": "https://example.test/new",
+            "stable": {"tag": "v2.0.0", "url": "https://example.test/new"},
+            "prerelease": None,
+            "error": None,
+            "meta": None,
+            "skipped": False,
+        }
+
+    monkeypatch.setattr(cores_status, "_latest_release_or_skip", fake)
+
+    payload = client.get("/api/cores/updates?force=1").get_json()
+    # The cache is still fresh by age, so wait for the new tag itself.
+    deadline = time.time() + 2.5
+    settled = payload
+    while time.time() < deadline and settled["latest"]["xray"]["stable"]["tag"] != "v2.0.0":
+        time.sleep(0.05)
+        settled = client.get("/api/cores/updates").get_json()
+
+    assert payload["refreshing"] is True
+    assert sorted(calls) == ["MetaCubeX/mihomo", "XTLS/Xray-core"]
+    assert settled["latest"]["xray"]["stable"]["tag"] == "v2.0.0"

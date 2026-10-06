@@ -15,6 +15,7 @@ import re
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -23,10 +24,16 @@ import subprocess
 from flask import Blueprint, current_app, jsonify, request
 
 from routes.common.errors import log_route_exception
+from services import github_client
 from services.io.atomic import _atomic_write_json
 
 
 _CACHE_FORMAT_VERSION = 3
+# "Проверить" right after a check would only spend the GitHub API budget.
+_FORCE_MIN_INTERVAL_S = 120.0
+# An incomplete answer (GitHub refused or was unreachable) is retried sooner
+# than a complete one.
+_INCOMPLETE_CACHE_TTL_S = 900
 
 
 def _env_int(name: str, default: int) -> int:
@@ -462,34 +469,21 @@ def _pick_release(raw_releases: List[dict], *, prerelease: bool) -> Optional[dic
 
 
 def _github_latest_release_tag(repo: str, *, timeout_s: float) -> Dict[str, Any]:
-    """Return {ok, repo, tag, url, error?, meta?}."""
-    base = os.environ.get("XKEEN_UI_GITHUB_API_BASE", "https://api.github.com") or "https://api.github.com"
-    base = str(base).rstrip("/")
-    url = f"{base}/repos/{repo}/releases/latest"
-    headers = {
-        "User-Agent": _cfg_user_agent(),
-        "Accept": "application/vnd.github+json",
-    }
-    req = urllib.request.Request(url, headers=headers, method="GET")
+    """Return {ok, repo, tag, url, error?, meta?} without a GitHub API request.
+
+    The stable tag is read from the ``/releases/latest`` web redirect, so this
+    still answers while the API rate limit is exhausted.
+    """
     try:
-        with urllib.request.urlopen(req, timeout=float(timeout_s)) as resp:
-            raw = resp.read().decode("utf-8", errors="replace")
-            data = json.loads(raw)
-            tag = data.get("tag_name")
-            html = data.get("html_url")
-            return {"ok": True, "repo": repo, "tag": tag, "url": html}
+        tag = github_client.latest_release_tag(repo, timeout=float(timeout_s))
     except urllib.error.HTTPError as e:
-        try:
-            body = e.read().decode("utf-8", errors="replace")
-        except Exception:
-            body = ""
         return {
             "ok": False,
             "repo": repo,
             "tag": None,
             "url": None,
             "error": "http_error",
-            "meta": {"status": int(getattr(e, "code", 0) or 0), "body": body[:200]},
+            "meta": {"status": int(getattr(e, "code", 0) or 0)},
         }
     except (urllib.error.URLError, TimeoutError, OSError) as e:
         _log_github_request_failure(repo, e)
@@ -497,44 +491,41 @@ def _github_latest_release_tag(repo: str, *, timeout_s: float) -> Dict[str, Any]
     except Exception:
         log_route_exception("cores_status.request_failed", repo=repo)
         return {"ok": False, "repo": repo, "tag": None, "url": None, "error": "request_failed", "meta": {}}
+    if not tag:
+        return {"ok": False, "repo": repo, "tag": None, "url": None, "error": "no_release", "meta": {}}
+    url = f"{github_client.web_base()}/{repo}/releases/tag/{urllib.parse.quote(tag, safe='')}"
+    return {"ok": True, "repo": repo, "tag": tag, "url": url}
 
 
 def _github_release_snapshot(repo: str, *, timeout_s: float) -> Dict[str, Any]:
     """Return stable + prerelease release info for a repo."""
-    base = os.environ.get("XKEEN_UI_GITHUB_API_BASE", "https://api.github.com") or "https://api.github.com"
-    base = str(base).rstrip("/")
-    url = f"{base}/repos/{repo}/releases?per_page=20"
-    headers = {
-        "User-Agent": _cfg_user_agent(),
-        "Accept": "application/vnd.github+json",
-    }
-    req = urllib.request.Request(url, headers=headers, method="GET")
+    url = f"{github_client.api_base()}/repos/{repo}/releases?per_page=20"
     try:
-        with urllib.request.urlopen(req, timeout=float(timeout_s)) as resp:
-            raw = resp.read().decode("utf-8", errors="replace")
-            data = json.loads(raw)
-            if not isinstance(data, list):
-                raise ValueError("bad_releases_payload")
-            stable_raw = _pick_release(data, prerelease=False)
-            prerelease_raw = _pick_release(data, prerelease=True)
-            stable_release = _release_summary(stable_raw)
-            prerelease_release = _release_summary(prerelease_raw)
-            if prerelease_release is not None and str(repo or "").strip().lower() == "metacubex/mihomo":
-                prerelease_release["install"] = _resolve_mihomo_prerelease_install(prerelease_raw)
-                install = prerelease_release.get("install") if isinstance(prerelease_release.get("install"), dict) else {}
-                display_tag = str((install or {}).get("build_id") or "").strip()
-                if display_tag:
-                    prerelease_release["display_tag"] = display_tag
-            primary = stable_release or prerelease_release or {}
-            return {
-                "ok": True,
-                "repo": repo,
-                "tag": primary.get("tag"),
-                "url": primary.get("url"),
-                "stable": stable_release,
-                "prerelease": prerelease_release,
-            }
+        data, _meta = github_client.api_get_json(url, timeout=float(timeout_s))
+        if not isinstance(data, list):
+            raise ValueError("bad_releases_payload")
+        stable_raw = _pick_release(data, prerelease=False)
+        prerelease_raw = _pick_release(data, prerelease=True)
+        stable_release = _release_summary(stable_raw)
+        prerelease_release = _release_summary(prerelease_raw)
+        if prerelease_release is not None and str(repo or "").strip().lower() == "metacubex/mihomo":
+            prerelease_release["install"] = _resolve_mihomo_prerelease_install(prerelease_raw)
+            install = prerelease_release.get("install") if isinstance(prerelease_release.get("install"), dict) else {}
+            display_tag = str((install or {}).get("build_id") or "").strip()
+            if display_tag:
+                prerelease_release["display_tag"] = display_tag
+        primary = stable_release or prerelease_release or {}
+        return {
+            "ok": True,
+            "repo": repo,
+            "tag": primary.get("tag"),
+            "url": primary.get("url"),
+            "stable": stable_release,
+            "prerelease": prerelease_release,
+        }
     except Exception:
+        # The release list needs the API. Without it only the stable tag is
+        # known; "partial" tells the cache to keep the prerelease it has.
         stable_only = _github_latest_release_tag(repo, timeout_s=timeout_s)
         stable_release = None
         if stable_only.get("tag"):
@@ -552,6 +543,7 @@ def _github_release_snapshot(repo: str, *, timeout_s: float) -> Dict[str, Any]:
             "url": stable_only.get("url"),
             "stable": stable_release,
             "prerelease": None,
+            "partial": True,
             "error": stable_only.get("error"),
             "meta": stable_only.get("meta"),
         }
@@ -581,8 +573,30 @@ def _latest_release_or_skip(repo: str, *, installed: bool, timeout_s: float) -> 
         "prerelease": data.get("prerelease"),
         "error": data.get("error"),
         "meta": data.get("meta"),
+        "partial": bool(data.get("partial")),
         "skipped": False,
     }
+
+
+def _merge_with_known(fresh: Dict[str, Any], known: Any) -> Tuple[Dict[str, Any], bool]:
+    """Fill what a failed or stable-only answer lacks from the previous cache.
+
+    Returns (entry, complete). A refusal from GitHub must not erase versions
+    the panel already knows.
+    """
+    known_entry = known if isinstance(known, dict) else {}
+    if fresh.get("skipped"):
+        return fresh, True
+    if not fresh.get("ok"):
+        if known_entry.get("tag") or known_entry.get("stable") or known_entry.get("prerelease"):
+            return dict(known_entry), False
+        return fresh, False
+    if fresh.get("partial"):
+        merged = dict(fresh)
+        if merged.get("prerelease") is None and known_entry.get("prerelease") is not None:
+            merged["prerelease"] = known_entry.get("prerelease")
+        return merged, False
+    return fresh, True
 
 
 def _compute_update_available(installed: Dict[str, Dict[str, Any]], latest: Dict[str, Any]) -> Dict[str, bool]:
@@ -769,6 +783,11 @@ def create_cores_status_blueprint(ui_state_dir: str) -> Blueprint:
                     timeout_s=timeout_s,
                 )
 
+                known = _cache_latest_data(_read_json(cache_path, trusted_root))
+                xr, xray_complete = _merge_with_known(xr, known.get("xray"))
+                mh, mihomo_complete = _merge_with_known(mh, known.get("mihomo"))
+                complete = xray_complete and mihomo_complete
+
                 latest: Dict[str, Any] = {
                     "xray": xr,
                     "mihomo": mh,
@@ -781,8 +800,8 @@ def create_cores_status_blueprint(ui_state_dir: str) -> Blueprint:
                     {
                         "format_version": _CACHE_FORMAT_VERSION,
                         "checked_ts": checked_ts,
-                        "ttl_s": ttl_s,
-                        "stale": False,
+                        "ttl_s": ttl_s if complete else min(ttl_s, _INCOMPLETE_CACHE_TTL_S),
+                        "stale": not complete,
                         "data": {"ok": ok, "latest": latest},
                     },
                     trusted_root,
@@ -852,6 +871,8 @@ def create_cores_status_blueprint(ui_state_dir: str) -> Blueprint:
         cached_checked_ts = _cache_checked_ts(cached)
         cache_is_fresh = False
         cache_stale_flag = bool(cached.get("stale") or False) if isinstance(cached, dict) else False
+        if force and cached_checked_ts and 0 <= now - cached_checked_ts < _FORCE_MIN_INTERVAL_S:
+            force = False
 
         if not force and cached:
             try:

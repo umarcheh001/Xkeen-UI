@@ -962,7 +962,7 @@ PY
     log "[*] Fetching latest commit (tarball) from GitHub API..."
 
   MAIN_OUT="$($PY - "$API_BASE" "$REPO" "${BRANCH:-}" "$API_TIMEOUT" <<'PYMAIN'
-import json, sys, urllib.request, urllib.error
+import json, os, sys, urllib.request, urllib.error, urllib.parse
 
 api_base = sys.argv[1].rstrip('/')
 repo = sys.argv[2]
@@ -970,17 +970,23 @@ branch_in = (sys.argv[3] or '').strip() or None
 timeout = float(sys.argv[4] or 10)
 
 headers = {"User-Agent": "xkeen-ui-updater", "Accept": "application/vnd.github+json"}
+# Необязательный токен поднимает лимит GitHub API; уходит только на api.github.com.
+token = (os.environ.get("XKEEN_UI_GITHUB_TOKEN") or "").strip()
+if token and urllib.parse.urlsplit(api_base).hostname == "api.github.com":
+    headers["Authorization"] = "Bearer " + token
 
-# Determine default branch (best-effort)
+# Determine default branch (best-effort). Asked only when no branch is given:
+# it is one more GitHub API request.
 default_branch = None
-try:
-    req = urllib.request.Request(f"{api_base}/repos/{repo}", headers=headers)
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        repo_data = json.loads(r.read().decode('utf-8', 'replace'))
-    if isinstance(repo_data, dict):
-        default_branch = repo_data.get('default_branch') or None
-except Exception:
-    default_branch = None
+if not branch_in:
+    try:
+        req = urllib.request.Request(f"{api_base}/repos/{repo}", headers=headers)
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            repo_data = json.loads(r.read().decode('utf-8', 'replace'))
+        if isinstance(repo_data, dict):
+            default_branch = repo_data.get('default_branch') or None
+    except Exception:
+        default_branch = None
 
 branch = branch_in or default_branch or 'main'
 
@@ -1093,7 +1099,7 @@ fi
 ERR_TMP="$UPDATE_DIR/.gh_latest.err.$$"
 LATEST_OUT=""
 if ! LATEST_OUT="$($PY - "$API_BASE" "$REPO" "$API_TIMEOUT" $ASSET_CANDIDATES 2>"$ERR_TMP" <<'PY'
-import json, sys, urllib.request, urllib.error
+import json, os, sys, urllib.request, urllib.error, urllib.parse
 
 api_base = sys.argv[1].rstrip('/')
 repo = sys.argv[2]
@@ -1101,7 +1107,12 @@ timeout = float(sys.argv[3] or 10)
 asset_names = [a for a in sys.argv[4:] if a]
 url = f"{api_base}/repos/{repo}/releases/latest"
 
-req = urllib.request.Request(url, headers={"User-Agent": "xkeen-ui-updater", "Accept": "application/vnd.github+json"})
+headers = {"User-Agent": "xkeen-ui-updater", "Accept": "application/vnd.github+json"}
+# Необязательный токен поднимает лимит GitHub API; уходит только на api.github.com.
+token = (os.environ.get("XKEEN_UI_GITHUB_TOKEN") or "").strip()
+if token and urllib.parse.urlsplit(api_base).hostname == "api.github.com":
+    headers["Authorization"] = "Bearer " + token
+req = urllib.request.Request(url, headers=headers)
 try:
     with urllib.request.urlopen(req, timeout=timeout) as r:
         data = json.loads(r.read().decode("utf-8", "replace"))

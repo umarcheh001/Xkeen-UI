@@ -17,6 +17,8 @@ import urllib.error
 import urllib.request
 import json
 
+from services import github_client
+
 
 EngineId = Literal["xray", "mihomo"]
 RiskLevel = Literal["official", "alternative", "experimental"]
@@ -258,44 +260,25 @@ def _platform_key(platform: RouterPlatform) -> str:
     return ""
 
 
-def _github_json(repo: str, timeout_s: float) -> dict[str, Any]:
-    api_base = str(os.environ.get("XKEEN_UI_GITHUB_API_BASE") or "https://api.github.com").rstrip("/")
-    request = urllib.request.Request(
-        f"{api_base}/repos/{repo}/releases/latest",
-        headers={
-            "Accept": "application/vnd.github+json",
-            "User-Agent": str(os.environ.get("XKEEN_UI_HTTP_USER_AGENT") or "xkeen-ui"),
-        },
-        method="GET",
-    )
+def _github_api(path: str, timeout_s: float) -> Any:
     try:
-        with urllib.request.urlopen(request, timeout=float(timeout_s)) as response:
-            payload = json.loads(response.read().decode("utf-8", errors="replace"))
+        payload, _meta = github_client.api_get_json(f"{github_client.api_base()}{path}", timeout=float(timeout_s))
     except (urllib.error.HTTPError, urllib.error.URLError, OSError, TimeoutError) as exc:
         raise CoreProfileError("github_unavailable", "GitHub недоступен. Попробуйте позже.") from exc
     except (TypeError, ValueError, json.JSONDecodeError) as exc:
         raise CoreProfileError("invalid_release", "GitHub вернул некорректные данные релиза.") from exc
+    return payload
+
+
+def _github_json(repo: str, timeout_s: float) -> dict[str, Any]:
+    payload = _github_api(f"/repos/{repo}/releases/latest", timeout_s)
     if not isinstance(payload, dict):
         raise CoreProfileError("invalid_release", "GitHub вернул некорректные данные релиза.")
     return payload
 
 
 def _github_releases(repo: str, timeout_s: float) -> list[dict[str, Any]]:
-    api_base = str(os.environ.get("XKEEN_UI_GITHUB_API_BASE") or "https://api.github.com").rstrip("/")
-    request = urllib.request.Request(
-        f"{api_base}/repos/{repo}/releases?per_page=20",
-        headers={
-            "Accept": "application/vnd.github+json",
-            "User-Agent": str(os.environ.get("XKEEN_UI_HTTP_USER_AGENT") or "xkeen-ui"),
-        },
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=float(timeout_s)) as response:
-            payload = json.loads(response.read().decode("utf-8", errors="replace"))
-    except (urllib.error.HTTPError, urllib.error.URLError, OSError, TimeoutError) as exc:
-        raise CoreProfileError("github_unavailable", "GitHub недоступен. Попробуйте позже.") from exc
-    except (TypeError, ValueError, json.JSONDecodeError) as exc:
-        raise CoreProfileError("invalid_release", "GitHub вернул некорректные данные релиза.") from exc
+    payload = _github_api(f"/repos/{repo}/releases?per_page=20", timeout_s)
     if not isinstance(payload, list):
         raise CoreProfileError("invalid_release", "GitHub вернул некорректные данные релиза.")
     return [item for item in payload if isinstance(item, dict)]
