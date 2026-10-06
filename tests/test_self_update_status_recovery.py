@@ -74,6 +74,40 @@ class SelfUpdateStatusRecoveryTests(unittest.TestCase):
             self.assertEqual(results.count(True), 1)
             self.assertEqual(results.count(False), 7)
 
+    def test_lock_transfer_and_stale_takeover_are_mutually_exclusive(self):
+        state = _reload("services.self_update.state")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            lock_file = Path(tmp) / "lock"
+            for _attempt in range(16):
+                lock_file.write_text(
+                    json.dumps({"pid": -1, "created_ts": time.time()}),
+                    encoding="utf-8",
+                )
+                barrier = threading.Barrier(2)
+                outcomes = []
+
+                def transfer():
+                    barrier.wait()
+                    outcomes.append(state.transfer_lock(str(lock_file), -1))
+
+                def reclaim():
+                    barrier.wait()
+                    outcomes.append(state.try_acquire_lock(str(lock_file))[0])
+
+                threads = [
+                    threading.Thread(target=transfer),
+                    threading.Thread(target=reclaim),
+                ]
+                for thread in threads:
+                    thread.start()
+                for thread in threads:
+                    thread.join(timeout=5)
+
+                self.assertFalse(any(thread.is_alive() for thread in threads))
+                self.assertEqual(outcomes.count(True), 1)
+                self.assertEqual(outcomes.count(False), 1)
+
     def test_reconcile_runtime_status_marks_stale_runner_as_failed(self):
         state = _reload("services.self_update.state")
 

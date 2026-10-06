@@ -309,19 +309,32 @@ def try_acquire_lock(lock_file: str) -> Tuple[bool, Dict[str, Any]]:
 def transfer_lock(lock_file: str, previous_pid: int) -> bool:
     """Transfer an existing live lock to this process without unlocking it."""
 
-    info = read_lock(lock_file)
+    directory = os.path.dirname(lock_file) or "."
+    os.makedirs(directory, exist_ok=True)
+    thread_guard = _thread_lock(lock_file)
+    if not thread_guard.acquire(blocking=False):
+        return False
+    guard_fd = _acquire_process_guard(lock_file + ".guard")
+    if guard_fd is None:
+        thread_guard.release()
+        return False
     try:
-        expected = int(previous_pid)
-        recorded = int(info.get("pid"))
-    except (TypeError, ValueError):
-        return False
-    if not info.get("exists") or recorded != expected:
-        return False
-    try:
-        _atomic_write_json(lock_file, _lock_payload())
-    except Exception:
-        return False
-    return True
+        info = read_lock(lock_file)
+        try:
+            expected = int(previous_pid)
+            recorded = int(info.get("pid"))
+        except (TypeError, ValueError):
+            return False
+        if not info.get("exists") or recorded != expected:
+            return False
+        try:
+            _atomic_write_json(lock_file, _lock_payload())
+        except Exception:
+            return False
+        return True
+    finally:
+        _release_process_guard(guard_fd)
+        thread_guard.release()
 
 
 def reconcile_runtime_status(status_file: str, lock_file: str) -> Tuple[Dict[str, Any], Dict[str, Any], bool]:
