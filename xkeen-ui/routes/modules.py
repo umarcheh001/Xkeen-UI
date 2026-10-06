@@ -7,6 +7,7 @@ from typing import Any, Callable
 from flask import Blueprint, jsonify, request
 
 from routes.common.errors import error_response, exception_response
+from services.module_lifecycle import ModuleLifecycleError, ModuleLifecycleService
 from services.module_registry import MODULE_IDS, PROFILE_PRESETS, ModuleRegistry, ModuleRegistryError
 
 
@@ -17,6 +18,7 @@ def create_modules_blueprint(
     module_registry: ModuleRegistry,
     *,
     before_change: Callable[[str, bool], dict[str, Any] | None] | None = None,
+    lifecycle_service: ModuleLifecycleService | None = None,
 ) -> Blueprint:
     """Create the configuration-only module registry API blueprint."""
 
@@ -35,6 +37,137 @@ def create_modules_blueprint(
             code=error.code,
             **error.details,
         )
+
+    def lifecycle_response(call: Callable[[], dict[str, Any]], status: int = 200):
+        if lifecycle_service is None:
+            return error_response(
+                "module lifecycle service is unavailable",
+                503,
+                ok=False,
+                code="module_lifecycle_unavailable",
+            )
+        try:
+            return success(call(), status)
+        except ModuleLifecycleError as error:
+            return error_response(
+                error.message,
+                error.status,
+                ok=False,
+                code=error.code,
+                **error.details,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return exception_response(
+                "Module lifecycle operation failed.",
+                500,
+                ok=False,
+                code="module_lifecycle_failed",
+                exc=exc,
+                log_tag="modules.lifecycle_failed",
+            )
+
+    def lifecycle_body(
+        *,
+        allowed: set[str],
+        required: set[str],
+    ):
+        try:
+            if request.content_length and int(request.content_length) > _MAX_PATCH_BYTES:
+                return None, error_response(
+                    "payload too large", 400, ok=False, code="payload_too_large"
+                )
+        except (TypeError, ValueError):
+            pass
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return None, error_response(
+                "payload must be an object",
+                400,
+                ok=False,
+                code="invalid_payload",
+            )
+        unknown = sorted(set(payload) - allowed)
+        if unknown:
+            return None, error_response(
+                "unsupported lifecycle fields",
+                400,
+                ok=False,
+                code="unsupported_lifecycle_fields",
+                fields=unknown,
+            )
+        missing = sorted(required - set(payload))
+        if missing:
+            return None, error_response(
+                "required lifecycle field is missing",
+                400,
+                ok=False,
+                code="lifecycle_field_required",
+                fields=missing,
+            )
+        return payload, None
+
+    @bp.get("/api/modules/installed")
+    def api_modules_installed():
+        return lifecycle_response(lambda: lifecycle_service.installed())
+
+    @bp.get("/api/modules/available")
+    def api_modules_available():
+        return lifecycle_response(lambda: lifecycle_service.available())
+
+    @bp.post("/api/modules/operations/plan")
+    def api_modules_operation_plan():
+        payload, failure = lifecycle_body(
+            allowed={"operation", "module_id"},
+            required={"operation", "module_id"},
+        )
+        if failure is not None:
+            return failure
+        return lifecycle_response(
+            lambda: lifecycle_service.plan(payload["operation"], payload["module_id"])
+        )
+
+    @bp.post("/api/modules/operations/apply")
+    def api_modules_operation_apply():
+        payload, failure = lifecycle_body(
+            allowed={"operation", "module_id", "plan_id"},
+            required={"operation", "module_id", "plan_id"},
+        )
+        if failure is not None:
+            return failure
+        plan_id = payload["plan_id"]
+        if (
+            not isinstance(plan_id, str)
+            or len(plan_id) != 64
+            or any(character not in "0123456789abcdef" for character in plan_id)
+        ):
+            return error_response(
+                "plan_id must be a lowercase SHA-256 digest",
+                400,
+                ok=False,
+                code="module_plan_id_invalid",
+            )
+        return lifecycle_response(
+            lambda: lifecycle_service.apply(
+                payload["operation"], payload["module_id"], plan_id
+            ),
+            202,
+        )
+
+    @bp.get("/api/modules/operations/status")
+    def api_modules_operation_status():
+        return lifecycle_response(lambda: lifecycle_service.status())
+
+    @bp.post("/api/modules/operations/<operation_id>/cancel")
+    def api_modules_operation_cancel(operation_id: str):
+        return lifecycle_response(lambda: lifecycle_service.cancel(operation_id), 202)
+
+    @bp.post("/api/modules/recovery")
+    def api_modules_recovery():
+        return lifecycle_response(lambda: lifecycle_service.recover())
+
+    @bp.post("/api/modules/restart")
+    def api_modules_restart():
+        return lifecycle_response(lambda: lifecycle_service.restart())
 
     @bp.get("/api/modules")
     def api_modules_list():

@@ -13,7 +13,6 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 
-from services.module_package_contract import detect_platform_architecture
 from services.module_registry import MODULE_IDS, ModuleRegistry
 from services.module_transactions.executor import recover
 from services.module_transactions.launcher import (
@@ -111,6 +110,12 @@ def _default_catalog_factory(
     return build
 
 
+def _default_architecture_provider() -> str:
+    from services.module_package_contract import detect_platform_architecture
+
+    return detect_platform_architecture()
+
+
 def _dependency_diff(
     catalog: Mapping[str, Any],
     module_id: str,
@@ -156,7 +161,7 @@ class ModuleLifecycleService:
         panel_root: Path,
         state_dir: Path,
         catalog_factory: Callable[[str, str], "ModuleCatalogClient"] | None = None,
-        architecture_provider: Callable[[], str] = detect_platform_architecture,
+        architecture_provider: Callable[[], str] = _default_architecture_provider,
         active_engines: Callable[[], frozenset[str]] | None = None,
         health_url: str = "",
         restart_cmd: Sequence[str] = (),

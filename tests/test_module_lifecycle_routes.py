@@ -1,0 +1,228 @@
+from __future__ import annotations
+
+import json
+
+import pytest
+from flask import Flask
+
+from routes.modules import create_modules_blueprint
+from services.module_lifecycle import ModuleLifecycleError
+
+
+class RegistryFake:
+    def get_registry(self):
+        return {"ok": True, "modules": []}
+
+
+class LifecycleFake:
+    def __init__(self) -> None:
+        self.calls = []
+        self.failure = None
+
+    def _result(self, call, payload):
+        self.calls.append(call)
+        if self.failure is not None:
+            raise self.failure
+        return payload
+
+    def installed(self):
+        return self._result(("installed",), {"ok": True, "kind": "installed"})
+
+    def available(self):
+        return self._result(("available",), {"ok": True, "kind": "available"})
+
+    def plan(self, operation, module_id):
+        return self._result(
+            ("plan", operation, module_id),
+            {"ok": True, "applicable": True, "plan_id": "a" * 64},
+        )
+
+    def apply(self, operation, module_id, plan_id):
+        return self._result(
+            ("apply", operation, module_id, plan_id),
+            {"ok": True, "operation_id": "20261006T120000Z-abcdef"},
+        )
+
+    def status(self):
+        return self._result(("status",), {"ok": True, "result": "running"})
+
+    def cancel(self, operation_id):
+        return self._result(
+            ("cancel", operation_id),
+            {"ok": True, "operation_id": operation_id, "cancel_requested": True},
+        )
+
+    def recover(self):
+        return self._result(
+            ("recover",), {"ok": True, "recovery_result": "rolled_back"}
+        )
+
+    def restart(self):
+        return self._result(("restart",), {"ok": True, "restart_requested": True})
+
+
+@pytest.fixture
+def app_with_lifecycle():
+    service = LifecycleFake()
+    app = Flask(__name__)
+    app.config["TESTING"] = True
+    app.register_blueprint(
+        create_modules_blueprint(RegistryFake(), lifecycle_service=service)
+    )
+    return app.test_client(), service
+
+
+def test_lifecycle_read_and_control_routes_delegate_with_no_store(app_with_lifecycle):
+    client, service = app_with_lifecycle
+    requests = [
+        ("get", "/api/modules/installed", None, 200, "installed"),
+        ("get", "/api/modules/available", None, 200, "available"),
+        ("get", "/api/modules/operations/status", None, 200, "status"),
+        (
+            "post",
+            "/api/modules/operations/20261006T120000Z-abcdef/cancel",
+            None,
+            202,
+            "cancel",
+        ),
+        ("post", "/api/modules/recovery", None, 200, "recover"),
+        ("post", "/api/modules/restart", None, 200, "restart"),
+    ]
+
+    for method, path, body, expected_status, call_name in requests:
+        response = getattr(client, method)(path, json=body)
+        assert response.status_code == expected_status
+        assert response.get_json()["ok"] is True
+        assert response.headers["Cache-Control"] == "no-store"
+        assert service.calls[-1][0] == call_name
+
+
+def test_lifecycle_plan_and_apply_routes_validate_and_delegate(app_with_lifecycle):
+    client, service = app_with_lifecycle
+
+    planned = client.post(
+        "/api/modules/operations/plan",
+        json={"operation": "install", "module_id": "tool.terminal"},
+    )
+    applied = client.post(
+        "/api/modules/operations/apply",
+        json={
+            "operation": "install",
+            "module_id": "tool.terminal",
+            "plan_id": "a" * 64,
+        },
+    )
+
+    assert planned.status_code == 200
+    assert applied.status_code == 202
+    assert service.calls == [
+        ("plan", "install", "tool.terminal"),
+        ("apply", "install", "tool.terminal", "a" * 64),
+    ]
+    assert planned.headers["Cache-Control"] == "no-store"
+    assert applied.headers["Cache-Control"] == "no-store"
+
+
+@pytest.mark.parametrize(
+    ("path", "body", "code"),
+    [
+        ("/api/modules/operations/plan", [], "invalid_payload"),
+        (
+            "/api/modules/operations/plan",
+            {"operation": "install", "module_id": "tool.terminal", "files": []},
+            "unsupported_lifecycle_fields",
+        ),
+        (
+            "/api/modules/operations/plan",
+            {"module_id": "tool.terminal"},
+            "lifecycle_field_required",
+        ),
+        (
+            "/api/modules/operations/apply",
+            {"operation": "install", "module_id": "tool.terminal"},
+            "lifecycle_field_required",
+        ),
+        (
+            "/api/modules/operations/apply",
+            {
+                "operation": "install",
+                "module_id": "tool.terminal",
+                "plan_id": "A" * 64,
+            },
+            "module_plan_id_invalid",
+        ),
+    ],
+)
+def test_lifecycle_body_validation_rejects_bad_requests(
+    app_with_lifecycle, path, body, code
+):
+    client, service = app_with_lifecycle
+
+    response = client.post(path, json=body)
+
+    assert response.status_code == 400
+    assert response.get_json()["code"] == code
+    assert service.calls == []
+
+
+def test_lifecycle_body_validation_rejects_payload_over_8_kib(app_with_lifecycle):
+    client, service = app_with_lifecycle
+    body = json.dumps(
+        {"operation": "install", "module_id": "tool.terminal", "padding": "x" * 8192}
+    )
+
+    response = client.post(
+        "/api/modules/operations/plan",
+        data=body,
+        content_type="application/json",
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["code"] == "payload_too_large"
+    assert service.calls == []
+
+
+def test_lifecycle_domain_error_preserves_safe_code_status_and_details(
+    app_with_lifecycle,
+):
+    client, service = app_with_lifecycle
+    service.failure = ModuleLifecycleError(
+        "operation_not_found",
+        "the module operation does not exist",
+        status=404,
+        operation_id="unknown",
+    )
+
+    response = client.post("/api/modules/operations/unknown/cancel")
+
+    assert response.status_code == 404
+    assert response.get_json() == {
+        "ok": False,
+        "error": "the module operation does not exist",
+        "code": "operation_not_found",
+        "operation_id": "unknown",
+    }
+
+
+def test_lifecycle_unexpected_error_is_sanitized(app_with_lifecycle):
+    client, service = app_with_lifecycle
+    service.failure = RuntimeError("secret archive path")
+
+    response = client.get("/api/modules/available")
+
+    assert response.status_code == 500
+    payload = response.get_json()
+    assert payload["code"] == "module_lifecycle_failed"
+    assert "secret archive path" not in json.dumps(payload)
+
+
+def test_missing_lifecycle_service_only_disables_new_routes():
+    app = Flask(__name__)
+    app.config["TESTING"] = True
+    app.register_blueprint(create_modules_blueprint(RegistryFake()))
+    client = app.test_client()
+
+    assert client.get("/api/modules").status_code == 200
+    unavailable = client.get("/api/modules/installed")
+    assert unavailable.status_code == 503
+    assert unavailable.get_json()["code"] == "module_lifecycle_unavailable"
