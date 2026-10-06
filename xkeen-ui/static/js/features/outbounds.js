@@ -4647,6 +4647,8 @@ let outboundsModuleApi = null;
       reset: 'outbounds-subscriptions-reset-btn',
       preview: 'outbounds-subscriptions-preview-btn',
       refreshDue: 'outbounds-subscriptions-refresh-due-btn',
+      refreshDueCount: 'outbounds-subscriptions-refresh-due-count',
+      mode: 'outbounds-subscriptions-mode',
       align: 'outbounds-subscriptions-align-btn',
       master: 'outbounds-subscriptions-master',
       masterWrap: 'outbounds-subscriptions-master-wrap',
@@ -4679,6 +4681,9 @@ let outboundsModuleApi = null;
     let _subscriptionPreview = null;
     let _subscriptionShowHidden = false;
     let _subscriptionBaseline = null;
+    // Настройки окна, перенесённые с только что сохранённой подписки на
+    // следующую: живут до закрытия окна или кнопки «Очистить форму».
+    let _subscriptionCarriedSettings = false;
     let _subscriptionPreviewBusy = false;
     let _subscriptionSaveBusy = false;
     const SUB_DEFAULT_INTERVAL_HOURS = 24;
@@ -5354,7 +5359,19 @@ let outboundsModuleApi = null;
       return { formState, resolved, validation, dirty };
     }
 
+    // Плашка у заголовка формы: что сделает «Сохранить» — добавит подписку
+    // или изменит открытую.
+    function subsRenderFormMode() {
+      const el = $(SUB_IDS.mode);
+      if (!el) return;
+      const saved = _subscriptionEditId ? subsFindById(_subscriptionEditId) : null;
+      const label = saved ? String(saved.tag || saved.name || saved.id || '').trim() : '';
+      el.textContent = saved ? `изменение · ${label}` : 'новая';
+      el.classList.toggle('is-edit', !!saved);
+    }
+
     function subsSyncSubscriptionFormState() {
+      try { subsRenderFormMode(); } catch (eMode) {}
       const formState = subsReadFormState();
       const resolved = subsResolveDraftDefaults(formState);
       const validation = subsValidateFormState(formState);
@@ -5619,7 +5636,7 @@ let outboundsModuleApi = null;
                   <div class="xk-sub-panelhead xk-sub-form-head">
                     <div>
                       <div class="xk-pool-kicker">Источник</div>
-                      <div class="terminal-menu-title" style="margin:0;">Подписка по ссылке</div>
+                      <div class="terminal-menu-title" style="margin:0;">Подписка по ссылке<span id="outbounds-subscriptions-mode" class="xk-sub-mode-pill">новая</span></div>
                     </div>
                   </div>
                   <form id="outbounds-subscriptions-form" class="xk-sub-form">
@@ -5724,7 +5741,7 @@ let outboundsModuleApi = null;
                     </div>
                     <div class="xk-sub-list-head-actions">
                       <div id="outbounds-subscriptions-summary" class="xk-pool-summary">0</div>
-                      <button type="button" id="outbounds-subscriptions-refresh-due-btn" class="btn-secondary btn-compact" title="Обновить просроченные" data-tooltip-multiline data-tooltip="Обновить одной пачкой&#10;Скачивает подписки, у которых наступил срок, и те, что сохранены без «Сразу» и ещё ни разу не скачивались.&#10;Xray перезапускается один раз на всю пачку.">${iconHtml('refresh')}<span class="xk-action-label">Обновить просроченные</span></button>
+                      <button type="button" id="outbounds-subscriptions-refresh-due-btn" class="btn-secondary btn-compact" title="Обновить просроченные" data-tooltip-multiline data-tooltip="Обновить одной пачкой&#10;Скачивает подписки, у которых наступил срок, и те, что сохранены без «Сразу» и ещё ни разу не скачивались.&#10;Xray перезапускается один раз на всю пачку.">${iconHtml('refresh')}<span class="xk-action-label">Обновить просроченные</span><span id="outbounds-subscriptions-refresh-due-count" class="xk-sub-due-count" hidden></span></button>
                       <button type="button" id="outbounds-subscriptions-align-btn" class="btn-secondary btn-compact" title="Выровнять расписание" data-tooltip="Свести время следующего обновления всех подписок к одному моменту, чтобы дальше они обновлялись одной пачкой.">${iconHtml('normalize')}<span class="xk-action-label">Выровнять расписание</span></button>
                       <button type="button" id="outbounds-subscriptions-delete-all-btn" class="btn-secondary btn-compact xk-sub-delete-all" aria-label="Удалить все подписки" data-tooltip-multiline data-tooltip="Удалить все подписки&#10;Стирает все подписки разом и возвращает конфигурацию к вашим серверам. Вернуть удалённое нельзя.&#10;Чтобы отключить подписки на время, используй переключатель «Подписки работают»." hidden>${iconHtml('trash')}</button>
                     </div>
@@ -6608,6 +6625,14 @@ let outboundsModuleApi = null;
       return subsTimestamp(s.last_update_ts || s.updated_ts);
     }
 
+    // Время сохранения записи — не скачивание: по нему подписка без единого
+    // узла выглядела бы работающей. Признак тот же, что у сервера в
+    // «Обновить просроченные».
+    function subsDownloadTs(sub) {
+      const s = sub && typeof sub === 'object' ? sub : {};
+      return subsTimestamp(s.last_update_ts);
+    }
+
     function subsNowTs() {
       return Math.floor(Date.now() / 1000);
     }
@@ -6699,11 +6724,10 @@ let outboundsModuleApi = null;
       const s = sub && typeof sub === 'object' ? sub : {};
       const hasError = s.last_ok === false;
       const due = subsIsDue(s, nowTs);
-      const lastUpdateTs = subsLastUpdateTs(s);
       if (hasError && due) return 0;
       if (hasError) return 1;
       if (due) return 2;
-      if (lastUpdateTs <= 0) return 3;
+      if (subsDownloadTs(s) <= 0) return 3;
       return 4;
     }
 
@@ -6765,7 +6789,7 @@ let outboundsModuleApi = null;
         return {
           tone: 'idle',
           word: 'Приостановлена',
-          detail: lastUpdateTs > 0
+          detail: subsDownloadTs(s) > 0
             ? (relative ? `${nodes} · ${relative}` : nodes)
             : 'узлы появятся после первого обновления',
         };
@@ -6778,11 +6802,12 @@ let outboundsModuleApi = null;
           detail: errorText || 'последнее обновление не удалось',
         };
       }
-      if (lastUpdateTs <= 0) {
+      if (subsDownloadTs(s) <= 0) {
         return {
-          tone: 'idle',
-          word: 'Ещё не обновлялась',
-          detail: 'узлы появятся после первого обновления',
+          tone: 'due',
+          word: 'Не скачана',
+          detail: 'узлов пока нет',
+          hint: 'Подписка сохранена, но ещё не скачана. Нажмите ↻ в этой строке или «Обновить просроченные» над списком.',
         };
       }
       const detail = relative ? `${nodes} · ${relative}` : nodes;
@@ -6824,8 +6849,9 @@ let outboundsModuleApi = null;
       } catch (e) {
         return { text: interval, title: '' };
       }
+      const lead = subsDownloadTs(s) > 0 ? 'Следующее обновление' : 'Первое автообновление';
       return {
-        text: `Следующее обновление ${day} в ${clock} · ${interval}`,
+        text: `${lead} ${day} в ${clock} · ${interval}`,
         title: `Точное время: ${subsFormatTime(nextTs)}.`,
       };
     }
@@ -6857,10 +6883,46 @@ let outboundsModuleApi = null;
       return badges;
     }
 
+    function subsReadWindowSettings() {
+      return {
+        interval: String(($(SUB_IDS.interval) && $(SUB_IDS.interval).value) || '').trim(),
+        enabled: !!($(SUB_IDS.enabled) && $(SUB_IDS.enabled).checked),
+        ping: !!($(SUB_IDS.ping) && $(SUB_IDS.ping).checked),
+        routingMode: String(($(SUB_IDS.routingMode) && $(SUB_IDS.routingMode).value) || '').trim(),
+        routingAutoRule: !!($(SUB_IDS.routingAutoRule) && $(SUB_IDS.routingAutoRule).checked),
+        sockoptMark: isEntwareMarkEnabled(SUB_IDS.sockoptMark),
+        balancerTags: subsSelectedBalancerTags(),
+        refreshNow: !!($(SUB_IDS.refreshNow) && $(SUB_IDS.refreshNow).checked),
+      };
+    }
+
+    // Форма под следующую подписку: своё у подписки (адрес, название, префикс,
+    // фильтры, исключённые узлы) стирается, настройки окна остаются.
+    function subsPrepareNextSubscription() {
+      const keep = subsReadWindowSettings();
+      subsResetForm();
+      _subscriptionCarriedSettings = true;
+      try { if (keep.interval) $(SUB_IDS.interval).value = keep.interval; } catch (e) {}
+      try { $(SUB_IDS.enabled).checked = keep.enabled; } catch (e) {}
+      try { $(SUB_IDS.ping).checked = keep.ping; } catch (e) {}
+      try { if (keep.routingMode) $(SUB_IDS.routingMode).value = keep.routingMode; } catch (e) {}
+      try { $(SUB_IDS.routingAutoRule).checked = keep.routingAutoRule; } catch (e) {}
+      try { setEntwareMarkButton(SUB_IDS.sockoptMark, keep.sockoptMark); } catch (e) {}
+      try { subsRenderRoutingBalancers(keep.balancerTags); } catch (e) {}
+      try { subsSetSelectedBalancerTags(keep.balancerTags); } catch (e) {}
+      try { $(SUB_IDS.refreshNow).checked = keep.refreshNow; } catch (e) {}
+      // Перенесённое — отправная точка, а не черновик: иначе крестик спрашивал
+      // бы про несохранённые правки на пустой форме.
+      try { subsCaptureBaseline(); } catch (e) {}
+      try { subsSyncSubscriptionFormState(); } catch (e) {}
+      try { $(SUB_IDS.url).focus(); } catch (e) {}
+    }
+
     function subsResetForm() {
       _subscriptionEditId = '';
       _subscriptionPreview = null;
       _subscriptionShowHidden = false;
+      _subscriptionCarriedSettings = false;
       try { $(SUB_IDS.id).value = ''; } catch (e) {}
       try { $(SUB_IDS.name).value = ''; } catch (e) {}
       try { $(SUB_IDS.tag).value = ''; } catch (e) {}
@@ -6894,6 +6956,7 @@ let outboundsModuleApi = null;
       if (nextId !== String(_subscriptionEditId || '') || opts.keepPreview !== true) {
         _subscriptionShowHidden = false;
       }
+      _subscriptionCarriedSettings = false;
       _subscriptionEditId = nextId;
       try { $(SUB_IDS.id).value = _subscriptionEditId; } catch (e) {}
       try { $(SUB_IDS.name).value = String(s.name || ''); } catch (e) {}
@@ -6964,7 +7027,7 @@ let outboundsModuleApi = null;
             <div class="xk-sub-muted">${metaBits.join(' · ')}</div>
           </td>
           <td class="xk-sub-status-cell">
-            <div class="xk-sub-state-row">
+            <div class="xk-sub-state-row"${state.hint ? ` title="${escapeHtml(state.hint)}" data-tooltip="${escapeHtml(state.hint)}"` : ''}>
               <div class="xk-sub-state" data-state="${state.tone}"><i aria-hidden="true"></i><b>${escapeHtml(state.word)}</b></div>
               <div class="xk-sub-muted">${escapeHtml(state.detail)}</div>
             </div>
@@ -7037,6 +7100,19 @@ let outboundsModuleApi = null;
           alignBtn.disabled = moments.length < 2 || new Set(moments).size < 2;
         }
       } catch (e) {}
+      try {
+        // Тот же отбор, что у сервера в «Обновить просроченные»: нескачанные
+        // и те, у которых наступил срок; выключенные и приостановленные — нет.
+        const dueCountEl = $(SUB_IDS.refreshDueCount);
+        if (dueCountEl) {
+          const waiting = items.filter((item) => {
+            if (!item || item.enabled === false || item.paused) return false;
+            return subsDownloadTs(item) <= 0 || subsIsDue(item, nowTs);
+          }).length;
+          dueCountEl.textContent = waiting ? String(waiting) : '';
+          dueCountEl.hidden = !waiting;
+        }
+      } catch (eCount) {}
       try { subsRenderPauseState(); } catch (ePause) {}
 
       Array.from(tbody.querySelectorAll('.xk-sub-file-link')).forEach((btn) => {
@@ -7695,8 +7771,10 @@ let outboundsModuleApi = null;
             cleanBlankDraft = !_subscriptionBaseline || !subsHasDirtyDraft();
           } catch (e4) {}
           try {
+            // Перенесённое положение «Пула» выбрал человек — не подменяем его
+            // рекомендацией при каждой перезагрузке списка.
             if (cleanBlankDraft) {
-              $(SUB_IDS.routingAutoRule).checked = subsSuggestedAutoRuleDefault();
+              if (!_subscriptionCarriedSettings) $(SUB_IDS.routingAutoRule).checked = subsSuggestedAutoRuleDefault();
             }
           } catch (e5) {}
           try { subsRenderRoutingBalancers(subsSelectedBalancerTags()); } catch (e6) {}
@@ -8523,6 +8601,44 @@ let outboundsModuleApi = null;
       }
     }
 
+    // Адрес без того, что не отличает одну подписку от другой.
+    function subsAddressKey(url) {
+      const text = String(url || '').trim();
+      try {
+        const parsed = new URL(text);
+        if (parsed.host) return (parsed.host + parsed.pathname).replace(/\/+$/, '').toLowerCase();
+      } catch (e) {}
+      return text;
+    }
+
+    // Другой адрес у сохранённой подписки чаще значит «хотел добавить ещё
+    // одну», чем «провайдер выдал новую ссылку»: спрашиваем, пока не поздно.
+    async function subsConfirmAddressChange(payload) {
+      const id = String(payload && payload.id || '').trim();
+      const saved = id ? subsFindById(subsCleanId(id)) : null;
+      if (!saved) return true;
+      const before = String(saved.url || '').trim();
+      const after = String(payload.url || '').trim();
+      if (!before || subsAddressKey(before) === subsAddressKey(after)) return true;
+      const label = String(saved.tag || saved.name || saved.id || '').trim();
+      try {
+        return !!(await confirmXkeenAction({
+          title: 'Адрес подписки изменился',
+          message: `Изменить адрес подписки «${label}»?`,
+          details: [
+            `Было: ${subsShortUrl(before)}`,
+            `Станет: ${subsShortUrl(after)}`,
+            'Файл узлов и префикс тегов останутся прежними, старые узлы заменятся новыми.',
+            'Если это другая подписка — закройте это окно, нажмите «Очистить форму» и добавьте её как новую.',
+          ],
+          okText: 'Изменить адрес',
+          cancelText: 'Отмена',
+        }));
+      } catch (e) {
+        return false;
+      }
+    }
+
     async function subsSave(e) {
       if (e && typeof e.preventDefault === 'function') e.preventDefault();
       const sync = subsSyncSubscriptionFormState();
@@ -8532,6 +8648,8 @@ let outboundsModuleApi = null;
         return false;
       }
       const payload = subsBuildPayload(sync.formState);
+      const savingNew = !String(payload.id || '').trim();
+      if (!(await subsConfirmAddressChange(payload))) return false;
 
       _subscriptionSaveBusy = true;
       subsSyncSubscriptionFormState();
@@ -8560,6 +8678,9 @@ let outboundsModuleApi = null;
           await subsRefresh(id, { skipDraftConfirm: true });
         } else {
           try { toastXkeen('Подписка сохранена', 'success'); } catch (e3) {}
+          // Иначе следующая подписка, набранная поверх, сохранилась бы под
+          // id предыдущей и заменила её.
+          if (savingNew) subsPrepareNextSubscription();
         }
         return true;
       } catch (err) {
