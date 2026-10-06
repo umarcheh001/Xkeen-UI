@@ -250,18 +250,19 @@ def test_last_subscription_leaving_restores_the_original_kind(env, tmp_path):
     _routing(xray_dir, "leastLoad")
     target = xray_dir / "07_observatory.json"
     target.write_text(PLAIN_BEFORE, encoding="utf-8")
-    subs._ensure_subscription_managed_baselines(str(ui_state_dir), str(xray_dir))
+    journal: dict = {}
 
-    subs.sync_observatory_subjects(xray_configs_dir=str(xray_dir), add_tags=SUB_TAGS)
+    subs.sync_observatory_subjects(xray_configs_dir=str(xray_dir), add_tags=SUB_TAGS, journal=journal)
     assert _sections(xray_dir) == [("07_observatory.json", "burstObservatory")]
     subs.sync_observatory_subjects(
-        xray_configs_dir=str(xray_dir), add_tags=[], remove_tags=SUB_TAGS, managed_active=False
+        xray_configs_dir=str(xray_dir), add_tags=[], remove_tags=SUB_TAGS, managed_active=False, journal=journal
     )
 
-    undone = subs._undo_observatory_conversion(str(ui_state_dir), xray_configs_dir=str(xray_dir))
+    undone = subs._undo_observatory_conversion(str(xray_dir), journal)
 
     assert undone is True
-    assert target.read_text(encoding="utf-8") == PLAIN_BEFORE
+    assert json.loads(target.read_text(encoding="utf-8")) == json.loads(PLAIN_BEFORE)
+    assert journal == {}
 
 
 def test_same_kind_keeps_owner_edits_made_while_subscribed(env, tmp_path):
@@ -270,12 +271,15 @@ def test_same_kind_keeps_owner_edits_made_while_subscribed(env, tmp_path):
     _routing(xray_dir, "leastPing")
     target = xray_dir / "07_observatory.json"
     target.write_text(PLAIN_BEFORE, encoding="utf-8")
-    subs._ensure_subscription_managed_baselines(str(ui_state_dir), str(xray_dir))
+    journal: dict = {}
+    subs.sync_observatory_subjects(xray_configs_dir=str(xray_dir), add_tags=SUB_TAGS, journal=journal)
+    # Вид секции не менялся -- запоминать нечего.
+    assert journal == {}
 
     edited = PLAIN_BEFORE.replace('"5m"', '"1m"')
     target.write_text(edited, encoding="utf-8")
 
-    assert subs._undo_observatory_conversion(str(ui_state_dir), xray_configs_dir=str(xray_dir)) is False
+    assert subs._undo_observatory_conversion(str(xray_dir), journal) is False
     assert target.read_text(encoding="utf-8") == edited
 
 
@@ -283,10 +287,10 @@ def test_file_created_by_the_panel_is_not_removed_by_the_undo(env, tmp_path):
     subs, xray_dir, _jsonc = env
     ui_state_dir = _state_dir(tmp_path)
     _routing(xray_dir, "leastLoad")
-    subs._ensure_subscription_managed_baselines(str(ui_state_dir), str(xray_dir))
-    subs.sync_observatory_subjects(xray_configs_dir=str(xray_dir), add_tags=SUB_TAGS)
+    journal: dict = {}
+    subs.sync_observatory_subjects(xray_configs_dir=str(xray_dir), add_tags=SUB_TAGS, journal=journal)
 
-    assert subs._undo_observatory_conversion(str(ui_state_dir), xray_configs_dir=str(xray_dir)) is False
+    assert subs._undo_observatory_conversion(str(xray_dir), journal) is False
     assert (xray_dir / "07_observatory.json").exists()
 
 
@@ -386,8 +390,11 @@ def test_deleting_the_last_subscription_returns_the_original_file_end_to_end(tmp
         restart_xkeen=None,
     )
 
-    assert target.read_text(encoding="utf-8") == PLAIN_BEFORE
-    assert subs.MANAGED_BASELINES_KEY not in subs.load_subscription_state(str(ui_state_dir))
+    # Возвращается содержимое, а не раскладка по строкам: файл пишет панель.
+    assert json.loads(target.read_text(encoding="utf-8")) == json.loads(PLAIN_BEFORE)
+    state = subs.load_subscription_state(str(ui_state_dir))
+    assert subs.MANAGED_BASELINES_KEY not in state
+    assert subs.DISPLACED_KEY not in state
 
 
 # --- final review fixes -------------------------------------------------------
@@ -399,12 +406,13 @@ def test_undo_leaves_a_burst_the_owner_uploaded_while_subscribed(env, tmp_path):
     _routing(xray_dir, "leastLoad")
     target = xray_dir / "07_observatory.json"
     target.write_text(PLAIN_BEFORE, encoding="utf-8")
-    subs._ensure_subscription_managed_baselines(str(ui_state_dir), str(xray_dir))
-    subs.sync_observatory_subjects(xray_configs_dir=str(xray_dir), add_tags=SUB_TAGS)
+    journal: dict = {}
+    subs.sync_observatory_subjects(xray_configs_dir=str(xray_dir), add_tags=SUB_TAGS, journal=journal)
+    assert journal["observatory"]["plain"]["probeInterval"] == "5m"
 
     target.write_text(ETALON, encoding="utf-8")
 
-    assert subs._undo_observatory_conversion(str(ui_state_dir), xray_configs_dir=str(xray_dir)) is False
+    assert subs._undo_observatory_conversion(str(xray_dir), journal) is False
     assert target.read_text(encoding="utf-8") == ETALON
 
 
@@ -417,14 +425,14 @@ def test_undo_never_brings_back_a_second_section_after_a_collapse(env, tmp_path)
         json.dumps({"burstObservatory": {"subjectSelector": ["VPS_"], "pingConfig": {"interval": "10m"}}}),
         encoding="utf-8",
     )
-    subs._ensure_subscription_managed_baselines(str(ui_state_dir), str(xray_dir))
-    subs.sync_observatory_subjects(xray_configs_dir=str(xray_dir), add_tags=SUB_TAGS)
+    journal: dict = {}
+    subs.sync_observatory_subjects(xray_configs_dir=str(xray_dir), add_tags=SUB_TAGS, journal=journal)
     assert _sections(xray_dir) == [("09_burst.json", "burstObservatory")]
     subs.sync_observatory_subjects(
-        xray_configs_dir=str(xray_dir), add_tags=[], remove_tags=SUB_TAGS, managed_active=False
+        xray_configs_dir=str(xray_dir), add_tags=[], remove_tags=SUB_TAGS, managed_active=False, journal=journal
     )
 
-    assert subs._undo_observatory_conversion(str(ui_state_dir), xray_configs_dir=str(xray_dir)) is False
+    assert subs._undo_observatory_conversion(str(xray_dir), journal) is False
     assert _sections(xray_dir) == [("09_burst.json", "burstObservatory")]
 
 
@@ -739,7 +747,8 @@ def test_owner_reference_file_survives_subscription_only_subscriptions_end_to_en
 
     # The mode took the manual proxies out and pointed the balancers at the
     # subscriptions; the owner's prefix still covers every node that is left.
-    assert (xray_dir / "04_outbounds.json.disable").exists()
+    assert not (xray_dir / "04_outbounds.json.disable").exists()
+    assert subs.load_subscription_state(str(ui_state_dir))[subs.DISPLACED_KEY]["outbounds"]
     routing = json.loads((xray_dir / "05_routing.json").read_text(encoding="utf-8"))
     strategies = {item["tag"]: item["strategy"]["type"] for item in routing["routing"]["balancers"]}
     assert strategies["heavy_load_balancer"] == "leastLoad"

@@ -13,12 +13,14 @@ the change there is one restart and DNS is not touched at all.
 
 from __future__ import annotations
 
+import copy
 import os
 import threading
 import time
 from typing import Any, Callable, Dict, List, Optional
 
 from services import dns_over_vless as dov
+from services import xray_subscription_displacement as displacement
 from services import xray_subscriptions as subs
 from services import xray_transactions
 from services.io.atomic import _atomic_write_json
@@ -149,10 +151,15 @@ def _predict_paused(ui_state_dir: str, xray_configs_dir: str, view: Dict[str, An
     outbounds = [item for item in runtime.get("outbounds", []) if item.get("file") not in files]
     known = {item["tag"] for item in outbounds}
     # "Subscription only" moved the owner's servers aside; a pause brings them back.
-    aside = subs._read_json_file(
-        subs._disabled_config_path(subs._config_fragment_path(xray_configs_dir, subs.OUTBOUNDS_FILE)), None
-    )
-    for item in (aside.get("outbounds") if isinstance(aside, dict) else None) or []:
+    journal = displacement.normalize(state.get(subs.DISPLACED_KEY))
+    aside_items = [entry.get("outbound") for entry in journal.get("outbounds") or []]
+    if not aside_items:
+        # A router that entered the mode on an older version keeps them in a file.
+        aside = subs._read_json_file(
+            subs._disabled_config_path(subs._config_fragment_path(xray_configs_dir, subs.OUTBOUNDS_FILE)), None
+        )
+        aside_items = (aside.get("outbounds") if isinstance(aside, dict) else None) or []
+    for item in aside_items:
         tag = dov._clean_tag(item.get("tag")) if isinstance(item, dict) else ""
         if tag and tag not in known:
             known.add(tag)
@@ -172,7 +179,7 @@ def _predict_paused(ui_state_dir: str, xray_configs_dir: str, view: Dict[str, An
         subs._effective_subscription_routing_mode(ui_state_dir) == subs.ROUTING_MODE_SUBSCRIPTION_ONLY
     )
     if subscription_only and isinstance(baseline, dict) and baseline.get("exists"):
-        # This mode is undone by writing the remembered routing back whole.
+        # Entered on an older version: undone by writing the remembered routing back whole.
         before = subs._load_jsonc_text(str(baseline.get("text") or "")) or {}
         before_model = before.get("routing") if isinstance(before.get("routing"), dict) else {}
         clone = dov._find_managed_clone(view["routing"])
@@ -180,8 +187,18 @@ def _predict_paused(ui_state_dir: str, xray_configs_dir: str, view: Dict[str, An
         if clone:
             balancers.append(clone)
     else:
-        # Otherwise the panel's own pool goes away once only the owner's
-        # preserved server would be left in it.
+        # What the mode took from the owner's balancers comes back from the
+        # journal; the subscriptions' own terms leave with the subscriptions.
+        balancers = copy.deepcopy(balancers)
+        forecast = copy.deepcopy(journal)
+        touched = set((forecast.get("selectors") or {}).keys())
+        displacement.return_balancers(forecast, balancers)
+        displacement.return_selectors(forecast, balancers)
+        for item in balancers:
+            if dov._clean_tag(item.get("tag")) in touched:
+                item["selector"] = [value for value in item.get("selector") or [] if value not in terms]
+        # The panel's own pool goes away once only the owner's preserved
+        # server would be left in it.
         pool_tag = subs._choose_auto_balancer_tag(model)
         preserved = set(subs._preserved_balancer_tags(xray_configs_dir))
         kept = []

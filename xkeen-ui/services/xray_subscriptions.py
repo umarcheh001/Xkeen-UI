@@ -28,6 +28,7 @@ from typing import Any, Callable, Dict, Iterable, List, Tuple
 from urllib.parse import parse_qs, unquote, urlparse
 
 from services import happ_links, happ_payloads
+from services import xray_subscription_displacement as displacement
 from services import xray_transactions
 from services.io.atomic import _atomic_write_json, _atomic_write_text
 from services.subscription_schedule import plan_alignment
@@ -62,6 +63,7 @@ from utils.fs import load_text
 STATE_VERSION = 1
 STATE_FILENAME = "xray_subscriptions.json"
 MANAGED_BASELINES_KEY = "managed_baselines"
+DISPLACED_KEY = "displaced"
 MANAGED_BASELINE_ROUTING_KEY = "routing"
 MANAGED_BASELINE_OBSERVATORY_KEY = "observatory"
 MANAGED_BASELINE_OUTBOUNDS_KEY = "outbounds"
@@ -881,6 +883,9 @@ def _normalize_state(obj: Any) -> Dict[str, Any]:
     baselines = _normalize_managed_baselines(obj.get(MANAGED_BASELINES_KEY))
     if baselines:
         state[MANAGED_BASELINES_KEY] = baselines
+    displaced = displacement.normalize(obj.get(DISPLACED_KEY))
+    if displaced:
+        state[DISPLACED_KEY] = displaced
     return state
 
 
@@ -1183,7 +1188,10 @@ def _delete_subscription_guarded(
         "baseline_restored": restored_baseline,
         "snapshots_removed": snapshots_removed,
         "restarted": restarted,
-        "warning": preflight_warning,
+        "warning": " ".join(
+            part for part in (displaced_skipped_warning(rebuild_stats.get("skipped")), preflight_warning) if part
+        ),
+        "skipped": list(rebuild_stats.get("skipped") or []),
     }
 
 
@@ -3658,43 +3666,102 @@ def _observatory_kind_of(obj: Any) -> str:
 
 
 def _undo_observatory_conversion(
-    ui_state_dir: str,
-    *,
     xray_configs_dir: str,
+    journal: Dict[str, Any],
+    *,
     snapshot: SnapshotCallback | None = None,
 ) -> bool:
-    """Give the owner's observatory file back once no subscription needs it.
+    """Give the owner's observatory section back once no subscription needs it.
 
     While a subscription is active the panel may turn the owner's plain section
     into a burst one to match the balancer strategies.  Removing tags cannot
-    undo that, so when the last subscription leaves, the file captured before
-    the first subscription is written back whole -- but only over a conversion
+    undo that, so the section is remembered in the journal when it is converted
+    and put back when the last subscription leaves -- but only over a conversion
     the panel made itself.  It is recognised by its ``pingConfig``: exactly what
-    the panel writes when it converts that captured section.  Anything else is
+    the panel writes when it converts that remembered section.  Anything else is
     the owner's: a burst they uploaded meanwhile, a file of the same kind, a
     section that now lives in another file -- all of it stays as it is.
+
+    Only the kind goes back.  The selectors stay as they are now: by this point
+    the panel's own tags are already subtracted, and what the owner added to
+    the list meanwhile is theirs to keep.
     """
-    with _STATE_LOCK:
-        state = load_subscription_state(ui_state_dir)
-        baselines = _normalize_managed_baselines(state.get(MANAGED_BASELINES_KEY))
-    baseline = baselines.get(MANAGED_BASELINE_OBSERVATORY_KEY) if baselines else None
-    if not isinstance(baseline, dict) or not baseline.get("exists"):
+    remembered = displacement.plain_observatory(journal)
+    if remembered is None:
         return False
-    before = _load_jsonc_text(str(baseline.get("text") or ""))
-    if _observatory_kind_of(before) != KIND_PLAIN or KIND_BURST in before:
-        return False
-    path = _config_fragment_path(xray_configs_dir, baseline.get("path") or OBSERVATORY_FILE)
+    displacement.forget_plain_observatory(journal)
+    path = _config_fragment_path(xray_configs_dir, remembered["file"] or OBSERVATORY_FILE)
     current = read_fragment(path)
     if not isinstance(current, dict) or KIND_PLAIN in current:
         return False
     section = current.get(KIND_BURST)
     if not isinstance(section, dict):
         return False
-    if section.get("pingConfig") != burst_from_plain(before[KIND_PLAIN], DEFAULT_PROBE_URL)["pingConfig"]:
+    if section.get("pingConfig") != burst_from_plain(remembered["section"], DEFAULT_PROBE_URL)["pingConfig"]:
         return False
-    return _restore_managed_file_baseline(
-        xray_configs_dir, baseline, default_name=OBSERVATORY_FILE, snapshot=snapshot
+    plain = copy.deepcopy(remembered["section"])
+    if "subjectSelector" in section:
+        plain["subjectSelector"] = copy.deepcopy(section["subjectSelector"])
+    else:
+        plain.pop("subjectSelector", None)
+    target_obj = replace_section(current, KIND_PLAIN, plain)
+    target_obj.pop(KIND_BURST, None)
+    changed = bool(
+        _write_jsonc_sidecar_if_changed(path, target_obj, header="", snapshot=snapshot, preserve_existing_comments=True)
     )
+    return bool(_write_json_if_changed(path, target_obj, snapshot=snapshot) or changed)
+
+
+def _load_displaced(ui_state_dir: str) -> Dict[str, Any]:
+    return displacement.normalize(load_subscription_state(ui_state_dir).get(DISPLACED_KEY))
+
+
+def _store_displaced(ui_state_dir: str, journal: Dict[str, Any]) -> None:
+    clean = displacement.normalize(journal)
+    with _STATE_LOCK:
+        state = load_subscription_state(ui_state_dir)
+        if displacement.normalize(state.get(DISPLACED_KEY)) == clean:
+            return
+        if clean:
+            state[DISPLACED_KEY] = clean
+        else:
+            state.pop(DISPLACED_KEY, None)
+        _write_state(ui_state_dir, state)
+
+
+def _seed_journal_from_legacy_baselines(journal: Dict[str, Any], baselines: Dict[str, Dict[str, Any]]) -> None:
+    """Перенести из копий старой версии единственное, что из них ещё нужно.
+
+    Вне «Только подписка» старая версия брала из запомненного текста только
+    одно: обычную секцию обсерватории, которую сама перевела в burst.
+    """
+    baseline = baselines.get(MANAGED_BASELINE_OBSERVATORY_KEY)
+    if not isinstance(baseline, dict) or not baseline.get("exists"):
+        return
+    try:
+        before = _load_jsonc_text(str(baseline.get("text") or ""))
+    except Exception:
+        return
+    if _observatory_kind_of(before) != KIND_PLAIN or KIND_BURST in before:
+        return
+    displacement.remember_plain_observatory(
+        journal, os.path.basename(str(baseline.get("path") or "")) or OBSERVATORY_FILE, before[KIND_PLAIN]
+    )
+
+
+def displaced_skipped_warning(skipped: Any) -> str:
+    """Одной строкой для окна: что не вернули, потому что владелец менял сам."""
+    kinds = {"rule": "правило", "balancer": "балансировщик", "outbound": "сервер", "selector": "селектор"}
+    names: List[str] = []
+    for item in skipped if isinstance(skipped, list) else []:
+        if not isinstance(item, dict):
+            continue
+        label = f"{kinds.get(str(item.get('kind') or ''), 'объект')} «{item.get('name') or ''}»"
+        if label not in names:
+            names.append(label)
+    if not names:
+        return ""
+    return "Не возвращено на прежнее место, потому что изменено вручную: " + ", ".join(names) + "."
 
 
 def _clear_subscription_managed_baselines(ui_state_dir: str) -> bool:
@@ -3858,7 +3925,41 @@ def _semantic_comment_key(path: str, root_obj: Any) -> str:
         if balancer_key:
             suffix = "/" + "/".join(parts[3:]) if len(parts) > 3 else ""
             return "/routing/balancers/" + balancer_key + suffix
+    if len(parts) >= 2 and parts[0] == "outbounds":
+        # A comment belongs to the server it is written above, not to its place
+        # in the list: taking the first server out must not hand its comment to
+        # the next one.
+        try:
+            idx = int(parts[1])
+        except Exception:
+            idx = -1
+        outbounds = (root_obj or {}).get("outbounds") if isinstance(root_obj, dict) else []
+        outbound = outbounds[idx] if isinstance(outbounds, list) and 0 <= idx < len(outbounds) else None
+        tag = str(outbound.get("tag") or "").strip() if isinstance(outbound, dict) else ""
+        if tag:
+            suffix = "/" + "/".join(parts[2:]) if len(parts) > 2 else ""
+            return "/outbounds/outbound:" + tag + suffix
     return str(path or "")
+
+
+_DISPLACEABLE_COMMENT_PREFIXES = ("/outbounds/outbound:", "/routing/rules/", "/routing/balancers/")
+
+
+def _comment_keys_of(obj: Any) -> set[str]:
+    """Every place in ``obj`` a comment could be attached to."""
+    keys: set[str] = set()
+
+    def walk(value: Any, path: str) -> None:
+        keys.add(_semantic_comment_key(path, obj))
+        if isinstance(value, dict):
+            for key, child in value.items():
+                walk(child, _json_pointer_join(path, str(key)))
+        elif isinstance(value, list):
+            for idx, child in enumerate(value):
+                walk(child, _json_pointer_join(path, str(idx)))
+
+    walk(obj, "")
+    return keys
 
 
 def _collect_jsonc_comments_by_semantic_key(text: str, root_obj: Any, *, header: str = "") -> Dict[str, List[str]]:
@@ -4088,6 +4189,8 @@ def _write_jsonc_sidecar_if_changed(
     snapshot: SnapshotCallback | None = None,
     preserve_existing_comments: bool = False,
     drop_header: str = "",
+    stash_comments: Dict[str, List[str]] | None = None,
+    extra_comments: Dict[str, List[str]] | None = None,
 ) -> bool:
     ensure_xray_jsonc_dir()
     jsonc = jsonc_path_for(main_path)
@@ -4115,6 +4218,21 @@ def _write_jsonc_sidecar_if_changed(
                 old_obj if old_obj is not None else obj,
                 header=header or drop_header,
             )
+            for key, lines in (extra_comments or {}).items():
+                # Coming back with the object they were written above.  What
+                # the file says now wins: the owner may have commented it anew.
+                if key not in comments:
+                    comments[key] = list(lines)
+            if stash_comments is not None:
+                # The object a comment was written above has just been taken
+                # out.  Left alone, the comment would be dumped at the top of
+                # the file and stay there after the object returns.
+                live = _comment_keys_of(obj)
+                for key in [key for key in comments if key.startswith(_DISPLACEABLE_COMMENT_PREFIXES)]:
+                    if key in live:
+                        continue
+                    bucket = stash_comments.setdefault(key, [])
+                    bucket.extend(line for line in comments.pop(key) if line not in bucket)
             text = _render_jsonc_with_comments(obj, comments, header=header)
         else:
             text = str(header or "")
@@ -4732,11 +4850,13 @@ def _subscription_only_retarget_proxy_rules(
     routing: Dict[str, Any],
     *,
     balancer_tag: str,
+    journal: Dict[str, Any] | None = None,
 ) -> Dict[str, int | bool]:
     rules = routing.get("rules")
     if not isinstance(rules, list):
         return {"changed": False, "retargeted": 0}
 
+    journal = journal if journal is not None else {}
     target_balancer = str(balancer_tag or AUTO_BALANCER_TAG).strip() or AUTO_BALANCER_TAG
     terminal_targets = {"direct", "block", "blackhole", "reject", "dns"}
     changed = False
@@ -4751,19 +4871,13 @@ def _subscription_only_retarget_proxy_rules(
         if outbound_tag:
             if outbound_tag.lower() in terminal_targets:
                 continue
-            before = copy.deepcopy(rule)
-            rule.pop("outboundTag", None)
-            rule["balancerTag"] = target_balancer
-            if before != rule:
-                changed = True
-                retargeted += 1
+        elif not balancer or balancer == target_balancer:
             continue
-        if balancer and balancer != target_balancer:
-            before = copy.deepcopy(rule)
-            rule["balancerTag"] = target_balancer
-            if before != rule:
-                changed = True
-                retargeted += 1
+        # Куда правило вело, записывается в журнал: при выходе из режима оно
+        # вернётся туда же, а не к тексту файла многомесячной давности.
+        if displacement.retarget_rule(journal, rules, rule, target_balancer):
+            changed = True
+            retargeted += 1
     return {"changed": changed, "retargeted": retargeted}
 
 
@@ -4783,12 +4897,14 @@ def _subscription_only_remove_unused_manual_balancers(
     *,
     balancer_tag: str,
     manual_tags: Iterable[Any],
+    journal: Dict[str, Any] | None = None,
 ) -> Dict[str, int | bool]:
     balancers = routing.get("balancers")
     rules = routing.get("rules")
     if not isinstance(balancers, list) or not isinstance(rules, list):
         return {"changed": False, "removed": 0}
 
+    journal = journal if journal is not None else {}
     target_balancer = str(balancer_tag or AUTO_BALANCER_TAG).strip() or AUTO_BALANCER_TAG
     manual = _clean_tags_list(manual_tags)
 
@@ -4797,12 +4913,9 @@ def _subscription_only_remove_unused_manual_balancers(
         for rule in rules
         if isinstance(rule, dict) and str(rule.get("balancerTag") or "").strip()
     }
-    changed = False
-    removed = 0
-    kept: List[Any] = []
-    for balancer in balancers:
+    doomed: List[int] = []
+    for index, balancer in enumerate(balancers):
         if not isinstance(balancer, dict):
-            kept.append(balancer)
             continue
         tag = str(balancer.get("tag") or "").strip()
         selector = _clean_tags_list(balancer.get("selector") if isinstance(balancer.get("selector"), list) else [])
@@ -4812,14 +4925,12 @@ def _subscription_only_remove_unused_manual_balancers(
             and tag not in referenced
             and (not manual or any(_selector_term_matches_any_tag(term, manual) for term in selector))
         ):
-            changed = True
-            removed += 1
-            continue
-        kept.append(balancer)
+            doomed.append(index)
 
-    if changed:
-        routing["balancers"] = kept
-    return {"changed": changed, "removed": removed}
+    # С конца, чтобы запомненные места остались местами в исходном списке.
+    for index in reversed(doomed):
+        displacement.remove_balancer(journal, balancers, index)
+    return {"changed": bool(doomed), "removed": len(doomed)}
 
 
 def _sync_subscription_only_base_outbounds(
@@ -4827,56 +4938,70 @@ def _sync_subscription_only_base_outbounds(
     xray_configs_dir: str,
     enabled: bool,
     snapshot: SnapshotCallback | None = None,
-) -> Dict[str, int | bool]:
-    path = _config_fragment_path(xray_configs_dir, OUTBOUNDS_FILE)
-    if not os.path.exists(path):
-        return {"changed": False, "removed": 0}
+    journal: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    """Убрать серверы владельца на время «Только подписка» и вернуть после.
 
-    try:
-        original_text = load_text(path, default="")
-    except Exception:
-        original_text = ""
+    Убранные объекты уходят в журнал вместе со своими местами.  Обратно
+    возвращаются только они: всё, что владелец поправил в файле за это
+    время, остаётся как есть.
+    """
+    path = _config_fragment_path(xray_configs_dir, OUTBOUNDS_FILE)
+    idle: Dict[str, Any] = {"changed": False, "removed": 0, "returned": 0, "skipped": []}
+    if not os.path.exists(path):
+        return idle
     obj = _read_json_file(path, None)
     if not isinstance(obj, dict) or not isinstance(obj.get("outbounds"), list):
-        return {"changed": False, "removed": 0}
+        return idle
 
-    outbounds = obj.get("outbounds")
-    next_outbounds: List[Any] = []
-    removed = 0
-    for item in outbounds:
-        if not enabled or not isinstance(item, dict):
-            next_outbounds.append(item)
-            continue
-        protocol = str(item.get("protocol") or "").strip().lower()
-        tag = str(item.get("tag") or "").strip()
-        if (
-            tag
-            and tag.lower() not in RESERVED_TAGS
-            and (not protocol or protocol not in IGNORED_OUTBOUND_PROTOCOLS)
-        ):
-            removed += 1
-            continue
-        next_outbounds.append(item)
-
-    if not enabled or removed <= 0:
-        return {"changed": False, "removed": 0}
-
-    disabled_changed = False
-    disabled_path = _disabled_config_path(path)
-    if original_text:
-        disabled_changed = _write_text_if_changed(disabled_path, original_text, snapshot=snapshot)
-
+    journal = journal if journal is not None else {}
     next_obj = copy.deepcopy(obj)
-    next_obj["outbounds"] = next_outbounds
+    outbounds = next_obj["outbounds"]
+    removed = 0
+    returned = 0
+    skipped: List[Dict[str, str]] = []
+    if enabled:
+        doomed: List[int] = []
+        for index, item in enumerate(outbounds):
+            if not isinstance(item, dict):
+                continue
+            protocol = str(item.get("protocol") or "").strip().lower()
+            tag = str(item.get("tag") or "").strip()
+            if (
+                tag
+                and tag.lower() not in RESERVED_TAGS
+                and (not protocol or protocol not in IGNORED_OUTBOUND_PROTOCOLS)
+            ):
+                doomed.append(index)
+        for index in reversed(doomed):
+            displacement.remove_outbound(journal, outbounds, index)
+        removed = len(doomed)
+    elif displacement.has_outbounds(journal):
+        before = len(outbounds)
+        skipped = displacement.return_outbounds(journal, outbounds)
+        returned = len(outbounds) - before
+
+    if next_obj == obj:
+        return {"changed": False, "removed": 0, "returned": 0, "skipped": skipped}
+
+    file_name = os.path.basename(path)
     raw_changed = _write_jsonc_sidecar_if_changed(
         path,
         next_obj,
-        header="// Generated by XKeen UI subscriptions (subscription-only base outbounds)",
+        header="// Generated by XKeen UI subscriptions (subscription-only base outbounds)" if enabled else "",
+        drop_header="// Generated by XKeen UI subscriptions (subscription-only base outbounds)",
         snapshot=snapshot,
         preserve_existing_comments=True,
+        stash_comments=displacement.comment_stash(journal, file_name) if enabled else None,
+        extra_comments=None if enabled else displacement.take_comments(journal, file_name),
     )
     main_changed = _write_json_if_changed(path, next_obj, snapshot=snapshot)
-    return {"changed": bool(disabled_changed or main_changed or raw_changed), "removed": removed}
+    return {
+        "changed": bool(main_changed or raw_changed),
+        "removed": removed,
+        "returned": returned,
+        "skipped": skipped,
+    }
 
 
 def _effective_subscription_routing_mode(ui_state_dir: str) -> str:
@@ -5039,6 +5164,7 @@ def _ensure_default_balancer_rule(
     *,
     balancer_tag: str,
     subscription_only: bool = False,
+    journal: Dict[str, Any] | None = None,
 ) -> bool:
     rules = routing.get("rules")
     if not isinstance(rules, list):
@@ -5049,6 +5175,9 @@ def _ensure_default_balancer_rule(
     if subscription_only:
         catch_all_idx = _find_subscription_only_catch_all_rule_idx(rules)
         if catch_all_idx >= 0:
+            if journal is not None:
+                # Правило владельца сейчас станет служебным: запомнить, каким было.
+                displacement.take_over_rule(journal, rules[catch_all_idx], catch_all_idx, AUTO_BALANCER_RULE_TAG)
             if candidate_idx >= 0 and candidate_idx != catch_all_idx:
                 rules.pop(candidate_idx)
                 if candidate_idx < catch_all_idx:
@@ -5374,9 +5503,14 @@ def sync_subscription_runtime_plan_delta(
     previous_plan: Dict[str, Any] | None = None,
     next_plan: Dict[str, Any] | None = None,
     snapshot: SnapshotCallback | None = None,
+    journal: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     prev = previous_plan if isinstance(previous_plan, dict) else {}
     nxt = next_plan if isinstance(next_plan, dict) else {}
+    journal = journal if journal is not None else {}
+    not_returned: List[Dict[str, str]] = []
+    returned_subjects: List[str] = []
+    early_outbounds_stats: Dict[str, Any] = {}
 
     prev_observatory_terms = _clean_tags_list(prev.get("observatory_terms") or [])
     next_observatory_terms = _clean_tags_list(nxt.get("observatory_terms") or [])
@@ -5399,6 +5533,7 @@ def sync_subscription_runtime_plan_delta(
 
     next_subscription_only = bool(nxt.get("subscription_only")) and bool(next_auto_terms)
     entering_subscription_only = next_subscription_only and not bool(prev.get("subscription_only"))
+
     subscription_only_excluded_tags = (
         _subscription_only_excluded_runtime_tags(xray_configs_dir, next_auto_terms)
         if next_subscription_only
@@ -5411,6 +5546,34 @@ def sync_subscription_runtime_plan_delta(
     selector: List[str] = []
     balancer_tag = _choose_auto_balancer_tag(routing)
     applied_manual_tags: List[str] = []
+
+    # Тег пула выбран выше, пока служебное правило ещё на месте и по нему
+    # пул можно узнать: возврат ниже может поставить на его место правило
+    # владельца.
+    if not next_subscription_only and not displacement.is_empty(journal):
+        # Режим «Только подписка» кончился: всё, что он вытеснил у владельца,
+        # возвращается на место раньше, чем обычный проход начнёт считать
+        # селекторы и правила -- он должен увидеть файл уже со своим хозяином.
+        if not isinstance(routing.get("rules"), list):
+            routing["rules"] = []
+        if not isinstance(routing.get("balancers"), list):
+            routing["balancers"] = []
+        before_return = copy.deepcopy(routing)
+        not_returned += displacement.return_taken_rules(journal, routing["rules"], AUTO_BALANCER_RULE_TAG)
+        not_returned += displacement.return_rules(journal, routing["rules"])
+        not_returned += displacement.return_balancers(journal, routing["balancers"])
+        not_returned += displacement.return_selectors(journal, routing["balancers"])
+        changed = bool(changed or before_return != routing)
+        returned_subjects = displacement.take_subjects(journal)
+        # Серверы владельца -- тоже сейчас: от того, есть ли они в конфиге,
+        # зависит, какие теги проход ниже оставит в селекторе пула.
+        early_outbounds_stats = _sync_subscription_only_base_outbounds(
+            xray_configs_dir=xray_configs_dir,
+            enabled=False,
+            snapshot=snapshot,
+            journal=journal,
+        )
+        preserved_tags = _preserved_balancer_tags(xray_configs_dir)
 
     balancer = _find_balancer_by_tag(routing.get("balancers", []), balancer_tag)
     current_selector = _clean_tags_list(
@@ -5428,6 +5591,13 @@ def sync_subscription_runtime_plan_delta(
             + scenario_owned_selector_terms
             + (subscription_only_excluded_tags if next_subscription_only else [])
         )
+        if next_subscription_only and isinstance(balancer, dict):
+            panel_terms = set(
+                prev_auto_terms + scenario_skipped_auto_terms + scenario_owned_selector_terms + auto_terms_for_pool
+            )
+            displacement.displace_selector_terms(
+                journal, balancer_tag, [term for term in current_selector if term not in panel_terms]
+            )
         selector = [] if next_subscription_only else _subtract_selector_terms(current_selector, remove_terms)
         selector = _merge_selector_terms(selector, auto_terms_for_pool)
         if not next_subscription_only:
@@ -5445,6 +5615,7 @@ def sync_subscription_runtime_plan_delta(
                 routing,
                 balancer_tag=balancer_tag,
                 subscription_only=next_subscription_only,
+                journal=journal,
             )
             or changed
         )
@@ -5467,6 +5638,15 @@ def sync_subscription_runtime_plan_delta(
     manual_tags = sorted(set(prev_manual_targets) | set(next_manual_targets))
     for tag in manual_tags:
         if selected_manual_subscription_only and (next_manual_targets.get(tag) or []):
+            manual_balancer = _find_balancer_by_tag(routing.get("balancers", []), tag)
+            if isinstance(manual_balancer, dict):
+                panel_terms = set(prev_manual_targets.get(tag) or []) | set(next_manual_targets.get(tag) or [])
+                own_terms = _clean_tags_list(
+                    manual_balancer.get("selector") if isinstance(manual_balancer.get("selector"), list) else []
+                )
+                displacement.displace_selector_terms(
+                    journal, tag, [term for term in own_terms if term not in panel_terms]
+                )
             manual_changed = _replace_existing_balancer_selector(
                 routing,
                 balancer_tag=tag,
@@ -5503,7 +5683,7 @@ def sync_subscription_runtime_plan_delta(
         enabled=bool(auto_terms_for_pool) and strict_enabled,
     )
     retarget_stats = (
-        _subscription_only_retarget_proxy_rules(routing, balancer_tag=balancer_tag)
+        _subscription_only_retarget_proxy_rules(routing, balancer_tag=balancer_tag, journal=journal)
         if next_subscription_only and not selected_manual_subscription_only
         else {"changed": False, "retargeted": 0}
     )
@@ -5512,6 +5692,7 @@ def sync_subscription_runtime_plan_delta(
             routing,
             balancer_tag=balancer_tag,
             manual_tags=subscription_only_excluded_tags,
+            journal=journal,
         )
         if next_subscription_only and not selected_manual_subscription_only
         else {"changed": False, "removed": 0}
@@ -5520,7 +5701,11 @@ def sync_subscription_runtime_plan_delta(
         xray_configs_dir=xray_configs_dir,
         enabled=next_subscription_only,
         snapshot=snapshot,
+        journal=journal,
     )
+    if early_outbounds_stats.get("changed") or early_outbounds_stats.get("skipped"):
+        outbounds_stats = early_outbounds_stats
+    not_returned += list(outbounds_stats.get("skipped") or [])
     changed = bool(changed or retarget_stats.get("changed"))
     changed = bool(changed or prune_stats.get("changed"))
     changed = bool(changed or migrate_stats.get("changed"))
@@ -5533,12 +5718,15 @@ def sync_subscription_runtime_plan_delta(
             else ""
         )
         _prune_empty_routing_collections(routing)
+        routing_name = os.path.basename(routing_path)
         raw_changed = _write_jsonc_sidecar_if_changed(
             routing_path,
             cfg,
             header=routing_header,
             snapshot=snapshot,
             preserve_existing_comments=True,
+            stash_comments=displacement.comment_stash(journal, routing_name) if next_subscription_only else None,
+            extra_comments=None if next_subscription_only else displacement.take_comments(journal, routing_name),
         )
         main_changed = _write_json_if_changed(routing_path, cfg, snapshot=snapshot)
         routing_changed = bool(main_changed or raw_changed)
@@ -5561,9 +5749,12 @@ def sync_subscription_runtime_plan_delta(
         managed_active=next_has_runtime_targets,
         snapshot=snapshot,
         replace_subjects=entering_subscription_only and bool(next_observatory_terms),
+        journal=journal,
+        restore_subjects=returned_subjects,
     )
 
     return {
+        "skipped": not_returned,
         "baseline_restored": False,
         "observatory_changed": bool(observatory_changed),
         "routing_changed": bool(routing_changed),
@@ -5753,10 +5944,22 @@ def _rebuild_subscription_runtime(
     next_plan = _build_runtime_sync_plan(next_state)
     prev_subscription_only = bool(prev_plan.get("subscription_only"))
     next_subscription_only = bool(next_plan.get("subscription_only"))
+    # Копии файлов целиком остались только у тех, кто вошёл в «Только
+    # подписка» на старой версии: журнала у них нет, и выйти из режима они
+    # могут лишь старым путём.  Всем остальным копии больше не нужны.
+    legacy_baselines = _normalize_managed_baselines(
+        next_state.get(MANAGED_BASELINES_KEY) or load_subscription_state(ui_state_dir).get(MANAGED_BASELINES_KEY)
+    )
+    journal = _load_displaced(ui_state_dir)
+    legacy_mode = bool(legacy_baselines and prev_subscription_only)
+    if legacy_baselines and not legacy_mode:
+        _seed_journal_from_legacy_baselines(journal, legacy_baselines)
+        _clear_subscription_managed_baselines(ui_state_dir)
+        _remove_file_if_exists(_disabled_config_path(_config_fragment_path(xray_configs_dir, OUTBOUNDS_FILE)))
     should_restore_baseline = bool(
-        rebuild_from_baseline
+        legacy_mode
+        and rebuild_from_baseline
         and (prev_subscription_only != next_subscription_only)
-        and _normalize_managed_baselines(next_state.get(MANAGED_BASELINES_KEY))
     )
     if should_restore_baseline:
         restored = _restore_subscription_managed_baselines(
@@ -5764,8 +5967,14 @@ def _rebuild_subscription_runtime(
             xray_configs_dir=xray_configs_dir,
             snapshot=snapshot,
         )
+        # Старый путь вернул файлы целиком; всё, что успел записать журнал,
+        # относится к тексту, которого больше нет.
+        _clear_subscription_managed_baselines(ui_state_dir)
+        journal = {}
+        _store_displaced(ui_state_dir, journal)
         if not next_plan.get("has_runtime_targets"):
             return {
+                "skipped": [],
                 "baseline_restored": bool(restored.get("restored")),
                 "observatory_changed": bool(restored.get("observatory_changed")),
                 "routing_changed": bool(restored.get("routing_changed")),
@@ -5784,7 +5993,9 @@ def _rebuild_subscription_runtime(
             previous_plan=empty_plan,
             next_plan=next_plan,
             snapshot=snapshot,
+            journal=journal,
         )
+        _store_displaced(ui_state_dir, journal)
         rebuilt["baseline_restored"] = bool(restored.get("restored"))
         rebuilt["observatory_changed"] = bool(
             restored.get("observatory_changed") or rebuilt.get("observatory_changed")
@@ -5797,12 +6008,12 @@ def _rebuild_subscription_runtime(
         previous_plan=prev_plan,
         next_plan=next_plan,
         snapshot=snapshot,
+        journal=journal,
     )
     if not result.get("has_runtime_targets"):
-        # Callers drop the baselines right after this returns, so the kind has
-        # to go back now or never.
-        undone = _undo_observatory_conversion(ui_state_dir, xray_configs_dir=xray_configs_dir, snapshot=snapshot)
+        undone = _undo_observatory_conversion(xray_configs_dir, journal, snapshot=snapshot)
         result["observatory_changed"] = bool(result.get("observatory_changed") or undone)
+    _store_displaced(ui_state_dir, journal)
     return result
 
 
@@ -5821,6 +6032,8 @@ def _apply_observatory_plan(
     managed_active: bool,
     convert_kind: bool,
     snapshot: SnapshotCallback | None,
+    journal: Dict[str, Any] | None = None,
+    restore: List[str] | None = None,
 ) -> bool:
     configs_dir = str(xray_configs_dir or "")
     # A broken 07_observatory.json must still stop the caller, as it did before.
@@ -5857,6 +6070,9 @@ def _apply_observatory_plan(
             for item in own_subjects
             if any(tag.startswith(item) for tag in add) and not any(other.startswith(item) for other in remove)
         ]
+        if journal is not None:
+            # То, что режим убрал из проб владельца, вернётся при выходе из него.
+            displacement.displace_subjects(journal, [item for item in own_subjects if item not in subjects])
     else:
         subjects = [item for item in own_subjects if item not in remove]
         for drop in drops:
@@ -5868,6 +6084,11 @@ def _apply_observatory_plan(
         if covers(subjects, tag):
             continue
         subjects.append(tag)
+    for item in restore or []:
+        # Селекторы владельца, вытесненные режимом «Только подписка».
+        if item in remove or covers(subjects, item):
+            continue
+        subjects.append(item)
     if subjects != own_subjects:
         # Otherwise the key stays as the owner wrote it: absent, or with repeats.
         section["subjectSelector"] = subjects
@@ -5882,6 +6103,9 @@ def _apply_observatory_plan(
             # An empty section is a placeholder, not a choice: finish it.
             _fill_plain_observatory_defaults(section)
         if kind == KIND_PLAIN and want_burst and convert_kind:
+            if journal is not None:
+                # Убрать теги мало, чтобы вернуть секцию владельца: запомнить её.
+                displacement.remember_plain_observatory(journal, target_file, keep["section"])
             section = burst_from_plain(section, DEFAULT_PROBE_URL)
             kind = KIND_BURST
 
@@ -5931,10 +6155,13 @@ def sync_observatory_subjects(
     managed_active: bool | None = None,
     snapshot: SnapshotCallback | None = None,
     replace_subjects: bool = False,
+    journal: Dict[str, Any] | None = None,
+    restore_subjects: Iterable[str] | None = None,
 ) -> bool:
     add = [str(t or "").strip() for t in add_tags if str(t or "").strip()]
     remove = {str(t or "").strip() for t in (remove_tags or []) if str(t or "").strip()}
-    if not add and not remove and not replace_subjects:
+    restore = [str(t or "").strip() for t in (restore_subjects or []) if str(t or "").strip()]
+    if not add and not remove and not replace_subjects and not restore:
         return False
     return _apply_observatory_plan(
         xray_configs_dir,
@@ -5946,6 +6173,8 @@ def sync_observatory_subjects(
         # owner's original file is _undo_observatory_conversion's job.
         convert_kind=bool(add),
         snapshot=snapshot,
+        journal=journal,
+        restore=restore,
     )
 
 
@@ -6300,7 +6529,6 @@ def refresh_subscription(
             }
         )
 
-        _ensure_subscription_managed_baselines(ui_state_dir, xray_configs_dir)
         state_for_runtime = load_subscription_state(ui_state_dir)
         previous_state_for_runtime = _normalize_state(copy.deepcopy(state_for_runtime))
         subs_for_runtime = state_for_runtime.get("subscriptions")
@@ -6333,6 +6561,10 @@ def refresh_subscription(
         if not rebuild_stats.get("has_runtime_targets"):
             _clear_subscription_managed_baselines(ui_state_dir)
 
+        skipped_warning = displaced_skipped_warning(rebuild_stats.get("skipped"))
+        if skipped_warning:
+            warnings = warnings + [skipped_warning]
+            sub["last_warnings"] = warnings
         if changed or observatory_changed or routing_changed or outbounds_changed:
             preflight_warning = _confirm_live_config(guard, xray_configs_dir)
             if preflight_warning:
@@ -6514,6 +6746,7 @@ def pause_subscriptions(
     outbounds_changed = bool(rebuild_stats.get("outbounds_changed"))
     return {
         "paused": [str(sub.get("id") or "") for sub in targets],
+        "skipped": list(rebuild_stats.get("skipped") or []),
         "changed": bool(files_moved or observatory_changed or routing_changed or outbounds_changed),
         "observatory_changed": observatory_changed,
         "routing_changed": routing_changed,
@@ -6552,9 +6785,6 @@ def resume_subscriptions(
         output_path = _subscription_output_path(xray_configs_dir, sub)
         files_moved = bool(_move_config_file(_paused_config_path(output_path), output_path) or files_moved)
 
-    # The configs are the owner's own right now -- exactly what has to be
-    # remembered before the subscriptions change them again.
-    _ensure_subscription_managed_baselines(ui_state_dir, xray_configs_dir)
     next_state = load_subscription_state(ui_state_dir)
     rebuild_stats = _rebuild_subscription_runtime(
         ui_state_dir,
@@ -6572,6 +6802,7 @@ def resume_subscriptions(
     outbounds_changed = bool(rebuild_stats.get("outbounds_changed"))
     return {
         "resumed": [str(sub.get("id") or "") for sub in targets],
+        "skipped": list(rebuild_stats.get("skipped") or []),
         "changed": bool(files_moved or observatory_changed or routing_changed or outbounds_changed),
         "observatory_changed": observatory_changed,
         "routing_changed": routing_changed,

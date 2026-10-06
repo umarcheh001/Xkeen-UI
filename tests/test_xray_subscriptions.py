@@ -3055,8 +3055,10 @@ def test_refresh_subscription_only_mode_replaces_manual_runtime_and_bypasses_sha
 
     base_outbounds = json.loads((xray_dir / "04_outbounds.json").read_text(encoding="utf-8"))
     assert [item["tag"] for item in base_outbounds["outbounds"]] == ["direct", "block"]
-    disabled_outbounds = json.loads((xray_dir / "04_outbounds.json.disable").read_text(encoding="utf-8"))
-    assert [item["tag"] for item in disabled_outbounds["outbounds"]] == ["manual-vless", "direct", "block"]
+    # Убранный сервер лежит в журнале вытеснения, а не файлом рядом с конфигами.
+    assert not (xray_dir / "04_outbounds.json.disable").exists()
+    displaced = subs.load_subscription_state(str(ui_state_dir))[subs.DISPLACED_KEY]
+    assert [(entry["outbound"]["tag"], entry["index"]) for entry in displaced["outbounds"]] == [("manual-vless", 0)]
 
     rules = routing["routing"]["rules"]
     assert [rule.get("ruleTag") for rule in rules] == [
@@ -3082,7 +3084,8 @@ def test_refresh_subscription_only_mode_replaces_manual_runtime_and_bypasses_sha
         remove_file=True,
         restart_xkeen=None,
     )
-    assert deleted["baseline_restored"] is True
+    assert deleted["skipped"] == []
+    assert subs.DISPLACED_KEY not in subs.load_subscription_state(str(ui_state_dir))
     assert deleted["outbounds_changed"] is True
     restored_outbounds = json.loads((xray_dir / "04_outbounds.json").read_text(encoding="utf-8"))
     assert [item["tag"] for item in restored_outbounds["outbounds"]] == ["manual-vless", "direct", "block"]
@@ -3316,7 +3319,9 @@ def test_refresh_subscription_only_disables_protocol_redacted_manual_pool(tmp_pa
 
     base_outbounds = json.loads((xray_dir / "04_outbounds.json").read_text(encoding="utf-8"))
     assert [item["tag"] for item in base_outbounds["outbounds"]] == ["direct", "block"]
-    assert (xray_dir / "04_outbounds.json.disable").exists()
+    assert not (xray_dir / "04_outbounds.json.disable").exists()
+    displaced = subs.load_subscription_state(str(ui_state_dir))[subs.DISPLACED_KEY]
+    assert len(displaced["outbounds"]) == 2
 
     routing = json.loads((xray_dir / "05_routing.json").read_text(encoding="utf-8"))
     assert [(item["tag"], item["selector"]) for item in routing["routing"]["balancers"]] == [
@@ -4489,7 +4494,8 @@ def test_delete_subscription_only_restores_manual_observatory_selector(tmp_path:
         restart_xkeen=None,
     )
 
-    assert deleted["baseline_restored"] is True
+    assert deleted["skipped"] == []
+    assert subs.DISPLACED_KEY not in subs.load_subscription_state(str(ui_state_dir))
     assert (xray_dir / "05_routing.json").read_text(encoding="utf-8") == routing_before
     assert (xray_dir / "07_observatory.json").read_text(encoding="utf-8") == observatory_before
     state = subs.load_subscription_state(str(ui_state_dir))
@@ -4595,11 +4601,9 @@ def test_refresh_subscription_preserves_cp1251_custom_routing_variant_and_restor
     assert rules[0]["ruleTag"] == "manual_direct_ru"
     assert any(rule.get("ruleTag") == "xk_auto_leastPing" for rule in rules)
 
+    # Копия файла целиком больше не снимается: вычитать свои объекты хватает.
     state = subs.load_subscription_state(str(ui_state_dir))
-    baseline = state[subs.MANAGED_BASELINES_KEY]["routing"]
-    assert baseline["path"] == "05_routing-2.json"
-    assert baseline["exists"] is True
-    assert "пример.рф" in baseline["text"]
+    assert subs.MANAGED_BASELINES_KEY not in state
 
     deleted = subs.delete_subscription(
         str(ui_state_dir),
@@ -4824,7 +4828,7 @@ def test_delete_subscription_rebuilds_runtime_from_baseline_for_remaining_subscr
     assert rules[0]["balancerTag"] == "proxy"
 
     state = subs.load_subscription_state(str(ui_state_dir))
-    assert "managed_baselines" in state
+    assert "managed_baselines" not in state
 
 
 def test_delete_subscription_keeps_unrelated_outbound_fragments(tmp_path: Path, monkeypatch):
