@@ -6,6 +6,8 @@ the detached Stage 8.3 transaction runner.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 
@@ -13,7 +15,14 @@ from services.module_package_contract import detect_platform_architecture
 from services.module_registry import MODULE_IDS, ModuleRegistry
 from services.module_transactions.executor import recover
 from services.module_transactions.launcher import launch, observe_status
-from services.module_transactions.plan import read_installed_modules, read_panel_version
+from services.module_transactions.plan import (
+    OPERATIONS,
+    Plan,
+    build_plan,
+    plan_to_json,
+    read_installed_modules,
+    read_panel_version,
+)
 from services.module_transactions.state import ModuleTransactionError
 
 if TYPE_CHECKING:
@@ -21,6 +30,17 @@ if TYPE_CHECKING:
 
 
 _REPAIR_ONLY_MODULES = frozenset({"tool.editor"})
+_PLAN_BLOCKERS = frozenset(
+    {
+        "module_already_installed",
+        "module_not_installed",
+        "module_dependency_missing",
+        "module_conflict",
+        "module_required_by",
+        "module_engine_active",
+        "module_free_space",
+    }
+)
 
 
 class ModuleLifecycleError(Exception):
@@ -50,6 +70,7 @@ def _domain_status(code: str) -> int:
         return 404
     if code.endswith("_invalid") or code in {
         "module_operation_forbidden",
+        "module_operation_invalid",
         "module_plan_id_invalid",
     }:
         return 400
@@ -81,6 +102,41 @@ def _default_catalog_factory(
         )
 
     return build
+
+
+def _dependency_diff(
+    catalog: Mapping[str, Any],
+    module_id: str,
+    installed: frozenset[str],
+) -> dict[str, list[str]]:
+    entries = {
+        str(item.get("id")): item
+        for item in catalog.get("modules", [])
+        if isinstance(item, Mapping)
+    }
+    entry = entries[module_id]
+    requires = sorted(set(entry.get("requires", ())))
+    return {
+        "requires": requires,
+        "missing": sorted(set(requires) - installed),
+        "conflicts": sorted(set(entry.get("conflicts", ())) & installed),
+        "required_by": sorted(
+            other
+            for other in installed
+            if other != module_id
+            and module_id in entries.get(other, {}).get("requires", ())
+        ),
+    }
+
+
+def _plan_digest(plan: Plan, dependency_diff: Mapping[str, Any]) -> str:
+    canonical = json.dumps(
+        {"plan": plan_to_json(plan), "dependency_diff": dependency_diff},
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
 
 
 class ModuleLifecycleService:
@@ -192,3 +248,130 @@ class ModuleLifecycleService:
             "stale_reason": snapshot.stale_reason,
             "modules": modules,
         }
+
+    @staticmethod
+    def _validate_operation(operation: str, module_id: str) -> tuple[str, str]:
+        normalized_operation = str(operation or "").strip()
+        normalized_module = str(module_id or "").strip()
+        if normalized_operation not in OPERATIONS:
+            raise ModuleLifecycleError(
+                "module_operation_invalid",
+                "operation must be install, repair, or remove",
+                status=400,
+            )
+        if normalized_module not in MODULE_IDS:
+            raise ModuleLifecycleError(
+                "module_not_found",
+                "module does not exist",
+                status=404,
+                module_id=normalized_module,
+            )
+        if normalized_module == "core" or (
+            normalized_module in _REPAIR_ONLY_MODULES
+            and normalized_operation != "repair"
+        ):
+            raise ModuleLifecycleError(
+                "module_operation_forbidden",
+                "this operation is not available for the module",
+                status=400,
+                operation=normalized_operation,
+                module_id=normalized_module,
+            )
+        return normalized_operation, normalized_module
+
+    @staticmethod
+    def _blocked_payload(
+        *,
+        operation: str,
+        module_id: str,
+        version: str,
+        installed: frozenset[str],
+        dependency_diff: Mapping[str, Any],
+        restart_required: bool,
+        error: ModuleTransactionError,
+    ) -> dict[str, Any]:
+        blocker = {"code": error.code, "message": error.message, **error.details}
+        return {
+            "ok": True,
+            "operation": operation,
+            "module_id": module_id,
+            "version": version,
+            "affected_module_ids": [module_id],
+            "files_add": [],
+            "files_remove": [],
+            "required_free_bytes": int(error.details.get("required", 0)),
+            "restart_required": restart_required,
+            "installed_after": sorted(installed),
+            "dependency_diff": dict(dependency_diff),
+            "blockers": [blocker],
+            "applicable": False,
+            "plan_id": None,
+        }
+
+    def _plan_and_payload(
+        self,
+        operation: str,
+        module_id: str,
+    ) -> tuple[Plan | None, dict[str, Any]]:
+        operation, module_id = self._validate_operation(operation, module_id)
+        version, architecture, _client, snapshot = self._release_context()
+        try:
+            installed = read_installed_modules(self.state_dir)
+            entries = {
+                str(item.get("id")): item
+                for item in snapshot.catalog.get("modules", [])
+                if isinstance(item, Mapping)
+            }
+            entry = entries[module_id]
+            dependencies = _dependency_diff(snapshot.catalog, module_id, installed)
+            plan = build_plan(
+                operation,
+                module_id,
+                panel_root=self.panel_root,
+                state_dir=self.state_dir,
+                catalog=snapshot.catalog,
+                architecture=architecture,
+                active_engines=self._active_engines(),
+            )
+        except KeyError as error:
+            raise ModuleLifecycleError(
+                "catalog_module_unknown",
+                "module does not exist in the trusted catalog",
+                status=409,
+                module_id=module_id,
+            ) from error
+        except ModuleTransactionError as error:
+            if error.code in _PLAN_BLOCKERS:
+                return None, self._blocked_payload(
+                    operation=operation,
+                    module_id=module_id,
+                    version=version,
+                    installed=installed,
+                    dependency_diff=dependencies,
+                    restart_required=bool(entry.get("requires_restart", True)),
+                    error=error,
+                )
+            _raise_domain(error)
+
+        encoded = plan_to_json(plan)
+        payload = {
+            "ok": True,
+            "operation": plan.operation,
+            "module_id": plan.module_id,
+            "version": plan.version,
+            "affected_module_ids": [plan.module_id],
+            "files_add": encoded["files_add"],
+            "files_remove": encoded["files_remove"],
+            "required_free_bytes": plan.required_free_bytes,
+            "restart_required": plan.restart_required,
+            "installed_after": encoded["installed_after"],
+            "dependency_diff": dependencies,
+            "blockers": [],
+            "applicable": True,
+            "plan_id": _plan_digest(plan, dependencies),
+        }
+        return plan, payload
+
+    def plan(self, operation: str, module_id: str) -> dict[str, Any]:
+        _plan, payload = self._plan_and_payload(operation, module_id)
+        return payload
