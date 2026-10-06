@@ -36,13 +36,13 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 483,
-      "size_bytes": 6550335,
+      "unit_count": 487,
+      "size_bytes": 6610030,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
-        "backend_service": 68,
-        "backend_test": 210,
+        "backend_service": 69,
+        "backend_test": 213,
         "configuration": 10,
         "frontend_bundle": 9,
         "frontend_entrypoint": 2,
@@ -54,7 +54,7 @@
         "stylesheet": 5,
         "template": 31
       },
-      "route_count": 77,
+      "route_count": 85,
       "background_task_count": 4,
       "ui_surface_count": 35,
       "representative_paths": [
@@ -538,15 +538,15 @@
       "module_id": "core",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/__init__.py",
-      "size_bytes": 19734,
+      "size_bytes": 20991,
       "depends_on": [
+        "tool.terminal",
         "tool.advanced-diagnostics",
         "tool.files",
         "engine.xray",
         "engine.mihomo",
         "integration.happ",
-        "tool.backups",
-        "tool.terminal"
+        "tool.backups"
       ],
       "starts_background_task": false,
       "background_markers": [],
@@ -561,7 +561,8 @@
         "XKEEN_REMOTEFM_MAX_SESSIONS",
         "XKEEN_REMOTEFM_MAX_UPLOAD_MB",
         "XKEEN_REMOTEFM_SESSION_TTL",
-        "XKEEN_REMOTEFM_TMP_DIR"
+        "XKEEN_REMOTEFM_TMP_DIR",
+        "XKEEN_UI_PORT"
       ],
       "removable": false
     },
@@ -818,7 +819,7 @@
       "module_id": "core",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/modules.py",
-      "size_bytes": 10282,
+      "size_bytes": 14998,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -832,6 +833,21 @@
         {
           "method": "GET",
           "path": "/api/modules/<module_id>",
+          "decorator": "bp.get"
+        },
+        {
+          "method": "GET",
+          "path": "/api/modules/available",
+          "decorator": "bp.get"
+        },
+        {
+          "method": "GET",
+          "path": "/api/modules/installed",
+          "decorator": "bp.get"
+        },
+        {
+          "method": "GET",
+          "path": "/api/modules/operations/status",
           "decorator": "bp.get"
         },
         {
@@ -856,7 +872,32 @@
         },
         {
           "method": "POST",
+          "path": "/api/modules/operations/<operation_id>/cancel",
+          "decorator": "bp.post"
+        },
+        {
+          "method": "POST",
+          "path": "/api/modules/operations/apply",
+          "decorator": "bp.post"
+        },
+        {
+          "method": "POST",
+          "path": "/api/modules/operations/plan",
+          "decorator": "bp.post"
+        },
+        {
+          "method": "POST",
           "path": "/api/modules/profile",
+          "decorator": "bp.post"
+        },
+        {
+          "method": "POST",
+          "path": "/api/modules/recovery",
+          "decorator": "bp.post"
+        },
+        {
+          "method": "POST",
+          "path": "/api/modules/restart",
           "decorator": "bp.post"
         }
       ],
@@ -1964,6 +2005,24 @@
     {
       "module_id": "core",
       "kind": "backend_service",
+      "path": "xkeen-ui/services/module_lifecycle.py",
+      "size_bytes": 17465,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_service",
       "path": "xkeen-ui/services/module_package_contract.py",
       "size_bytes": 21869,
       "depends_on": [],
@@ -2094,7 +2153,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_transactions/launcher.py",
-      "size_bytes": 6176,
+      "size_bytes": 9597,
       "depends_on": [],
       "starts_background_task": true,
       "background_markers": [
@@ -4722,7 +4781,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_modular_panel_stage8_contract.py",
-      "size_bytes": 10245,
+      "size_bytes": 12403,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -4762,7 +4821,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_backend_gates.py",
-      "size_bytes": 10910,
+      "size_bytes": 12334,
       "depends_on": [
         "tool.terminal",
         "integration.happ",
@@ -4780,7 +4839,9 @@
         "python3",
         "flask"
       ],
-      "environment_variables": [],
+      "environment_variables": [
+        "XKEEN_UI_PORT"
+      ],
       "removable": false
     },
     {
@@ -4840,6 +4901,42 @@
     {
       "module_id": "core",
       "kind": "backend_test",
+      "path": "tests/test_module_lifecycle.py",
+      "size_bytes": 16240,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_module_lifecycle_routes.py",
+      "size_bytes": 7027,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
       "path": "tests/test_module_package_contract.py",
       "size_bytes": 12332,
       "depends_on": [],
@@ -4877,7 +4974,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_registry.py",
-      "size_bytes": 28437,
+      "size_bytes": 28889,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -5008,6 +5105,26 @@
         "flask"
       ],
       "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_module_transactions_launcher.py",
+      "size_bytes": 5535,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [
+        "XKEEN_UI_UPDATE_DIR"
+      ],
       "removable": false
     },
     {
@@ -23727,7 +23844,7 @@
     }
   ],
   "routes": {
-    "endpoint_count": 320,
+    "endpoint_count": 328,
     "files_with_routes": 54,
     "endpoint_files": [
       {
@@ -23916,6 +24033,21 @@
             "decorator": "bp.get"
           },
           {
+            "method": "GET",
+            "path": "/api/modules/available",
+            "decorator": "bp.get"
+          },
+          {
+            "method": "GET",
+            "path": "/api/modules/installed",
+            "decorator": "bp.get"
+          },
+          {
+            "method": "GET",
+            "path": "/api/modules/operations/status",
+            "decorator": "bp.get"
+          },
+          {
             "method": "PATCH",
             "path": "/api/modules/<module_id>",
             "decorator": "bp.patch"
@@ -23937,7 +24069,32 @@
           },
           {
             "method": "POST",
+            "path": "/api/modules/operations/<operation_id>/cancel",
+            "decorator": "bp.post"
+          },
+          {
+            "method": "POST",
+            "path": "/api/modules/operations/apply",
+            "decorator": "bp.post"
+          },
+          {
+            "method": "POST",
+            "path": "/api/modules/operations/plan",
+            "decorator": "bp.post"
+          },
+          {
+            "method": "POST",
             "path": "/api/modules/profile",
+            "decorator": "bp.post"
+          },
+          {
+            "method": "POST",
+            "path": "/api/modules/recovery",
+            "decorator": "bp.post"
+          },
+          {
+            "method": "POST",
+            "path": "/api/modules/restart",
             "decorator": "bp.post"
           }
         ]
