@@ -36,20 +36,20 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 479,
-      "size_bytes": 6546714,
+      "unit_count": 483,
+      "size_bytes": 6585905,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 18,
-        "backend_service": 67,
-        "backend_test": 208,
+        "backend_service": 68,
+        "backend_test": 210,
         "configuration": 10,
         "frontend_bundle": 9,
         "frontend_entrypoint": 2,
         "frontend_feature": 28,
         "frontend_javascript": 35,
         "frontend_runtime": 2,
-        "frontend_test": 44,
+        "frontend_test": 45,
         "frontend_ui": 17,
         "stylesheet": 5,
         "template": 31
@@ -365,7 +365,7 @@
       ],
       "removable": true,
       "unit_count": 26,
-      "size_bytes": 648131,
+      "size_bytes": 648880,
       "kind_counts": {
         "backend_route": 2,
         "backend_service": 8,
@@ -760,7 +760,7 @@
       "module_id": "core",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/cores_status.py",
-      "size_bytes": 31761,
+      "size_bytes": 32838,
       "depends_on": [],
       "starts_background_task": true,
       "background_markers": [
@@ -788,7 +788,6 @@
       "environment_variables": [
         "XKEEN_UI_CORES_UPDATE_API_TIMEOUT",
         "XKEEN_UI_CORES_UPDATE_CACHE_TTL",
-        "XKEEN_UI_GITHUB_API_BASE",
         "XKEEN_UI_HTTP_USER_AGENT",
         "XKEEN_UI_MIHOMO_REPO",
         "XKEEN_UI_XRAY_REPO"
@@ -1425,7 +1424,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/core_installer.py",
-      "size_bytes": 24277,
+      "size_bytes": 26193,
       "depends_on": [],
       "starts_background_task": true,
       "background_markers": [
@@ -1464,7 +1463,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/core_profiles.py",
-      "size_bytes": 18061,
+      "size_bytes": 16905,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -1476,7 +1475,6 @@
         "flask"
       ],
       "environment_variables": [
-        "XKEEN_UI_GITHUB_API_BASE",
         "XKEEN_UI_HTTP_USER_AGENT"
       ],
       "removable": false
@@ -1658,6 +1656,29 @@
         "flask"
       ],
       "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_service",
+      "path": "xkeen-ui/services/github_client.py",
+      "size_bytes": 7296,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [
+        "XKEEN_UI_GITHUB_API_BASE",
+        "XKEEN_UI_GITHUB_TOKEN",
+        "XKEEN_UI_GITHUB_WEB_BASE",
+        "XKEEN_UI_HTTP_USER_AGENT"
+      ],
       "removable": false
     },
     {
@@ -2257,7 +2278,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/self_update/github.py",
-      "size_bytes": 24706,
+      "size_bytes": 27236,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -2269,9 +2290,6 @@
         "flask"
       ],
       "environment_variables": [
-        "XKEEN_UI_GITHUB_API_BASE",
-        "XKEEN_UI_GITHUB_WEB_BASE",
-        "XKEEN_UI_HTTP_USER_AGENT",
         "XKEEN_UI_UPDATE_API_TIMEOUT",
         "XKEEN_UI_UPDATE_ASSET_NAME",
         "XKEEN_UI_UPDATE_BRANCH",
@@ -2928,7 +2946,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_core_installer.py",
-      "size_bytes": 13697,
+      "size_bytes": 18429,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -3018,7 +3036,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_cores_status_prereleases.py",
-      "size_bytes": 16525,
+      "size_bytes": 22185,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -3056,7 +3074,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_devtools_env_whitelist.py",
-      "size_bytes": 7028,
+      "size_bytes": 7610,
       "depends_on": [
         "tool.advanced-diagnostics",
         "engine.mihomo",
@@ -3096,6 +3114,7 @@
         "XKEEN_SUBSCRIPTION_ALLOW_HTTP",
         "XKEEN_SUBSCRIPTION_ALLOW_PRIVATE_HOSTS",
         "XKEEN_UI_DEVTOOLS_SECTIONS_WHITELIST",
+        "XKEEN_UI_GITHUB_TOKEN",
         "XKEEN_UI_INSTALL_MODULES",
         "XKEEN_UI_INSTALL_PROFILE",
         "XKEEN_UI_PANEL_SECTIONS_WHITELIST"
@@ -3756,6 +3775,28 @@
       ],
       "environment_variables": [
         "XKEEN_SKIP_KEYS_CHECK"
+      ],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_github_client.py",
+      "size_bytes": 7266,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [
+        "XKEEN_UI_GITHUB_API_BASE",
+        "XKEEN_UI_GITHUB_TOKEN",
+        "XKEEN_UI_GITHUB_WEB_BASE"
       ],
       "removable": false
     },
@@ -5832,8 +5873,29 @@
     {
       "module_id": "core",
       "kind": "backend_test",
+      "path": "tests/test_self_update_github_budget.py",
+      "size_bytes": 5085,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [
+        "XKEEN_UI_UPDATE_BRANCH",
+        "XKEEN_UI_UPDATE_CHECK_CACHE_TTL"
+      ],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
       "path": "tests/test_self_update_github_fallback.py",
-      "size_bytes": 4933,
+      "size_bytes": 5026,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -6558,7 +6620,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_version_check_script.py",
-      "size_bytes": 5452,
+      "size_bytes": 6722,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -6571,7 +6633,8 @@
       ],
       "environment_variables": [
         "XKEEN_UI_CACHE_DIR",
-        "XKEEN_UI_CACHE_NS"
+        "XKEEN_UI_CACHE_NS",
+        "XKEEN_UI_GITHUB_TOKEN"
       ],
       "removable": false
     },
@@ -7836,7 +7899,7 @@
       "module_id": "core",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/update_notifier.js",
-      "size_bytes": 27987,
+      "size_bytes": 27986,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -9636,6 +9699,24 @@
       "kind": "frontend_test",
       "path": "e2e/ui_memory_settings.spec.mjs",
       "size_bytes": 2135,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "frontend_test",
+      "path": "e2e/update_notifier_budget.spec.mjs",
+      "size_bytes": 2841,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -18053,7 +18134,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/devtools.py",
-      "size_bytes": 38218,
+      "size_bytes": 38341,
       "depends_on": [
         "core"
       ],
@@ -18293,7 +18374,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_service",
       "path": "xkeen-ui/services/devtools/env.py",
-      "size_bytes": 31392,
+      "size_bytes": 31450,
       "depends_on": [
         "core",
         "integration.happ",
@@ -18412,6 +18493,7 @@
         "XKEEN_UI_DEVTOOLS_SECTIONS_WHITELIST",
         "XKEEN_UI_DIR",
         "XKEEN_UI_ENV_FILE",
+        "XKEEN_UI_GITHUB_TOKEN",
         "XKEEN_UI_MAX_CONTENT_LENGTH",
         "XKEEN_UI_PANEL_SECTIONS_WHITELIST",
         "XKEEN_UI_PORT",
@@ -18659,7 +18741,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/devtools/env.js",
-      "size_bytes": 80117,
+      "size_bytes": 80685,
       "depends_on": [
         "core"
       ],
@@ -18797,6 +18879,7 @@
         "XKEEN_TRASH_WARN_RATIO",
         "XKEEN_UI_DEVTOOLS_SECTIONS_WHITELIST",
         "XKEEN_UI_ENV_FILE",
+        "XKEEN_UI_GITHUB_TOKEN",
         "XKEEN_UI_MAX_CONTENT_LENGTH",
         "XKEEN_UI_PANEL_SECTIONS_WHITELIST",
         "XKEEN_UI_PORT",
@@ -29446,7 +29529,7 @@
         },
         "tool.advanced-diagnostics": {
           "unit_count": 26,
-          "size_bytes": 648131
+          "size_bytes": 648880
         }
       },
       "next_stage": "Этапы 4, 5 и 6."
