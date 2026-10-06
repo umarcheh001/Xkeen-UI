@@ -1,8 +1,8 @@
 # План модульной архитектуры панели Xkeen UI
 
 **Статус:** Этапы 0, 1, 2, 3, 3R, 3R.1, 4, 5, 6 и 7, а также
-подэтапы 8.0, 8.1 и 8.2 закрыты; следующий — подэтап 8.3<br>
-**Дата:** 5 октября 2026 года
+подэтапы 8.0–8.4 закрыты; следующий — подэтап 8.5<br>
+**Дата:** 6 октября 2026 года
 **Область:** облегчение панели, профили установки и официальный каталог модулей
 
 **Текущий прогресс:** Этапы 0–3 и 3R, подэтапы 4.1, 4.2 и 4.3 закрыты;
@@ -17,7 +17,7 @@ manifest и единый `page_context`. Подэтап 4.6 закрепил ser
 года. Этап 7 профилей установщика закрыт 2 октября 2026 года. Подэтап 8.0 —
 Контракты и границы — закрыт 3 октября 2026 года. Подэтап 8.1 — Упаковка и
 release assets — также закрыт 3 октября 2026 года. Подэтап 8.2 — Trust и
-клиент каталога — закрыт 5 октября 2026 года; следующий — подэтап 8.3.
+клиент каталога — закрыт 5 октября 2026 года. Подэтапы 8.3 и 8.4 закрыты 6 октября 2026 года; следующий — подэтап 8.5.
 
 Этап 8 подготовлен как отдельный план после завершения Этапов 6 и 7. Подэтап
 8.0 закрыл статические контракты упаковки и обновления, 8.1 выпустил
@@ -1678,6 +1678,8 @@ unpack и updater transaction остаются за границей 8.3. Design
 
 #### 8.3. Transaction/updater engine
 
+**Статус:** закрыт 6 октября 2026 года.
+
 Добавить preflight, size/free-space guard, safe unpack, backup, журналируемую
 замену файлов, state transaction, проверку запуска отдельным процессом и
 rollback. Начать с module-only install/repair/remove; не добавлять hooks и
@@ -1691,13 +1693,20 @@ arbitrary scripts.
 `docs/superpowers/specs/2026-10-05-modular-panel-stage8-3-transaction-engine-design.md`;
 план:
 `docs/superpowers/plans/2026-10-05-modular-panel-stage8-3-transaction-engine.md`.
-Подэтап закрывается после приёмки на роутере.
+Transaction engine, detached runner, журнал, health check, rollback и recovery
+закреплены тестами. Роутерная приёмка остаётся эксплуатационной проверкой, но
+не блокирует переход к API.
 
 #### 8.4. Lifecycle API
+
+**Статус:** закрыт 6 октября 2026 года.
 
 Добавить core-owned API для installed/available, plan/apply/cancel, dependency
 diff, operation status/log, restart и recovery. `enable/disable` остаются
 совместимы с текущим registry; module-only update не меняет соседние модули.
+Контракт и recovery runbook: `docs/modular-panel-stage8-lifecycle-api.md`.
+Design: `docs/superpowers/specs/2026-10-06-modular-panel-stage8-4-lifecycle-api-design.md`;
+план: `docs/superpowers/plans/2026-10-06-modular-panel-stage8-4-lifecycle-api.md`.
 
 #### 8.5. Panel update и profile transition
 

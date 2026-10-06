@@ -398,6 +398,65 @@
     "request_thread_policy": "never install inside the Flask request thread",
     "post_restart_owner": "detached module runner; the init script undoes an interrupted operation"
   },
+  "lifecycle_api": {
+    "stage": {
+      "id": "8.4",
+      "status": "closed",
+      "closed_on": "2026-10-06"
+    },
+    "service": "xkeen-ui/services/module_lifecycle.py",
+    "routes": [
+      {
+        "method": "GET",
+        "path": "/api/modules/installed",
+        "success_status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/modules/available",
+        "success_status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/api/modules/operations/plan",
+        "success_status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/api/modules/operations/apply",
+        "success_status": 202
+      },
+      {
+        "method": "GET",
+        "path": "/api/modules/operations/status",
+        "success_status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/api/modules/operations/<operation_id>/cancel",
+        "success_status": 202
+      },
+      {
+        "method": "POST",
+        "path": "/api/modules/recovery",
+        "success_status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/api/modules/restart",
+        "success_status": 200
+      }
+    ],
+    "operations": [
+      "install",
+      "repair",
+      "remove"
+    ],
+    "execution": "detached module transaction runner",
+    "plan_guard": "lowercase SHA-256 of canonical server plan and dependency diff",
+    "update_available": false,
+    "recovery_restarts_implicitly": false
+  },
   "acceptance_matrix": [
     {
       "id": "unknown-signing-key",

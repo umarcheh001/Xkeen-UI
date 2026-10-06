@@ -1,8 +1,8 @@
 # Этап 8: менеджер официальных модулей
 
-**Статус:** подэтапы 8.0 и 8.1 закрыты 3 октября 2026 года; следующий — 8.2
-«Trust и клиент каталога»<br>
-**Дата:** 2 октября 2026 года
+**Статус:** подэтапы 8.0–8.4 закрыты; следующий — 8.5
+«Panel update и profile transition»<br>
+**Дата:** 6 октября 2026 года
 
 Этот документ фиксирует implementation contract для Этапа 8. Полный roadmap
 остаётся в [`README-modular-panel-plan.md`](../README-modular-panel-plan.md).
@@ -124,9 +124,9 @@ Core выполняет тихий poll раз в сутки и поддержи
 
 1. **8.0 Contracts:** ownership, topology, schema, compatibility и acceptance matrix.
 2. **8.1 Artifacts:** закрыт; deterministic module/panel archives, catalog generation и CI release assets.
-3. **8.2 Trust:** allow-list, signatures, key rotation, cache/offline policy.
-4. **8.3 Updater:** preflight, safe unpack, backup, atomic switch, supervisor и rollback.
-5. **8.4 API:** list/plan/apply/status/cancel/recovery и operation log.
+3. **8.2 Trust:** закрыт; allow-list, signatures, key rotation, cache/offline policy.
+4. **8.3 Updater:** закрыт; preflight, safe unpack, backup, journal, detached runner и rollback.
+5. **8.4 API:** закрыт; list/plan/apply/status/cancel/recovery/restart и operation log. Контракт: [`modular-panel-stage8-lifecycle-api.md`](modular-panel-stage8-lifecycle-api.md).
 6. **8.5 Panel/profile:** panel archive update и связь с profile transaction.
 7. **8.6 UI:** installed/available, update badge, dependency diff, progress и restart.
 8. **8.7 Notifications:** daily/manual poll, deduplication и stale/error state.

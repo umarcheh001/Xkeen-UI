@@ -79,6 +79,24 @@ Discovery ограничен `https://api.github.com/repos/umarcheh001/Xkeen-UI/
 | panel update | core-owned payload, backup и полный rollback |
 | profile transition | Stage 7 transaction, diff, restart и rollback |
 
+## Lifecycle API 8.4
+
+Подэтап 8.4 закрыт 2026-10-06. `xkeen-ui/services/module_lifecycle.py` повторно строит authoritative plan и передаёт его в detached module transaction runner; Flask request не меняет файлы панели.
+Допустимы только `install`, `repair`, `remove`. Plan guard — lowercase SHA-256 of canonical server plan and dependency diff. Независимое обновление версии модуля отложено до 8.5, поэтому `update_available` всегда `false`.
+
+| Method | Path | Success |
+| --- | --- | --- |
+| `GET` | `/api/modules/installed` | `200` |
+| `GET` | `/api/modules/available` | `200` |
+| `POST` | `/api/modules/operations/plan` | `200` |
+| `POST` | `/api/modules/operations/apply` | `202` |
+| `GET` | `/api/modules/operations/status` | `200` |
+| `POST` | `/api/modules/operations/<operation_id>/cancel` | `202` |
+| `POST` | `/api/modules/recovery` | `200` |
+| `POST` | `/api/modules/restart` | `200` |
+
+Cancel посылает SIGTERM только точному live runner после проверки journal, status и Linux `/proc/<pid>/cmdline`. Recovery не перезапускает панель автоматически; restart имеет отдельный guard от активной операции, update lock и rollback-failed state.
+
 ## Acceptance matrix
 
 | ID | Operation | Expected result |

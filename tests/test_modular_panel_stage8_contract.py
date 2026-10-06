@@ -12,6 +12,7 @@ SNAPSHOT = ROOT / "docs" / "modular-panel-stage8-contract.json"
 CONTRACT = ROOT / "docs" / "modular-panel-stage8-contract.md"
 PLAN = ROOT / "README-modular-panel-plan.md"
 DOCS_INDEX = ROOT / "docs" / "README.md"
+LIFECYCLE_DOC = ROOT / "docs" / "modular-panel-stage8-lifecycle-api.md"
 
 
 def _generate(tmp_path: Path) -> tuple[dict, str]:
@@ -265,3 +266,52 @@ def test_stage8_contract_describes_the_shared_root_transaction_engine() -> None:
     assert "modules/<module-id>" not in markdown
     assert "module-ownership.json" in markdown
     assert "xkeen-ui.module-transactions" in markdown
+
+
+def test_stage8_contract_describes_closed_lifecycle_api(tmp_path) -> None:
+    payload, markdown = _generate(tmp_path)
+    lifecycle = payload["lifecycle_api"]
+
+    assert lifecycle["stage"] == {
+        "id": "8.4",
+        "status": "closed",
+        "closed_on": "2026-10-06",
+    }
+    assert lifecycle["service"] == "xkeen-ui/services/module_lifecycle.py"
+    assert [(item["method"], item["path"], item["success_status"]) for item in lifecycle["routes"]] == [
+        ("GET", "/api/modules/installed", 200),
+        ("GET", "/api/modules/available", 200),
+        ("POST", "/api/modules/operations/plan", 200),
+        ("POST", "/api/modules/operations/apply", 202),
+        ("GET", "/api/modules/operations/status", 200),
+        ("POST", "/api/modules/operations/<operation_id>/cancel", 202),
+        ("POST", "/api/modules/recovery", 200),
+        ("POST", "/api/modules/restart", 200),
+    ]
+    assert lifecycle["operations"] == ["install", "repair", "remove"]
+    assert lifecycle["execution"] == "detached module transaction runner"
+    assert lifecycle["plan_guard"] == "lowercase SHA-256 of canonical server plan and dependency diff"
+    assert lifecycle["update_available"] is False
+    assert lifecycle["recovery_restarts_implicitly"] is False
+    assert "## Lifecycle API 8.4" in markdown
+
+
+def test_stage8_lifecycle_document_and_roadmap_are_closed() -> None:
+    assert LIFECYCLE_DOC.is_file()
+    lifecycle = LIFECYCLE_DOC.read_text(encoding="utf-8")
+    plan = PLAN.read_text(encoding="utf-8")
+    docs_index = DOCS_INDEX.read_text(encoding="utf-8")
+
+    for fragment in (
+        "GET /api/modules/installed",
+        "POST /api/modules/operations/apply",
+        "module_plan_stale",
+        "SIGTERM",
+        "module_transaction.py",
+        "POST /api/modules/recovery",
+        "POST /api/modules/restart",
+    ):
+        assert fragment in lifecycle
+    assert "8.3 и 8.4 закрыты 6 октября 2026 года" in plan
+    assert "следующий — подэтап 8.5" in plan
+    assert "modular-panel-stage8-lifecycle-api.md" in docs_index
