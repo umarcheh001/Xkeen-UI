@@ -266,3 +266,75 @@ def test_launch_refuses_a_state_directory_apart_from_the_panel(tmp_path: Path) -
     assert raised.value.code == "operation_state_dir_mismatch"
     assert Journal.find(panel.root) is None
     assert read_status(elsewhere) == {"result": None}
+
+
+# -- renaming a file onto another name of itself ------------------------------
+
+
+@pytest.fixture
+def posix_rename(monkeypatch) -> None:
+    """Make ``os.replace`` behave as rename(2) does on the router.
+
+    POSIX: when both names already refer to the same file, rename does
+    nothing and reports success - the source name stays. Windows removes it,
+    which hid a leftover temporary file from the tests run there.
+    """
+
+    real_replace = os.replace
+
+    def replace(source, target, *args, **kwargs):
+        try:
+            if os.path.samefile(source, target):
+                return None
+        except OSError:
+            pass
+        return real_replace(source, target, *args, **kwargs)
+
+    monkeypatch.setattr(journal_module.os, "replace", replace)
+
+
+def _links_work(tmp_path: Path) -> bool:
+    probe = tmp_path / "link-probe"
+    probe.write_bytes(b"x")
+    try:
+        os.link(probe, tmp_path / "link-probe-2")
+    except OSError:
+        return False
+    return True
+
+
+def test_rollback_leaves_no_temporary_file_when_the_original_was_never_replaced(tmp_path: Path, posix_rename) -> None:
+    if not _links_work(tmp_path):
+        pytest.skip("this filesystem has no hard links")
+    panel = make_panel(tmp_path / "stand", installed=("core", "tool.editor", "engine.xray", "tool.terminal"))
+    before = snapshot(panel.root)
+    plan = build_plan("remove", "tool.terminal", **panel.kwargs)
+    journal = Journal.create(panel.root, plan, "20261005T000000Z-abcdef", extra={})
+    relative = plan.files_remove[0]
+    # Announced and kept, and then the power went: the file itself is untouched.
+    journal._record("remove", relative)
+    journal._keep(relative, panel.path(relative))
+
+    Journal.open(journal.dir).rollback()
+
+    assert snapshot(panel.root) == before
+
+
+def test_second_rollback_leaves_no_temporary_files(tmp_path: Path, posix_rename) -> None:
+    if not _links_work(tmp_path):
+        pytest.skip("this filesystem has no hard links")
+    panel = make_panel(tmp_path / "stand", installed=("core", "tool.editor", "engine.xray", "tool.terminal"))
+    before = snapshot(panel.root)
+    plan = build_plan("repair", "tool.terminal", **panel.kwargs)
+    journal = Journal.create(panel.root, plan, "20261005T000000Z-abcdef", extra={})
+    for relative in plan.files_add:
+        source = tmp_path / "incoming.bin"
+        source.write_bytes(b"new " + relative.encode())
+        journal.apply_file(relative, source)
+
+    journal.rollback()
+    assert snapshot(panel.root) == before
+    # The undo is repeated after a failure or a power cut halfway through.
+    Journal.open(journal.dir).rollback()
+
+    assert snapshot(panel.root) == before

@@ -49,6 +49,13 @@ def _plain(relative: str) -> bool:
     return all(part not in {"", ".", ".."} for part in relative.split("/"))
 
 
+def _same_file(first: Path, second: Path) -> bool:
+    try:
+        return os.path.samefile(first, second)
+    except OSError:
+        return False
+
+
 class Journal:
     def __init__(self, operation_dir: Path, panel_root: Path, plan: Plan, meta: dict[str, Any]) -> None:
         self.dir = Path(operation_dir)
@@ -322,6 +329,12 @@ class Journal:
                 kept = self._kept(relative)
                 if not kept.is_file():
                     # Announced but never started: the original is untouched.
+                    continue
+                if _same_file(target, kept):
+                    # The previous file is still in place (announced, kept and
+                    # never replaced, or put back by an earlier undo). Renaming
+                    # another name of a file onto it does nothing on POSIX and
+                    # would leave the temporary name behind.
                     continue
                 target.parent.mkdir(parents=True, exist_ok=True)
                 try:
