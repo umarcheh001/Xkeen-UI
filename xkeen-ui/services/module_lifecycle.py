@@ -628,6 +628,16 @@ class ModuleLifecycleService:
                 status=400,
             )
 
+        if not self.restart_cmd:
+            # Every operation ends with a restart of the panel. Without a
+            # service to ask, the runner would lay the files and only then
+            # find out that it has to put them back.
+            raise ModuleLifecycleError(
+                "panel_restart_unavailable",
+                "the panel service that restarts the panel was not found",
+                status=503,
+            )
+
         plan, payload = self._plan_and_payload(operation, module_id)
         stale_code = "operation_plan_stale" if operation in _FULL_SCOPE_OPERATIONS else "module_plan_stale"
         if plan is None or not payload["applicable"]:

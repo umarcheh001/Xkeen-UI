@@ -742,3 +742,19 @@ def test_restart_maps_false_or_exceptional_dispatch_to_503(tmp_path, failure):
         "module_restart_failed",
         503,
     )
+
+
+def test_apply_refuses_before_touching_files_when_the_panel_cannot_be_restarted(tmp_path):
+    panel = make_panel(tmp_path)
+    launcher = LaunchRecorder()
+    service, _ = make_service(panel, make_release(), launch_operation=launcher, restart_cmd=())
+    preview = service.plan("install", "tool.terminal")
+
+    with pytest.raises(ModuleLifecycleError) as raised:
+        service.apply("install", "tool.terminal", preview["plan_id"])
+
+    # Иначе исполнитель разложил бы файлы и только потом узнал, что
+    # перезапустить панель нечем.
+    assert raised.value.code == "panel_restart_unavailable"
+    assert raised.value.status == 503
+    assert launcher.plans == []

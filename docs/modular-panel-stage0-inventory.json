@@ -36,13 +36,13 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 497,
-      "size_bytes": 6824155,
+      "unit_count": 499,
+      "size_bytes": 6832280,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
-        "backend_service": 71,
-        "backend_test": 220,
+        "backend_service": 72,
+        "backend_test": 221,
         "configuration": 10,
         "frontend_bundle": 9,
         "frontend_entrypoint": 2,
@@ -365,7 +365,7 @@
       ],
       "removable": true,
       "unit_count": 25,
-      "size_bytes": 599187,
+      "size_bytes": 598192,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 8,
@@ -539,14 +539,14 @@
       "module_id": "core",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/__init__.py",
-      "size_bytes": 21040,
+      "size_bytes": 21245,
       "depends_on": [
-        "tool.terminal",
         "tool.files",
         "engine.xray",
         "engine.mihomo",
         "integration.happ",
         "tool.backups",
+        "tool.terminal",
         "tool.advanced-diagnostics"
       ],
       "starts_background_task": false,
@@ -2138,7 +2138,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_lifecycle.py",
-      "size_bytes": 29375,
+      "size_bytes": 29813,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -2412,6 +2412,27 @@
         "flask"
       ],
       "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_service",
+      "path": "xkeen-ui/services/panel_service.py",
+      "size_bytes": 2898,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [
+        "XKEEN_UI_INIT_OWNER",
+        "XKEEN_UI_INIT_SCRIPT"
+      ],
       "removable": false
     },
     {
@@ -4990,7 +5011,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_backend_gates.py",
-      "size_bytes": 12334,
+      "size_bytes": 12772,
       "depends_on": [
         "tool.terminal",
         "integration.happ",
@@ -5071,7 +5092,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_lifecycle.py",
-      "size_bytes": 25904,
+      "size_bytes": 26648,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -5783,6 +5804,28 @@
         "flask"
       ],
       "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_panel_service.py",
+      "size_bytes": 3402,
+      "depends_on": [
+        "tool.advanced-diagnostics"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [
+        "XKEEN_UI_INIT_SCRIPT"
+      ],
       "removable": false
     },
     {
@@ -18980,7 +19023,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_service",
       "path": "xkeen-ui/services/devtools/ui_service.py",
-      "size_bytes": 5633,
+      "size_bytes": 4638,
       "depends_on": [
         "core"
       ],
@@ -18996,8 +19039,6 @@
         "XKEEN_ENV",
         "XKEEN_RUNTIME",
         "XKEEN_UI_CONTROL_CMD",
-        "XKEEN_UI_INIT_OWNER",
-        "XKEEN_UI_INIT_SCRIPT",
         "XKEEN_UI_PID_FILE",
         "XKEEN_UI_RESTART_CMD"
       ],
@@ -28619,16 +28660,16 @@
       {
         "from": "core",
         "to": "tool.advanced-diagnostics",
-        "unit_count": 8,
+        "unit_count": 9,
         "examples": [
           "xkeen-ui/routes/__init__.py",
           "xkeen-ui/services/router_modem_control.py",
           "tests/test_devtools_env_whitelist.py",
+          "tests/test_panel_service.py",
           "xkeen-ui/static/js/pages/panel.diagnostics.bundle.js",
           "xkeen-ui/static/js/features/compat/devtools.js",
           "xkeen-ui/static/js/features/feature_access.js",
-          "xkeen-ui/static/js/features/index.js",
-          "xkeen-ui/static/js/pages/top_level_devtools_screen.js"
+          "xkeen-ui/static/js/features/index.js"
         ]
       },
       {
@@ -29688,16 +29729,16 @@
       {
         "from": "core",
         "to": "tool.advanced-diagnostics",
-        "unit_count": 8,
+        "unit_count": 9,
         "examples": [
           "xkeen-ui/routes/__init__.py",
           "xkeen-ui/services/router_modem_control.py",
           "tests/test_devtools_env_whitelist.py",
+          "tests/test_panel_service.py",
           "xkeen-ui/static/js/pages/panel.diagnostics.bundle.js",
           "xkeen-ui/static/js/features/compat/devtools.js",
           "xkeen-ui/static/js/features/feature_access.js",
-          "xkeen-ui/static/js/features/index.js",
-          "xkeen-ui/static/js/pages/top_level_devtools_screen.js"
+          "xkeen-ui/static/js/features/index.js"
         ]
       },
       {
@@ -29973,7 +30014,7 @@
         },
         "tool.advanced-diagnostics": {
           "unit_count": 25,
-          "size_bytes": 599187
+          "size_bytes": 598192
         }
       },
       "next_stage": "Этапы 4, 5 и 6."

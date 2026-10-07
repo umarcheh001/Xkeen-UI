@@ -65,8 +65,15 @@ Linux pidfd удерживает проверенный процесс межд�
 recovery с `panel_running=True`. Он сохраняет `restart_required`, но никогда не
 перезапускает панель сам. `POST /api/modules/restart` сначала проверяет отсутствие
 активной module transaction, self-update lock, abandoned journal и
-`rollback_failed`, затем вызывает существующий restart boundary с source
-`module-lifecycle`.
+`rollback_failed`, затем перезапускает саму панель через её службу
+(`services/panel_service.py`, source `module-lifecycle`).
+
+Перезапуск панели — это всегда init-скрипт панели
+(`/opt/etc/init.d/S99xkeen-ui-umarcheh001 restart`), и для
+`POST /api/modules/restart`, и для detached runner. `xkeen -restart`
+перезапускает только прокси: процесс панели остаётся прежним, а health check
+ответил бы старым кодом. Если служба панели не найдена, `apply` отказывает с
+`503 panel_restart_unavailable` до любых изменений файлов.
 
 Launcher атомарно захватывает общий с self-update lock до проверки journal и
 передаёт владение detached runner без окна unlock. Поэтому два apply или apply
@@ -79,7 +86,7 @@ Launcher атомарно захватывает общий с self-update lock 
 | 400 | `invalid_payload`, `module_operation_invalid`, `module_plan_id_invalid` |
 | 404 | `module_not_found`, `operation_not_found` |
 | 409 | `module_plan_stale`, `operation_in_progress`, `operation_recovery_required` |
-| 503 | `catalog_unavailable`, `module_restart_failed` |
+| 503 | `catalog_unavailable`, `module_restart_failed`, `panel_restart_unavailable` |
 | 500 | `module_lifecycle_failed` без текста внутреннего исключения |
 
 ## Ручное восстановление

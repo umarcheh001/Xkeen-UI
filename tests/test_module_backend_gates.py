@@ -70,8 +70,13 @@ def _register(tmp_path: Path, active_module_ids: list[str]) -> Flask:
 def test_lifecycle_api_is_core_owned_and_wired_lazily(tmp_path, monkeypatch):
     monkeypatch.setenv("XKEEN_UI_PORT", "9091")
     monkeypatch.setattr(
-        "services.xkeen_commands_catalog.build_xkeen_cmd",
-        lambda flag: ["xkeen-test", flag],
+        "services.panel_service.resolve_panel_init_script",
+        lambda: "/opt/etc/init.d/S99xkeen-ui-test",
+    )
+    panel_restarts: list[str] = []
+    monkeypatch.setattr(
+        "services.panel_service.restart_panel",
+        lambda source: panel_restarts.append(source) or True,
     )
     monkeypatch.setattr("services.cores.detect_running_core", lambda: "xray")
 
@@ -90,7 +95,10 @@ def test_lifecycle_api_is_core_owned_and_wired_lazily(tmp_path, monkeypatch):
         "/api/modules/restart",
     } <= rules
     assert service.health_url == "http://127.0.0.1:9091/login"
-    assert service.restart_cmd == ("xkeen-test", "-restart")
+    # Перезапускается сама панель: `xkeen -restart` трогает только прокси.
+    assert service.restart_cmd == ("/opt/etc/init.d/S99xkeen-ui-test", "restart")
+    assert service._restart_panel("module-lifecycle") is True
+    assert panel_restarts == ["module-lifecycle"]
     assert service._active_engines() == frozenset({"engine.xray"})
     assert app.test_client().get("/api/modules/operations/status").status_code == 200
 

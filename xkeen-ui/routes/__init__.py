@@ -159,8 +159,8 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
     from .ui_settings import create_ui_settings_blueprint
     from .utils import create_utils_blueprint
     from .xkeen_lists import create_xkeen_lists_blueprint
+    from services import panel_service
     from services.module_lifecycle import ModuleLifecycleService
-    from services.xkeen_commands_catalog import build_xkeen_cmd
 
     def lifecycle_active_engines() -> frozenset[str]:
         from services.cores import detect_running_core
@@ -178,8 +178,10 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
         state_dir=lifecycle_root,
         active_engines=lifecycle_active_engines,
         health_url=f"http://127.0.0.1:{_lifecycle_port()}/login",
-        restart_cmd=build_xkeen_cmd("-restart"),
-        restart_panel=lambda source: bool(ctx.restart_xkeen(source=source)),
+        # Служба самой панели: перезапуск XKeen оставил бы работать прежний
+        # процесс панели и оборвал бы клиентам интернет.
+        restart_cmd=panel_service.panel_restart_command(),
+        restart_panel=lambda source: panel_service.restart_panel(source),
     )
     app.extensions["xkeen.module_lifecycle"] = lifecycle_service
 

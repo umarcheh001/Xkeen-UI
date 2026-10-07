@@ -13,9 +13,9 @@ import subprocess
 from typing import Any, Dict
 
 
-UI_INIT_SCRIPT_DEFAULT = "/opt/etc/init.d/S99xkeen-ui-umarcheh001"
-UI_INIT_SCRIPT_LEGACY = "/opt/etc/init.d/S99xkeen-ui"
-UI_INIT_OWNER_MARKER = 'XKEEN_UI_INIT_OWNER="umarcheh001/Xkeen-UI"'
+# Сама служба панели описана в ядре: её же перезапускают операции с модулями.
+from services import panel_service
+
 UI_PID_FILE = os.environ.get("XKEEN_UI_PID_FILE", "/opt/var/run/xkeen-ui.pid")
 # Optional: custom command to control UI in dev (e.g. launchctl/systemd). Supports "{action}" placeholder.
 UI_CONTROL_CMD = os.environ.get("XKEEN_UI_CONTROL_CMD") or os.environ.get("XKEEN_UI_RESTART_CMD")
@@ -39,37 +39,8 @@ def _runtime_mode() -> str:
     return "router" if (has_ndm or has_opkg) else "dev"
 
 
-def _is_executable_file(path: str) -> bool:
-    try:
-        return bool(path) and os.path.isfile(path) and os.access(path, os.X_OK)
-    except Exception:
-        return False
-
-
-def _is_our_ui_init_script(path: str) -> bool:
-    try:
-        if not path or not os.path.isfile(path):
-            return False
-        with open(path, "r", encoding="utf-8", errors="ignore") as f:
-            content = f.read()
-        if UI_INIT_OWNER_MARKER in content:
-            return True
-        if 'UI_DIR="/opt/etc/xkeen-ui"' not in content:
-            return False
-        return 'RUN_SERVER="$UI_DIR/run_server.py"' in content or 'APP_PY="$UI_DIR/app.py"' in content
-    except Exception:
-        return False
-
-
 def _resolve_ui_init_script() -> str | None:
-    override = str(os.environ.get("XKEEN_UI_INIT_SCRIPT", "") or "").strip()
-    if override and _is_executable_file(override):
-        return override
-
-    for cand in (UI_INIT_SCRIPT_DEFAULT, UI_INIT_SCRIPT_LEGACY):
-        if _is_executable_file(cand) and _is_our_ui_init_script(cand):
-            return cand
-    return None
+    return panel_service.resolve_panel_init_script()
 
 
 def ui_status() -> Dict[str, Any]:
