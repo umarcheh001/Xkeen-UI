@@ -215,7 +215,10 @@ def test_what_the_hung_command_started_is_stopped_with_it(stand):
     proc, _calls, _elapsed = _run(
         stand,
         'provision_run_limited 2 "$OPKG_BIN" update || true; sleep 1; '
-        f'kill -0 "$(cat "{child.as_posix()}")" 2>/dev/null && echo alive || echo gone',
+        # Не `kill -0`: снятый процесс, которого ещё никто не забрал, на Linux
+        # числится существующим. Смотрим состояние: нет записи или «Z» — снят.
+        f'state="$(cat "/proc/$(cat "{child.as_posix()}")/stat" 2>/dev/null || true)"; '
+        'case "$state" in ""|*") Z "*) echo gone ;; *) echo alive ;; esac',
         "children",
         FAKE_CHILD=child.as_posix(),
     )

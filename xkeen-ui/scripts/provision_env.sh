@@ -434,6 +434,18 @@ provision_kill_children() {
   done
 }
 
+provision_pid_running() {
+  # Работает ли ещё процесс $1. Завершившийся, которого оболочка не успела
+  # забрать, для `kill -0` существует: не все оболочки забирают фоновые
+  # процессы сами, и без этой проверки ожидание шло бы до самого предела.
+  kill -0 "$1" 2>/dev/null || return 1
+  _pr_stat="$(cat "/proc/$1/stat" 2>/dev/null)" || return 0
+  case "$_pr_stat" in
+    *") Z "*) return 1 ;;
+  esac
+  return 0
+}
+
 provision_run_limited() {
   # $1 — предел в секундах, дальше команда. Код 124 — не уложилась в срок.
   _pl_limit="$1"
@@ -441,7 +453,7 @@ provision_run_limited() {
   "$@" &
   _pl_pid=$!
   _pl_waited=0
-  while kill -0 "$_pl_pid" 2>/dev/null; do
+  while provision_pid_running "$_pl_pid"; do
     if [ "$_pl_waited" -ge "$_pl_limit" ]; then
       # Сначала те, кого команда запустила сама: opkg ждёт свой wget, и без
       # этого тот остался бы висеть до собственного предела.
