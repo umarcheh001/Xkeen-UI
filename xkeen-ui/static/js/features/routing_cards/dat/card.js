@@ -282,6 +282,25 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         if (typeof combo.bind === 'function') combo.bind(kind, m, refreshLater);
       } catch (e) {}
     });
+
+    // The values live on the router and may arrive after the card is built
+    // (or be changed from another browser). Show them, except in the input
+    // the operator is typing into right now.
+    const showRouterValues = () => {
+      const current = loadPrefs();
+      Object.keys(map).forEach((kind) => {
+        ['dir', 'name', 'url'].forEach((field) => {
+          const input = map[kind][field];
+          const value = (current[kind] && current[kind][field]) ? current[kind][field] : '';
+          if (!input || input === document.activeElement) return;
+          if (String(input.value || '') !== String(value)) input.value = value;
+        });
+      });
+      syncDatCurrentFileLabels(current);
+    };
+    try {
+      document.addEventListener('xkeen:ui-settings-changed', showRouterValues);
+    } catch (e) {}
   }
 
   async function refreshDatMeta() {

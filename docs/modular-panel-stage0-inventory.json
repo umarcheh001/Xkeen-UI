@@ -36,13 +36,13 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 517,
-      "size_bytes": 6980905,
+      "unit_count": 518,
+      "size_bytes": 6990534,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
         "backend_service": 74,
-        "backend_test": 235,
+        "backend_test": 236,
         "configuration": 10,
         "frontend_bundle": 9,
         "frontend_entrypoint": 2,
@@ -86,7 +86,7 @@
       ],
       "removable": true,
       "unit_count": 135,
-      "size_bytes": 3805224,
+      "size_bytes": 3810310,
       "kind_counts": {
         "backend_route": 13,
         "backend_service": 20,
@@ -2673,7 +2673,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/ui_settings.py",
-      "size_bytes": 49894,
+      "size_bytes": 52869,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -7172,6 +7172,24 @@
     {
       "module_id": "core",
       "kind": "backend_test",
+      "path": "tests/test_ui_settings_routing_dat.py",
+      "size_bytes": 3751,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
       "path": "tests/test_ui_settings_routing_scenario_card.py",
       "size_bytes": 1643,
       "depends_on": [],
@@ -10281,7 +10299,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/routing_dat_prefs_survive_refresh.spec.mjs",
-      "size_bytes": 3841,
+      "size_bytes": 6672,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -10409,7 +10427,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/subscriptions_modal_layout.spec.mjs",
-      "size_bytes": 107598,
+      "size_bytes": 107670,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -17463,7 +17481,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/routing_cards/dat/card.js",
-      "size_bytes": 20046,
+      "size_bytes": 20872,
       "depends_on": [
         "core",
         "tool.editor"
@@ -17521,7 +17539,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/routing_cards/dat/prefs.js",
-      "size_bytes": 2333,
+      "size_bytes": 6593,
       "depends_on": [
         "core",
         "tool.editor"

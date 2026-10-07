@@ -110,6 +110,12 @@ DEFAULTS: Dict[str, Any] = {
         # "single" — всегда одна, "split" — всегда две. Ниже 1100 px любая
         # раскладка схлопывается в одну колонку: на планшете двух колонок нет.
         "dnsOverVlessLayout": "auto",
+        # Папка, имя и адрес загрузки DAT-файлов, которые оператор вписал в
+        # карточке DAT: {"geosite": {"dir", "name", "url"}, "geoip": {...}}.
+        # Пусто — оператор ничего не задавал, карточка берёт значения поставки.
+        # Раньше это хранил только браузер, и другой браузер или другой адрес
+        # панели показывал значения по умолчанию.
+        "dat": {},
     },
     "mihomo": {
         # Hide nodes only after Mihomo itself reports a stable run of timeout
@@ -176,6 +182,56 @@ def _json_chars(v: Any) -> int:
         return 10**9
 
 
+_DAT_KINDS = ("geosite", "geoip")
+_DAT_FIELD_LIMITS = {"dir": 512, "name": 255, "url": 2048}
+
+
+def _sanitize_dat_prefs(value: Any, *, strict: bool, report: "SettingsReport") -> Optional[Dict[str, Any]]:
+    """Check what the operator typed into the DAT card.
+
+    A patch (``strict``) with a bad value is an error: answering "saved" to
+    something that was not saved is worse than refusing. A stored file with a
+    bad value loses that value alone.
+    """
+
+    def bad(path: str, why: str) -> None:
+        if strict:
+            report.errors.append({"path": path, "error": why})
+        else:
+            report.warnings.append({"path": path, "warning": why + "; dropped"})
+            report.changed = True
+
+    if not isinstance(value, dict):
+        bad("routing.dat", "must be an object")
+        return None
+    cleaned: Dict[str, Any] = {}
+    for kind, fields in value.items():
+        if kind not in _DAT_KINDS:
+            bad(f"routing.dat.{kind}", "unknown key")
+            continue
+        if not isinstance(fields, dict):
+            bad(f"routing.dat.{kind}", "must be an object")
+            continue
+        kept: Dict[str, str] = {}
+        for field, raw in fields.items():
+            path = f"routing.dat.{kind}.{field}"
+            limit = _DAT_FIELD_LIMITS.get(str(field))
+            if limit is None:
+                bad(path, "unknown key")
+                continue
+            if not isinstance(raw, str):
+                bad(path, "must be a string")
+                continue
+            text = raw.strip()
+            if len(text) > limit or any(ord(character) < 32 for character in text):
+                bad(path, "is too long or holds control characters")
+                continue
+            kept[str(field)] = text
+        if kept:
+            cleaned[kind] = kept
+    return cleaned
+
+
 def _canonical_empty() -> Dict[str, Any]:
     """Create a canonical defaults dict with stable key ordering."""
 
@@ -212,6 +268,7 @@ def _canonical_empty() -> Dict[str, Any]:
             "showActiveOutbound": bool(DEFAULTS["routing"]["showActiveOutbound"]),
             "showScenarioCard": bool(DEFAULTS["routing"]["showScenarioCard"]),
             "dnsOverVlessLayout": str(DEFAULTS["routing"]["dnsOverVlessLayout"]),
+            "dat": {},
         },
         "mihomo": {
             "hideUnavailable": bool(DEFAULTS["mihomo"]["hideUnavailable"]),
@@ -616,8 +673,13 @@ def _sanitize_full(raw: Any) -> Tuple[Dict[str, Any], SettingsReport]:
                 )
                 rep.changed = True
 
+        if routing_raw.get("dat") is not None:
+            dat_clean = _sanitize_dat_prefs(routing_raw.get("dat"), strict=False, report=rep)
+            if dat_clean is not None:
+                out["routing"]["dat"] = dat_clean
+
         for k in routing_raw.keys():
-            if k not in ("guiEnabled", "autoApply", "showActiveOutbound", "showScenarioCard", "dnsOverVlessLayout"):
+            if k not in ("guiEnabled", "autoApply", "showActiveOutbound", "showScenarioCard", "dnsOverVlessLayout", "dat"):
                 rep.warnings.append({"path": f"routing.{k}", "warning": "unknown key dropped"})
                 rep.changed = True
 
@@ -981,8 +1043,14 @@ def _sanitize_patch(patch: Any) -> Tuple[Dict[str, Any], SettingsReport]:
                         {"path": "routing.dnsOverVlessLayout", "error": "must be auto|single|split"}
                     )
 
+            if "dat" in routing_patch:
+                errors_before = len(rep.errors)
+                dat_clean = _sanitize_dat_prefs(routing_patch.get("dat"), strict=True, report=rep)
+                if dat_clean and len(rep.errors) == errors_before:
+                    p["dat"] = dat_clean
+
             for k in routing_patch.keys():
-                if k not in ("guiEnabled", "autoApply", "showActiveOutbound", "showScenarioCard", "dnsOverVlessLayout"):
+                if k not in ("guiEnabled", "autoApply", "showActiveOutbound", "showScenarioCard", "dnsOverVlessLayout", "dat"):
                     rep.warnings.append({"path": f"routing.{k}", "warning": "unknown key dropped"})
 
             if p:

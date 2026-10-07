@@ -80,3 +80,61 @@ test.describe('DAT card keeps what the operator typed', () => {
     expect(stored.geoip.dir).toBe('/opt/etc/xray/mydat');
   });
 });
+
+async function routerPrefs(page) {
+  return page.evaluate(async () => {
+    const response = await fetch('/api/ui-settings', { headers: { Accept: 'application/json' } });
+    const data = await response.json();
+    return (data.settings.routing && data.settings.routing.dat) || {};
+  });
+}
+
+test.describe('DAT card keeps its values on the router', () => {
+  test('what the operator typed is there in a browser that has never seen the panel', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    const body = page.locator('#routing-dat-body');
+    for (let attempt = 0; attempt < 3 && !(await body.isVisible()); attempt += 1) {
+      await page.locator('#routing-dat-header').click();
+      await page.waitForTimeout(250);
+    }
+    await page.locator('#routing-dat-geosite-url').fill('https://example.invalid/kept-on-router.dat');
+    await page.locator('#routing-dat-geosite-dir').fill('/opt/etc/xray/mydat');
+    await expect.poll(async () => (await routerPrefs(page)).geosite?.url).toBe('https://example.invalid/kept-on-router.dat');
+
+    // Другой браузер: своей памяти о панели у него нет.
+    await page.evaluate((key) => window.localStorage.removeItem(key), PREF_KEY);
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+
+    await expect(page.locator('#routing-dat-geosite-url')).toHaveValue('https://example.invalid/kept-on-router.dat');
+    await expect(page.locator('#routing-dat-geosite-dir')).toHaveValue('/opt/etc/xray/mydat');
+  });
+
+  test('values kept by the browser alone are handed over to the router', async ({ page }) => {
+    await page.addInitScript(([key, saved]) => {
+      try { window.localStorage.setItem(key, JSON.stringify(saved)); } catch (error) {}
+    }, [PREF_KEY, SAVED]);
+
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    await expect.poll(async () => (await routerPrefs(page)).geoip?.url).toBe(SAVED.geoip.url);
+    expect((await routerPrefs(page)).geosite.name).toBe(SAVED.geosite.name);
+  });
+
+  test('a shipped value is not stored as the operators choice', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    const body = page.locator('#routing-dat-body');
+    for (let attempt = 0; attempt < 3 && !(await body.isVisible()); attempt += 1) {
+      await page.locator('#routing-dat-header').click();
+      await page.waitForTimeout(250);
+    }
+    await page.locator('#routing-dat-geoip-name').fill('geoip_mine.dat');
+    await expect.poll(async () => (await routerPrefs(page)).geoip?.name).toBe('geoip_mine.dat');
+
+    // Адрес оператор не трогал: на роутере он остаётся «не задан».
+    expect((await routerPrefs(page)).geoip.url || '').toBe('');
+  });
+});
