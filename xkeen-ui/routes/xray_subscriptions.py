@@ -88,6 +88,8 @@ def create_xray_subscriptions_blueprint(
                         # One switch for all of them; the date is when it was thrown.
                         "paused": bool(paused_since),
                         "paused_ts": min((ts for ts in paused_since if ts), default=None),
+                        # Для окна, которое потеряло ответ на перезапуске ядра.
+                        "switch_notice": subscription_pause.last_notice(ui_state_dir),
                         "routing_balancers": list_subscription_routing_balancers(xray_configs_dir),
                         "routing_meta": get_subscription_routing_meta(xray_configs_dir),
                     }

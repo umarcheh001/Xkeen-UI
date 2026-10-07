@@ -17,6 +17,7 @@ from flask import Response, jsonify, request, send_file
 
 from routes.common.errors import log_route_exception
 from services.filemanager.transfer import save_filestorage_to_tmp, stream_file_then_cleanup
+from services.fs_common.local import local_protection_error
 from services.xray_assets import ensure_xray_dat_assets
 
 
@@ -417,7 +418,7 @@ def register_transfer_endpoints(bp, deps: Dict[str, Any]) -> None:
             # Those "loose" files are confusing and were historically undeletable.
             try:
                 if callable(_local_is_protected_entry_abs) and _local_is_protected_entry_abs(rp):
-                    return error_response("protected_path", 403, ok=False)
+                    return error_response(local_protection_error(rp) or "protected_path", 403, ok=False, code="protected_path")
             except Exception:
                 pass
 

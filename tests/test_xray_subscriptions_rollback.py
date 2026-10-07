@@ -225,6 +225,8 @@ def test_pause_the_core_rejects_is_undone_without_a_restart(tmp_path: Path, monk
     assert _config_names(rig.bench) == names
     assert _own_bytes(rig.bench) == before
     assert rig.bench.sub("alpha")["paused"] is False
+    # Отложенного после отмены тоже не остаётся.
+    assert rig.bench.set_aside() == []
 
 
 def test_resume_the_core_rejects_keeps_the_pause(tmp_path: Path, monkeypatch):
@@ -244,3 +246,4 @@ def test_resume_the_core_rejects_keeps_the_pause(tmp_path: Path, monkeypatch):
     assert rig.restarts == []
     assert _config_names(rig.bench) == names
     assert rig.bench.sub("alpha")["paused"] is True
+    assert rig.bench.set_aside() == ["04_outbounds.alpha.json"]

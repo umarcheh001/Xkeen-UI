@@ -26,6 +26,7 @@ from services import xray_transactions
 from services.io.atomic import _atomic_write_json
 
 RECORD_FILENAME = "xray_subscriptions_pause.json"
+NOTICE_FILENAME = "xray_subscriptions_notice.json"
 
 _LOCK = threading.RLock()
 
@@ -59,6 +60,34 @@ def _drop_record(ui_state_dir: str) -> None:
     try:
         os.remove(_record_path(ui_state_dir))
     except FileNotFoundError:
+        pass
+
+
+def _notice_path(ui_state_dir: str) -> str:
+    return os.path.join(str(ui_state_dir or ""), NOTICE_FILENAME)
+
+
+def last_notice(ui_state_dir: str) -> Dict[str, Any]:
+    """Что последнее переключение не вернуло на место; пусто, если вернуло всё."""
+    value = subs._read_json_file(_notice_path(ui_state_dir), {})
+    return value if isinstance(value, dict) else {}
+
+
+def _store_notice(ui_state_dir: str, action: str, warning: str, skipped: List[Any]) -> None:
+    # Перезапуск ядра нередко рвёт и соединение с панелью: ответ до окна не
+    # доходит, и итог оно берёт из списка подписок.  Сказанное в ответе должно
+    # пережить этот обрыв.  Каждое переключение пишет своё или стирает чужое.
+    try:
+        if warning or skipped:
+            _atomic_write_json(
+                _notice_path(ui_state_dir),
+                {"action": action, "ts": int(time.time()), "warning": warning, "skipped": list(skipped)},
+            )
+        else:
+            os.remove(_notice_path(ui_state_dir))
+    except FileNotFoundError:
+        pass
+    except Exception:  # noqa: BLE001 - сообщение не повод ронять выполненную операцию
         pass
 
 
@@ -296,7 +325,7 @@ def _Guard(ui_state_dir: str, xray_configs_dir: str) -> xray_transactions.Memory
     """Byte copy of everything a pause or resume may rewrite."""
     jsonc_dir = os.path.dirname(subs.jsonc_path_for(subs._config_fragment_path(xray_configs_dir, subs.ROUTING_FILE)))
     return xray_transactions.MemoryGuard(
-        dirs=[xray_configs_dir, jsonc_dir],
+        dirs=[xray_configs_dir, jsonc_dir, subs.ensure_paused_store_dir(ui_state_dir)],
         paths=[
             subs.subscription_state_path(ui_state_dir),
             dov._state_path(ui_state_dir),
@@ -405,6 +434,10 @@ def _switch(
                 )
             else:
                 _drop_record(ui_state_dir)
+            warning = " ".join(
+                part for part in (subs.displaced_skipped_warning(notes["skipped"]), notes["warning"]) if part
+            )
+            _store_notice(ui_state_dir, direction, warning, notes["skipped"])
             return {
                 "ok": True,
                 "changed": True,
@@ -413,9 +446,7 @@ def _switch(
                 "restarted": bool(restarted),
                 "restarts": restarts,
                 "dns": _dns_result(before, after, round_trip=round_trip, restored=restore),
-                "warning": " ".join(
-                    part for part in (subs.displaced_skipped_warning(notes["skipped"]), notes["warning"]) if part
-                ),
+                "warning": warning,
                 "skipped": notes["skipped"],
             }
 
@@ -568,6 +599,9 @@ def delete_all(
             deleted += 1
         # Nothing is left to resume, so nothing to remember about DNS either.
         _drop_record(ui_state_dir)
+        warning = str(switched.get("warning") or "")
+        skipped = list(switched.get("skipped") or [])
+        _store_notice(ui_state_dir, "delete_all", warning, skipped)
 
         return {
             "ok": True,
@@ -577,6 +611,6 @@ def delete_all(
             "restarted": bool(switched.get("restarted")),
             "restarts": int(switched.get("restarts") or 0),
             "dns": switched["dns"],
-            "warning": str(switched.get("warning") or ""),
-            "skipped": list(switched.get("skipped") or []),
+            "warning": warning,
+            "skipped": skipped,
         }

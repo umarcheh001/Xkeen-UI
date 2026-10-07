@@ -139,6 +139,20 @@ class Bench:
         state = self.subs.load_subscription_state(str(self.state))
         return next(item for item in state["subscriptions"] if item["id"] == sub_id)
 
+    @property
+    def paused_store(self) -> Path:
+        return Path(self.subs.paused_store_dir(str(self.state)))
+
+    def set_aside(self) -> list[str]:
+        if not self.paused_store.is_dir():
+            return []
+        return sorted(item.name for item in self.paused_store.iterdir())
+
+    def to_legacy_pause(self) -> None:
+        """Как оставила пауза прежней версии: фрагменты рядом с конфигами."""
+        for item in list(self.paused_store.iterdir()):
+            item.replace(self.xray / (item.name + ".paused"))
+
 
 @pytest.fixture
 def bench(tmp_path: Path, monkeypatch) -> Bench:
@@ -155,13 +169,10 @@ def test_pause_returns_configs_to_own_keys_and_keeps_subscription_records(bench:
 
     assert sorted(result["paused"]) == ["alpha", "beta"]
     assert result["changed"] is True
-    after = bench.config_files()
-    # Xray читает только *.json: всё, что он видит, снова как до подписок.
-    assert {name: text for name, text in after.items() if name.endswith(".json")} == own
-    assert sorted(name for name in after if not name.endswith(".json")) == [
-        "04_outbounds.alpha.json.paused",
-        "04_outbounds.beta.json.paused",
-    ]
+    # В каталоге конфигов снова только своё: отложенные узлы лежат у панели,
+    # где их не сотрёшь вместе с конфигами.
+    assert bench.config_files() == own
+    assert bench.set_aside() == ["04_outbounds.alpha.json", "04_outbounds.beta.json"]
     alpha = bench.sub("alpha")
     assert alpha["paused"] is True
     assert alpha["url"] == "https://example.com/alpha"
@@ -244,10 +255,75 @@ def test_delete_of_paused_subscription_removes_its_set_aside_fragment(bench: Ben
         str(bench.state), "alpha", xray_configs_dir=str(bench.xray), snapshot=lambda _path: None
     )
 
-    names = sorted(bench.config_files())
-    assert "04_outbounds.alpha.json.paused" not in names
-    assert "04_outbounds.beta.json.paused" in names
+    assert bench.set_aside() == ["04_outbounds.beta.json"]
     assert bench.subs.subscriptions_paused(str(bench.state)) is True
+
+
+def test_resume_finds_nodes_a_previous_version_left_next_to_the_configs(bench: Bench):
+    bench.add("alpha")
+    active = bench.config_files()
+    bench.pause()
+    bench.to_legacy_pause()
+
+    bench.resume()
+
+    assert _meaning(bench.config_files()) == _meaning(active)
+    assert bench.set_aside() == []
+
+
+def test_delete_removes_nodes_a_previous_version_left_next_to_the_configs(bench: Bench):
+    own = bench.config_files()
+    bench.add("alpha")
+    bench.pause()
+    bench.to_legacy_pause()
+
+    bench.subs.delete_subscription(
+        str(bench.state), "alpha", xray_configs_dir=str(bench.xray), snapshot=lambda _path: None
+    )
+
+    assert bench.config_files() == own
+    assert bench.set_aside() == []
+
+
+def test_first_start_moves_set_aside_nodes_out_of_the_configs(bench: Bench):
+    own = bench.config_files()
+    bench.add("alpha")
+    bench.add("beta")
+    bench.pause()
+    bench.to_legacy_pause()
+    # Чужой файл с таким же окончанием панель не трогает.
+    (bench.xray / "mine.json.paused").write_text("{}", encoding="utf-8")
+
+    moved = bench.subs.adopt_legacy_paused_files(str(bench.state), str(bench.xray))
+
+    assert moved == 2
+    assert bench.set_aside() == ["04_outbounds.alpha.json", "04_outbounds.beta.json"]
+    assert sorted(set(bench.config_files()) - set(own)) == ["mine.json.paused"]
+    assert bench.subs.adopt_legacy_paused_files(str(bench.state), str(bench.xray)) == 0
+
+
+def test_pause_works_when_the_panel_state_is_on_another_disk(bench: Bench, monkeypatch):
+    own = bench.config_files()
+    bench.add("alpha")
+    active = bench.config_files()
+    real_replace = bench.subs.os.replace
+
+    def _replace(source, target):
+        # Переименование между дисками не работает: так бывает, когда каталог
+        # панели и конфиги Xray лежат на разных разделах.
+        if Path(source).parent != Path(target).parent:
+            raise OSError(18, "Invalid cross-device link")
+        return real_replace(source, target)
+
+    monkeypatch.setattr(bench.subs.os, "replace", _replace)
+
+    bench.pause()
+    assert bench.config_files() == own
+    assert bench.set_aside() == ["04_outbounds.alpha.json"]
+
+    bench.resume()
+    assert _meaning(bench.config_files()) == _meaning(active)
+    assert bench.set_aside() == []
 
 
 def test_subscription_added_during_pause_joins_the_pause(bench: Bench):

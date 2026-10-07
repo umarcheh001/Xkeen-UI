@@ -144,6 +144,55 @@ def _local_resolve_nofollow(path: str, roots: List[str]) -> str:
 _PROTECT_MNT_LABELS = str(os.getenv('XKEEN_PROTECT_MNT_LABELS', '1') or '1').strip().lower() not in ('0', 'false', 'no', 'off')
 _PROTECTED_MNT_ROOT = str(os.getenv('XKEEN_PROTECTED_MNT_ROOT', '/tmp/mnt') or '/tmp/mnt').strip() or '/tmp/mnt'
 
+# --- Служебные данные панели ---
+# То, без чего панель не вернёт владельцу его настройки (журнал вытесненного,
+# отложенные узлы приостановленных подписок).  Владельцы данных называют свои
+# пути при запуске; файловый менеджер их не удаляет, не переименовывает и не
+# заменяет.
+PROTECTED_PANEL_DATA_MESSAGE = (
+    "Это служебные данные панели: по ним она возвращает ваши настройки после паузы "
+    "и удаления подписок. Удалить, переименовать или заменить их из файлового менеджера нельзя."
+)
+_PANEL_PROTECTED: Dict[str, bool] = {}
+
+
+def _protection_key(path: str) -> str:
+    return os.path.normcase(os.path.normpath(os.path.abspath(str(path or ""))))
+
+
+def protect_local_path(path: str, *, subtree: bool = False) -> None:
+    """Объявить путь служебным; с ``subtree`` -- вместе со всем, что внутри."""
+    if not str(path or "").strip():
+        return
+    key = _protection_key(path)
+    _PANEL_PROTECTED[key] = bool(subtree or _PANEL_PROTECTED.get(key))
+
+
+def _local_is_panel_data_abs(ap: str) -> bool:
+    if not _PANEL_PROTECTED:
+        return False
+    try:
+        key = _protection_key(ap)
+    except Exception:
+        return False
+    for protected, subtree in list(_PANEL_PROTECTED.items()):
+        if key == protected:
+            return True
+        # Каталог выше унёс бы служебное с собой.
+        if protected.startswith(key.rstrip(os.sep) + os.sep):
+            return True
+        if subtree and key.startswith(protected + os.sep):
+            return True
+    return False
+
+
+def local_protection_error(ap: str) -> str:
+    """Чем отказать в действии над ``ap``; пустая строка -- действие разрешено."""
+    if _local_is_panel_data_abs(ap):
+        return PROTECTED_PANEL_DATA_MESSAGE
+    return 'protected_path' if _local_is_protected_entry_abs(ap) else ''
+
+
 def _local_is_protected_entry_abs(ap: str) -> bool:
     """Return True if `ap` is a protected mount-label entry (or /tmp/mnt itself).
 
@@ -162,7 +211,11 @@ def _local_is_protected_entry_abs(ap: str) -> bool:
       - Regular files under /tmp/mnt are NOT protected (so they can be cleaned up).
       - If the path does not exist yet and is a direct child of /tmp/mnt, treat it as
         protected to prevent creating new "loose" entries in the mount root.
+
+    Служебные данные панели защищены так же, независимо от этой настройки.
     """
+    if _local_is_panel_data_abs(ap):
+        return True
     if not _PROTECT_MNT_LABELS:
         return False
     try:
@@ -246,7 +299,7 @@ def _local_remove_entry(path: str, roots: List[str], *, recursive: bool = True) 
     ap = _local_resolve_nofollow(path, roots)
 
     if _local_is_protected_entry_abs(ap):
-        raise PermissionError('protected_path')
+        raise PermissionError(local_protection_error(ap) or 'protected_path')
 
     try:
         st = os.lstat(ap)
@@ -712,7 +765,7 @@ def _local_move_to_trash(path: str, roots: List[str]) -> Dict[str, Any]:
     ap = _local_resolve_nofollow(path, roots)
 
     if _local_is_protected_entry_abs(ap):
-        raise PermissionError('protected_path')
+        raise PermissionError(local_protection_error(ap) or 'protected_path')
 
     # Do not allow trashing of allowlist roots themselves.
     for r in roots:

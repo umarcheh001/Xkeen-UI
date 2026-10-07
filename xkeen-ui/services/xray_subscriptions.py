@@ -24,6 +24,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import uuid
 from typing import Any, Callable, Dict, Iterable, List, Tuple
 from urllib.parse import parse_qs, unquote, urlparse
 
@@ -62,6 +63,7 @@ from utils.fs import load_text
 
 STATE_VERSION = 1
 STATE_FILENAME = "xray_subscriptions.json"
+PAUSED_STORE_DIRNAME = os.path.join("xray-subscriptions", "paused")
 MANAGED_BASELINES_KEY = "managed_baselines"
 DISPLACED_KEY = "displaced"
 MANAGED_BASELINE_ROUTING_KEY = "routing"
@@ -1110,7 +1112,8 @@ def _delete_subscription_guarded(
         output_path = _subscription_output_path(xray_configs_dir, removed)
         output_removed = bool(_remove_file_if_exists(output_path, snapshot=snapshot) or output_removed)
         # A paused subscription keeps its nodes set aside; they go with it.
-        _remove_file_if_exists(_paused_config_path(output_path))
+        _remove_file_if_exists(_paused_store_path(ui_state_dir, output_path))
+        _remove_file_if_exists(_legacy_paused_config_path(output_path))
         snapshot_cleanup_paths.append(output_path)
         try:
             raw_path = jsonc_path_for(output_path)
@@ -1642,7 +1645,7 @@ def _operation_guard(ui_state_dir: str, xray_configs_dir: str) -> xray_transacti
     except Exception:
         jsonc_dir = ""
     return xray_transactions.MemoryGuard(
-        dirs=[xray_configs_dir, jsonc_dir],
+        dirs=[xray_configs_dir, jsonc_dir, ensure_paused_store_dir(ui_state_dir)],
         paths=[subscription_state_path(ui_state_dir)],
     )
 
@@ -3471,10 +3474,63 @@ def _disabled_config_path(path: str) -> str:
     return str(path or "") + ".disable"
 
 
-def _paused_config_path(path: str) -> str:
-    # Xray reads the directory by extension, so the suffix alone takes the
-    # fragment out of the running config without losing what is in it.
+def paused_store_dir(ui_state_dir: str) -> str:
+    """Где лежат узлы приостановленных подписок.
+
+    В каталоге состояния панели, а не рядом с конфигами: там их не видит ядро
+    и не сотрёшь вместе с конфигами из файлового менеджера.
+    """
+    return os.path.join(str(ui_state_dir or "/opt/etc/xkeen-ui"), PAUSED_STORE_DIRNAME)
+
+
+def protected_state_paths(ui_state_dir: str) -> List[Tuple[str, bool]]:
+    """Что файловому менеджеру панели нельзя удалять: путь и «вместе с содержимым»."""
+    root = str(ui_state_dir or "/opt/etc/xkeen-ui")
+    return [
+        (root, False),
+        (subscription_state_path(root), False),
+        (os.path.dirname(paused_store_dir(root)), True),
+    ]
+
+
+def ensure_paused_store_dir(ui_state_dir: str) -> str:
+    # Слепок операции запоминает каталог целиком, поэтому каталог должен быть
+    # на месте ещё до первой паузы -- иначе откат не уберёт отложенное.
+    path = paused_store_dir(ui_state_dir)
+    try:
+        os.makedirs(path, exist_ok=True)
+    except Exception:
+        return ""
+    return path
+
+
+def _paused_store_path(ui_state_dir: str, output_path: str) -> str:
+    return os.path.join(paused_store_dir(ui_state_dir), os.path.basename(str(output_path or "")))
+
+
+def _legacy_paused_config_path(path: str) -> str:
+    # Прежние версии откладывали узлы рядом с конфигами, меняя окончание.
     return str(path or "") + ".paused"
+
+
+def adopt_legacy_paused_files(ui_state_dir: str, xray_configs_dir: str) -> int:
+    """Перенести узлы, которые пауза прежней версии оставила рядом с конфигами."""
+    moved = 0
+    for sub in list_subscriptions(ui_state_dir):
+        output_path = _subscription_output_path(xray_configs_dir, sub)
+        legacy = _legacy_paused_config_path(output_path)
+        if not os.path.isfile(legacy):
+            continue
+        target = _paused_store_path(ui_state_dir, output_path)
+        try:
+            if os.path.isfile(target):
+                os.remove(legacy)
+                continue
+            if _move_config_file(legacy, target):
+                moved += 1
+        except Exception as exc:
+            _log("warning", "xray subscriptions: paused nodes not moved", file=os.path.basename(legacy), error=str(exc))
+    return moved
 
 
 def _remove_config_snapshot_for_path(xray_configs_dir: str, path: str) -> bool:
@@ -3513,52 +3569,6 @@ def _remove_config_snapshots_for_paths(xray_configs_dir: str, paths: Iterable[st
         if _remove_config_snapshot_for_path(xray_configs_dir, path):
             removed.append(basename)
     return removed
-
-
-def _capture_managed_file_baseline(state: Dict[str, Any], *, key: str, path: str) -> bool:
-    baselines = state.get(MANAGED_BASELINES_KEY)
-    if not isinstance(baselines, dict):
-        baselines = {}
-        state[MANAGED_BASELINES_KEY] = baselines
-    if isinstance(baselines.get(key), dict):
-        return False
-
-    entry: Dict[str, Any] = {"path": os.path.basename(path), "exists": False, "jsonc_exists": False}
-    try:
-        text = load_text(path, default=None)
-        if text is not None:
-            entry["text"] = text
-            entry["exists"] = True
-    except Exception:
-        pass
-
-    try:
-        jsonc = jsonc_path_for(path)
-    except Exception:
-        jsonc = ""
-    if jsonc:
-        try:
-            jsonc_text = load_text(jsonc, default=None)
-            if jsonc_text is not None:
-                entry["jsonc_text"] = jsonc_text
-                entry["jsonc_exists"] = True
-        except Exception:
-            pass
-
-    baselines[key] = entry
-    return True
-
-
-def _ensure_subscription_managed_baselines(ui_state_dir: str, xray_configs_dir: str) -> bool:
-    with _STATE_LOCK:
-        state = load_subscription_state(ui_state_dir)
-        changed = False
-        for key, default_name in MANAGED_BASELINE_TARGETS.items():
-            path = _config_fragment_path(xray_configs_dir, default_name)
-            changed = bool(_capture_managed_file_baseline(state, key=key, path=path) or changed)
-        if changed:
-            _write_state(ui_state_dir, state)
-        return changed
 
 
 def _restore_managed_file_baseline(
@@ -6692,7 +6702,20 @@ def subscriptions_paused(ui_state_dir: str) -> bool:
 def _move_config_file(source: str, target: str) -> bool:
     if not os.path.isfile(source):
         return False
-    os.replace(source, target)
+    os.makedirs(os.path.dirname(target) or ".", exist_ok=True)
+    try:
+        os.replace(source, target)
+    except OSError:
+        # Каталог панели и конфиги ядра могут лежать на разных разделах:
+        # переименование между ними не работает, только копия и удаление.
+        temp = f"{target}.{uuid.uuid4().hex}.tmp"
+        try:
+            shutil.copyfile(source, temp)
+            os.replace(temp, target)
+        except Exception:
+            _remove_file_if_exists(temp)
+            raise
+        os.remove(source)
     return True
 
 
@@ -6728,7 +6751,9 @@ def pause_subscriptions(
     files_moved = False
     for sub in targets:
         output_path = _subscription_output_path(xray_configs_dir, sub)
-        files_moved = bool(_move_config_file(output_path, _paused_config_path(output_path)) or files_moved)
+        files_moved = bool(
+            _move_config_file(output_path, _paused_store_path(ui_state_dir, output_path)) or files_moved
+        )
 
     rebuild_stats = _rebuild_subscription_runtime(
         ui_state_dir,
@@ -6780,10 +6805,13 @@ def resume_subscriptions(
             sub.pop("paused_ts", None)
         _write_state(ui_state_dir, _normalize_state(state))
 
+    adopt_legacy_paused_files(ui_state_dir, xray_configs_dir)
     files_moved = False
     for sub in targets:
         output_path = _subscription_output_path(xray_configs_dir, sub)
-        files_moved = bool(_move_config_file(_paused_config_path(output_path), output_path) or files_moved)
+        files_moved = bool(
+            _move_config_file(_paused_store_path(ui_state_dir, output_path), output_path) or files_moved
+        )
 
     next_state = load_subscription_state(ui_state_dir)
     rebuild_stats = _rebuild_subscription_runtime(
@@ -8163,6 +8191,10 @@ def start_subscription_scheduler(
 
     def _loop() -> None:
         time.sleep(min(15, tick))
+        try:
+            adopt_legacy_paused_files(ui_state_dir, xray_configs_dir)
+        except Exception as exc:
+            _log("warning", "xray subscriptions: paused nodes not moved", error=str(exc))
         while True:
             try:
                 results = refresh_due_subscriptions(

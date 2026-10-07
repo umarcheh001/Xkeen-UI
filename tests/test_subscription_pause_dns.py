@@ -362,3 +362,25 @@ def test_pause_with_everything_returned_has_nothing_to_tell(rig: Rig):
 
     assert result["skipped"] == []
     assert result["warning"] == ""
+
+
+def test_what_was_not_put_back_is_kept_for_a_window_that_lost_the_answer(rig: Rig):
+    rig.bench.add("alpha", routing_mode="subscription-only")
+    _put_own_server_back_by_hand(rig)
+
+    result = rig.pause()
+
+    notice = rig.pause_mod.last_notice(str(rig.bench.state))
+    assert notice["action"] == "pause"
+    assert notice["warning"] == result["warning"]
+    assert notice["skipped"] == result["skipped"]
+
+
+def test_a_clean_switch_leaves_no_stale_notice(rig: Rig):
+    rig.bench.add("alpha", routing_mode="subscription-only")
+    _put_own_server_back_by_hand(rig)
+    rig.pause()
+
+    rig.resume()
+
+    assert rig.pause_mod.last_notice(str(rig.bench.state)) == {}

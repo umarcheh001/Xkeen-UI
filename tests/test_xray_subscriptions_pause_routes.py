@@ -104,3 +104,20 @@ def test_list_route_says_whether_subscriptions_are_paused(api, monkeypatch):
 
     assert body["paused"] is True
     assert body["paused_ts"] == 1790000000
+
+
+def test_list_carries_the_notice_of_the_last_switch(api, monkeypatch):
+    routes, client, _calls = api
+    monkeypatch.setattr(routes, "list_subscriptions", lambda _dir: [])
+    monkeypatch.setattr(routes, "list_subscription_routing_balancers", lambda _dir: [])
+    monkeypatch.setattr(routes, "get_subscription_routing_meta", lambda _dir: {})
+    monkeypatch.setattr(
+        routes.subscription_pause,
+        "last_notice",
+        lambda _dir: {"action": "pause", "warning": "Не возвращено: сервер «a».", "skipped": []},
+    )
+
+    response = client.get("/api/xray/subscriptions")
+
+    assert response.status_code == 200
+    assert response.get_json()["switch_notice"]["action"] == "pause"

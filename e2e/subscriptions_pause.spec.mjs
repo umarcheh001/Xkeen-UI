@@ -25,12 +25,18 @@ function sub(id, extra = {}) {
 
 // Подставной сервер: список подписок, прогноз и сам рубильник.
 async function mockApi(page, { subs = [sub('alpha'), sub('beta')], dns = { outcome: 'none', restarts: 1 }, onSwitch } = {}) {
-  const state = { paused: false, deleted: false, posts: [] };
+  const state = { paused: false, deleted: false, posts: [], notice: {} };
   await page.route('**/api/xray/subscriptions', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     const list = state.deleted ? [] : subs.map((item) => ({ ...item, paused: state.paused }));
     await route.fulfill({
-      json: { ok: true, subscriptions: list, paused: state.paused && list.length > 0, paused_ts: state.paused ? 1790970900 : null },
+      json: {
+        ok: true,
+        subscriptions: list,
+        paused: state.paused && list.length > 0,
+        paused_ts: state.paused ? 1790970900 : null,
+        switch_notice: state.notice,
+      },
     });
   });
   await page.route('**/api/xray/subscriptions/pause-plan', async (route) => {
@@ -42,6 +48,7 @@ async function mockApi(page, { subs = [sub('alpha'), sub('beta')], dns = { outco
     state.posts.push({ action, body });
     if (onSwitch) {
       const custom = onSwitch({ action, body, state });
+      if (custom === 'abort') return route.abort('connectionreset');
       if (custom) return route.fulfill(custom);
     }
     if (action === 'delete-all') {
@@ -151,6 +158,47 @@ test.describe('рубильник подписок', () => {
     await expect(status).toHaveClass(/is-warning/);
     await expect(status).not.toHaveClass(/is-success/);
     await expect(banner(page)).toBeVisible();
+  });
+
+  test('связь оборвалась на перезапуске: окно всё равно говорит, что не вернулось', async ({ page }) => {
+    const warning = 'Не возвращено на прежнее место, потому что изменено вручную: сервер «vless-reality».';
+    await mockApi(page, {
+      onSwitch: ({ state }) => {
+        // Роутер довёл паузу до конца, но ответ до окна не дошёл.
+        state.paused = true;
+        state.notice = { action: 'pause', warning, skipped: [] };
+        return 'abort';
+      },
+    });
+    await openSubscriptions(page);
+
+    await masterWrap(page).click();
+    await page.locator('#confirm-modal-ok-btn').click();
+
+    const status = page.locator('#outbounds-subscriptions-status');
+    await expect(status).toContainText('Жду итог');
+    await expect(status).toContainText(warning, { timeout: 15000 });
+    await expect(status).toHaveClass(/is-warning/);
+    await expect(banner(page)).toBeVisible();
+  });
+
+  test('чужое сообщение от прошлого переключения окно не показывает', async ({ page }) => {
+    await mockApi(page, {
+      onSwitch: ({ state }) => {
+        state.paused = true;
+        state.notice = { action: 'resume', warning: 'старое сообщение', skipped: [] };
+        return 'abort';
+      },
+    });
+    await openSubscriptions(page);
+
+    await masterWrap(page).click();
+    await page.locator('#confirm-modal-ok-btn').click();
+
+    const status = page.locator('#outbounds-subscriptions-status');
+    await expect(status).toContainText('Подписки приостановлены.', { timeout: 15000 });
+    await expect(status).not.toContainText('старое сообщение');
+    await expect(status).toHaveClass(/is-success/);
   });
 
   test('отказ в подтверждении ничего не отправляет', async ({ page }) => {
