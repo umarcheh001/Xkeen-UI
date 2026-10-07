@@ -127,7 +127,15 @@ def test_request_cancel_never_signals_a_process_by_its_number(tmp_path, listenin
     _channel, address, _asked = listening
     panel, journal = _operation(tmp_path)
     journal.set_cancel_channel(address)
-    monkeypatch.setattr(os, "kill", lambda *_args: pytest.fail("must not signal by PID"))
+    real_kill = os.kill
+
+    def only_probe(pid, sig):
+        # Сигнал 0 ничего не посылает: так на Linux узнают, жив ли процесс.
+        if sig != 0:
+            pytest.fail("must not signal by PID")
+        return real_kill(pid, sig)
+
+    monkeypatch.setattr(os, "kill", only_probe)
 
     request_cancel(panel.root, panel.state, OPERATION_ID)
 
