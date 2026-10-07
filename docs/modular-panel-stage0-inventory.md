@@ -36,15 +36,15 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 | Module ID | Единиц | Размер | Routes | Background | UI surfaces | Removable |
 |---|---:|---:|---:|---:|---:|---|
-| `core` | 496 | 6.47 МБ | 104 | 4 | 35 | нет |
-| `engine.xray` | 128 | 3.50 МБ | 60 | 3 | 14 | да |
+| `core` | 497 | 6.50 МБ | 104 | 4 | 35 | нет |
+| `engine.xray` | 134 | 3.59 МБ | 60 | 3 | 14 | да |
 | `engine.mihomo` | 128 | 2.93 МБ | 89 | 4 | 6 | да |
 | `tool.editor` | 25 | 813.5 КБ | 0 | 0 | 2 | да |
 | `tool.terminal` | 49 | 496.5 КБ | 2 | 2 | 2 | да |
-| `tool.files` | 85 | 972.8 КБ | 43 | 1 | 1 | да |
+| `tool.files` | 85 | 976.0 КБ | 43 | 1 | 1 | да |
 | `tool.backups` | 12 | 112.6 КБ | 17 | 0 | 1 | да |
 | `integration.happ` | 22 | 306.5 КБ | 5 | 0 | 1 | да |
-| `tool.advanced-diagnostics` | 25 | 584.4 КБ | 8 | 0 | 2 | да |
+| `tool.advanced-diagnostics` | 25 | 585.1 КБ | 8 | 0 | 2 | да |
 
 ## Backend routes и регистрация
 
@@ -102,7 +102,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 | `core` | `tool.advanced-diagnostics` | 8 | `xkeen-ui/routes/__init__.py`<br>`xkeen-ui/services/router_modem_control.py`<br>`tests/test_devtools_env_whitelist.py` |
 | `core` | `tool.backups` | 10 | `xkeen-ui/app_factory.py`<br>`xkeen-ui/routes/__init__.py`<br>`tests/test_backup_path_hardening.py` |
 | `core` | `tool.editor` | 10 | `xkeen-ui/static/js/pages/panel.editor.bundle.js`<br>`xkeen-ui/static/js/pages/panel.editor.codemirror.bundle.js`<br>`xkeen-ui/static/js/pages/panel.editor.diff.bundle.js` |
-| `core` | `tool.files` | 7 | `xkeen-ui/routes/__init__.py`<br>`tests/test_filemanager_trash_policy.py`<br>`tests/test_module_backend_gates.py` |
+| `core` | `tool.files` | 9 | `xkeen-ui/app_factory.py`<br>`xkeen-ui/routes/__init__.py`<br>`tests/test_filemanager_trash_policy.py` |
 | `core` | `tool.terminal` | 16 | `xkeen-ui/app.py`<br>`xkeen-ui/app_factory.py`<br>`xkeen-ui/run_server.py` |
 | `engine.mihomo` | `core` | 128 | `xkeen-ui/bootstrap_mihomo_env.py`<br>`xkeen-ui/mihomo_config_generator.py`<br>`xkeen-ui/mihomo_server_core.py` |
 | `engine.mihomo` | `engine.xray` | 6 | `xkeen-ui/routes/mihomo.py`<br>`xkeen-ui/services/mihomo_clash_devices.py`<br>`xkeen-ui/services/mihomo_clash_dto.py` |
@@ -111,11 +111,11 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 | `engine.mihomo` | `tool.backups` | 1 | `xkeen-ui/routes/mihomo.py` |
 | `engine.mihomo` | `tool.editor` | 128 | `xkeen-ui/bootstrap_mihomo_env.py`<br>`xkeen-ui/mihomo_config_generator.py`<br>`xkeen-ui/mihomo_server_core.py` |
 | `engine.mihomo` | `tool.terminal` | 3 | `xkeen-ui/routes/mihomo.py`<br>`xkeen-ui/services/mihomo_dns.py`<br>`xkeen-ui/services/mihomo_runtime.py` |
-| `engine.xray` | `core` | 128 | `xkeen-ui/routes/routing/__init__.py`<br>`xkeen-ui/routes/routing/blueprint.py`<br>`xkeen-ui/routes/routing/config.py` |
+| `engine.xray` | `core` | 134 | `xkeen-ui/routes/routing/__init__.py`<br>`xkeen-ui/routes/routing/blueprint.py`<br>`xkeen-ui/routes/routing/config.py` |
 | `engine.xray` | `engine.mihomo` | 1 | `xkeen-ui/services/xray_subscriptions.py` |
 | `engine.xray` | `integration.happ` | 2 | `xkeen-ui/services/xray_subscriptions.py`<br>`xkeen-ui/static/js/features/outbounds.js` |
 | `engine.xray` | `tool.backups` | 2 | `xkeen-ui/routes/routing/config.py`<br>`xkeen-ui/routes/xray_configs.py` |
-| `engine.xray` | `tool.editor` | 128 | `xkeen-ui/routes/routing/__init__.py`<br>`xkeen-ui/routes/routing/blueprint.py`<br>`xkeen-ui/routes/routing/config.py` |
+| `engine.xray` | `tool.editor` | 134 | `xkeen-ui/routes/routing/__init__.py`<br>`xkeen-ui/routes/routing/blueprint.py`<br>`xkeen-ui/routes/routing/config.py` |
 | `engine.xray` | `tool.files` | 3 | `xkeen-ui/routes/routing/dat.py`<br>`xkeen-ui/routes/routing/dat_files.py`<br>`xkeen-ui/services/geodat/runner.py` |
 | `engine.xray` | `tool.terminal` | 2 | `xkeen-ui/routes/routing/config.py`<br>`xkeen-ui/routes/xray_configs.py` |
 | `integration.happ` | `core` | 22 | `xkeen-ui/routes/happ_decryptor.py`<br>`xkeen-ui/services/happ_decryptor/__init__.py`<br>`xkeen-ui/services/happ_decryptor/engine.py` |

@@ -11,6 +11,14 @@ from typing import Any, Dict
 from services.fileops.runtime import FileOpsRuntime
 from services.fileops.job_models import FileOpJob
 from services.fileops.local_backend import _copyfile_no_stat, _copytree_no_stat, _safe_move_no_stat
+from services.fs_common.local import PROTECTED_PANEL_DATA_MESSAGE, _local_is_panel_data_abs
+
+
+def _protected_reason(*paths: str) -> str:
+    # Про служебные данные панели говорим словами: код тут ничего не объяснит.
+    if any(_local_is_panel_data_abs(path) for path in paths):
+        return PROTECTED_PANEL_DATA_MESSAGE
+    return 'protected_path'
 
 
 def run_job_copy_move(job: FileOpJob, spec: Dict[str, Any], rt: FileOpsRuntime) -> None:
@@ -194,7 +202,7 @@ def run_job_copy_move(job: FileOpJob, spec: Dict[str, Any], rt: FileOpsRuntime) 
 
                     # Protect Keenetic /tmp/mnt mount labels from being moved/renamed.
                     if rt.local_is_protected_entry_abs(sp) or rt.local_is_protected_entry_abs(dp):
-                        raise RuntimeError('protected_path')
+                        raise RuntimeError(_protected_reason(sp, dp))
 
                     # Moving onto itself is a no-op; never delete the source.
                     if _same_local(sp, dp):
@@ -249,7 +257,7 @@ def run_job_copy_move(job: FileOpJob, spec: Dict[str, Any], rt: FileOpsRuntime) 
                 # dpath is already resolved above; keep as a safety net.
                 dp = ensure_nofollow(dpath)
                 if rt.local_is_protected_entry_abs(dp):
-                    raise RuntimeError('protected_path')
+                    raise RuntimeError(_protected_reason(dp))
                 # overwrite policy
                 if os.path.exists(dp):
                     action = _decide_overwrite_action(spath=str(spath), sname=str(sname), dpath=str(dp))
@@ -379,7 +387,7 @@ def run_job_copy_move(job: FileOpJob, spec: Dict[str, Any], rt: FileOpsRuntime) 
                     dp = _next_copy_path_local(dp)
 
                 if rt.local_is_protected_entry_abs(dp):
-                    raise RuntimeError('protected_path')
+                    raise RuntimeError(_protected_reason(dp))
 
                 if os.path.exists(dp):
                     action = _decide_overwrite_action(spath=str(spath), sname=str(sname), dpath=str(dp))

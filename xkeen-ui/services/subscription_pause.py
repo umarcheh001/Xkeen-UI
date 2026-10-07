@@ -13,17 +13,20 @@ the change there is one restart and DNS is not touched at all.
 
 from __future__ import annotations
 
+import copy
 import os
 import threading
 import time
-import uuid
 from typing import Any, Callable, Dict, List, Optional
 
 from services import dns_over_vless as dov
+from services import xray_subscription_displacement as displacement
 from services import xray_subscriptions as subs
+from services import xray_transactions
 from services.io.atomic import _atomic_write_json
 
 RECORD_FILENAME = "xray_subscriptions_pause.json"
+NOTICE_FILENAME = "xray_subscriptions_notice.json"
 
 _LOCK = threading.RLock()
 
@@ -57,6 +60,34 @@ def _drop_record(ui_state_dir: str) -> None:
     try:
         os.remove(_record_path(ui_state_dir))
     except FileNotFoundError:
+        pass
+
+
+def _notice_path(ui_state_dir: str) -> str:
+    return os.path.join(str(ui_state_dir or ""), NOTICE_FILENAME)
+
+
+def last_notice(ui_state_dir: str) -> Dict[str, Any]:
+    """Что последнее переключение не вернуло на место; пусто, если вернуло всё."""
+    value = subs._read_json_file(_notice_path(ui_state_dir), {})
+    return value if isinstance(value, dict) else {}
+
+
+def _store_notice(ui_state_dir: str, action: str, warning: str, skipped: List[Any]) -> None:
+    # Перезапуск ядра нередко рвёт и соединение с панелью: ответ до окна не
+    # доходит, и итог оно берёт из списка подписок.  Сказанное в ответе должно
+    # пережить этот обрыв.  Каждое переключение пишет своё или стирает чужое.
+    try:
+        if warning or skipped:
+            _atomic_write_json(
+                _notice_path(ui_state_dir),
+                {"action": action, "ts": int(time.time()), "warning": warning, "skipped": list(skipped)},
+            )
+        else:
+            os.remove(_notice_path(ui_state_dir))
+    except FileNotFoundError:
+        pass
+    except Exception:  # noqa: BLE001 - сообщение не повод ронять выполненную операцию
         pass
 
 
@@ -149,10 +180,15 @@ def _predict_paused(ui_state_dir: str, xray_configs_dir: str, view: Dict[str, An
     outbounds = [item for item in runtime.get("outbounds", []) if item.get("file") not in files]
     known = {item["tag"] for item in outbounds}
     # "Subscription only" moved the owner's servers aside; a pause brings them back.
-    aside = subs._read_json_file(
-        subs._disabled_config_path(subs._config_fragment_path(xray_configs_dir, subs.OUTBOUNDS_FILE)), None
-    )
-    for item in (aside.get("outbounds") if isinstance(aside, dict) else None) or []:
+    journal = displacement.normalize(state.get(subs.DISPLACED_KEY))
+    aside_items = [entry.get("outbound") for entry in journal.get("outbounds") or []]
+    if not aside_items:
+        # A router that entered the mode on an older version keeps them in a file.
+        aside = subs._read_json_file(
+            subs._disabled_config_path(subs._config_fragment_path(xray_configs_dir, subs.OUTBOUNDS_FILE)), None
+        )
+        aside_items = (aside.get("outbounds") if isinstance(aside, dict) else None) or []
+    for item in aside_items:
         tag = dov._clean_tag(item.get("tag")) if isinstance(item, dict) else ""
         if tag and tag not in known:
             known.add(tag)
@@ -172,7 +208,7 @@ def _predict_paused(ui_state_dir: str, xray_configs_dir: str, view: Dict[str, An
         subs._effective_subscription_routing_mode(ui_state_dir) == subs.ROUTING_MODE_SUBSCRIPTION_ONLY
     )
     if subscription_only and isinstance(baseline, dict) and baseline.get("exists"):
-        # This mode is undone by writing the remembered routing back whole.
+        # Entered on an older version: undone by writing the remembered routing back whole.
         before = subs._load_jsonc_text(str(baseline.get("text") or "")) or {}
         before_model = before.get("routing") if isinstance(before.get("routing"), dict) else {}
         clone = dov._find_managed_clone(view["routing"])
@@ -180,8 +216,18 @@ def _predict_paused(ui_state_dir: str, xray_configs_dir: str, view: Dict[str, An
         if clone:
             balancers.append(clone)
     else:
-        # Otherwise the panel's own pool goes away once only the owner's
-        # preserved server would be left in it.
+        # What the mode took from the owner's balancers comes back from the
+        # journal; the subscriptions' own terms leave with the subscriptions.
+        balancers = copy.deepcopy(balancers)
+        forecast = copy.deepcopy(journal)
+        touched = set((forecast.get("selectors") or {}).keys())
+        displacement.return_balancers(forecast, balancers)
+        displacement.return_selectors(forecast, balancers)
+        for item in balancers:
+            if dov._clean_tag(item.get("tag")) in touched:
+                item["selector"] = [value for value in item.get("selector") or [] if value not in terms]
+        # The panel's own pool goes away once only the owner's preserved
+        # server would be left in it.
         pool_tag = subs._choose_auto_balancer_tag(model)
         preserved = set(subs._preserved_balancer_tags(xray_configs_dir))
         kept = []
@@ -275,50 +321,17 @@ def plan(*, ui_state_dir: str, xray_configs_dir: str, routing_file: str) -> Dict
 # --- undoing a half-done change --------------------------------------------------
 
 
-class _Guard:
+def _Guard(ui_state_dir: str, xray_configs_dir: str) -> xray_transactions.MemoryGuard:
     """Byte copy of everything a pause or resume may rewrite."""
-
-    def __init__(self, ui_state_dir: str, xray_configs_dir: str):
-        jsonc_dir = os.path.dirname(subs.jsonc_path_for(subs._config_fragment_path(xray_configs_dir, subs.ROUTING_FILE)))
-        self._dirs = [path for path in dict.fromkeys([xray_configs_dir, jsonc_dir]) if path and os.path.isdir(path)]
-        self._snap: Dict[str, Optional[bytes]] = {}
-        for directory in self._dirs:
-            for name in os.listdir(directory):
-                path = os.path.join(directory, name)
-                if os.path.isfile(path):
-                    self._snap[path] = self._read(path)
-        for path in (
+    jsonc_dir = os.path.dirname(subs.jsonc_path_for(subs._config_fragment_path(xray_configs_dir, subs.ROUTING_FILE)))
+    return xray_transactions.MemoryGuard(
+        dirs=[xray_configs_dir, jsonc_dir, subs.ensure_paused_store_dir(ui_state_dir)],
+        paths=[
             subs.subscription_state_path(ui_state_dir),
             dov._state_path(ui_state_dir),
             _record_path(ui_state_dir),
-        ):
-            self._snap[path] = self._read(path)
-
-    @staticmethod
-    def _read(path: str) -> Optional[bytes]:
-        try:
-            with open(path, "rb") as handle:
-                return handle.read()
-        except FileNotFoundError:
-            return None
-
-    def restore(self) -> None:
-        for directory in self._dirs:
-            for name in os.listdir(directory):
-                path = os.path.join(directory, name)
-                if os.path.isfile(path) and path not in self._snap:
-                    os.remove(path)
-        for path, data in self._snap.items():
-            if data is None:
-                try:
-                    os.remove(path)
-                except FileNotFoundError:
-                    pass
-            elif self._read(path) != data:
-                temp = f"{path}.{uuid.uuid4().hex}.tmp"
-                with open(temp, "wb") as handle:
-                    handle.write(data)
-                os.replace(temp, path)
+        ],
+    )
 
 
 def _restart(restart_xkeen: Callable[..., Any], source: str) -> bool:
@@ -390,9 +403,22 @@ def _switch(
         before_kinds = _with_kinds(before["selection"], _usable(view["runtime"], view["routing"]))
         outlook = _pause_outlook(ui_state_dir, xray_configs_dir, view) if pausing else {}
 
+        notes: Dict[str, Any] = {"warning": "", "skipped": []}
+
         def _apply_files() -> Dict[str, Any]:
             operation = subs.pause_subscriptions if pausing else subs.resume_subscriptions
-            return operation(ui_state_dir, xray_configs_dir=xray_configs_dir, snapshot=snapshot)
+            applied = operation(ui_state_dir, xray_configs_dir=xray_configs_dir, snapshot=snapshot)
+            # Запоминается последний проход: первый могли откатить и пойти длинным путём.
+            notes["skipped"] = list(applied.get("skipped") or [])
+            return applied
+
+        def _confirm(guard: xray_transactions.MemoryGuard) -> None:
+            # Перед перезапуском, а не после: ядро, которое не поднялось на
+            # отклонённом конфиге, оставило бы сеть без прокси.
+            try:
+                notes["warning"] = subs._confirm_live_config(guard, xray_configs_dir)
+            except subs.SubscriptionConfigRejected as exc:
+                raise PauseError(str(exc), code="xray_config_rejected", details={"rolled_back": True})
 
         def _finish(*, restarts: int, restarted: bool, round_trip: bool) -> Dict[str, Any]:
             after = _brief(_dns_now(ui_state_dir, xray_configs_dir, routing_file))
@@ -408,6 +434,10 @@ def _switch(
                 )
             else:
                 _drop_record(ui_state_dir)
+            warning = " ".join(
+                part for part in (subs.displaced_skipped_warning(notes["skipped"]), notes["warning"]) if part
+            )
+            _store_notice(ui_state_dir, direction, warning, notes["skipped"])
             return {
                 "ok": True,
                 "changed": True,
@@ -416,6 +446,8 @@ def _switch(
                 "restarted": bool(restarted),
                 "restarts": restarts,
                 "dns": _dns_result(before, after, round_trip=round_trip, restored=restore),
+                "warning": warning,
+                "skipped": notes["skipped"],
             }
 
         # One restart, DNS untouched: nothing to protect, or the route survives.
@@ -425,6 +457,7 @@ def _switch(
             try:
                 _apply_files()
                 if dns_idle or _intact(_dns_now(ui_state_dir, xray_configs_dir, routing_file)):
+                    _confirm(guard)
                     restarted = _restart(restart_xkeen, source)
                     return _finish(restarts=1, restarted=restarted, round_trip=False)
             except Exception:
@@ -473,6 +506,7 @@ def _switch(
                 dov.apply_action("enable", target_tag=target, **dns_args)
                 restarted = True
             else:
+                _confirm(guard)
                 restarted = _restart(restart_xkeen, source)
             restarts += 1
         except Exception as exc:
@@ -565,6 +599,9 @@ def delete_all(
             deleted += 1
         # Nothing is left to resume, so nothing to remember about DNS either.
         _drop_record(ui_state_dir)
+        warning = str(switched.get("warning") or "")
+        skipped = list(switched.get("skipped") or [])
+        _store_notice(ui_state_dir, "delete_all", warning, skipped)
 
         return {
             "ok": True,
@@ -574,4 +611,6 @@ def delete_all(
             "restarted": bool(switched.get("restarted")),
             "restarts": int(switched.get("restarts") or 0),
             "dns": switched["dns"],
+            "warning": warning,
+            "skipped": skipped,
         }

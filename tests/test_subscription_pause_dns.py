@@ -335,3 +335,52 @@ def test_owners_balancer_is_offered_first_when_dns_has_to_move(tmp_path: Path, m
 
     assert result["dns"]["to"] == ["my-pool"]
     assert rig.dns() == {"enabled": True, "selection": ["my-pool"]}
+
+
+def _put_own_server_back_by_hand(rig: Rig) -> None:
+    path = rig.bench.xray / "04_outbounds.json"
+    outbounds = json.loads(path.read_text(encoding="utf-8"))
+    outbounds["outbounds"].insert(0, {"tag": "vless-reality", "protocol": "vless", "settings": {"mine": True}})
+    path.write_text(json.dumps(outbounds, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def test_pause_tells_what_it_did_not_put_back(rig: Rig):
+    rig.bench.add("alpha", routing_mode="subscription-only")
+    _put_own_server_back_by_hand(rig)
+
+    result = rig.pause()
+
+    assert result["ok"] is True
+    assert {"kind": "outbound", "name": "vless-reality", "reason": "exists"} in result["skipped"]
+    assert "сервер «vless-reality»" in result["warning"]
+
+
+def test_pause_with_everything_returned_has_nothing_to_tell(rig: Rig):
+    rig.bench.add("alpha", routing_mode="subscription-only")
+
+    result = rig.pause()
+
+    assert result["skipped"] == []
+    assert result["warning"] == ""
+
+
+def test_what_was_not_put_back_is_kept_for_a_window_that_lost_the_answer(rig: Rig):
+    rig.bench.add("alpha", routing_mode="subscription-only")
+    _put_own_server_back_by_hand(rig)
+
+    result = rig.pause()
+
+    notice = rig.pause_mod.last_notice(str(rig.bench.state))
+    assert notice["action"] == "pause"
+    assert notice["warning"] == result["warning"]
+    assert notice["skipped"] == result["skipped"]
+
+
+def test_a_clean_switch_leaves_no_stale_notice(rig: Rig):
+    rig.bench.add("alpha", routing_mode="subscription-only")
+    _put_own_server_back_by_hand(rig)
+    rig.pause()
+
+    rig.resume()
+
+    assert rig.pause_mod.last_notice(str(rig.bench.state)) == {}

@@ -12,6 +12,7 @@ from services import subscription_pause
 from services.latency_jobs import create_latency_job, get_latency_job
 from services.xray_config_files import ROUTING_FILE
 from services.xray_subscriptions import (
+    SubscriptionConfigRejected,
     apply_schedule_alignment,
     delete_subscription,
     get_subscription_routing_meta,
@@ -87,6 +88,8 @@ def create_xray_subscriptions_blueprint(
                         # One switch for all of them; the date is when it was thrown.
                         "paused": bool(paused_since),
                         "paused_ts": min((ts for ts in paused_since if ts), default=None),
+                        # Для окна, которое потеряло ответ на перезапуске ядра.
+                        "switch_notice": subscription_pause.last_notice(ui_state_dir),
                         "routing_balancers": list_subscription_routing_balancers(xray_configs_dir),
                         "routing_meta": get_subscription_routing_meta(xray_configs_dir),
                     }
@@ -165,6 +168,8 @@ def create_xray_subscriptions_blueprint(
             )
         except KeyError:
             return error_response("subscription not found", 404, ok=False)
+        except SubscriptionConfigRejected as exc:
+            return error_response(str(exc), 409, ok=False, code="xray_config_rejected")
         except Exception as exc:
             return exception_response(
                 "Не удалось удалить подписку Xray.",

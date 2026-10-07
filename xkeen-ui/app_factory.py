@@ -799,7 +799,11 @@ def create_app(*, ws_runtime: bool = False):
 
     if "engine.xray" in active_modules:
         try:
-            from services.xray_subscriptions import start_subscription_scheduler
+            from services.fs_common.local import protect_local_path
+            from services.xray_subscriptions import protected_state_paths, start_subscription_scheduler
+
+            for _protected_path, _subtree in protected_state_paths(UI_STATE_DIR):
+                protect_local_path(_protected_path, subtree=_subtree)
 
             start_subscription_scheduler(
                 UI_STATE_DIR,

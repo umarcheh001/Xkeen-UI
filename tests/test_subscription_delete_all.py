@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -26,7 +27,8 @@ def _subscriptions(rig: Rig) -> list:
 
 
 def _leftovers(rig: Rig) -> list[str]:
-    return sorted(name for name in os.listdir(rig.bench.xray) if "alpha" in name or "beta" in name)
+    in_configs = [name for name in os.listdir(rig.bench.xray) if "alpha" in name or "beta" in name]
+    return sorted(in_configs + rig.bench.set_aside())
 
 
 def test_delete_all_returns_configs_to_own_servers_with_one_restart(rig: Rig):
@@ -104,3 +106,31 @@ def test_delete_all_with_nothing_to_delete_is_a_no_op(rig: Rig):
     assert result["deleted"] == 0
     assert result["changed"] is False
     assert rig.restarts == []
+
+
+def test_delete_all_tells_what_it_did_not_put_back(rig: Rig):
+    rig.bench.add("alpha", routing_mode="subscription-only")
+    path = rig.bench.xray / "04_outbounds.json"
+    outbounds = json.loads(path.read_text(encoding="utf-8"))
+    outbounds["outbounds"].insert(0, {"tag": "vless-reality", "protocol": "vless", "settings": {"mine": True}})
+    path.write_text(json.dumps(outbounds, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    result = _delete_all(rig)
+
+    assert result["deleted"] == 1
+    assert {"kind": "outbound", "name": "vless-reality", "reason": "exists"} in result["skipped"]
+    assert "сервер «vless-reality»" in result["warning"]
+
+
+def test_delete_all_keeps_the_notice_under_its_own_name(rig: Rig):
+    rig.bench.add("alpha", routing_mode="subscription-only")
+    path = rig.bench.xray / "04_outbounds.json"
+    outbounds = json.loads(path.read_text(encoding="utf-8"))
+    outbounds["outbounds"].insert(0, {"tag": "vless-reality", "protocol": "vless", "settings": {"mine": True}})
+    path.write_text(json.dumps(outbounds, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    result = _delete_all(rig)
+
+    notice = rig.pause_mod.last_notice(str(rig.bench.state))
+    assert notice["action"] == "delete_all"
+    assert notice["warning"] == result["warning"]

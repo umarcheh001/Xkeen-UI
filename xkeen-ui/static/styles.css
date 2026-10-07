@@ -10224,6 +10224,41 @@ html[data-theme="light"] .xk-sub-draft-badge {
 
 .xk-sub-state[data-state="bad"] i { background: #f87171; }
 
+.xk-sub-due-count {
+  margin-left: 6px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: rgba(251, 191, 36, 0.18);
+  color: #fcd34d;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.xk-sub-mode-pill {
+  display: inline-block;
+  max-width: 60%;
+  margin-left: 10px;
+  padding: 2px 9px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 999px;
+  color: #a8b3c7;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xk-sub-mode-pill.is-edit {
+  border-color: rgba(139, 140, 246, 0.55);
+  background: rgba(139, 140, 246, 0.14);
+  color: #c7c8ff;
+}
+
 .xk-sub-muted {
   margin-top: 3px;
   color: #94a3b8;

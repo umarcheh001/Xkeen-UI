@@ -13471,6 +13471,24 @@ body.panel-page #outbounds-subscriptions-modal .xk-sub-state[data-state="bad"] i
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--op-danger) 18%, transparent);
 }
 
+body.panel-page #outbounds-subscriptions-modal .xk-sub-due-count {
+  background: color-mix(in srgb, var(--op-warning) 18%, transparent);
+  color: var(--op-warning);
+  font-size: calc(11px * var(--xk-font-scale, 1));
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-mode-pill {
+  border-color: var(--op-border-strong);
+  color: var(--op-muted);
+  font-size: calc(11px * var(--xk-font-scale, 1));
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-mode-pill.is-edit {
+  border-color: var(--op-accent-border);
+  background: var(--op-accent-soft);
+  color: var(--op-accent);
+}
+
 body.panel-page #outbounds-subscriptions-modal .xk-sub-draft-badge {
   margin-left: 7px;
   padding: 1px 6px;
