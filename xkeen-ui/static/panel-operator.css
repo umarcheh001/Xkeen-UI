@@ -13124,6 +13124,82 @@ body.panel-page #outbounds-subscriptions-modal .xk-sub-advanced-grid {
   padding: 12px;
 }
 
+body.panel-page #outbounds-subscriptions-modal .xk-sub-request-profile {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-control-radius);
+  background: color-mix(in srgb, var(--op-editor) 72%, transparent);
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-request-profile-head,
+body.panel-page #outbounds-subscriptions-modal .xk-sub-request-profile-status {
+  grid-column: 1 / -1;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-request-profile-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-request-mode-field {
+  grid-column: 1 / -1;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-request-mode-field,
+body.panel-page #outbounds-subscriptions-modal .xk-sub-request-fields label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-request-mode {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-request-mode button {
+  min-height: 32px;
+  padding: 5px 8px;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-control-radius) !important;
+  background: var(--op-editor) !important;
+  color: var(--op-data-muted) !important;
+  cursor: pointer;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-request-mode button.is-active {
+  border-color: var(--op-accent) !important;
+  background: color-mix(in srgb, var(--op-accent) 22%, var(--op-editor)) !important;
+  color: var(--op-text) !important;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-request-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-request-fields .xk-sub-request-ua,
+body.panel-page #outbounds-subscriptions-modal .xk-sub-request-fields label:last-child {
+  grid-column: 1 / -1;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-request-profile input:disabled {
+  opacity: 0.72;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-request-profile-status {
+  color: var(--op-data-muted);
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  line-height: 1.35;
+}
+
 body.panel-page #outbounds-subscriptions-modal .xk-sub-controls {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -16862,6 +16938,16 @@ body.panel-page :is(#json-editor-modal, #fm-editor-modal) :is(#json-editor-save-
 
   body.panel-page .xk-sub-advanced-grid > :is(.xk-sub-span-3, .xk-sub-span-4, .xk-sub-span-5, .xk-sub-wide, .xk-sub-controls, .xk-sub-balancers) {
     grid-column: 1 / -1;
+  }
+
+  body.panel-page #outbounds-subscriptions-modal .xk-sub-request-profile,
+  body.panel-page #outbounds-subscriptions-modal .xk-sub-request-fields,
+  body.panel-page #outbounds-subscriptions-modal .xk-sub-request-mode {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.panel-page #outbounds-subscriptions-modal .xk-sub-request-profile-head {
+    align-items: flex-start;
   }
 
   body.panel-page .xk-sub-advanced > summary {

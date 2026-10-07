@@ -58,6 +58,28 @@ def test_xray_subscription_form_exposes_regex_filters_and_payload_fields():
     )[1].split('}', 1)[0]
 
 
+def test_xray_subscription_modal_exposes_request_profile_controls():
+    outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")
+    operator_styles_src = _read("xkeen-ui/static/panel-operator.css")
+
+    assert "requestProfileMode: 'outbounds-subscriptions-request-profile-mode'" in outbounds_src
+    assert "requestHwid: 'outbounds-subscriptions-request-hwid'" in outbounds_src
+    assert "requestUserAgent: 'outbounds-subscriptions-request-user-agent'" in outbounds_src
+    assert "requestDeviceOs: 'outbounds-subscriptions-request-device-os'" in outbounds_src
+    assert "requestOsVersion: 'outbounds-subscriptions-request-os-version'" in outbounds_src
+    assert "requestDeviceModel: 'outbounds-subscriptions-request-device-model'" in outbounds_src
+    assert "requestProfileReset: 'outbounds-subscriptions-request-profile-reset'" in outbounds_src
+    assert "function subsReadRequestProfile()" in outbounds_src
+    assert "function subsSyncRequestProfileControls(" in outbounds_src
+    assert "button.dataset.xkSubRequestModeBound" in outbounds_src
+    assert "modeRoot.dataset.requestProfileMode" in outbounds_src
+    assert "subsSelectRequestProfileMode(nextMode);" in outbounds_src
+    assert "request_profile: subsReadRequestProfile()," in outbounds_src
+    assert "request_profile: state.request_profile," in outbounds_src
+    assert "/api/xray/subscriptions/request-profile" in outbounds_src
+    assert "xk-sub-request-profile" in operator_styles_src
+
+
 def test_outbounds_entware_mark_controls_are_wired_to_payloads():
     template_src = _read("xkeen-ui/templates/panel.html")
     outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")
