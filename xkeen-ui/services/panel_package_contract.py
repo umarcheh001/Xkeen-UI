@@ -1,0 +1,189 @@
+"""Static trust checks for a signed whole-panel release archive."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import re
+import tarfile
+from pathlib import PurePosixPath
+from typing import Any, Mapping
+
+from services.module_package_contract import (
+    ModulePackageContractError,
+    validate_panel_catalog_descriptor,
+)
+from services.module_registry import MODULE_IDS
+
+
+MAX_PANEL_EXPANDED_BYTES = 256 * 1024 * 1024
+MAX_OWNERSHIP_BYTES = 4 * 1024 * 1024
+_BOOTSTRAP_FILES = {"install.sh", "uninstall.sh"}
+_STATE_FILES = {"modules.json", "module-installed.json", "install-profile.json", "install-managed.json"}
+_USER_TOP_LEVEL = {"xray-jsonc", "var", "bin"}
+_USER_FILES = {
+    "secret.key",
+    "devtools.env",
+    "ui-settings.json",
+    "branding.json",
+    "terminal_theme.json",
+    "terminal_theme.css",
+}
+_USER_PREFIXES = ("opt/etc/mihomo/profiles/", "opt/etc/mihomo/backup/")
+_WINDOWS_DRIVE = re.compile(r"^[A-Za-z]:")
+
+
+def _fail(code: str, message: str, **details: Any) -> None:
+    raise ModulePackageContractError(code, message, **details)
+
+
+def _safe_member_path(value: object) -> str:
+    if not isinstance(value, str) or not value or "\\" in value or _WINDOWS_DRIVE.match(value):
+        _fail("panel_archive_path_unsafe", "panel archive path is not normalized")
+    parsed = PurePosixPath(value)
+    if parsed.is_absolute() or any(part in {"", ".", ".."} for part in parsed.parts):
+        _fail("panel_archive_path_unsafe", "panel archive path is not relative and normalized", path=value)
+    if any(ord(character) < 32 for character in value) or str(parsed) != value.rstrip("/"):
+        _fail("panel_archive_path_unsafe", "panel archive path is not normalized", path=value)
+    return str(parsed)
+
+
+def _user_owned(relative: str) -> bool:
+    return (
+        relative in _STATE_FILES
+        or relative in _USER_FILES
+        or relative == "opt/etc/mihomo/config.yaml"
+        or relative.startswith(_USER_PREFIXES)
+        or relative.split("/", 1)[0] in _USER_TOP_LEVEL
+    )
+
+
+def _string_paths(value: object, *, module_id: str) -> list[str]:
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        _fail("panel_archive_ownership_invalid", "ownership entries must be lists of paths", module_id=module_id)
+    normalized: list[str] = []
+    for item in value:
+        checked = _safe_member_path(item)
+        if checked != item or checked.startswith("xkeen-ui/") or _user_owned(checked):
+            _fail("panel_archive_ownership_invalid", "ownership path is outside the managed package", path=item)
+        normalized.append(checked)
+    if len(normalized) != len(set(normalized)):
+        _fail("panel_archive_ownership_invalid", "ownership paths must not contain duplicates", module_id=module_id)
+    return normalized
+
+
+def _validate_ownership(payload: bytes, managed_files: set[str]) -> dict[str, Any]:
+    try:
+        raw = json.loads(payload.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError) as error:
+        _fail("panel_archive_ownership_invalid", "module ownership is not valid UTF-8 JSON")
+    if not isinstance(raw, Mapping) or set(raw) != {"schema_version", "modules", "frontend"}:
+        _fail("panel_archive_ownership_invalid", "module ownership has an invalid shape")
+    if raw["schema_version"] != 1 or not isinstance(raw["modules"], Mapping) or not isinstance(raw["frontend"], Mapping):
+        _fail("panel_archive_ownership_invalid", "module ownership has an unsupported schema")
+    modules: dict[str, list[str]] = {}
+    claimed: set[str] = set()
+    for module_id, paths in raw["modules"].items():
+        if module_id not in MODULE_IDS:
+            _fail("panel_archive_ownership_invalid", "module ownership names an unknown module", module_id=module_id)
+        normalized = _string_paths(paths, module_id=module_id)
+        overlap = claimed.intersection(normalized)
+        if overlap:
+            _fail("panel_archive_ownership_invalid", "managed path has more than one owner", paths=sorted(overlap))
+        claimed.update(normalized)
+        modules[module_id] = normalized
+    if claimed != managed_files:
+        _fail(
+            "panel_archive_ownership_mismatch",
+            "module ownership does not match packaged managed files",
+            missing=sorted(managed_files - claimed),
+            extra=sorted(claimed - managed_files),
+        )
+    frontend = dict(raw["frontend"])
+    if set(frontend) != {"bridge", "build"} or any(not isinstance(value, Mapping) for value in frontend.values()):
+        _fail("panel_archive_ownership_invalid", "frontend ownership manifests have an invalid shape")
+    return {
+        "schema_version": 1,
+        "modules": modules,
+        "frontend": {"bridge": dict(frontend["bridge"]), "build": dict(frontend["build"])},
+    }
+
+
+def validate_panel_archive(
+    archive_path: os.PathLike[str] | str,
+    descriptor: Mapping[str, Any],
+    *,
+    platform_architecture: str,
+) -> dict[str, Any]:
+    """Verify archive identity, tar safety, mutable-state exclusion, and ownership."""
+
+    version = str(descriptor.get("version", "")) if isinstance(descriptor, Mapping) else ""
+    key_id = str(descriptor.get("signing_key_id", "")) if isinstance(descriptor, Mapping) else ""
+    normalized = validate_panel_catalog_descriptor(
+        descriptor,
+        release_version=version,
+        signing_key_id=key_id,
+        platform_architecture=platform_architecture,
+    )
+    path = os.fspath(archive_path)
+    if not os.path.isfile(path):
+        _fail("panel_archive_missing", "panel archive does not exist")
+    if os.path.getsize(path) != normalized["size"]:
+        _fail("panel_archive_size_mismatch", "panel archive size does not match its descriptor")
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    if digest.hexdigest() != normalized["sha256"]:
+        _fail("panel_archive_checksum_mismatch", "panel archive checksum does not match its descriptor")
+
+    seen: set[str] = set()
+    payload_files: list[str] = []
+    ownership_data: bytes | None = None
+    expanded_size = 0
+    try:
+        with tarfile.open(path, "r:gz") as archive:
+            for member in archive:
+                member_path = _safe_member_path(member.name)
+                if member_path in seen:
+                    _fail("panel_archive_member_duplicate", "panel archive contains duplicate members", path=member_path)
+                seen.add(member_path)
+                parts = PurePosixPath(member_path).parts
+                if not parts or parts[0] != "xkeen-ui":
+                    _fail("panel_archive_root_invalid", "panel archive must contain exactly one xkeen-ui root")
+                if member.isdir():
+                    continue
+                if not member.isreg():
+                    _fail("panel_archive_member_type_forbidden", "panel archive contains a non-regular member")
+                if len(parts) == 1:
+                    _fail("panel_archive_root_invalid", "xkeen-ui root cannot be a regular file")
+                relative = PurePosixPath(*parts[1:]).as_posix()
+                if _user_owned(relative):
+                    _fail("panel_archive_user_path_forbidden", "panel archive contains mutable user state", path=relative)
+                expanded_size += member.size
+                if expanded_size > MAX_PANEL_EXPANDED_BYTES:
+                    _fail("panel_archive_expanded_too_large", "panel archive exceeds its expanded size limit")
+                payload_files.append(relative)
+                if relative == "module-ownership.json":
+                    if member.size > MAX_OWNERSHIP_BYTES:
+                        _fail("panel_archive_ownership_invalid", "module ownership exceeds its size limit")
+                    extracted = archive.extractfile(member)
+                    if extracted is None:
+                        _fail("panel_archive_ownership_invalid", "module ownership cannot be read")
+                    ownership_data = extracted.read(MAX_OWNERSHIP_BYTES + 1)
+    except ModulePackageContractError:
+        raise
+    except (OSError, tarfile.TarError) as error:
+        raise ModulePackageContractError("panel_archive_invalid", "panel archive cannot be read") from error
+
+    if ownership_data is None:
+        _fail("panel_archive_ownership_missing", "panel archive has no module ownership map")
+    managed_files = set(payload_files) - _BOOTSTRAP_FILES
+    ownership = _validate_ownership(ownership_data, managed_files)
+    return {
+        "root": "xkeen-ui",
+        "payload_files": sorted(payload_files),
+        "expanded_size": expanded_size,
+        "ownership": ownership,
+    }

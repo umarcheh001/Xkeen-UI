@@ -358,9 +358,13 @@ def build_ownership_map(root: Path) -> dict[str, Any]:
         if not isinstance(entries, dict):
             raise ReleaseBuildError(f"invalid frontend manifest {relative}: not an object")
         frontend[key] = entries
+    ownership = {module_id: list(paths) for module_id, paths in build_module_ownership(root).items()}
+    if OWNERSHIP_MAP_FILENAME not in ownership["core"]:
+        ownership["core"].append(OWNERSHIP_MAP_FILENAME)
+        ownership["core"].sort()
     return {
         "schema_version": 1,
-        "modules": {module_id: list(paths) for module_id, paths in build_module_ownership(root).items()},
+        "modules": ownership,
         "frontend": frontend,
     }
 
@@ -648,7 +652,11 @@ def build_panel_archive(root: Path, output_dir: Path, *, version: str, epoch: in
     """Build the legacy-compatible panel payload without mutable runtime state."""
 
     path = Path(output_dir) / f"xkeen-ui-panel-{version}.tar.gz"
-    build_deterministic_tar(path, _panel_members(root), epoch=epoch)
+    members: dict[str, Path | bytes] = dict(_panel_members(root))
+    members[f"{PACKAGE_DIRNAME}/{OWNERSHIP_MAP_FILENAME}"] = (
+        json.dumps(build_ownership_map(root), ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
+    ).encode("utf-8")
+    build_deterministic_tar(path, members, epoch=epoch)
     return _built_asset(path)
 
 
@@ -683,6 +691,17 @@ def _catalog_entry(manifest: Mapping[str, Any], asset: BuiltAsset) -> dict[str, 
         "size": asset.size,
         "sha256": asset.sha256,
         "signing_key_id": "release-2026",
+    }
+
+
+def _panel_catalog_entry(panel: BuiltAsset, inputs: ReleaseInputs) -> dict[str, Any]:
+    return {
+        "archive": panel.path.name,
+        "size": panel.size,
+        "sha256": panel.sha256,
+        "version": inputs.version,
+        "signing_key_id": "release-2026",
+        "architectures": normalize_architectures(inputs.architectures),
     }
 
 
@@ -815,6 +834,7 @@ def build_release(
             "release_version": inputs.version,
             "channel": "stable",
             "source_commit": inputs.source_commit,
+            "panel": _panel_catalog_entry(panel, inputs),
             "modules": catalog_entries,
         },
     )

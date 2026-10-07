@@ -27,6 +27,7 @@ SUPPORTED_MODULE_API = "1"
 MANIFEST_SCHEMA_VERSION = 1
 # The ids a catalog entry may name. The release builder keeps the same list.
 CATALOG_ARCHITECTURES = ("aarch64", "mips", "mipsel")
+MAX_PANEL_ARCHIVE_BYTES = 64 * 1024 * 1024
 OFFICIAL_CATALOG_PREFIX = "/umarcheh001/Xkeen-UI/releases/download/"
 _SEMVER_RE = re.compile(
     r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
@@ -284,6 +285,75 @@ def validate_catalog_entry(
     }
 
 
+def validate_panel_catalog_descriptor(
+    descriptor: Mapping[str, Any],
+    *,
+    release_version: str,
+    signing_key_id: str,
+    trusted_signing_key_ids: AbstractSet[str] | None = None,
+    platform_architecture: str | None = None,
+) -> dict[str, Any]:
+    """Validate the signed descriptor for the whole-panel release asset."""
+
+    panel = _mapping(descriptor, "catalog_panel")
+    required = {"archive", "size", "sha256", "version", "signing_key_id", "architectures"}
+    missing = sorted(required - set(panel))
+    if missing:
+        _fail("catalog_panel_required_field", "panel descriptor is missing required fields", fields=missing)
+    unknown = sorted(set(panel) - required)
+    if unknown:
+        _fail("catalog_panel_field_unknown", "panel descriptor contains unknown fields", fields=unknown)
+
+    version = validate_semver(panel["version"], "catalog_panel_version")
+    expected_version = validate_semver(release_version, "catalog_release_version")
+    if version != expected_version:
+        _fail(
+            "catalog_panel_version_mismatch",
+            "panel version does not match the catalog release",
+            panel_version=version,
+            release_version=expected_version,
+        )
+    archive = str(panel["archive"] or "").strip()
+    if archive != f"xkeen-ui-panel-{version}.tar.gz" or "/" in archive or "\\" in archive:
+        _fail("catalog_panel_archive_not_filename", "panel archive must be the official release filename")
+    size = panel["size"]
+    if not isinstance(size, int) or isinstance(size, bool) or not 0 < size <= MAX_PANEL_ARCHIVE_BYTES:
+        _fail("catalog_panel_size_invalid", "panel archive size is outside the accepted range")
+    sha256 = str(panel["sha256"] or "")
+    if not _SHA256_RE.fullmatch(sha256):
+        _fail("catalog_panel_sha256_invalid", "panel archive sha256 must be lowercase hexadecimal")
+    architectures = _string_list(panel["architectures"], "catalog_panel_architectures")
+    if not architectures or any(item not in CATALOG_ARCHITECTURES for item in architectures):
+        _fail("catalog_panel_architectures_invalid", "panel descriptor names an unsupported architecture")
+    if platform_architecture is not None and str(platform_architecture).strip() not in architectures:
+        _fail(
+            "catalog_architecture_unsupported",
+            "catalog does not contain the requested normalized platform architecture",
+            architecture=str(platform_architecture).strip(),
+        )
+    panel_key = str(panel["signing_key_id"] or "").strip()
+    if not panel_key or "/" in panel_key or "\\" in panel_key:
+        _fail("catalog_panel_signing_key_invalid", "panel signing_key_id must be a stable identifier")
+    trusted_keys = TRUSTED_SIGNING_KEY_IDS if trusted_signing_key_ids is None else trusted_signing_key_ids
+    if panel_key not in trusted_keys:
+        _fail("catalog_signing_key_unknown", "catalog signing key is not trusted", signing_key_id=panel_key)
+    if panel_key != signing_key_id:
+        _fail(
+            "catalog_signing_key_mismatch",
+            "panel key does not match the verified signature envelope",
+            panel_signing_key_id=panel_key,
+            signing_key_id=signing_key_id,
+        )
+    return {
+        "archive": archive,
+        "size": size,
+        "sha256": sha256,
+        "version": version,
+        "signing_key_id": panel_key,
+        "architectures": architectures,
+    }
+
+
 def validate_catalog_document(
     document: Mapping[str, Any],
     *,
@@ -296,7 +366,7 @@ def validate_catalog_document(
     """Validate one signed stable catalog after its envelope is verified."""
 
     catalog = _mapping(document, "catalog")
-    required = ("schema_version", "release_version", "channel", "source_commit", "modules")
+    required = ("schema_version", "release_version", "channel", "source_commit", "panel", "modules")
     missing = [field for field in required if field not in catalog]
     if missing:
         _fail("catalog_required_field", "catalog document is missing required fields", fields=missing)
@@ -316,6 +386,13 @@ def validate_catalog_document(
     source_commit = catalog["source_commit"]
     if not isinstance(source_commit, str) or not source_commit.strip():
         _fail("catalog_source_commit_invalid", "catalog source_commit must be a non-empty string")
+    normalized_panel = validate_panel_catalog_descriptor(
+        _mapping(catalog["panel"], "catalog_panel"),
+        release_version=normalized_release,
+        signing_key_id=signing_key_id,
+        trusted_signing_key_ids=trusted_signing_key_ids,
+        platform_architecture=platform_architecture,
+    )
     modules = catalog["modules"]
     if not isinstance(modules, list):
         _fail("catalog_modules_invalid", "catalog modules must be a list")
@@ -349,6 +426,7 @@ def validate_catalog_document(
         "release_version": normalized_release,
         "channel": "stable",
         "source_commit": source_commit.strip(),
+        "panel": normalized_panel,
         "modules": normalized_modules,
     }
 

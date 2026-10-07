@@ -100,6 +100,14 @@ def _catalog_document(*, modules: object | None = None, **overrides: object) -> 
         "release_version": "1.2.3",
         "channel": "stable",
         "source_commit": "a" * 40,
+        "panel": {
+            "archive": "xkeen-ui-panel-1.2.3.tar.gz",
+            "size": 3,
+            "sha256": "b" * 64,
+            "version": "1.2.3",
+            "signing_key_id": "release-2026",
+            "architectures": ["aarch64"],
+        },
         "modules": [
             _catalog(
                 size=1,
@@ -140,6 +148,64 @@ def test_catalog_document_validates_top_level_and_entry_key_identity() -> None:
     assert normalized == document
     assert normalized is not document
     assert normalized["modules"] is not document["modules"]
+    assert normalized["panel"] is not document["panel"]
+
+
+@pytest.mark.parametrize(
+    ("panel", "code"),
+    [
+        (None, "catalog_required_field"),
+        ({}, "catalog_panel_required_field"),
+        (
+            {
+                "archive": "xkeen-ui-panel-1.2.3.tar.gz",
+                "size": 3,
+                "sha256": "b" * 64,
+                "version": "1.2.3",
+                "signing_key_id": "release-2026",
+                "architectures": ["aarch64"],
+                "unexpected": True,
+            },
+            "catalog_panel_field_unknown",
+        ),
+        (
+            {
+                "archive": "xkeen-ui-panel-1.2.3.tar.gz",
+                "size": 3,
+                "sha256": "b" * 64,
+                "version": "1.2.4",
+                "signing_key_id": "release-2026",
+                "architectures": ["aarch64"],
+            },
+            "catalog_panel_version_mismatch",
+        ),
+        (
+            {
+                "archive": "xkeen-ui-panel-1.2.3.tar.gz",
+                "size": 3,
+                "sha256": "b" * 64,
+                "version": "1.2.3",
+                "signing_key_id": "release-2026",
+                "architectures": ["mips"],
+            },
+            "catalog_architecture_unsupported",
+        ),
+    ],
+)
+def test_catalog_document_rejects_invalid_panel_descriptor(panel: object, code: str) -> None:
+    document = _catalog_document()
+    if panel is None:
+        del document["panel"]
+    else:
+        document["panel"] = panel
+
+    with pytest.raises(ModulePackageContractError, match=code):
+        validate_catalog_document(
+            document,
+            release_version="1.2.3",
+            signing_key_id="release-2026",
+            platform_architecture="aarch64",
+        )
 
 
 @pytest.mark.parametrize(

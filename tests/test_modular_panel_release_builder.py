@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from services.module_package_contract import CATALOG_ARCHITECTURES, validate_module_archive
+from services.panel_package_contract import validate_panel_archive
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -470,6 +471,14 @@ def test_catalog_and_release_metadata_publish_every_generated_asset(tmp_path: Pa
     metadata = json.loads(bundle.metadata_path.read_text(encoding="utf-8"))
     assert catalog["release_version"] == "1.2.3"
     assert catalog["channel"] == "stable"
+    assert catalog["panel"] == {
+        "archive": "xkeen-ui-panel-1.2.3.tar.gz",
+        "size": bundle.panel.path.stat().st_size,
+        "sha256": __import__("hashlib").sha256(bundle.panel.path.read_bytes()).hexdigest(),
+        "version": "1.2.3",
+        "signing_key_id": "release-2026",
+        "architectures": ["aarch64", "mips", "mipsel"],
+    }
     assert [entry["id"] for entry in catalog["modules"]] == ["core", "tool.terminal"]
     assert metadata["source_commit"] == "a" * 40
     assert len(metadata["assets"]) == len(set(metadata["assets"]))
@@ -556,6 +565,14 @@ def test_complete_bundle_is_reproducible_and_passes_static_preflight(tmp_path: P
 
     catalog = json.loads(first.catalog_path.read_text(encoding="utf-8"))
     assert len(catalog["modules"]) == 9
+    for architecture in catalog["panel"]["architectures"]:
+        checked_panel = validate_panel_archive(
+            first.panel.path,
+            catalog["panel"],
+            platform_architecture=architecture,
+        )
+        assert "services/module_lifecycle.py" in checked_panel["payload_files"]
+        assert checked_panel["ownership"]["modules"]["core"]
     for entry in catalog["modules"]:
         # The payload does not depend on the CPU: a MIPS router must find
         # itself in the catalog just as an aarch64 one does.

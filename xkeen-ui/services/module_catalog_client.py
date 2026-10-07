@@ -25,6 +25,7 @@ from services.module_package_contract import (
     compare_semver,
     validate_catalog_document,
     validate_catalog_source,
+    validate_panel_catalog_descriptor,
     validate_semver,
 )
 
@@ -550,6 +551,51 @@ class ModuleCatalogClient:
             or not isinstance(expected_digest, str)
         ):
             raise CatalogClientError("catalog_schema_invalid", "trusted catalog archive entry is invalid")
+        return self._download_verified_asset(
+            snapshot,
+            archive_name=archive_name,
+            expected_size=expected_size,
+            expected_digest=expected_digest,
+            destination_dir=destination_dir,
+        )
+
+    def download_verified_panel_archive(
+        self,
+        snapshot: CatalogSnapshot,
+        destination_dir: str | os.PathLike[str],
+    ) -> Path:
+        """Stream the whole-panel asset named by an already verified catalog."""
+
+        descriptor = snapshot.catalog.get("panel")
+        if not isinstance(descriptor, Mapping):
+            raise CatalogClientError("catalog_panel_not_object", "trusted catalog panel descriptor is invalid")
+        try:
+            normalized = validate_panel_catalog_descriptor(
+                descriptor,
+                release_version=snapshot.release_version,
+                signing_key_id=str(descriptor.get("signing_key_id", "")),
+                trusted_signing_key_ids=frozenset(self._keyring),
+                platform_architecture=self._platform_architecture,
+            )
+        except ModulePackageContractError as error:
+            raise self._client_validation_error(error) from error
+        return self._download_verified_asset(
+            snapshot,
+            archive_name=normalized["archive"],
+            expected_size=normalized["size"],
+            expected_digest=normalized["sha256"],
+            destination_dir=destination_dir,
+        )
+
+    def _download_verified_asset(
+        self,
+        snapshot: CatalogSnapshot,
+        *,
+        archive_name: str,
+        expected_size: int,
+        expected_digest: str,
+        destination_dir: str | os.PathLike[str],
+    ) -> Path:
         archive_url = official_release_asset_url(snapshot.release_version, archive_name)
         destination = Path(destination_dir)
         destination.mkdir(parents=True, exist_ok=True)

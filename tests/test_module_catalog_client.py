@@ -89,12 +89,20 @@ def _public_pem(private_key: Ed25519PrivateKey) -> bytes:
     )
 
 
-def _catalog_bytes(version: str, *, archive_bytes: bytes = b"abc") -> bytes:
+def _catalog_bytes(version: str, *, archive_bytes: bytes = b"abc", panel_bytes: bytes = b"panel") -> bytes:
     document = {
         "schema_version": 1,
         "release_version": version,
         "channel": "stable",
         "source_commit": "a" * 40,
+        "panel": {
+            "archive": f"xkeen-ui-panel-{version}.tar.gz",
+            "size": len(panel_bytes),
+            "sha256": hashlib.sha256(panel_bytes).hexdigest(),
+            "version": version,
+            "signing_key_id": "release-2026",
+            "architectures": ["aarch64", "mips", "mipsel"],
+        },
         "modules": [
             {
                 "id": "tool.files",
@@ -134,9 +142,13 @@ def _signature_bytes(private_key: Ed25519PrivateKey, catalog_bytes: bytes) -> by
 
 
 def _release_responses(
-    private_key: Ed25519PrivateKey, version: str, *, archive_bytes: bytes = b"abc"
+    private_key: Ed25519PrivateKey,
+    version: str,
+    *,
+    archive_bytes: bytes = b"abc",
+    panel_bytes: bytes = b"panel",
 ) -> dict[str, bytes]:
-    catalog_bytes = _catalog_bytes(version, archive_bytes=archive_bytes)
+    catalog_bytes = _catalog_bytes(version, archive_bytes=archive_bytes, panel_bytes=panel_bytes)
     return {
         LATEST_RELEASE_URL: json.dumps(
             {"tag_name": f"v{version}", "draft": False, "prerelease": False},
@@ -584,6 +596,85 @@ def test_client_downloads_only_trusted_archive_bytes(tmp_path) -> None:
     assert archive_path.name == "xkeen-module-tool.files-1.2.3.tar.gz"
     assert archive_path.read_bytes() == archive_bytes
     assert transport.stream_calls == [archive_url]
+
+
+def test_client_downloads_only_the_panel_asset_from_the_verified_descriptor(tmp_path) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    panel_bytes = b"trusted-panel"
+    archive_url = official_release_asset_url("1.2.3", "xkeen-ui-panel-1.2.3.tar.gz")
+    transport = _CatalogTransport(
+        _release_responses(private_key, "1.2.3", panel_bytes=panel_bytes),
+        stream_responses={archive_url: panel_bytes},
+    )
+    client = ModuleCatalogClient(
+        tmp_path / "state",
+        transport=transport,
+        now=lambda: 100.0,
+        keyring={"release-2026": _public_pem(private_key)},
+        platform_architecture="aarch64",
+    )
+    snapshot = client.get_catalog()
+
+    archive_path = client.download_verified_panel_archive(snapshot, tmp_path / "downloads")
+
+    assert archive_path.name == "xkeen-ui-panel-1.2.3.tar.gz"
+    assert archive_path.read_bytes() == panel_bytes
+    assert transport.stream_calls == [archive_url]
+
+
+@pytest.mark.parametrize(
+    ("downloaded", "code"),
+    [
+        (b"trusted-panel-extra", "catalog_archive_size_mismatch"),
+        (b"untrusted-pnl", "catalog_archive_checksum_mismatch"),
+    ],
+)
+def test_client_removes_partial_panel_archive_when_bytes_do_not_match_catalog(
+    tmp_path: Path, downloaded: bytes, code: str
+) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    expected = b"trusted-panel"
+    archive_url = official_release_asset_url("1.2.3", "xkeen-ui-panel-1.2.3.tar.gz")
+    transport = _CatalogTransport(
+        _release_responses(private_key, "1.2.3", panel_bytes=expected),
+        stream_responses={archive_url: downloaded},
+    )
+    client = ModuleCatalogClient(
+        tmp_path / "state",
+        transport=transport,
+        now=lambda: 100.0,
+        keyring={"release-2026": _public_pem(private_key)},
+        platform_architecture="aarch64",
+    )
+    snapshot = client.get_catalog()
+    downloads = tmp_path / "downloads"
+
+    with pytest.raises(CatalogClientError) as raised:
+        client.download_verified_panel_archive(snapshot, downloads)
+
+    assert raised.value.code == code
+    assert list(downloads.glob("*.part")) == []
+    assert not (downloads / "xkeen-ui-panel-1.2.3.tar.gz").exists()
+
+
+def test_client_revalidates_panel_descriptor_before_starting_download(tmp_path) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    transport = _CatalogTransport(_release_responses(private_key, "1.2.3"))
+    client = ModuleCatalogClient(
+        tmp_path,
+        transport=transport,
+        now=lambda: 100.0,
+        keyring={"release-2026": _public_pem(private_key)},
+        platform_architecture="aarch64",
+    )
+    snapshot = client.get_catalog()
+    snapshot.catalog["panel"]["archive"] = "other.tar.gz"
+
+    with pytest.raises(CatalogClientError) as raised:
+        client.download_verified_panel_archive(snapshot, tmp_path / "downloads")
+
+    assert raised.value.code == "catalog_panel_archive_not_filename"
+    assert transport.stream_calls == []
 
 
 @pytest.mark.parametrize(
