@@ -186,10 +186,12 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     // full-width picker; choosing one is the only action allowed to change it.
     const name = String(p.name || '').trim() || ((DEFAULTS[k] && DEFAULTS[k].name) ? DEFAULTS[k].name : '');
 
-    // Apply to inputs
+    // Fill an empty input with the value in use. An input that holds
+    // something is the operator's: the list above took seconds to arrive from
+    // the router, and what was typed meanwhile is newer than what we read.
     try {
-      if (els && els.dir && String(els.dir.value || '') !== String(dir || '')) els.dir.value = dir;
-      if (els && els.name && String(els.name.value || '') !== String(name || '')) els.name.value = name;
+      if (els && els.dir && !String(els.dir.value || '').trim()) els.dir.value = dir;
+      if (els && els.name && !String(els.name.value || '').trim()) els.name.value = name;
     } catch (e) {}
 
     // Preserve the current values in the prefs object. This makes refreshes
@@ -314,8 +316,10 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     try { rSite = await resolveKindPrefs('geosite', prefs, els.geosite); } catch (e) { rSite = null; }
     try { rIp = await resolveKindPrefs('geoip', prefs, els.geoip); } catch (e) { rIp = null; }
 
-    // Persist any auto-resolve changes
-    try { savePrefs(prefs); } catch (e) {}
+    // Nothing is saved here. `prefs` was read before the router was asked, and
+    // the operator may have typed an address since: writing the snapshot back
+    // would silently put the old one into the browser storage, to come back on
+    // the next visit. Prefs are saved only where the inputs change.
 
     const pSite = normalizePath((rSite && rSite.dir) ? rSite.dir : (prefs.geosite && prefs.geosite.dir), (rSite && rSite.name) ? rSite.name : (prefs.geosite && prefs.geosite.name));
     const pIp = normalizePath((rIp && rIp.dir) ? rIp.dir : (prefs.geoip && prefs.geoip.dir), (rIp && rIp.name) ? rIp.name : (prefs.geoip && prefs.geoip.name));

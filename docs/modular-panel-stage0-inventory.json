@@ -36,8 +36,8 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 516,
-      "size_bytes": 6977064,
+      "unit_count": 517,
+      "size_bytes": 6980905,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -49,7 +49,7 @@
         "frontend_feature": 28,
         "frontend_javascript": 35,
         "frontend_runtime": 2,
-        "frontend_test": 46,
+        "frontend_test": 47,
         "frontend_ui": 17,
         "stylesheet": 5,
         "template": 31
@@ -86,7 +86,7 @@
       ],
       "removable": true,
       "unit_count": 135,
-      "size_bytes": 3804826,
+      "size_bytes": 3805224,
       "kind_counts": {
         "backend_route": 13,
         "backend_service": 20,
@@ -10280,6 +10280,24 @@
     {
       "module_id": "core",
       "kind": "frontend_test",
+      "path": "e2e/routing_dat_prefs_survive_refresh.spec.mjs",
+      "size_bytes": 3841,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "frontend_test",
       "path": "e2e/routing_schema.spec.mjs",
       "size_bytes": 24247,
       "depends_on": [],
@@ -17445,7 +17463,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/routing_cards/dat/card.js",
-      "size_bytes": 19648,
+      "size_bytes": 20046,
       "depends_on": [
         "core",
         "tool.editor"
