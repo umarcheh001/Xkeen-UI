@@ -4637,6 +4637,10 @@ let outboundsModuleApi = null;
       requestOsVersion: 'outbounds-subscriptions-request-os-version',
       requestDeviceModel: 'outbounds-subscriptions-request-device-model',
       requestProfileReset: 'outbounds-subscriptions-request-profile-reset',
+      requestProfileHelp: 'outbounds-subscriptions-request-profile-help',
+      requestProfileHelpModal: 'outbounds-subscriptions-request-profile-help-modal',
+      requestProfileHelpClose: 'outbounds-subscriptions-request-profile-help-close',
+      requestProfileHelpDone: 'outbounds-subscriptions-request-profile-help-done',
       requestProfileStatus: 'outbounds-subscriptions-request-profile-status',
       routingMode: 'outbounds-subscriptions-routing-mode',
       routingAutoRule: 'outbounds-subscriptions-routing-auto-rule',
@@ -5847,7 +5851,10 @@ let outboundsModuleApi = null;
                           <span id="outbounds-subscriptions-request-profile-title" class="xk-pool-fieldlabel">Профиль запроса</span>
                           <span class="xk-sub-field-hint">HWID и данные клиента отправляются провайдеру при скачивании подписки.</span>
                         </span>
-                        <button type="button" id="outbounds-subscriptions-request-profile-reset" class="btn-secondary btn-compact xk-sub-icon-btn" title="Подставить профиль роутера" data-tooltip="Заменить пользовательские значения текущим профилем роутера.">${iconHtml('refresh')}</button>
+                        <span class="xk-sub-request-profile-actions">
+                          <button type="button" id="outbounds-subscriptions-request-profile-help" class="btn-secondary btn-compact xk-sub-icon-btn" title="Справка по полям" aria-label="Справка по профилю запроса подписки" data-tooltip="Какие поля нужны провайдеру и как указать Android или iPhone.">${iconHtml('help')}</button>
+                          <button type="button" id="outbounds-subscriptions-request-profile-reset" class="btn-secondary btn-compact xk-sub-icon-btn" title="Подставить профиль роутера" data-tooltip="Заменить пользовательские значения текущим профилем роутера.">${iconHtml('refresh')}</button>
+                        </span>
                       </summary>
                       <div class="xk-sub-request-profile-body">
                       <div class="xk-sub-request-mode-field">
@@ -5960,6 +5967,68 @@ let outboundsModuleApi = null;
                 <div id="outbounds-subscriptions-nodes-list" class="xk-sub-node-list"></div>
                 <div id="outbounds-subscriptions-nodes-empty" class="xk-pool-empty">Список узлов появится после обновления подписки.</div>
               </section>
+            </div>
+          </div>
+        </div>
+        <div id="outbounds-subscriptions-request-profile-help-modal" class="modal hidden" data-operator-modal-family="drawer-help" role="dialog" aria-modal="true" aria-label="Справка по профилю запроса подписки">
+          <div class="modal-content xk-sub-request-profile-help">
+            <div class="modal-header">
+              <div>
+                <span class="modal-title">Профиль запроса подписки</span>
+                <div class="xk-sub-field-hint">HWID, User-Agent и сведения об устройстве</div>
+              </div>
+              <button type="button" class="modal-close" id="outbounds-subscriptions-request-profile-help-close" title="Закрыть" aria-label="Закрыть справку">${iconHtml('close')}</button>
+            </div>
+            <div class="modal-body xk-sub-request-profile-help-body">
+              <section>
+                <h3>Что обязательно</h3>
+                <p><strong>Обязательных полей профиля нет.</strong> Обычные подписки работают без него. Пустые значения не отправляются провайдеру.</p>
+                <p>Если подписка защищена по HWID или типу приложения, точный набор значений сообщает её провайдер. Чаще всего достаточно HWID и User-Agent.</p>
+              </section>
+              <section>
+                <h3>Режимы</h3>
+                <dl>
+                  <dt>Авто</dt><dd>Сначала выполняется обычный запрос. Профиль роутера используется только после ответа, похожего на HWID-блокировку.</dd>
+                  <dt>Свой профиль</dt><dd>Заполненные значения отправляются сразу при каждом скачивании подписки.</dd>
+                  <dt>Не отправлять</dt><dd>Профиль и HWID-заголовки не добавляются к запросу.</dd>
+                </dl>
+              </section>
+              <section>
+                <h3>Поля</h3>
+                <dl>
+                  <dt>HWID</dt><dd>Идентификатор устройства, выданный или ожидаемый провайдером.</dd>
+                  <dt>User-Agent</dt><dd>Имя и версия приложения, от имени которого скачивается подписка.</dd>
+                  <dt>Платформа</dt><dd>Операционная система: например, <code>Android</code> или <code>iOS</code>.</dd>
+                  <dt>Версия OS</dt><dd>Версия системы: например, <code>14</code> или <code>17.6.1</code>.</dd>
+                  <dt>Модель</dt><dd>Модель устройства: например, <code>Pixel 8</code> или <code>iPhone15,2</code>.</dd>
+                </dl>
+              </section>
+              <section>
+                <h3>Пример для Android</h3>
+                <pre><code>User-Agent: Happ/3.18.3/Android/17771400994551771562
+Платформа: Android
+Версия OS: 14
+Модель: Pixel 8</code></pre>
+              </section>
+              <section>
+                <h3>Пример для iPhone</h3>
+                <pre><code>User-Agent: Happ/3.18.3/iOS/&lt;идентификатор-устройства&gt;
+Платформа: iOS
+Версия OS: 17.6.1
+Модель: iPhone15,2</code></pre>
+                <p class="xk-sub-request-profile-help-note"><strong>Формат User-Agent зависит от провайдера.</strong> Примеры показывают один из возможных форматов Happ и не являются универсальными пресетами.</p>
+              </section>
+              <section>
+                <h3>Как проверить</h3>
+                <ol>
+                  <li>Уточните у провайдера точные HWID, User-Agent и необходимые заголовки.</li>
+                  <li>Выберите «Свой профиль» и заполните только выданные значения.</li>
+                  <li>Нажмите «Скачать подписку» и проверьте ответ. Если доступ запрещён, сверьте значения с рабочим клиентом.</li>
+                </ol>
+              </section>
+            </div>
+            <div class="modal-actions">
+              <button type="button" id="outbounds-subscriptions-request-profile-help-done" class="btn-primary">Закрыть</button>
             </div>
           </div>
         </div>
@@ -6082,6 +6151,23 @@ let outboundsModuleApi = null;
         }
       }
       try { syncXkeenBodyScrollLock(!!show); } catch (e2) {}
+    }
+
+    function subsShowRequestProfileHelp(show) {
+      const helpModal = $(SUB_IDS.requestProfileHelpModal);
+      if (!helpModal) return;
+      try {
+        if (show) helpModal.classList.remove('hidden');
+        else helpModal.classList.add('hidden');
+      } catch (e) {}
+      const subscriptionsModal = $(SUB_IDS.modal);
+      const subscriptionsOpen = !!(subscriptionsModal && !subscriptionsModal.classList.contains('hidden'));
+      try { syncXkeenBodyScrollLock(!!show || subscriptionsOpen); } catch (e2) {}
+      if (show) {
+        try { $(SUB_IDS.requestProfileHelpClose).focus(); } catch (e3) {}
+      } else {
+        try { $(SUB_IDS.requestProfileHelp).focus(); } catch (e4) {}
+      }
     }
 
     function subsSetStatusContent(el, msg, opts) {
@@ -9078,6 +9164,7 @@ let outboundsModuleApi = null;
       });
       if (!ok) return false;
       try { subsDiscardUnprotectedDraftOnClose(); } catch (e) {}
+      try { subsShowRequestProfileHelp(false); } catch (e0) {}
       subsShow(false);
       try { subsResetForm(); } catch (e) {}
       return true;
@@ -9152,6 +9239,22 @@ let outboundsModuleApi = null;
         subsClearPreview(true);
         subsSyncSubscriptionFormState();
       });
+      wireButton(SUB_IDS.requestProfileHelp, () => {
+        subsShowRequestProfileHelp(true);
+      });
+      wireButton(SUB_IDS.requestProfileHelpClose, () => {
+        subsShowRequestProfileHelp(false);
+      });
+      wireButton(SUB_IDS.requestProfileHelpDone, () => {
+        subsShowRequestProfileHelp(false);
+      });
+      const requestProfileHelpModal = $(SUB_IDS.requestProfileHelpModal);
+      if (requestProfileHelpModal && (!requestProfileHelpModal.dataset || requestProfileHelpModal.dataset.xkSubHelpBound !== '1')) {
+        requestProfileHelpModal.addEventListener('click', (event) => {
+          if (event && event.target === requestProfileHelpModal) subsShowRequestProfileHelp(false);
+        });
+        if (requestProfileHelpModal.dataset) requestProfileHelpModal.dataset.xkSubHelpBound = '1';
+      }
 
       const form = $(SUB_IDS.form);
       if (form) {
@@ -9286,6 +9389,11 @@ let outboundsModuleApi = null;
 
       document.addEventListener('keydown', (e) => {
         if (!e || e.key !== 'Escape') return;
+        const helpModal = $(SUB_IDS.requestProfileHelpModal);
+        if (helpModal && !helpModal.classList.contains('hidden')) {
+          subsShowRequestProfileHelp(false);
+          return;
+        }
         const m = $(SUB_IDS.modal);
         if (m && !m.classList.contains('hidden')) void subsClose();
       });

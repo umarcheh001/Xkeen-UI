@@ -93,6 +93,35 @@ def test_xray_request_profile_is_collapsed_and_compact():
     assert ".xk-sub-request-fields label:nth-child(3)" in operator_styles_src
 
 
+def test_xray_request_profile_has_field_help_drawer():
+    outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")
+    operator_styles_src = _read("xkeen-ui/static/panel-operator.css")
+
+    assert "requestProfileHelp: 'outbounds-subscriptions-request-profile-help'" in outbounds_src
+    assert "requestProfileHelpModal: 'outbounds-subscriptions-request-profile-help-modal'" in outbounds_src
+    assert 'data-operator-modal-family="drawer-help"' in outbounds_src
+    assert 'aria-label="Справка по профилю запроса подписки"' in outbounds_src
+    assert "Обязательных полей профиля нет." in outbounds_src
+    assert "Пустые значения не отправляются провайдеру." in outbounds_src
+    assert "Happ/3.18.3/Android/17771400994551771562" in outbounds_src
+    assert "Happ/3.18.3/iOS/&lt;идентификатор-устройства&gt;" in outbounds_src
+    assert "Формат User-Agent зависит от провайдера" in outbounds_src
+    assert "function subsShowRequestProfileHelp(show)" in outbounds_src
+    assert "xk-sub-request-profile-help-body" in operator_styles_src
+
+
+def test_xray_request_profile_help_opens_as_centered_wide_dialog():
+    operator_styles_src = _read("xkeen-ui/static/panel-operator.css")
+
+    assert "#outbounds-subscriptions-request-profile-help-modal {" in operator_styles_src
+    assert "justify-content: center;" in operator_styles_src
+    assert "#outbounds-subscriptions-request-profile-help-modal .xk-sub-request-profile-help {" in operator_styles_src
+    assert "width: min(1200px, calc(100vw - 72px));" in operator_styles_src
+    assert "height: min(80dvh, 1050px);" in operator_styles_src
+    assert "#outbounds-subscriptions-request-profile-help-modal {\n    padding: 0;" in operator_styles_src
+    assert "#outbounds-subscriptions-request-profile-help-modal .xk-sub-request-profile-help {\n    width: 100vw;" in operator_styles_src
+
+
 def test_outbounds_entware_mark_controls_are_wired_to_payloads():
     template_src = _read("xkeen-ui/templates/panel.html")
     outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")

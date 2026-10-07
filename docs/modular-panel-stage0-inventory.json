@@ -37,7 +37,7 @@
       ],
       "removable": false,
       "unit_count": 509,
-      "size_bytes": 6960813,
+      "size_bytes": 6963904,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -86,7 +86,7 @@
       ],
       "removable": true,
       "unit_count": 135,
-      "size_bytes": 3794221,
+      "size_bytes": 3803755,
       "kind_counts": {
         "backend_route": 13,
         "backend_service": 20,
@@ -10851,7 +10851,7 @@
       "module_id": "core",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/panel-operator.css",
-      "size_bytes": 743385,
+      "size_bytes": 746476,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -16722,7 +16722,7 @@
       "module_id": "engine.xray",
       "kind": "backend_test",
       "path": "tests/test_xray_subscription_filters_contract.py",
-      "size_bytes": 45253,
+      "size_bytes": 47243,
       "depends_on": [
         "core",
         "tool.editor"
@@ -17141,7 +17141,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/outbounds.js",
-      "size_bytes": 459276,
+      "size_bytes": 466820,
       "depends_on": [
         "core",
         "tool.editor",
