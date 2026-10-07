@@ -12,7 +12,6 @@ from dataclasses import asdict, dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Mapping
 
-from services.module_package_contract import compare_semver
 from services.module_profile_plan import ProfilePlanError, build_profile_target, user_owned
 from services.module_registry import MODULE_IDS
 
@@ -363,6 +362,10 @@ def _full_scope_plan(
     require_newer: bool,
     free_bytes: int | None,
 ) -> Plan:
+    # Signature/semver dependencies are not imported while boot recovery only
+    # deserializes an existing journal.
+    from services.module_package_contract import compare_semver
+
     source_version = read_panel_version(panel_root)
     target_version = str(catalog.get("release_version") or "")
     comparison = compare_semver(target_version, source_version)

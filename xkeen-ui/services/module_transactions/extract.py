@@ -65,3 +65,43 @@ def extract_payload(archive: Path, destination: Path, only: Collection[str]) -> 
     if missing:
         raise ModuleTransactionError("archive_member_missing", "the archive lacks files of the module", paths=missing)
     return tuple(sorted(extracted))
+
+
+def extract_panel_payload(archive: Path, destination: Path, only: Collection[str]) -> tuple[str, ...]:
+    """Extract selected verified files from the single ``xkeen-ui/`` root."""
+
+    wanted = set(only)
+    for relative in wanted:
+        if not _safe(relative):
+            raise ModuleTransactionError("archive_path_unsafe", "requested panel path is unsafe", path=relative)
+    destination = Path(destination)
+    extracted: list[str] = []
+    try:
+        with tarfile.open(archive, "r:gz") as source:
+            for member in source:
+                if member.issym() or member.islnk():
+                    raise ModuleTransactionError("archive_link_forbidden", "archive links are not allowed", path=member.name)
+                if not _safe(member.name):
+                    raise ModuleTransactionError("archive_path_unsafe", "archive contains an unsafe member path", path=member.name)
+                if not member.isreg() or not member.name.startswith("xkeen-ui/"):
+                    continue
+                relative = member.name[len("xkeen-ui/"):]
+                if relative not in wanted:
+                    continue
+                stream = source.extractfile(member)
+                if stream is None:
+                    raise ModuleTransactionError("archive_invalid", "panel archive cannot be read", path=member.name)
+                target = destination.joinpath(*relative.split("/"))
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with stream, open(target, "wb") as output:
+                    shutil.copyfileobj(stream, output)
+                os.chmod(target, 0o755 if member.mode & 0o111 else 0o644)
+                extracted.append(relative)
+    except ModuleTransactionError:
+        raise
+    except (tarfile.TarError, OSError, EOFError) as error:
+        raise ModuleTransactionError("archive_invalid", "panel archive cannot be read", error=str(error)) from error
+    missing = sorted(wanted - set(extracted))
+    if missing:
+        raise ModuleTransactionError("archive_member_missing", "the panel archive lacks planned files", paths=missing)
+    return tuple(sorted(extracted))

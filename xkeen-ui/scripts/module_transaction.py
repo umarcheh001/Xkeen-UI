@@ -143,6 +143,7 @@ def _run(args, *, client_factory, architecture, on_step) -> int:
                 plan.operation,
                 timeout_s=_health_timeout(),
                 check_module=phase == "operation",
+                target_module_ids=plan.installed_after if plan.scope != "module" else None,
             )
 
         if architecture is None:

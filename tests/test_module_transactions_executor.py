@@ -394,6 +394,22 @@ def test_wait_for_panel_requires_200_and_no_last_error(tmp_path: Path, health_se
     assert wait_for_panel(health_server, panel.state, "tool.terminal", "install", timeout_s=5, check_module=False) is True
 
 
+def test_wait_for_panel_checks_every_full_scope_target_module(tmp_path: Path, health_server: str) -> None:
+    panel = make_panel(tmp_path)
+    state = panel.read_json("modules.json")
+    state["modules"]["engine.xray"]["last_error"] = "failed activation"
+    panel.path("modules.json").write_text(json.dumps(state), encoding="utf-8")
+
+    assert wait_for_panel(
+        health_server,
+        panel.state,
+        None,
+        "profile-transition",
+        timeout_s=5,
+        target_module_ids=("core", "engine.xray", "tool.editor"),
+    ) is False
+
+
 def test_wait_for_panel_gives_up_when_the_panel_answers_with_an_error(tmp_path: Path, health_server: str) -> None:
     panel = make_panel(tmp_path)
     _Health.status = 500

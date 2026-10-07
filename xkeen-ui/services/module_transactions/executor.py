@@ -10,7 +10,7 @@ import urllib.request
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
-from .extract import extract_payload
+from .extract import extract_panel_payload, extract_payload
 from .install_state import rebuild_frontend_manifests, state_file_updates
 from .journal import Journal
 from .plan import load_ownership_map
@@ -39,12 +39,13 @@ def _code(error: BaseException) -> str:
 def wait_for_panel(
     health_url: str,
     state_dir: Path,
-    module_id: str,
+    module_id: str | None,
     operation: str,
     *,
     timeout_s: float,
     sleep: Callable[[float], None] = time.sleep,
     check_module: bool = True,
+    target_module_ids: tuple[str, ...] | None = None,
 ) -> bool:
     """Wait until the restarted panel answers and the module did not fail to start."""
 
@@ -62,8 +63,11 @@ def wait_for_panel(
             # panel begins to serve, so one look after the first answer is final.
             try:
                 state = json.loads((Path(state_dir) / "modules.json").read_text(encoding="utf-8"))
-                item = state["modules"][module_id]
-                return not (isinstance(item, dict) and item.get("last_error"))
+                module_ids = target_module_ids or ((module_id,) if module_id else ())
+                return all(
+                    not (isinstance(state["modules"].get(current), dict) and state["modules"][current].get("last_error"))
+                    for current in module_ids
+                )
             except (OSError, ValueError, KeyError, TypeError):
                 return True
         if time.monotonic() >= deadline:
@@ -93,6 +97,7 @@ def run_operation(
     meta = journal.meta()
     status: dict[str, Any] = {
         "operation_id": meta.get("operation_id"),
+        "scope": plan.scope,
         "operation": plan.operation,
         "module_id": plan.module_id,
         "version": plan.version,
@@ -136,34 +141,61 @@ def run_operation(
                 pass
 
     # Nothing in the panel changes until "applying": a failure here needs no undo.
+    catalog_source_commit: str | None = None
     try:
         enter("prepared")
         if plan.archive is not None:
             enter("downloading")
             snapshot = client.get_release_catalog(plan.version)
-            entry = next((item for item in snapshot.catalog["modules"] if item.get("id") == plan.module_id), None)
-            if entry is None or (entry.get("archive"), entry.get("size"), entry.get("sha256")) != (
-                plan.archive.archive, plan.archive.size, plan.archive.sha256,
-            ):
-                raise ModuleTransactionError(
-                    "module_version_mismatch",
-                    "the release catalog no longer matches the planned operation",
-                    module_id=plan.module_id,
-                )
-            archive_path = client.download_verified_archive(snapshot, plan.module_id, journal.staging)
-            enter("verifying")
-            from services.module_package_contract import validate_module_archive
+            if plan.scope == "module":
+                entry = next((item for item in snapshot.catalog["modules"] if item.get("id") == plan.module_id), None)
+                if entry is None or (entry.get("archive"), entry.get("size"), entry.get("sha256")) != (
+                    plan.archive.archive, plan.archive.size, plan.archive.sha256,
+                ):
+                    raise ModuleTransactionError(
+                        "module_version_mismatch",
+                        "the release catalog no longer matches the planned operation",
+                        module_id=plan.module_id,
+                    )
+                archive_path = client.download_verified_archive(snapshot, plan.module_id, journal.staging)
+                enter("verifying")
+                from services.module_package_contract import validate_module_archive
 
-            checked = validate_module_archive(
-                archive_path, entry, platform_architecture=architecture, core_version=plan.version
-            )
-            if set(checked["payload_files"]) != set(plan.files_add):
-                raise ModuleTransactionError(
-                    "module_ownership_conflict",
-                    "the archive does not hold exactly the files this panel build assigns to the module",
-                    module_id=plan.module_id,
+                checked = validate_module_archive(
+                    archive_path, entry, platform_architecture=architecture, core_version=plan.version
                 )
-            extract_payload(archive_path, journal.staging / "payload", plan.files_add)
+                if set(checked["payload_files"]) != set(plan.files_add):
+                    raise ModuleTransactionError(
+                        "module_ownership_conflict",
+                        "the archive does not hold exactly the files this panel build assigns to the module",
+                        module_id=plan.module_id,
+                    )
+                extract_payload(archive_path, journal.staging / "payload", plan.files_add)
+            else:
+                descriptor = snapshot.catalog.get("panel")
+                if not isinstance(descriptor, dict) or (
+                    descriptor.get("archive"), descriptor.get("size"), descriptor.get("sha256")
+                ) != (plan.archive.archive, plan.archive.size, plan.archive.sha256):
+                    raise ModuleTransactionError(
+                        "operation_plan_stale",
+                        "the release catalog no longer matches the planned panel operation",
+                    )
+                archive_path = client.download_verified_panel_archive(snapshot, journal.staging)
+                enter("verifying")
+                from services.panel_package_contract import validate_panel_archive
+
+                checked = validate_panel_archive(
+                    archive_path,
+                    descriptor,
+                    platform_architecture=architecture,
+                )
+                if not set(plan.files_add) <= set(checked["payload_files"]):
+                    raise ModuleTransactionError(
+                        "module_ownership_conflict",
+                        "the panel archive does not contain every planned target file",
+                    )
+                extract_panel_payload(archive_path, journal.staging / "payload", plan.files_add)
+                catalog_source_commit = str(snapshot.catalog.get("source_commit") or "")
     except Exception as error:
         journal.commit()
         return finish("interrupted", error)
@@ -182,6 +214,15 @@ def run_operation(
         root = journal.panel_root
         shared = rebuild_frontend_manifests(root, load_ownership_map(root).frontend)
         shared.update(state_file_updates(root, plan))
+        if plan.scope == "panel":
+            shared["BUILD.json"] = (
+                json.dumps(
+                    {"version": plan.target_version, "commit": catalog_source_commit},
+                    ensure_ascii=False,
+                    indent=2,
+                )
+                + "\n"
+            ).encode("utf-8")
         for relative, content in sorted(shared.items()):
             target = root.joinpath(*relative.split("/"))
             if not target.is_file() or target.read_bytes() != content:

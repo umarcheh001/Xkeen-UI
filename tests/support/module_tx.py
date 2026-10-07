@@ -262,6 +262,28 @@ def module_archive(module_id: str, version: str, ownership: Mapping[str, tuple[s
     return buffer.getvalue()
 
 
+def panel_archive(version: str, ownership: Mapping[str, tuple[str, ...]] = OWNERSHIP) -> bytes:
+    """A deterministic whole-panel archive with authoritative ownership metadata."""
+
+    buffer = io.BytesIO()
+    ownership_document = {
+        "schema_version": 1,
+        "modules": {module_id: list(paths) for module_id, paths in ownership.items()},
+        "frontend": FRONTEND,
+    }
+    with gzip.GzipFile(fileobj=buffer, mode="wb", mtime=0) as packed, tarfile.open(fileobj=packed, mode="w") as archive:
+        def add(name: str, payload: bytes) -> None:
+            info = tarfile.TarInfo(name)
+            info.size = len(payload)
+            info.mtime = 1_700_000_000
+            archive.addfile(info, io.BytesIO(payload))
+
+        for relative in sorted({path for paths in ownership.values() for path in paths}):
+            payload = _json_bytes(ownership_document) if relative == "module-ownership.json" else file_bytes(relative, version)
+            add("xkeen-ui/" + relative, payload)
+    return buffer.getvalue()
+
+
 def _entry(module_id: str, version: str, size: int = 1, sha256: str = "0" * 64) -> dict[str, Any]:
     definition = _definition(module_id)
     return {
@@ -292,11 +314,20 @@ def catalog_document(version: str = VERSION, ownership: Mapping[str, tuple[str, 
         entry["size"] = len(archive)
         entry["sha256"] = hashlib.sha256(archive).hexdigest()
         modules.append(entry)
+    panel = panel_archive(version, ownership)
     return {
         "schema_version": 1,
         "release_version": version,
         "channel": "stable",
         "source_commit": "c" * 40,
+        "panel": {
+            "archive": f"xkeen-ui-panel-{version}.tar.gz",
+            "size": len(panel),
+            "sha256": hashlib.sha256(panel).hexdigest(),
+            "version": version,
+            "signing_key_id": "release-2026",
+            "architectures": ["aarch64", "mips", "mipsel"],
+        },
         "modules": modules,
     }
 
@@ -339,6 +370,7 @@ class Release:
     transport: ReleaseTransport
     catalog: dict[str, Any]
     archives: dict[str, bytes]
+    panel: bytes
 
     @property
     def keyring(self) -> dict[str, bytes]:
@@ -350,6 +382,10 @@ class Release:
 
     def archive_url(self, module_id: str) -> str:
         return official_release_asset_url(self.version, f"xkeen-module-{module_id}-{self.version}.tar.gz")
+
+    @property
+    def panel_url(self) -> str:
+        return official_release_asset_url(self.version, f"xkeen-ui-panel-{self.version}.tar.gz")
 
     def client(self, state_dir: Path) -> ModuleCatalogClient:
         return ModuleCatalogClient(
@@ -371,6 +407,7 @@ def make_release(
 
     key = Ed25519PrivateKey.generate()
     document = catalog_document(version, ownership)
+    panel = panel_archive(version, ownership)
     bodies: dict[str, bytes] = {}
     for entry in document["modules"]:
         body = module_archive(entry["id"], version, ownership, entry)
@@ -399,7 +436,15 @@ def make_release(
     }
     for module_id, body in bodies.items():
         responses[official_release_asset_url(version, f"xkeen-module-{module_id}-{version}.tar.gz")] = body
-    return Release(version=version, key=key, transport=ReleaseTransport(responses), catalog=document, archives=bodies)
+    responses[official_release_asset_url(version, f"xkeen-ui-panel-{version}.tar.gz")] = panel
+    return Release(
+        version=version,
+        key=key,
+        transport=ReleaseTransport(responses),
+        catalog=document,
+        archives=bodies,
+        panel=panel,
+    )
 
 
 def write_release_directory(release: Release, directory: Path) -> Path:
