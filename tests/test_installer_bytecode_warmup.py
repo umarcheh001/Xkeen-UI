@@ -23,7 +23,8 @@ from pathlib import Path
 
 import pytest
 
-INSTALLER = Path("xkeen-ui/install.sh")
+# Служба автозапуска вынесена из установщика в отдельный файл панели.
+INSTALLER = Path("xkeen-ui/scripts/panel_init.sh")
 SH = shutil.which("sh") or shutil.which("bash")
 
 

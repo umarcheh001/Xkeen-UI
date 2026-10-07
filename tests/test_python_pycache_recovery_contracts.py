@@ -15,8 +15,8 @@ def test_installer_isolates_python_cache_before_first_python_process():
 
 
 def test_generated_init_script_isolates_panel_runtime_python_cache():
-    text = INSTALLER.read_text(encoding="utf-8")
-    init_script = text.split("cat > \"$INIT_SCRIPT\" << 'EOF'", 1)[1]
+    # The service text lives in its own file of the panel now.
+    init_script = Path("xkeen-ui/scripts/panel_init.sh").read_text(encoding="utf-8")
 
     assert 'PYTHONPYCACHEPREFIX="${XKEEN_UI_PYTHONPYCACHEPREFIX:-/tmp/xkeen-ui-pycache}"' in init_script
     assert "export PYTHONPYCACHEPREFIX" in init_script

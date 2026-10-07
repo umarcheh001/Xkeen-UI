@@ -27,6 +27,10 @@ def test_install_script_preserves_and_persists_panel_port_via_env_file():
     assert 'EXISTING_PORT="$(extract_env_numeric_field "XKEEN_UI_PORT" "$EXISTING_ENV_FILE")"' in text
     assert 'EXISTING_PORT="$(extract_run_server_port "$EXISTING_RUN")"' in text
     assert 'write_env_numeric_field "$EXISTING_ENV_FILE" "XKEEN_UI_PORT" "$PANEL_PORT"' in text
-    assert 'export XKEEN_UI_PORT="${XKEEN_UI_PORT:-$PANEL_PORT}"' in text
-    assert 'PANEL_PORT="__XKEEN_UI_PORT__"' in text
-    assert 'sed -i -E "s/__XKEEN_UI_PORT__/${PANEL_PORT}/g" "$INIT_SCRIPT" || true' in text
+    # Служба автозапуска — отдельный файл; порт в него подставляет общий скрипт.
+    service = (ROOT / "xkeen-ui" / "scripts" / "panel_init.sh").read_text(encoding="utf-8")
+    shared = (ROOT / "xkeen-ui" / "scripts" / "provision_env.sh").read_text(encoding="utf-8")
+    assert 'export XKEEN_UI_PORT="${XKEEN_UI_PORT:-$PANEL_PORT}"' in service
+    assert 'PANEL_PORT="__XKEEN_UI_PORT__"' in service
+    assert 'sed "s/__XKEEN_UI_PORT__/$_pi_port/g" "$_pi_template"' in shared
+    assert 'provision_init_script "$SRC_DIR/scripts/panel_init.sh" "$INIT_SCRIPT" "$PANEL_PORT"' in text

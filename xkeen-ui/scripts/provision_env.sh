@@ -245,3 +245,149 @@ if changed:
     os.replace(tmp, path)
 PYFIX
 }
+
+# --- BUILD.json -------------------------------------------------------------
+# Небольшой файл с метаданными сборки: его показывает DevTools и по нему панель
+# решает, есть ли обновление.
+
+json_escape() {
+  # minimal JSON string escape
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+extract_json_field() {
+  # extract "field": "value" from a small JSON file without jq
+  _field="$1"
+  _file="$2"
+  [ -f "$_file" ] || return 0
+  grep -o "\"$_field\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" "$_file" 2>/dev/null \
+    | head -n 1 \
+    | sed -E 's/.*:[[:space:]]*\"([^\"]*)\".*/\1/' \
+    || true
+}
+
+extract_json_bare() {
+  # extract "field": <literal> (true/false/null/number) — values without quotes
+  _field="$1"
+  _file="$2"
+  [ -f "$_file" ] || return 0
+  grep -o "\"$_field\"[[:space:]]*:[[:space:]]*[A-Za-z0-9._-]*" "$_file" 2>/dev/null \
+    | head -n 1 \
+    | sed -E 's/.*:[[:space:]]*//' \
+    || true
+}
+
+provision_build_json() {
+  # $1 — BUILD.json устанавливаемой сборки (штамп кладёт build_user_archive.py),
+  # $2 — BUILD.json установленной панели, он же переписывается.
+  #
+  # Штамп — версия, коммит, сумма дерева — принадлежит сборке и берётся из неё.
+  # Раскладка файлов этот файл не кладёт: он не принадлежит ни одному модулю,
+  # и без чтения из архива панель продолжала бы называть себя прежней версией.
+  # Репозиторий и канал обновлений выбирает владелец — они берутся из панели.
+  #
+  # base_commit — коммит, с которого началась упаковка, а не тот, что внутри архива:
+  # релиз собирается ДО коммита, поэтому рабочее дерево обычно уже впереди. В таком
+  # случае dirty=true, commit не заполняется, а version несёт суффикс -dirty.
+  # Опознать сборку точно можно только по tree_sha256.
+  #
+  # Параметры можно передать через окружение (например, при сборке релиза):
+  #   XKEEN_UI_UPDATE_REPO, XKEEN_UI_UPDATE_CHANNEL, XKEEN_UI_VERSION, XKEEN_UI_COMMIT
+  _pb_target="$2"
+  _pb_stamp="$1"
+  [ -f "$_pb_stamp" ] || _pb_stamp="$_pb_target"
+
+  _pb_version="$(extract_json_field version "$_pb_stamp")"
+  _pb_commit="$(extract_json_field commit "$_pb_stamp")"
+  _pb_base_commit="$(extract_json_field base_commit "$_pb_stamp")"
+  _pb_tree_sha="$(extract_json_field tree_sha256 "$_pb_stamp")"
+  _pb_dirty="$(extract_json_bare dirty "$_pb_stamp")"
+  _pb_repo="$(extract_json_field repo "$_pb_target")"
+  _pb_channel="$(extract_json_field channel "$_pb_target")"
+
+  _pb_repo="${XKEEN_UI_UPDATE_REPO:-${_pb_repo:-umarcheh001/Xkeen-UI}}"
+  _pb_channel="${XKEEN_UI_UPDATE_CHANNEL:-${_pb_channel:-stable}}"
+  _pb_version="${XKEEN_UI_VERSION:-$_pb_version}"
+  _pb_commit="${XKEEN_UI_COMMIT:-$_pb_commit}"
+  case "$_pb_dirty" in
+    true|false) ;;
+    *)          _pb_dirty="" ;;
+  esac
+  _pb_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date +"%Y-%m-%dT%H:%M:%SZ")"
+
+  _pb_tmp="$(dirname "$_pb_target")/.BUILD.json.tmp"
+  {
+    echo "{"
+    echo "  \"repo\": \"$(json_escape "$_pb_repo")\","
+    echo "  \"channel\": \"$(json_escape "$_pb_channel")\","
+    if [ -n "$_pb_version" ]; then
+      echo "  \"version\": \"$(json_escape "$_pb_version")\","
+    else
+      echo "  \"version\": null,"
+    fi
+    if [ -n "$_pb_commit" ]; then
+      echo "  \"commit\": \"$(json_escape "$_pb_commit")\","
+    else
+      echo "  \"commit\": null,"
+    fi
+    if [ -n "$_pb_base_commit" ]; then
+      echo "  \"base_commit\": \"$(json_escape "$_pb_base_commit")\","
+    else
+      echo "  \"base_commit\": null,"
+    fi
+    if [ -n "$_pb_dirty" ]; then
+      echo "  \"dirty\": $_pb_dirty,"
+    else
+      echo "  \"dirty\": null,"
+    fi
+    if [ -n "$_pb_tree_sha" ]; then
+      echo "  \"tree_sha256\": \"$(json_escape "$_pb_tree_sha")\","
+    else
+      echo "  \"tree_sha256\": null,"
+    fi
+    echo "  \"built_utc\": \"$(json_escape "$_pb_utc")\","
+    echo "  \"source\": \"install.sh\","
+    echo "  \"artifact\": null"
+    echo "}"
+  } > "$_pb_tmp" 2>/dev/null || true
+
+  if [ -s "$_pb_tmp" ]; then
+    mv -f "$_pb_tmp" "$_pb_target" 2>/dev/null || true
+  fi
+}
+
+# --- Служба автозапуска -----------------------------------------------------
+
+provision_init_script() {
+  # $1 — текст службы (scripts/panel_init.sh), $2 — куда ставить, $3 — порт панели.
+  #
+  # Прежняя служба заменяется одним переименованием: что бы ни случилось
+  # посреди записи, в init.d лежит либо прежний скрипт целиком, либо новый.
+  # Ошибка здесь не глотается — без службы панель не переживёт перезагрузку.
+  _pi_template="$1"
+  _pi_target="$2"
+  _pi_port="$3"
+  _pi_new="$_pi_target.xk-new"
+
+  if [ ! -f "$_pi_template" ]; then
+    echo "[!] Не найден текст службы автозапуска: $_pi_template"
+    return 1
+  fi
+  case "$_pi_port" in
+    ''|*[!0-9]*)
+      echo "[!] Порт панели для службы автозапуска не задан: '$_pi_port'"
+      return 1
+      ;;
+  esac
+
+  if ! sed "s/__XKEEN_UI_PORT__/$_pi_port/g" "$_pi_template" > "$_pi_new" || [ ! -s "$_pi_new" ]; then
+    rm -f "$_pi_new" 2>/dev/null || true
+    echo "[!] Не удалось подготовить службу автозапуска $_pi_target"
+    return 1
+  fi
+  chmod +x "$_pi_new"
+  if ! mv -f "$_pi_new" "$_pi_target"; then
+    rm -f "$_pi_new" 2>/dev/null || true
+    return 1
+  fi
+}

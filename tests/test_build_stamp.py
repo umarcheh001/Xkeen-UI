@@ -194,9 +194,10 @@ def test_build_json_hash_ignores_itself(builder, tmp_path):
 
 
 def test_installer_preserves_the_stamp_fields():
-    installer = (ROOT / "xkeen-ui" / "install.sh").read_text(encoding="utf-8")
+    # The installer rewrites BUILD.json from scratch (the work lives in the
+    # script it shares with the panel update); the archive's stamp must survive it.
+    installer = (ROOT / "xkeen-ui" / "scripts" / "provision_env.sh").read_text(encoding="utf-8")
 
-    # install.sh rewrites BUILD.json from scratch; the archive's stamp must survive it.
     for field in ("base_commit", "dirty", "tree_sha256"):
         assert field in installer, f"install.sh drops the {field!r} field"
 

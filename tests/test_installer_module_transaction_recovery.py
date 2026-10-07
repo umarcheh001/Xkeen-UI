@@ -19,6 +19,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 INSTALL = ROOT / "xkeen-ui" / "install.sh"
 UNINSTALL = ROOT / "xkeen-ui" / "uninstall.sh"
+# Служба автозапуска вынесена из установщика в отдельный файл панели.
+INIT_TEMPLATE = ROOT / "xkeen-ui" / "scripts" / "panel_init.sh"
 BEGIN = "# >>> module-operation-recovery"
 END = "# <<< module-operation-recovery"
 
@@ -27,9 +29,8 @@ def _source() -> str:
     return INSTALL.read_text(encoding="utf-8")
 
 
-def _init_template(source: str) -> str:
-    start = source.index('cat > "$INIT_SCRIPT" << \'EOF\'')
-    return source[start:source.index("\nEOF\n", start)]
+def _init_template(_source: str) -> str:
+    return INIT_TEMPLATE.read_text(encoding="utf-8")
 
 
 def _fragment(text: str) -> str:
@@ -65,7 +66,7 @@ def test_init_script_waits_for_recovery_before_it_starts_the_panel() -> None:
 
 def test_installer_recovers_before_it_lays_out_the_profile() -> None:
     source = _source()
-    installer_part = source[: source.index('cat > "$INIT_SCRIPT" << \'EOF\'')]
+    installer_part = source
 
     recovery = installer_part.index('scripts/module_transaction.py" recover')
     assert recovery < installer_part.index('"$INSTALL_PROFILE_HELPER" apply')
@@ -167,7 +168,7 @@ def test_fragment_gives_up_on_a_recovery_that_hangs(tmp_path: Path) -> None:
 
 def test_installer_refuses_to_lay_files_over_a_live_operation() -> None:
     source = _source()
-    installer_part = source[: source.index('cat > "$INIT_SCRIPT" << \'EOF\'')]
+    installer_part = source
 
     busy = installer_part.index('scripts/module_transaction.py" busy --panel-root "$UI_DIR"')
     refusal = installer_part.index('if [ "$MODULE_TX_BUSY" -eq 3 ]; then\n    fail_install')
