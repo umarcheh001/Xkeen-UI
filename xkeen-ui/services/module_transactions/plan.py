@@ -12,7 +12,12 @@ from dataclasses import asdict, dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Mapping
 
-from services.module_profile_plan import ProfilePlanError, build_profile_target, user_owned
+from services.module_profile_plan import (
+    ProfilePlanError,
+    build_profile_target,
+    build_profile_target_from_ownership,
+    user_owned,
+)
 from services.module_registry import MODULE_IDS
 
 from .state import ModuleTransactionError, transactions_root
@@ -378,11 +383,14 @@ def _full_scope_plan(
     panel_root: Path,
     state_dir: Path,
     catalog: Mapping[str, Any],
-    target_panel_root: Path,
+    target_panel_root: Path | None,
+    target_archive: Mapping[str, Any] | None,
     architecture: str,
     require_newer: bool,
     free_bytes: int | None,
 ) -> Plan:
+    if (target_panel_root is None) == (target_archive is None):
+        raise TypeError("a full-scope plan needs either an unpacked target tree or a verified archive listing")
     # Signature/semver dependencies are not imported while boot recovery only
     # deserializes an existing journal.
     from services.module_package_contract import compare_semver
@@ -411,12 +419,25 @@ def _full_scope_plan(
         _fail("catalog_architecture_unsupported", "the panel is not published for this router", architecture=architecture)
     profile, requested_modules, editor_variant = _read_desired_profile(state_dir)
     try:
-        target = build_profile_target(
-            Path(target_panel_root),
-            profile=profile,
-            module_ids=requested_modules,
-            editor_variant=editor_variant,
-        )
+        if target_archive is not None:
+            # The verified listing of the archive: nothing has to be unpacked
+            # to know what the operation will lay and how much room it needs.
+            target_sizes = {str(path): int(size) for path, size in target_archive["payload_sizes"].items()}
+            target = build_profile_target_from_ownership(
+                target_archive["ownership"],
+                target_sizes,
+                profile=profile,
+                module_ids=requested_modules,
+                editor_variant=editor_variant,
+            )
+        else:
+            target_sizes = None
+            target = build_profile_target(
+                Path(target_panel_root),
+                profile=profile,
+                module_ids=requested_modules,
+                editor_variant=editor_variant,
+            )
     except ProfilePlanError as error:
         raise ModuleTransactionError(error.code, "the desired physical profile is invalid", **error.details) from error
     installed_paths = set(_read_managed_paths(state_dir))
@@ -440,7 +461,10 @@ def _full_scope_plan(
         size=int(descriptor["size"]),
         sha256=str(descriptor["sha256"]),
     )
-    expanded = sum(_file_size(Path(target_panel_root) / path) for path in files_add)
+    if target_sizes is not None:
+        expanded = sum(target_sizes.get(path, 0) for path in files_add)
+    else:
+        expanded = sum(_file_size(Path(target_panel_root) / path) for path in files_add)
     backup = sum(_file_size(Path(panel_root) / path) for path in installed_paths | target_paths)
     required = (archive.size + expanded + backup) * 6 // 5
     if free_bytes is None:
@@ -475,7 +499,8 @@ def build_panel_update_plan(
     panel_root: Path,
     state_dir: Path,
     catalog: Mapping[str, Any],
-    target_panel_root: Path,
+    target_panel_root: Path | None = None,
+    target_archive: Mapping[str, Any] | None = None,
     architecture: str,
     free_bytes: int | None = None,
 ) -> Plan:
@@ -486,6 +511,7 @@ def build_panel_update_plan(
         state_dir=state_dir,
         catalog=catalog,
         target_panel_root=target_panel_root,
+        target_archive=target_archive,
         architecture=architecture,
         require_newer=True,
         free_bytes=free_bytes,
@@ -497,7 +523,8 @@ def build_profile_transition_plan(
     panel_root: Path,
     state_dir: Path,
     catalog: Mapping[str, Any],
-    target_panel_root: Path,
+    target_panel_root: Path | None = None,
+    target_archive: Mapping[str, Any] | None = None,
     architecture: str,
     free_bytes: int | None = None,
 ) -> Plan:
@@ -508,6 +535,7 @@ def build_profile_transition_plan(
         state_dir=state_dir,
         catalog=catalog,
         target_panel_root=target_panel_root,
+        target_archive=target_archive,
         architecture=architecture,
         require_newer=False,
         free_bytes=free_bytes,

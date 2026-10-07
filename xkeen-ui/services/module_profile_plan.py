@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Any, Mapping, Sequence
+from typing import Any, Callable, Collection, Mapping, Sequence
 
 from services.module_registry import MODULE_DEFINITIONS, MODULE_IDS
 
@@ -77,6 +77,24 @@ def _safe_relative(value: str) -> bool:
 def _load_ownership(panel_source: Path) -> tuple[dict[str, tuple[str, ...]], dict[str, dict[str, Any]]]:
     try:
         raw = json.loads((panel_source / "module-ownership.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise ProfilePlanError(
+            "profile_ownership_unavailable",
+            "panel ownership metadata cannot build a physical profile",
+        ) from error
+    return _normalize_ownership(raw, lambda relative: (panel_source / relative).is_file())
+
+
+def _normalize_ownership(
+    raw: Any, has_payload: Callable[[str], bool]
+) -> tuple[dict[str, tuple[str, ...]], dict[str, dict[str, Any]]]:
+    """Check an ownership map against the payload it describes.
+
+    The payload may be a directory or the listing of an archive: what matters
+    is that every owned path is really there.
+    """
+
+    try:
         if not isinstance(raw, Mapping) or raw.get("schema_version") != 1:
             raise ValueError("unsupported schema")
         raw_modules = raw["modules"]
@@ -97,7 +115,7 @@ def _load_ownership(panel_source: Path) -> tuple[dict[str, tuple[str, ...]], dic
             for relative in normalized:
                 if not _safe_relative(relative) or user_owned(relative) or relative in claimed:
                     raise ValueError("unsafe ownership path")
-                if not (panel_source / relative).is_file():
+                if not has_payload(relative):
                     raise ValueError("owned payload is missing")
                 claimed.add(relative)
             modules[module_id] = normalized
@@ -204,8 +222,37 @@ def build_profile_target(
 ) -> ProfileTarget:
     """Return the exact declarative payload and state for one physical profile."""
 
-    source = Path(panel_source)
-    modules, frontend_source = _load_ownership(source)
+    modules, frontend_source = _load_ownership(Path(panel_source))
+    return _profile_target(modules, frontend_source, profile=profile, module_ids=module_ids, editor_variant=editor_variant)
+
+
+def build_profile_target_from_ownership(
+    ownership: Mapping[str, Any],
+    payload_files: Collection[str],
+    *,
+    profile: str,
+    module_ids: Sequence[str] | None,
+    editor_variant: str | None,
+) -> ProfileTarget:
+    """The same target, described by an ownership map and the list of files it covers.
+
+    A verified archive gives both without being unpacked, so a plan can be
+    shown before a single payload file is written anywhere.
+    """
+
+    present = frozenset(payload_files)
+    modules, frontend_source = _normalize_ownership(ownership, present.__contains__)
+    return _profile_target(modules, frontend_source, profile=profile, module_ids=module_ids, editor_variant=editor_variant)
+
+
+def _profile_target(
+    modules: Mapping[str, tuple[str, ...]],
+    frontend_source: Mapping[str, Mapping[str, Any]],
+    *,
+    profile: str,
+    module_ids: Sequence[str] | None,
+    editor_variant: str | None,
+) -> ProfileTarget:
     selected = _selected_modules(str(profile), module_ids)
     default_variant = "full" if profile in {"full", "legacy-full"} else "light"
     variant = default_variant if editor_variant is None else str(editor_variant)

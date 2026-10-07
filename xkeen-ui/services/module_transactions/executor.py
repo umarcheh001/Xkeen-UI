@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import time
 import urllib.error
 import urllib.request
@@ -75,6 +76,27 @@ def wait_for_panel(
         sleep(1.0)
 
 
+def _take_kept_panel_archive(cache: Path | None, plan_archive: Any, staging: Path) -> Path | None:
+    """Move the archive the panel has already downloaded into the staging of the operation.
+
+    It is checked again like a downloaded one, so a wrong or damaged copy
+    costs nothing but the download it was meant to save.
+    """
+
+    if cache is None:
+        return None
+    try:
+        kept = Path(cache) / f"{plan_archive.sha256}.tar.gz"
+        if not kept.is_file() or kept.stat().st_size != plan_archive.size:
+            return None
+        staging.mkdir(parents=True, exist_ok=True)
+        target = staging / "panel-archive.tar.gz"
+        shutil.move(str(kept), str(target))
+        return target
+    except OSError:
+        return None
+
+
 def run_operation(
     journal: Journal,
     *,
@@ -85,6 +107,7 @@ def run_operation(
     wait_healthy: Callable[[str], bool],
     on_step: Callable[[str], None] | None = None,
     shield: Callable[[], None] | None = None,
+    panel_archive_cache: Path | None = None,
 ) -> str:
     """Run the planned operation; ``shield`` is called once nothing may interrupt it.
 
@@ -180,15 +203,31 @@ def run_operation(
                         "operation_plan_stale",
                         "the release catalog no longer matches the planned panel operation",
                     )
-                archive_path = client.download_verified_panel_archive(snapshot, journal.staging)
-                enter("verifying")
+                from services.module_package_contract import ModulePackageContractError
                 from services.panel_package_contract import validate_panel_archive
 
-                checked = validate_panel_archive(
-                    archive_path,
-                    descriptor,
-                    platform_architecture=architecture,
-                )
+                archive_path = _take_kept_panel_archive(panel_archive_cache, plan.archive, journal.staging)
+                kept = archive_path is not None
+                if archive_path is None:
+                    archive_path = client.download_verified_panel_archive(snapshot, journal.staging)
+                enter("verifying")
+                try:
+                    checked = validate_panel_archive(
+                        archive_path,
+                        descriptor,
+                        platform_architecture=architecture,
+                    )
+                except ModulePackageContractError:
+                    if not kept:
+                        raise
+                    # The copy kept by the panel did not survive; the release itself may be fine.
+                    archive_path.unlink(missing_ok=True)
+                    archive_path = client.download_verified_panel_archive(snapshot, journal.staging)
+                    checked = validate_panel_archive(
+                        archive_path,
+                        descriptor,
+                        platform_architecture=architecture,
+                    )
                 if not set(plan.files_add) <= set(checked["payload_files"]):
                     raise ModuleTransactionError(
                         "module_ownership_conflict",

@@ -377,9 +377,15 @@ def create_devtools_blueprint(
         payload = request.get_json(silent=True) or {}
         if lifecycle_service is not None and _update_channel() == "stable":
             try:
-                plan = lifecycle_service.plan("panel-update", None)
+                # Only the signed catalog: the page asks on every load, and a
+                # plan would cost the archive of the whole panel each time.
+                checked = lifecycle_service.panel_update_check(
+                    force_refresh=bool(payload.get("force_refresh") or payload.get("force") or False)
+                )
             except Exception as error:
                 return _lifecycle_failure(error)
+            available = bool(checked.get("update_available"))
+            target_version = str(checked.get("target_version") or "")
             return jsonify(
                 {
                     "ok": True,
@@ -387,13 +393,13 @@ def create_devtools_blueprint(
                     "repo": "umarcheh001/Xkeen-UI",
                     "channel": "stable",
                     "branch": None,
-                    "current": {"version": plan.get("source_version")},
-                    "latest": {"version": plan.get("target_version")},
-                    "update_available": bool(plan.get("applicable")),
+                    "current": {"version": checked.get("source_version")},
+                    "latest": {"version": target_version, "tag": f"v{target_version}" if target_version else ""},
+                    "update_available": available,
                     "stale": False,
                     "meta": {"source": "signed_lifecycle_catalog"},
-                    "security": {"signed_catalog": True, "will_block_run": not bool(plan.get("applicable"))},
-                    "lifecycle_plan": plan,
+                    "security": {"signed_catalog": True, "will_block_run": not available},
+                    "lifecycle_check": checked,
                 }
             )
         force_refresh = bool(payload.get("force_refresh") or payload.get("force") or False)

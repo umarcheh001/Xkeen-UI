@@ -85,6 +85,8 @@ def make_service(panel, release, *, registry=None, **overrides):
         "observe_operation": observe_status,
         "recover_operation": recover,
     }
+    # Свой каталог на каждый тест: общий каталог обновлений один на весь прогон.
+    dependencies["archive_cache_dir"] = Path(panel.state).parent / "panel-archive-cache"
     dependencies.update(overrides)
     service = ModuleLifecycleService(
         registry or ModuleRegistry(str(panel.state), which=lambda _name: "/bin/tool"),

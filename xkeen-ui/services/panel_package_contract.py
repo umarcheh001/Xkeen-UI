@@ -140,6 +140,7 @@ def validate_panel_archive(
 
     seen: set[str] = set()
     payload_files: list[str] = []
+    payload_sizes: dict[str, int] = {}
     ownership_data: bytes | None = None
     expanded_size = 0
     try:
@@ -165,6 +166,7 @@ def validate_panel_archive(
                 if expanded_size > MAX_PANEL_EXPANDED_BYTES:
                     _fail("panel_archive_expanded_too_large", "panel archive exceeds its expanded size limit")
                 payload_files.append(relative)
+                payload_sizes[relative] = int(member.size)
                 if relative == "module-ownership.json":
                     if member.size > MAX_OWNERSHIP_BYTES:
                         _fail("panel_archive_ownership_invalid", "module ownership exceeds its size limit")
@@ -184,6 +186,8 @@ def validate_panel_archive(
     return {
         "root": "xkeen-ui",
         "payload_files": sorted(payload_files),
+        # Enough to plan an operation without unpacking the archive.
+        "payload_sizes": payload_sizes,
         "expanded_size": expanded_size,
         "ownership": ownership,
     }

@@ -25,6 +25,10 @@ class Lifecycle:
             "plan_id": "a" * 64,
         }
 
+    def panel_update_check(self, *, force_refresh=False):
+        self.calls.append(("check", force_refresh))
+        return {"ok": True, "source_version": "1.0.0", "target_version": "1.1.0", "update_available": True}
+
     def apply(self, operation, module_id, plan_id):
         self.calls.append(("apply", operation, module_id, plan_id))
         return {"ok": True, "operation_id": "20261007T120000Z-abcdef", "status": {"result": "running"}}
@@ -51,7 +55,7 @@ def _client(tmp_path, lifecycle: Lifecycle):
     return app.test_client()
 
 
-def test_stable_check_uses_lifecycle_panel_plan(tmp_path) -> None:
+def test_stable_check_uses_lifecycle_catalog_without_building_a_plan(tmp_path) -> None:
     lifecycle = Lifecycle()
     with patch.dict(os.environ, {"XKEEN_UI_UPDATE_CHANNEL": "stable"}, clear=False):
         response = _client(tmp_path, lifecycle).post("/api/devtools/update/check", json={"force_refresh": True})
@@ -63,7 +67,7 @@ def test_stable_check_uses_lifecycle_panel_plan(tmp_path) -> None:
     assert payload["update_available"] is True
     assert payload["current"]["version"] == "1.0.0"
     assert payload["latest"]["version"] == "1.1.0"
-    assert lifecycle.calls == [("plan", "panel-update", None)]
+    assert lifecycle.calls == [("check", True)]
 
 
 def test_stable_run_ignores_client_resolved_authority_and_applies_server_plan(tmp_path) -> None:

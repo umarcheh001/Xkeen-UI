@@ -74,6 +74,7 @@ def test_valid_panel_archive_returns_normalized_payload_and_ownership(tmp_path: 
         "root": "xkeen-ui",
         "payload_files": ["app.py", "module-ownership.json"],
         "expanded_size": 136,
+        "payload_sizes": {"app.py": 15, "module-ownership.json": 121},
         "ownership": {
             "schema_version": 1,
             "modules": {"core": ["app.py", "module-ownership.json"]},

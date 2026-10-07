@@ -9,8 +9,10 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import os
 import re
-import tempfile
+import shutil
+import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 
@@ -90,6 +92,8 @@ _CATALOG_COMPATIBILITY_ERRORS = frozenset(
         "catalog_schema_unsupported",
     }
 )
+PANEL_ARCHIVE_CACHE_DIRNAME = "panel-archive"
+_SHA256_HEX = re.compile(r"[0-9a-f]{64}")
 _PROFILE_TARGET_ERRORS = frozenset(
     {
         "profile_state_unavailable",
@@ -247,6 +251,7 @@ class ModuleLifecycleService:
         recover_operation: Callable[..., str | None] = recover,
         cancel_operation: Callable[..., None] = request_cancel,
         ensure_restartable_operation: Callable[[Path, Path], None] = ensure_restartable,
+        archive_cache_dir: Path | None = None,
     ) -> None:
         self.module_registry = module_registry
         self.panel_root = Path(panel_root)
@@ -262,6 +267,134 @@ class ModuleLifecycleService:
         self._recover_operation = recover_operation
         self._cancel_operation = cancel_operation
         self._ensure_restartable = ensure_restartable_operation
+        self._archive_cache_dir = None if archive_cache_dir is None else Path(archive_cache_dir)
+
+    @property
+    def archive_cache_dir(self) -> Path:
+        """Where the verified panel archive waits between a plan and its runner.
+
+        On the storage, next to the update records and outside the panel
+        tree: the router's temporary directory is its memory, and one archive
+        serves the plan, its re-check under the lock and the runner.
+        """
+
+        if self._archive_cache_dir is None:
+            from services.self_update.state import get_update_paths
+
+            self._archive_cache_dir = (
+                Path(get_update_paths(str(self.state_dir))["update_dir"]) / PANEL_ARCHIVE_CACHE_DIRNAME
+            )
+        return self._archive_cache_dir
+
+    def _drop_archive_cache(self) -> None:
+        shutil.rmtree(self.archive_cache_dir, ignore_errors=True)
+
+    def _panel_archive(self, client: Any, snapshot: Any) -> tuple[Path, bool]:
+        """The panel archive of a verified catalog and whether it was just downloaded."""
+
+        descriptor = snapshot.catalog.get("panel")
+        digest = descriptor.get("sha256") if isinstance(descriptor, Mapping) else None
+        cache = self.archive_cache_dir
+        target = (
+            cache / f"{digest}.tar.gz"
+            if isinstance(digest, str) and _SHA256_HEX.fullmatch(digest)
+            else None
+        )
+        if target is not None and target.is_file():
+            return target, False
+        # One archive at a time: whatever is here belongs to another release.
+        self._drop_archive_cache()
+        incoming = cache / f"incoming-{os.getpid()}-{uuid.uuid4().hex[:8]}"
+        try:
+            downloaded = client.download_verified_panel_archive(snapshot, incoming)
+            if target is None:
+                target = cache / "panel.tar.gz"
+            os.replace(downloaded, target)
+        finally:
+            shutil.rmtree(incoming, ignore_errors=True)
+        return target, True
+
+    def _checked_panel_archive(self, client: Any, snapshot: Any, architecture: str) -> dict[str, Any]:
+        """The verified listing of the panel archive; nothing is unpacked."""
+
+        from services.module_package_contract import ModulePackageContractError
+        from services.panel_package_contract import validate_panel_archive
+
+        while True:
+            archive, fresh = self._panel_archive(client, snapshot)
+            try:
+                return validate_panel_archive(
+                    archive,
+                    snapshot.catalog["panel"],
+                    platform_architecture=architecture,
+                )
+            except ModulePackageContractError:
+                # A kept copy may have rotted on the storage; a download that
+                # fails the same check is the release's own fault.
+                self._drop_archive_cache()
+                if fresh:
+                    raise
+
+    def _raise_full_scope_error(self, operation: str, error: BaseException) -> None:
+        code = str(getattr(error, "code", None) or "")
+        if code.startswith("panel_archive_") or code in {
+            "catalog_archive_checksum_mismatch",
+            "catalog_archive_size_mismatch",
+        }:
+            raise ModuleLifecycleError(
+                "panel_archive_invalid",
+                "the panel archive failed verification",
+                status=409,
+            ) from error
+        unavailable = code in {
+            "catalog_archive_unavailable",
+            "catalog_panel_not_object",
+            "catalog_release_not_found",
+        }
+        if operation == "profile-transition" and unavailable:
+            raise ModuleLifecycleError(
+                "profile_payload_unavailable",
+                "the exact-release panel payload is unavailable",
+                status=503,
+            ) from error
+        if operation == "panel-update" and unavailable:
+            raise ModuleLifecycleError(
+                "panel_update_unavailable",
+                "no trusted compatible panel update is available",
+                status=503,
+            ) from error
+        if code:
+            _raise_domain(error)
+        raise error
+
+    def panel_update_check(self, *, force_refresh: bool = False) -> dict[str, Any]:
+        """Whether a newer signed release exists; reads the catalog and nothing else.
+
+        The answer to "is there an update" must not cost the archive of the
+        whole panel: the page asks on every load and every few hours.
+        """
+
+        self._ensure_profile_settled("panel-update")
+        # A check means nobody is between a reviewed plan and its launch.
+        self._drop_archive_cache()
+        try:
+            from services.module_package_contract import compare_semver
+
+            source_version = read_panel_version(self.panel_root)
+            client = self._catalog_factory(source_version, self._architecture_provider())
+            snapshot = client.get_catalog(force_refresh=bool(force_refresh))
+            target_version = str(snapshot.catalog.get("release_version") or "")
+            newer = compare_semver(target_version, source_version) > 0
+        except ModuleTransactionError as error:
+            _raise_domain(error)
+        except Exception as error:
+            self._raise_full_scope_error("panel-update", error)
+        return {
+            "ok": True,
+            "source_version": source_version,
+            "target_version": target_version,
+            "update_available": newer,
+        }
 
     def _release_context(self):
         try:
@@ -387,28 +520,31 @@ class ModuleLifecycleService:
                 if operation == "panel-update"
                 else client.get_release_catalog(source_version)
             )
-            with tempfile.TemporaryDirectory(prefix="xkeen-panel-plan-") as temporary:
-                staging = Path(temporary)
-                archive = client.download_verified_panel_archive(snapshot, staging)
-                from services.panel_package_contract import validate_panel_archive
-                from services.module_transactions.extract import extract_panel_payload
+            if operation == "panel-update":
+                from services.module_package_contract import compare_semver
 
-                checked = validate_panel_archive(
-                    archive,
-                    snapshot.catalog["panel"],
-                    platform_architecture=architecture,
-                )
-                target_root = staging / "payload" / "xkeen-ui"
-                extract_panel_payload(archive, target_root, checked["payload_files"])
-                builder = build_panel_update_plan if operation == "panel-update" else build_profile_transition_plan
-                plan = builder(
-                    panel_root=self.panel_root,
-                    state_dir=self.state_dir,
-                    catalog=snapshot.catalog,
-                    target_panel_root=target_root,
-                    architecture=architecture,
-                )
+                # Before the archive: a panel that is already current must
+                # not download the whole release to learn that.
+                target_version = str(snapshot.catalog.get("release_version") or "")
+                if compare_semver(target_version, source_version) <= 0:
+                    raise ModuleTransactionError(
+                        "panel_update_not_newer",
+                        "the stable catalog does not contain a newer panel release",
+                        current_version=source_version,
+                        target_version=target_version,
+                    )
+            checked = self._checked_panel_archive(client, snapshot, architecture)
+            builder = build_panel_update_plan if operation == "panel-update" else build_profile_transition_plan
+            plan = builder(
+                panel_root=self.panel_root,
+                state_dir=self.state_dir,
+                catalog=snapshot.catalog,
+                target_archive=checked,
+                architecture=architecture,
+            )
         except ModuleTransactionError as error:
+            # Nothing will be launched from this plan: the archive has no reader.
+            self._drop_archive_cache()
             if error.code in _PLAN_BLOCKERS | {"panel_update_not_newer", "profile_transition_not_required"}:
                 public_code = {
                     "panel_update_not_newer": "panel_version_current",
@@ -442,39 +578,8 @@ class ModuleLifecycleService:
                 ) from error
             _raise_domain(error)
         except Exception as error:
-            code = str(getattr(error, "code", None) or "")
-            if code.startswith("panel_archive_") or code in {
-                "catalog_archive_checksum_mismatch",
-                "catalog_archive_size_mismatch",
-            }:
-                raise ModuleLifecycleError(
-                    "panel_archive_invalid",
-                    "the panel archive failed verification",
-                    status=409,
-                ) from error
-            if operation == "profile-transition" and code in {
-                "catalog_archive_unavailable",
-                "catalog_panel_not_object",
-                "catalog_release_not_found",
-            }:
-                raise ModuleLifecycleError(
-                    "profile_payload_unavailable",
-                    "the exact-release panel payload is unavailable",
-                    status=503,
-                ) from error
-            if operation == "panel-update" and code in {
-                "catalog_archive_unavailable",
-                "catalog_panel_not_object",
-                "catalog_release_not_found",
-            }:
-                raise ModuleLifecycleError(
-                    "panel_update_unavailable",
-                    "no trusted compatible panel update is available",
-                    status=503,
-                ) from error
-            if code:
-                _raise_domain(error)
-            raise
+            self._drop_archive_cache()
+            self._raise_full_scope_error(operation, error)
 
         encoded = plan_to_json(plan)
         dependency_diff: dict[str, Any] = {}
@@ -638,6 +743,25 @@ class ModuleLifecycleService:
                 status=503,
             )
 
+        if operation not in _FULL_SCOPE_OPERATIONS:
+            return self._apply(operation, module_id, plan_id, {})
+        try:
+            # The runner takes the archive this process has already verified.
+            return self._apply(
+                operation, module_id, plan_id, {"extra_args": ("--archive-cache", str(self.archive_cache_dir))}
+            )
+        except BaseException:
+            # Nothing was launched, so nobody will come for the archive.
+            self._drop_archive_cache()
+            raise
+
+    def _apply(
+        self,
+        operation: str,
+        module_id: str | None,
+        plan_id: str,
+        launch_options: Mapping[str, Any],
+    ) -> dict[str, Any]:
         plan, payload = self._plan_and_payload(operation, module_id)
         stale_code = "operation_plan_stale" if operation in _FULL_SCOPE_OPERATIONS else "module_plan_stale"
         if plan is None or not payload["applicable"]:
@@ -681,6 +805,7 @@ class ModuleLifecycleService:
                 health_url=self.health_url,
                 restart_cmd=self.restart_cmd,
                 prepare_plan=prepare_plan,
+                **launch_options,
             )
         except ModuleTransactionError as error:
             _raise_domain(error)

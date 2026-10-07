@@ -162,6 +162,7 @@ def _run(args, *, client_factory, architecture, on_step) -> int:
             wait_healthy=wait_healthy,
             on_step=on_step,
             shield=lambda: signal.signal(signal.SIGTERM, signal.SIG_IGN),
+            panel_archive_cache=Path(args.archive_cache) if args.archive_cache else None,
         )
     finally:
         release_lock(lock_file, owner_pid=os.getpid())
@@ -213,6 +214,8 @@ def main(argv=None, *, client_factory=None, architecture=None, on_step=None) -> 
     run.add_argument("--state-dir", required=True)
     run.add_argument("--operation", required=True)
     run.add_argument("--lock-owner-pid", type=int)
+    # Where the panel left the archive it has already downloaded and verified.
+    run.add_argument("--archive-cache")
     again = commands.add_parser("recover")
     again.add_argument("--panel-root", required=True)
     again.add_argument("--state-dir", required=True)
