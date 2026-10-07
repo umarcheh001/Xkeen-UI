@@ -7893,6 +7893,52 @@ let outboundsModuleApi = null;
       }
     }
 
+    function subsUpdateStamps() {
+      const stamps = {};
+      _subscriptions.forEach((item) => {
+        if (item && item.id) stamps[subsCleanId(item.id)] = Number(item.last_update_ts || 0);
+      });
+      return stamps;
+    }
+
+    // Ответ на обновление потерян вместе с соединением, но итог панель пишет в
+    // запись подписки: кто обновился, видно по сдвинувшемуся времени обновления.
+    // Запись появляется уже после перезапуска, поэтому первому ответу не верим.
+    async function subsRefreshOutcomeAfterLinkLoss(stamps, onlyId) {
+      subsSetStatus('Связь с роутером прервалась на время перезапуска Xray. Жду итог…', false, false, { busy: true });
+      const only = onlyId ? subsCleanId(onlyId) : '';
+      const updatedIn = (list) => (Array.isArray(list.subscriptions) ? list.subscriptions : []).filter((item) => {
+        const key = subsCleanId(item && item.id);
+        if (only && key !== only) return false;
+        return Number((item && item.last_update_ts) || 0) > Number(stamps[key] || 0);
+      });
+      const settled = await subsAwaitOutcome((list) => updatedIn(list).length > 0, 15000);
+      if (settled === null) {
+        throw new Error('связь с роутером не восстановилась. Обновление могло завершиться — обновите страницу.');
+      }
+      if (!settled) {
+        throw new Error(only
+          ? 'после восстановления связи подписка осталась в прежнем состоянии.'
+          : 'после восстановления связи подписки остались в прежнем состоянии.');
+      }
+      return updatedIn(settled).map((item) => ({
+        id: item.id,
+        ok: item.last_ok !== false,
+        error: String(item.last_error || ''),
+        // Связь рвёт только перезапуск, а он бывает лишь после изменений.
+        changed: item.last_changed !== false,
+        observatory_changed: item.last_observatory_changed !== false,
+        routing_changed: item.last_routing_changed !== false,
+        restarted: true,
+        count: Number(item.last_count || 0),
+        source_count: Number(item.last_source_count || 0),
+        filtered_out_count: Number(item.last_filtered_out_count || 0),
+        warnings: Array.isArray(item.last_warnings) ? item.last_warnings : [],
+        output_file: String(item.output_file || ''),
+        routing_mode: item.last_routing_mode || item.routing_mode,
+      }));
+    }
+
     async function subsRefresh(id, options) {
       const subId = String(id || '').trim();
       if (!subId) return false;
@@ -7908,15 +7954,22 @@ let outboundsModuleApi = null;
       const prevActive = getActiveFragment();
       subsSetStatus('Обновляю подписку…', false, false, { busy: true });
       const restart = shouldRestartAfterSave();
+      const stamps = subsUpdateStamps();
       try {
-        const res = await fetch('/api/xray/subscriptions/' + encodeURIComponent(subId) + '/refresh?restart=' + (restart ? '1' : '0'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: '{}',
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data || data.ok === false) {
-          const err = String((data && (data.error || data.message)) || ('HTTP ' + res.status));
+        let res = null;
+        let data = null;
+        try {
+          res = await fetch('/api/xray/subscriptions/' + encodeURIComponent(subId) + '/refresh?restart=' + (restart ? '1' : '0'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: '{}',
+          });
+        } catch (eLink) {
+          data = (await subsRefreshOutcomeAfterLinkLoss(stamps, subId))[0];
+        }
+        if (res) data = await res.json().catch(() => ({}));
+        if ((res && !res.ok) || !data || data.ok === false) {
+          const err = String((data && (data.error || data.message)) || ('HTTP ' + (res ? res.status : 0)));
           throw new Error(err);
         }
         const fileChanged = !!data.changed;
@@ -8224,11 +8277,12 @@ let outboundsModuleApi = null;
 
     // Перезапуск ядра может оборвать и само соединение с панелью. Операция на
     // роутере при этом доходит до конца, поэтому итог берём из списка подписок.
-    // firstAnswerDecides — когда список меняется раньше перезапуска и первый же
-    // ответ после обрыва окончателен.
-    async function subsAwaitOutcome(reached, firstAnswerDecides) {
+    // settleMs — сколько ещё ждать после первого ответа роутера: ноль, когда список
+    // меняется раньше перезапуска и первый же ответ окончателен.
+    async function subsAwaitOutcome(reached, settleMs) {
       const deadline = Date.now() + 90000;
       let answered = false;
+      let answeredAt = 0;
       while (Date.now() < deadline) {
         await new Promise((resolve) => setTimeout(resolve, 3000));
         try {
@@ -8240,7 +8294,8 @@ let outboundsModuleApi = null;
           if (res.ok && data && data.ok !== false) {
             answered = true;
             if (reached(data)) return data;
-            if (firstAnswerDecides) return false;
+            if (!answeredAt) answeredAt = Date.now();
+            if (settleMs != null && Date.now() - answeredAt >= settleMs) return false;
           }
         } catch (e) {}
       }
@@ -8423,15 +8478,25 @@ let outboundsModuleApi = null;
       subsSetStatus('Проверяю просроченные подписки…', false, false, { busy: true });
       const prevActive = getActiveFragment();
       const restart = shouldRestartAfterSave();
+      const stamps = subsUpdateStamps();
       try {
-        const res = await fetch('/api/xray/subscriptions/refresh-due?restart=' + (restart ? '1' : '0'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: '{}',
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data || data.ok === false) {
-          throw new Error(String((data && (data.error || data.message)) || ('HTTP ' + res.status)));
+        let res = null;
+        let data = null;
+        try {
+          res = await fetch('/api/xray/subscriptions/refresh-due?restart=' + (restart ? '1' : '0'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: '{}',
+          });
+        } catch (eLink) {
+          const results = await subsRefreshOutcomeAfterLinkLoss(stamps, '');
+          data = { ok: true, updated: results.length, ok_count: results.filter((item) => item.ok).length, results };
+        }
+        if (res) {
+          data = await res.json().catch(() => ({}));
+          if (!res.ok || !data || data.ok === false) {
+            throw new Error(String((data && (data.error || data.message)) || ('HTTP ' + res.status)));
+          }
         }
         const results = Array.isArray(data.results) ? data.results : [];
         const updatedCount = Number(data.updated || 0);
@@ -8716,7 +8781,7 @@ let outboundsModuleApi = null;
       const settled = await subsAwaitOutcome((list) => {
         const items = Array.isArray(list.subscriptions) ? list.subscriptions : [];
         return !items.some((item) => subsCleanId(item && item.id) === target);
-      }, true);
+      }, 0);
       if (settled === null) {
         throw new Error('связь с роутером не восстановилась. Удаление могло завершиться — обновите страницу.');
       }

@@ -428,3 +428,89 @@ test.describe('удаление одной подписки при обрыве 
     await expect(page.locator('#outbounds-subscriptions-tbody tr')).toHaveCount(2);
   });
 });
+
+// Обновление: роутер скачал и применил, а ответ потерян на перезапуске ядра.
+async function mockRefresh(page, onRefresh) {
+  const past = Math.floor(Date.now() / 1000) - 600;
+  const state = { subs: [sub('alpha'), sub('beta', { next_update_ts: past })], posts: [] };
+  await page.route('**/api/xray/subscriptions', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    await route.fulfill({
+      json: { ok: true, subscriptions: state.subs, paused: false, paused_ts: null, switch_notice: {} },
+    });
+  });
+  await page.route(/\/api\/xray\/subscriptions\/(alpha\/refresh|beta\/refresh|refresh-due)(\?.*)?$/, async (route) => {
+    const target = new URL(route.request().url()).pathname.split('/subscriptions/').pop();
+    state.posts.push(target);
+    onRefresh({ target, state });
+    await route.abort('connectionreset');
+  });
+  return state;
+}
+
+function refreshed(state, id, extra = {}) {
+  state.subs = state.subs.map((item) => (item.id !== id ? item : {
+    ...item,
+    last_update_ts: Math.floor(Date.now() / 1000) + 5,
+    last_ok: true,
+    last_count: 7,
+    last_source_count: 7,
+    last_changed: true,
+    last_routing_changed: false,
+    last_observatory_changed: false,
+    last_warnings: [],
+    ...extra,
+  }));
+}
+
+test.describe('обновление подписки при обрыве связи', () => {
+  const status = (page) => page.locator('#outbounds-subscriptions-status');
+  const rows = (page) => page.locator('#outbounds-subscriptions-tbody tr');
+
+  test('одна подписка: окно дожидается итога и называет его', async ({ page }) => {
+    const warning = 'Не возвращено на прежнее место, потому что изменено вручную: сервер «vless-reality».';
+    const state = await mockRefresh(page, ({ state: s }) => refreshed(s, 'alpha', { last_warnings: [warning] }));
+    await openSubscriptions(page);
+    await expect(rows(page)).toHaveCount(2);
+    await page.locator('#outbounds-subscriptions-tbody tr[data-sub-id="alpha"] .xk-sub-refresh').click();
+
+    await expect(status(page)).toContainText('Жду итог');
+    await expect(status(page)).toContainText('Готово: узлов 7', { timeout: 15000 });
+    await expect(status(page)).toContainText('файл обновлён');
+    await expect(status(page)).toContainText(warning);
+    await expect(status(page)).not.toContainText('Ошибка обновления');
+    expect(state.posts).toEqual(['alpha/refresh']);
+  });
+
+  test('одна подписка: роутер не смог скачать — окно называет настоящую причину', async ({ page }) => {
+    await mockRefresh(page, ({ state: s }) => refreshed(s, 'alpha', { last_ok: false, last_error: 'сервер подписки ответил 502' }));
+    await openSubscriptions(page);
+    await page.locator('#outbounds-subscriptions-tbody tr[data-sub-id="alpha"] .xk-sub-refresh').click();
+
+    await expect(status(page)).toContainText('Ошибка обновления: сервер подписки ответил 502', { timeout: 15000 });
+    await expect(status(page)).not.toContainText('Failed to fetch');
+  });
+
+  test('одна подписка: ничего не изменилось — окно говорит об этом', async ({ page }) => {
+    await mockRefresh(page, () => {});
+    await openSubscriptions(page);
+    await page.locator('#outbounds-subscriptions-tbody tr[data-sub-id="alpha"] .xk-sub-refresh').click();
+
+    await expect(status(page)).toContainText('Жду итог');
+    await expect(status(page)).toContainText('Ошибка обновления', { timeout: 40000 });
+    await expect(status(page)).toContainText('подписка осталась в прежнем состоянии');
+    await expect(status(page)).not.toContainText('Failed to fetch');
+  });
+
+  test('просроченные: окно дожидается итога и считает обновлённые', async ({ page }) => {
+    const state = await mockRefresh(page, ({ state: s }) => refreshed(s, 'beta'));
+    await openSubscriptions(page);
+    await expect(rows(page)).toHaveCount(2);
+    await page.locator('#outbounds-subscriptions-refresh-due-btn').click();
+
+    await expect(status(page)).toContainText('Жду итог');
+    await expect(status(page)).toContainText('Просроченные обновлены: 1 / 1', { timeout: 15000 });
+    await expect(status(page)).toHaveClass(/is-success/);
+    expect(state.posts).toEqual(['refresh-due']);
+  });
+});
