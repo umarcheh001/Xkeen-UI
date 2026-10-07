@@ -10,6 +10,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 INSTALLER = ROOT / "xkeen-ui" / "install.sh"
+PROVISION = ROOT / "xkeen-ui" / "scripts" / "provision_env.sh"
 DEV_REQUIREMENTS = ROOT / "requirements-dev.txt"
 
 
@@ -25,7 +26,10 @@ def _shell() -> str:
 
 
 def _function(name: str) -> str:
+    # Работа, общая с обновлением из панели, вынесена в отдельный скрипт.
     text = _text()
+    if name + "() {" not in text:
+        text = PROVISION.read_text(encoding="utf-8")
     start = text.index(name + "() {")
     return text[start:text.index("\n}\n", start) + 3]
 

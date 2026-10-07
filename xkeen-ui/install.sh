@@ -625,6 +625,11 @@ trap 'installer_on_exit $?' 0
 ui_progress_start
 trap 'installer_on_interrupt' HUP INT TERM
 
+# Работа, общая для установки и обновления из панели, живёт в одном файле.
+PROVISION_LIB="$SRC_DIR/scripts/provision_env.sh"
+[ -f "$PROVISION_LIB" ] || fail_install "Установочный архив повреждён: нет scripts/provision_env.sh."
+. "$PROVISION_LIB"
+
 if [ -f "$UI_DIR/app.py" ] || [ -f "$UI_DIR/run_server.py" ]; then
   INSTALL_MODE="Обновление"
 else
@@ -1481,54 +1486,6 @@ migrate_legacy_jsonc_files() {
 
 # --- Определяем существующую установку и её порт ---
 
-same_ignoring_cr() {
-  # Локальный архив, собранный на Windows, везёт шаблоны с CRLF, релизный — с LF.
-  # Такая разница — не правка пользователя, и копия под неё не нужна.
-  [ -f "$1" ] && [ -f "$2" ] || return 1
-  [ "$(tr -d '\r' < "$1" | md5sum | cut -d' ' -f1)" = "$(tr -d '\r' < "$2" | md5sum | cut -d' ' -f1)" ]
-}
-
-sync_bundled_template_dir() {
-  src_dir="$1"
-  dest_dir="$2"
-  label="$3"
-
-  if [ ! -d "$src_dir" ]; then
-    echo "[*] Шаблоны $label не найдены в архиве (пропуск)"
-    return 0
-  fi
-
-  echo "[*] Устанавливаю шаблоны $label в $dest_dir..."
-  mkdir -p "$dest_dir"
-
-  if command -v date >/dev/null 2>&1; then
-    TS="$(date +%Y%m%d-%H%M%S 2>/dev/null || date 2>/dev/null || echo "no-date")"
-  else
-    TS="no-date"
-  fi
-
-  for f in "$src_dir"/*.json "$src_dir"/*.jsonc; do
-    [ -f "$f" ] || continue
-    base="$(basename "$f")"
-    dest="$dest_dir/$base"
-
-    if [ -f "$dest" ] && cmp -s "$f" "$dest" 2>/dev/null; then
-      continue
-    fi
-
-    if same_ignoring_cr "$f" "$dest"; then
-      :
-    elif [ -f "$dest" ]; then
-      cp -f "$dest" "$dest.dist-$TS" 2>/dev/null || true
-      echo "[*] ~ обновляю built-in шаблон $base (backup: $base.dist-$TS)"
-    else
-      echo "[*] + $base"
-    fi
-
-    cp -f "$f" "$dest"
-  done
-}
-
 drop_previous_precompressed() {
   STATIC_DIR="$1"
   [ -n "$STATIC_DIR" ] || return 0
@@ -2220,190 +2177,8 @@ if profile_has_module tool.terminal; then
   fi
 fi
 
-# --- Sysmon wrapper ---
-# Make `sysmon` available inside interactive PTY shell sessions.
-SYS_MON_SRC="$UI_DIR/tools/sysmon_keenetic.sh"
-SYS_MON_BIN="/opt/bin/sysmon"
-
-if [ -f "$SYS_MON_SRC" ]; then
-  echo "[*] Устанавливаю sysmon в $SYS_MON_BIN..."
-  cat > "$SYS_MON_BIN" <<'EOF'
-#!/bin/sh
-# sysmon — XKeen router monitor
-SCRIPT="/opt/etc/xkeen-ui/tools/sysmon_keenetic.sh"
-if [ ! -f "$SCRIPT" ]; then
-  echo "sysmon: script not found: $SCRIPT" >&2
-  exit 127
-fi
-exec sh "$SCRIPT" "$@"
-EOF
-  chmod +x "$SYS_MON_BIN" 2>/dev/null || true
-  chmod +x "$SYS_MON_SRC" 2>/dev/null || true
-else
-  echo "[*] sysmon: скрипт не найден в $SYS_MON_SRC (пропуск)"
-fi
-
-# --- Entware backup wrapper ---
-ENTWARE_BACKUP_SRC="$UI_DIR/tools/entware_backup.sh"
-ENTWARE_BACKUP_BIN="/opt/bin/entware-backup"
-
-if [ -f "$ENTWARE_BACKUP_SRC" ]; then
-  echo "[*] Устанавливаю entware-backup в $ENTWARE_BACKUP_BIN..."
-  cat > "$ENTWARE_BACKUP_BIN" <<'EOF'
-#!/bin/sh
-SCRIPT="/opt/etc/xkeen-ui/tools/entware_backup.sh"
-if [ ! -f "$SCRIPT" ]; then
-  echo "entware-backup: script not found: $SCRIPT" >&2
-  exit 127
-fi
-exec sh "$SCRIPT" "$@"
-EOF
-  chmod +x "$ENTWARE_BACKUP_BIN" 2>/dev/null || true
-  chmod +x "$ENTWARE_BACKUP_SRC" 2>/dev/null || true
-else
-  echo "[*] entware-backup: скрипт не найден в $ENTWARE_BACKUP_SRC (пропуск)"
-fi
-
-# --- Storage dashboard wrapper ---
-_STORAGE_DASH_SRC="$UI_DIR/tools/storage_dashboard.sh"
-_STORAGE_DASH_BIN="/opt/bin/storage-dashboard"
-
-if [ -f "$_STORAGE_DASH_SRC" ]; then
-  echo "[*] Устанавливаю storage-dashboard в $_STORAGE_DASH_BIN..."
-  cat > "$_STORAGE_DASH_BIN" <<'EOF'
-#!/bin/sh
-SCRIPT="/opt/etc/xkeen-ui/tools/storage_dashboard.sh"
-if [ ! -f "$SCRIPT" ]; then
-  echo "storage-dashboard: script not found: $SCRIPT" >&2
-  exit 127
-fi
-exec sh "$SCRIPT" "$@"
-EOF
-  chmod +x "$_STORAGE_DASH_BIN" 2>/dev/null || true
-  chmod +x "$_STORAGE_DASH_SRC" 2>/dev/null || true
-else
-  echo "[*] storage-dashboard: скрипт не найден в $_STORAGE_DASH_SRC (пропуск)"
-fi
-
-# --- Cleanup removed legacy io-monitor utility ---
-_IO_MON_SRC="$UI_DIR/tools/io_monitor.sh"
-_IO_MON_BIN="/opt/bin/io-monitor"
-
-if [ -f "$_IO_MON_BIN" ] || [ -f "$_IO_MON_SRC" ]; then
-  echo "[*] Удаляю legacy io-monitor..."
-  rm -f "$_IO_MON_BIN" "$_IO_MON_SRC" 2>/dev/null || true
-fi
-
-# --- Device lock detector wrapper ---
-_DEV_LOCK_SRC="$UI_DIR/tools/device_lock_detector.sh"
-_DEV_LOCK_BIN="/opt/bin/device-locks"
-
-if [ -f "$_DEV_LOCK_SRC" ]; then
-  echo "[*] Устанавливаю device-locks в $_DEV_LOCK_BIN..."
-  cat > "$_DEV_LOCK_BIN" <<'EOF'
-#!/bin/sh
-SCRIPT="/opt/etc/xkeen-ui/tools/device_lock_detector.sh"
-if [ ! -f "$SCRIPT" ]; then
-  echo "device-locks: script not found: $SCRIPT" >&2
-  exit 127
-fi
-exec sh "$SCRIPT" "$@"
-EOF
-  chmod +x "$_DEV_LOCK_BIN" 2>/dev/null || true
-  chmod +x "$_DEV_LOCK_SRC" 2>/dev/null || true
-else
-  echo "[*] device-locks: скрипт не найден в $_DEV_LOCK_SRC (пропуск)"
-fi
-
-# --- Memory check wrapper ---
-_MEM_CHECK_SRC="$UI_DIR/tools/memory_check.sh"
-_MEM_CHECK_BIN="/opt/bin/memory-check"
-
-if [ -f "$_MEM_CHECK_SRC" ]; then
-  echo "[*] Устанавливаю memory-check в $_MEM_CHECK_BIN..."
-  cat > "$_MEM_CHECK_BIN" <<'EOF'
-#!/bin/sh
-SCRIPT="/opt/etc/xkeen-ui/tools/memory_check.sh"
-if [ ! -f "$SCRIPT" ]; then
-  echo "memory-check: script not found: $SCRIPT" >&2
-  exit 127
-fi
-exec sh "$SCRIPT" "$@"
-EOF
-  chmod +x "$_MEM_CHECK_BIN" 2>/dev/null || true
-  chmod +x "$_MEM_CHECK_SRC" 2>/dev/null || true
-else
-  echo "[*] memory-check: скрипт не найден в $_MEM_CHECK_SRC (пропуск)"
-fi
-
-# --- Version check wrapper ---
-_VER_CHECK_SRC="$UI_DIR/tools/version_check.sh"
-_VER_CHECK_BIN="/opt/bin/version-check"
-
-if [ -f "$_VER_CHECK_SRC" ]; then
-  echo "[*] Устанавливаю version-check в $_VER_CHECK_BIN..."
-  cat > "$_VER_CHECK_BIN" <<'EOF'
-#!/bin/sh
-SCRIPT="/opt/etc/xkeen-ui/tools/version_check.sh"
-if [ ! -f "$SCRIPT" ]; then
-  echo "version-check: script not found: $SCRIPT" >&2
-  exit 127
-fi
-exec sh "$SCRIPT" "$@"
-EOF
-  chmod +x "$_VER_CHECK_BIN" 2>/dev/null || true
-  chmod +x "$_VER_CHECK_SRC" 2>/dev/null || true
-else
-  echo "[*] version-check: скрипт не найден в $_VER_CHECK_SRC (пропуск)"
-fi
-
-# --- Backup monitor wrapper ---
-_BKUP_MON_SRC="$UI_DIR/tools/backup_monitor.sh"
-_BKUP_MON_BIN="/opt/bin/backup-monitor"
-
-if [ -f "$_BKUP_MON_SRC" ]; then
-  echo "[*] Устанавливаю backup-monitor в $_BKUP_MON_BIN..."
-  cat > "$_BKUP_MON_BIN" <<'EOF'
-#!/bin/sh
-SCRIPT="/opt/etc/xkeen-ui/tools/backup_monitor.sh"
-if [ ! -f "$SCRIPT" ]; then
-  echo "backup-monitor: script not found: $SCRIPT" >&2
-  exit 127
-fi
-exec sh "$SCRIPT" "$@"
-EOF
-  chmod +x "$_BKUP_MON_BIN" 2>/dev/null || true
-  chmod +x "$_BKUP_MON_SRC" 2>/dev/null || true
-else
-  echo "[*] backup-monitor: скрипт не найден в $_BKUP_MON_SRC (пропуск)"
-fi
-
-
-cleanup_legacy_xray_templates() {
-  # Некоторые версии xkeen/xray могут подхватывать *.jsonc из /opt/etc/xray (recursive scan)
-  # и из-за этого зависать/не стартовать. Начиная с этого релиза шаблоны живут в $UI_DIR/templates/*.
-  # Поэтому аккуратно убираем ТОЛЬКО наши встроенные шаблоны из /opt/etc/xray/templates/*.
-
-  LEGACY_ROOT="${1:-/opt/etc/xray/templates}"
-  [ -d "$LEGACY_ROOT" ] || return 0
-
-  # remove built-in routing templates by name
-  for f in \
-    "$LEGACY_ROOT/routing/05_routing_base.jsonc" \
-    "$LEGACY_ROOT/routing/05_routing_zkeen_only.jsonc" \
-    "$LEGACY_ROOT/routing/05_routing_all_proxy_except_ru.jsonc" \
-    "$LEGACY_ROOT/routing/.xkeen_seeded" \
-    "$LEGACY_ROOT/observatory/07_observatory_base.jsonc" \
-    "$LEGACY_ROOT/observatory/.xkeen_seeded" \
-    ; do
-    [ -f "$f" ] && rm -f "$f" 2>/dev/null || true
-  done
-
-  # Try to prune empty dirs (best-effort)
-  rmdir "$LEGACY_ROOT/routing" 2>/dev/null || true
-  rmdir "$LEGACY_ROOT/observatory" 2>/dev/null || true
-  rmdir "$LEGACY_ROOT" 2>/dev/null || true
-}
+# --- Команды панели в /opt/bin (sysmon, entware-backup и другие) ---
+provision_command_wrappers
 
 # Убираем legacy шаблоны из /opt/etc/xray/templates (если они были установлены ранее).
 # Эта уборка не влияет на работоспособность новой панели.
@@ -2418,37 +2193,7 @@ fi
 ui_step_done
 ui_step "Шаблоны Mihomo и Xray"
 if profile_has_module engine.mihomo && [ -d "$SRC_MIHOMO_TEMPLATES" ]; then
-  echo "[*] Устанавливаю шаблон Mihomo в $MIHOMO_TEMPLATES_DIR..."
-  mkdir -p "$MIHOMO_TEMPLATES_DIR"
-
-  for old in config_2.yaml umarcheh001.yaml; do
-    if [ -f "$MIHOMO_TEMPLATES_DIR/$old" ]; then
-      rm -f "$MIHOMO_TEMPLATES_DIR/$old" && echo "[*] Удалён старый шаблон $old"
-    fi
-  done
-
-  SRC_CUSTOM="$SRC_MIHOMO_TEMPLATES/custom.yaml"
-  if [ -f "$SRC_CUSTOM" ]; then
-    cp -f "$SRC_CUSTOM" "$MIHOMO_TEMPLATES_DIR/custom.yaml"
-    echo "[*] Установлен шаблон custom.yaml в $MIHOMO_TEMPLATES_DIR"
-  else
-    echo "[!] Не найден шаблон custom.yaml в $SRC_MIHOMO_TEMPLATES"
-  fi
-  SRC_ZKEEN="$SRC_MIHOMO_TEMPLATES/zkeen.yaml"
-  if [ -f "$SRC_ZKEEN" ]; then
-    cp -f "$SRC_ZKEEN" "$MIHOMO_TEMPLATES_DIR/zkeen.yaml"
-    echo "[*] Установлен шаблон zkeen.yaml в $MIHOMO_TEMPLATES_DIR"
-  else
-    echo "[!] Не найден шаблон zkeen.yaml в $SRC_MIHOMO_TEMPLATES"
-  fi
-
-  # HWID subscription template (из внешнего проекта)
-  SRC_HWID_TPL="$SRC_MIHOMO_TEMPLATES/template.yaml"
-  if [ -f "$SRC_HWID_TPL" ]; then
-    cp -f "$SRC_HWID_TPL" "$MIHOMO_TEMPLATES_DIR/template.yaml"
-    rm -f "$MIHOMO_TEMPLATES_DIR/hwid_subscription_template.yaml"
-    echo "[*] Установлен шаблон template.yaml в $MIHOMO_TEMPLATES_DIR"
-  fi
+  provision_mihomo_templates "$SRC_MIHOMO_TEMPLATES" "$MIHOMO_TEMPLATES_DIR"
 fi
 
 # --- Шаблоны Xray (Routing / Observatory) ---
@@ -2469,70 +2214,10 @@ fi
 
 ui_step_done
 ui_step "Списки GeoIP и GeoSite"
-if [ -d "$XRAY_DAT_DIR" ] && [ -d "$XRAY_BIN_DIR" ]; then
-  echo "[*] Xray DAT: создаю symlink *.dat из $XRAY_DAT_DIR в $XRAY_BIN_DIR (для ext:... )"
-  for f in "$XRAY_DAT_DIR"/*.dat; do
-    # Resolve symlinks in dat dir so /opt/sbin points to the real file.
-    # (BusyBox usually supports `readlink -f`, but keep fallback.)
-    src="$f"
-    if command -v readlink >/dev/null 2>&1; then
-      src="$(readlink -f "$f" 2>/dev/null || echo "$f")"
-    fi
-    [ -f "$src" ] || continue
-    base="$(basename "$f")"
-    # Не затираем реальные файлы (на всякий случай), только ссылки.
-    if [ -e "$XRAY_BIN_DIR/$base" ] && [ ! -L "$XRAY_BIN_DIR/$base" ]; then
-      continue
-    fi
-    ln -sf "$src" "$XRAY_BIN_DIR/$base" 2>/dev/null || true
-  done
-fi
+provision_xray_dat_links "$XRAY_DAT_DIR" "$XRAY_BIN_DIR"
 
 # --- Compat fix: удалить отсутствующие geosite-списки из routing (xray) ---
-
-# Некоторые GeoSite датасеты (например v2fly) не содержат отдельных списков типа whatsapp-ads.
-# Если такие строки попали в /opt/etc/xray/configs/05_routing*.json, Xray не стартует.
-# В старых версиях панели этого списка не было. Исправляем мягко и только точечно.
-
-if [ -n "$ROUTING_FILE" ] && [ -f "$ROUTING_FILE" ] && grep -q 'ext:geosite_v2fly.dat:whatsapp-ads' "$ROUTING_FILE" 2>/dev/null; then
-  echo "[*] Compat: удаляю ext:geosite_v2fly.dat:whatsapp-ads из $ROUTING_FILE (иначе Xray не стартует)"
-  ROUTING_FILE="$ROUTING_FILE" $PYTHON_BIN - <<'PYFIX' || true
-import json, os, sys
-path = os.environ.get('ROUTING_FILE')
-if not path or not os.path.exists(path):
-    sys.exit(0)
-try:
-    raw = open(path, 'r', encoding='utf-8', errors='replace').read()
-    data = json.loads(raw)
-except Exception:
-    # Если файл не JSON (или с комментариями) — не трогаем
-    sys.exit(0)
-TARGET = 'ext:geosite_v2fly.dat:whatsapp-ads'
-changed = False
-
-def walk(x):
-    global changed
-    if isinstance(x, list):
-        out = []
-        for i in x:
-            if i == TARGET:
-                changed = True
-                continue
-            out.append(walk(i))
-        return out
-    if isinstance(x, dict):
-        return {k: walk(v) for k, v in x.items()}
-    return x
-
-new = walk(data)
-if changed:
-    tmp = path + '.tmp'
-    with open(tmp, 'w', encoding='utf-8') as f:
-        json.dump(new, f, ensure_ascii=False, indent=2)
-        f.write('\n')
-    os.replace(tmp, path)
-PYFIX
-fi
+provision_routing_compat "$ROUTING_FILE"
 
 # --- Обновление порта в run_server.py / app.py ---
 

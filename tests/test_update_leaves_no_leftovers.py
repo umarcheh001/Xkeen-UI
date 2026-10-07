@@ -22,6 +22,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 INSTALLER = ROOT / "xkeen-ui" / "install.sh"
+PROVISION = ROOT / "xkeen-ui" / "scripts" / "provision_env.sh"
 RUNNER = ROOT / "xkeen-ui" / "scripts" / "update_xkeen_ui.sh"
 SH = shutil.which("sh")
 
@@ -50,7 +51,7 @@ def _sync(tmp_path: Path, bundled: bytes, installed: bytes | None) -> tuple[Path
     (src / "05_routing_base.jsonc").write_bytes(bundled)
     if installed is not None:
         (dest / "05_routing_base.jsonc").write_bytes(installed)
-    code = _function(INSTALLER, "same_ignoring_cr") + _function(INSTALLER, "sync_bundled_template_dir")
+    code = _function(PROVISION, "same_ignoring_cr") + _function(PROVISION, "sync_bundled_template_dir")
     code += f'\nsync_bundled_template_dir "{src.as_posix()}" "{dest.as_posix()}" test\n'
     proc = _sh(code, tmp_path)
     assert proc.returncode == 0, proc.stderr
