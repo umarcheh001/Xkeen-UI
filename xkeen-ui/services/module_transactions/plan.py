@@ -12,6 +12,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Mapping
 
+from services.module_profile_plan import user_owned
+
 from .state import ModuleTransactionError, transactions_root
 
 
@@ -20,23 +22,6 @@ OWNERSHIP_MAP_FILENAME = "module-ownership.json"
 # The editor is a dependency of both engines and its variant belongs to the
 # installer, so it can only be laid out again, never added or taken away.
 _REPAIR_ONLY_MODULES = frozenset({"tool.editor"})
-
-# What belongs to the user, not to any module. These mirror the profile
-# installer (``scripts/module_profile_install.py``); a test keeps them equal.
-STATE_FILES = {"modules.json", "module-installed.json", "install-profile.json", "install-managed.json"}
-USER_TOP_LEVEL = {"xray-jsonc", "var", "bin"}
-USER_FILES = {"secret.key", "devtools.env", "ui-settings.json", "branding.json", "terminal_theme.json", "terminal_theme.css"}
-USER_PREFIXES = ("opt/etc/mihomo/profiles/", "opt/etc/mihomo/backup/")
-
-
-def user_owned(rel: str) -> bool:
-    return (
-        rel in STATE_FILES or rel in USER_FILES or rel == "install.sh"
-        or rel == "opt/etc/mihomo/config.yaml"
-        or rel.startswith(USER_PREFIXES)
-        or rel.split("/", 1)[0] in USER_TOP_LEVEL
-    )
-
 
 @dataclass(frozen=True, slots=True)
 class OwnershipMap:

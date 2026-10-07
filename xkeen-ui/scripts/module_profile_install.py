@@ -20,6 +20,13 @@ import tempfile
 from pathlib import Path, PurePosixPath
 
 
+_PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+if str(_PACKAGE_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PACKAGE_ROOT))
+
+from services.module_profile_plan import ProfilePlanError, build_profile_target, user_owned as _profile_user_owned
+
+
 MODULE_IDS = (
     "core", "engine.xray", "engine.mihomo", "tool.editor", "tool.terminal",
     "tool.files", "tool.backups", "integration.happ", "tool.advanced-diagnostics",
@@ -48,12 +55,7 @@ USER_PREFIXES = ("opt/etc/mihomo/profiles/", "opt/etc/mihomo/backup/")
 
 
 def _user_owned(rel: str) -> bool:
-    return (
-        rel in STATE_FILES or rel in USER_FILES or rel == "install.sh"
-        or rel == "opt/etc/mihomo/config.yaml"
-        or rel.startswith(USER_PREFIXES)
-        or rel.split("/", 1)[0] in USER_TOP_LEVEL
-    )
+    return _profile_user_owned(rel)
 
 
 class ProfileInstallError(RuntimeError):
@@ -437,15 +439,35 @@ def apply_profile(source: Path, target: Path, profile: str, *, module_ids=None, 
                     variant = old_variant
         except (OSError, ValueError, AttributeError):
             pass
-    frontend = _frontend_files(source, selected, variant)
-    frontend_files = frontend[0] if frontend else None
-    source_files = {
-        rel: path for rel, path in _files(source)
-        if (rel in frontend_files if frontend_files is not None and rel.startswith("static/frontend-build/")
-            else owner(rel) in selected or (owner(rel) == "editor-full" and variant != "light"))
-    }
-    _include_python_dependencies(source, source_files)
-    _include_js_dependencies(source, source_files)
+    profile_target = None
+    try:
+        profile_target = build_profile_target(
+            source,
+            profile=profile,
+            module_ids=module_ids,
+            editor_variant=variant,
+        )
+    except ProfilePlanError as error:
+        if error.code != "profile_ownership_unavailable":
+            raise ProfileInstallError(str(error)) from error
+    if profile_target is not None:
+        selected = set(profile_target.module_ids)
+        source_files = {relative: source / relative for relative in profile_target.payload_files}
+        frontend = (
+            {relative for relative in profile_target.payload_files if relative.startswith("static/frontend-build/")},
+            profile_target.frontend["build"],
+            profile_target.frontend["bridge"],
+        )
+    else:
+        frontend = _frontend_files(source, selected, variant)
+        frontend_files = frontend[0] if frontend else None
+        source_files = {
+            rel: path for rel, path in _files(source)
+            if (rel in frontend_files if frontend_files is not None and rel.startswith("static/frontend-build/")
+                else owner(rel) in selected or (owner(rel) == "editor-full" and variant != "light"))
+        }
+        _include_python_dependencies(source, source_files)
+        _include_js_dependencies(source, source_files)
     missing_markers = {
         module: [marker for marker in INSTALL_MARKERS[module] if marker not in source_files]
         for module in selected
@@ -504,13 +526,17 @@ def apply_profile(source: Path, target: Path, profile: str, *, module_ids=None, 
             _write_json(target / "static/frontend-build/.vite/manifest.build.json", frontend[1])
             if (source / "static/frontend-build/.vite/manifest.json").is_file():
                 _write_json(target / "static/frontend-build/.vite/manifest.json", frontend[2])
-        _write_json(target / "modules.json", _state(profile, selected, variant))
-        _write_json(target / "module-installed.json", {"schema_version": 1, "modules": {
-            module: module in selected and all((target / marker).is_file() for marker in INSTALL_MARKERS[module])
-            for module in MODULE_IDS
-        }})
-        _write_json(target / "install-profile.json", {"schema_version": 1, "profile": profile, "module_ids": [module for module in MODULE_IDS if module in selected], "editor_variant": variant})
-        _write_json(target / "install-managed.json", {"schema_version": 1, "paths": sorted(source_files)})
+        if profile_target is not None:
+            for filename, document in profile_target.state_files.items():
+                _write_json(target / filename, document)
+        else:
+            _write_json(target / "modules.json", _state(profile, selected, variant))
+            _write_json(target / "module-installed.json", {"schema_version": 1, "modules": {
+                module: module in selected and all((target / marker).is_file() for marker in INSTALL_MARKERS[module])
+                for module in MODULE_IDS
+            }})
+            _write_json(target / "install-profile.json", {"schema_version": 1, "profile": profile, "module_ids": [module for module in MODULE_IDS if module in selected], "editor_variant": variant})
+            _write_json(target / "install-managed.json", {"schema_version": 1, "paths": sorted(source_files)})
     except BaseException:
         # An interrupt (Ctrl+C, a closed SSH session) must not leave a panel
         # that is half old and half new.
