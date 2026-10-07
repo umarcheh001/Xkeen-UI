@@ -8368,8 +8368,13 @@ let outboundsModuleApi = null;
           try { subsResetForm(); } catch (eReset) {}
         }
         await subsLoad();
-        subsSetStatus(summary, false, true);
+        // Что панель не вернула на место, остаётся в строке статуса: уведомление гаснет само.
+        const warning = String((data && data.warning) || '').trim();
+        subsSetStatus(warning ? summary + ' ' + warning : summary, false, !warning, { warning: !!warning });
         try { toastXkeen(summary, 'success'); } catch (e3) {}
+        if (warning) {
+          try { toastXkeen(warning, 'warning'); } catch (eWarn) {}
+        }
         await subsSyncOutboundsViewAfterMutation({ prevActive, touchedFiles: [] });
         await subsSyncRoutingViewAfterMutation({
           routingChanged: true,
@@ -8727,7 +8732,11 @@ let outboundsModuleApi = null;
         if (!res.ok || !data || data.ok === false) {
           throw new Error(String((data && (data.error || data.message)) || ('HTTP ' + res.status)));
         }
-        subsSetStatus('Удалено.', false, true);
+        const warning = String((data && data.warning) || '').trim();
+        subsSetStatus(warning ? 'Удалено. ' + warning : 'Удалено.', false, !warning, { warning: !!warning });
+        if (warning) {
+          try { toastXkeen(warning, 'warning'); } catch (eWarn) {}
+        }
         if (deletingActiveSubscription) subsResetForm();
         await subsSyncOutboundsViewAfterMutation({
           prevActive,

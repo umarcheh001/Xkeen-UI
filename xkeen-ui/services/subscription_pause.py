@@ -374,11 +374,14 @@ def _switch(
         before_kinds = _with_kinds(before["selection"], _usable(view["runtime"], view["routing"]))
         outlook = _pause_outlook(ui_state_dir, xray_configs_dir, view) if pausing else {}
 
-        notes = {"warning": ""}
+        notes: Dict[str, Any] = {"warning": "", "skipped": []}
 
         def _apply_files() -> Dict[str, Any]:
             operation = subs.pause_subscriptions if pausing else subs.resume_subscriptions
-            return operation(ui_state_dir, xray_configs_dir=xray_configs_dir, snapshot=snapshot)
+            applied = operation(ui_state_dir, xray_configs_dir=xray_configs_dir, snapshot=snapshot)
+            # Запоминается последний проход: первый могли откатить и пойти длинным путём.
+            notes["skipped"] = list(applied.get("skipped") or [])
+            return applied
 
         def _confirm(guard: xray_transactions.MemoryGuard) -> None:
             # Перед перезапуском, а не после: ядро, которое не поднялось на
@@ -410,7 +413,10 @@ def _switch(
                 "restarted": bool(restarted),
                 "restarts": restarts,
                 "dns": _dns_result(before, after, round_trip=round_trip, restored=restore),
-                "warning": notes["warning"],
+                "warning": " ".join(
+                    part for part in (subs.displaced_skipped_warning(notes["skipped"]), notes["warning"]) if part
+                ),
+                "skipped": notes["skipped"],
             }
 
         # One restart, DNS untouched: nothing to protect, or the route survives.
@@ -571,4 +577,6 @@ def delete_all(
             "restarted": bool(switched.get("restarted")),
             "restarts": int(switched.get("restarts") or 0),
             "dns": switched["dns"],
+            "warning": str(switched.get("warning") or ""),
+            "skipped": list(switched.get("skipped") or []),
         }

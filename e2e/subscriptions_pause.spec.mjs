@@ -122,6 +122,37 @@ test.describe('рубильник подписок', () => {
     await expect(page.locator('#outbounds-subscriptions-status')).toContainText('Подписки приостановлены.');
   });
 
+  test('пауза говорит, что не вернулось на место, и не красит итог в зелёный', async ({ page }) => {
+    const warning = 'Не возвращено на прежнее место, потому что изменено вручную: сервер «vless-reality».';
+    await mockApi(page, {
+      onSwitch: ({ state }) => {
+        state.paused = true;
+        return {
+          json: {
+            ok: true,
+            changed: true,
+            paused: true,
+            restarts: 1,
+            dns: { action: 'none', from: [], to: [] },
+            warning,
+            skipped: [{ kind: 'outbound', name: 'vless-reality', reason: 'exists' }],
+          },
+        };
+      },
+    });
+    await openSubscriptions(page);
+
+    await masterWrap(page).click();
+    await page.locator('#confirm-modal-ok-btn').click();
+
+    const status = page.locator('#outbounds-subscriptions-status');
+    await expect(status).toContainText('Подписки приостановлены.');
+    await expect(status).toContainText(warning);
+    await expect(status).toHaveClass(/is-warning/);
+    await expect(status).not.toHaveClass(/is-success/);
+    await expect(banner(page)).toBeVisible();
+  });
+
   test('отказ в подтверждении ничего не отправляет', async ({ page }) => {
     const state = await mockApi(page);
     await openSubscriptions(page);
