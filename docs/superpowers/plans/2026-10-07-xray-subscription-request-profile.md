@@ -36,7 +36,7 @@
 - `detected_request_profile` maps the existing `get_device_info()` result to the five field names without changing the existing device-info response.
 - `request_headers_for_profile` emits only non-empty supported headers and maps `user_agent` to `User-Agent`, `device_os` to `x-device-os`, `os_version` to `x-ver-os`, and `device_model` to `x-device-model`.
 
-- [ ] **Step 1: Write failing normalization/header tests**
+- [x] **Step 1: Write failing normalization/header tests**
 
 ```python
 from services.subscription_request_profile import (
@@ -80,27 +80,27 @@ def test_detected_profile_uses_existing_mihomo_device_info_shape():
     }
 ```
 
-- [ ] **Step 2: Run the focused tests and verify they fail**
+- [x] **Step 2: Run the focused tests and verify they fail**
 
 Run: `pytest -q tests/test_subscription_request_profile.py`
 
 Expected: FAIL because the shared module and functions do not exist yet.
 
-- [ ] **Step 3: Implement the shared helper**
+- [x] **Step 3: Implement the shared helper**
 
 Use one field map and one printable-value validator. Keep the HWID length limit compatible with the existing Mihomo override (128 characters), use a bounded 256-character limit for the other fields, trim whitespace, and never log rejected values. Treat `None`, non-mapping input, and invalid mode as `auto` rather than raising during state loading.
 
-- [ ] **Step 4: Integrate Mihomo's existing header result**
+- [x] **Step 4: Integrate Mihomo's existing header result**
 
 Make `get_device_info()` continue returning its current `headers` dictionary, but build that dictionary through `request_headers_for_profile(detected_request_profile(info))` or an equivalent shared mapping. Preserve its current HWID source/diagnostic keys and all existing UA defaults.
 
-- [ ] **Step 5: Run the focused tests and the existing Mihomo contracts**
+- [x] **Step 5: Run the focused tests and the existing Mihomo contracts**
 
 Run: `pytest -q tests/test_subscription_request_profile.py tests/test_mihomo_hwid_sub.py`
 
 Expected: PASS with no changes to the current Mihomo modal/API behavior.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add xkeen-ui/services/subscription_request_profile.py xkeen-ui/services/mihomo_hwid_sub.py tests/test_subscription_request_profile.py
@@ -119,7 +119,7 @@ git commit -m "Добавить общий профиль заголовков �
 - `fetch_subscription_body_for_xray(url, *, request_profile=None) -> (body, headers, meta)` accepts the normalized profile while remaining backward-compatible for callers omitting it.
 - `preview_subscription(payload)` reads `payload["request_profile"]`; scheduled/manual refresh reads `sub["request_profile"]`.
 
-- [ ] **Step 1: Write failing state and transport tests**
+- [x] **Step 1: Write failing state and transport tests**
 
 ```python
 def test_old_state_gets_auto_request_profile(tmp_path):
@@ -151,17 +151,17 @@ def test_disabled_profile_does_not_use_detected_fallback(monkeypatch):
     assert calls == [{}]
 ```
 
-- [ ] **Step 2: Run the focused tests and verify they fail**
+- [x] **Step 2: Run the focused tests and verify they fail**
 
 Run: `pytest -q tests/test_xray_subscription_request_profiles.py`
 
 Expected: FAIL because state and fetch functions do not accept `request_profile` yet.
 
-- [ ] **Step 3: Normalize and persist `request_profile`**
+- [x] **Step 3: Normalize and persist `request_profile`**
 
 Add a canonical state field in `_normalize_state` and `upsert_subscription`. Preserve it when updating an existing subscription, drop unsupported aliases only after reading them, and ensure the default is `auto`. Do not include raw profile values in existing summary/log paths.
 
-- [ ] **Step 4: Add profile-aware transport selection**
+- [x] **Step 4: Add profile-aware transport selection**
 
 Update `fetch_subscription_body_for_xray` so that:
 
@@ -171,17 +171,17 @@ Update `fetch_subscription_body_for_xray` so that:
 
 Pass `request_headers` through `_resolve_happ_subscription_source` recursion and preserve current decryption/redirect metadata.
 
-- [ ] **Step 5: Thread the profile through preview and refresh**
+- [x] **Step 5: Thread the profile through preview and refresh**
 
 Pass the payload profile from `preview_subscription` and the stored subscription profile from the refresh/update path. Ensure all paths use the same fetch function, including due refresh and Happ deep-link resolution.
 
-- [ ] **Step 6: Run focused and regression tests**
+- [x] **Step 6: Run focused and regression tests**
 
 Run: `pytest -q tests/test_xray_subscription_request_profiles.py tests/test_xray_subscriptions.py tests/test_xray_subscriptions_pause.py`
 
 Expected: PASS, including all pre-existing no-argument fetch callers.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add xkeen-ui/services/xray_subscriptions.py tests/test_xray_subscription_request_profiles.py tests/test_xray_subscriptions.py
@@ -199,7 +199,7 @@ git commit -m "Применять профиль устройства к под�
 - Invalid profile fields return the existing 400 error format without leaking the rejected value.
 - List/preview/refresh responses return normalized `request_profile`, `fetch_mode`, `hwid_response_headers`, and `hwid_limit_info` through existing service results.
 
-- [ ] **Step 1: Write failing route contract tests**
+- [x] **Step 1: Write failing route contract tests**
 
 ```python
 def test_xray_subscription_upsert_round_trips_request_profile(client, monkeypatch):
@@ -220,27 +220,27 @@ def test_xray_preview_rejects_control_character_in_profile(client):
     assert "bad" not in response.get_data(as_text=True)
 ```
 
-- [ ] **Step 2: Run route tests and verify they fail**
+- [x] **Step 2: Run route tests and verify they fail**
 
 Run: `pytest -q tests/test_xray_subscription_routes.py`
 
 Expected: FAIL until route/service validation and response round-tripping are wired.
 
-- [ ] **Step 3: Wire request-profile payloads through existing route handlers**
+- [x] **Step 3: Wire request-profile payloads through existing route handlers**
 
 Keep the existing endpoint paths and error helpers. Let the service normalizer validate the object, catch `ValueError` using the existing 400 response shape, and do not add a parallel endpoint.
 
-- [ ] **Step 4: Verify diagnostics are returned without raw request values**
+- [x] **Step 4: Verify diagnostics are returned without raw request values**
 
 Add assertions that preview contains `fetch_mode` and normalized `hwid_response_headers`/`hwid_limit_info`, while response JSON and captured logs do not contain the custom HWID or User-Agent beyond the normalized subscription object returned to the owner.
 
-- [ ] **Step 5: Run route and service regressions**
+- [x] **Step 5: Run route and service regressions**
 
 Run: `pytest -q tests/test_xray_subscription_routes.py tests/test_xray_observatory_routes.py tests/test_xray_subscriptions.py`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add xkeen-ui/routes/xray_subscriptions.py tests/test_xray_subscription_routes.py
@@ -259,7 +259,7 @@ git commit -m "Принять профиль запроса в API подпис�
 - `subsReadFormState()` and `subsFillForm()` round-trip `request_profile` without losing drafts when switching subscriptions.
 - Preview and upsert payloads include `request_profile`.
 
-- [ ] **Step 1: Write failing frontend contract assertions**
+- [x] **Step 1: Write failing frontend contract assertions**
 
 ```python
 def test_xray_subscription_modal_exposes_request_profile_controls():
@@ -273,35 +273,35 @@ def test_xray_subscription_modal_exposes_request_profile_controls():
     assert "request_profile" in outbounds_src
 ```
 
-- [ ] **Step 2: Run the contract test and verify it fails**
+- [x] **Step 2: Run the contract test and verify it fails**
 
 Run: `pytest -q tests/test_xray_subscription_filters_contract.py -k request_profile`
 
 Expected: FAIL because the modal has no request-profile controls yet.
 
-- [ ] **Step 3: Add the collapsible profile section**
+- [x] **Step 3: Add the collapsible profile section**
 
 Place it inside the existing advanced settings after the filters and before routing controls. Use the existing segmented-control/switch/input styling, explanatory tooltips, and a reset icon button. Auto mode renders detected values read-only; custom mode enables inputs; disabled mode hides or disables the profile values while showing that no device headers will be sent.
 
-- [ ] **Step 4: Wire form state and draft behavior**
+- [x] **Step 4: Wire form state and draft behavior**
 
 Extend `subsReadFormState`, `subsFillForm`, reset/copy behavior, dirty-state comparison, and carried settings. On first switch to custom, copy the current detected profile into the draft. Reset replaces custom values with the detected profile and leaves mode custom. Switching subscriptions must restore that subscription's saved profile.
 
-- [ ] **Step 5: Include profile in preview/upsert payloads and diagnostics**
+- [x] **Step 5: Include profile in preview/upsert payloads and diagnostics**
 
 Include the normalized draft object in preview and save requests. Render the last fetch mode, whether a profile retry was used, and the existing HWID limit/warning summary without rendering raw header values in list badges.
 
-- [ ] **Step 6: Add responsive styles**
+- [x] **Step 6: Add responsive styles**
 
 Extend `panel-operator.css` for the profile grid, read-only values, mode control, diagnostic line, and compact mobile layout. Keep inputs inside their parent at the existing modal breakpoints.
 
-- [ ] **Step 7: Run frontend contracts and the full Xray modal suite**
+- [x] **Step 7: Run frontend contracts and the full Xray modal suite**
 
 Run: `pytest -q tests/test_xray_subscription_filters_contract.py tests/test_xray_subscription_displacement.py`
 
 Expected: PASS with existing filters, routing, draft protection, and diagnostics intact.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add xkeen-ui/static/js/features/outbounds.js xkeen-ui/static/panel-operator.css tests/test_xray_subscription_filters_contract.py
@@ -314,7 +314,7 @@ git commit -m "Добавить профиль запроса в модалку 
 - Modify: `tests/test_xray_subscriptions.py` and/or `tests/test_xray_subscription_routes.py` only when a missing regression assertion is discovered.
 - Inspect: `README-modular-panel-plan.md`, `docs/superpowers/specs/2026-10-07-xray-subscription-request-profile-design.md`
 
-- [ ] **Step 1: Run the focused complete suite**
+- [x] **Step 1: Run the focused complete suite**
 
 Run: `pytest -q tests/test_subscription_request_profile.py tests/test_xray_subscription_request_profiles.py tests/test_xray_subscriptions.py tests/test_xray_subscription_routes.py tests/test_xray_subscription_filters_contract.py tests/test_mihomo_hwid_sub.py`
 
@@ -326,18 +326,17 @@ Run: `pytest -q`
 
 Expected: PASS, or a documented unrelated baseline failure with its exact test name and output.
 
-- [ ] **Step 3: Run static checks used by the repository**
+- [x] **Step 3: Run static checks used by the repository**
 
 Run the project-provided lint/type/compile commands from `README.md` or CI configuration. At minimum run `python -m compileall -q xkeen-ui` and `git diff --check`.
 
-- [ ] **Step 4: Review migration and log safety**
+- [x] **Step 4: Review migration and log safety**
 
 Inspect a normalized old state and a custom state, confirm empty fields are omitted from requests, and search changed Python files for logging of raw `hwid`/`user_agent` values.
 
-- [ ] **Step 5: Commit final test-only adjustments**
+- [x] **Step 5: Commit final test-only adjustments**
 
 ```bash
 git add tests
 git commit -m "Проверить профили запросов Xray сквозным набором тестов"
 ```
-
