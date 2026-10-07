@@ -315,6 +315,7 @@ def test_invalid_profile_target_uses_stable_public_code(tmp_path):
     ("operation", "lower_code", "public_code"),
     [
         ("panel-update", "catalog_panel_not_object", "panel_update_unavailable"),
+        ("panel-update", "catalog_archive_unavailable", "panel_update_unavailable"),
         ("profile-transition", "catalog_archive_unavailable", "profile_payload_unavailable"),
     ],
 )

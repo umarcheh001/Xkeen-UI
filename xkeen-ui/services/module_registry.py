@@ -14,6 +14,7 @@ import shutil
 import sys
 import threading
 import time
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping
@@ -374,6 +375,25 @@ class ModuleRegistry:
 
         return self._path
 
+    @contextmanager
+    def _user_mutation_lock(self):
+        """Serialize requested-state writes with lifecycle transactions."""
+
+        from services.self_update.state import get_update_paths, release_lock, try_acquire_lock
+
+        lock_file = get_update_paths(self.ui_state_dir)["lock_file"]
+        acquired, _info = try_acquire_lock(lock_file)
+        if not acquired:
+            raise ModuleRegistryError(
+                "operation_in_progress",
+                "Другая операция с панелью уже выполняется.",
+                status=409,
+            )
+        try:
+            yield
+        finally:
+            release_lock(lock_file, owner_pid=os.getpid())
+
     def initialize_for_startup(self) -> dict[str, Any]:
         """Create/migrate state and consume a restart request on application boot."""
 
@@ -635,7 +655,7 @@ class ModuleRegistry:
                 available_variants=list(EDITOR_VARIANTS),
             )
 
-        with self._lock:
+        with self._user_mutation_lock(), self._lock:
             if self._state_read_only_recovery:
                 raise ModuleRegistryError(
                     "state_schema_newer",
@@ -672,7 +692,7 @@ class ModuleRegistry:
                 status=400,
             )
 
-        with self._lock:
+        with self._user_mutation_lock(), self._lock:
             if self._state_read_only_recovery:
                 raise ModuleRegistryError(
                     "state_schema_newer",
@@ -804,7 +824,7 @@ class ModuleRegistry:
         if variant not in EDITOR_VARIANTS:
             raise ModuleRegistryError("editor_variant_invalid", "Недопустимый вариант редакторов.", available_variants=list(EDITOR_VARIANTS))
 
-        with self._lock:
+        with self._user_mutation_lock(), self._lock:
             if self._state_read_only_recovery:
                 raise ModuleRegistryError("state_schema_newer", "Состояние модулей создано более новой версией панели.", status=409)
             state, normalized = self._load_state_locked()

@@ -463,6 +463,7 @@ class ModuleLifecycleService:
                     status=503,
                 ) from error
             if operation == "panel-update" and code in {
+                "catalog_archive_unavailable",
                 "catalog_panel_not_object",
                 "catalog_release_not_found",
             }:

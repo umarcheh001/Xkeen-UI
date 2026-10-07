@@ -37,7 +37,7 @@
       ],
       "removable": false,
       "unit_count": 496,
-      "size_bytes": 6784582,
+      "size_bytes": 6786677,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -2137,7 +2137,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_lifecycle.py",
-      "size_bytes": 29328,
+      "size_bytes": 29375,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -2191,7 +2191,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_registry.py",
-      "size_bytes": 56008,
+      "size_bytes": 56835,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -5069,7 +5069,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_lifecycle.py",
-      "size_bytes": 25819,
+      "size_bytes": 25904,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -5159,7 +5159,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_registry.py",
-      "size_bytes": 28889,
+      "size_bytes": 30025,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -5171,7 +5171,8 @@
         "flask"
       ],
       "environment_variables": [
-        "XKEEN_UI_MODULE_SAFE_MODE"
+        "XKEEN_UI_MODULE_SAFE_MODE",
+        "XKEEN_UI_UPDATE_DIR"
       ],
       "removable": false
     },

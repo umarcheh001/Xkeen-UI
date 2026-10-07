@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
+import pytest
 from flask import Flask
 
 from routes.modules import create_modules_blueprint
@@ -16,6 +18,7 @@ from services.module_registry import (
     ModuleRegistry,
     ModuleRegistryError,
 )
+from services.self_update.state import get_update_paths, release_lock, try_acquire_lock
 
 
 def _available_which(name: str) -> str:
@@ -116,6 +119,32 @@ def test_editor_variant_rejects_unknown_values(tmp_path):
         assert error.details["available_variants"] == ["light", "full", "advanced"]
     else:
         raise AssertionError("unknown editor variant must be rejected")
+
+
+def test_user_mutations_refuse_live_lifecycle_lock(tmp_path, monkeypatch):
+    update_dir = tmp_path / "update"
+    monkeypatch.setenv("XKEEN_UI_UPDATE_DIR", str(update_dir))
+    registry = _registry(tmp_path)
+    registry.get_registry()
+    before = (tmp_path / "modules.json").read_bytes()
+    lock_file = get_update_paths(str(tmp_path))["lock_file"]
+    acquired, _info = try_acquire_lock(lock_file)
+    assert acquired is True
+
+    try:
+        mutations = (
+            lambda: registry.set_editor_variant("advanced"),
+            lambda: registry.set_enabled("tool.files", False),
+            lambda: registry.set_profile("mihomo-minimal"),
+        )
+        for mutate in mutations:
+            with pytest.raises(ModuleRegistryError) as raised:
+                mutate()
+            assert raised.value.code == "operation_in_progress"
+            assert raised.value.status == 409
+        assert (tmp_path / "modules.json").read_bytes() == before
+    finally:
+        release_lock(lock_file, owner_pid=os.getpid())
 
 
 def test_v0_active_modules_state_migrates_to_schema_v1(tmp_path):
