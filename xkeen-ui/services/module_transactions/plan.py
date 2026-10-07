@@ -39,7 +39,12 @@ _REPAIR_ONLY_MODULES = frozenset({"tool.editor"})
 STATE_FILES = {"modules.json", "module-installed.json", "install-profile.json", "install-managed.json"}
 USER_TOP_LEVEL = {"xray-jsonc", "var", "bin"}
 USER_FILES = {"secret.key", "devtools.env", "ui-settings.json", "branding.json", "terminal_theme.json", "terminal_theme.css"}
-USER_PREFIXES = ("opt/etc/mihomo/profiles/", "opt/etc/mihomo/backup/")
+USER_PREFIXES = (
+    "opt/etc/mihomo/profiles/",
+    "opt/etc/mihomo/backup/",
+    "templates/routing/",
+    "templates/observatory/",
+)
 
 @dataclass(frozen=True, slots=True)
 class OwnershipMap:

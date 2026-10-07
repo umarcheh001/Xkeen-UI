@@ -211,7 +211,9 @@
     ],
     "user_prefixes": [
       "opt/etc/mihomo/profiles/",
-      "opt/etc/mihomo/backup/"
+      "opt/etc/mihomo/backup/",
+      "templates/routing/",
+      "templates/observatory/"
     ],
     "ambiguous_files_default_to": "core",
     "legacy_rule": "reuse Stage 7 owner(path); quarantine unknown managed files before removal",

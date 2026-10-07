@@ -29,7 +29,15 @@ _USER_FILES = {
     "terminal_theme.css",
     *STATE_FILENAMES,
 }
-_USER_PREFIXES = ("opt/etc/mihomo/profiles/", "opt/etc/mihomo/backup/")
+# Template folders hold the shipped templates next to the ones the user made;
+# the installer refreshes the shipped ones by name and nothing else there is
+# the panel's to remove.
+_USER_PREFIXES = (
+    "opt/etc/mihomo/profiles/",
+    "opt/etc/mihomo/backup/",
+    "templates/routing/",
+    "templates/observatory/",
+)
 
 
 class ProfilePlanError(ValueError):

@@ -31,7 +31,12 @@ _USER_FILES = {
     "terminal_theme.json",
     "terminal_theme.css",
 }
-_USER_PREFIXES = ("opt/etc/mihomo/profiles/", "opt/etc/mihomo/backup/")
+_USER_PREFIXES = (
+    "opt/etc/mihomo/profiles/",
+    "opt/etc/mihomo/backup/",
+    "templates/routing/",
+    "templates/observatory/",
+)
 _WINDOWS_DRIVE = re.compile(r"^[A-Za-z]:")
 
 

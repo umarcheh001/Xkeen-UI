@@ -36,13 +36,13 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 511,
-      "size_bytes": 6967577,
+      "unit_count": 512,
+      "size_bytes": 6971664,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
         "backend_service": 74,
-        "backend_test": 231,
+        "backend_test": 232,
         "configuration": 10,
         "frontend_bundle": 9,
         "frontend_entrypoint": 2,
@@ -2174,7 +2174,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_profile_plan.py",
-      "size_bytes": 12841,
+      "size_bytes": 13088,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -2345,7 +2345,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_transactions/plan.py",
-      "size_bytes": 30058,
+      "size_bytes": 30125,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -2421,7 +2421,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/panel_package_contract.py",
-      "size_bytes": 9904,
+      "size_bytes": 9971,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -4379,6 +4379,24 @@
         "XKEEN_UI_INSTALL_MODULES",
         "XKEEN_UI_INSTALL_PROFILE"
       ],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_installer_keeps_user_templates.py",
+      "size_bytes": 3706,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
       "removable": false
     },
     {
