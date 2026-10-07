@@ -60,6 +60,23 @@ def normalize_request_profile(
     return profile
 
 
+def validate_request_profile(raw: Any) -> dict[str, str]:
+    """Validate a user payload before persistence or a network request."""
+
+    source = raw if isinstance(raw, Mapping) else {}
+    mode = str(source.get("mode") or "auto").strip().lower()
+    if mode not in REQUEST_PROFILE_MODES:
+        raise ValueError("request_profile.mode must be auto, custom, or disabled")
+    for field in REQUEST_PROFILE_FIELDS:
+        value = str(source.get(field) or "").strip()
+        limit = _HWID_MAX_LEN if field == "hwid" else _OTHER_FIELD_MAX_LEN
+        if len(value) > limit:
+            raise ValueError(f"request_profile.{field} is too long")
+        if any(ord(char) < 32 or ord(char) == 127 or ord(char) > 126 for char in value):
+            raise ValueError(f"request_profile.{field} contains invalid HTTP header characters")
+    return normalize_request_profile(source)
+
+
 def detected_request_profile(device_info: Mapping[str, Any] | None = None) -> dict[str, str]:
     """Map the existing Mihomo device-info response to the shared profile."""
 

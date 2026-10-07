@@ -59,3 +59,15 @@ def test_detected_profile_uses_existing_mihomo_device_info_shape():
         "os_version": "5.0",
         "device_model": "KN",
     }
+
+
+def test_validate_custom_profile_rejects_control_characters_without_echoing_value():
+    from services.subscription_request_profile import validate_request_profile
+
+    try:
+        validate_request_profile({"mode": "custom", "hwid": "secret\nInjected"})
+    except ValueError as exc:
+        assert str(exc) == "request_profile.hwid contains invalid HTTP header characters"
+        assert "secret" not in str(exc)
+    else:
+        raise AssertionError("invalid custom profile was accepted")

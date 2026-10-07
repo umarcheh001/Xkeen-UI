@@ -11,6 +11,10 @@ from routes.common.errors import error_response, exception_response
 from services import subscription_pause
 from services.latency_jobs import create_latency_job, get_latency_job
 from services.xray_config_files import ROUTING_FILE
+from services.subscription_request_profile import (
+    detected_request_profile,
+    validate_request_profile,
+)
 from services.xray_subscriptions import (
     SubscriptionConfigRejected,
     apply_schedule_alignment,
@@ -111,6 +115,8 @@ def create_xray_subscriptions_blueprint(
     def api_upsert_xray_subscription():
         payload = request.get_json(silent=True) or {}
         try:
+            if "request_profile" in payload:
+                payload["request_profile"] = validate_request_profile(payload.get("request_profile"))
             sub = upsert_subscription(ui_state_dir, payload)
         except ValueError as exc:
             return error_response(str(exc), 400, ok=False)
@@ -130,6 +136,8 @@ def create_xray_subscriptions_blueprint(
     def api_preview_xray_subscription():
         payload = request.get_json(silent=True) or {}
         try:
+            if "request_profile" in payload:
+                payload["request_profile"] = validate_request_profile(payload.get("request_profile"))
             result = preview_subscription(payload)
         except ValueError as exc:
             return error_response(str(exc), 400, ok=False)
@@ -152,6 +160,21 @@ def create_xray_subscriptions_blueprint(
                 log_tag="xray_subscriptions.preview_failed",
             )
         return jsonify(result), 200
+
+    @bp.get("/api/xray/subscriptions/request-profile")
+    def api_xray_subscription_request_profile():
+        try:
+            return jsonify({"ok": True, "profile": detected_request_profile()}), 200
+        except Exception as exc:
+            return exception_response(
+                "Не удалось определить профиль устройства.",
+                500,
+                ok=False,
+                code="subscription_request_profile_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=exc,
+                log_tag="xray_subscriptions.request_profile_failed",
+            )
 
     @bp.delete("/api/xray/subscriptions/<string:sub_id>")
     def api_delete_xray_subscription(sub_id: str):
