@@ -44,17 +44,17 @@ fi
 
 ui_header() {
   UI_HEADER_BAR="════════════════════════════════════════"
-  printf '\n%b  ╔%s╗%b\n' "$UI_CYAN" "$UI_HEADER_BAR" "$UI_RESET" >&3
+  printf '\n%b  ╔%s╗%b\n' "$UI_CYAN" "$UI_HEADER_BAR" "$UI_RESET" >&3 2>/dev/null || true
   if [ -n "$UI_HEADER_RIGHT" ]; then
     printf '%b  ║%b  %bXK / XKEEN UI%b%b%b║%b\n' \
-      "$UI_CYAN" "$UI_RESET" "$UI_BOLD" "$UI_RESET" "$UI_HEADER_RIGHT" "$UI_CYAN" "$UI_RESET" >&3
+      "$UI_CYAN" "$UI_RESET" "$UI_BOLD" "$UI_RESET" "$UI_HEADER_RIGHT" "$UI_CYAN" "$UI_RESET" >&3 2>/dev/null || true
     printf '%b  ║%b     ROUTER CONTROL%b%b║%b\n' \
-      "$UI_CYAN" "$UI_RESET" "$UI_HEADER_RIGHT" "$UI_CYAN" "$UI_RESET" >&3
+      "$UI_CYAN" "$UI_RESET" "$UI_HEADER_RIGHT" "$UI_CYAN" "$UI_RESET" >&3 2>/dev/null || true
   else
-    printf '%b  ║%b  %-38s%b║%b\n' "$UI_CYAN" "$UI_RESET" "XK / XKEEN UI" "$UI_CYAN" "$UI_RESET" >&3
-    printf '%b  ║%b  %-38s%b║%b\n' "$UI_CYAN" "$UI_RESET" "   ROUTER CONTROL" "$UI_CYAN" "$UI_RESET" >&3
+    printf '%b  ║%b  %-38s%b║%b\n' "$UI_CYAN" "$UI_RESET" "XK / XKEEN UI" "$UI_CYAN" "$UI_RESET" >&3 2>/dev/null || true
+    printf '%b  ║%b  %-38s%b║%b\n' "$UI_CYAN" "$UI_RESET" "   ROUTER CONTROL" "$UI_CYAN" "$UI_RESET" >&3 2>/dev/null || true
   fi
-  printf '%b  ╚%s╝%b\n\n' "$UI_CYAN" "$UI_HEADER_BAR" "$UI_RESET" >&3
+  printf '%b  ╚%s╝%b\n\n' "$UI_CYAN" "$UI_HEADER_BAR" "$UI_RESET" >&3 2>/dev/null || true
 }
 
 # Любая обычная строка сначала гасит нижний блок прогресса, иначе две руки
@@ -62,31 +62,31 @@ ui_header() {
 ui_stage() {
   INSTALL_STAGE="$2"
   ui_hold; ui_sticky_clear
-  printf '  %b%s%b  %s\n' "$UI_CYAN" "$1" "$UI_RESET" "$2" >&3
+  printf '  %b%s%b  %s\n' "$UI_CYAN" "$1" "$UI_RESET" "$2" >&3 2>/dev/null || true
   ui_release
 }
 
 ui_info() {
   ui_hold; ui_sticky_clear
-  printf '      %s\n' "$*" >&3
+  printf '      %s\n' "$*" >&3 2>/dev/null || true
   ui_sticky_draw; ui_release
 }
 
 ui_success() {
   ui_hold; ui_sticky_clear
-  printf '%b  ✓%b  %s\n' "$UI_GREEN" "$UI_RESET" "$*" >&3
+  printf '%b  ✓%b  %s\n' "$UI_GREEN" "$UI_RESET" "$*" >&3 2>/dev/null || true
   ui_sticky_draw; ui_release
 }
 
 ui_warning() {
   ui_hold; ui_sticky_clear
-  printf '%b  !%b  %s\n' "$UI_YELLOW" "$UI_RESET" "$*" >&3
+  printf '%b  !%b  %s\n' "$UI_YELLOW" "$UI_RESET" "$*" >&3 2>/dev/null || true
   ui_sticky_draw; ui_release
 }
 
 ui_error() {
   ui_hold; ui_sticky_clear
-  printf '\n%b  ×  %s%b\n' "$UI_RED" "$*" "$UI_RESET" >&3
+  printf '\n%b  ×  %s%b\n' "$UI_RED" "$*" "$UI_RESET" >&3 2>/dev/null || true
   ui_release
 }
 
@@ -150,18 +150,18 @@ ui_squares() {
   _ui_idx=0
   _ui_first_group=1
   for _ui_count in $UI_PLAN; do
-    [ "$_ui_first_group" -eq 1 ] || printf '  ' >&"$INSTALL_UI_FD"
+    [ "$_ui_first_group" -eq 1 ] || printf '  ' >&"$INSTALL_UI_FD" 2>/dev/null || true
     _ui_first_group=0
     _ui_i=0
     while [ "$_ui_i" -lt "$_ui_count" ]; do
       _ui_idx=$(( _ui_idx + 1 ))
-      [ "$_ui_i" -eq 0 ] || printf ' ' >&"$INSTALL_UI_FD"
+      [ "$_ui_i" -eq 0 ] || printf ' ' >&"$INSTALL_UI_FD" 2>/dev/null || true
       if [ "$_ui_idx" -le "$_ui_done" ]; then
-        printf '%b■%b' "$UI_CYAN" "$UI_RESET" >&"$INSTALL_UI_FD"
+        printf '%b■%b' "$UI_CYAN" "$UI_RESET" >&"$INSTALL_UI_FD" 2>/dev/null || true
       elif [ "$_ui_idx" -eq "$_ui_cur" ]; then
-        printf '%b▣%b' "$UI_YELLOW" "$UI_RESET" >&"$INSTALL_UI_FD"
+        printf '%b▣%b' "$UI_YELLOW" "$UI_RESET" >&"$INSTALL_UI_FD" 2>/dev/null || true
       else
-        printf '%b□%b' "$UI_DIM" "$UI_RESET" >&"$INSTALL_UI_FD"
+        printf '%b□%b' "$UI_DIM" "$UI_RESET" >&"$INSTALL_UI_FD" 2>/dev/null || true
       fi
       _ui_i=$(( _ui_i + 1 ))
     done
@@ -209,18 +209,18 @@ ui_sticky_draw() {
   _ui_frame=$(ui_spin_frame)
   printf '\r\033[K  %b%s%b  %s  %b%s%b\n' \
     "$UI_CYAN" "$_ui_frame" "$UI_RESET" "$_ui_label" \
-    "$UI_DIM" "$(ui_since "$_ui_step_at")" "$UI_RESET" >&"$INSTALL_UI_FD"
-  printf '\033[K  ' >&"$INSTALL_UI_FD"
+    "$UI_DIM" "$(ui_since "$_ui_step_at")" "$UI_RESET" >&"$INSTALL_UI_FD" 2>/dev/null || true
+  printf '\033[K  ' >&"$INSTALL_UI_FD" 2>/dev/null || true
   ui_squares "$_ui_done" "$_ui_cur"
   printf '  %s/%s  %bэтап %s/5  ·  всего %s%b\033[1A\r' \
     "$_ui_done" "$UI_STEP_TOTAL" \
-    "$UI_DIM" "$_ui_stage" "$(ui_clock "$_ui_run")" "$UI_RESET" >&"$INSTALL_UI_FD"
+    "$UI_DIM" "$_ui_stage" "$(ui_clock "$_ui_run")" "$UI_RESET" >&"$INSTALL_UI_FD" 2>/dev/null || true
   UI_STICKY=1
 }
 
 ui_sticky_clear() {
   [ "$UI_STICKY" -eq 1 ] || return 0
-  printf '\r\033[K\n\033[K\033[1A\r' >&"$INSTALL_UI_FD"
+  printf '\r\033[K\n\033[K\033[1A\r' >&"$INSTALL_UI_FD" 2>/dev/null || true
   UI_STICKY=0
 }
 
@@ -255,7 +255,7 @@ ui_release() {
 ui_line() {
   ui_hold
   ui_sticky_clear
-  printf '%b\n' "$*" >&"$INSTALL_UI_FD"
+  printf '%b\n' "$*" >&"$INSTALL_UI_FD" 2>/dev/null || true
   ui_sticky_draw
   ui_release
 }
@@ -283,7 +283,7 @@ ui_progress_start() {
     UI_STATE_FILE="${TMPDIR:-/tmp}/xkeen-ui-progress-state.$$"
     : > "$UI_TICKER_FILE" 2>/dev/null || UI_PROGRESS_TTY=0
     : > "$UI_STATE_FILE" 2>/dev/null || UI_PROGRESS_TTY=0
-    printf '\033[?25l' >&"$INSTALL_UI_FD"
+    printf '\033[?25l' >&"$INSTALL_UI_FD" 2>/dev/null || true
   fi
 }
 
@@ -297,7 +297,7 @@ ui_progress_stop() {
   fi
   if [ "$UI_PROGRESS_TTY" -eq 1 ]; then
     ui_sticky_clear
-    printf '\033[?25h' >&"$INSTALL_UI_FD"
+    printf '\033[?25h' >&"$INSTALL_UI_FD" 2>/dev/null || true
   fi
   UI_STEP_LABEL=""
   if [ -n "$UI_STATE_FILE" ]; then
@@ -326,7 +326,7 @@ ui_step() {
     ui_sticky_draw
     ui_release
   else
-    printf '      →  %s…\n' "$UI_STEP_LABEL" >&"$INSTALL_UI_FD"
+    printf '      →  %s…\n' "$UI_STEP_LABEL" >&"$INSTALL_UI_FD" 2>/dev/null || true
   fi
 }
 
@@ -344,7 +344,7 @@ ui_step_close() {
   ui_sticky_clear
   printf '%b      %s%b  %s  %b%s%b\n' \
     "$_ui_color" "$_ui_mark" "$UI_RESET" "$UI_STEP_LABEL" \
-    "$UI_DIM" "$_ui_tail" "$UI_RESET" >&"$INSTALL_UI_FD"
+    "$UI_DIM" "$_ui_tail" "$UI_RESET" >&"$INSTALL_UI_FD" 2>/dev/null || true
   UI_STEP_LABEL=""
   ui_release
 }
@@ -369,29 +369,29 @@ ui_confirm_default_yes() {
   UI_CONFIRM_ANSWER=""
 
   printf '      %s [%bY%b/%bn%b]: ' \
-    "$_ui_prompt" "$UI_GREEN" "$UI_RESET" "$UI_YELLOW" "$UI_RESET" >&3
+    "$_ui_prompt" "$UI_GREEN" "$UI_RESET" "$UI_YELLOW" "$UI_RESET" >&3 2>/dev/null || true
   IFS= read -r UI_CONFIRM_ANSWER < /dev/tty || UI_CONFIRM_ANSWER=""
   if [ -n "$UI_RESET" ]; then
     # read already moved to the next line after Enter. Move back, clear that
     # prompt row and write the result in its semantic colour.
     printf '%b[1A\r%b[2K      %s [%bY%b/%bn%b]: ' \
-      "$UI_ESC" "$UI_ESC" "$_ui_prompt" "$UI_GREEN" "$UI_RESET" "$UI_YELLOW" "$UI_RESET" >&3
+      "$UI_ESC" "$UI_ESC" "$_ui_prompt" "$UI_GREEN" "$UI_RESET" "$UI_YELLOW" "$UI_RESET" >&3 2>/dev/null || true
     case "$UI_CONFIRM_ANSWER" in
       y|Y|yes|YES|Yes|д|Д|да|ДА|Да)
-        printf '%b%s%b' "$UI_GREEN" "$UI_CONFIRM_ANSWER" "$UI_RESET" >&3
+        printf '%b%s%b' "$UI_GREEN" "$UI_CONFIRM_ANSWER" "$UI_RESET" >&3 2>/dev/null || true
         ;;
       n|N|no|NO|No|н|Н|нет|НЕТ|Нет)
-        printf '%b%s%b' "$UI_YELLOW" "$UI_CONFIRM_ANSWER" "$UI_RESET" >&3
+        printf '%b%s%b' "$UI_YELLOW" "$UI_CONFIRM_ANSWER" "$UI_RESET" >&3 2>/dev/null || true
         ;;
       '')
-        printf '%bY%b' "$UI_GREEN" "$UI_RESET" >&3
+        printf '%bY%b' "$UI_GREEN" "$UI_RESET" >&3 2>/dev/null || true
         ;;
       *)
-        printf '%b%s%b' "$UI_YELLOW" "$UI_CONFIRM_ANSWER" "$UI_RESET" >&3
+        printf '%b%s%b' "$UI_YELLOW" "$UI_CONFIRM_ANSWER" "$UI_RESET" >&3 2>/dev/null || true
         ;;
     esac
   fi
-  printf '\n' >&3
+  printf '\n' >&3 2>/dev/null || true
 }
 
 choose_geodat_option() {
@@ -400,14 +400,14 @@ choose_geodat_option() {
       GEODAT_OPTION="1"
       XKEEN_GEODAT_INSTALL="$GEODAT_OPTION"
       export XKEEN_GEODAT_INSTALL
-      printf '  %bДополнение:%b  просмотрщик DAT будет установлен\n' "$UI_DIM" "$UI_RESET" >&3
+      printf '  %bДополнение:%b  просмотрщик DAT будет установлен\n' "$UI_DIM" "$UI_RESET" >&3 2>/dev/null || true
       return 0
       ;;
     0)
       GEODAT_OPTION="0"
       XKEEN_GEODAT_INSTALL="$GEODAT_OPTION"
       export XKEEN_GEODAT_INSTALL
-      printf '  %bДополнение:%b  просмотрщик DAT пропущен\n' "$UI_DIM" "$UI_RESET" >&3
+      printf '  %bДополнение:%b  просмотрщик DAT пропущен\n' "$UI_DIM" "$UI_RESET" >&3 2>/dev/null || true
       return 0
       ;;
   esac
@@ -415,7 +415,7 @@ choose_geodat_option() {
   # Preserve the historical behavior for unattended installs: xk-geodat is on.
   GEODAT_OPTION="1"
   if [ -t 0 ] && [ -r /dev/tty ]; then
-    printf '  %bДополнение%b   Просмотрщик DAT-файлов\n' "$UI_BOLD" "$UI_RESET" >&3
+    printf '  %bДополнение%b   Просмотрщик DAT-файлов\n' "$UI_BOLD" "$UI_RESET" >&3 2>/dev/null || true
     ui_info "Показывает содержимое GeoIP/GeoSite и помогает добавлять теги."
     ui_confirm_default_yes "Установить xk-geodat?"
     case "$UI_CONFIRM_ANSWER" in
@@ -432,21 +432,21 @@ choose_happ_option() {
       HAPP_OPTION="1"
       XKEEN_HAPP_DECRYPTOR_INSTALL="$HAPP_OPTION"
       export XKEEN_HAPP_DECRYPTOR_INSTALL
-      printf '  %bДополнение:%b  режим разработчика для подписок включён\n' "$UI_DIM" "$UI_RESET" >&3
+      printf '  %bДополнение:%b  режим разработчика для подписок включён\n' "$UI_DIM" "$UI_RESET" >&3 2>/dev/null || true
       return 0
       ;;
     0)
       HAPP_OPTION="0"
       XKEEN_HAPP_DECRYPTOR_INSTALL="$HAPP_OPTION"
       export XKEEN_HAPP_DECRYPTOR_INSTALL
-      printf '  %bДополнение:%b  режим разработчика для подписок пропущен\n' "$UI_DIM" "$UI_RESET" >&3
+      printf '  %bДополнение:%b  режим разработчика для подписок пропущен\n' "$UI_DIM" "$UI_RESET" >&3 2>/dev/null || true
       return 0
       ;;
   esac
 
   HAPP_OPTION="1"
   if [ -t 0 ] && [ -r /dev/tty ]; then
-    printf '  %bДополнение%b   Режим разработчика для подписок\n' "$UI_BOLD" "$UI_RESET" >&3
+    printf '  %bДополнение%b   Режим разработчика для подписок\n' "$UI_BOLD" "$UI_RESET" >&3 2>/dev/null || true
     ui_info "Расширенная обработка ссылок при импорте подписок."
     ui_info "Компоненты загрузятся с GitHub."
     ui_confirm_default_yes "Установить?"
@@ -501,13 +501,13 @@ PY
     # the ticker before reading so it cannot overwrite the menu or the answer.
     ui_input_begin
     PROFILE_INPUT_ACTIVE=1
-    printf '  %bПрофиль панели%b\n' "$UI_BOLD" "$UI_RESET" >&3
-    printf '      1) Full\n' >&3
-    printf '      2) Xray Minimal\n' >&3
-    printf '      3) Mihomo Minimal\n' >&3
-    printf '      4) Custom\n' >&3
+    printf '  %bПрофиль панели%b\n' "$UI_BOLD" "$UI_RESET" >&3 2>/dev/null || true
+    printf '      1) Full\n' >&3 2>/dev/null || true
+    printf '      2) Xray Minimal\n' >&3 2>/dev/null || true
+    printf '      3) Mihomo Minimal\n' >&3 2>/dev/null || true
+    printf '      4) Custom\n' >&3 2>/dev/null || true
     while :; do
-      printf '      Выбор [1]: ' >&3
+      printf '      Выбор [1]: ' >&3 2>/dev/null || true
       IFS= read -r PROFILE_ANSWER < /dev/tty || PROFILE_ANSWER=""
       case "$PROFILE_ANSWER" in
         ''|1) PROFILE_CHOICE="full"; break ;;
@@ -515,7 +515,7 @@ PY
         3) PROFILE_CHOICE="mihomo-minimal"; break ;;
         4) PROFILE_CHOICE="custom"; break ;;
         *)
-          printf '      Введите число от 1 до 4.\n' >&3
+          printf '      Введите число от 1 до 4.\n' >&3 2>/dev/null || true
           ;;
       esac
     done
@@ -545,7 +545,7 @@ PY
         PROFILE_INPUT_ACTIVE=1
       fi
       ui_info "Модули: core, engine.xray, engine.mihomo, tool.editor, tool.terminal, tool.files, tool.backups, integration.happ, tool.advanced-diagnostics"
-      printf '      ID через запятую: ' >&3
+      printf '      ID через запятую: ' >&3 2>/dev/null || true
       IFS= read -r XKEEN_UI_INSTALL_MODULES < /dev/tty || XKEEN_UI_INSTALL_MODULES=""
     fi
     [ -n "${XKEEN_UI_INSTALL_MODULES:-}" ] || fail_install "Для Custom задайте XKEEN_UI_INSTALL_MODULES."
@@ -592,7 +592,7 @@ installer_on_exit() {
     fi
     ui_info "Последнее действие: ${INSTALL_CURRENT_ACTION:-не определено} (код $INSTALL_STATUS)."
     ui_info "Подробности: $INSTALL_LOG"
-    printf '\n' >&3
+    printf '\n' >&3 2>/dev/null || true
   fi
 }
 
@@ -632,11 +632,11 @@ else
 fi
 
 ui_header
-printf '  %bРежим:%b       %s\n' "$UI_DIM" "$UI_RESET" "$INSTALL_MODE" >&3
-printf '  %bАрхитектура:%b %s\n' "$UI_DIM" "$UI_RESET" "$(uname -m 2>/dev/null || echo unknown)" >&3
+printf '  %bРежим:%b       %s\n' "$UI_DIM" "$UI_RESET" "$INSTALL_MODE" >&3 2>/dev/null || true
+printf '  %bАрхитектура:%b %s\n' "$UI_DIM" "$UI_RESET" "$(uname -m 2>/dev/null || echo unknown)" >&3 2>/dev/null || true
 choose_geodat_option
 choose_happ_option
-printf '\n' >&3
+printf '\n' >&3 2>/dev/null || true
 ui_stage "01/05" "Проверка окружения"
 ui_stage_plan 2
 ui_step "Служба панели и каталоги"
@@ -2954,13 +2954,13 @@ PANEL_IP="$(ip -4 addr show br0 2>/dev/null | sed -n 's/.*inet \([0-9.]*\).*/\1/
 [ -n "$PANEL_IP" ] || PANEL_IP="<IP_роутера>"
 PANEL_URL="http://${PANEL_IP}:${PANEL_PORT}/"
 
-printf '\n' >&3
+printf '\n' >&3 2>/dev/null || true
 if [ "$INSTALL_MODE" = "Обновление" ]; then
   ui_success "Xkeen UI обновлена и запущена"
 else
   ui_success "Xkeen UI установлена и запущена"
 fi
-printf '      %bОткрыть:%b  %b%s%b\n' "$UI_BOLD" "$UI_RESET" "$UI_CYAN" "$PANEL_URL" "$UI_RESET" >&3
+printf '      %bОткрыть:%b  %b%s%b\n' "$UI_BOLD" "$UI_RESET" "$UI_CYAN" "$PANEL_URL" "$UI_RESET" >&3 2>/dev/null || true
 
 if [ "$WS_VERDICT" != "on" ]; then
   ui_warning "Терминал работает в lite-режиме: $WS_VERDICT_REASON."
@@ -2975,5 +2975,5 @@ if [ "${PORT_UPDATE_WARNING:-0}" -eq 1 ]; then
   ui_warning "Проверьте порт панели в DevTools после первого входа."
 fi
 
-printf '      %bДиагностика:%b %s\n\n' "$UI_DIM" "$UI_RESET" "$INSTALL_LOG" >&3
+printf '      %bДиагностика:%b %s\n\n' "$UI_DIM" "$UI_RESET" "$INSTALL_LOG" >&3 2>/dev/null || true
 INSTALL_FINISHED=1

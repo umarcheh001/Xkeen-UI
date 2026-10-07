@@ -36,13 +36,13 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 509,
-      "size_bytes": 6960813,
+      "unit_count": 510,
+      "size_bytes": 6965686,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
         "backend_service": 74,
-        "backend_test": 229,
+        "backend_test": 230,
         "configuration": 10,
         "frontend_bundle": 9,
         "frontend_entrypoint": 2,
@@ -4209,7 +4209,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_install_progress_ui.py",
-      "size_bytes": 9036,
+      "size_bytes": 9437,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -4268,6 +4268,24 @@
         "XKEEN_UI_INSTALL_MODULES",
         "XKEEN_UI_INSTALL_PROFILE"
       ],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_install_ui_never_stops_install.py",
+      "size_bytes": 3412,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
       "removable": false
     },
     {
@@ -7551,7 +7569,7 @@
       "module_id": "core",
       "kind": "configuration",
       "path": "xkeen-ui/install.sh",
-      "size_bytes": 116952,
+      "size_bytes": 118012,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],

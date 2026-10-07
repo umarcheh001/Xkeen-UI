@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import subprocess
+import tempfile
 from pathlib import Path
 
 
@@ -52,9 +53,14 @@ def _run(body: str, tty: str = "0") -> str:
             body,
         ]
     )
-    proc = subprocess.run(
-        ["sh", "-c", script], capture_output=True, text=True, encoding="utf-8"
-    )
+    # Файлом, а не аргументом: командная строка Windows длинный сценарий с
+    # кириллицей и псевдографикой до оболочки не доносит.
+    with tempfile.TemporaryDirectory() as folder:
+        path = Path(folder) / "progress.sh"
+        path.write_bytes(script.encode("utf-8"))
+        proc = subprocess.run(
+            ["sh", path.as_posix()], capture_output=True, text=True, encoding="utf-8"
+        )
     assert proc.returncode == 0, proc.stderr
     return proc.stdout
 
