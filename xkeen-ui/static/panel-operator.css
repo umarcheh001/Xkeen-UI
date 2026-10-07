@@ -13147,6 +13147,13 @@ body.panel-page #outbounds-subscriptions-modal .xk-sub-request-profile-copy {
   gap: 2px;
 }
 
+body.panel-page #outbounds-subscriptions-modal .xk-sub-request-profile-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
 body.panel-page #outbounds-subscriptions-modal .xk-sub-request-profile-head::-webkit-details-marker {
   display: none;
 }
@@ -13219,6 +13226,80 @@ body.panel-page #outbounds-subscriptions-modal .xk-sub-request-profile-status {
   color: var(--op-data-muted);
   font-size: calc(10.5px * var(--xk-font-scale, 1));
   line-height: 1.35;
+}
+
+body.panel-page #outbounds-subscriptions-request-profile-help-modal {
+  justify-content: center;
+  padding-left: 18px;
+}
+
+body.panel-page #outbounds-subscriptions-request-profile-help-modal .xk-sub-request-profile-help {
+  width: min(1200px, calc(100vw - 72px));
+  max-width: 1200px;
+  height: min(80dvh, 1050px);
+  max-height: calc(100dvh - 36px);
+}
+
+body.panel-page #outbounds-subscriptions-request-profile-help-modal .xk-sub-request-profile-help-body {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  padding: 18px;
+  color: var(--op-text);
+}
+
+body.panel-page #outbounds-subscriptions-request-profile-help-modal .xk-sub-request-profile-help-body section {
+  display: grid;
+  gap: 8px;
+}
+
+body.panel-page #outbounds-subscriptions-request-profile-help-modal .xk-sub-request-profile-help-body :is(h3, p, dl, dt, dd, pre, ol) {
+  margin: 0;
+}
+
+body.panel-page #outbounds-subscriptions-request-profile-help-modal .xk-sub-request-profile-help-body h3 {
+  color: var(--op-text-strong);
+  font-size: calc(13px * var(--xk-font-scale, 1));
+  line-height: 1.3;
+}
+
+body.panel-page #outbounds-subscriptions-request-profile-help-modal .xk-sub-request-profile-help-body :is(p, dd, li) {
+  color: var(--op-muted);
+  line-height: 1.5;
+}
+
+body.panel-page #outbounds-subscriptions-request-profile-help-modal .xk-sub-request-profile-help-body dl {
+  display: grid;
+  grid-template-columns: minmax(112px, 0.28fr) minmax(0, 1fr);
+  gap: 7px 12px;
+}
+
+body.panel-page #outbounds-subscriptions-request-profile-help-modal .xk-sub-request-profile-help-body dt {
+  color: var(--op-text-strong);
+  font-weight: 650;
+}
+
+body.panel-page #outbounds-subscriptions-request-profile-help-modal .xk-sub-request-profile-help-body pre {
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-control-radius);
+  background: var(--op-editor);
+  color: var(--op-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+body.panel-page #outbounds-subscriptions-request-profile-help-modal .xk-sub-request-profile-help-body ol {
+  display: grid;
+  gap: 6px;
+  padding-left: 22px;
+}
+
+body.panel-page #outbounds-subscriptions-request-profile-help-modal .xk-sub-request-profile-help-note {
+  padding: 10px 12px;
+  border-left: 3px solid var(--op-accent);
+  background: color-mix(in srgb, var(--op-accent) 9%, transparent);
 }
 
 body.panel-page #outbounds-subscriptions-modal .xk-sub-controls {
@@ -16975,6 +17056,15 @@ body.panel-page :is(#json-editor-modal, #fm-editor-modal) :is(#json-editor-save-
     align-items: flex-start;
   }
 
+  body.panel-page #outbounds-subscriptions-request-profile-help-modal .xk-sub-request-profile-help-body dl {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  body.panel-page #outbounds-subscriptions-request-profile-help-modal .xk-sub-request-profile-help-body dd {
+    margin-bottom: 6px;
+  }
+
   body.panel-page .xk-sub-advanced > summary {
     align-items: flex-start;
     flex-direction: column;
@@ -17231,6 +17321,17 @@ body.panel-page :is(#json-editor-modal, #fm-editor-modal) :is(#json-editor-save-
     min-height: 100dvh;
     border-width: 0 !important;
     border-radius: 0 !important;
+  }
+
+  body.panel-page #outbounds-subscriptions-request-profile-help-modal {
+    padding: 0;
+  }
+
+  body.panel-page #outbounds-subscriptions-request-profile-help-modal .xk-sub-request-profile-help {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
   }
 
   /* The Mihomo result retains the same operator full-screen contract as the
