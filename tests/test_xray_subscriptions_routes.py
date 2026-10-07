@@ -93,11 +93,11 @@ def test_detected_request_profile_endpoint_returns_editable_fields(monkeypatch):
 
     monkeypatch.setattr(
         routes,
-        "detected_request_profile",
+        "detected_xray_request_profile",
         lambda: {
             "mode": "auto",
             "hwid": "ROUTER",
-            "user_agent": "Mihomo/1",
+            "user_agent": "Xray/26.3.27",
             "device_os": "Keenetic OS",
             "os_version": "5.0",
             "device_model": "KN",
@@ -109,6 +109,7 @@ def test_detected_request_profile_endpoint_returns_editable_fields(monkeypatch):
 
     assert response.status_code == 200
     assert response.get_json()["profile"]["hwid"] == "ROUTER"
+    assert response.get_json()["profile"]["user_agent"] == "Xray/26.3.27"
 
 
 def test_preview_rejects_invalid_request_profile_without_echoing_value(monkeypatch):

@@ -12,7 +12,7 @@ from services import subscription_pause
 from services.latency_jobs import create_latency_job, get_latency_job
 from services.xray_config_files import ROUTING_FILE
 from services.subscription_request_profile import (
-    detected_request_profile,
+    detected_xray_request_profile,
     validate_request_profile,
 )
 from services.xray_subscriptions import (
@@ -164,7 +164,7 @@ def create_xray_subscriptions_blueprint(
     @bp.get("/api/xray/subscriptions/request-profile")
     def api_xray_subscription_request_profile():
         try:
-            return jsonify({"ok": True, "profile": detected_request_profile()}), 200
+            return jsonify({"ok": True, "profile": detected_xray_request_profile()}), 200
         except Exception as exc:
             return exception_response(
                 "Не удалось определить профиль устройства.",

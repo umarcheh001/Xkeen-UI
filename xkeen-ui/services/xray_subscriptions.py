@@ -1864,10 +1864,10 @@ def _subscription_request_variants() -> List[Tuple[str, Dict[str, str], str]]:
         device_info = get_device_info()
     except Exception:
         device_info = {}
-    from services.subscription_request_profile import detected_request_profile
+    from services.subscription_request_profile import detected_xray_request_profile
 
     normalized_headers = request_headers_for_profile(
-        detected_request_profile(device_info if isinstance(device_info, dict) else {})
+        detected_xray_request_profile(device_info if isinstance(device_info, dict) else {})
     )
     has_hwid = any(
         str(key or "").strip().lower() == "x-hwid" and str(value or "").strip()

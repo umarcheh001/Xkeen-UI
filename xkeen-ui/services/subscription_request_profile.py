@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import os
+import re
+import subprocess
 from typing import Any
 
 
@@ -24,6 +27,34 @@ _HEADER_NAMES = {
     "os_version": "x-ver-os",
     "device_model": "x-device-model",
 }
+
+
+def _detect_xray_version() -> str | None:
+    """Return the installed Xray version, when the local binary is available."""
+
+    binaries = ("/opt/sbin/xray", "/opt/bin/xray", "xray")
+    for binary in binaries:
+        if os.path.isabs(binary) and not os.path.exists(binary):
+            continue
+        for flag in ("version", "-version"):
+            try:
+                completed = subprocess.run(
+                    [binary, flag],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    timeout=2.5,
+                    check=False,
+                )
+            except Exception:
+                continue
+            output = (completed.stdout or "").strip()
+            if not output:
+                continue
+            match = re.search(r"\b(?:v)?([0-9]+\.[0-9]+(?:\.[0-9]+)?)\b", output)
+            if match:
+                return match.group(1)
+    return None
 
 
 def _safe_header_value(value: Any, *, limit: int) -> str:
@@ -101,6 +132,15 @@ def detected_request_profile(device_info: Mapping[str, Any] | None = None) -> di
         "device_model": lower_headers.get("x-device-model"),
     }
     return normalize_request_profile(raw)
+
+
+def detected_xray_request_profile(device_info: Mapping[str, Any] | None = None) -> dict[str, str]:
+    """Map router device data to an Xray-specific automatic request profile."""
+
+    profile = detected_request_profile(device_info)
+    version = _detect_xray_version()
+    profile["user_agent"] = f"Xray/{version}" if version else "Xray"
+    return profile
 
 
 def request_headers_for_profile(

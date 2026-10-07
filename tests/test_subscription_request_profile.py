@@ -61,6 +61,36 @@ def test_detected_profile_uses_existing_mihomo_device_info_shape():
     }
 
 
+def test_detected_xray_profile_uses_xray_user_agent(monkeypatch):
+    import services.subscription_request_profile as profiles
+
+    monkeypatch.setattr(profiles, "_detect_xray_version", lambda: "26.3.27")
+
+    result = profiles.detected_xray_request_profile(
+        {
+            "hwid": "ABC",
+            "user_agent": "ClashMeta/1; mihomo/1",
+            "headers": {
+                "x-device-os": "Keenetic OS",
+                "x-ver-os": "5.0",
+                "x-device-model": "KN",
+            },
+        }
+    )
+
+    assert result["user_agent"] == "Xray/26.3.27"
+    assert result["hwid"] == "ABC"
+    assert result["device_os"] == "Keenetic OS"
+
+
+def test_detected_xray_profile_falls_back_to_xray_without_version(monkeypatch):
+    import services.subscription_request_profile as profiles
+
+    monkeypatch.setattr(profiles, "_detect_xray_version", lambda: None)
+
+    assert profiles.detected_xray_request_profile({})["user_agent"] == "Xray"
+
+
 def test_validate_custom_profile_rejects_control_characters_without_echoing_value():
     from services.subscription_request_profile import validate_request_profile
 

@@ -80,6 +80,19 @@ def test_xray_subscription_modal_exposes_request_profile_controls():
     assert "xk-sub-request-profile" in operator_styles_src
 
 
+def test_xray_request_profile_is_collapsed_and_compact():
+    outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")
+    operator_styles_src = _read("xkeen-ui/static/panel-operator.css")
+
+    assert '<details class="xk-sub-request-profile xk-sub-wide"' in outbounds_src
+    assert '<summary class="xk-sub-request-profile-head">' in outbounds_src
+    assert 'class="xk-sub-request-profile-body"' in outbounds_src
+    assert '<details class="xk-sub-request-profile xk-sub-wide" open' not in outbounds_src
+    assert "grid-template-columns: repeat(6, minmax(0, 1fr));" in operator_styles_src
+    assert ".xk-sub-request-fields label:nth-child(1)" in operator_styles_src
+    assert ".xk-sub-request-fields label:nth-child(3)" in operator_styles_src
+
+
 def test_outbounds_entware_mark_controls_are_wired_to_payloads():
     template_src = _read("xkeen-ui/templates/panel.html")
     outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")

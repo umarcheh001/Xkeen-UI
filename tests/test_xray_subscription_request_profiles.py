@@ -129,3 +129,27 @@ def test_auto_profile_keeps_adaptive_retry(monkeypatch):
 
     assert calls == [{}, {"x-hwid": "ROUTER"}]
     assert meta["fetch_mode"] == "hwid"
+
+
+def test_auto_profile_uses_xray_user_agent_for_hwid_variant(monkeypatch):
+    from services import subscription_request_profile as profiles
+    from services import xray_subscriptions as subs
+
+    monkeypatch.setattr(
+        profiles,
+        "detected_xray_request_profile",
+        lambda _device_info=None: {
+            "mode": "auto",
+            "hwid": "ROUTER",
+            "user_agent": "Xray/26.3.27",
+            "device_os": "Keenetic OS",
+            "os_version": "5.0",
+            "device_model": "KN",
+        },
+    )
+    monkeypatch.setattr(subs, "fetch_subscription_body", lambda _url, request_headers=None: ("", {}))
+
+    variants = subs._subscription_request_variants()
+
+    assert variants[0][0] == "hwid"
+    assert variants[0][1]["User-Agent"] == "Xray/26.3.27"

@@ -13125,18 +13125,11 @@ body.panel-page #outbounds-subscriptions-modal .xk-sub-advanced-grid {
 }
 
 body.panel-page #outbounds-subscriptions-modal .xk-sub-request-profile {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 10px;
-  padding: 10px;
+  display: block;
+  padding: 0;
   border: 1px solid var(--op-border);
   border-radius: var(--op-control-radius);
   background: color-mix(in srgb, var(--op-editor) 72%, transparent);
-}
-
-body.panel-page #outbounds-subscriptions-modal .xk-sub-request-profile-head,
-body.panel-page #outbounds-subscriptions-modal .xk-sub-request-profile-status {
-  grid-column: 1 / -1;
 }
 
 body.panel-page #outbounds-subscriptions-modal .xk-sub-request-profile-head {
@@ -13144,6 +13137,28 @@ body.panel-page #outbounds-subscriptions-modal .xk-sub-request-profile-head {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  padding: 10px;
+  cursor: pointer;
+  list-style: none;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-request-profile-copy {
+  display: grid;
+  gap: 2px;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-request-profile-head::-webkit-details-marker {
+  display: none;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-request-profile[open] > .xk-sub-request-profile-head {
+  border-bottom: 1px solid var(--op-border);
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-request-profile-body {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
 }
 
 body.panel-page #outbounds-subscriptions-modal .xk-sub-request-mode-field {
@@ -13181,13 +13196,19 @@ body.panel-page #outbounds-subscriptions-modal .xk-sub-request-mode button.is-ac
 
 body.panel-page #outbounds-subscriptions-modal .xk-sub-request-fields {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 8px;
 }
 
-body.panel-page #outbounds-subscriptions-modal .xk-sub-request-fields .xk-sub-request-ua,
-body.panel-page #outbounds-subscriptions-modal .xk-sub-request-fields label:last-child {
-  grid-column: 1 / -1;
+body.panel-page #outbounds-subscriptions-modal .xk-sub-request-fields label:nth-child(1),
+body.panel-page #outbounds-subscriptions-modal .xk-sub-request-fields label:nth-child(2) {
+  grid-column: span 3;
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-request-fields label:nth-child(3),
+body.panel-page #outbounds-subscriptions-modal .xk-sub-request-fields label:nth-child(4),
+body.panel-page #outbounds-subscriptions-modal .xk-sub-request-fields label:nth-child(5) {
+  grid-column: span 2;
 }
 
 body.panel-page #outbounds-subscriptions-modal .xk-sub-request-profile input:disabled {
@@ -16944,6 +16965,10 @@ body.panel-page :is(#json-editor-modal, #fm-editor-modal) :is(#json-editor-save-
   body.panel-page #outbounds-subscriptions-modal .xk-sub-request-fields,
   body.panel-page #outbounds-subscriptions-modal .xk-sub-request-mode {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.panel-page #outbounds-subscriptions-modal .xk-sub-request-fields label {
+    grid-column: 1 / -1;
   }
 
   body.panel-page #outbounds-subscriptions-modal .xk-sub-request-profile-head {

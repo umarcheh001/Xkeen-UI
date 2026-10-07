@@ -5841,14 +5841,15 @@ let outboundsModuleApi = null;
                       <span class="xk-sub-field-hint">Рег. выражение; пусто — все.</span>
                       <span id="outbounds-subscriptions-transport-filter-note" class="xk-sub-field-note" hidden></span>
                     </label>
-                    <section class="xk-sub-request-profile xk-sub-wide" aria-labelledby="outbounds-subscriptions-request-profile-title">
-                      <div class="xk-sub-request-profile-head">
-                        <div>
+                    <details class="xk-sub-request-profile xk-sub-wide">
+                      <summary class="xk-sub-request-profile-head">
+                        <span class="xk-sub-request-profile-copy">
                           <span id="outbounds-subscriptions-request-profile-title" class="xk-pool-fieldlabel">Профиль запроса</span>
                           <span class="xk-sub-field-hint">HWID и данные клиента отправляются провайдеру при скачивании подписки.</span>
-                        </div>
+                        </span>
                         <button type="button" id="outbounds-subscriptions-request-profile-reset" class="btn-secondary btn-compact xk-sub-icon-btn" title="Подставить профиль роутера" data-tooltip="Заменить пользовательские значения текущим профилем роутера.">${iconHtml('refresh')}</button>
-                      </div>
+                      </summary>
+                      <div class="xk-sub-request-profile-body">
                       <div class="xk-sub-request-mode-field">
                         <span class="xk-pool-fieldlabel">Режим</span>
                         <input id="outbounds-subscriptions-request-profile-mode" type="hidden" value="auto">
@@ -5866,7 +5867,8 @@ let outboundsModuleApi = null;
                         <label><span class="xk-pool-fieldlabel">Модель</span><input id="outbounds-subscriptions-request-device-model" class="xray-log-filter" type="text" autocomplete="off" maxlength="256"></label>
                       </div>
                       <div id="outbounds-subscriptions-request-profile-status" class="xk-sub-request-profile-status" role="status"></div>
-                    </section>
+                      </div>
+                    </details>
                     <div class="xk-sub-controls">
                       <label class="dt-switch xk-sub-check" aria-label="Автообновление" data-tooltip="Включить плановое автообновление этой подписки."><input id="outbounds-subscriptions-enabled" type="checkbox" checked title="Автообновление" aria-label="Автообновление" data-tooltip="Включить плановое автообновление этой подписки."><span class="dt-switch-slider" aria-hidden="true"></span><span class="xk-sub-switch-label">Автообн.</span></label>
                       <label class="dt-switch xk-sub-check" aria-label="Замер" data-tooltip-multiline data-tooltip="Фоновая проверка скорости узлов&#10;Xray сам, раз в заданный интервал, проверяет задержку каждого узла этой подписки.&#10;Нужно, чтобы балансировщики (служебный пул и отмеченные ниже) выбирали самый быстрый узел. Без замеров им не по чему выбирать.&#10;Выключить можно, если узлы подписки используются только напрямую по тегу. На кнопку «Пинг всех узлов» это не влияет."><input id="outbounds-subscriptions-ping" type="checkbox" checked title="Замер" aria-label="Замер" data-tooltip-multiline data-tooltip="Фоновая проверка скорости узлов&#10;Xray сам, раз в заданный интервал, проверяет задержку каждого узла этой подписки.&#10;Нужно, чтобы балансировщики (служебный пул и отмеченные ниже) выбирали самый быстрый узел. Без замеров им не по чему выбирать.&#10;Выключить можно, если узлы подписки используются только напрямую по тегу. На кнопку «Пинг всех узлов» это не влияет."><span class="dt-switch-slider" aria-hidden="true"></span><span class="xk-sub-switch-label">Замер</span></label>
@@ -7088,6 +7090,10 @@ let outboundsModuleApi = null;
       _subscriptionPreview = null;
       _subscriptionShowHidden = false;
       _subscriptionCarriedSettings = false;
+      try {
+        const requestProfile = $(SUB_IDS.requestProfileReset) && $(SUB_IDS.requestProfileReset).closest('details');
+        if (requestProfile) requestProfile.open = false;
+      } catch (e) {}
       try { $(SUB_IDS.id).value = ''; } catch (e) {}
       try { $(SUB_IDS.name).value = ''; } catch (e) {}
       try { $(SUB_IDS.tag).value = ''; } catch (e) {}
@@ -7123,6 +7129,10 @@ let outboundsModuleApi = null;
         _subscriptionShowHidden = false;
       }
       _subscriptionCarriedSettings = false;
+      try {
+        const requestProfile = $(SUB_IDS.requestProfileReset) && $(SUB_IDS.requestProfileReset).closest('details');
+        if (requestProfile) requestProfile.open = false;
+      } catch (e) {}
       _subscriptionEditId = nextId;
       try { $(SUB_IDS.id).value = _subscriptionEditId; } catch (e) {}
       try { $(SUB_IDS.name).value = String(s.name || ''); } catch (e) {}
