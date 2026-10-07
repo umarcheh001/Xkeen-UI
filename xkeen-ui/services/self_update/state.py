@@ -234,11 +234,59 @@ def write_status(status_file: str, status: Dict[str, Any]) -> None:
         pass
 
 
+def _current_boot_id() -> Optional[str]:
+    """An identifier that changes with every boot of the router, if the system has one."""
+
+    try:
+        with open("/proc/sys/kernel/random/boot_id", "r", encoding="ascii") as handle:
+            return handle.read().strip() or None
+    except (OSError, ValueError):
+        return None
+
+
+def _process_start_ticks(pid: Any) -> Optional[int]:
+    """When the process started, in clock ticks since boot; ``None`` if unknown."""
+
+    try:
+        with open(f"/proc/{int(pid)}/stat", "r", encoding="ascii", errors="replace") as handle:
+            stat = handle.read()
+        # "<pid> (<name>) <state> ...": the name may hold spaces and brackets.
+        # The start time is the 22nd field, the 20th after the name.
+        return int(stat.rpartition(")")[2].split()[19])
+    except (OSError, ValueError, TypeError, IndexError):
+        return None
+
+
 def _lock_payload() -> Dict[str, Any]:
+    # A process id alone lies: after a reboot the same numbers are handed out
+    # again, and a stranger with the owner's number would keep the lock
+    # "alive" for good. The boot and the start of the process pin the owner.
     return {
         "pid": os.getpid(),
         "created_ts": time.time(),
+        "boot_id": _current_boot_id(),
+        "start_ticks": _process_start_ticks(os.getpid()),
     }
+
+
+def _lock_owner_alive(data: Any) -> bool:
+    pid = data.get("pid") if isinstance(data, dict) else None
+    if not _pid_is_running(pid):
+        return False
+    if not isinstance(data, dict):
+        return True
+    # A lock written by older code, or a system without /proc, has nothing
+    # but the process id to go by.
+    recorded_boot = data.get("boot_id")
+    current_boot = _current_boot_id()
+    if recorded_boot and current_boot and recorded_boot != current_boot:
+        return False
+    recorded_start = data.get("start_ticks")
+    if isinstance(recorded_start, int) and not isinstance(recorded_start, bool):
+        current_start = _process_start_ticks(pid)
+        if current_start is not None and current_start != recorded_start:
+            return False
+    return True
 
 
 def read_lock(lock_file: str) -> Dict[str, Any]:
@@ -268,7 +316,7 @@ def read_lock(lock_file: str) -> Dict[str, Any]:
             out["age_sec"] = max(0.0, time.time() - ct)
     except Exception:
         pass
-    out["alive"] = _pid_is_running(out.get("pid"))
+    out["alive"] = _lock_owner_alive(data)
     out["stale"] = bool(out["exists"] and not out["alive"])
     return out
 
