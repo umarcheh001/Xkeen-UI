@@ -51,12 +51,14 @@ state и exact-release catalog, повторно строит план и сра
 
 ## Cancel, recovery и restart
 
-Cancel отправляет `SIGTERM` только когда operation id совпадает с journal и
-status, status равен `running`, PID жив и Linux
-`/proc/<pid>/cmdline` указывает на `module_transaction.py run` с тем же id.
-Linux pidfd удерживает проверенный процесс между чтением cmdline и сигналом,
-поэтому повторно использованный PID не может получить отмену. Несовпадающий
-или исчезнувший процесс не получает сигнал. Итог отмены
+Cancel принимается только когда operation id совпадает с journal и status,
+status равен `running` и runner жив. Сигнал по PID не отправляется: runner при
+старте открывает слушатель на `127.0.0.1` и записывает его порт и одноразовое
+слово в journal, панель передаёт туда слово и operation id, а runner сам
+посылает `SIGTERM` своему главному потоку. Повторно использованный PID
+получить отмену не может, и ядро с pidfd для этого не требуется. Если на
+записанном адресе никто не слушает, ответ `operation_not_running`; чужой
+слушатель слова не знает, ответ `operation_cancel_failed`. Итог отмены
 определяет transaction runner: ранняя отмена завершается как interrupted,
 после начала mutation выполняется rollback, а защищённый commit может
 завершиться штатно.

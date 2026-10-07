@@ -164,6 +164,12 @@ class Journal:
         self._meta["boot_id"] = current_boot_id()
         self._save()
 
+    def set_cancel_channel(self, address: Mapping[str, Any]) -> None:
+        """Record where the runner listens for a request to stop."""
+
+        self._meta["cancel"] = dict(address)
+        self._save()
+
     def runner_alive(self) -> bool:
         """Whether the process that carries this operation still exists."""
 

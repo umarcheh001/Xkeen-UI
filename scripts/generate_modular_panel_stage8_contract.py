@@ -503,7 +503,7 @@ def render_markdown(payload: dict[str, Any]) -> str:
                 for item in lifecycle_api["routes"]
             ],
             "",
-            "Cancel посылает SIGTERM только точному live runner после проверки journal, status и Linux `/proc/<pid>/cmdline`. Recovery не перезапускает панель автоматически; restart имеет отдельный guard от активной операции, update lock и rollback-failed state.",
+            "Cancel передаёт просьбу слушателю самого live runner на `127.0.0.1` после проверки journal и status; runner сам посылает себе SIGTERM, сигнал по PID не отправляется. Recovery не перезапускает панель автоматически; restart имеет отдельный guard от активной операции, update lock и rollback-failed state.",
             "",
             "## Panel update и profile transition 8.5",
             "",

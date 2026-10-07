@@ -30,6 +30,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -38,6 +39,7 @@ PANEL_DIR = Path(__file__).resolve().parents[1]
 if str(PANEL_DIR) not in sys.path:
     sys.path.insert(0, str(PANEL_DIR))
 
+from services.module_transactions.cancel_channel import CancelListener  # noqa: E402
 from services.module_transactions.executor import OperationCancelled, recover, run_operation, wait_for_panel  # noqa: E402
 from services.module_transactions.journal import Journal  # noqa: E402
 from services.module_transactions.state import (  # noqa: E402
@@ -112,6 +114,7 @@ def _run(args, *, client_factory, architecture, on_step) -> int:
             },
         )
         return 1
+    listener: CancelListener | None = None
     try:
         journal.set_pid(os.getpid())
 
@@ -119,6 +122,24 @@ def _run(args, *, client_factory, architecture, on_step) -> int:
             raise OperationCancelled()
 
         signal.signal(signal.SIGTERM, cancel)
+
+        main_thread = threading.main_thread().ident
+
+        def interrupt() -> None:
+            # The panel asked to stop. The signal goes from this process to
+            # its own main thread, which wakes it out of a download as well.
+            if hasattr(signal, "pthread_kill") and main_thread is not None:
+                signal.pthread_kill(main_thread, signal.SIGTERM)
+            else:
+                signal.raise_signal(signal.SIGTERM)
+
+        listener = CancelListener(args.operation, interrupt)
+        try:
+            journal.set_cancel_channel(listener.start())
+        except OSError:
+            # Without a listener the operation cannot be cancelled from the
+            # panel; that is no reason not to carry it out.
+            listener = None
 
         restart_cmd = [str(part) for part in (meta.get("restart_cmd") or [])]
         health_url = str(meta.get("health_url") or "")
@@ -165,6 +186,8 @@ def _run(args, *, client_factory, architecture, on_step) -> int:
             panel_archive_cache=Path(args.archive_cache) if args.archive_cache else None,
         )
     finally:
+        if listener is not None:
+            listener.close()
         release_lock(lock_file, owner_pid=os.getpid())
     return 0 if result in ("committed", "rolled_back") else 1
 

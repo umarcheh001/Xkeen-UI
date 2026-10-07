@@ -8,7 +8,6 @@ then reads its status file.
 from __future__ import annotations
 
 import os
-import signal
 import subprocess
 import sys
 import threading
@@ -23,6 +22,7 @@ from services.self_update.state import (
     try_acquire_lock,
 )
 
+from .cancel_channel import send_cancel
 from .executor import recover
 from .journal import Journal
 from .plan import Plan
@@ -61,59 +61,13 @@ def ensure_idle(
         raise ModuleTransactionError("operation_in_progress", "the panel is being updated")
 
 
-def _read_proc_cmdline(pid: int) -> tuple[str, ...]:
-    """Read a Linux process command line without guessing on failure."""
+def request_cancel(panel_root: Path, state_dir: Path, operation_id: str) -> None:
+    """Ask the live runner of an operation to cancel itself.
 
-    try:
-        raw = Path(f"/proc/{int(pid)}/cmdline").read_bytes()
-    except (OSError, TypeError, ValueError):
-        return ()
-    return tuple(
-        part.decode("utf-8", errors="surrogateescape")
-        for part in raw.split(b"\0")
-        if part
-    )
-
-
-def _is_expected_runner(argv: Sequence[str], operation_id: str) -> bool:
-    names = [Path(part).name for part in argv]
-    try:
-        operation_index = argv.index("--operation")
-    except ValueError:
-        return False
-    return (
-        "module_transaction.py" in names
-        and "run" in argv
-        and operation_index + 1 < len(argv)
-        and argv[operation_index + 1] == operation_id
-    )
-
-
-def _open_pidfd(pid: int) -> int | None:
-    opener = getattr(os, "pidfd_open", None)
-    sender = getattr(signal, "pidfd_send_signal", None)
-    if not callable(opener) or not callable(sender):
-        return None
-    return opener(pid, 0)
-
-
-def _signal_pidfd(fd: int, sig: int) -> None:
-    signal.pidfd_send_signal(fd, sig, None, 0)
-
-
-def request_cancel(
-    panel_root: Path,
-    state_dir: Path,
-    operation_id: str,
-    *,
-    terminate: Callable[[int, int], None] = os.kill,
-    read_cmdline: Callable[[int], tuple[str, ...]] = _read_proc_cmdline,
-    platform_name: str = os.name,
-    open_process: Callable[[int], int | None] = _open_pidfd,
-    signal_process: Callable[[int, int], None] = _signal_pidfd,
-    close_process: Callable[[int], None] = os.close,
-) -> None:
-    """Ask the exact live runner for an operation to cancel itself."""
+    The request goes to the address the runner recorded when it started; the
+    runner interrupts itself. No signal is sent by process id, so there is
+    no other process it could reach by mistake.
+    """
 
     operation_dir = Journal.find(Path(panel_root))
     if operation_dir is None:
@@ -129,45 +83,21 @@ def request_cancel(
     if status.get("result") != "running" or not journal.runner_alive():
         raise ModuleTransactionError("operation_not_running", "the module operation is not running")
 
-    pid = meta.get("pid")
-    if isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0:
-        raise ModuleTransactionError("operation_not_running", "the module operation is not running")
-    process_fd: int | None = None
     try:
-        if platform_name != "nt":
-            process_fd = open_process(pid)
-            if process_fd is None:
-                raise ModuleTransactionError(
-                    "operation_process_mismatch",
-                    "the module operation runner identity cannot be pinned",
-                )
-        argv = read_cmdline(pid)
-        if argv:
-            if not _is_expected_runner(argv, operation_id):
-                raise ModuleTransactionError(
-                    "operation_process_mismatch",
-                    "the recorded process is not the module operation runner",
-                )
-        elif platform_name != "nt":
-            raise ModuleTransactionError(
-                "operation_process_mismatch",
-                "the module operation runner identity cannot be verified",
-            )
-        if process_fd is not None:
-            signal_process(process_fd, signal.SIGTERM)
-        else:
-            terminate(pid, signal.SIGTERM)
-    except ProcessLookupError as error:
+        accepted = send_cancel(meta.get("cancel"), operation_id)
+    except ConnectionRefusedError as error:
+        # The runner finished between the look at its record and the request.
         raise ModuleTransactionError(
             "operation_not_running", "the module operation is not running"
         ) from error
-    except OSError as error:
+    except (OSError, ValueError) as error:
         raise ModuleTransactionError(
             "operation_cancel_failed", "the module operation could not be cancelled"
         ) from error
-    finally:
-        if process_fd is not None:
-            close_process(process_fd)
+    if not accepted:
+        raise ModuleTransactionError(
+            "operation_cancel_failed", "the module operation could not be cancelled"
+        )
 
 
 def ensure_restartable(panel_root: Path, state_dir: Path) -> None:
