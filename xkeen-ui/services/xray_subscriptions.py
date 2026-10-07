@@ -33,6 +33,10 @@ from services import xray_subscription_displacement as displacement
 from services import xray_transactions
 from services.io.atomic import _atomic_write_json, _atomic_write_text
 from services.subscription_schedule import plan_alignment
+from services.subscription_request_profile import (
+    normalize_request_profile,
+    request_headers_for_profile,
+)
 from services.url_policy import URLPolicy, env_flag, is_url_allowed
 from services.xray_config_files import OUTBOUNDS_FILE, ROUTING_FILE, ensure_xray_jsonc_dir, jsonc_path_for
 from services.xray_outbounds import (
@@ -800,6 +804,7 @@ def _normalize_state(obj: Any) -> Dict[str, Any]:
         name_filter = _stored_filter_value(item, NAME_FILTER_KEYS)
         type_filter = _stored_filter_value(item, TYPE_FILTER_KEYS)
         transport_filter = _stored_filter_value(item, TRANSPORT_FILTER_KEYS)
+        request_profile = normalize_request_profile(item.get("request_profile"))
         excluded_node_keys = _read_string_list_value(item, EXCLUDED_NODE_KEYS_KEYS)
         last_warnings = _read_string_list_value(item, LAST_WARNINGS_KEYS)
         ping_enabled = bool(item.get("ping_enabled", item.get("pingEnabled", True)))
@@ -853,6 +858,7 @@ def _normalize_state(obj: Any) -> Dict[str, Any]:
                 "name_filter": name_filter,
                 "type_filter": type_filter,
                 "transport_filter": transport_filter,
+                "request_profile": request_profile,
                 "excluded_node_keys": excluded_node_keys,
                 "enabled": bool(item.get("enabled", True)),
                 "paused": bool(item.get("paused", False)),
@@ -943,6 +949,9 @@ def upsert_subscription(ui_state_dir: str, payload: Dict[str, Any]) -> Dict[str,
         name_filter_raw = _read_filter_value(data, NAME_FILTER_KEYS)
         type_filter_raw = _read_filter_value(data, TYPE_FILTER_KEYS)
         transport_filter_raw = _read_filter_value(data, TRANSPORT_FILTER_KEYS)
+        request_profile = normalize_request_profile(
+            data.get("request_profile", base.get("request_profile"))
+        )
         excluded_node_keys = (
             _read_string_list_value(data, EXCLUDED_NODE_KEYS_KEYS)
             if _has_any_key(data, EXCLUDED_NODE_KEYS_KEYS)
@@ -1008,6 +1017,7 @@ def upsert_subscription(ui_state_dir: str, payload: Dict[str, Any]) -> Dict[str,
                 "name_filter": name_filter,
                 "type_filter": type_filter,
                 "transport_filter": transport_filter,
+                "request_profile": request_profile,
                 "excluded_node_keys": excluded_node_keys,
                 "enabled": bool(data.get("enabled", base.get("enabled", True))),
                 # The pause is one switch for all of them: a subscription added
@@ -1854,11 +1864,10 @@ def _subscription_request_variants() -> List[Tuple[str, Dict[str, str], str]]:
         device_info = get_device_info()
     except Exception:
         device_info = {}
-    request_headers = device_info.get("headers") if isinstance(device_info, dict) else {}
-    normalized_headers = (
-        {str(k): str(v) for k, v in request_headers.items() if str(k or "").strip()}
-        if isinstance(request_headers, dict)
-        else {}
+    from services.subscription_request_profile import detected_xray_request_profile
+
+    normalized_headers = request_headers_for_profile(
+        detected_xray_request_profile(device_info if isinstance(device_info, dict) else {})
     )
     has_hwid = any(
         str(key or "").strip().lower() == "x-hwid" and str(value or "").strip()
@@ -1936,7 +1945,11 @@ def _try_subscription_request_variants(
     return None, errors
 
 
-def fetch_subscription_body_for_xray(url: str) -> Tuple[str, Dict[str, str], Dict[str, Any]]:
+def fetch_subscription_body_for_xray(
+    url: str,
+    *,
+    request_profile: Dict[str, Any] | None = None,
+) -> Tuple[str, Dict[str, str], Dict[str, Any]]:
     """Fetch subscription text, retrying with HWID headers when needed.
 
     Some Remnawave/Happ providers return an empty provider, loopback placeholder
@@ -1946,6 +1959,24 @@ def fetch_subscription_body_for_xray(url: str) -> Tuple[str, Dict[str, str], Dic
     """
 
     url = happ_links.normalize_happ_deep_link(url)
+    profile = normalize_request_profile(request_profile)
+    profile_mode = profile["mode"]
+
+    if profile_mode in {"custom", "disabled"}:
+        selected_headers = (
+            request_headers_for_profile(profile) if profile_mode == "custom" else {}
+        )
+        body, headers = fetch_subscription_body(url, request_headers=selected_headers)
+        hwid_headers = _subscription_hwid_response_headers(headers)
+        warnings = _subscription_happ_resolution_warnings(headers)
+        warnings.extend(_subscription_hwid_warning_messages(hwid_headers))
+        return body, headers, {
+            "fetch_mode": profile_mode,
+            "hwid_response_headers": hwid_headers,
+            "hwid_limit_info": _subscription_hwid_limit_info(hwid_headers),
+            "warnings": warnings,
+        }
+
     direct_fetch_error: Exception | None = None
     body = ""
     headers: Dict[str, str] = {}
@@ -6245,7 +6276,14 @@ def preview_subscription(payload: Dict[str, Any]) -> Dict[str, Any]:
     _compile_regex_filter(type_filter, "фильтра типа")
     _compile_regex_filter(transport_filter, "фильтра транспорта")
 
-    body, headers, fetch_meta = fetch_subscription_body_for_xray(url)
+    request_profile = normalize_request_profile(data.get("request_profile"))
+    if request_profile["mode"] == "auto":
+        body, headers, fetch_meta = fetch_subscription_body_for_xray(url)
+    else:
+        body, headers, fetch_meta = fetch_subscription_body_for_xray(
+            url,
+            request_profile=request_profile,
+        )
     links = parse_subscription_links(body)
     hwid_placeholder_links = _subscription_links_are_hwid_placeholders(links)
     unsupported_client_links = _subscription_links_are_unsupported_client_placeholders(links)
@@ -6364,7 +6402,14 @@ def refresh_subscription(
     fetch_meta: Dict[str, Any] = {}
 
     try:
-        body, headers, fetch_meta = fetch_subscription_body_for_xray(str(sub.get("url") or ""))
+        request_profile = normalize_request_profile(sub.get("request_profile"))
+        if request_profile["mode"] == "auto":
+            body, headers, fetch_meta = fetch_subscription_body_for_xray(str(sub.get("url") or ""))
+        else:
+            body, headers, fetch_meta = fetch_subscription_body_for_xray(
+                str(sub.get("url") or ""),
+                request_profile=request_profile,
+            )
         links = parse_subscription_links(body)
         placeholder_links = _subscription_links_are_hwid_placeholders(links)
         unsupported_client_links = _subscription_links_are_unsupported_client_placeholders(links)

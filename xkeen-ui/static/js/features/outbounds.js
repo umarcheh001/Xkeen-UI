@@ -4630,6 +4630,14 @@ let outboundsModuleApi = null;
       typeFilterNote: 'outbounds-subscriptions-type-filter-note',
       transportFilter: 'outbounds-subscriptions-transport-filter',
       transportFilterNote: 'outbounds-subscriptions-transport-filter-note',
+      requestProfileMode: 'outbounds-subscriptions-request-profile-mode',
+      requestHwid: 'outbounds-subscriptions-request-hwid',
+      requestUserAgent: 'outbounds-subscriptions-request-user-agent',
+      requestDeviceOs: 'outbounds-subscriptions-request-device-os',
+      requestOsVersion: 'outbounds-subscriptions-request-os-version',
+      requestDeviceModel: 'outbounds-subscriptions-request-device-model',
+      requestProfileReset: 'outbounds-subscriptions-request-profile-reset',
+      requestProfileStatus: 'outbounds-subscriptions-request-profile-status',
       routingMode: 'outbounds-subscriptions-routing-mode',
       routingAutoRule: 'outbounds-subscriptions-routing-auto-rule',
       poolWarning: 'outbounds-subscriptions-pool-warning',
@@ -4686,6 +4694,9 @@ let outboundsModuleApi = null;
     let _subscriptionCarriedSettings = false;
     let _subscriptionPreviewBusy = false;
     let _subscriptionSaveBusy = false;
+    let _subscriptionDetectedProfile = {
+      mode: 'auto', hwid: '', user_agent: '', device_os: '', os_version: '', device_model: '',
+    };
     const SUB_DEFAULT_INTERVAL_HOURS = 24;
     const SUB_TAG_PREFIX_MAX_LEN = 64;
     const SUB_RESERVED_TAGS = new Set([
@@ -5019,6 +5030,7 @@ let outboundsModuleApi = null;
         name_filter: String(($(SUB_IDS.nameFilter) && $(SUB_IDS.nameFilter).value) || '').trim(),
         type_filter: String(($(SUB_IDS.typeFilter) && $(SUB_IDS.typeFilter).value) || '').trim(),
         transport_filter: String(($(SUB_IDS.transportFilter) && $(SUB_IDS.transportFilter).value) || '').trim(),
+        request_profile: subsReadRequestProfile(),
         routing_mode: String(($(SUB_IDS.routingMode) && $(SUB_IDS.routingMode).value) || 'safe-fallback').trim() || 'safe-fallback',
         routing_auto_rule: !!($(SUB_IDS.routingAutoRule) && $(SUB_IDS.routingAutoRule).checked),
         sockopt_mark_255: isEntwareMarkEnabled(SUB_IDS.sockoptMark),
@@ -5028,6 +5040,128 @@ let outboundsModuleApi = null;
         enabled: !!($(SUB_IDS.enabled) && $(SUB_IDS.enabled).checked),
         ping_enabled: !!($(SUB_IDS.ping) && $(SUB_IDS.ping).checked),
       };
+    }
+
+    function subsNormalizeRequestProfile(raw) {
+      const source = raw && typeof raw === 'object' ? raw : {};
+      const rawMode = String(source.mode || 'auto').trim().toLowerCase();
+      const mode = ['auto', 'custom', 'disabled'].includes(rawMode) ? rawMode : 'auto';
+      return {
+        mode,
+        hwid: String(source.hwid || '').trim(),
+        user_agent: String(source.user_agent || '').trim(),
+        device_os: String(source.device_os || '').trim(),
+        os_version: String(source.os_version || '').trim(),
+        device_model: String(source.device_model || '').trim(),
+      };
+    }
+
+    function subsReadRequestProfile() {
+      const modeInput = $(SUB_IDS.requestProfileMode);
+      const modeRoot = modeInput && modeInput.parentElement;
+      const mode = String((modeRoot && modeRoot.dataset.requestProfileMode) || (modeInput && modeInput.value) || 'auto');
+      if (mode !== 'custom') return subsNormalizeRequestProfile({ mode });
+      return subsNormalizeRequestProfile({
+        mode,
+        hwid: String(($(SUB_IDS.requestHwid) && $(SUB_IDS.requestHwid).value) || ''),
+        user_agent: String(($(SUB_IDS.requestUserAgent) && $(SUB_IDS.requestUserAgent).value) || ''),
+        device_os: String(($(SUB_IDS.requestDeviceOs) && $(SUB_IDS.requestDeviceOs).value) || ''),
+        os_version: String(($(SUB_IDS.requestOsVersion) && $(SUB_IDS.requestOsVersion).value) || ''),
+        device_model: String(($(SUB_IDS.requestDeviceModel) && $(SUB_IDS.requestDeviceModel).value) || ''),
+      });
+    }
+
+    function subsWriteRequestProfile(raw) {
+      const profile = subsNormalizeRequestProfile(raw);
+      const display = profile.mode === 'auto'
+        ? subsNormalizeRequestProfile(Object.assign({}, _subscriptionDetectedProfile, { mode: 'auto' }))
+        : profile;
+      try {
+        const modeInput = $(SUB_IDS.requestProfileMode);
+        const modeRoot = modeInput && modeInput.parentElement;
+        if (modeRoot) modeRoot.dataset.requestProfileMode = profile.mode;
+        if (modeInput) modeInput.value = profile.mode;
+      } catch (e) {}
+      const values = {
+        [SUB_IDS.requestHwid]: display.hwid,
+        [SUB_IDS.requestUserAgent]: display.user_agent,
+        [SUB_IDS.requestDeviceOs]: display.device_os,
+        [SUB_IDS.requestOsVersion]: display.os_version,
+        [SUB_IDS.requestDeviceModel]: display.device_model,
+      };
+      Object.keys(values).forEach((id) => {
+        try { $(id).value = values[id]; } catch (e) {}
+      });
+      subsSyncRequestProfileControls(profile);
+    }
+
+    function subsSelectRequestProfileMode(rawMode) {
+      const nextMode = subsNormalizeRequestProfile({ mode: rawMode }).mode;
+      const current = subsReadRequestProfile();
+      if (nextMode === 'custom' && current.mode !== 'custom') {
+        subsWriteRequestProfile(Object.assign({}, _subscriptionDetectedProfile, { mode: 'custom' }));
+      } else {
+        try {
+          const modeInput = $(SUB_IDS.requestProfileMode);
+          const modeRoot = modeInput && modeInput.parentElement;
+          if (modeRoot) modeRoot.dataset.requestProfileMode = nextMode;
+          if (modeInput) modeInput.value = nextMode;
+        } catch (e) {}
+      }
+      subsClearPreview(true);
+      subsSyncSubscriptionFormState();
+    }
+
+    function subsSyncRequestProfileControls(profileValue) {
+      const profile = subsNormalizeRequestProfile(profileValue || subsReadRequestProfile());
+      const custom = profile.mode === 'custom';
+      const fields = [
+        SUB_IDS.requestHwid, SUB_IDS.requestUserAgent, SUB_IDS.requestDeviceOs,
+        SUB_IDS.requestOsVersion, SUB_IDS.requestDeviceModel,
+      ];
+      fields.forEach((id) => {
+        const el = $(id);
+        if (!el) return;
+        el.disabled = !custom;
+        el.readOnly = !custom;
+      });
+      const reset = $(SUB_IDS.requestProfileReset);
+      if (reset) reset.disabled = !custom;
+      const status = $(SUB_IDS.requestProfileStatus);
+      if (status) {
+        const saved = subsFindById(String(_subscriptionEditId || ''));
+        const previewMode = String((_subscriptionPreview && _subscriptionPreview.fetchMode) || '').trim();
+        const lastMode = previewMode || String((saved && saved.last_fetch_mode) || '').trim();
+        let text = profile.mode === 'auto'
+          ? 'Сначала обычный запрос; профиль роутера отправится только при HWID-блокировке.'
+          : (profile.mode === 'custom'
+            ? 'Эти значения отправляются при каждом скачивании подписки.'
+            : 'Заголовки устройства и автоматический HWID fallback отключены.');
+        if (lastMode) text += ` Последний запрос: ${lastMode}.`;
+        status.textContent = text;
+      }
+      const modeRoot = $(SUB_IDS.requestProfileMode) && $(SUB_IDS.requestProfileMode).parentElement;
+      if (modeRoot && modeRoot.querySelectorAll) {
+        Array.from(modeRoot.querySelectorAll('[data-request-profile-mode]')).forEach((button) => {
+          const active = String(button.getAttribute('data-request-profile-mode') || '') === profile.mode;
+          button.classList.toggle('is-active', active);
+          button.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+      }
+    }
+
+    async function subsLoadDetectedRequestProfile() {
+      try {
+        const res = await fetch('/api/xray/subscriptions/request-profile', { cache: 'no-store' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data || data.ok === false) return false;
+        _subscriptionDetectedProfile = subsNormalizeRequestProfile(data.profile);
+        const current = subsReadRequestProfile();
+        if (current.mode === 'auto') subsWriteRequestProfile(Object.assign({}, _subscriptionDetectedProfile, { mode: 'auto' }));
+        return true;
+      } catch (e) {
+        return false;
+      }
     }
 
     function normalizeHappDeepLink(value) {
@@ -5072,6 +5206,7 @@ let outboundsModuleApi = null;
         name_filter: String(state.name_filter || '').trim(),
         type_filter: String(state.type_filter || '').trim(),
         transport_filter: String(state.transport_filter || '').trim(),
+        request_profile: subsNormalizeRequestProfile(state.request_profile),
         routing_mode: String(state.routing_mode || 'safe-fallback').trim() || 'safe-fallback',
         routing_auto_rule: !!state.routing_auto_rule,
         sockopt_mark_255: !!state.sockopt_mark_255,
@@ -5404,6 +5539,7 @@ let outboundsModuleApi = null;
 
       const pingEl = $(SUB_IDS.ping);
       if (pingEl) pingEl.disabled = subsPingLocked(formState);
+      try { subsSyncRequestProfileControls(formState.request_profile); } catch (eProfile) {}
       subsSetFieldNote(
         SUB_IDS.poolWarning,
         subsPoolWithoutPing(formState)
@@ -5420,6 +5556,7 @@ let outboundsModuleApi = null;
           formState.name_filter,
           formState.type_filter,
           formState.transport_filter,
+          formState.request_profile && formState.request_profile.mode !== 'auto' ? formState.request_profile.mode : '',
           ...(Array.isArray(formState.routing_balancer_tags) ? formState.routing_balancer_tags : []),
         ].filter((value) => String(value || '').trim()).length;
         const summary = advanced.querySelector('.xk-sub-advanced-summary');
@@ -5502,6 +5639,7 @@ let outboundsModuleApi = null;
       try { $(SUB_IDS.nameFilter).value = String((baseline && baseline.name_filter) || ''); } catch (e) {}
       try { $(SUB_IDS.typeFilter).value = String((baseline && baseline.type_filter) || ''); } catch (e) {}
       try { $(SUB_IDS.transportFilter).value = String((baseline && baseline.transport_filter) || ''); } catch (e) {}
+      try { subsWriteRequestProfile(baseline && baseline.request_profile); } catch (e) {}
       subsSetExcludedKeysValue(Array.isArray(baseline && baseline.excluded_node_keys) ? baseline.excluded_node_keys : []);
       try { $(SUB_IDS.interval).value = String((baseline && baseline.interval_raw) || SUB_DEFAULT_INTERVAL_HOURS); } catch (e) {}
       try { $(SUB_IDS.enabled).checked = baseline ? !!baseline.enabled : true; } catch (e) {}
@@ -5536,6 +5674,7 @@ let outboundsModuleApi = null;
         name_filter: state.name_filter,
         type_filter: state.type_filter,
         transport_filter: state.transport_filter,
+        request_profile: state.request_profile,
         routing_mode: state.routing_mode,
         routing_auto_rule: !!state.routing_auto_rule,
         sockopt_mark_255: !!state.sockopt_mark_255,
@@ -5702,6 +5841,34 @@ let outboundsModuleApi = null;
                       <span class="xk-sub-field-hint">Рег. выражение; пусто — все.</span>
                       <span id="outbounds-subscriptions-transport-filter-note" class="xk-sub-field-note" hidden></span>
                     </label>
+                    <details class="xk-sub-request-profile xk-sub-wide">
+                      <summary class="xk-sub-request-profile-head">
+                        <span class="xk-sub-request-profile-copy">
+                          <span id="outbounds-subscriptions-request-profile-title" class="xk-pool-fieldlabel">Профиль запроса</span>
+                          <span class="xk-sub-field-hint">HWID и данные клиента отправляются провайдеру при скачивании подписки.</span>
+                        </span>
+                        <button type="button" id="outbounds-subscriptions-request-profile-reset" class="btn-secondary btn-compact xk-sub-icon-btn" title="Подставить профиль роутера" data-tooltip="Заменить пользовательские значения текущим профилем роутера.">${iconHtml('refresh')}</button>
+                      </summary>
+                      <div class="xk-sub-request-profile-body">
+                      <div class="xk-sub-request-mode-field">
+                        <span class="xk-pool-fieldlabel">Режим</span>
+                        <input id="outbounds-subscriptions-request-profile-mode" type="hidden" value="auto">
+                        <div class="xk-sub-request-mode" role="group" aria-label="Режим профиля запроса">
+                          <button type="button" data-request-profile-mode="auto">Авто</button>
+                          <button type="button" data-request-profile-mode="custom">Свой профиль</button>
+                          <button type="button" data-request-profile-mode="disabled">Не отправлять</button>
+                        </div>
+                      </div>
+                      <div class="xk-sub-request-fields">
+                        <label><span class="xk-pool-fieldlabel">HWID</span><input id="outbounds-subscriptions-request-hwid" class="xray-log-filter" type="text" autocomplete="off" maxlength="128"></label>
+                        <label class="xk-sub-request-ua"><span class="xk-pool-fieldlabel">User-Agent</span><input id="outbounds-subscriptions-request-user-agent" class="xray-log-filter" type="text" autocomplete="off" maxlength="256"></label>
+                        <label><span class="xk-pool-fieldlabel">Платформа</span><input id="outbounds-subscriptions-request-device-os" class="xray-log-filter" type="text" autocomplete="off" maxlength="256"></label>
+                        <label><span class="xk-pool-fieldlabel">Версия OS</span><input id="outbounds-subscriptions-request-os-version" class="xray-log-filter" type="text" autocomplete="off" maxlength="256"></label>
+                        <label><span class="xk-pool-fieldlabel">Модель</span><input id="outbounds-subscriptions-request-device-model" class="xray-log-filter" type="text" autocomplete="off" maxlength="256"></label>
+                      </div>
+                      <div id="outbounds-subscriptions-request-profile-status" class="xk-sub-request-profile-status" role="status"></div>
+                      </div>
+                    </details>
                     <div class="xk-sub-controls">
                       <label class="dt-switch xk-sub-check" aria-label="Автообновление" data-tooltip="Включить плановое автообновление этой подписки."><input id="outbounds-subscriptions-enabled" type="checkbox" checked title="Автообновление" aria-label="Автообновление" data-tooltip="Включить плановое автообновление этой подписки."><span class="dt-switch-slider" aria-hidden="true"></span><span class="xk-sub-switch-label">Автообн.</span></label>
                       <label class="dt-switch xk-sub-check" aria-label="Замер" data-tooltip-multiline data-tooltip="Фоновая проверка скорости узлов&#10;Xray сам, раз в заданный интервал, проверяет задержку каждого узла этой подписки.&#10;Нужно, чтобы балансировщики (служебный пул и отмеченные ниже) выбирали самый быстрый узел. Без замеров им не по чему выбирать.&#10;Выключить можно, если узлы подписки используются только напрямую по тегу. На кнопку «Пинг всех узлов» это не влияет."><input id="outbounds-subscriptions-ping" type="checkbox" checked title="Замер" aria-label="Замер" data-tooltip-multiline data-tooltip="Фоновая проверка скорости узлов&#10;Xray сам, раз в заданный интервал, проверяет задержку каждого узла этой подписки.&#10;Нужно, чтобы балансировщики (служебный пул и отмеченные ниже) выбирали самый быстрый узел. Без замеров им не по чему выбирать.&#10;Выключить можно, если узлы подписки используются только напрямую по тегу. На кнопку «Пинг всех узлов» это не влияет."><span class="dt-switch-slider" aria-hidden="true"></span><span class="xk-sub-switch-label">Замер</span></label>
@@ -6923,6 +7090,10 @@ let outboundsModuleApi = null;
       _subscriptionPreview = null;
       _subscriptionShowHidden = false;
       _subscriptionCarriedSettings = false;
+      try {
+        const requestProfile = $(SUB_IDS.requestProfileReset) && $(SUB_IDS.requestProfileReset).closest('details');
+        if (requestProfile) requestProfile.open = false;
+      } catch (e) {}
       try { $(SUB_IDS.id).value = ''; } catch (e) {}
       try { $(SUB_IDS.name).value = ''; } catch (e) {}
       try { $(SUB_IDS.tag).value = ''; } catch (e) {}
@@ -6930,6 +7101,7 @@ let outboundsModuleApi = null;
       try { $(SUB_IDS.nameFilter).value = ''; } catch (e) {}
       try { $(SUB_IDS.typeFilter).value = ''; } catch (e) {}
       try { $(SUB_IDS.transportFilter).value = ''; } catch (e) {}
+      try { subsWriteRequestProfile(Object.assign({}, _subscriptionDetectedProfile, { mode: 'auto' })); } catch (e) {}
       subsSetExcludedKeysValue([]);
       try { $(SUB_IDS.interval).value = String(SUB_DEFAULT_INTERVAL_HOURS); } catch (e) {}
       try { $(SUB_IDS.enabled).checked = true; } catch (e) {}
@@ -6957,6 +7129,10 @@ let outboundsModuleApi = null;
         _subscriptionShowHidden = false;
       }
       _subscriptionCarriedSettings = false;
+      try {
+        const requestProfile = $(SUB_IDS.requestProfileReset) && $(SUB_IDS.requestProfileReset).closest('details');
+        if (requestProfile) requestProfile.open = false;
+      } catch (e) {}
       _subscriptionEditId = nextId;
       try { $(SUB_IDS.id).value = _subscriptionEditId; } catch (e) {}
       try { $(SUB_IDS.name).value = String(s.name || ''); } catch (e) {}
@@ -6965,6 +7141,7 @@ let outboundsModuleApi = null;
       try { $(SUB_IDS.nameFilter).value = String(s.name_filter || ''); } catch (e) {}
       try { $(SUB_IDS.typeFilter).value = String(s.type_filter || ''); } catch (e) {}
       try { $(SUB_IDS.transportFilter).value = String(s.transport_filter || ''); } catch (e) {}
+      try { subsWriteRequestProfile(s.request_profile || { mode: 'auto' }); } catch (e) {}
       subsSetExcludedKeysValue(Array.isArray(s.excluded_node_keys) ? s.excluded_node_keys : []);
       try { $(SUB_IDS.interval).value = String(s.interval_hours || SUB_DEFAULT_INTERVAL_HOURS); } catch (e) {}
       try { $(SUB_IDS.enabled).checked = s.enabled !== false; } catch (e) {}
@@ -7830,6 +8007,7 @@ let outboundsModuleApi = null;
         name_filter: formState.name_filter,
         type_filter: formState.type_filter,
         transport_filter: formState.transport_filter,
+        request_profile: formState.request_profile,
         excluded_node_keys: formState.excluded_node_keys.slice(),
       };
       _subscriptionPreviewBusy = true;
@@ -8886,6 +9064,7 @@ let outboundsModuleApi = null;
       try { subsResetForm(); } catch (e) {}
       subsShow(true);
       subsSetStatus('', false);
+      await subsLoadDetectedRequestProfile();
       await subsLoad();
       try { subsSyncSubscriptionFormState(); } catch (e) {}
       try { $(SUB_IDS.url).focus(); } catch (e) {}
@@ -8956,6 +9135,22 @@ let outboundsModuleApi = null;
       });
       wireEntwareMarkButton(SUB_IDS.sockoptMark, () => {
         try { subsSyncSubscriptionFormState(); } catch (e) {}
+      });
+      const requestModeRoot = $(SUB_IDS.requestProfileMode) && $(SUB_IDS.requestProfileMode).parentElement;
+      if (requestModeRoot && requestModeRoot.querySelectorAll) {
+        Array.from(requestModeRoot.querySelectorAll('[data-request-profile-mode]')).forEach((button) => {
+          if (button.dataset.xkSubRequestModeBound === '1') return;
+          button.dataset.xkSubRequestModeBound = '1';
+          button.addEventListener('click', () => {
+            const nextMode = String(button.getAttribute('data-request-profile-mode') || 'auto');
+            subsSelectRequestProfileMode(nextMode);
+          });
+        });
+      }
+      wireButton(SUB_IDS.requestProfileReset, () => {
+        subsWriteRequestProfile(Object.assign({}, _subscriptionDetectedProfile, { mode: 'custom' }));
+        subsClearPreview(true);
+        subsSyncSubscriptionFormState();
       });
 
       const form = $(SUB_IDS.form);
@@ -9034,6 +9229,18 @@ let outboundsModuleApi = null;
           try { subsRenderNodeList(); } catch (e) {}
         });
         if (el.dataset) el.dataset.xkSubFilterBound = '1';
+      });
+      [
+        SUB_IDS.requestHwid, SUB_IDS.requestUserAgent, SUB_IDS.requestDeviceOs,
+        SUB_IDS.requestOsVersion, SUB_IDS.requestDeviceModel,
+      ].forEach((id) => {
+        const el = $(id);
+        if (!el || (el.dataset && el.dataset.xkSubRequestFieldBound === '1')) return;
+        el.addEventListener('input', () => {
+          subsClearPreview(true);
+          subsSyncSubscriptionFormState();
+        });
+        if (el.dataset) el.dataset.xkSubRequestFieldBound = '1';
       });
       const intervalApplyBtn = $(SUB_IDS.intervalApply);
       if (intervalApplyBtn && !(intervalApplyBtn.dataset && intervalApplyBtn.dataset.xkSubApplyBound === '1')) {

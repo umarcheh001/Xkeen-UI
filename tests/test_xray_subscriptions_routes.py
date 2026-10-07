@@ -86,3 +86,44 @@ def test_preview_reports_provider_placeholder_instead_of_internal_error(monkeypa
     assert payload["ok"] is False
     assert payload["code"] == "subscription_placeholder"
     assert payload["error"] == str(SubscriptionPlaceholderError("unsupported-client"))
+
+
+def test_detected_request_profile_endpoint_returns_editable_fields(monkeypatch):
+    from routes import xray_subscriptions as routes
+
+    monkeypatch.setattr(
+        routes,
+        "detected_xray_request_profile",
+        lambda: {
+            "mode": "auto",
+            "hwid": "ROUTER",
+            "user_agent": "Xray/26.3.27",
+            "device_os": "Keenetic OS",
+            "os_version": "5.0",
+            "device_model": "KN",
+        },
+    )
+    client = _client(monkeypatch, lambda *_args, **_kwargs: {})
+
+    response = client.get("/api/xray/subscriptions/request-profile")
+
+    assert response.status_code == 200
+    assert response.get_json()["profile"]["hwid"] == "ROUTER"
+    assert response.get_json()["profile"]["user_agent"] == "Xray/26.3.27"
+
+
+def test_preview_rejects_invalid_request_profile_without_echoing_value(monkeypatch):
+    client = _client(monkeypatch, lambda *_args, **_kwargs: {})
+
+    response = client.post(
+        "/api/xray/subscriptions/preview",
+        json={
+            "url": "https://example.test/sub",
+            "request_profile": {"mode": "custom", "hwid": "secret\nInjected"},
+        },
+    )
+
+    assert response.status_code == 400
+    text = response.get_data(as_text=True)
+    assert "request_profile.hwid" in text
+    assert "secret" not in text

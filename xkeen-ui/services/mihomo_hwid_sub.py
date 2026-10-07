@@ -483,14 +483,24 @@ def get_device_info() -> Dict[str, Any]:
         has_env_override and mac_hwid and hwid and hwid != mac_hwid
     )
 
-    headers: Dict[str, str] = {
-        # Upstream expects HWID without separators and in uppercase.
-        "x-hwid": hwid,
-        "x-device-os": "Keenetic OS",
-        "x-ver-os": os_release or "",
-        "x-device-model": device_model or "Keenetic",
-        "User-Agent": ua,
-    }
+    from services.subscription_request_profile import (
+        detected_request_profile,
+        request_headers_for_profile,
+    )
+
+    headers: Dict[str, str] = request_headers_for_profile(
+        detected_request_profile(
+            {
+                "hwid": hwid,
+                "user_agent": ua,
+                "headers": {
+                    "x-device-os": "Keenetic OS",
+                    "x-ver-os": os_release or "",
+                    "x-device-model": device_model or "Keenetic",
+                },
+            }
+        )
+    )
 
     hwid_env_hint = (
         "Если нужно отправлять уже привязанный или ожидаемый провайдером HWID, "

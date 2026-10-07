@@ -354,7 +354,7 @@ def test_fetch_subscription_body_for_xray_retries_raw_happ_with_happ_hwid_after_
         calls.append(headers)
         if not headers:
             raise urllib.error.HTTPError(url, 502, "Bad Gateway", hdrs=None, fp=None)
-        if headers.get("User-Agent") == "router":
+        if str(headers.get("User-Agent") or "").startswith("Xray"):
             raise urllib.error.HTTPError(url, 502, "Bad Gateway", hdrs=None, fp=None)
         return (
             _vless("Recovered"),
@@ -381,7 +381,7 @@ def test_fetch_subscription_body_for_xray_retries_raw_happ_with_happ_hwid_after_
     assert any("Happ User-Agent" in line for line in meta["warnings"])
     assert calls == [
         {},
-        {"x-hwid": "hwid-demo", "User-Agent": "router"},
+        {"x-hwid": "hwid-demo", "User-Agent": "Xray"},
         {"x-hwid": "hwid-demo", "User-Agent": "Happ/3.18.3/Android/test-hwid"},
     ]
 
@@ -441,7 +441,7 @@ def test_fetch_subscription_body_for_xray_retries_unsupported_client_placeholder
     assert meta["fetch_mode"] == "hwid"
     assert calls == [
         {},
-        {"x-hwid": "hwid-demo", "User-Agent": "ClashMeta/1.19.24"},
+        {"x-hwid": "hwid-demo", "User-Agent": "Xray"},
     ]
 
 

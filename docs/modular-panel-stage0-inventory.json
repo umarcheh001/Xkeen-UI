@@ -36,13 +36,13 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 507,
-      "size_bytes": 6947793,
+      "unit_count": 509,
+      "size_bytes": 6960572,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
-        "backend_service": 73,
-        "backend_test": 228,
+        "backend_service": 74,
+        "backend_test": 229,
         "configuration": 10,
         "frontend_bundle": 9,
         "frontend_entrypoint": 2,
@@ -85,12 +85,12 @@
         "xray"
       ],
       "removable": true,
-      "unit_count": 134,
-      "size_bytes": 3770695,
+      "unit_count": 135,
+      "size_bytes": 3794221,
       "kind_counts": {
         "backend_route": 13,
         "backend_service": 20,
-        "backend_test": 44,
+        "backend_test": 45,
         "configuration": 4,
         "editor_schema": 4,
         "frontend_feature": 35,
@@ -98,7 +98,7 @@
         "frontend_ui": 1,
         "template": 4
       },
-      "route_count": 60,
+      "route_count": 61,
       "background_task_count": 3,
       "ui_surface_count": 14,
       "representative_paths": [
@@ -326,7 +326,7 @@
       ],
       "removable": true,
       "unit_count": 22,
-      "size_bytes": 313887,
+      "size_bytes": 314149,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 6,
@@ -2619,6 +2619,26 @@
       "path": "xkeen-ui/services/subscription_pause.py",
       "size_bytes": 25075,
       "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_service",
+      "path": "xkeen-ui/services/subscription_request_profile.py",
+      "size_bytes": 6064,
+      "depends_on": [
+        "integration.happ"
+      ],
       "starts_background_task": false,
       "background_markers": [],
       "registers_routes": false,
@@ -6796,6 +6816,24 @@
     {
       "module_id": "core",
       "kind": "backend_test",
+      "path": "tests/test_subscription_request_profile.py",
+      "size_bytes": 3228,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
       "path": "tests/test_subscription_schedule_alignment.py",
       "size_bytes": 7330,
       "depends_on": [],
@@ -10813,7 +10851,7 @@
       "module_id": "core",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/panel-operator.css",
-      "size_bytes": 739898,
+      "size_bytes": 743385,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -15353,7 +15391,7 @@
       "module_id": "engine.xray",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/xray_subscriptions.py",
-      "size_bytes": 17828,
+      "size_bytes": 18913,
       "depends_on": [
         "core",
         "tool.editor"
@@ -15380,6 +15418,11 @@
         {
           "method": "GET",
           "path": "/api/xray/subscriptions/pause-plan",
+          "decorator": "bp.get"
+        },
+        {
+          "method": "GET",
+          "path": "/api/xray/subscriptions/request-profile",
           "decorator": "bp.get"
         },
         {
@@ -15850,7 +15893,7 @@
       "module_id": "engine.xray",
       "kind": "backend_service",
       "path": "xkeen-ui/services/xray_subscriptions.py",
-      "size_bytes": 326208,
+      "size_bytes": 328080,
       "depends_on": [
         "core",
         "tool.editor",
@@ -16679,7 +16722,28 @@
       "module_id": "engine.xray",
       "kind": "backend_test",
       "path": "tests/test_xray_subscription_filters_contract.py",
-      "size_bytes": 43021,
+      "size_bytes": 45253,
+      "depends_on": [
+        "core",
+        "tool.editor"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "xkeen",
+        "xray"
+      ],
+      "environment_variables": [],
+      "removable": true
+    },
+    {
+      "module_id": "engine.xray",
+      "kind": "backend_test",
+      "path": "tests/test_xray_subscription_request_profiles.py",
+      "size_bytes": 4539,
       "depends_on": [
         "core",
         "tool.editor"
@@ -16700,7 +16764,7 @@
       "module_id": "engine.xray",
       "kind": "backend_test",
       "path": "tests/test_xray_subscriptions.py",
-      "size_bytes": 253248,
+      "size_bytes": 253251,
       "depends_on": [
         "core",
         "tool.editor"
@@ -16838,7 +16902,7 @@
       "module_id": "engine.xray",
       "kind": "backend_test",
       "path": "tests/test_xray_subscriptions_routes.py",
-      "size_bytes": 2712,
+      "size_bytes": 4020,
       "depends_on": [
         "core",
         "tool.editor"
@@ -17077,7 +17141,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/outbounds.js",
-      "size_bytes": 446789,
+      "size_bytes": 459276,
       "depends_on": [
         "core",
         "tool.editor",
@@ -18517,7 +18581,7 @@
       "module_id": "integration.happ",
       "kind": "backend_service",
       "path": "xkeen-ui/services/mihomo_hwid_sub.py",
-      "size_bytes": 68929,
+      "size_bytes": 69191,
       "depends_on": [
         "core",
         "engine.xray",
@@ -24345,7 +24409,7 @@
     }
   ],
   "routes": {
-    "endpoint_count": 328,
+    "endpoint_count": 329,
     "files_with_routes": 54,
     "endpoint_files": [
       {
@@ -25763,6 +25827,11 @@
           {
             "method": "GET",
             "path": "/api/xray/subscriptions/pause-plan",
+            "decorator": "bp.get"
+          },
+          {
+            "method": "GET",
+            "path": "/api/xray/subscriptions/request-profile",
             "decorator": "bp.get"
           },
           {
@@ -28803,9 +28872,10 @@
       {
         "from": "core",
         "to": "integration.happ",
-        "unit_count": 5,
+        "unit_count": 6,
         "examples": [
           "xkeen-ui/routes/__init__.py",
+          "xkeen-ui/services/subscription_request_profile.py",
           "tests/test_check_keys_upstream.py",
           "tests/test_module_backend_gates.py",
           "xkeen-ui/static/js/features/index.js",
@@ -28969,7 +29039,7 @@
       {
         "from": "engine.xray",
         "to": "core",
-        "unit_count": 134,
+        "unit_count": 135,
         "examples": [
           "xkeen-ui/routes/routing/__init__.py",
           "xkeen-ui/routes/routing/blueprint.py",
@@ -29010,7 +29080,7 @@
       {
         "from": "engine.xray",
         "to": "tool.editor",
-        "unit_count": 134,
+        "unit_count": 135,
         "examples": [
           "xkeen-ui/routes/routing/__init__.py",
           "xkeen-ui/routes/routing/blueprint.py",
@@ -29286,9 +29356,10 @@
       {
         "from": "core",
         "to": "integration.happ",
-        "unit_count": 3,
+        "unit_count": 4,
         "examples": [
           "xkeen-ui/routes/__init__.py",
+          "xkeen-ui/services/subscription_request_profile.py",
           "xkeen-ui/static/js/features/index.js",
           "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js"
         ]
@@ -29760,9 +29831,10 @@
       {
         "from": "core",
         "to": "integration.happ",
-        "unit_count": 3,
+        "unit_count": 4,
         "examples": [
           "xkeen-ui/routes/__init__.py",
+          "xkeen-ui/services/subscription_request_profile.py",
           "xkeen-ui/static/js/features/index.js",
           "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js"
         ]
@@ -29872,9 +29944,10 @@
       {
         "from": "core",
         "to": "integration.happ",
-        "unit_count": 5,
+        "unit_count": 6,
         "examples": [
           "xkeen-ui/routes/__init__.py",
+          "xkeen-ui/services/subscription_request_profile.py",
           "tests/test_check_keys_upstream.py",
           "tests/test_module_backend_gates.py",
           "xkeen-ui/static/js/features/index.js",
@@ -30053,9 +30126,10 @@
         {
           "from": "core",
           "to": "integration.happ",
-          "unit_count": 3,
+          "unit_count": 4,
           "examples": [
             "xkeen-ui/routes/__init__.py",
+            "xkeen-ui/services/subscription_request_profile.py",
             "xkeen-ui/static/js/features/index.js",
             "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js"
           ]
