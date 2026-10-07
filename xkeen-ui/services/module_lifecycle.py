@@ -269,6 +269,7 @@ class ModuleLifecycleService:
         self._cancel_operation = cancel_operation
         self._ensure_restartable = ensure_restartable_operation
         self._archive_cache_dir = None if archive_cache_dir is None else Path(archive_cache_dir)
+        self._archive_listing: tuple[tuple[Any, ...], dict[str, Any]] | None = None
 
     @property
     def archive_cache_dir(self) -> Path:
@@ -324,11 +325,29 @@ class ModuleLifecycleService:
         while True:
             archive, fresh = self._panel_archive(client, snapshot)
             try:
-                return validate_panel_archive(
+                # Reading the archive means unpacking all of it for the sums of
+                # its files. The plan is built again for the re-check and for
+                # the launch; the same file with the same time is not read
+                # twice, and the runner checks its copy on its own anyway.
+                info = archive.stat()
+                descriptor = snapshot.catalog["panel"]
+                key = (
+                    descriptor.get("sha256") if isinstance(descriptor, Mapping) else None,
+                    descriptor.get("size") if isinstance(descriptor, Mapping) else None,
+                    architecture,
+                    str(archive),
+                    info.st_size,
+                    info.st_mtime_ns,
+                )
+                if self._archive_listing is not None and self._archive_listing[0] == key:
+                    return self._archive_listing[1]
+                listing = validate_panel_archive(
                     archive,
-                    snapshot.catalog["panel"],
+                    descriptor,
                     platform_architecture=architecture,
                 )
+                self._archive_listing = (key, listing)
+                return listing
             except ModulePackageContractError:
                 # A kept copy may have rotted on the storage; a download that
                 # fails the same check is the release's own fault.

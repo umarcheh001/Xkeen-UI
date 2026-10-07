@@ -296,11 +296,12 @@ class Journal:
 
         The panel serves a precompressed copy only when it is not older than
         the file it stands for, and files of one package land a moment apart.
+        The source may not be part of the operation at all: an update leaves
+        an unchanged file alone, and its time can be ahead of the clock.
         """
 
-        added = set(self.plan.files_add)
-        for relative in sorted(added):
-            if not relative.endswith(_GZIP_SUFFIX) or relative[: -len(_GZIP_SUFFIX)] not in added:
+        for relative in sorted(self.plan.files_add):
+            if not relative.endswith(_GZIP_SUFFIX):
                 continue
             packed = self._path(relative)
             source = self._path(relative[: -len(_GZIP_SUFFIX)])

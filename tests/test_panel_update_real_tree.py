@@ -138,6 +138,10 @@ def test_real_tree_panel_update_preserves_profile_and_user_state(built: Built, t
         architecture=ARCHITECTURE,
     )
 
+    # Релиз отличается одним файлом: остальное дерево не перекладывается.
+    assert "app.py" in plan.files_add
+    assert len(plan.files_add) * 10 < len(set(_files(panel))), plan.files_add
+
     assert _run(panel, plan, client) == "committed"
 
     assert (panel / "app.py").read_bytes() == changed.read_bytes()

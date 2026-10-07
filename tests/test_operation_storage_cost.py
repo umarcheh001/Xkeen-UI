@@ -190,13 +190,12 @@ def test_a_storage_without_hard_links_is_reported_as_such(tmp_path, monkeypatch)
     assert sorted(path.name for path in tmp_path.iterdir()) == ["xkeen-ui"]
 
 
-def _update_numbers(tmp_path: Path, panel, release) -> tuple[int, int, int]:
+def _update_numbers(tmp_path: Path, panel, release, plan) -> tuple[int, int, int]:
+    # Считается только то, что план кладёт: совпавшие с релизом файлы не трогаются.
     listing = _listing(tmp_path, release)
     archive = int(release.catalog["panel"]["size"])
-    expanded = sum(size for path, size in listing["payload_sizes"].items() if path != "install.sh")
-    replaced = sum(
-        panel.path(path).stat().st_size for path in listing["payload_sizes"] if panel.path(path).is_file()
-    )
+    expanded = sum(listing["payload_sizes"][path] for path in plan.files_add)
+    replaced = sum(panel.path(path).stat().st_size for path in plan.files_add if panel.path(path).is_file())
     return archive, expanded, replaced
 
 
@@ -204,9 +203,8 @@ def test_update_needs_room_for_the_archive_and_one_copy_of_the_release(tmp_path,
     panel = make_panel(tmp_path, version="2.10.0", installed=tuple(OWNERSHIP))
     release = make_release(version="2.11.0")
     monkeypatch.setattr(plan_module, "hard_links_supported", lambda _root: True)
-    archive, expanded, _replaced = _update_numbers(tmp_path, panel, release)
-
     plan = _update_plan(tmp_path, panel, release, free_bytes=1 << 40)
+    archive, expanded, _replaced = _update_numbers(tmp_path, panel, release, plan)
 
     assert plan.required_free_bytes == (archive + expanded) * 6 // 5
 
@@ -215,9 +213,8 @@ def test_update_counts_the_copy_of_old_files_only_without_hard_links(tmp_path, m
     panel = make_panel(tmp_path, version="2.10.0", installed=tuple(OWNERSHIP))
     release = make_release(version="2.11.0")
     monkeypatch.setattr(plan_module, "hard_links_supported", lambda _root: False)
-    archive, expanded, replaced = _update_numbers(tmp_path, panel, release)
-
     plan = _update_plan(tmp_path, panel, release, free_bytes=1 << 40)
+    archive, expanded, replaced = _update_numbers(tmp_path, panel, release, plan)
 
     assert replaced > 0
     assert plan.required_free_bytes == (archive + expanded + replaced) * 6 // 5

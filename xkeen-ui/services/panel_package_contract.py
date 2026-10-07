@@ -7,6 +7,7 @@ import json
 import os
 import re
 import tarfile
+import zlib
 from pathlib import PurePosixPath
 from typing import Any, Mapping
 
@@ -141,6 +142,8 @@ def validate_panel_archive(
     seen: set[str] = set()
     payload_files: list[str] = []
     payload_sizes: dict[str, int] = {}
+    payload_digests: dict[str, str] = {}
+    payload_executable: list[str] = []
     ownership_data: bytes | None = None
     expanded_size = 0
     try:
@@ -167,16 +170,27 @@ def validate_panel_archive(
                     _fail("panel_archive_expanded_too_large", "panel archive exceeds its expanded size limit")
                 payload_files.append(relative)
                 payload_sizes[relative] = int(member.size)
-                if relative == "module-ownership.json":
-                    if member.size > MAX_OWNERSHIP_BYTES:
-                        _fail("panel_archive_ownership_invalid", "module ownership exceeds its size limit")
-                    extracted = archive.extractfile(member)
-                    if extracted is None:
-                        _fail("panel_archive_ownership_invalid", "module ownership cannot be read")
-                    ownership_data = extracted.read(MAX_OWNERSHIP_BYTES + 1)
+                if member.mode & 0o111:
+                    payload_executable.append(relative)
+                if relative == "module-ownership.json" and member.size > MAX_OWNERSHIP_BYTES:
+                    _fail("panel_archive_ownership_invalid", "module ownership exceeds its size limit")
+                extracted = archive.extractfile(member)
+                if extracted is None:
+                    _fail("panel_archive_member_unreadable", "panel archive member cannot be read", path=relative)
+                # The stream is unpacked to walk the archive anyway; the sum of
+                # each file lets an update leave alone what did not change.
+                member_digest = hashlib.sha256()
+                kept = bytearray() if relative == "module-ownership.json" else None
+                for chunk in iter(lambda: extracted.read(1024 * 1024), b""):
+                    member_digest.update(chunk)
+                    if kept is not None:
+                        kept.extend(chunk)
+                payload_digests[relative] = member_digest.hexdigest()
+                if kept is not None:
+                    ownership_data = bytes(kept)
     except ModulePackageContractError:
         raise
-    except (OSError, tarfile.TarError) as error:
+    except (OSError, EOFError, tarfile.TarError, zlib.error) as error:
         raise ModulePackageContractError("panel_archive_invalid", "panel archive cannot be read") from error
 
     if ownership_data is None:
@@ -188,6 +202,9 @@ def validate_panel_archive(
         "payload_files": sorted(payload_files),
         # Enough to plan an operation without unpacking the archive.
         "payload_sizes": payload_sizes,
+        # Enough to tell which files on the storage are already the target's.
+        "payload_digests": payload_digests,
+        "payload_executable": sorted(payload_executable),
         "expanded_size": expanded_size,
         "ownership": ownership,
     }

@@ -6,6 +6,7 @@ user before anything starts, and the runner executes the same plan later.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -244,6 +245,44 @@ def _file_size(path: Path) -> int:
         return path.stat().st_size if path.is_file() else 0
     except OSError:
         return 0
+
+
+# Sums of files on the storage by path, kept while the file has the same size
+# and time: a plan is built up to three times for one update.
+_DISK_DIGESTS: dict[str, tuple[int, int, str]] = {}
+
+
+def _hash_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _disk_digest(path: Path) -> str | None:
+    """SHA-256 of a regular file, ``None`` when there is no such file."""
+
+    try:
+        if not path.is_file():
+            return None
+        info = path.stat()
+        key = os.fspath(path)
+        cached = _DISK_DIGESTS.get(key)
+        if cached is not None and cached[:2] == (info.st_size, info.st_mtime_ns):
+            return cached[2]
+        digest = _hash_file(path)
+        _DISK_DIGESTS[key] = (info.st_size, info.st_mtime_ns, digest)
+        return digest
+    except OSError:
+        return None
+
+
+def _executable(path: Path) -> bool:
+    try:
+        return bool(path.stat().st_mode & 0o111)
+    except OSError:
+        return False
 
 
 def build_plan(
@@ -536,6 +575,10 @@ def _full_scope_plan(
             # The verified listing of the archive: nothing has to be unpacked
             # to know what the operation will lay and how much room it needs.
             target_sizes = {str(path): int(size) for path, size in target_archive["payload_sizes"].items()}
+            listed_digests = target_archive.get("payload_digests")
+            listed_executable = frozenset(target_archive.get("payload_executable") or ())
+            target_digest = None if listed_digests is None else listed_digests.get
+            target_executable = listed_executable.__contains__
             target = build_profile_target_from_ownership(
                 target_archive["ownership"],
                 target_sizes,
@@ -545,6 +588,8 @@ def _full_scope_plan(
             )
         else:
             target_sizes = None
+            target_digest = lambda path: _disk_digest(Path(target_panel_root) / path)  # noqa: E731
+            target_executable = lambda path: _executable(Path(target_panel_root) / path)  # noqa: E731
             target = build_profile_target(
                 Path(target_panel_root),
                 profile=profile,
@@ -586,8 +631,24 @@ def _full_scope_plan(
             archive = None
         backup = sum(_file_size(Path(panel_root) / path) for path in (*files_add, *files_remove))
     else:
-        files_add = tuple(sorted(target_paths))
-        backup = sum(_file_size(Path(panel_root) / path) for path in installed_paths | target_paths)
+        # Most of a release is the previous one. A managed file that already
+        # has the content and the executable bit the target wants is left
+        # alone: it is neither unpacked nor copied for the undo. A file with
+        # the same content that the panel does not manage is laid all the
+        # same, so that the managed list ends up equal to the target.
+        def in_place(path: str) -> bool:
+            if target_digest is None or path not in installed_paths:
+                return False
+            current = Path(panel_root) / path
+            if target_sizes is not None and _file_size(current) != target_sizes.get(path):
+                return False
+            wanted = target_digest(path)
+            if wanted is None or _disk_digest(current) != wanted:
+                return False
+            return os.name == "nt" or _executable(current) == target_executable(path)
+
+        files_add = tuple(sorted(path for path in target_paths if not in_place(path)))
+        backup = sum(_file_size(Path(panel_root) / path) for path in (*files_add, *files_remove))
     if target_sizes is not None:
         expanded = sum(target_sizes.get(path, 0) for path in files_add)
     else:
