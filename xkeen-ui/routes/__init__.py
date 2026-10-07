@@ -413,6 +413,7 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
         create_devtools_blueprint(
             ctx.ui_state_dir,
             include_advanced=module_active("tool.advanced-diagnostics"),
+            lifecycle_service=lifecycle_service,
         )
     )
 

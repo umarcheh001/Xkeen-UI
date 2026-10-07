@@ -185,6 +185,7 @@ def create_devtools_blueprint(
     ui_state_dir: str,
     *,
     include_advanced: bool = True,
+    lifecycle_service: Any | None = None,
 ) -> Blueprint:
     bp = Blueprint("devtools", __name__)
 
@@ -245,6 +246,22 @@ def create_devtools_blueprint(
             return cand2
         return cand  # default (will fail later with a clear error)
 
+    def _update_channel() -> str:
+        try:
+            build = get_build_info(ui_state_dir)
+        except Exception:
+            build = {}
+        return str(os.environ.get("XKEEN_UI_UPDATE_CHANNEL") or build.get("channel") or "stable").strip().lower()
+
+    def _lifecycle_failure(error: Exception):
+        return jsonify(
+            {
+                "ok": False,
+                "error": str(getattr(error, "message", None) or "lifecycle_update_failed"),
+                "code": str(getattr(error, "code", None) or "lifecycle_update_failed"),
+            }
+        ), int(getattr(error, "status", 503))
+
     @bp.get("/api/devtools/update/info")
     def api_devtools_update_info() -> Any:
         """Return local build/update information.
@@ -274,6 +291,44 @@ def create_devtools_blueprint(
         PR/Commit 2 (self-update): provides stable state storage for later update runs.
         This endpoint performs *no* network calls.
         """
+
+        if lifecycle_service is not None and _update_channel() == "stable":
+            try:
+                lifecycle = lifecycle_service.status()
+            except Exception as error:
+                return _lifecycle_failure(error)
+            result = lifecycle.get("result")
+            if result == "running":
+                state = "running"
+            elif result == "committed":
+                state = "done"
+            elif result in {"interrupted", "rolled_back", "rollback_failed"}:
+                state = "failed"
+            else:
+                state = "idle"
+            status = {
+                "state": state,
+                "step": lifecycle.get("step"),
+                "progress": None,
+                "error": lifecycle.get("error_code"),
+                "message": lifecycle.get("error"),
+                "operation_id": lifecycle.get("operation_id"),
+                "result": result,
+                "scope": lifecycle.get("scope"),
+            }
+            return jsonify(
+                {
+                    "ok": True,
+                    "status": status,
+                    "lock": None,
+                    "log_tail": lifecycle.get("log", []),
+                    "backup_dir": get_backup_dir(ui_state_dir),
+                    "backups": [],
+                    "has_backup": False,
+                    "reconciled": False,
+                    "lifecycle": lifecycle,
+                }
+            )
 
         try:
             ensure_update_dir(ui_state_dir)
@@ -308,6 +363,7 @@ def create_devtools_blueprint(
                 "backups": backups,
                 "has_backup": bool(backups),
                 "reconciled": bool(reconciled),
+                "development_only": _update_channel() == "main",
             }
         )
 
@@ -319,6 +375,27 @@ def create_devtools_blueprint(
         Network is performed with a short wait and safe caching; the UI must not freeze.
         """
         payload = request.get_json(silent=True) or {}
+        if lifecycle_service is not None and _update_channel() == "stable":
+            try:
+                plan = lifecycle_service.plan("panel-update", None)
+            except Exception as error:
+                return _lifecycle_failure(error)
+            return jsonify(
+                {
+                    "ok": True,
+                    "error": None,
+                    "repo": "umarcheh001/Xkeen-UI",
+                    "channel": "stable",
+                    "branch": None,
+                    "current": {"version": plan.get("source_version")},
+                    "latest": {"version": plan.get("target_version")},
+                    "update_available": bool(plan.get("applicable")),
+                    "stale": False,
+                    "meta": {"source": "signed_lifecycle_catalog"},
+                    "security": {"signed_catalog": True, "will_block_run": not bool(plan.get("applicable"))},
+                    "lifecycle_plan": plan,
+                }
+            )
         force_refresh = bool(payload.get("force_refresh") or payload.get("force") or False)
         try:
             wait_seconds = float(payload.get("wait_seconds") or 2.5)
@@ -508,6 +585,7 @@ def create_devtools_blueprint(
                 "stale": bool(stale),
                 "meta": meta,
                 "security": sec,
+                "development_only": ch == "main",
             }
         )
 
@@ -520,6 +598,31 @@ def create_devtools_blueprint(
         """
 
         payload = request.get_json(silent=True) or {}
+        if lifecycle_service is not None and _update_channel() == "stable":
+            try:
+                plan = lifecycle_service.plan("panel-update", None)
+                if not plan.get("applicable") or not plan.get("plan_id"):
+                    return jsonify(
+                        {
+                            "ok": True,
+                            "started": False,
+                            "reason": "not_applicable",
+                            "blockers": plan.get("blockers", []),
+                            "status": lifecycle_service.status(),
+                        }
+                    )
+                applied = lifecycle_service.apply("panel-update", None, plan["plan_id"])
+            except Exception as error:
+                return _lifecycle_failure(error)
+            return jsonify(
+                {
+                    "ok": True,
+                    "started": True,
+                    "operation_id": applied.get("operation_id"),
+                    "status": applied.get("status"),
+                    "lifecycle": applied,
+                }
+            ), 202
         skip_backup = bool(payload.get("skip_backup") or payload.get("no_backup") or False)
         # Optional "preflight" data from /api/devtools/update/check so runner can skip network check_latest.
         resolved = payload.get("resolved") if isinstance(payload, dict) else None
@@ -644,7 +747,14 @@ def create_devtools_blueprint(
             base_status["updated_ts"] = time.time()
             write_status(paths["status_file"], base_status)
             _core_log("info", "self_update: started runner", pid=p.pid, runner=runner)
-            return jsonify({"ok": True, "started": True, "pid": p.pid, "lock": lock_info, "status": base_status})
+            return jsonify({
+                "ok": True,
+                "started": True,
+                "pid": p.pid,
+                "lock": lock_info,
+                "status": base_status,
+                "development_only": channel_eff.strip().lower() == "main",
+            })
         except Exception as e:
             # Best-effort rollback of lock and status.
             release_lock(paths["lock_file"])
