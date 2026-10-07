@@ -61,6 +61,11 @@ def test_profile_transition_stays_on_release_and_uses_desired_registry_profile(t
     desired = panel.read_json("modules.json")
     desired["profile"] = "xray-minimal"
     desired["modules"]["engine.mihomo"]["enabled"] = False
+    desired["physical_request"] = {
+        "profile": "xray-minimal",
+        "module_ids": ["core", "engine.xray", "tool.editor"],
+        "editor_variant": "light",
+    }
     _json(panel.path("modules.json"), desired)
 
     plan = build_profile_transition_plan(
@@ -109,6 +114,11 @@ def test_profile_transition_allows_state_only_profile_metadata_change(tmp_path: 
     panel = make_panel(tmp_path, version="1.2.3")
     desired = panel.read_json("modules.json")
     desired["profile"] = "custom"
+    desired["physical_request"] = {
+        "profile": "custom",
+        "module_ids": ["core", "engine.xray", "tool.editor"],
+        "editor_variant": "light",
+    }
     _json(panel.path("modules.json"), desired)
 
     plan = build_profile_transition_plan(

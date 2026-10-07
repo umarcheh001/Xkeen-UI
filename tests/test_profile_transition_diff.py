@@ -43,6 +43,12 @@ def _desire(panel, modules: set[str], *, profile: str = "custom", variant: str =
     state["profile"] = profile
     state["editor"] = {"variant": variant}
     state["modules"] = {module_id: {"enabled": module_id in modules} for module_id in MODULE_ORDER}
+    # Переход исполняет явный запрос профиля, а не положение переключателей.
+    state["physical_request"] = {
+        "profile": profile,
+        "module_ids": [module_id for module_id in MODULE_ORDER if module_id in modules],
+        "editor_variant": variant,
+    }
     panel.path("modules.json").write_text(json.dumps(state), encoding="utf-8")
 
 

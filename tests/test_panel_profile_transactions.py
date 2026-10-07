@@ -50,6 +50,12 @@ def _set_desired(panel, profile: str, selected: set[str], variant: str = "light"
     state["profile"] = profile
     state["editor"] = {"variant": variant}
     state["modules"] = {module_id: {"enabled": module_id in selected} for module_id in MODULE_ORDER}
+    # A transition applies the explicit profile request, not the module switches.
+    state["physical_request"] = {
+        "profile": profile,
+        "module_ids": [module_id for module_id in MODULE_ORDER if module_id in selected],
+        "editor_variant": variant,
+    }
     _write_json(panel.path("modules.json"), state)
 
 

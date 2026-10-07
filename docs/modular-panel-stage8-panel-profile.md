@@ -56,9 +56,54 @@ panel archive и строит тот же plan. Изменение версии,
 physical install state возвращает `operation_plan_stale`.
 
 `panel-update` имеет scope `panel`, требует `target_version > source_version`
-и сохраняет текущий profile, Custom module set, editor variant и user state.
-`profile-transition` имеет scope `profile`, требует архив ровно установленной
-версии и применяет желаемый профиль без version transition.
+и сохраняет установленное: набор модулей и editor variant берутся из
+`install-profile.json`, положение переключателей и user state не меняются.
+`profile-transition` имеет scope `profile`, остаётся на установленной версии
+и применяет запрошенный профиль без version transition.
+
+## «Включён» и «установлен»
+
+Это два разных состояния, и меняют их разные действия.
+
+| Действие | Что меняет |
+| --- | --- |
+| Переключатель модуля (`PATCH /api/modules/<id>`, enable/disable) | только работает ли модуль; файлы остаются |
+| `POST /api/modules/profile` | переключатели и запрос физического профиля |
+| `PATCH /api/modules/editor` | настройку; запрос физического профиля — только при переходе с `light`, которому не хватает файлов |
+| `profile-transition` | файлы на накопителе по запросу профиля |
+| `install` / `remove` модуля | файлы одного модуля |
+| `panel-update`, `install.sh` без заданного профиля | версию; установленный набор и переключатели сохраняются |
+
+Запрос физического профиля хранится в `modules.json` отдельной записью:
+
+```json
+"physical_request": {
+  "profile": "xray-minimal",
+  "module_ids": ["core", "engine.xray", "tool.editor"],
+  "editor_variant": "light"
+}
+```
+
+Её пишет только явный запрос профиля. Переключатели её не создают и не
+меняют. Любая завершённая операция — переход, обновление панели, установка
+или удаление модуля — запись стирает: она либо исполнена, либо устарела.
+
+Следствия:
+
+- выключенный модуль ничего не блокирует: доступны перезапуск, операции с
+  модулями и обновление панели;
+- выключенный модуль обновляется вместе с панелью и остаётся выключенным —
+  смеси версий на накопителе не бывает;
+- убрать модуль с накопителя можно только явно: `remove`, запрос другого
+  профиля с `profile-transition` или `install.sh` с заданным профилем;
+- `profile-transition` без запроса отвечает `profile_transition_not_required`,
+  как бы ни стояли переключатели.
+
+`install.sh` поверх установленной панели без `XKEEN_UI_INSTALL_PROFILE` и
+`XKEEN_UI_INSTALL_MODULES` спрашивает у helper `current`, что установлено
+(или запрошено и ещё не применено), и ставит именно это с `--keep-switches`.
+Явно заданный профиль исполняется как раньше и выставляет переключатели
+по профилю.
 
 ## Pending profile
 
@@ -76,11 +121,13 @@ physical install state возвращает `operation_plan_stale`.
 }
 ```
 
-Пока desired registry state не совпадает с `install-profile.json`,
-`module-installed.json` и физическим payload, `POST /api/modules/restart`
-возвращает `409 profile_transition_required`. Оператор должен выполнить
-plan/apply с `operation: profile-transition`, дождаться `committed` и только
-затем считать профиль установленным.
+Пока запрос физического профиля не совпадает с `install-profile.json` и
+`module-installed.json`, `POST /api/modules/restart`, проверка и запуск
+обновления и операции с модулями возвращают `409 profile_transition_required`.
+Оператор должен выполнить plan/apply с `operation: profile-transition`,
+дождаться `committed` и только затем считать профиль установленным. Без
+запроса и при запросе, совпадающем с установленным, `transition_required`
+равен `false`, а `transition_target` — `null`.
 
 ## Status, cancel и recovery
 

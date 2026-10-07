@@ -13,6 +13,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Mapping
 
 from services.module_profile_plan import (
+    PRESETS,
     ProfilePlanError,
     build_profile_target,
     build_profile_target_from_ownership,
@@ -352,24 +353,40 @@ def plan_from_json(data: Mapping[str, Any]) -> Plan:
         raise ModuleTransactionError("operation_journal_invalid", "the stored operation plan cannot be read") from error
 
 
-def _read_desired_profile(state_dir: Path) -> tuple[str, list[str] | None, str]:
+PHYSICAL_REQUEST_KEY = "physical_request"
+
+
+def _read_requested_profile(state_dir: Path) -> tuple[str, list[str] | None, str] | None:
+    """The physical profile the owner asked for; ``None`` when nothing was asked.
+
+    Module switches are not read here: a module that is switched off stays
+    installed. Only an explicit profile request changes what lies on the
+    storage, and it is recorded apart from the switches.
+    """
+
     try:
         state = json.loads((Path(state_dir) / "modules.json").read_text(encoding="utf-8"))
-        profile = state["profile"]
-        editor_variant = state["editor"]["variant"]
-        modules = state["modules"]
-        if not isinstance(profile, str) or not isinstance(editor_variant, str) or not isinstance(modules, Mapping):
-            raise ValueError("invalid desired profile")
-        selected = [
-            module_id
-            for module_id in MODULE_IDS
-            if isinstance(modules.get(module_id), Mapping) and modules[module_id].get("enabled") is True
-        ]
+        if not isinstance(state, Mapping):
+            raise ValueError("invalid module state")
+        request = state.get(PHYSICAL_REQUEST_KEY)
+        if request is None:
+            return None
+        profile = request["profile"]
+        editor_variant = request["editor_variant"]
+        modules = request["module_ids"]
+        if (
+            not isinstance(profile, str)
+            or not isinstance(editor_variant, str)
+            or not isinstance(modules, list)
+            or any(not isinstance(module_id, str) for module_id in modules)
+        ):
+            raise ValueError("invalid physical profile request")
     except (OSError, ValueError, KeyError, TypeError) as error:
         raise ModuleTransactionError(
             "profile_state_unavailable",
-            "the desired physical profile cannot be read",
+            "the requested physical profile cannot be read",
         ) from error
+    selected = [module_id for module_id in MODULE_IDS if module_id in modules]
     return profile, selected if profile == "custom" else None, editor_variant
 
 
@@ -451,7 +468,21 @@ def _full_scope_plan(
         _fail("catalog_panel_invalid", "the trusted catalog has no matching panel descriptor")
     if architecture not in descriptor.get("architectures", ()):
         _fail("catalog_architecture_unsupported", "the panel is not published for this router", architecture=architecture)
-    profile, requested_modules, editor_variant = _read_desired_profile(state_dir)
+    installed_profile, installed_profile_modules, installed_editor_variant = _read_installed_profile(state_dir)
+    if scope == "profile":
+        requested = _read_requested_profile(state_dir)
+        if requested is None:
+            _fail("profile_transition_not_required", "no other physical profile was requested")
+        profile, requested_modules, editor_variant = requested
+    else:
+        # An update keeps what is installed, switched on or not: a module that
+        # is switched off is updated with the rest and stays switched off.
+        profile, editor_variant = installed_profile, installed_editor_variant
+        if profile in PRESETS and set(PRESETS[profile]) == set(installed_profile_modules):
+            requested_modules = None
+        else:
+            profile = "custom"
+            requested_modules = [module_id for module_id in MODULE_IDS if module_id in installed_profile_modules]
     try:
         if target_archive is not None:
             # The verified listing of the archive: nothing has to be unpacked
@@ -476,7 +507,6 @@ def _full_scope_plan(
         raise ModuleTransactionError(error.code, "the desired physical profile is invalid", **error.details) from error
     installed_paths = set(_read_managed_paths(state_dir))
     installed_modules = set(read_installed_modules(state_dir))
-    installed_profile, installed_profile_modules, installed_editor_variant = _read_installed_profile(state_dir)
     target_paths = set(target.payload_files)
     target_modules = set(target.module_ids)
     payload_matches = installed_paths == target_paths and installed_modules == target_modules

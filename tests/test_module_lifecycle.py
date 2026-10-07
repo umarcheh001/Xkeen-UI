@@ -175,7 +175,7 @@ def test_plan_returns_single_module_file_and_dependency_diff(tmp_path):
 
 
 def test_panel_update_plan_uses_latest_release_and_preserves_profile(tmp_path):
-    panel = make_panel(tmp_path, version="2.10.0", installed=("core", "tool.files"))
+    panel = make_panel(tmp_path, version="2.10.0")
     release = make_release(version="2.11.0")
     launcher = LaunchRecorder()
     service, catalog = make_service(panel, release, launch_operation=launcher)
@@ -301,7 +301,11 @@ def test_full_scope_plans_expose_stable_design_error_codes(tmp_path, monkeypatch
 def test_invalid_profile_target_uses_stable_public_code(tmp_path):
     panel = make_panel(tmp_path)
     desired = panel.read_json("modules.json")
-    desired["editor"]["variant"] = "unsupported"
+    desired["physical_request"] = {
+        "profile": "custom",
+        "module_ids": ["core", "engine.xray", "tool.editor"],
+        "editor_variant": "unsupported",
+    }
     panel.path("modules.json").write_text(json.dumps(desired), encoding="utf-8")
     service, _ = make_service(panel, make_release())
 

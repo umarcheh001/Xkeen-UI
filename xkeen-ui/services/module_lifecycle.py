@@ -873,27 +873,29 @@ class ModuleLifecycleService:
         return {"ok": True, "recovery_result": result, **observed}
 
     def profile_transition_status(self) -> dict[str, Any]:
-        registry = self.module_registry.get_registry()
-        desired_ids = tuple(
-            module_id for module_id in MODULE_IDS if module_id in set(registry.get("configured_module_ids", ()))
-        )
+        # Only an explicit profile request can make a transition necessary.
+        # Module switches decide what runs, never what is installed.
+        request = self.module_registry.get_registry().get("physical_request")
+        if not isinstance(request, Mapping):
+            return {"transition_required": False, "transition_target": None}
         desired = {
-            "profile": registry.get("profile"),
-            "module_ids": list(desired_ids),
-            "editor_variant": (registry.get("editor") or {}).get("variant"),
+            "profile": request.get("profile"),
+            "module_ids": [module_id for module_id in MODULE_IDS if module_id in set(request.get("module_ids", ()))],
+            "editor_variant": request.get("editor_variant"),
         }
+        desired_ids = set(desired["module_ids"])
         try:
             installed_profile = json.loads((self.state_dir / "install-profile.json").read_text(encoding="utf-8"))
             installed_ids = read_installed_modules(self.state_dir)
             matches = (
                 installed_profile.get("profile") == desired["profile"]
                 and installed_profile.get("editor_variant") == desired["editor_variant"]
-                and set(installed_profile.get("module_ids", ())) == set(desired_ids)
-                and set(installed_ids) == set(desired_ids)
+                and set(installed_profile.get("module_ids", ())) == desired_ids
+                and set(installed_ids) == desired_ids
             )
         except (OSError, ValueError, TypeError, AttributeError, ModuleTransactionError):
             matches = False
-        return {"transition_required": not matches, "transition_target": desired}
+        return {"transition_required": not matches, "transition_target": None if matches else desired}
 
     def restart(self) -> dict[str, Any]:
         pending = self.profile_transition_status()

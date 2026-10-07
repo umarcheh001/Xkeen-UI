@@ -30,6 +30,9 @@ RUNTIME_DIAGNOSTICS_FILENAME = "module-runtime.json"
 MODULE_SIZES_FILENAME = "module-sizes.json"
 LEGACY_FULL_PROFILE = "legacy-full"
 CUSTOM_PROFILE = "custom"
+# What the owner asked to have on the storage. A module switch never
+# writes it: switching a module off stops it and leaves its files alone.
+PHYSICAL_REQUEST_KEY = "physical_request"
 PROFILE_IDS = (LEGACY_FULL_PROFILE, "full", "xray-minimal", "mihomo-minimal", CUSTOM_PROFILE)
 SAFE_MODE_ENV = "XKEEN_UI_MODULE_SAFE_MODE"
 EDITOR_VARIANTS = ("light", "full", "advanced")
@@ -675,7 +678,17 @@ class ModuleRegistry:
             if changed:
                 state["restart_required"] = True
 
-            if changed or normalized:
+            # Only the light editor lacks files the others need. Anything else
+            # is a setting over files that are already there.
+            request_before = state.get(PHYSICAL_REQUEST_KEY)
+            if isinstance(request_before, dict):
+                state[PHYSICAL_REQUEST_KEY] = {**request_before, "editor_variant": normalized_variant}
+            elif normalized_variant != "light":
+                installed = self._installed_physical_profile()
+                if installed is not None and installed["editor_variant"] == "light":
+                    state[PHYSICAL_REQUEST_KEY] = {**installed, "editor_variant": normalized_variant}
+
+            if changed or normalized or state.get(PHYSICAL_REQUEST_KEY) != request_before:
                 self._write_state_locked(state)
 
             snapshot = self._snapshot_from_state(state)
@@ -843,7 +856,16 @@ class ModuleRegistry:
                 state["modules"][module_id].pop("blocked_reason", None)
             if changed:
                 state["restart_required"] = True
-            if changed or normalized:
+            # A profile is the one explicit way to ask for another set of
+            # files; the lifecycle applies exactly this record.
+            request = {
+                "profile": profile,
+                "module_ids": [module_id for module_id in MODULE_IDS if module_id in requested],
+                "editor_variant": variant,
+            }
+            request_changed = state.get(PHYSICAL_REQUEST_KEY) != request
+            state[PHYSICAL_REQUEST_KEY] = request
+            if changed or normalized or request_changed:
                 self._write_state_locked(state)
 
             after = self._snapshot_from_state(state)
@@ -920,6 +942,48 @@ class ModuleRegistry:
         if self._environ is not None:
             return self._environ.get(key)
         return os.environ.get(key)
+
+    def _installed_physical_profile(self) -> dict[str, Any] | None:
+        """The profile the installer or the last transition actually laid."""
+
+        try:
+            with open(os.path.join(self.ui_state_dir, "install-profile.json"), "r", encoding="utf-8") as handle:
+                document = json.load(handle)
+        except (OSError, ValueError):
+            return None
+        return self._normalize_physical_request(
+            {
+                "profile": document.get("profile"),
+                "module_ids": document.get("module_ids"),
+                "editor_variant": document.get("editor_variant"),
+            }
+            if isinstance(document, dict)
+            else None
+        )
+
+    @staticmethod
+    def _normalize_physical_request(raw: Any) -> dict[str, Any] | None:
+        if not isinstance(raw, dict):
+            return None
+        profile = raw.get("profile")
+        module_ids = raw.get("module_ids")
+        variant = raw.get("editor_variant")
+        if (
+            not isinstance(profile, str)
+            or profile not in PROFILE_IDS
+            or variant not in EDITOR_VARIANTS
+            or not isinstance(module_ids, list)
+            or any(not isinstance(item, str) for item in module_ids)
+            or len(module_ids) != len(set(module_ids))
+            or "core" not in module_ids
+            or set(module_ids) - set(MODULE_IDS)
+        ):
+            return None
+        return {
+            "profile": profile,
+            "module_ids": [module_id for module_id in MODULE_IDS if module_id in module_ids],
+            "editor_variant": variant,
+        }
 
     def _write_state_locked(self, state: Mapping[str, Any]) -> None:
         text = json.dumps(state, ensure_ascii=False, indent=2) + "\n"
@@ -1032,6 +1096,9 @@ class ModuleRegistry:
             },
             "modules": modules,
         }
+        physical_request = self._normalize_physical_request(raw.get(PHYSICAL_REQUEST_KEY))
+        if physical_request is not None:
+            normalized[PHYSICAL_REQUEST_KEY] = physical_request
         if raw != normalized:
             changed = True
         return normalized, changed
@@ -1082,6 +1149,9 @@ class ModuleRegistry:
             "configured_module_ids": configured_module_ids,
             "effective_module_ids": effective_module_ids,
             "modules": module_payloads,
+            PHYSICAL_REQUEST_KEY: (
+                dict(state[PHYSICAL_REQUEST_KEY]) if isinstance(state.get(PHYSICAL_REQUEST_KEY), dict) else None
+            ),
         }
         if self._recovery_reason:
             snapshot["recovery_reason"] = self._recovery_reason

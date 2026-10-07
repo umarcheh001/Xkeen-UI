@@ -463,6 +463,27 @@ choose_panel_profile() {
   [ -f "$INSTALL_PROFILE_HELPER" ] || fail_install "В архиве нет helper профилей установки."
   PROFILE_INPUT_ACTIVE=0
   PROFILE_CHOICE="${XKEEN_UI_INSTALL_PROFILE:-}"
+  PROFILE_APPLY_OPTIONS=""
+  PROFILE_KEEP_SWITCHES=0
+  if [ -z "$PROFILE_CHOICE" ] && [ -z "${XKEEN_UI_INSTALL_MODULES:-}" ] && [ -d "$UI_DIR" ]; then
+    # Профиль не задан: ставим то, что уже установлено (или то, что владелец
+    # запросил и ещё не применил). Переключатели модулей не читаем и не
+    # трогаем: выключенный модуль обновляется вместе со всеми и остаётся
+    # выключенным, убрать его с накопителя можно только явным действием.
+    PROFILE_CURRENT="$("$PYTHON_BIN" "$INSTALL_PROFILE_HELPER" current --target "$UI_DIR" 2>/dev/null || true)"
+    PROFILE_CHOICE="$(printf '%s\n' "$PROFILE_CURRENT" | sed -n 's/^profile=//p')"
+    if [ -n "$PROFILE_CHOICE" ]; then
+      PROFILE_KEEP_SWITCHES=1
+      PROFILE_APPLY_OPTIONS="--keep-switches"
+      PROFILE_CURRENT_VARIANT="$(printf '%s\n' "$PROFILE_CURRENT" | sed -n 's/^variant=//p')"
+      case "$PROFILE_CURRENT_VARIANT" in
+        light|full|advanced) PROFILE_APPLY_OPTIONS="$PROFILE_APPLY_OPTIONS --editor-variant $PROFILE_CURRENT_VARIANT" ;;
+      esac
+      if [ "$PROFILE_CHOICE" = "custom" ]; then
+        XKEEN_UI_INSTALL_MODULES="$(printf '%s\n' "$PROFILE_CURRENT" | sed -n 's/^modules=//p')"
+      fi
+    fi
+  fi
   if [ -z "$PROFILE_CHOICE" ] && [ -f "$UI_DIR/modules.json" ]; then
     PROFILE_CHOICE="$("$PYTHON_BIN" - "$UI_DIR/modules.json" <<'PY'
 import json
@@ -2039,7 +2060,8 @@ PROFILE_TRANSACTION="$UI_DIR.profile-transaction-$$"
 PROFILE_TRANSACTION_ACTIVE=1
 if ! "$PYTHON_BIN" "$INSTALL_PROFILE_HELPER" apply \
     --source "$SRC_DIR" --target "$UI_DIR" --profile "$PROFILE_CHOICE" \
-    --module-ids "${XKEEN_UI_INSTALL_MODULES:-}" --transaction "$PROFILE_TRANSACTION"; then
+    --module-ids "${XKEEN_UI_INSTALL_MODULES:-}" --transaction "$PROFILE_TRANSACTION" \
+    $PROFILE_APPLY_OPTIONS; then
   # Helper сам вернул прежние файлы; панель при этом не перезапускаем.
   PROFILE_TRANSACTION_ACTIVE=0
   fail_install "Не удалось применить профиль установки. Проверьте свободное место и журнал."

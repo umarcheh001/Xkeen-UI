@@ -423,13 +423,91 @@ def _drop_older_transactions(target: Path, transaction_root) -> None:
             shutil.rmtree(sibling, ignore_errors=True)
 
 
-def apply_profile(source: Path, target: Path, profile: str, *, module_ids=None, transaction_root=None) -> Path:
+_EDITOR_VARIANTS = ("light", "full", "advanced")
+
+
+def _physical_profile(raw, source: str):
+    """A profile record that can be installed as it stands, or ``None``."""
+
+    if not isinstance(raw, dict):
+        return None
+    profile, modules, variant = raw.get("profile"), raw.get("module_ids"), raw.get("editor_variant")
+    if profile not in (*PRESETS, "custom") or variant not in _EDITOR_VARIANTS:
+        return None
+    if (
+        not isinstance(modules, list)
+        or any(not isinstance(module, str) for module in modules)
+        or "core" not in modules
+        or set(modules) - set(MODULE_IDS)
+    ):
+        return None
+    ordered = [module for module in MODULE_IDS if module in modules]
+    if profile != "custom" and set(PRESETS[profile]) != set(ordered):
+        # The record names a preset but something else is installed: what is
+        # installed wins, a preset must not quietly add or take modules away.
+        profile = "custom"
+    return {"profile": profile, "module_ids": ordered, "editor_variant": variant, "source": source}
+
+
+def current_install(target: Path):
+    """What an update over an existing panel installs when no profile is chosen.
+
+    A profile the owner asked for and has not applied yet comes first;
+    otherwise it is what already lies on the storage. Module switches are not
+    consulted: a module that is switched off stays installed.
+    """
+
+    target = Path(target)
+    try:
+        state = json.loads((target / "modules.json").read_text(encoding="utf-8"))
+        request = _physical_profile(state.get("physical_request"), "request") if isinstance(state, dict) else None
+    except (OSError, ValueError):
+        request = None
+    if request is not None:
+        return request
+    try:
+        return _physical_profile(json.loads((target / "install-profile.json").read_text(encoding="utf-8")), "installed")
+    except (OSError, ValueError):
+        return None
+
+
+def _keep_switches(document: dict, old_state, selected) -> dict:
+    """The new module state with the owner's switches and settings carried over."""
+
+    result = json.loads(json.dumps(document))
+    if not isinstance(old_state, dict):
+        return result
+    if old_state.get("profile") in (*PRESETS, "custom"):
+        result["profile"] = old_state["profile"]
+    old_editor = old_state.get("editor")
+    if isinstance(old_editor, dict) and old_editor.get("variant") in _EDITOR_VARIANTS:
+        result["editor"] = {"variant": old_editor["variant"]}
+    old_modules = old_state.get("modules")
+    if isinstance(old_modules, dict):
+        for module in selected:
+            item = old_modules.get(module)
+            if module != "core" and isinstance(item, dict) and item.get("enabled") is False:
+                result["modules"][module]["enabled"] = False
+    return result
+
+
+def apply_profile(
+    source: Path,
+    target: Path,
+    profile: str,
+    *,
+    module_ids=None,
+    transaction_root=None,
+    editor_variant=None,
+    keep_switches: bool = False,
+) -> Path:
     source, target = Path(source).resolve(), Path(target).resolve()
     if source == target or source in target.parents or target in source.parents:
         raise ProfileInstallError("source and target must be separate directories")
     selected = _selected(profile, module_ids)
     variant = "full" if profile in ("full", "legacy-full") else "light"
     old_state_path = target / "modules.json"
+    old_state = None
     if old_state_path.is_file():
         try:
             old_state = json.loads(old_state_path.read_text(encoding="utf-8"))
@@ -438,7 +516,11 @@ def apply_profile(source: Path, target: Path, profile: str, *, module_ids=None, 
                 if old_variant in ("light", "full", "advanced"):
                     variant = old_variant
         except (OSError, ValueError, AttributeError):
-            pass
+            old_state = None
+    if editor_variant is not None:
+        if editor_variant not in _EDITOR_VARIANTS:
+            raise ProfileInstallError(f"unknown editor variant: {editor_variant}")
+        variant = editor_variant
     profile_target = None
     try:
         profile_target = build_profile_target(
@@ -528,9 +610,14 @@ def apply_profile(source: Path, target: Path, profile: str, *, module_ids=None, 
                 _write_json(target / "static/frontend-build/.vite/manifest.json", frontend[2])
         if profile_target is not None:
             for filename, document in profile_target.state_files.items():
+                if filename == "modules.json" and keep_switches:
+                    document = _keep_switches(dict(document), old_state, selected)
                 _write_json(target / filename, document)
         else:
-            _write_json(target / "modules.json", _state(profile, selected, variant))
+            modules_document = _state(profile, selected, variant)
+            if keep_switches:
+                modules_document = _keep_switches(modules_document, old_state, selected)
+            _write_json(target / "modules.json", modules_document)
             _write_json(target / "module-installed.json", {"schema_version": 1, "modules": {
                 module: module in selected and all((target / marker).is_file() for marker in INSTALL_MARKERS[module])
                 for module in MODULE_IDS
@@ -577,16 +664,37 @@ def commit_profile(root: Path):
 
 def main(argv=None):
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=("apply", "commit", "rollback"))
+    parser.add_argument("action", choices=("apply", "commit", "rollback", "current"))
     parser.add_argument("--source")
     parser.add_argument("--target")
     parser.add_argument("--profile")
     parser.add_argument("--module-ids", default="")
     parser.add_argument("--transaction")
+    parser.add_argument("--editor-variant")
+    parser.add_argument("--keep-switches", action="store_true")
     args = parser.parse_args(argv)
+    if args.action == "current":
+        current = current_install(args.target)
+        if current is None:
+            raise SystemExit(1)
+        # One value per line, for the shell of the installer.
+        print(f"profile={current['profile']}")
+        print(f"modules={','.join(current['module_ids'])}")
+        print(f"variant={current['editor_variant']}")
+        return
     if args.action == "apply":
         selected = args.module_ids.split(",") if args.module_ids else None
-        print(apply_profile(args.source, args.target, args.profile, module_ids=selected, transaction_root=args.transaction))
+        print(
+            apply_profile(
+                args.source,
+                args.target,
+                args.profile,
+                module_ids=selected,
+                transaction_root=args.transaction,
+                editor_variant=args.editor_variant,
+                keep_switches=args.keep_switches,
+            )
+        )
     elif args.action == "rollback":
         rollback_profile(args.transaction)
     else:

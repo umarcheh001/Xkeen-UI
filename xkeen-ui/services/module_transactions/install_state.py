@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 from typing import Any, Mapping
 
-from .plan import Plan
+from .plan import PHYSICAL_REQUEST_KEY, Plan
 
 
 # Same order as ``MODULE_IDS`` of the profile installer; a test keeps them equal.
@@ -83,15 +83,23 @@ def state_file_updates(panel_root: Path, plan: Plan) -> dict[str, bytes]:
         selected = {str(module_id) for module_id in raw_modules}
         modules_state = _load(Path(panel_root) / "modules.json")
         modules_state = dict(modules_state) if isinstance(modules_state, dict) else {"schema_version": 1}
-        modules_state["profile"] = profile
+        if plan.scope == "profile" or not isinstance(modules_state.get("profile"), str):
+            # A transition applies the requested profile. An update keeps the
+            # owner's settings: the profile label and the editor variant there
+            # describe what runs, not what is installed.
+            modules_state["profile"] = profile
+            modules_state["editor"] = {"variant": variant}
         modules_state["restart_required"] = False
-        modules_state["editor"] = {"variant": variant}
+        # The request is either applied now or superseded by this operation.
+        modules_state.pop(PHYSICAL_REQUEST_KEY, None)
         current_modules = modules_state.get("modules")
         current_modules = dict(current_modules) if isinstance(current_modules, dict) else {}
         for module_id in MODULE_ORDER:
             item = current_modules.get(module_id)
             item = dict(item) if isinstance(item, dict) else {}
-            item["enabled"] = module_id in selected
+            # Installed is not the same as switched on: a module that stays
+            # keeps its switch, a module that is not installed cannot run.
+            item["enabled"] = module_id in selected and item.get("enabled") is not False
             current_modules[module_id] = item
         modules_state["modules"] = current_modules
         managed = _load(Path(panel_root) / "install-managed.json")
@@ -137,6 +145,8 @@ def state_file_updates(panel_root: Path, plan: Plan) -> dict[str, bytes]:
             # A preset would be applied again by the next panel update and
             # undo this operation; the actual set is a custom profile now.
             modules_state["profile"] = "custom"
+            # An explicit module operation is newer than any profile request.
+            modules_state.pop(PHYSICAL_REQUEST_KEY, None)
             item = modules_state["modules"].get(plan.module_id)
             item = dict(item) if isinstance(item, dict) else {}
             item["enabled"] = present
