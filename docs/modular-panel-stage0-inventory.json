@@ -37,7 +37,7 @@
       ],
       "removable": false,
       "unit_count": 520,
-      "size_bytes": 6985737,
+      "size_bytes": 6987817,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -6147,7 +6147,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_provision_opkg.py",
-      "size_bytes": 6883,
+      "size_bytes": 8963,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],

@@ -414,6 +414,26 @@ provision_fail() {
   echo "[!] $1"
 }
 
+provision_kill_children() {
+  # Снять процессы, запущенные процессом $1. На роутере нет ни pkill, ни
+  # `ps -o`, поэтому родитель читается из /proc/<pid>/stat: после имени в
+  # скобках идут состояние и номер родителя.
+  _pk_parent="$1"
+  for _pk_stat in /proc/[0-9]*/stat; do
+    [ -r "$_pk_stat" ] || continue
+    _pk_line="$(cat "$_pk_stat" 2>/dev/null)" || continue
+    _pk_child="${_pk_line%% *}"
+    _pk_after_name="${_pk_line##*) }"
+    _pk_ppid="${_pk_after_name#* }"
+    _pk_ppid="${_pk_ppid%% *}"
+    [ "$_pk_ppid" = "$_pk_parent" ] || continue
+    # opkg запускает wget через оболочку: снимать надо и внуков. В подоболочке,
+    # чтобы вложенный обход не затёр переменные этого.
+    ( provision_kill_children "$_pk_child" )
+    kill "$_pk_child" 2>/dev/null || true
+  done
+}
+
 provision_run_limited() {
   # $1 — предел в секундах, дальше команда. Код 124 — не уложилась в срок.
   _pl_limit="$1"
@@ -423,9 +443,15 @@ provision_run_limited() {
   _pl_waited=0
   while kill -0 "$_pl_pid" 2>/dev/null; do
     if [ "$_pl_waited" -ge "$_pl_limit" ]; then
-      # Сначала те, кого команда запустила сама (opkg ждёт свой wget).
-      pkill -P "$_pl_pid" 2>/dev/null || true
+      # Сначала те, кого команда запустила сама: opkg ждёт свой wget, и без
+      # этого тот остался бы висеть до собственного предела.
+      # Команду сперва замораживаем: иначе, пока снимается один её потомок,
+      # она успевает запустить следующего (opkg переходит к следующему
+      # источнику), и тот остаётся сиротой.
+      kill -STOP "$_pl_pid" 2>/dev/null || true
+      provision_kill_children "$_pl_pid"
       kill "$_pl_pid" 2>/dev/null || true
+      kill -CONT "$_pl_pid" 2>/dev/null || true
       sleep 1
       kill -9 "$_pl_pid" 2>/dev/null || true
       wait "$_pl_pid" 2>/dev/null || true
@@ -466,6 +492,27 @@ provision_opkg_official_conf() {
   grep -q "^src/gz[[:space:]].*$PROVISION_OPKG_OFFICIAL/" "$_pc_target"
 }
 
+provision_file_mtime() {
+  date -r "$1" +%s 2>/dev/null || stat -c %Y "$1" 2>/dev/null || echo 0
+}
+
+provision_opkg_main_list_fresh() {
+  # $1 — настройки opkg, $2 — время (секунды), раньше которого список старый.
+  # Получен ли список основного источника — первого `src/gz` в настройках.
+  #
+  # Код возврата `opkg update` на это не отвечает: он ненулевой, если не
+  # ответил ЛЮБОЙ источник, включая сторонние, которые владелец добавил рядом
+  # (на роутерах встречаются источники по https, которых wget прошивки не
+  # умеет). Основной список при этом получен, и пакеты ставить можно.
+  _pm_conf="$1"
+  _pm_since="$2"
+  _pm_name="$(sed -n 's/^src\/gz[[:space:]][[:space:]]*\([^[:space:]]*\)[[:space:]].*/\1/p' "$_pm_conf" 2>/dev/null | head -n 1)"
+  _pm_dir="$(sed -n 's/^lists_dir[[:space:]][[:space:]]*[^[:space:]]*[[:space:]][[:space:]]*\([^[:space:]]*\).*/\1/p' "$_pm_conf" 2>/dev/null | head -n 1)"
+  [ -n "$_pm_name" ] && [ -n "$_pm_dir" ] || return 1
+  [ -s "$_pm_dir/$_pm_name" ] || return 1
+  [ "$(provision_file_mtime "$_pm_dir/$_pm_name")" -ge "$_pm_since" ]
+}
+
 provision_opkg_update() {
   # Обновить списки пакетов. 0 — списки есть (с зеркала роутера или с
   # официального источника, тогда PROVISION_OPKG_CONF указывает на временные
@@ -478,8 +525,13 @@ provision_opkg_update() {
 
   PROVISION_OPKG_CONF=""
   _pu_status=0
+  _pu_started="$(date +%s 2>/dev/null || echo 0)"
   provision_run_limited "$_pu_limit" "$OPKG_BIN" update || _pu_status=$?
   [ "$_pu_status" -eq 0 ] && return 0
+  if provision_opkg_main_list_fresh "$_pu_conf" "$_pu_started"; then
+    echo "[*] Часть источников пакетов не ответила, но основной список Entware получен."
+    return 0
+  fi
 
   _pu_sources="$(provision_opkg_sources "$_pu_conf")"
   if [ "$_pu_status" -eq 124 ]; then
@@ -506,8 +558,9 @@ provision_opkg_update() {
 
   echo "[*] Беру список пакетов с официального источника $PROVISION_OPKG_OFFICIAL (настройки роутера не меняются)..."
   _pu_status=0
+  _pu_started="$(date +%s 2>/dev/null || echo 0)"
   provision_run_limited "$_pu_limit" "$OPKG_BIN" -f "$PROVISION_OPKG_TMP/opkg.conf" update || _pu_status=$?
-  if [ "$_pu_status" -ne 0 ]; then
+  if [ "$_pu_status" -ne 0 ] && ! provision_opkg_main_list_fresh "$PROVISION_OPKG_TMP/opkg.conf" "$_pu_started"; then
     echo "[!] Официальный источник Entware тоже не ответил."
     provision_opkg_cleanup
     return 1

@@ -42,6 +42,8 @@ case "$FAKE_OPKG:$with_conf" in
   hang-always:*) exec sleep 30 ;;
   fail-mirror:0) exit 1 ;;
   fail-mirror:1) exit 0 ;;
+  partial:*) mkdir -p "$FAKE_LISTS"; echo "Package: python3" > "$FAKE_LISTS/entware"; exit 2 ;;
+  children:*) sh -c 'sleep 30 & echo $! > "$FAKE_CHILD"; wait' & wait ;;
 esac
 exit 0
 """
@@ -172,3 +174,50 @@ def test_the_temporary_settings_are_removed_afterwards(stand):
 
     assert "done" in proc.stdout
     assert not [path.name for path in tmp_path.iterdir() if path.name.startswith("xkeen-opkg")]
+
+
+def test_a_dead_third_party_source_does_not_hide_that_entware_answered(stand):
+    tmp_path, _opkg, conf = stand
+    lists = tmp_path / "lists"
+    conf.write_text(MIRROR_CONF.replace("/opt/var/opkg-lists", lists.as_posix()), encoding="utf-8")
+
+    proc, calls, _elapsed = _run(
+        stand, 'provision_opkg_update && echo "conf=[$PROVISION_OPKG_CONF]"', "partial", FAKE_LISTS=lists.as_posix()
+    )
+
+    # opkg ответил ошибкой из-за стороннего источника, но список Entware свежий:
+    # это не повод ни останавливаться, ни идти к другому источнику.
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert calls == ["update"]
+    assert "conf=[]" in proc.stdout
+
+
+def test_an_old_list_does_not_pass_for_a_fresh_one(stand):
+    tmp_path, _opkg, conf = stand
+    lists = tmp_path / "lists"
+    lists.mkdir()
+    stale = lists / "entware"
+    stale.write_text("Package: python3\n", encoding="utf-8")
+    os.utime(stale, (1_600_000_000, 1_600_000_000))
+    conf.write_text(MIRROR_CONF.replace("/opt/var/opkg-lists", lists.as_posix()), encoding="utf-8")
+
+    proc, calls, _elapsed = _run(stand, "provision_opkg_update || echo refused", "fail", XKEEN_OPKG_FALLBACK="0")
+
+    assert "refused" in proc.stdout
+    assert calls == ["update"]
+
+
+@pytest.mark.skipif(os.name == "nt", reason="дерево процессов проверяется на Linux")
+def test_what_the_hung_command_started_is_stopped_with_it(stand):
+    tmp_path, _opkg, _conf = stand
+    child = tmp_path / "child.pid"
+
+    proc, _calls, _elapsed = _run(
+        stand,
+        'provision_run_limited 2 "$OPKG_BIN" update || true; sleep 1; '
+        f'kill -0 "$(cat "{child.as_posix()}")" 2>/dev/null && echo alive || echo gone',
+        "children",
+        FAKE_CHILD=child.as_posix(),
+    )
+
+    assert "gone" in proc.stdout
