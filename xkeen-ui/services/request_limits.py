@@ -211,6 +211,12 @@ def _read_stream_limited(stream, *, max_bytes: int, chunk_size: int = 64 * 1024)
 
 def read_request_bytes_limited(request, *, max_bytes: int, chunk_size: int = 64 * 1024) -> bytes:
     _check_known_content_length(getattr(request, "content_length", None), max_bytes=max_bytes)
+    cached = getattr(request, "_cached_data", None)
+    if isinstance(cached, (bytes, bytearray)):
+        raw = bytes(cached)
+        if len(raw) > int(max_bytes):
+            raise PayloadTooLargeError(max_bytes=max_bytes, actual=len(raw))
+        return raw
     return _read_stream_limited(request.stream, max_bytes=max_bytes, chunk_size=chunk_size)
 
 

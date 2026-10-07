@@ -46,7 +46,12 @@ from services.module_transactions.state import (  # noqa: E402
     transactions_root,
     write_status,
 )
-from services.self_update.state import get_update_paths, try_acquire_lock  # noqa: E402
+from services.self_update.state import (  # noqa: E402
+    get_update_paths,
+    release_lock,
+    transfer_lock,
+    try_acquire_lock,
+)
 
 
 DEFAULT_HEALTH_TIMEOUT_S = 120.0
@@ -87,7 +92,10 @@ def _run(args, *, client_factory, architecture, on_step) -> int:
         return 2
 
     lock_file = get_update_paths(str(state_dir))["lock_file"]
-    acquired, _ = try_acquire_lock(lock_file)
+    if args.lock_owner_pid is not None:
+        acquired = transfer_lock(lock_file, args.lock_owner_pid)
+    else:
+        acquired, _ = try_acquire_lock(lock_file)
     if not acquired:
         # A panel update or another operation owns the tree right now.
         journal.commit()
@@ -155,10 +163,7 @@ def _run(args, *, client_factory, architecture, on_step) -> int:
             shield=lambda: signal.signal(signal.SIGTERM, signal.SIG_IGN),
         )
     finally:
-        try:
-            os.remove(lock_file)
-        except OSError:
-            pass
+        release_lock(lock_file, owner_pid=os.getpid())
     return 0 if result in ("committed", "rolled_back") else 1
 
 
@@ -206,6 +211,7 @@ def main(argv=None, *, client_factory=None, architecture=None, on_step=None) -> 
     run.add_argument("--panel-root", required=True)
     run.add_argument("--state-dir", required=True)
     run.add_argument("--operation", required=True)
+    run.add_argument("--lock-owner-pid", type=int)
     again = commands.add_parser("recover")
     again.add_argument("--panel-root", required=True)
     again.add_argument("--state-dir", required=True)

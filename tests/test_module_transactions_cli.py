@@ -351,6 +351,37 @@ def test_ensure_idle_blocks_while_the_panel_updates_itself(stand) -> None:
     assert raised.value.code == "operation_in_progress"
 
 
+def test_launch_atomically_acquires_update_lock_before_creating_journal(
+    stand, monkeypatch
+) -> None:
+    plan = build_plan(
+        "install",
+        "tool.terminal",
+        **{**stand.panel.kwargs, "catalog": stand.release.catalog},
+    )
+    monkeypatch.setattr(
+        launcher,
+        "try_acquire_lock",
+        lambda _path: (False, {"exists": True, "alive": True}),
+    )
+    monkeypatch.setattr(
+        launcher.Journal,
+        "create",
+        lambda *_args, **_kwargs: pytest.fail("journal must not be created"),
+    )
+
+    with pytest.raises(ModuleTransactionError) as raised:
+        launcher.launch(
+            plan,
+            panel_root=stand.panel.root,
+            state_dir=stand.panel.state,
+            health_url=stand.health_url,
+            restart_cmd=stand.restart_cmd,
+        )
+
+    assert raised.value.code == "operation_in_progress"
+
+
 def test_launch_returns_id_and_status_reaches_committed(stand) -> None:
     plan = build_plan("install", "tool.terminal", **{**stand.panel.kwargs, "catalog": stand.release.catalog})
 

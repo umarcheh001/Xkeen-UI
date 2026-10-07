@@ -383,7 +383,7 @@
           "accessible_label": "Подтвердить"
         },
         {
-          "location": "xkeen-ui/static/js/features/resource_monitor.js:L1424",
+          "location": "xkeen-ui/static/js/features/resource_monitor.js:L1265",
           "control_type": "runtime-action",
           "accessible_label": "Подтвердить"
         },
@@ -1137,7 +1137,7 @@
           "accessible_label": "Показать доменные имена"
         },
         {
-          "location": "xkeen-ui/static/js/features/resource_monitor.js:L573",
+          "location": "xkeen-ui/static/js/features/resource_monitor.js:L568",
           "control_type": "runtime-action",
           "accessible_label": "Показать доменные имена"
         },
@@ -2071,7 +2071,7 @@
           "accessible_label": "Загрузка"
         },
         {
-          "location": "xkeen-ui/static/js/features/resource_monitor.js:L439",
+          "location": "xkeen-ui/static/js/features/resource_monitor.js:L434",
           "control_type": "runtime-action",
           "accessible_label": "Загрузка"
         },
@@ -2897,11 +2897,6 @@
       "tabler_asset": "refresh",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/resource_monitor.js:L1246",
-          "control_type": "runtime-action",
-          "accessible_label": "Перезапустить"
-        },
-        {
           "location": "xkeen-ui/static/js/features/routing_cards/rules/forced_rules_wizard.js:L196",
           "control_type": "runtime-action",
           "accessible_label": "Перезапустить"
@@ -2994,7 +2989,7 @@
       "tabler_asset": "refresh-alert",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/resource_monitor.js:L1459",
+          "location": "xkeen-ui/static/js/features/resource_monitor.js:L1300",
           "control_type": "runtime-action",
           "accessible_label": "retry"
         }
@@ -3151,7 +3146,7 @@
           "accessible_label": "Поиск"
         },
         {
-          "location": "xkeen-ui/static/js/features/resource_monitor.js:L1245",
+          "location": "xkeen-ui/static/js/features/resource_monitor.js:L1088",
           "control_type": "runtime-action",
           "accessible_label": "Поиск"
         },

@@ -3,9 +3,19 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Optional
 
 from core.context import AppContext
+
+
+def _lifecycle_port() -> int:
+    raw = str(os.environ.get("XKEEN_UI_PORT") or "8088").strip()
+    try:
+        port = int(raw)
+    except (TypeError, ValueError):
+        return 8088
+    return port if 0 < port <= 65535 else 8088
 
 
 def register_blueprints(app, ctx: Optional[AppContext] = None):
@@ -149,6 +159,29 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
     from .ui_settings import create_ui_settings_blueprint
     from .utils import create_utils_blueprint
     from .xkeen_lists import create_xkeen_lists_blueprint
+    from services.module_lifecycle import ModuleLifecycleService
+    from services.xkeen_commands_catalog import build_xkeen_cmd
+
+    def lifecycle_active_engines() -> frozenset[str]:
+        from services.cores import detect_running_core
+
+        module_id = {
+            "xray": "engine.xray",
+            "mihomo": "engine.mihomo",
+        }.get(detect_running_core() or "")
+        return frozenset({module_id}) if module_id else frozenset()
+
+    lifecycle_root = Path(ctx.ui_state_dir)
+    lifecycle_service = ModuleLifecycleService(
+        ctx.module_registry,
+        panel_root=lifecycle_root,
+        state_dir=lifecycle_root,
+        active_engines=lifecycle_active_engines,
+        health_url=f"http://127.0.0.1:{_lifecycle_port()}/login",
+        restart_cmd=build_xkeen_cmd("-restart"),
+        restart_panel=lambda source: bool(ctx.restart_xkeen(source=source)),
+    )
+    app.extensions["xkeen.module_lifecycle"] = lifecycle_service
 
     app.register_blueprint(create_utils_blueprint())
     app.register_blueprint(create_ui_settings_blueprint())
@@ -157,6 +190,7 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
         create_modules_blueprint(
             ctx.module_registry,
             before_change=module_change_guard,
+            lifecycle_service=lifecycle_service,
         )
     )
     app.register_blueprint(create_cores_status_blueprint(ctx.ui_state_dir))

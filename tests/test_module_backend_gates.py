@@ -67,6 +67,43 @@ def _register(tmp_path: Path, active_module_ids: list[str]) -> Flask:
     return app
 
 
+def test_lifecycle_api_is_core_owned_and_wired_lazily(tmp_path, monkeypatch):
+    monkeypatch.setenv("XKEEN_UI_PORT", "9091")
+    monkeypatch.setattr(
+        "services.xkeen_commands_catalog.build_xkeen_cmd",
+        lambda flag: ["xkeen-test", flag],
+    )
+    monkeypatch.setattr("services.cores.detect_running_core", lambda: "xray")
+
+    app = _register(tmp_path, ["core"])
+    rules = {rule.rule for rule in app.url_map.iter_rules()}
+    service = app.extensions["xkeen.module_lifecycle"]
+
+    assert {
+        "/api/modules/installed",
+        "/api/modules/available",
+        "/api/modules/operations/plan",
+        "/api/modules/operations/apply",
+        "/api/modules/operations/status",
+        "/api/modules/operations/<operation_id>/cancel",
+        "/api/modules/recovery",
+        "/api/modules/restart",
+    } <= rules
+    assert service.health_url == "http://127.0.0.1:9091/login"
+    assert service.restart_cmd == ("xkeen-test", "-restart")
+    assert service._active_engines() == frozenset({"engine.xray"})
+    assert app.test_client().get("/api/modules/operations/status").status_code == 200
+
+
+def test_lifecycle_port_falls_back_for_invalid_values(monkeypatch):
+    for raw in ("", "not-a-port", "0", "65536"):
+        monkeypatch.setenv("XKEEN_UI_PORT", raw)
+        assert routes._lifecycle_port() == 8088
+
+    monkeypatch.setenv("XKEEN_UI_PORT", "8443")
+    assert routes._lifecycle_port() == 8443
+
+
 def test_xray_only_registers_xray_routes_and_excludes_mihomo_tools(tmp_path):
     app = _register(tmp_path, ["core", "tool.editor", "engine.xray"])
     rules = {rule.rule for rule in app.url_map.iter_rules()}

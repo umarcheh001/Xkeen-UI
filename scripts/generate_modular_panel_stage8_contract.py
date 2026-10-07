@@ -289,6 +289,29 @@ def build_contract(root: Path) -> dict[str, Any]:
             "request_thread_policy": "never install inside the Flask request thread",
             "post_restart_owner": "detached module runner; the init script undoes an interrupted operation",
         },
+        "lifecycle_api": {
+            "stage": {
+                "id": "8.4",
+                "status": "closed",
+                "closed_on": "2026-10-06",
+            },
+            "service": "xkeen-ui/services/module_lifecycle.py",
+            "routes": [
+                {"method": "GET", "path": "/api/modules/installed", "success_status": 200},
+                {"method": "GET", "path": "/api/modules/available", "success_status": 200},
+                {"method": "POST", "path": "/api/modules/operations/plan", "success_status": 200},
+                {"method": "POST", "path": "/api/modules/operations/apply", "success_status": 202},
+                {"method": "GET", "path": "/api/modules/operations/status", "success_status": 200},
+                {"method": "POST", "path": "/api/modules/operations/<operation_id>/cancel", "success_status": 202},
+                {"method": "POST", "path": "/api/modules/recovery", "success_status": 200},
+                {"method": "POST", "path": "/api/modules/restart", "success_status": 200},
+            ],
+            "operations": ["install", "repair", "remove"],
+            "execution": "detached module transaction runner",
+            "plan_guard": "lowercase SHA-256 of canonical server plan and dependency diff",
+            "update_available": False,
+            "recovery_restarts_implicitly": False,
+        },
         "acceptance_matrix": acceptance,
         "deferred": [
             "arbitrary GitHub repositories",
@@ -310,6 +333,7 @@ def render_markdown(payload: dict[str, Any]) -> str:
     release_assets = payload["release_assets"]
     trust_client = payload["trust_client"]
     ci_publication = payload["ci_publication"]
+    lifecycle_api = payload["lifecycle_api"]
     lines = [
         "# Этап 8.0: контракты и границы",
         "",
@@ -391,6 +415,20 @@ def render_markdown(payload: dict[str, Any]) -> str:
             "| module-only | файлы модуля из manifest, state-файлы, restart, health, commit или rollback |",
             "| panel update | core-owned payload, backup и полный rollback |",
             "| profile transition | Stage 7 transaction, diff, restart и rollback |",
+            "",
+            "## Lifecycle API 8.4",
+            "",
+            f"Подэтап {lifecycle_api['stage']['id']} закрыт {lifecycle_api['stage']['closed_on']}. `{lifecycle_api['service']}` повторно строит authoritative plan и передаёт его в {lifecycle_api['execution']}; Flask request не меняет файлы панели.",
+            f"Допустимы только `{ '`, `'.join(lifecycle_api['operations']) }`. Plan guard — {lifecycle_api['plan_guard']}. Независимое обновление версии модуля отложено до 8.5, поэтому `update_available` всегда `false`.",
+            "",
+            "| Method | Path | Success |",
+            "| --- | --- | --- |",
+            *[
+                f"| `{item['method']}` | `{item['path']}` | `{item['success_status']}` |"
+                for item in lifecycle_api["routes"]
+            ],
+            "",
+            "Cancel посылает SIGTERM только точному live runner после проверки journal, status и Linux `/proc/<pid>/cmdline`. Recovery не перезапускает панель автоматически; restart имеет отдельный guard от активной операции, update lock и rollback-failed state.",
             "",
             "## Acceptance matrix",
             "",

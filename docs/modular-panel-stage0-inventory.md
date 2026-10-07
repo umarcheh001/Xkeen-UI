@@ -36,7 +36,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 | Module ID | Единиц | Размер | Routes | Background | UI surfaces | Removable |
 |---|---:|---:|---:|---:|---:|---|
-| `core` | 484 | 6.31 МБ | 77 | 4 | 35 | нет |
+| `core` | 488 | 6.35 МБ | 85 | 4 | 35 | нет |
 | `engine.xray` | 134 | 3.59 МБ | 60 | 3 | 14 | да |
 | `engine.mihomo` | 128 | 2.93 МБ | 89 | 4 | 6 | да |
 | `tool.editor` | 25 | 813.5 КБ | 0 | 0 | 2 | да |
@@ -44,11 +44,11 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 | `tool.files` | 85 | 976.0 КБ | 43 | 1 | 1 | да |
 | `tool.backups` | 12 | 112.6 КБ | 17 | 0 | 1 | да |
 | `integration.happ` | 22 | 306.5 КБ | 5 | 0 | 1 | да |
-| `tool.advanced-diagnostics` | 26 | 634.4 КБ | 29 | 0 | 2 | да |
+| `tool.advanced-diagnostics` | 26 | 622.6 КБ | 27 | 0 | 2 | да |
 
 ## Backend routes и регистрация
 
-- Endpoint declarations: **322**.
+- Endpoint declarations: **328**.
 - Файлов с route decorators/WS dispatch: **54**.
 - Точек регистрации: **30**.
 

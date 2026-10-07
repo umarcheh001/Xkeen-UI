@@ -15,12 +15,78 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 import glob
 from typing import Any, Dict, List, Optional, Tuple
 
 from services.io import read_json
 from services.io.atomic import _atomic_write_json
+
+
+_LOCK_GUARDS: Dict[str, threading.Lock] = {}
+_LOCK_GUARDS_MUTEX = threading.Lock()
+_LOCK_TRANSFER_TIMEOUT_SEC = 1.0
+_LOCK_GUARD_RETRY_SEC = 0.01
+
+
+def _thread_lock(path: str) -> threading.Lock:
+    with _LOCK_GUARDS_MUTEX:
+        return _LOCK_GUARDS.setdefault(os.path.abspath(path), threading.Lock())
+
+
+def _acquire_process_guard(path: str, *, timeout_sec: float = 0.0) -> int | None:
+    deadline = time.monotonic() + max(0.0, timeout_sec)
+    while True:
+        fd: int | None = None
+        try:
+            fd = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
+            if os.name == "nt":
+                import msvcrt
+
+                if os.fstat(fd).st_size == 0:
+                    os.write(fd, b"0")
+                os.lseek(fd, 0, os.SEEK_SET)
+                msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return fd
+        except ImportError:
+            if fd is not None:
+                os.close(fd)
+            return None
+        except OSError:
+            if fd is not None:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return None
+            time.sleep(min(_LOCK_GUARD_RETRY_SEC, remaining))
+
+
+def _release_process_guard(fd: int) -> None:
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            os.lseek(fd, 0, os.SEEK_SET)
+            msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(fd, fcntl.LOCK_UN)
+    except (OSError, ImportError):
+        pass
+    finally:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
 
 
 def _is_dir_writable(path: str) -> bool:
@@ -212,9 +278,27 @@ def try_acquire_lock(lock_file: str) -> Tuple[bool, Dict[str, Any]]:
 
     Returns (acquired, lock_info).
     """
-    os.makedirs(os.path.dirname(lock_file) or ".", exist_ok=True)
-    payload = _lock_payload()
-    for attempt in range(2):
+    directory = os.path.dirname(lock_file) or "."
+    os.makedirs(directory, exist_ok=True)
+    thread_guard = _thread_lock(lock_file)
+    if not thread_guard.acquire(blocking=False):
+        return False, {"exists": True, "alive": True, "stale": False}
+    guard_fd = _acquire_process_guard(lock_file + ".guard")
+    if guard_fd is None:
+        thread_guard.release()
+        return False, {"exists": True, "alive": True, "stale": False}
+    try:
+        info = read_lock(lock_file)
+        if info.get("exists") and not info.get("stale"):
+            return False, info
+        if info.get("stale"):
+            try:
+                os.remove(lock_file)
+            except FileNotFoundError:
+                pass
+            except OSError:
+                return False, read_lock(lock_file)
+        payload = _lock_payload()
         try:
             fd = os.open(lock_file, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
             try:
@@ -224,22 +308,50 @@ def try_acquire_lock(lock_file: str) -> Tuple[bool, Dict[str, Any]]:
             info = {"exists": True, **payload, "age_sec": 0.0, "alive": True, "stale": False}
             return True, info
         except FileExistsError:
-            info = read_lock(lock_file)
-            if attempt == 0 and info.get("stale"):
-                try:
-                    os.remove(lock_file)
-                    continue
-                except Exception:
-                    pass
-            return False, info
+            return False, read_lock(lock_file)
         except Exception:
             # If lock cannot be created due to FS errors, treat as locked to be safe.
             info = read_lock(lock_file)
             info["exists"] = True
             return False, info
-    info = read_lock(lock_file)
-    info["exists"] = True
-    return False, info
+    finally:
+        _release_process_guard(guard_fd)
+        thread_guard.release()
+
+
+def transfer_lock(lock_file: str, previous_pid: int) -> bool:
+    """Transfer an existing live lock to this process without unlocking it."""
+
+    directory = os.path.dirname(lock_file) or "."
+    os.makedirs(directory, exist_ok=True)
+    deadline = time.monotonic() + _LOCK_TRANSFER_TIMEOUT_SEC
+    thread_guard = _thread_lock(lock_file)
+    if not thread_guard.acquire(timeout=_LOCK_TRANSFER_TIMEOUT_SEC):
+        return False
+    guard_fd = _acquire_process_guard(
+        lock_file + ".guard",
+        timeout_sec=max(0.0, deadline - time.monotonic()),
+    )
+    if guard_fd is None:
+        thread_guard.release()
+        return False
+    try:
+        info = read_lock(lock_file)
+        try:
+            expected = int(previous_pid)
+            recorded = int(info.get("pid"))
+        except (TypeError, ValueError):
+            return False
+        if not info.get("exists") or recorded != expected:
+            return False
+        try:
+            _atomic_write_json(lock_file, _lock_payload())
+        except Exception:
+            return False
+        return True
+    finally:
+        _release_process_guard(guard_fd)
+        thread_guard.release()
 
 
 def reconcile_runtime_status(status_file: str, lock_file: str) -> Tuple[Dict[str, Any], Dict[str, Any], bool]:
@@ -277,7 +389,13 @@ def reconcile_runtime_status(status_file: str, lock_file: str) -> Tuple[Dict[str
     return failed, lock_info, True
 
 
-def release_lock(lock_file: str) -> None:
+def release_lock(lock_file: str, *, owner_pid: int | None = None) -> None:
+    if owner_pid is not None:
+        try:
+            if int(read_lock(lock_file).get("pid")) != int(owner_pid):
+                return
+        except (TypeError, ValueError):
+            return
     try:
         os.remove(lock_file)
     except FileNotFoundError:

@@ -1,8 +1,8 @@
-"""Scoped LTE modem probing and reset operations.
+"""Read-only LTE modem transport probing.
 
 The service deliberately keeps transport paths and command output out of its
-public DTOs.  A modem is selected by its normalised RCI id and IMEI matching
-is required before either QMI or TTY can be used for a reset.
+public DTOs. A modem is selected by its normalised RCI id and IMEI matching is
+required before a QMI or TTY transport is reported as available.
 """
 
 from __future__ import annotations
@@ -14,9 +14,7 @@ import re
 import select
 import stat
 import subprocess
-import threading
 import time
-import uuid
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping, Sequence
 
@@ -30,19 +28,11 @@ from services.router_diagnostics import fetch_rci_json, sample_router_lte
 
 MODEM_ID_RE = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 IMEI_RE = re.compile(r"(?<!\d)(\d{14,17})(?!\d)")
-TERMINAL_STATES = frozenset({"recovered", "failed", "timed_out"})
-
 PROBE_TIMEOUT_SECONDS = 3.0
-# Both the probe endpoint and reset preflight run synchronously in the browser
-# request. Keep identity checks below the browser timeout even when the router
-# exposes many stale transport candidates.
+# The probe endpoint runs synchronously in the browser request. Keep identity
+# checks below the browser timeout even when the router exposes many stale
+# transport candidates.
 MODEM_PROBE_DEADLINE_SECONDS = 12.0
-RESET_TIMEOUT_SECONDS = 30.0
-RECOVERY_POLL_SECONDS = 1.0
-OPERATION_RETENTION_SECONDS = 15 * 60
-# Keep completed operation metadata bounded even when clients never poll the
-# status endpoint. Active operations are always retained until they finish.
-MAX_OPERATION_ENTRIES = 256
 MAX_TTY_RESPONSE_BYTES = 2048
 _SNAPSHOT_LIMITS = {
     "id": 64, "name": 96, "operator": 96, "technology": 32,
@@ -86,45 +76,6 @@ class ModemControlProbe:
         if self.code:
             result["code"] = self.code
         return result
-
-
-@dataclass(frozen=True)
-class _OperationState:
-    operation_id: str
-    modem_id: str
-    status: str
-    transport: str | None
-    code: str | None
-    message: str | None
-    started_at: float
-    updated_at: float
-    finished_at: float | None
-    before: Mapping[str, Any]
-    after: Mapping[str, Any] | None
-
-    def as_dict(self) -> dict[str, Any]:
-        result = {
-            "operation_id": self.operation_id,
-            "modem_id": self.modem_id,
-            "status": self.status,
-            "transport": self.transport,
-            "started_at": self.started_at,
-            "updated_at": self.updated_at,
-            "finished_at": self.finished_at,
-            "before": copy.deepcopy(dict(self.before)),
-            "after": copy.deepcopy(dict(self.after)) if self.after is not None else None,
-        }
-        if self.code:
-            result["code"] = self.code
-        if self.message:
-            result["message"] = self.message
-        return result
-
-
-@dataclass(frozen=True)
-class _TransportMatch:
-    kind: str
-    path: str
 
 
 def _default_device_enumerator() -> dict[str, list[str]]:
@@ -247,7 +198,7 @@ def _default_tty_exchange(path: str, command: str, *, timeout: float = PROBE_TIM
 
 
 class ModemControlService:
-    """Probe and reset one exact RCI modem with injected transport seams."""
+    """Probe one exact RCI modem without changing modem state."""
 
     def __init__(
         self,
@@ -256,28 +207,16 @@ class ModemControlService:
         runner: Callable[..., Any] = subprocess.run,
         tty_exchange: Callable[..., str] | None = None,
         clock: Callable[[], float] = time.time,
-        sleep: Callable[[float], None] = time.sleep,
-        worker_starter: Callable[[Callable[[], None]], Any] | None = None,
         sampler: Callable[[], Mapping[str, Any]] | None = None,
     ):
         self._clock = clock
-        self._sleep = sleep
         self._rci_fetcher = rci_fetcher
         self._sampler_explicit = sampler is not None
         self._sampler = sampler or (lambda: sample_router_lte(rci_fetcher=rci_fetcher, clock=clock))
         self._device_enumerator = device_enumerator
         self._runner = runner
         self._tty_exchange = tty_exchange or _default_tty_exchange
-        self._worker_starter = worker_starter or self._start_thread
         self._direct_inventory_mode: bool | None = None
-        self._lock = threading.RLock()
-        self._operations: dict[str, _OperationState] = {}
-        self._targets: dict[str, _TransportMatch] = {}
-        self._active_by_modem: dict[str, str] = {}
-
-    @staticmethod
-    def _start_thread(worker: Callable[[], None]) -> None:
-        threading.Thread(target=worker, name="router-modem-reset", daemon=True).start()
 
     @staticmethod
     def _inventory_available(result: Any) -> bool:
@@ -376,14 +315,14 @@ class ModemControlService:
         except Exception:
             return False
 
-    def _probe_internal(self, modem_id: str, *, deadline: float | None = None) -> tuple[dict[str, Any], _TransportMatch | None]:
+    def _probe_internal(self, modem_id: str, *, deadline: float | None = None) -> dict[str, Any]:
         modem = self._selected_modem(modem_id)
         expected_imei = str(modem.get("imei") or "").strip()
         snapshot = _safe_snapshot(modem)
         statuses: list[dict[str, Any]] = []
         if not expected_imei:
             statuses = [{"kind": kind, "available": False} for kind in ("qmi", "tty")]
-            return ModemControlProbe(snapshot, None, tuple(statuses), "transport_not_matched", self._clock()).as_dict(), None
+            return ModemControlProbe(snapshot, None, tuple(statuses), "transport_not_matched", self._clock()).as_dict()
 
         qmi_error: str | None = None
         for path in self._devices()["qmi"]:
@@ -394,7 +333,7 @@ class ModemControlService:
             qmi_error = qmi_error or error
             if imei == expected_imei:
                 statuses.append({"kind": "qmi", "available": True})
-                return ModemControlProbe(snapshot, "qmi", tuple(statuses), sampled_at=self._clock()).as_dict(), _TransportMatch("qmi", path)
+                return ModemControlProbe(snapshot, "qmi", tuple(statuses), sampled_at=self._clock()).as_dict()
         statuses.append({"kind": "qmi", "available": False})
 
         for path in self._devices()["tty"]:
@@ -402,214 +341,22 @@ class ModemControlService:
                 break
             if self._tty_match(path, expected_imei, deadline=deadline):
                 statuses = [{"kind": "tty", "available": True}]
-                return ModemControlProbe(snapshot, "tty", tuple(statuses), sampled_at=self._clock()).as_dict(), _TransportMatch("tty", path)
+                return ModemControlProbe(snapshot, "tty", tuple(statuses), sampled_at=self._clock()).as_dict()
         statuses.append({"kind": "tty", "available": False})
         code = qmi_error if qmi_error and not any(item["available"] for item in statuses) else "transport_not_matched"
         result = ModemControlProbe(snapshot, None, tuple(statuses), code, self._clock()).as_dict()
-        return result, None
+        return result
 
     def probe(self, modem_id: str) -> dict[str, Any]:
         modem_id = validate_modem_id(modem_id)
         return self._probe_internal(
             modem_id,
             deadline=self._clock() + MODEM_PROBE_DEADLINE_SECONDS,
-        )[0]
-
-    def _replace(self, operation_id: str, **changes: Any) -> None:
-        with self._lock:
-            current = self._operations.get(operation_id)
-            if current is None:
-                return
-            self._operations[operation_id] = _OperationState(
-                operation_id=current.operation_id,
-                modem_id=current.modem_id,
-                status=changes.get("status", current.status),
-                transport=changes.get("transport", current.transport),
-                code=changes.get("code", current.code),
-                message=changes.get("message", current.message),
-                started_at=current.started_at,
-                updated_at=self._clock(),
-                finished_at=changes.get("finished_at", current.finished_at),
-                before=changes.get("before", current.before),
-                after=changes.get("after", current.after),
-            )
-
-    def _prune_operations_locked(self, now: float | None = None) -> None:
-        """Drop stale/completely terminal entries while preserving active work.
-
-        Callers must hold ``self._lock``. The retention sweep is deliberately
-        limited to terminal states so a long-running reset cannot disappear
-        merely because its client did not poll status in time.
-        """
-
-        now = self._clock() if now is None else now
-        active_ids = set(self._active_by_modem.values())
-        removable: list[str] = []
-        for operation_id, state in self._operations.items():
-            if state.status not in TERMINAL_STATES or operation_id in active_ids:
-                continue
-            finished_at = state.finished_at
-            if finished_at is not None and now - finished_at > OPERATION_RETENTION_SECONDS:
-                removable.append(operation_id)
-
-        for operation_id in removable:
-            self._operations.pop(operation_id, None)
-            self._targets.pop(operation_id, None)
-
-        overflow = len(self._operations) - MAX_OPERATION_ENTRIES
-        if overflow <= 0:
-            return
-        active_ids = set(self._active_by_modem.values())
-        for operation_id, state in list(self._operations.items()):
-            if overflow <= 0:
-                break
-            if state.status not in TERMINAL_STATES or operation_id in active_ids:
-                continue
-            self._operations.pop(operation_id, None)
-            self._targets.pop(operation_id, None)
-            overflow -= 1
-
-    def _finish(self, operation_id: str, *, status: str, code: str | None = None, after: Mapping[str, Any] | None = None) -> None:
-        now = self._clock()
-        self._replace(operation_id, status=status, code=code, after=after, finished_at=now)
-        self._release_operation_slot(operation_id)
-        with self._lock:
-            self._prune_operations_locked(now)
-
-    def _release_operation_slot(self, operation_id: str) -> None:
-        with self._lock:
-            state = self._operations.get(operation_id)
-            if state and self._active_by_modem.get(state.modem_id) == operation_id:
-                self._active_by_modem.pop(state.modem_id, None)
-            self._targets.pop(operation_id, None)
-
-    def _reset_qmi(self, path: str) -> bool:
-        try:
-            result = self._runner(
-                ["qmicli", "-d", path, "--dms-set-operating-mode=reset"],
-                capture_output=True,
-                text=True,
-                timeout=RESET_TIMEOUT_SECONDS,
-                check=False,
-                shell=False,
-            )
-            return int(getattr(result, "returncode", 1) or 0) == 0
-        except Exception:
-            return False
-
-    def _reset_target(self, target: _TransportMatch) -> bool:
-        if target.kind == "qmi":
-            return self._reset_qmi(target.path)
-        try:
-            response = _response_text(self._tty_exchange(target.path, "AT+RESET", timeout=RESET_TIMEOUT_SECONDS))
-            return not response or bool(re.search(r"\b(?:OK|RESET)\b", response, re.I))
-        except Exception:
-            return False
-
-    def _worker(self, operation_id: str) -> None:
-        try:
-            with self._lock:
-                target = self._targets.get(operation_id)
-            if target is None:
-                self._finish(operation_id, status="failed", code="modem_operation_target_missing")
-                return
-            self._replace(operation_id, status="running")
-            if not self._reset_target(target):
-                self._finish(operation_id, status="failed", code="modem_reset_failed")
-                return
-            self._replace(operation_id, status="waiting_for_modem")
-            deadline = self._clock() + RESET_TIMEOUT_SECONDS
-            seen_missing = False
-            last_now = self._clock()
-            for _attempt in range(128):
-                if self._clock() >= deadline:
-                    break
-                inventory, available = self._inventory()
-                modem = next((item for item in _modem_items(inventory) if str(item.get("id") or "") == self._operation_modem(operation_id)), None)
-                if available and modem is None:
-                    seen_missing = True
-                elif available and seen_missing and modem is not None:
-                    self._finish(operation_id, status="recovered", after=_safe_snapshot(modem))
-                    return
-                current_now = self._clock()
-                if current_now >= deadline:
-                    break
-                self._sleep(min(RECOVERY_POLL_SECONDS, max(0.0, deadline - current_now)))
-                after_sleep = self._clock()
-                if not seen_missing and after_sleep <= last_now:
-                    # A synchronous test worker may inject a no-op sleep.  Avoid
-                    # spinning forever while retaining the same timeout result.
-                    break
-                last_now = after_sleep
-            self._finish(operation_id, status="timed_out", code="modem_recovery_timeout")
-        except Exception:
-            self._finish(operation_id, status="failed", code="modem_operation_failed")
-        finally:
-            self._release_operation_slot(operation_id)
-
-    def _operation_modem(self, operation_id: str) -> str:
-        with self._lock:
-            state = self._operations.get(operation_id)
-            return state.modem_id if state else ""
-
-    def start_reset(self, modem_id: str, *, confirmation: str | None = None) -> dict[str, Any]:
-        modem_id = validate_modem_id(modem_id)
-        if confirmation != modem_id:
-            raise ModemControlError("modem_confirmation_mismatch")
-        probe, target = self._probe_internal(
-            modem_id,
-            deadline=self._clock() + MODEM_PROBE_DEADLINE_SECONDS,
         )
-        if target is None:
-            raise ModemControlError(str(probe.get("code") or "transport_not_matched"))
-        with self._lock:
-            self._prune_operations_locked()
-            if modem_id in self._active_by_modem:
-                raise ModemControlError("modem_operation_in_progress")
-            now = self._clock()
-            operation_id = uuid.uuid4().hex
-            state = _OperationState(
-                operation_id=operation_id,
-                modem_id=modem_id,
-                status="queued",
-                transport=target.kind,
-                code=None,
-                message=None,
-                started_at=now,
-                updated_at=now,
-                finished_at=None,
-                before=_safe_snapshot(probe["modem"]),
-                after=None,
-            )
-            self._operations[operation_id] = state
-            self._targets[operation_id] = target
-            self._active_by_modem[modem_id] = operation_id
-        try:
-            self._worker_starter(lambda: self._worker(operation_id))
-        except Exception as exc:
-            self._finish(operation_id, status="failed", code="worker_start_failed")
-            raise ModemControlError("worker_start_failed") from exc
-        return {
-            "operation_id": operation_id,
-            "modem_id": modem_id,
-            "status": "queued",
-            "before": copy.deepcopy(state.before),
-            "transport": target.kind,
-        }
 
-    def status(self, operation_id: str) -> dict[str, Any]:
-        if not isinstance(operation_id, str) or not operation_id or len(operation_id) > 128:
-            raise ModemControlError("operation_not_found")
-        with self._lock:
-            self._prune_operations_locked()
-            state = self._operations.get(operation_id)
-            if state is None:
-                raise ModemControlError("operation_not_found")
-            return state.as_dict()
 
 
 __all__ = [
-    "MAX_OPERATION_ENTRIES",
     "MODEM_PROBE_DEADLINE_SECONDS",
     "ModemControlError",
     "ModemControlProbe",

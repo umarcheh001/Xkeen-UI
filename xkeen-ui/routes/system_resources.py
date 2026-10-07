@@ -22,36 +22,22 @@ MODEM_CONTROL_SERVICE = ModemControlService()
 
 _MODEM_CONTROL_STATUS = {
     "invalid_modem_id": 400,
-    "modem_confirmation_mismatch": 400,
     "modem_not_found": 404,
-    "operation_not_found": 404,
-    "modem_operation_in_progress": 409,
     "transport_not_matched": 409,
     "qmi_tool_missing": 503,
     "qmi_probe_timeout": 503,
     "qmi_probe_failed": 503,
-    "modem_reset_failed": 502,
-    "modem_recovery_timeout": 504,
-    "modem_operation_target_missing": 502,
-    "modem_operation_failed": 502,
-    "worker_start_failed": 503,
+    "modem_probe_failed": 502,
 }
 
 _MODEM_CONTROL_MESSAGES = {
     "invalid_modem_id": "Некорректный идентификатор модема.",
-    "modem_confirmation_mismatch": "Подтверждение не совпадает с идентификатором модема.",
     "modem_not_found": "Модем не найден в текущем состоянии роутера.",
-    "operation_not_found": "Операция не найдена или уже истекла.",
-    "modem_operation_in_progress": "Для этого модема уже выполняется операция.",
     "transport_not_matched": "Безопасный транспорт управления не найден.",
     "qmi_tool_missing": "QMI-инструмент на роутере недоступен.",
     "qmi_probe_timeout": "Проверка QMI превысила время ожидания.",
     "qmi_probe_failed": "Проверка QMI завершилась ошибкой.",
-    "modem_reset_failed": "Команда перезапуска модема завершилась ошибкой.",
-    "modem_recovery_timeout": "Возврат модема не подтверждён за отведённое время.",
-    "modem_operation_target_missing": "Цель операции управления недоступна.",
-    "modem_operation_failed": "Операция управления модемом завершилась ошибкой.",
-    "worker_start_failed": "Не удалось запустить операцию управления модемом.",
+    "modem_probe_failed": "Проверка управления модемом не выполнена.",
 }
 
 
@@ -64,9 +50,9 @@ def _no_store_json(payload: dict, status: int = 200):
 def _modem_control_error(exc: ModemControlError):
     code = str(exc.code)
     if code not in _MODEM_CONTROL_STATUS:
-        code = "modem_operation_failed"
+        code = "modem_probe_failed"
     status = _MODEM_CONTROL_STATUS.get(code, 400)
-    message = _MODEM_CONTROL_MESSAGES.get(code, "Операция управления модемом отклонена.")
+    message = _MODEM_CONTROL_MESSAGES.get(code, "Проверка управления модемом отклонена.")
     response, response_status = error_response(message, status, ok=False, code=code, retryable=status >= 500)
     response.headers["Cache-Control"] = "no-store"
     return response, response_status
@@ -181,43 +167,6 @@ def create_system_resources_blueprint() -> Blueprint:
             return _no_store_json(MODEM_CONTROL_SERVICE.probe(modem_id))
         except ValueError:
             return _modem_control_error(ModemControlError("invalid_modem_id"))
-        except ModemControlError as exc:
-            return _modem_control_error(exc)
-
-    @bp.post("/api/system/router/lte/<modem_id>/reset")
-    def api_router_lte_modem_reset(modem_id: str):
-        try:
-            validate_modem_id(modem_id)
-        except ValueError:
-            return _modem_control_error(ModemControlError("invalid_modem_id"))
-        body = request.get_json(silent=True)
-        if not isinstance(body, dict):
-            response, status = error_response(
-                "Ожидается JSON-объект с подтверждением модема.",
-                400,
-                ok=False,
-                code="invalid_payload",
-                retryable=False,
-            )
-            response.headers["Cache-Control"] = "no-store"
-            return response, status
-        confirmation = body.get("confirmation")
-        try:
-            return _no_store_json(
-                MODEM_CONTROL_SERVICE.start_reset(
-                    modem_id, confirmation=confirmation if isinstance(confirmation, str) else None,
-                ),
-                202,
-            )
-        except ValueError:
-            return _modem_control_error(ModemControlError("invalid_modem_id"))
-        except ModemControlError as exc:
-            return _modem_control_error(exc)
-
-    @bp.get("/api/system/router/lte/operations/<operation_id>")
-    def api_router_lte_operation(operation_id: str):
-        try:
-            return _no_store_json(MODEM_CONTROL_SERVICE.status(operation_id))
         except ModemControlError as exc:
             return _modem_control_error(exc)
 

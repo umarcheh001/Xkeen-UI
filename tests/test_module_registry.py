@@ -766,3 +766,14 @@ def test_stage1_closure_is_reflected_in_documentation():
         assert fragment in contract
 
     assert "modular-panel-stage1-module-registry.md" in docs_index
+
+
+def test_legacy_registry_blueprint_without_lifecycle_keeps_old_api_available(tmp_path):
+    app = Flask(__name__)
+    app.register_blueprint(create_modules_blueprint(_registry(tmp_path)))
+    client = app.test_client()
+
+    assert client.get("/api/modules").status_code == 200
+    unavailable = client.get("/api/modules/installed")
+    assert unavailable.status_code == 503
+    assert unavailable.get_json()["code"] == "module_lifecycle_unavailable"
