@@ -1170,6 +1170,11 @@ def _delete_subscription_guarded(
 
     snapshots_removed = _remove_config_snapshots_for_paths(xray_configs_dir, snapshot_cleanup_paths)
 
+    skipped = list(rebuild_stats.get("skipped") or [])
+    warning = " ".join(part for part in (displaced_skipped_warning(skipped), preflight_warning) if part)
+    # До перезапуска: он может оборвать связь с окном раньше, чем уйдёт ответ.
+    store_operation_notice(ui_state_dir, "delete", warning, skipped, subject=str(removed.get("id") or ""))
+
     restarted = False
     if restart_xkeen and (output_removed or observatory_changed or routing_changed or outbounds_changed):
         try:
@@ -1191,10 +1196,8 @@ def _delete_subscription_guarded(
         "baseline_restored": restored_baseline,
         "snapshots_removed": snapshots_removed,
         "restarted": restarted,
-        "warning": " ".join(
-            part for part in (displaced_skipped_warning(rebuild_stats.get("skipped")), preflight_warning) if part
-        ),
-        "skipped": list(rebuild_stats.get("skipped") or []),
+        "warning": warning,
+        "skipped": skipped,
     }
 
 
@@ -3772,6 +3775,38 @@ def displaced_skipped_warning(skipped: Any) -> str:
     if not names:
         return ""
     return "Не возвращено на прежнее место, потому что изменено вручную: " + ", ".join(names) + "."
+
+
+NOTICE_FILENAME = "xray_subscriptions_notice.json"
+
+
+def store_operation_notice(
+    ui_state_dir: str, action: str, warning: str, skipped: Any, *, subject: str = ""
+) -> None:
+    """Запомнить, что операция не вернула на место, для окна, потерявшего ответ.
+
+    Перезапуск ядра нередко рвёт и соединение с панелью: ответ до окна не
+    доходит, и итог оно берёт из списка подписок.  Сказанное в ответе должно
+    пережить этот обрыв.  Каждая операция пишет своё или стирает чужое.
+    """
+    path = os.path.join(str(ui_state_dir or ""), NOTICE_FILENAME)
+    try:
+        if warning or skipped:
+            notice: Dict[str, Any] = {
+                "action": action,
+                "ts": int(time.time()),
+                "warning": warning,
+                "skipped": list(skipped or []),
+            }
+            if subject:
+                notice["subject"] = subject
+            _atomic_write_json(path, notice)
+        else:
+            os.remove(path)
+    except FileNotFoundError:
+        pass
+    except Exception:  # noqa: BLE001 - сообщение не повод ронять выполненную операцию
+        pass
 
 
 def _clear_subscription_managed_baselines(ui_state_dir: str) -> bool:

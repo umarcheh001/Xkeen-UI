@@ -8224,7 +8224,9 @@ let outboundsModuleApi = null;
 
     // Перезапуск ядра может оборвать и само соединение с панелью. Операция на
     // роутере при этом доходит до конца, поэтому итог берём из списка подписок.
-    async function subsAwaitSwitchOutcome(mode) {
+    // firstAnswerDecides — когда список меняется раньше перезапуска и первый же
+    // ответ после обрыва окончателен.
+    async function subsAwaitOutcome(reached, firstAnswerDecides) {
       const deadline = Date.now() + 90000;
       let answered = false;
       while (Date.now() < deadline) {
@@ -8237,7 +8239,8 @@ let outboundsModuleApi = null;
           const data = await res.json().catch(() => null);
           if (res.ok && data && data.ok !== false) {
             answered = true;
-            if (subsSwitchReached(mode, data)) return data;
+            if (reached(data)) return data;
+            if (firstAnswerDecides) return false;
           }
         } catch (e) {}
       }
@@ -8257,7 +8260,7 @@ let outboundsModuleApi = null;
         data = await res.json().catch(() => ({}));
       } catch (e) {
         subsSetStatus('Связь с роутером прервалась на время перезапуска Xray. Жду итог…', false, false, { busy: true });
-        const settled = await subsAwaitSwitchOutcome(mode);
+        const settled = await subsAwaitOutcome((list) => subsSwitchReached(mode, list));
         if (settled) {
           // Ответ потерян вместе с соединением; что панель не вернула на место,
           // она запомнила и отдаёт со списком.
@@ -8705,6 +8708,34 @@ let outboundsModuleApi = null;
       }
     }
 
+    // Ответ на удаление потерян вместе с соединением: запись из списка панель
+    // убирает ещё до перезапуска, а что не вернула на место — отдаёт со списком.
+    async function subsDeleteOutcomeAfterLinkLoss(subId, known) {
+      subsSetStatus('Связь с роутером прервалась на время перезапуска Xray. Жду итог…', false, false, { busy: true });
+      const target = subsCleanId(subId);
+      const settled = await subsAwaitOutcome((list) => {
+        const items = Array.isArray(list.subscriptions) ? list.subscriptions : [];
+        return !items.some((item) => subsCleanId(item && item.id) === target);
+      }, true);
+      if (settled === null) {
+        throw new Error('связь с роутером не восстановилась. Удаление могло завершиться — обновите страницу.');
+      }
+      if (!settled) {
+        throw new Error('после восстановления связи подписка осталась на месте.');
+      }
+      const notice = settled.switch_notice || {};
+      const ours = String(notice.action || '') === 'delete' && subsCleanId(notice.subject) === target;
+      const outputFile = String((known && known.output_file) || '');
+      return {
+        ok: true,
+        warning: ours ? String(notice.warning || '') : '',
+        deleted: outputFile ? { output_file: outputFile } : null,
+        // Что именно задето, знал только потерянный ответ: перечитываем всё.
+        routing_changed: true,
+        observatory_changed: true,
+      };
+    }
+
     async function subsDelete(id) {
       const subId = String(id || '').trim();
       if (!subId) return false;
@@ -8729,14 +8760,23 @@ let outboundsModuleApi = null;
       });
       if (!ok) return false;
       const restart = shouldRestartAfterSave();
+      const known = subsFindById(subId);
       subsSetStatus('Удаляю…', false, false, { busy: true });
       try {
-        const res = await fetch('/api/xray/subscriptions/' + encodeURIComponent(subId) + '?restart=' + (restart ? '1' : '0'), {
-          method: 'DELETE',
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data || data.ok === false) {
-          throw new Error(String((data && (data.error || data.message)) || ('HTTP ' + res.status)));
+        let res = null;
+        let data = null;
+        try {
+          res = await fetch('/api/xray/subscriptions/' + encodeURIComponent(subId) + '?restart=' + (restart ? '1' : '0'), {
+            method: 'DELETE',
+          });
+        } catch (eLink) {
+          data = await subsDeleteOutcomeAfterLinkLoss(subId, known);
+        }
+        if (res) {
+          data = await res.json().catch(() => ({}));
+          if (!res.ok || !data || data.ok === false) {
+            throw new Error(String((data && (data.error || data.message)) || ('HTTP ' + res.status)));
+          }
         }
         const warning = String((data && data.warning) || '').trim();
         subsSetStatus(warning ? 'Удалено. ' + warning : 'Удалено.', false, !warning, { warning: !!warning });

@@ -3203,7 +3203,7 @@
           "accessible_label": "Настройки"
         },
         {
-          "location": "xkeen-ui/static/js/features/outbounds.js:L9027",
+          "location": "xkeen-ui/static/js/features/outbounds.js:L9067",
           "control_type": "runtime-action",
           "accessible_label": "Настройки"
         },

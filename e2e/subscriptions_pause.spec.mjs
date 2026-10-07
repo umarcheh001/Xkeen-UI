@@ -343,3 +343,88 @@ test.describe('рубильник подписок', () => {
     await expect(page.locator('#outbounds-subscriptions-tbody tr')).toHaveCount(2);
   });
 });
+
+// Удаление одной подписки: роутер доводит его до конца, даже если ответ потерян.
+async function mockSingleDelete(page, onDelete) {
+  const state = { removed: [], notice: {}, deletes: [] };
+  const subs = [sub('alpha'), sub('beta')];
+  await page.route('**/api/xray/subscriptions', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    await route.fulfill({
+      json: {
+        ok: true,
+        subscriptions: subs.filter((item) => !state.removed.includes(item.id)),
+        paused: false,
+        paused_ts: null,
+        switch_notice: state.notice,
+      },
+    });
+  });
+  await page.route(/\/api\/xray\/subscriptions\/(alpha|beta)(\?.*)?$/, async (route) => {
+    if (route.request().method() !== 'DELETE') return route.fallback();
+    const id = new URL(route.request().url()).pathname.split('/').pop();
+    state.deletes.push(id);
+    const custom = onDelete({ id, state });
+    if (custom === 'abort') return route.abort('connectionreset');
+    state.removed.push(id);
+    await route.fulfill({ json: { ok: true, deleted: { id, output_file: `04_outbounds.${id}.json` }, warning: '', skipped: [] } });
+  });
+  return state;
+}
+
+async function deleteFirstSubscription(page) {
+  await expect(page.locator('#outbounds-subscriptions-tbody tr')).toHaveCount(2);
+  await page.locator('#outbounds-subscriptions-tbody tr').first().locator('.xk-sub-delete').click();
+  await expect(page.locator('#confirm-modal-title')).toHaveText('Удалить подписку?');
+  await page.locator('#confirm-modal-ok-btn').click();
+}
+
+test.describe('удаление одной подписки при обрыве связи', () => {
+  const warning = 'Не возвращено на прежнее место, потому что изменено вручную: сервер «vless-reality».';
+  const status = (page) => page.locator('#outbounds-subscriptions-status');
+
+  test('окно дожидается итога и говорит, что не вернулось', async ({ page }) => {
+    const state = await mockSingleDelete(page, ({ id, state: s }) => {
+      // Роутер удалил подписку, но ответ до окна не дошёл.
+      s.removed.push(id);
+      s.notice = { action: 'delete', subject: id, warning, skipped: [] };
+      return 'abort';
+    });
+    await openSubscriptions(page);
+    await deleteFirstSubscription(page);
+
+    await expect(status(page)).toContainText('Жду итог');
+    await expect(status(page)).toContainText(warning, { timeout: 15000 });
+    await expect(status(page)).toContainText('Удалено.');
+    await expect(status(page)).not.toContainText('Ошибка удаления');
+    await expect(status(page)).toHaveClass(/is-warning/);
+    await expect(page.locator('#outbounds-subscriptions-tbody tr')).toHaveCount(1);
+    expect(state.deletes).toEqual(['alpha']);
+  });
+
+  test('сообщение от другой операции окно не показывает', async ({ page }) => {
+    await mockSingleDelete(page, ({ id, state: s }) => {
+      s.removed.push(id);
+      s.notice = { action: 'delete', subject: 'gamma', warning: 'старое сообщение', skipped: [] };
+      return 'abort';
+    });
+    await openSubscriptions(page);
+    await deleteFirstSubscription(page);
+
+    await expect(status(page)).toContainText('Удалено.', { timeout: 15000 });
+    await expect(status(page)).not.toContainText('старое сообщение');
+    await expect(status(page)).toHaveClass(/is-success/);
+    await expect(page.locator('#outbounds-subscriptions-tbody tr')).toHaveCount(1);
+  });
+
+  test('подписка осталась на месте: окно говорит об этом, не дожидаясь полутора минут', async ({ page }) => {
+    await mockSingleDelete(page, () => 'abort');
+    await openSubscriptions(page);
+    await deleteFirstSubscription(page);
+
+    await expect(status(page)).toContainText('Жду итог');
+    await expect(status(page)).toContainText('Ошибка удаления', { timeout: 15000 });
+    await expect(status(page)).toContainText('подписка осталась на месте');
+    await expect(page.locator('#outbounds-subscriptions-tbody tr')).toHaveCount(2);
+  });
+});

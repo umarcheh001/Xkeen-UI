@@ -384,3 +384,51 @@ def test_a_clean_switch_leaves_no_stale_notice(rig: Rig):
     rig.resume()
 
     assert rig.pause_mod.last_notice(str(rig.bench.state)) == {}
+
+
+def _delete_one(rig: Rig, sub_id: str, restart=None):
+    return rig.bench.subs.delete_subscription(
+        str(rig.bench.state),
+        sub_id,
+        xray_configs_dir=rig.paths["xray_configs_dir"],
+        snapshot=lambda _path: None,
+        restart_xkeen=restart or rig._restart,
+    )
+
+
+def test_deleting_one_subscription_keeps_what_was_not_put_back(rig: Rig):
+    rig.bench.add("alpha", routing_mode="subscription-only")
+    _put_own_server_back_by_hand(rig)
+
+    result = _delete_one(rig, "alpha")
+
+    notice = rig.pause_mod.last_notice(str(rig.bench.state))
+    assert "сервер «vless-reality»" in result["warning"]
+    assert notice["action"] == "delete"
+    assert notice["subject"] == "alpha"
+    assert notice["warning"] == result["warning"]
+    assert notice["skipped"] == result["skipped"]
+
+
+def test_the_delete_notice_is_on_disk_before_the_restart_cuts_the_link(rig: Rig):
+    rig.bench.add("alpha", routing_mode="subscription-only")
+    _put_own_server_back_by_hand(rig)
+    seen: list[dict] = []
+
+    def _restart(source: str = "api") -> bool:
+        seen.append(rig.pause_mod.last_notice(str(rig.bench.state)))
+        return True
+
+    _delete_one(rig, "alpha", restart=_restart)
+
+    assert [item.get("action") for item in seen] == ["delete"]
+    assert seen[0]["subject"] == "alpha"
+
+
+def test_a_clean_delete_leaves_no_stale_notice(rig: Rig):
+    rig.bench.add("alpha")
+    rig.pause_mod._store_notice(str(rig.bench.state), "pause", "старое сообщение", [])
+
+    _delete_one(rig, "alpha")
+
+    assert rig.pause_mod.last_notice(str(rig.bench.state)) == {}

@@ -26,7 +26,7 @@ from services import xray_transactions
 from services.io.atomic import _atomic_write_json
 
 RECORD_FILENAME = "xray_subscriptions_pause.json"
-NOTICE_FILENAME = "xray_subscriptions_notice.json"
+NOTICE_FILENAME = subs.NOTICE_FILENAME
 
 _LOCK = threading.RLock()
 
@@ -74,21 +74,7 @@ def last_notice(ui_state_dir: str) -> Dict[str, Any]:
 
 
 def _store_notice(ui_state_dir: str, action: str, warning: str, skipped: List[Any]) -> None:
-    # Перезапуск ядра нередко рвёт и соединение с панелью: ответ до окна не
-    # доходит, и итог оно берёт из списка подписок.  Сказанное в ответе должно
-    # пережить этот обрыв.  Каждое переключение пишет своё или стирает чужое.
-    try:
-        if warning or skipped:
-            _atomic_write_json(
-                _notice_path(ui_state_dir),
-                {"action": action, "ts": int(time.time()), "warning": warning, "skipped": list(skipped)},
-            )
-        else:
-            os.remove(_notice_path(ui_state_dir))
-    except FileNotFoundError:
-        pass
-    except Exception:  # noqa: BLE001 - сообщение не повод ронять выполненную операцию
-        pass
+    subs.store_operation_notice(ui_state_dir, action, warning, skipped)
 
 
 # --- reading DNS-over-VLESS ----------------------------------------------------
