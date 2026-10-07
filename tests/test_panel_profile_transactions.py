@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from services.module_transactions.executor import run_operation
+import pytest
+
+from services.module_transactions.executor import recover, run_operation
 from services.module_transactions.journal import Journal
 from services.module_transactions.plan import build_panel_update_plan, build_profile_transition_plan
 from services.module_transactions.state import read_status
@@ -160,6 +162,96 @@ def test_full_scope_health_failure_rolls_back_every_changed_file(tmp_path: Path)
     assert result == "rolled_back"
     assert not journal.dir.exists()
     assert restarts == ["restart", "restart"]
+    assert changed_paths(before, snapshot(panel.root)) <= {
+        "module-catalog/catalog-2.10.0.json",
+        "module-operations/status.json",
+    }
+
+
+@pytest.mark.parametrize(
+    ("step", "expected"),
+    [
+        ("prepared", "interrupted"),
+        ("downloading", "interrupted"),
+        ("verifying", "interrupted"),
+        ("applying", "rolled_back"),
+        ("state", "rolled_back"),
+        ("restarting", "rolled_back"),
+        ("health", "rolled_back"),
+    ],
+)
+def test_full_scope_crash_recovery_restores_the_old_tree(
+    tmp_path: Path, step: str, expected: str
+) -> None:
+    panel = make_panel(tmp_path)
+    _set_desired(panel, "mihomo-minimal", {"core", "engine.mihomo", "tool.editor"})
+    release = make_release()
+    plan = build_profile_transition_plan(
+        panel_root=panel.root,
+        state_dir=panel.state,
+        catalog=release.catalog,
+        target_panel_root=_target_source(tmp_path, release.version),
+        architecture=ARCHITECTURE,
+        free_bytes=1 << 40,
+    )
+    before = snapshot(panel.root)
+    journal = Journal.create(panel.root, plan, f"crash-{step}", extra={})
+    journal.set_pid(2_147_483_647)
+
+    def crash(current: str) -> None:
+        if current == step:
+            raise SystemExit("power cut")
+
+    with pytest.raises(SystemExit):
+        run_operation(
+            journal,
+            state_dir=panel.state,
+            client=release.client(panel.state),
+            architecture=ARCHITECTURE,
+            restart=lambda: None,
+            wait_healthy=lambda _phase: True,
+            on_step=crash,
+        )
+
+    assert recover(panel.root, panel.state) == expected
+    assert changed_paths(before, snapshot(panel.root)) <= {
+        "module-catalog/catalog-2.10.0.json",
+        "module-operations/status.json",
+    }
+
+
+def test_full_scope_recovery_retries_after_crash_while_rolling_back(tmp_path: Path, monkeypatch) -> None:
+    panel = make_panel(tmp_path)
+    _set_desired(panel, "mihomo-minimal", {"core", "engine.mihomo", "tool.editor"})
+    release = make_release()
+    plan = build_profile_transition_plan(
+        panel_root=panel.root,
+        state_dir=panel.state,
+        catalog=release.catalog,
+        target_panel_root=_target_source(tmp_path, release.version),
+        architecture=ARCHITECTURE,
+        free_bytes=1 << 40,
+    )
+    before = snapshot(panel.root)
+    journal = Journal.create(panel.root, plan, "crash-rolling-back", extra={})
+    original = Journal.rollback
+
+    def crash(_self):
+        raise SystemExit("power cut")
+
+    monkeypatch.setattr(Journal, "rollback", crash)
+    with pytest.raises(SystemExit):
+        run_operation(
+            journal,
+            state_dir=panel.state,
+            client=release.client(panel.state),
+            architecture=ARCHITECTURE,
+            restart=lambda: None,
+            wait_healthy=lambda _phase: False,
+        )
+    monkeypatch.setattr(Journal, "rollback", original)
+
+    assert recover(panel.root, panel.state) == "rolled_back"
     assert changed_paths(before, snapshot(panel.root)) <= {
         "module-catalog/catalog-2.10.0.json",
         "module-operations/status.json",

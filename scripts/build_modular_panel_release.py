@@ -68,6 +68,9 @@ _KNOWN_PACKAGE_FILES = {
 # import closure below drags what they import into the core package. Every
 # importer of a file listed here already belongs to the same module.
 _PACKAGE_OWNER_OVERRIDES = {
+    # Stable update/core.log/recovery routes are registered unconditionally;
+    # only their optional UI stays with advanced diagnostics.
+    "routes/devtools.py": "core",
     "mihomo_config_generator.py": "engine.mihomo",
     # A facade over the Mihomo services; the core takes the config path and
     # the save helpers straight from services/mihomo_runtime.py.

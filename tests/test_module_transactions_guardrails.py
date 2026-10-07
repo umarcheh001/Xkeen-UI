@@ -85,5 +85,6 @@ def test_engine_files_belong_to_the_core_package(panel_source_root: Path) -> Non
     for path in ENGINE_FILES:
         assert path.relative_to(PANEL).as_posix() in core
     for dependency in ("services/module_catalog_client.py", "services/module_catalog_trust.py",
-                       "services/module_package_contract.py", "services/self_update/state.py", "services/io/atomic.py"):
+                       "services/module_package_contract.py", "services/self_update/state.py", "services/io/atomic.py",
+                       "routes/devtools.py"):
         assert dependency in core, dependency
