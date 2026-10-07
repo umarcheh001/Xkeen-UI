@@ -77,6 +77,54 @@ def _default_client(state_dir: Path, architecture: str, version: str):
     return ModuleCatalogClient(state_dir, platform_architecture=architecture, core_version=version)
 
 
+PROVISION_TIMEOUTS_S = {"prepare": 1500.0, "apply": 300.0}
+
+
+def build_provision(panel_root: Path):
+    """How the runner asks the panel's shared script to bring the router in line.
+
+    The script is the one the installer uses; here it is run as a command.
+    A panel installed before the script existed has none: nothing is called.
+    """
+
+    def provision(phase: str, script: Path) -> None:
+        script = Path(script)
+        if not script.is_file():
+            return
+        environment = dict(os.environ, UI_DIR=str(panel_root), PYTHON_BIN=sys.executable)
+        try:
+            process = subprocess.run(
+                ["sh", script.as_posix() if os.name == "nt" else str(script), phase],
+                env=environment,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=PROVISION_TIMEOUTS_S.get(phase, 300.0),
+            )
+        except subprocess.TimeoutExpired as error:
+            raise ModuleTransactionError(
+                "operation_environment_failed",
+                "preparing the router for the release took too long",
+                phase=phase,
+            ) from error
+        except OSError as error:
+            raise ModuleTransactionError(
+                "operation_environment_failed", "the router could not be prepared for the release", phase=phase
+            ) from error
+        if process.returncode == 0:
+            return
+        output = process.stdout.decode("utf-8", "replace") if process.stdout else ""
+        # The script names the reason on its last line that starts with "[!]".
+        reasons = [line[3:].strip() for line in output.splitlines() if line.startswith("[!]")]
+        raise ModuleTransactionError(
+            "operation_environment_failed",
+            reasons[-1] if reasons else "the router could not be prepared for the release",
+            phase=phase,
+        )
+
+    return provision
+
+
 def _run(args, *, client_factory, architecture, on_step) -> int:
     panel_root, state_dir = Path(args.panel_root), Path(args.state_dir)
     operation_dir = transactions_root(panel_root) / args.operation
@@ -184,6 +232,7 @@ def _run(args, *, client_factory, architecture, on_step) -> int:
             on_step=on_step,
             shield=lambda: signal.signal(signal.SIGTERM, signal.SIG_IGN),
             panel_archive_cache=Path(args.archive_cache) if args.archive_cache else None,
+            provision=build_provision(panel_root),
         )
     finally:
         if listener is not None:

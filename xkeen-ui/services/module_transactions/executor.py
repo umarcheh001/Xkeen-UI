@@ -97,6 +97,44 @@ def _take_kept_panel_archive(cache: Path | None, plan_archive: Any, staging: Pat
         return None
 
 
+PROVISION_SCRIPT = ("scripts", "provision_env.sh")
+
+
+def provision_script(journal: Journal, *, staged: bool) -> Path:
+    """The script that brings the router in line with a panel release.
+
+    Before files change the release speaks for itself: its own copy is taken
+    from the unpacked payload. A release that did not change the script does
+    not carry it (unchanged files are not unpacked), and after the files are
+    laid the panel holds the right one either way.
+    """
+
+    if staged:
+        candidate = journal.staging.joinpath("payload", *PROVISION_SCRIPT)
+        if candidate.is_file():
+            return candidate
+    return journal.panel_root.joinpath(*PROVISION_SCRIPT)
+
+
+def _build_stamp(root: Path, version: str, commit: str | None) -> bytes:
+    """``BUILD.json`` of the release that was just laid.
+
+    The repository and the channel of updates are the owner's choice and
+    stay; everything that described the previous build goes.
+    """
+
+    kept: dict[str, Any] = {}
+    try:
+        previous = json.loads((root / "BUILD.json").read_text(encoding="utf-8"))
+        if isinstance(previous, dict):
+            kept = {key: previous[key] for key in ("repo", "channel") if isinstance(previous.get(key), str)}
+    except (OSError, ValueError):
+        kept = {}
+    return (json.dumps({**kept, "version": version, "commit": commit}, ensure_ascii=False, indent=2) + "\n").encode(
+        "utf-8"
+    )
+
+
 def run_operation(
     journal: Journal,
     *,
@@ -108,8 +146,14 @@ def run_operation(
     on_step: Callable[[str], None] | None = None,
     shield: Callable[[], None] | None = None,
     panel_archive_cache: Path | None = None,
+    provision: Callable[[str, Path], None] | None = None,
 ) -> str:
     """Run the planned operation; ``shield`` is called once nothing may interrupt it.
+
+    ``provision`` does what lies outside the panel folder and has to match
+    the release: ``prepare`` (libraries) before a single file changes, so a
+    router that cannot run the release is refused while nothing is touched;
+    ``apply`` (service, templates, commands) once the files are laid.
 
     From the moment the panel is confirmed, and from the moment an undo
     starts, a cancel request can only do harm: the runner uses ``shield``
@@ -238,6 +282,10 @@ def run_operation(
                 extract_panel_payload(archive_path, journal.staging / "payload", plan.files_add)
                 archive_path.unlink(missing_ok=True)
                 catalog_source_commit = str(snapshot.catalog.get("source_commit") or "")
+                if provision is not None and plan.scope == "panel":
+                    # Libraries the release needs: a failure here leaves the
+                    # panel exactly as it was.
+                    provision("prepare", provision_script(journal, staged=True))
     except Exception as error:
         journal.commit()
         return finish("interrupted", error)
@@ -258,18 +306,16 @@ def run_operation(
         shared = rebuild_frontend_manifests(root, load_ownership_map(root).frontend)
         shared.update(state_file_updates(root, plan))
         if plan.scope == "panel":
-            shared["BUILD.json"] = (
-                json.dumps(
-                    {"version": plan.target_version, "commit": catalog_source_commit},
-                    ensure_ascii=False,
-                    indent=2,
-                )
-                + "\n"
-            ).encode("utf-8")
+            shared["BUILD.json"] = _build_stamp(root, plan.target_version, catalog_source_commit)
         for relative, content in sorted(shared.items()):
             target = root.joinpath(*relative.split("/"))
             if not target.is_file() or target.read_bytes() != content:
                 journal.write_state_file(relative, content)
+
+        if provision is not None:
+            # The service, the templates and the commands of the release that
+            # now lies in the panel folder.
+            provision("apply", provision_script(journal, staged=False))
 
         # The new files must be on the storage before anything relies on them.
         journal.flush()
@@ -305,6 +351,13 @@ def run_operation(
                 failed_path=failure.details.get("path"),
                 failed_error=failure.details.get("error"),
             )
+        if provision is not None:
+            # The previous files are back, the previous script among them:
+            # it puts back what the failed release changed outside the folder.
+            try:
+                provision("apply", provision_script(journal, staged=False))
+            except Exception:
+                status["environment_restored"] = False
         unresponsive = False
         if restarted:
             # The running panel has loaded nothing new unless it was restarted.

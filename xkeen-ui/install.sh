@@ -655,25 +655,6 @@ PYTHONPYCACHEPREFIX="${XKEEN_UI_PYTHONPYCACHEPREFIX:-/tmp/xkeen-ui-pycache}"
 export PYTHONPYCACHEPREFIX
 mkdir -p "$PYTHONPYCACHEPREFIX" 2>/dev/null || true
 
-is_our_ui_init_script() {
-  _path="$1"
-  [ -n "$_path" ] || return 1
-  [ -f "$_path" ] || return 1
-
-  if grep -q 'XKEEN_UI_INIT_OWNER="umarcheh001/Xkeen-UI"' "$_path" 2>/dev/null; then
-    return 0
-  fi
-
-  if grep -q 'UI_DIR="/opt/etc/xkeen-ui"' "$_path" 2>/dev/null; then
-    if grep -q 'RUN_SERVER="\$UI_DIR/run_server.py"' "$_path" 2>/dev/null || \
-       grep -q 'APP_PY="\$UI_DIR/app.py"' "$_path" 2>/dev/null; then
-      return 0
-    fi
-  fi
-
-  return 1
-}
-
 assert_safe_ui_init_target() {
   _path="$1"
   [ -n "$_path" ] || return 0
@@ -714,25 +695,7 @@ fi
 # Определяем архитектуру устройства, чтобы решить, устанавливать ли gevent
 ui_step_done
 ui_step "Модель роутера и архитектура"
-ARCH="$(uname -m 2>/dev/null || echo unknown)"
-WANT_GEVENT=1
-GEVENT_PIP_SPEC="${XKEEN_GEVENT_PIP_SPEC:-gevent}"
-GEVENT_PIN_REASON=""
-case "$ARCH" in
-  mipsel*|mips*)
-    # На слабых MIPS/MIPSEL-роутерах сборка gevent/greenlet часто не проходит.
-    # В этом случае панель будет работать через HTTP-пуллинг без gevent.
-    WANT_GEVENT=0
-    ;;
-  aarch64|arm64)
-    # Для части Entware/aarch64 устройств gevent 26.x не подбирает совместимый
-    # wheel и падает в source-build, где обычно нет C compiler.
-    if [ -z "${XKEEN_GEVENT_PIP_SPEC:-}" ]; then
-      GEVENT_PIP_SPEC="gevent<26"
-      GEVENT_PIN_REASON="совместимость wheel на Entware/aarch64"
-    fi
-    ;;
-esac
+provision_gevent_policy
 
 MIHOMO_ROOT="/opt/etc/mihomo"
 MIHOMO_CONFIG_FILE="$MIHOMO_ROOT/config.yaml"

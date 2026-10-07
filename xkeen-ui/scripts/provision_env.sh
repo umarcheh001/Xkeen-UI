@@ -1059,3 +1059,143 @@ provision_python_libs_install() {
 
   echo "[*] Python-зависимости в порядке."
 }
+
+# --- Чья служба --------------------------------------------------------------
+
+is_our_ui_init_script() {
+  _path="$1"
+  [ -n "$_path" ] || return 1
+  [ -f "$_path" ] || return 1
+
+  if grep -q 'XKEEN_UI_INIT_OWNER="umarcheh001/Xkeen-UI"' "$_path" 2>/dev/null; then
+    return 0
+  fi
+
+  if grep -q 'UI_DIR="/opt/etc/xkeen-ui"' "$_path" 2>/dev/null; then
+    if grep -q 'RUN_SERVER="\$UI_DIR/run_server.py"' "$_path" 2>/dev/null || \
+       grep -q 'APP_PY="\$UI_DIR/app.py"' "$_path" 2>/dev/null; then
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
+# --- gevent: ставить ли и какой -----------------------------------------------
+
+provision_gevent_policy() {
+  # Выставляет ARCH, WANT_GEVENT, GEVENT_PIP_SPEC, GEVENT_PIN_REASON.
+  ARCH="$(uname -m 2>/dev/null || echo unknown)"
+  WANT_GEVENT=1
+  GEVENT_PIP_SPEC="${XKEEN_GEVENT_PIP_SPEC:-gevent}"
+  GEVENT_PIN_REASON=""
+  case "$ARCH" in
+    mipsel*|mips*)
+      # На слабых MIPS/MIPSEL-роутерах сборка gevent/greenlet часто не проходит.
+      # В этом случае панель будет работать через HTTP-пуллинг без gevent.
+      WANT_GEVENT=0
+      ;;
+    aarch64|arm64)
+      # Для части Entware/aarch64 устройств gevent 26.x не подбирает совместимый
+      # wheel и падает в source-build, где обычно нет C compiler.
+      if [ -z "${XKEEN_GEVENT_PIP_SPEC:-}" ]; then
+        GEVENT_PIP_SPEC="gevent<26"
+        GEVENT_PIN_REASON="совместимость wheel на Entware/aarch64"
+      fi
+      ;;
+  esac
+}
+
+# --- Запуск командой ----------------------------------------------------------
+# Обновление из панели терминала не имеет и функции по одной не зовёт: оно
+# запускает этот файл с командой.
+#
+#   sh provision_env.sh prepare   до первого изменённого файла: библиотеки.
+#                                 Ненулевой код — обновлять нельзя; причина —
+#                                 последняя строка, начинающаяся с «[!]».
+#   sh provision_env.sh apply     после раскладки файлов: всё, что лежит вне
+#                                 каталога панели и должно совпадать с версией.
+
+provision_installed_modules() {
+  # Установленные модули через запятую, из install-profile.json.
+  tr -d '\n' < "$UI_DIR/install-profile.json" 2>/dev/null \
+    | sed -n 's/.*"module_ids"[[:space:]]*:[[:space:]]*\[\([^]]*\)\].*/\1/p' \
+    | tr -d '" '
+}
+
+provision_has_module() {
+  case ",$PROVISION_MODULES," in
+    *",$1,"*) return 0 ;;
+  esac
+  return 1
+}
+
+provision_panel_port() {
+  # Порт панели: из службы, которая уже стоит, иначе из сохранённых настроек.
+  _pp_port="$(sed -n 's/^PANEL_PORT="\([0-9][0-9]*\)".*/\1/p' "$1" 2>/dev/null | head -n 1)"
+  if [ -z "$_pp_port" ]; then
+    _pp_port="$(sed -n "s/^[[:space:]]*export[[:space:]][[:space:]]*XKEEN_UI_PORT=['\"]\{0,1\}\([0-9][0-9]*\).*/\1/p" "$UI_DIR/devtools.env" 2>/dev/null | tail -n 1)"
+  fi
+  printf '%s' "$_pp_port"
+}
+
+provision_cmd_prepare() {
+  provision_gevent_policy
+  provision_python_libs_check
+  provision_python_libs_install
+}
+
+provision_cmd_apply() {
+  PROVISION_MODULES="$(provision_installed_modules)"
+
+  provision_command_wrappers
+  cleanup_legacy_xray_templates "${XKEEN_UI_LEGACY_XRAY_TEMPLATES_DIR:-/opt/etc/xray/templates}" || true
+
+  # Шаблоны берутся из каталога панели: новые файлы уже разложены.
+  if provision_has_module engine.mihomo && [ -d "$UI_DIR/opt/etc/mihomo/templates" ]; then
+    provision_mihomo_templates "$UI_DIR/opt/etc/mihomo/templates" "${XKEEN_UI_MIHOMO_TEMPLATES_DIR:-/opt/etc/mihomo/templates}"
+  fi
+  if provision_has_module engine.xray; then
+    sync_bundled_template_dir "$UI_DIR/opt/etc/xray/templates/routing" "$UI_DIR/templates/routing" "роутинга Xray"
+    sync_bundled_template_dir "$UI_DIR/opt/etc/xray/templates/observatory" "$UI_DIR/templates/observatory" "observatory Xray"
+    provision_xray_dat_links "${XKEEN_UI_XRAY_DAT_DIR:-/opt/etc/xray/dat}" "${XKEEN_UI_XRAY_BIN_DIR:-/opt/sbin}"
+    _pa_configs="${XKEEN_UI_XRAY_CONFIG_DIR:-/opt/etc/xray/configs}"
+    for _pa_routing in "$_pa_configs/05_routing.json" "$_pa_configs/05_routing_hys2.json"; do
+      provision_routing_compat "$_pa_routing"
+    done
+  fi
+
+  # Служба автозапуска. Заводит её установщик — он выбирает порт; здесь она
+  # только обновляется, и только если это наша служба и её текст изменился.
+  _pa_init="${XKEEN_UI_INIT_SCRIPT:-/opt/etc/init.d/S99xkeen-ui-umarcheh001}"
+  _pa_template="$UI_DIR/scripts/panel_init.sh"
+  if [ -f "$_pa_template" ] && is_our_ui_init_script "$_pa_init"; then
+    _pa_port="$(provision_panel_port "$_pa_init")"
+    if [ -n "$_pa_port" ]; then
+      _pa_wanted="${TMPDIR:-/tmp}/xkeen-init-$$"
+      if sed "s/__XKEEN_UI_PORT__/$_pa_port/g" "$_pa_template" > "$_pa_wanted" 2>/dev/null \
+          && cmp -s "$_pa_wanted" "$_pa_init"; then
+        echo "[*] Служба автозапуска уже соответствует версии."
+      else
+        echo "[*] Обновляю службу автозапуска $_pa_init..."
+        provision_init_script "$_pa_template" "$_pa_init" "$_pa_port" || { rm -f "$_pa_wanted" 2>/dev/null; return 1; }
+      fi
+      rm -f "$_pa_wanted" 2>/dev/null || true
+    else
+      echo "[!] Порт панели не определён; служба автозапуска оставлена прежней."
+    fi
+  fi
+}
+
+case "${0##*/}" in
+  provision_env.sh)
+    case "${1:-}" in
+      prepare) provision_cmd_prepare || exit 1 ;;
+      apply) provision_cmd_apply || exit 1 ;;
+      *)
+        echo "Использование: sh provision_env.sh {prepare|apply}" >&2
+        exit 2
+        ;;
+    esac
+    ;;
+esac

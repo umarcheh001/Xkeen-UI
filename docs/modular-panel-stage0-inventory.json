@@ -36,13 +36,13 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 520,
-      "size_bytes": 6987817,
+      "unit_count": 522,
+      "size_bytes": 7008082,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
         "backend_service": 74,
-        "backend_test": 238,
+        "backend_test": 240,
         "configuration": 10,
         "frontend_bundle": 9,
         "frontend_entrypoint": 2,
@@ -2252,7 +2252,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_transactions/executor.py",
-      "size_bytes": 16832,
+      "size_bytes": 19288,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -6008,6 +6008,24 @@
     {
       "module_id": "core",
       "kind": "backend_test",
+      "path": "tests/test_panel_update_provisions_environment.py",
+      "size_bytes": 10772,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
       "path": "tests/test_panel_update_real_tree.py",
       "size_bytes": 5533,
       "depends_on": [],
@@ -6099,6 +6117,32 @@
         "XKEEN_UI_COMMIT",
         "XKEEN_UI_UPDATE_CHANNEL",
         "XKEEN_UI_VERSION"
+      ],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_provision_commands.py",
+      "size_bytes": 8302,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [
+        "XKEEN_UI_BIN_DIR",
+        "XKEEN_UI_INIT_SCRIPT",
+        "XKEEN_UI_LEGACY_XRAY_TEMPLATES_DIR",
+        "XKEEN_UI_MIHOMO_TEMPLATES_DIR",
+        "XKEEN_UI_XRAY_BIN_DIR",
+        "XKEEN_UI_XRAY_CONFIG_DIR",
+        "XKEEN_UI_XRAY_DAT_DIR"
       ],
       "removable": false
     },
@@ -7730,7 +7774,7 @@
       "module_id": "core",
       "kind": "configuration",
       "path": "xkeen-ui/install.sh",
-      "size_bytes": 72759,
+      "size_bytes": 71494,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -7743,10 +7787,8 @@
       ],
       "environment_variables": [
         "XKEEN_GEODAT_INSTALL",
-        "XKEEN_GEVENT_PIP_SPEC",
         "XKEEN_HAPP_DECRYPTOR_INSTALL",
         "XKEEN_INSTALL_LOG",
-        "XKEEN_UI_INIT_OWNER",
         "XKEEN_UI_INIT_SCRIPT",
         "XKEEN_UI_INSTALL_MODULES",
         "XKEEN_UI_INSTALL_PROFILE",
