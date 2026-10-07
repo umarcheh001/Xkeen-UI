@@ -174,6 +174,71 @@ def test_plan_returns_single_module_file_and_dependency_diff(tmp_path):
     assert re.fullmatch(r"[0-9a-f]{64}", payload["plan_id"])
 
 
+def test_panel_update_plan_uses_latest_release_and_preserves_profile(tmp_path):
+    panel = make_panel(tmp_path, version="2.10.0", installed=("core", "tool.files"))
+    release = make_release(version="2.11.0")
+    launcher = LaunchRecorder()
+    service, catalog = make_service(panel, release, launch_operation=launcher)
+
+    payload = service.plan("panel-update", None)
+
+    assert payload["scope"] == "panel"
+    assert payload["source_version"] == "2.10.0"
+    assert payload["target_version"] == "2.11.0"
+    assert payload["target_profile"]["profile"] == "xray-minimal"
+    assert payload["module_id"] is None
+    assert payload["applicable"] is True
+    assert re.fullmatch(r"[0-9a-f]{64}", payload["plan_id"])
+    assert catalog.latest_requests == 1
+
+
+def test_profile_transition_plan_and_apply_use_exact_release(tmp_path):
+    panel = make_panel(tmp_path)
+    registry = ModuleRegistry(str(panel.state), which=lambda _name: "/bin/tool")
+    registry.set_profile("mihomo-minimal")
+    launcher = LaunchRecorder()
+    service, catalog = make_service(panel, make_release(), registry=registry, launch_operation=launcher)
+
+    payload = service.plan("profile-transition", None)
+    applied = service.apply("profile-transition", None, payload["plan_id"])
+
+    assert payload["scope"] == "profile"
+    assert payload["source_version"] == payload["target_version"] == VERSION
+    assert payload["target_profile"]["profile"] == "mihomo-minimal"
+    assert catalog.requested_versions == [VERSION, VERSION]
+    assert launcher.plans[-1].scope == "profile"
+    assert applied["operation_id"] == "20261006T120000Z-abcdef"
+
+
+def test_full_scope_apply_rejects_profile_change_after_review(tmp_path):
+    panel = make_panel(tmp_path)
+    registry = ModuleRegistry(str(panel.state), which=lambda _name: "/bin/tool")
+    registry.set_profile("mihomo-minimal")
+    service, _ = make_service(panel, make_release(), registry=registry, launch_operation=LaunchRecorder())
+    reviewed = service.plan("profile-transition", None)
+    registry.set_profile("full")
+
+    with pytest.raises(ModuleLifecycleError) as raised:
+        service.apply("profile-transition", None, reviewed["plan_id"])
+
+    assert raised.value.code == "operation_plan_stale"
+
+
+def test_restart_is_blocked_while_profile_transition_is_pending(tmp_path):
+    panel = make_panel(tmp_path)
+    registry = ModuleRegistry(str(panel.state), which=lambda _name: "/bin/tool")
+    registry.set_profile("mihomo-minimal")
+    service, _ = make_service(panel, make_release(), registry=registry)
+
+    pending = service.profile_transition_status()
+    with pytest.raises(ModuleLifecycleError) as raised:
+        service.restart()
+
+    assert pending["transition_required"] is True
+    assert pending["transition_target"]["profile"] == "mihomo-minimal"
+    assert raised.value.code == "profile_transition_required"
+
+
 def test_missing_dependency_is_a_visible_blocker_not_an_automatic_install(tmp_path):
     panel = make_panel(tmp_path, installed=("core",))
     service, _ = make_service(panel, make_release())

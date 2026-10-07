@@ -10,6 +10,7 @@ import hashlib
 import hmac
 import json
 import re
+import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 
@@ -25,6 +26,8 @@ from services.module_transactions.plan import (
     OPERATIONS,
     Plan,
     build_plan,
+    build_panel_update_plan,
+    build_profile_transition_plan,
     plan_to_json,
     read_installed_modules,
     read_panel_version,
@@ -36,6 +39,7 @@ if TYPE_CHECKING:
 
 
 _REPAIR_ONLY_MODULES = frozenset({"tool.editor"})
+_FULL_SCOPE_OPERATIONS = frozenset({"panel-update", "profile-transition"})
 _PLAN_BLOCKERS = frozenset(
     {
         "module_already_installed",
@@ -50,6 +54,7 @@ _PLAN_BLOCKERS = frozenset(
 _PUBLIC_STATUS_FIELDS = frozenset(
     {
         "operation_id",
+        "scope",
         "operation",
         "module_id",
         "version",
@@ -321,9 +326,17 @@ class ModuleLifecycleService:
         }
 
     @staticmethod
-    def _validate_operation(operation: str, module_id: str) -> tuple[str, str]:
+    def _validate_operation(operation: str, module_id: str | None) -> tuple[str, str | None]:
         normalized_operation = str(operation or "").strip()
         normalized_module = str(module_id or "").strip()
+        if normalized_operation in _FULL_SCOPE_OPERATIONS:
+            if normalized_module:
+                raise ModuleLifecycleError(
+                    "module_operation_invalid",
+                    "full-panel operations do not accept module_id",
+                    status=400,
+                )
+            return normalized_operation, None
         if normalized_operation not in OPERATIONS:
             raise ModuleLifecycleError(
                 "module_operation_invalid",
@@ -349,6 +362,88 @@ class ModuleLifecycleService:
                 module_id=normalized_module,
             )
         return normalized_operation, normalized_module
+
+    def _full_scope_plan_and_payload(self, operation: str) -> tuple[Plan | None, dict[str, Any]]:
+        try:
+            source_version = read_panel_version(self.panel_root)
+            architecture = self._architecture_provider()
+            client = self._catalog_factory(source_version, architecture)
+            snapshot = (
+                client.get_catalog(force_refresh=True)
+                if operation == "panel-update"
+                else client.get_release_catalog(source_version)
+            )
+            with tempfile.TemporaryDirectory(prefix="xkeen-panel-plan-") as temporary:
+                staging = Path(temporary)
+                archive = client.download_verified_panel_archive(snapshot, staging)
+                from services.panel_package_contract import validate_panel_archive
+                from services.module_transactions.extract import extract_panel_payload
+
+                checked = validate_panel_archive(
+                    archive,
+                    snapshot.catalog["panel"],
+                    platform_architecture=architecture,
+                )
+                target_root = staging / "payload" / "xkeen-ui"
+                extract_panel_payload(archive, target_root, checked["payload_files"])
+                builder = build_panel_update_plan if operation == "panel-update" else build_profile_transition_plan
+                plan = builder(
+                    panel_root=self.panel_root,
+                    state_dir=self.state_dir,
+                    catalog=snapshot.catalog,
+                    target_panel_root=target_root,
+                    architecture=architecture,
+                )
+        except ModuleTransactionError as error:
+            if error.code in _PLAN_BLOCKERS | {"panel_update_not_newer", "profile_transition_not_required"}:
+                blocker = {"code": error.code, "message": error.message, **error.details}
+                return None, {
+                    "ok": True,
+                    "scope": "panel" if operation == "panel-update" else "profile",
+                    "operation": operation,
+                    "module_id": None,
+                    "source_version": locals().get("source_version"),
+                    "target_version": getattr(locals().get("snapshot"), "release_version", None),
+                    "target_profile": None,
+                    "affected_module_ids": [],
+                    "files_add": [],
+                    "files_remove": [],
+                    "required_free_bytes": int(error.details.get("required", 0)),
+                    "restart_required": True,
+                    "installed_after": [],
+                    "dependency_diff": {},
+                    "blockers": [blocker],
+                    "applicable": False,
+                    "plan_id": None,
+                }
+            _raise_domain(error)
+        except Exception as error:
+            if getattr(error, "code", None):
+                _raise_domain(error)
+            raise
+
+        encoded = plan_to_json(plan)
+        dependency_diff: dict[str, Any] = {}
+        return plan, {
+            "ok": True,
+            "scope": plan.scope,
+            "operation": plan.operation,
+            "module_id": None,
+            "version": plan.version,
+            "source_version": plan.source_version,
+            "target_version": plan.target_version,
+            "target_profile": dict(plan.target_profile or {}),
+            "affected_module_ids": list(plan.installed_after),
+            "files_add": encoded["files_add"],
+            "files_remove": encoded["files_remove"],
+            "required_free_bytes": plan.required_free_bytes,
+            "restart_required": plan.restart_required,
+            "installed_after": encoded["installed_after"],
+            "dependency_diff": dependency_diff,
+            "blockers": [],
+            "applicable": True,
+            "plan_id": _plan_digest(plan, dependency_diff),
+        }
 
     @staticmethod
     def _blocked_payload(
@@ -382,9 +477,12 @@ class ModuleLifecycleService:
     def _plan_and_payload(
         self,
         operation: str,
-        module_id: str,
+        module_id: str | None,
     ) -> tuple[Plan | None, dict[str, Any]]:
         operation, module_id = self._validate_operation(operation, module_id)
+        if operation in _FULL_SCOPE_OPERATIONS:
+            return self._full_scope_plan_and_payload(operation)
+        assert module_id is not None
         version, architecture, _client, snapshot = self._release_context()
         try:
             installed = read_installed_modules(self.state_dir)
@@ -443,14 +541,14 @@ class ModuleLifecycleService:
         }
         return plan, payload
 
-    def plan(self, operation: str, module_id: str) -> dict[str, Any]:
+    def plan(self, operation: str, module_id: str | None = None) -> dict[str, Any]:
         _plan, payload = self._plan_and_payload(operation, module_id)
         return payload
 
     def apply(
         self,
         operation: str,
-        module_id: str,
+        module_id: str | None,
         plan_id: str,
     ) -> dict[str, Any]:
         if not isinstance(plan_id, str) or re.fullmatch(
@@ -463,16 +561,17 @@ class ModuleLifecycleService:
             )
 
         plan, payload = self._plan_and_payload(operation, module_id)
+        stale_code = "operation_plan_stale" if operation in _FULL_SCOPE_OPERATIONS else "module_plan_stale"
         if plan is None or not payload["applicable"]:
             raise ModuleLifecycleError(
-                "module_plan_stale",
+                stale_code,
                 "the reviewed module plan is no longer applicable",
                 status=409,
                 blockers=payload["blockers"],
             )
         if not hmac.compare_digest(payload["plan_id"], plan_id):
             raise ModuleLifecycleError(
-                "module_plan_stale",
+                stale_code,
                 "the reviewed module plan is stale",
                 status=409,
             )
@@ -534,7 +633,38 @@ class ModuleLifecycleService:
             )
         return {"ok": True, "recovery_result": result, **observed}
 
+    def profile_transition_status(self) -> dict[str, Any]:
+        registry = self.module_registry.get_registry()
+        desired_ids = tuple(
+            module_id for module_id in MODULE_IDS if module_id in set(registry.get("configured_module_ids", ()))
+        )
+        desired = {
+            "profile": registry.get("profile"),
+            "module_ids": list(desired_ids),
+            "editor_variant": (registry.get("editor") or {}).get("variant"),
+        }
+        try:
+            installed_profile = json.loads((self.state_dir / "install-profile.json").read_text(encoding="utf-8"))
+            installed_ids = read_installed_modules(self.state_dir)
+            matches = (
+                installed_profile.get("profile") == desired["profile"]
+                and installed_profile.get("editor_variant") == desired["editor_variant"]
+                and set(installed_profile.get("module_ids", ())) == set(desired_ids)
+                and set(installed_ids) == set(desired_ids)
+            )
+        except (OSError, ValueError, TypeError, AttributeError, ModuleTransactionError):
+            matches = False
+        return {"transition_required": not matches, "transition_target": desired}
+
     def restart(self) -> dict[str, Any]:
+        pending = self.profile_transition_status()
+        if pending["transition_required"]:
+            raise ModuleLifecycleError(
+                "profile_transition_required",
+                "the configured profile must be physically applied before restart",
+                status=409,
+                transition_target=pending["transition_target"],
+            )
         try:
             self._ensure_restartable(self.panel_root, self.state_dir)
         except ModuleTransactionError as error:

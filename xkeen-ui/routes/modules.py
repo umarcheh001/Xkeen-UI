@@ -121,22 +121,34 @@ def create_modules_blueprint(
     def api_modules_operation_plan():
         payload, failure = lifecycle_body(
             allowed={"operation", "module_id"},
-            required={"operation", "module_id"},
+            required={"operation"},
         )
         if failure is not None:
             return failure
+        operation = payload["operation"]
+        full_scope = operation in {"panel-update", "profile-transition"}
+        if not full_scope and "module_id" not in payload:
+            return error_response("required lifecycle field is missing", 400, ok=False, code="lifecycle_field_required", fields=["module_id"])
+        if full_scope and "module_id" in payload:
+            return error_response("unsupported lifecycle fields", 400, ok=False, code="unsupported_lifecycle_fields", fields=["module_id"])
         return lifecycle_response(
-            lambda: lifecycle_service.plan(payload["operation"], payload["module_id"])
+            lambda: lifecycle_service.plan(operation, payload.get("module_id"))
         )
 
     @bp.post("/api/modules/operations/apply")
     def api_modules_operation_apply():
         payload, failure = lifecycle_body(
             allowed={"operation", "module_id", "plan_id"},
-            required={"operation", "module_id", "plan_id"},
+            required={"operation", "plan_id"},
         )
         if failure is not None:
             return failure
+        operation = payload["operation"]
+        full_scope = operation in {"panel-update", "profile-transition"}
+        if not full_scope and "module_id" not in payload:
+            return error_response("required lifecycle field is missing", 400, ok=False, code="lifecycle_field_required", fields=["module_id"])
+        if full_scope and "module_id" in payload:
+            return error_response("unsupported lifecycle fields", 400, ok=False, code="unsupported_lifecycle_fields", fields=["module_id"])
         plan_id = payload["plan_id"]
         if (
             not isinstance(plan_id, str)
@@ -151,7 +163,7 @@ def create_modules_blueprint(
             )
         return lifecycle_response(
             lambda: lifecycle_service.apply(
-                payload["operation"], payload["module_id"], plan_id
+                operation, payload.get("module_id"), plan_id
             ),
             202,
         )
@@ -294,6 +306,8 @@ def create_modules_blueprint(
                 editor_variant=payload.get("editor_variant"),
             )
             response_payload["changed"] = changed
+            if lifecycle_service is not None:
+                response_payload.update(lifecycle_service.profile_transition_status())
             return success(response_payload)
         except ModuleRegistryError as error:
             return registry_error(error)

@@ -14,13 +14,18 @@ class CatalogRecorder:
     def __init__(self, release, state_dir: Path) -> None:
         self.client = release.client(state_dir)
         self.requested_versions: list[str] = []
+        self.latest_requests = 0
 
     def get_release_catalog(self, version: str):
         self.requested_versions.append(version)
         return self.client.get_release_catalog(version)
 
     def get_catalog(self, **_kwargs):
-        raise AssertionError("Stage 8.4 must not discover the latest release")
+        self.latest_requests += 1
+        return self.client.get_release_catalog(self.client._core_version)
+
+    def download_verified_panel_archive(self, snapshot, destination):
+        return self.client.download_verified_panel_archive(snapshot, destination)
 
 
 class StaticCatalogRecorder:

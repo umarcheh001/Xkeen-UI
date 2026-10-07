@@ -14,6 +14,9 @@ class RegistryFake:
     def get_registry(self):
         return {"ok": True, "modules": []}
 
+    def set_profile(self, profile, *, module_ids=None, editor_variant=None):
+        return ({"ok": True, "profile": profile, "diff": {}}, True)
+
 
 class LifecycleFake:
     def __init__(self) -> None:
@@ -32,7 +35,7 @@ class LifecycleFake:
     def available(self):
         return self._result(("available",), {"ok": True, "kind": "available"})
 
-    def plan(self, operation, module_id):
+    def plan(self, operation, module_id=None):
         return self._result(
             ("plan", operation, module_id),
             {"ok": True, "applicable": True, "plan_id": "a" * 64},
@@ -60,6 +63,19 @@ class LifecycleFake:
 
     def restart(self):
         return self._result(("restart",), {"ok": True, "restart_requested": True})
+
+    def profile_transition_status(self):
+        return self._result(
+            ("profile_transition_status",),
+            {
+                "transition_required": True,
+                "transition_target": {
+                    "profile": "xray-minimal",
+                    "module_ids": ["core", "engine.xray", "tool.editor"],
+                    "editor_variant": "light",
+                },
+            },
+        )
 
 
 @pytest.fixture
@@ -122,6 +138,37 @@ def test_lifecycle_plan_and_apply_routes_validate_and_delegate(app_with_lifecycl
     ]
     assert planned.headers["Cache-Control"] == "no-store"
     assert applied.headers["Cache-Control"] == "no-store"
+
+
+def test_full_scope_plan_and_apply_routes_omit_module_id(app_with_lifecycle):
+    client, service = app_with_lifecycle
+
+    planned = client.post("/api/modules/operations/plan", json={"operation": "panel-update"})
+    applied = client.post(
+        "/api/modules/operations/apply",
+        json={"operation": "panel-update", "plan_id": "a" * 64},
+    )
+
+    assert planned.status_code == 200
+    assert applied.status_code == 202
+    assert service.calls == [
+        ("plan", "panel-update", None),
+        ("apply", "panel-update", None, "a" * 64),
+    ]
+
+
+def test_profile_route_adds_physical_transition_status_without_applying_it(app_with_lifecycle):
+    client, service = app_with_lifecycle
+
+    response = client.post("/api/modules/profile", json={"profile": "xray-minimal"})
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["profile"] == "xray-minimal"
+    assert payload["changed"] is True
+    assert payload["transition_required"] is True
+    assert payload["transition_target"]["module_ids"] == ["core", "engine.xray", "tool.editor"]
+    assert service.calls == [("profile_transition_status",)]
 
 
 @pytest.mark.parametrize(
