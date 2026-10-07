@@ -1083,7 +1083,7 @@ test('subscriptions advanced settings keep a consistent inner gutter', async ({ 
   await openSubscriptionsModal(page);
   await page.locator('tr[data-sub-id="demo-sub"]').click();
   const advanced = page.locator('#outbounds-subscriptions-modal .xk-sub-advanced');
-  if (!(await advanced.getAttribute('open'))) await advanced.locator('summary').click();
+  if (!(await advanced.getAttribute('open'))) await advanced.locator(':scope > summary').click();
 
   const spacing = await advanced.evaluate((root) => {
     const summary = root.querySelector(':scope > summary');
@@ -1203,7 +1203,7 @@ test('subscription pool keeps latency probing on and warns about a pool without 
 
   await openSubscriptionsModal(page);
   const advanced = page.locator('#outbounds-subscriptions-modal .xk-sub-advanced');
-  await advanced.locator('summary').click();
+  await advanced.locator(':scope > summary').click();
   await expect(advanced).toHaveAttribute('open', '');
 
   const ping = page.locator('#outbounds-subscriptions-ping');
@@ -1284,7 +1284,7 @@ test('subscriptions routing controls stay compact and balancers wrap as tiles', 
   await openSubscriptionsModal(page);
   await page.locator('tr[data-sub-id="demo-sub"]').click();
   const advanced = page.locator('#outbounds-subscriptions-modal .xk-sub-advanced');
-  if (!(await advanced.getAttribute('open'))) await advanced.locator('summary').click();
+  if (!(await advanced.getAttribute('open'))) await advanced.locator(':scope > summary').click();
   await expect(page.locator('#outbounds-subscriptions-routing-balancers .xk-sub-balancer-check')).toHaveCount(routingBalancers.length);
 
   const layout = await page.evaluate(() => {
@@ -1360,7 +1360,7 @@ test('subscriptions workbench collapses empty rows and keeps refresh due in the 
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
   await page.locator('tr[data-sub-id="demo-sub"]').click();
   const advanced = page.locator('#outbounds-subscriptions-modal .xk-sub-advanced');
-  if (!(await advanced.getAttribute('open'))) await advanced.locator('summary').click();
+  if (!(await advanced.getAttribute('open'))) await advanced.locator(':scope > summary').click();
 
   const layout = await page.evaluate(() => {
     const modal = document.querySelector('#outbounds-subscriptions-modal .xk-sub-modal');
@@ -1686,7 +1686,7 @@ test('subscriptions fragment list grows into the free column height', async ({ p
   await openSubscriptionsModal(page);
   await expect(page.locator('tr[data-sub-id="demo-sub-0"]')).toBeVisible();
   const advanced = page.locator('#outbounds-subscriptions-modal .xk-sub-advanced');
-  if (!(await advanced.getAttribute('open'))) await advanced.locator('summary').click();
+  if (!(await advanced.getAttribute('open'))) await advanced.locator(':scope > summary').click();
 
   const layout = await page.evaluate(() => {
     const panel = document.querySelector('#outbounds-subscriptions-modal .xk-sub-list-panel');
@@ -1835,7 +1835,7 @@ test('subscriptions fragment table fills the free height of its column', async (
   // The form column is the tall one once its advanced block is open: that is the
   // height the table has to fill instead of leaving a dead zone underneath.
   const advanced = page.locator('#outbounds-subscriptions-modal .xk-sub-advanced');
-  if (!(await advanced.getAttribute('open'))) await advanced.locator('summary').click();
+  if (!(await advanced.getAttribute('open'))) await advanced.locator(':scope > summary').click();
   await page.waitForTimeout(150);
 
   const layout = await page.evaluate(() => {
@@ -1889,7 +1889,7 @@ test('subscriptions advanced settings remember their expanded state', async ({ p
   // A first visit keeps the block collapsed so the modal opens compact.
   await expect(advanced).not.toHaveAttribute('open', '');
 
-  await advanced.locator('summary').click();
+  await advanced.locator(':scope > summary').click();
   await expect(advanced).toHaveAttribute('open', '');
 
   // Reopening the modal keeps the operator's choice.
@@ -2237,7 +2237,7 @@ async function routeStatefulSubscriptions(page, initial = [], extra = {}) {
 
 async function openSubscriptionAdvanced(page) {
   const advanced = page.locator('#outbounds-subscriptions-modal .xk-sub-advanced');
-  if ((await advanced.getAttribute('open')) === null) await advanced.locator('summary').click();
+  if ((await advanced.getAttribute('open')) === null) await advanced.locator(':scope > summary').click();
   await expect(advanced).toHaveAttribute('open', '');
 }
 
