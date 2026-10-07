@@ -2799,6 +2799,29 @@ let outboundsModuleApi = null;
       } catch (e) {}
     }
 
+    // What an open or a closed card needs besides its looks. The card may have
+    // been opened before this module arrived: the lazy-click guard toggles it
+    // at once and asks for this by event when the module is ready.
+    function syncCardState() {
+      const body = $('outbounds-body');
+      if (!body) return;
+      if (body.style.display !== 'none') {
+        scheduleOutboundsNodeListLayout();
+        try { refreshOutboundsActive(true, { fragment: getActiveFragment() || '' }); } catch (e) {}
+      } else {
+        outboundsClearActivePoll();
+      }
+    }
+
+    function wireCardStateSync() {
+      const header = $('outbounds-header');
+      if (!header || (header.dataset && header.dataset.xkeenCardSyncWired === '1')) return;
+      header.addEventListener('xkeen:outbounds-card-sync', () => {
+        try { syncCardState(); } catch (e) {}
+      });
+      if (header.dataset) header.dataset.xkeenCardSyncWired = '1';
+    }
+
     function toggleCard() {
       const body = $('outbounds-body');
       const arrow = $('outbounds-arrow');
@@ -2806,12 +2829,7 @@ let outboundsModuleApi = null;
 
       const willOpen = body.style.display === 'none';
       applyCollapseState(willOpen);
-      if (willOpen) {
-        scheduleOutboundsNodeListLayout();
-        try { refreshOutboundsActive(true, { fragment: getActiveFragment() || '' }); } catch (e) {}
-      } else {
-        outboundsClearActivePoll();
-      }
+      syncCardState();
       try {
         if (window.localStorage) {
           localStorage.setItem('xkeen_outbounds_open', willOpen ? '1' : '0');
@@ -9451,6 +9469,7 @@ let outboundsModuleApi = null;
 
       safeInitStep('collapse-state', () => setCollapsedFromStorage());
       safeInitStep('header', () => wireHeader('outbounds-header', toggleCard));
+      safeInitStep('card-state-sync', () => wireCardStateSync());
 
       // Fragment selector
       const initialFragmentsReady = safeInitStep('fragments', () => refreshFragmentsList());

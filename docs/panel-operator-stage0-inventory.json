@@ -13782,7 +13782,8 @@
         "xkeen-ui/static/js/features/outbounds.js"
       ],
       "outbounds-arrow": [
-        "xkeen-ui/static/js/features/outbounds.js"
+        "xkeen-ui/static/js/features/outbounds.js",
+        "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js"
       ],
       "outbounds-backup-btn": [
         "xkeen-ui/static/js/features/outbounds.js"
@@ -13803,7 +13804,8 @@
         "xkeen-ui/static/js/features/outbounds.js"
       ],
       "outbounds-body": [
-        "xkeen-ui/static/js/features/outbounds.js"
+        "xkeen-ui/static/js/features/outbounds.js",
+        "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js"
       ],
       "outbounds-build-btn": [
         "xkeen-ui/static/js/features/outbounds.js"

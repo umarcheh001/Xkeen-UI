@@ -115,7 +115,7 @@
           "accessible_label": "Предупреждение"
         },
         {
-          "location": "xkeen-ui/static/js/features/outbounds.js:L5262",
+          "location": "xkeen-ui/static/js/features/outbounds.js:L5280",
           "control_type": "runtime-action",
           "accessible_label": "Предупреждение"
         },
@@ -274,7 +274,7 @@
           "accessible_label": "Быстрое действие"
         },
         {
-          "location": "xkeen-ui/static/js/features/outbounds.js:L6629",
+          "location": "xkeen-ui/static/js/features/outbounds.js:L6647",
           "control_type": "runtime-action",
           "accessible_label": "Быстрое действие"
         },
@@ -316,7 +316,7 @@
       "tabler_asset": "custom:broom",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/outbounds.js:L5704",
+          "location": "xkeen-ui/static/js/features/outbounds.js:L5722",
           "control_type": "runtime-action",
           "accessible_label": "Очистить журнал"
         },
@@ -429,7 +429,7 @@
           "accessible_label": "Раскрыть"
         },
         {
-          "location": "xkeen-ui/static/js/features/outbounds.js:L5826",
+          "location": "xkeen-ui/static/js/features/outbounds.js:L5844",
           "control_type": "runtime-action",
           "accessible_label": "Раскрыть"
         },
@@ -591,17 +591,17 @@
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/static/js/features/outbounds.js:L4371",
+          "location": "xkeen-ui/static/js/features/outbounds.js:L4389",
           "control_type": "runtime-action",
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/static/js/features/outbounds.js:L5758",
+          "location": "xkeen-ui/static/js/features/outbounds.js:L5776",
           "control_type": "runtime-action",
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/static/js/features/outbounds.js:L5980",
+          "location": "xkeen-ui/static/js/features/outbounds.js:L5998",
           "control_type": "runtime-action",
           "accessible_label": "Закрыть"
         },
@@ -1218,7 +1218,7 @@
           "accessible_label": "Скачать"
         },
         {
-          "location": "xkeen-ui/static/js/features/outbounds.js:L5718",
+          "location": "xkeen-ui/static/js/features/outbounds.js:L5736",
           "control_type": "runtime-action",
           "accessible_label": "Скачать"
         },
@@ -1725,7 +1725,7 @@
       "tabler_asset": "help-circle",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/outbounds.js:L5855",
+          "location": "xkeen-ui/static/js/features/outbounds.js:L5873",
           "control_type": "runtime-action",
           "accessible_label": "Справка"
         },
@@ -1807,7 +1807,7 @@
           "accessible_label": "HWID"
         },
         {
-          "location": "xkeen-ui/static/js/features/outbounds.js:L6952",
+          "location": "xkeen-ui/static/js/features/outbounds.js:L6970",
           "control_type": "runtime-action",
           "accessible_label": "HWID"
         },
@@ -2303,7 +2303,7 @@
       "tabler_asset": "wand",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/outbounds.js:L5919",
+          "location": "xkeen-ui/static/js/features/outbounds.js:L5937",
           "control_type": "runtime-action",
           "accessible_label": "Нормализовать"
         },
@@ -2381,7 +2381,7 @@
           "accessible_label": "Пауза"
         },
         {
-          "location": "xkeen-ui/static/js/features/outbounds.js:L8451",
+          "location": "xkeen-ui/static/js/features/outbounds.js:L8469",
           "control_type": "runtime-action",
           "accessible_label": "Пауза"
         },
@@ -2448,7 +2448,7 @@
           "accessible_label": "Проверить задержку"
         },
         {
-          "location": "xkeen-ui/static/js/features/outbounds.js:L5960",
+          "location": "xkeen-ui/static/js/features/outbounds.js:L5978",
           "control_type": "runtime-action",
           "accessible_label": "Проверить задержку"
         },
@@ -2556,12 +2556,12 @@
           "accessible_label": "Предпросмотр"
         },
         {
-          "location": "xkeen-ui/static/js/features/outbounds.js:L5954",
+          "location": "xkeen-ui/static/js/features/outbounds.js:L5972",
           "control_type": "runtime-action",
           "accessible_label": "Предпросмотр"
         },
         {
-          "location": "xkeen-ui/static/js/features/outbounds.js:L7647",
+          "location": "xkeen-ui/static/js/features/outbounds.js:L7665",
           "control_type": "runtime-action",
           "accessible_label": "Предпросмотр"
         },
@@ -2654,12 +2654,12 @@
           "accessible_label": "Обновить"
         },
         {
-          "location": "xkeen-ui/static/js/features/outbounds.js:L5856",
+          "location": "xkeen-ui/static/js/features/outbounds.js:L5874",
           "control_type": "runtime-action",
           "accessible_label": "Обновить"
         },
         {
-          "location": "xkeen-ui/static/js/features/outbounds.js:L5918",
+          "location": "xkeen-ui/static/js/features/outbounds.js:L5936",
           "control_type": "runtime-action",
           "accessible_label": "Обновить"
         },
@@ -2958,7 +2958,7 @@
           "accessible_label": "Восстановить"
         },
         {
-          "location": "xkeen-ui/static/js/features/outbounds.js:L7595",
+          "location": "xkeen-ui/static/js/features/outbounds.js:L7613",
           "control_type": "runtime-action",
           "accessible_label": "Восстановить"
         },
@@ -3025,7 +3025,7 @@
           "accessible_label": "Сохранить"
         },
         {
-          "location": "xkeen-ui/static/js/features/outbounds.js:L5711",
+          "location": "xkeen-ui/static/js/features/outbounds.js:L5729",
           "control_type": "runtime-action",
           "accessible_label": "Сохранить"
         },
@@ -3197,7 +3197,7 @@
           "accessible_label": "server-off"
         },
         {
-          "location": "xkeen-ui/static/js/features/outbounds.js:L6629",
+          "location": "xkeen-ui/static/js/features/outbounds.js:L6647",
           "control_type": "runtime-action",
           "accessible_label": "server-off"
         }
@@ -3218,7 +3218,7 @@
           "accessible_label": "Настройки"
         },
         {
-          "location": "xkeen-ui/static/js/features/outbounds.js:L9447",
+          "location": "xkeen-ui/static/js/features/outbounds.js:L9465",
           "control_type": "runtime-action",
           "accessible_label": "Настройки"
         },
@@ -3518,7 +3518,7 @@
           "accessible_label": "Удалить"
         },
         {
-          "location": "xkeen-ui/static/js/features/outbounds.js:L5920",
+          "location": "xkeen-ui/static/js/features/outbounds.js:L5938",
           "control_type": "runtime-action",
           "accessible_label": "Удалить"
         },
@@ -3676,7 +3676,7 @@
           "accessible_label": "Исключить"
         },
         {
-          "location": "xkeen-ui/static/js/features/outbounds.js:L7595",
+          "location": "xkeen-ui/static/js/features/outbounds.js:L7613",
           "control_type": "runtime-action",
           "accessible_label": "Исключить"
         },

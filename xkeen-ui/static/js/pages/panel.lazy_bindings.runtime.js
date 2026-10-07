@@ -579,6 +579,45 @@ function consumeReplayFlag(el) {
   }
 }
 
+// The «Прокси-серверы» card is a plain collapsible section and has to answer a
+// click at once. Its module wakes up on that same click and may take seconds
+// on a router: waiting for it made the first click look dead, and a second
+// one toggled the card twice. So the card is toggled here, the choice is
+// stored where the module looks for it, and the module is only asked to catch
+// up with what is on the screen once it is ready.
+const OUTBOUNDS_CARD_SYNC_EVENT = 'xkeen:outbounds-card-sync';
+let outboundsCardActivation = null;
+
+function toggleOutboundsCardNow() {
+  const header = document.getElementById('outbounds-header');
+  const body = document.getElementById('outbounds-body');
+  const arrow = document.getElementById('outbounds-arrow');
+  if (!header || !body || !arrow) return false;
+  const open = body.style.display === 'none';
+  body.style.display = open ? 'block' : 'none';
+  arrow.textContent = open ? '▲' : '▼';
+  try {
+    header.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (header.dataset) header.dataset.xkCollapseOpen = open ? '1' : '0';
+  } catch (error) {}
+  try {
+    if (window.localStorage) window.localStorage.setItem('xkeen_outbounds_open', open ? '1' : '0');
+  } catch (error) {}
+  return true;
+}
+
+function activateOutboundsCard(reason) {
+  if (outboundsCardActivation) return;
+  outboundsCardActivation = ensurePanelLazyFeature('outbounds', { reason })
+    .then((ready) => {
+      if (!ready) return;
+      const header = document.getElementById('outbounds-header');
+      if (header) header.dispatchEvent(new CustomEvent(OUTBOUNDS_CARD_SYNC_EVENT));
+    })
+    .catch(() => {})
+    .then(() => { outboundsCardActivation = null; });
+}
+
 export function wirePanelLazyFeatureClicks() {
   if (document.body && document.body.dataset && document.body.dataset.xkLazyFeatureClicks === '1') return;
   markUnavailableEditorEngines();
@@ -795,6 +834,14 @@ export function wirePanelLazyFeatureClicks() {
       return;
     }
 
+    const outboundsCardHeader = raw.closest('#outbounds-header');
+    if (outboundsCardHeader && !isPanelLazyFeatureReady('outbounds') && toggleOutboundsCardNow()) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      activateOutboundsCard('interaction');
+      return;
+    }
+
     const outboundsTrigger = raw.closest('#outbounds-header, [id^="outbounds-"]');
     if (outboundsTrigger && !isPanelLazyFeatureReady('outbounds')) {
       if (consumeReplayFlag(outboundsTrigger)) return;
@@ -846,6 +893,10 @@ export function wirePanelLazyFeatureClicks() {
     if (outboundsHeader && !isPanelLazyFeatureReady('outbounds')) {
       event.preventDefault();
       event.stopImmediatePropagation();
+      if (toggleOutboundsCardNow()) {
+        activateOutboundsCard('keyboard-interaction');
+        return;
+      }
       try {
         if (outboundsHeader.dataset && outboundsHeader.dataset.xkOutboundsActivationPending === '1') return;
         if (outboundsHeader.dataset) outboundsHeader.dataset.xkOutboundsActivationPending = '1';

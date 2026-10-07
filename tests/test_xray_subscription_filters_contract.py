@@ -314,7 +314,10 @@ def test_outbounds_pool_nodes_relayout_after_card_open_and_async_load():
     assert "setTimeout(run, 180);" in outbounds_src
     assert "if (visible !== false && hasNodes) {\n          scheduleOutboundsNodeListLayout();" in outbounds_src
     assert "refreshOutboundsActive(true, { fragment: requestFragment });" in outbounds_src
-    assert "if (willOpen) {\n        scheduleOutboundsNodeListLayout();" in outbounds_src
+    # The card may be opened before the module arrives (the lazy-click guard
+    # toggles it at once), so the relayout hangs on the state, not on the click.
+    assert "if (body.style.display !== 'none') {\n        scheduleOutboundsNodeListLayout();" in outbounds_src
+    assert "applyCollapseState(willOpen);\n      syncCardState();" in outbounds_src
     assert "setTimeout(rerunLayout, 120);" in outbounds_src
     assert "setTimeout(rerunLayout, 260);" in outbounds_src
     assert "onShow," in outbounds_src
