@@ -52,20 +52,22 @@ def test_installer_is_valid_posix_shell_syntax():
 
 def test_installer_treats_catalog_signature_verification_as_required_dependency():
     requirements = DEV_REQUIREMENTS.read_text(encoding="utf-8")
-    installer = _text()
+    # Библиотеки ставит общий скрипт; установщик его вызывает.
+    installer = _text() + PROVISION.read_text(encoding="utf-8")
 
     assert any(line.startswith("cryptography") for line in requirements.splitlines())
     assert "NEED_CRYPTOGRAPHY=0" in installer
     assert '"$PYTHON_BIN" -c "import cryptography"' in installer
     assert 'pip_install_with_fallback "cryptography" cryptography' in installer
-    assert 'fail_install "cryptography установлен некорректно' in installer
+    assert 'provision_fail "cryptography установлен некорректно' in installer
+    assert "provision_python_libs_install || fail_install" in installer
 
 
 def test_installer_tries_the_entware_cryptography_package_before_pip():
-    installer = _text()
+    installer = PROVISION.read_text(encoding="utf-8")
 
     # PyPI has no cryptography builds for MIPS routers; Entware does.
-    package = installer.index('"$OPKG_BIN" install python3-cryptography')
+    package = installer.index("provision_opkg install python3-cryptography")
     pip = installer.index('pip_install_with_fallback "cryptography" cryptography')
     assert package < pip
     between = installer[package:pip]

@@ -1,0 +1,174 @@
+"""Список пакетов Entware не может подвесить установку.
+
+`opkg update` качает списки с зеркала, записанного в настройках роутера, и ждёт
+его без ограничения. На роутере с нестабильным зеркалом установка панели висела
+десять минут без единой строки на экране. Теперь у запроса есть предел времени,
+а если зеркало не ответило, списки берутся один раз с официального источника —
+через временный файл настроек, настройки самого роутера не меняются.
+"""
+
+from __future__ import annotations
+
+import os
+import subprocess
+import time
+from pathlib import Path
+
+import pytest
+
+
+ROOT = Path(__file__).resolve().parents[1]
+LIB = ROOT / "xkeen-ui" / "scripts" / "provision_env.sh"
+
+MIRROR_CONF = """src/gz entware http://mirrors.example.invalid/entware/aarch64-k3.10
+src/gz keendev http://mirrors.example.invalid/entware/aarch64-k3.10/keenetic
+dest root /
+lists_dir ext /opt/var/opkg-lists
+arch all 100
+arch aarch64-3.10 150
+"""
+OFFICIAL_CONF = MIRROR_CONF.replace("http://mirrors.example.invalid/entware/", "http://bin.entware.net/")
+
+# Подставной opkg: что делать, говорит FAKE_OPKG, вызовы пишутся в журнал.
+FAKE_OPKG = """#!/bin/sh
+echo "$*" >> "$FAKE_LOG"
+with_conf=0
+for arg in "$@"; do [ "$arg" = "-f" ] && with_conf=1; done
+case "$FAKE_OPKG:$with_conf" in
+  ok:*) exit 0 ;;
+  fail:*) exit 1 ;;
+  hang:0) exec sleep 30 ;;
+  hang:1) exit 0 ;;
+  hang-always:*) exec sleep 30 ;;
+  fail-mirror:0) exit 1 ;;
+  fail-mirror:1) exit 0 ;;
+esac
+exit 0
+"""
+
+
+@pytest.fixture
+def stand(tmp_path):
+    opkg = tmp_path / "opkg"
+    opkg.write_bytes(FAKE_OPKG.encode("utf-8"))
+    os.chmod(opkg, 0o755)
+    conf = tmp_path / "opkg.conf"
+    conf.write_text(MIRROR_CONF, encoding="utf-8")
+    return tmp_path, opkg, conf
+
+
+def _run(stand, body: str, mode: str, **env: str) -> tuple[subprocess.CompletedProcess, list[str], float]:
+    tmp_path, opkg, conf = stand
+    log = tmp_path / "opkg.log"
+    script = tmp_path / "call.sh"
+    script.write_bytes(
+        "\n".join(["set -e", f'. "{LIB.as_posix()}"', f'OPKG_BIN="{opkg.as_posix()}"', body, ""]).encode("utf-8")
+    )
+    started = time.monotonic()
+    proc = subprocess.run(
+        ["sh", script.as_posix()],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        env={
+            **os.environ,
+            "FAKE_OPKG": mode,
+            "FAKE_LOG": log.as_posix(),
+            "XKEEN_OPKG_CONF": conf.as_posix(),
+            "XKEEN_OPKG_UPDATE_TIMEOUT": "2",
+            "TMPDIR": tmp_path.as_posix(),
+            **env,
+        },
+    )
+    calls = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
+    return proc, calls, time.monotonic() - started
+
+
+def test_a_mirror_that_answers_is_asked_once(stand):
+    proc, calls, _elapsed = _run(stand, 'provision_opkg_update && echo "conf=[$PROVISION_OPKG_CONF]"', "ok")
+
+    assert proc.returncode == 0, proc.stderr
+    assert calls == ["update"]
+    assert "conf=[]" in proc.stdout
+
+
+def test_a_mirror_that_hangs_is_given_up_on_and_the_official_source_is_used(stand):
+    tmp_path, _opkg, conf = stand
+
+    # Содержимое печатает сама оболочка: её путь к временной папке на Windows
+    # не тот, каким его видит Python.
+    proc, calls, elapsed = _run(
+        stand, 'provision_opkg_update && echo "conf=[$PROVISION_OPKG_CONF]" && cat "$PROVISION_OPKG_CONF"', "hang"
+    )
+
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    # Предел — две секунды, а не тридцать, которые зеркало молчало бы.
+    assert elapsed < 15
+    assert calls[0] == "update" and calls[1].startswith("-f ") and calls[1].endswith(" update")
+    assert "conf=[]" not in proc.stdout
+    text = proc.stdout.split("conf=[", 1)[1].split("]\n", 1)[1]
+    assert "src/gz entware http://bin.entware.net/aarch64-k3.10\n" in text
+    assert "src/gz keendev http://bin.entware.net/aarch64-k3.10/keenetic\n" in text
+    assert "mirrors.example.invalid" not in text
+    assert "arch aarch64-3.10 150" in text
+    # Свои списки, чтобы не подменять списки настроенного зеркала.
+    assert "lists_dir ext /opt/var/opkg-lists" not in text
+    # Настройки роутера не тронуты.
+    assert conf.read_text(encoding="utf-8") == MIRROR_CONF
+    assert "не ответил" in proc.stdout or "официальн" in proc.stdout
+
+
+def test_packages_are_then_installed_from_the_source_that_answered(stand):
+    proc, calls, _elapsed = _run(stand, "provision_opkg_update && provision_opkg install python3-cryptography", "hang")
+
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert calls[-1].startswith("-f ") and calls[-1].endswith(" install python3-cryptography")
+
+
+def test_without_trouble_packages_are_installed_as_before(stand):
+    proc, calls, _elapsed = _run(stand, "provision_opkg_update && provision_opkg install lftp", "ok")
+
+    assert proc.returncode == 0, proc.stderr
+    assert calls == ["update", "install lftp"]
+
+
+def test_a_mirror_that_fails_at_once_is_replaced_too(stand):
+    proc, calls, _elapsed = _run(stand, "provision_opkg_update", "fail-mirror")
+
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert len(calls) == 2 and calls[1].startswith("-f ")
+
+
+def test_the_official_source_is_not_asked_twice(stand):
+    _tmp_path, _opkg, conf = stand
+    conf.write_text(OFFICIAL_CONF, encoding="utf-8")
+
+    proc, calls, _elapsed = _run(stand, "provision_opkg_update || echo refused", "fail")
+
+    assert "refused" in proc.stdout
+    assert calls == ["update"]
+
+
+def test_when_nothing_answers_the_failure_is_reported_in_time(stand):
+    proc, calls, elapsed = _run(stand, "provision_opkg_update || echo refused", "hang-always")
+
+    assert "refused" in proc.stdout
+    assert elapsed < 20
+    assert len(calls) == 2
+    assert "mirrors.example.invalid" in proc.stdout
+
+
+def test_the_owner_can_forbid_the_other_source(stand):
+    proc, calls, _elapsed = _run(stand, "provision_opkg_update || echo refused", "fail-mirror", XKEEN_OPKG_FALLBACK="0")
+
+    assert "refused" in proc.stdout
+    assert calls == ["update"]
+
+
+def test_the_temporary_settings_are_removed_afterwards(stand):
+    tmp_path, _opkg, _conf = stand
+
+    proc, _calls, _elapsed = _run(stand, "provision_opkg_update; provision_opkg_cleanup; echo done", "hang")
+
+    assert "done" in proc.stdout
+    assert not [path.name for path in tmp_path.iterdir() if path.name.startswith("xkeen-opkg")]

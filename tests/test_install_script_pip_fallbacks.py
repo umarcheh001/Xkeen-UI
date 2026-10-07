@@ -1,8 +1,21 @@
 from pathlib import Path
 
 
+def _installer_and_shared_script() -> str:
+    """The installer together with the script it shares with the panel update.
+
+    Libraries are installed by ``scripts/provision_env.sh``; the installer
+    calls it between the steps of its screen.
+    """
+
+    return "\n".join(
+        Path(name).read_text(encoding="utf-8")
+        for name in ("xkeen-ui/install.sh", "xkeen-ui/scripts/provision_env.sh")
+    )
+
+
 def test_install_script_supports_pip_mirror_fallbacks_for_flask_and_gevent():
-    text = Path("xkeen-ui/install.sh").read_text(encoding="utf-8")
+    text = _installer_and_shared_script()
 
     assert 'PIP_FALLBACK_INDEX_DEFAULT="https://mirrors.aliyun.com/pypi/simple/"' in text
     assert 'GEVENT_PIP_SPEC="${XKEEN_GEVENT_PIP_SPEC:-gevent}"' in text
@@ -18,7 +31,7 @@ def test_install_script_supports_pip_mirror_fallbacks_for_flask_and_gevent():
 
 
 def test_install_script_repairs_entware_pip_truststore_failures():
-    text = Path("xkeen-ui/install.sh").read_text(encoding="utf-8")
+    text = _installer_and_shared_script()
 
     assert "PIP_REPAIR_ATTEMPTED=0" in text
     assert "repair_python3_pip_package() {" in text
@@ -30,7 +43,7 @@ def test_install_script_repairs_entware_pip_truststore_failures():
 
 
 def test_install_script_falls_back_to_trusted_http_pip_mirrors_without_ssl():
-    text = Path("xkeen-ui/install.sh").read_text(encoding="utf-8")
+    text = _installer_and_shared_script()
 
     assert 'PIP_HTTP_FALLBACK_INDEX_DEFAULT="http://mirrors.aliyun.com/pypi/simple/"' in text
     assert 'PIP_HTTP_EXTRA_INDEX_DEFAULT="http://mirror.yandex.ru/pypi/simple/"' in text

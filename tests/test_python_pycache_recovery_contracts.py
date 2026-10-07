@@ -10,7 +10,8 @@ def test_installer_isolates_python_cache_before_first_python_process():
 
     prefix = 'PYTHONPYCACHEPREFIX="${XKEEN_UI_PYTHONPYCACHEPREFIX:-/tmp/xkeen-ui-pycache}"'
     assert prefix in text
-    assert text.index(prefix) < text.index('"$PYTHON_BIN" -c')
+    # The first Python process of the installer is the check of the libraries.
+    assert text.index(prefix) < text.index("provision_python_libs_check\n")
     assert "export PYTHONPYCACHEPREFIX" in text
 
 

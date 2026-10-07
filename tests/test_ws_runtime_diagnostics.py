@@ -235,7 +235,11 @@ def test_capabilities_js_fills_the_warning_from_the_backend_reason():
 
 
 def _install_sh() -> str:
-    return (ROOT / "xkeen-ui" / "install.sh").read_text(encoding="utf-8")
+    # Библиотеки ставит общий скрипт, установщик его вызывает: читаем оба.
+    return "\n".join(
+        (ROOT / "xkeen-ui" / name).read_text(encoding="utf-8")
+        for name in ("install.sh", "scripts/provision_env.sh")
+    )
 
 
 def test_install_script_repairs_a_package_that_pip_thinks_is_already_installed():
