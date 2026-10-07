@@ -12,16 +12,26 @@ from dataclasses import asdict, dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Mapping
 
-from services.module_profile_plan import user_owned
+from services.module_package_contract import compare_semver
+from services.module_profile_plan import ProfilePlanError, build_profile_target, user_owned
+from services.module_registry import MODULE_IDS
 
 from .state import ModuleTransactionError, transactions_root
 
 
 OPERATIONS = ("install", "repair", "remove")
+SCOPES = ("module", "panel", "profile")
 OWNERSHIP_MAP_FILENAME = "module-ownership.json"
 # The editor is a dependency of both engines and its variant belongs to the
 # installer, so it can only be laid out again, never added or taken away.
 _REPAIR_ONLY_MODULES = frozenset({"tool.editor"})
+
+# Compatibility exports for Stage 8.3 callers; the predicate itself is shared
+# with the profile planner so these contracts cannot diverge in production.
+STATE_FILES = {"modules.json", "module-installed.json", "install-profile.json", "install-managed.json"}
+USER_TOP_LEVEL = {"xray-jsonc", "var", "bin"}
+USER_FILES = {"secret.key", "devtools.env", "ui-settings.json", "branding.json", "terminal_theme.json", "terminal_theme.css"}
+USER_PREFIXES = ("opt/etc/mihomo/profiles/", "opt/etc/mihomo/backup/")
 
 @dataclass(frozen=True, slots=True)
 class OwnershipMap:
@@ -40,9 +50,13 @@ class ArchiveSource:
 
 @dataclass(frozen=True, slots=True)
 class Plan:
+    scope: str
     operation: str
-    module_id: str
+    module_id: str | None
     version: str
+    source_version: str
+    target_version: str
+    target_profile: Mapping[str, Any] | None
     files_add: tuple[str, ...]
     files_remove: tuple[str, ...]
     archive: ArchiveSource | None
@@ -241,9 +255,13 @@ def build_plan(
         _fail("module_free_space", "not enough free space for the operation and its rollback copy", required=required, free=free_bytes)
 
     return Plan(
+        scope="module",
         operation=operation,
         module_id=module_id,
         version=version,
+        source_version=version,
+        target_version=version,
+        target_profile=None,
         files_add=files_add,
         files_remove=files_remove,
         archive=archive,
@@ -263,11 +281,26 @@ def plan_to_json(plan: Plan) -> dict[str, Any]:
 
 def plan_from_json(data: Mapping[str, Any]) -> Plan:
     try:
+        scope = str(data.get("scope", "module"))
+        if scope not in SCOPES:
+            raise ValueError("unknown plan scope")
         archive = data["archive"]
+        version = str(data["version"])
+        raw_module_id = data.get("module_id")
+        module_id = None if raw_module_id is None else str(raw_module_id)
+        if scope == "module" and not module_id:
+            raise ValueError("module plan has no module_id")
+        raw_profile = data.get("target_profile")
+        if raw_profile is not None and not isinstance(raw_profile, Mapping):
+            raise ValueError("target profile is not an object")
         return Plan(
+            scope=scope,
             operation=str(data["operation"]),
-            module_id=str(data["module_id"]),
-            version=str(data["version"]),
+            module_id=module_id,
+            version=version,
+            source_version=str(data.get("source_version", version)),
+            target_version=str(data.get("target_version", version)),
+            target_profile=None if raw_profile is None else dict(raw_profile),
             files_add=tuple(str(item) for item in data["files_add"]),
             files_remove=tuple(str(item) for item in data["files_remove"]),
             archive=None if archive is None else ArchiveSource(
@@ -279,3 +312,171 @@ def plan_from_json(data: Mapping[str, Any]) -> Plan:
         )
     except (KeyError, TypeError, ValueError) as error:
         raise ModuleTransactionError("operation_journal_invalid", "the stored operation plan cannot be read") from error
+
+
+def _read_desired_profile(state_dir: Path) -> tuple[str, list[str] | None, str]:
+    try:
+        state = json.loads((Path(state_dir) / "modules.json").read_text(encoding="utf-8"))
+        profile = state["profile"]
+        editor_variant = state["editor"]["variant"]
+        modules = state["modules"]
+        if not isinstance(profile, str) or not isinstance(editor_variant, str) or not isinstance(modules, Mapping):
+            raise ValueError("invalid desired profile")
+        selected = [
+            module_id
+            for module_id in MODULE_IDS
+            if isinstance(modules.get(module_id), Mapping) and modules[module_id].get("enabled") is True
+        ]
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        raise ModuleTransactionError(
+            "profile_state_unavailable",
+            "the desired physical profile cannot be read",
+        ) from error
+    return profile, selected if profile == "custom" else None, editor_variant
+
+
+def _read_managed_paths(state_dir: Path) -> tuple[str, ...]:
+    try:
+        document = json.loads((Path(state_dir) / "install-managed.json").read_text(encoding="utf-8"))
+        paths = document["paths"]
+        if not isinstance(paths, list) or any(
+            not isinstance(path, str) or not _safe_relative(path) or user_owned(path) for path in paths
+        ):
+            raise ValueError("invalid managed paths")
+        return tuple(sorted(set(paths)))
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        raise ModuleTransactionError(
+            "profile_installed_state_unavailable",
+            "the physical install manifest cannot be read",
+        ) from error
+
+
+def _full_scope_plan(
+    *,
+    scope: str,
+    operation: str,
+    panel_root: Path,
+    state_dir: Path,
+    catalog: Mapping[str, Any],
+    target_panel_root: Path,
+    architecture: str,
+    require_newer: bool,
+    free_bytes: int | None,
+) -> Plan:
+    source_version = read_panel_version(panel_root)
+    target_version = str(catalog.get("release_version") or "")
+    comparison = compare_semver(target_version, source_version)
+    if require_newer and comparison <= 0:
+        _fail(
+            "panel_update_not_newer",
+            "the stable catalog does not contain a newer panel release",
+            current_version=source_version,
+            target_version=target_version,
+        )
+    if not require_newer and comparison != 0:
+        _fail(
+            "profile_release_mismatch",
+            "a profile transition must use the installed panel release",
+            current_version=source_version,
+            catalog_version=target_version,
+        )
+    descriptor = catalog.get("panel")
+    if not isinstance(descriptor, Mapping) or descriptor.get("version") != target_version:
+        _fail("catalog_panel_invalid", "the trusted catalog has no matching panel descriptor")
+    if architecture not in descriptor.get("architectures", ()):
+        _fail("catalog_architecture_unsupported", "the panel is not published for this router", architecture=architecture)
+    profile, requested_modules, editor_variant = _read_desired_profile(state_dir)
+    try:
+        target = build_profile_target(
+            Path(target_panel_root),
+            profile=profile,
+            module_ids=requested_modules,
+            editor_variant=editor_variant,
+        )
+    except ProfilePlanError as error:
+        raise ModuleTransactionError(error.code, "the desired physical profile is invalid", **error.details) from error
+    installed_paths = set(_read_managed_paths(state_dir))
+    installed_modules = set(read_installed_modules(state_dir))
+    target_paths = set(target.payload_files)
+    target_modules = set(target.module_ids)
+    if scope == "profile" and installed_paths == target_paths and installed_modules == target_modules:
+        _fail("profile_transition_not_required", "the desired profile is already installed")
+    files_add = tuple(sorted(target_paths))
+    files_remove = tuple(sorted(installed_paths - target_paths))
+    archive = ArchiveSource(
+        archive=str(descriptor["archive"]),
+        size=int(descriptor["size"]),
+        sha256=str(descriptor["sha256"]),
+    )
+    expanded = sum(_file_size(Path(target_panel_root) / path) for path in files_add)
+    backup = sum(_file_size(Path(panel_root) / path) for path in installed_paths | target_paths)
+    required = (archive.size + expanded + backup) * 6 // 5
+    if free_bytes is None:
+        probe = transactions_root(Path(panel_root)).parent
+        free_bytes = shutil.disk_usage(probe if probe.exists() else panel_root).free
+    if free_bytes < required:
+        _fail("module_free_space", "not enough free space for the operation and its rollback copy", required=required, free=free_bytes)
+    target_profile = {
+        "profile": target.profile,
+        "module_ids": list(target.module_ids),
+        "editor_variant": target.editor_variant,
+    }
+    return Plan(
+        scope=scope,
+        operation=operation,
+        module_id=None,
+        version=target_version,
+        source_version=source_version,
+        target_version=target_version,
+        target_profile=target_profile,
+        files_add=files_add,
+        files_remove=files_remove,
+        archive=archive,
+        required_free_bytes=required,
+        restart_required=True,
+        installed_after=target.module_ids,
+    )
+
+
+def build_panel_update_plan(
+    *,
+    panel_root: Path,
+    state_dir: Path,
+    catalog: Mapping[str, Any],
+    target_panel_root: Path,
+    architecture: str,
+    free_bytes: int | None = None,
+) -> Plan:
+    return _full_scope_plan(
+        scope="panel",
+        operation="panel-update",
+        panel_root=panel_root,
+        state_dir=state_dir,
+        catalog=catalog,
+        target_panel_root=target_panel_root,
+        architecture=architecture,
+        require_newer=True,
+        free_bytes=free_bytes,
+    )
+
+
+def build_profile_transition_plan(
+    *,
+    panel_root: Path,
+    state_dir: Path,
+    catalog: Mapping[str, Any],
+    target_panel_root: Path,
+    architecture: str,
+    free_bytes: int | None = None,
+) -> Plan:
+    return _full_scope_plan(
+        scope="profile",
+        operation="profile-transition",
+        panel_root=panel_root,
+        state_dir=state_dir,
+        catalog=catalog,
+        target_panel_root=target_panel_root,
+        architecture=architecture,
+        require_newer=False,
+        free_bytes=free_bytes,
+    )

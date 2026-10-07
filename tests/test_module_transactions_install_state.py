@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -122,6 +123,32 @@ def test_repair_changes_no_state(tmp_path: Path) -> None:
     plan = build_plan("repair", "engine.xray", **panel.kwargs)
 
     assert state_file_updates(panel.root, plan) == {}
+
+
+def test_full_scope_state_files_describe_the_target_profile(tmp_path: Path) -> None:
+    panel = make_panel(tmp_path, installed=("core", "tool.editor", "engine.xray", "engine.mihomo"))
+    module_plan = build_plan("repair", "engine.xray", **panel.kwargs)
+    plan = replace(
+        module_plan,
+        scope="profile",
+        operation="profile-transition",
+        module_id=None,
+        target_profile={
+            "profile": "mihomo-minimal",
+            "module_ids": ["core", "engine.mihomo", "tool.editor"],
+            "editor_variant": "light",
+        },
+        files_add=tuple(sorted(set(OWNERSHIP["core"]) | set(OWNERSHIP["engine.mihomo"]) | set(OWNERSHIP["tool.editor"]))),
+        installed_after=("core", "engine.mihomo", "tool.editor"),
+    )
+
+    updates = state_file_updates(panel.root, plan)
+
+    assert _json(updates["modules.json"])["profile"] == "mihomo-minimal"
+    assert _json(updates["module-installed.json"])["modules"]["engine.xray"] is False
+    assert _json(updates["module-installed.json"])["modules"]["engine.mihomo"] is True
+    assert _json(updates["install-profile.json"])["module_ids"] == ["core", "engine.mihomo", "tool.editor"]
+    assert _json(updates["install-managed.json"])["paths"] == list(plan.files_add)
 
 
 def test_install_keeps_fields_the_engine_does_not_know(tmp_path: Path) -> None:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import errno
 import json
 import os
@@ -79,6 +80,44 @@ def test_open_restores_the_plan_and_step(tmp_path: Path) -> None:
     assert reopened.panel_root == panel.root
     assert reopened.meta()["step"] == "applying"
     assert reopened.meta()["pid"] == 4242
+
+
+def test_open_accepts_stage_8_3_plan_without_scope_fields(tmp_path: Path) -> None:
+    panel = make_panel(tmp_path)
+    journal = _install_journal(tmp_path, panel)
+    record = json.loads((journal.dir / "operation.json").read_text(encoding="utf-8"))
+    for field in ("scope", "source_version", "target_version", "target_profile"):
+        record["plan"].pop(field)
+    (journal.dir / "operation.json").write_text(json.dumps(record), encoding="utf-8")
+
+    reopened = Journal.open(journal.dir)
+
+    assert reopened.plan.scope == "module"
+    assert reopened.plan.source_version == reopened.plan.version
+
+
+@pytest.mark.parametrize("scope,operation", [("panel", "panel-update"), ("profile", "profile-transition")])
+def test_full_scope_journal_round_trip_keeps_path_constraints(
+    tmp_path: Path, scope: str, operation: str
+) -> None:
+    panel = make_panel(tmp_path)
+    module_journal = _install_journal(tmp_path, panel)
+    plan = replace(
+        module_journal.plan,
+        scope=scope,
+        operation=operation,
+        module_id=None,
+        target_profile={"profile": "xray-minimal", "module_ids": ["core"], "editor_variant": "light"},
+    )
+    module_journal.commit()
+    journal = Journal.create(panel.root, plan, f"{scope}-operation", extra={})
+
+    reopened = Journal.open(journal.dir)
+
+    assert reopened.plan == plan
+    with pytest.raises(ModuleTransactionError) as raised:
+        reopened.apply_file("secret.key", tmp_path / "missing")
+    assert raised.value.code == "operation_target_unsafe"
 
 
 def test_open_reports_a_corrupt_operation_file(tmp_path: Path) -> None:

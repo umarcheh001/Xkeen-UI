@@ -72,6 +72,43 @@ def rebuild_frontend_manifests(panel_root: Path, frontend: Mapping[str, Mapping[
 def state_file_updates(panel_root: Path, plan: Plan) -> dict[str, bytes]:
     """New contents of the installer records, keyed by path under the panel root."""
 
+    if plan.scope in {"panel", "profile"}:
+        if not isinstance(plan.target_profile, Mapping):
+            return {}
+        profile = str(plan.target_profile.get("profile") or "")
+        variant = str(plan.target_profile.get("editor_variant") or "")
+        raw_modules = plan.target_profile.get("module_ids")
+        if not profile or variant not in {"light", "full", "advanced"} or not isinstance(raw_modules, list):
+            return {}
+        selected = {str(module_id) for module_id in raw_modules}
+        modules_state = _load(Path(panel_root) / "modules.json")
+        modules_state = dict(modules_state) if isinstance(modules_state, dict) else {"schema_version": 1}
+        modules_state["profile"] = profile
+        modules_state["restart_required"] = False
+        modules_state["editor"] = {"variant": variant}
+        current_modules = modules_state.get("modules")
+        current_modules = dict(current_modules) if isinstance(current_modules, dict) else {}
+        for module_id in MODULE_ORDER:
+            item = current_modules.get(module_id)
+            item = dict(item) if isinstance(item, dict) else {}
+            item["enabled"] = module_id in selected
+            current_modules[module_id] = item
+        modules_state["modules"] = current_modules
+        return {
+            "modules.json": _dump(modules_state),
+            "module-installed.json": _dump(
+                {"schema_version": 1, "modules": {module_id: module_id in selected for module_id in MODULE_ORDER}}
+            ),
+            "install-profile.json": _dump(
+                {
+                    "schema_version": 1,
+                    "profile": profile,
+                    "module_ids": [module_id for module_id in MODULE_ORDER if module_id in selected],
+                    "editor_variant": variant,
+                }
+            ),
+            "install-managed.json": _dump({"schema_version": 1, "paths": sorted(plan.files_add)}),
+        }
     if plan.operation == "repair":
         return {}
     panel_root = Path(panel_root)

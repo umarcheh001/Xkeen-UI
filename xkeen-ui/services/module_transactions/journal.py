@@ -115,7 +115,8 @@ class Journal:
         """
 
         plan = Plan(
-            operation="repair", module_id="", version="", files_add=(), files_remove=(),
+            scope="module", operation="repair", module_id="salvage", version="",
+            source_version="", target_version="", target_profile=None, files_add=(), files_remove=(),
             archive=None, required_free_bytes=0, restart_required=False, installed_after=(),
         )
         return cls(Path(operation_dir), Path(panel_root), plan, {"schema_version": 1, "step": None, "pid": None})

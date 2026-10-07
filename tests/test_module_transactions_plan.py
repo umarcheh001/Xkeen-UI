@@ -92,6 +92,26 @@ def test_plan_json_round_trip(tmp_path: Path) -> None:
         assert plan_from_json(encoded) == plan
 
 
+def test_plan_from_stage_8_3_json_defaults_to_module_scope() -> None:
+    old = {
+        "operation": "install",
+        "module_id": "tool.files",
+        "version": "2.10.0",
+        "files_add": ["static/js/pages/file_manager.lazy.entry.js"],
+        "files_remove": [],
+        "archive": {"archive": "module.tar.gz", "size": 10, "sha256": "a" * 64},
+        "required_free_bytes": 100,
+        "restart_required": True,
+        "installed_after": ["core", "tool.files"],
+    }
+
+    plan = plan_from_json(old)
+
+    assert plan.scope == "module"
+    assert plan.source_version == plan.target_version == plan.version == "2.10.0"
+    assert plan.target_profile is None
+
+
 @pytest.mark.parametrize(
     ("operation", "module_id"),
     [("update", "tool.terminal"), ("install", "core"), ("remove", "core"), ("repair", "core"),
