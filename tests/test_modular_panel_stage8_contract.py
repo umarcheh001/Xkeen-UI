@@ -13,6 +13,7 @@ CONTRACT = ROOT / "docs" / "modular-panel-stage8-contract.md"
 PLAN = ROOT / "README-modular-panel-plan.md"
 DOCS_INDEX = ROOT / "docs" / "README.md"
 LIFECYCLE_DOC = ROOT / "docs" / "modular-panel-stage8-lifecycle-api.md"
+PANEL_PROFILE_DOC = ROOT / "docs" / "modular-panel-stage8-panel-profile.md"
 
 
 def _generate(tmp_path: Path) -> tuple[dict, str]:
@@ -57,6 +58,7 @@ def test_stage8_contract_generator_covers_boundaries_and_acceptance_matrix(tmp_p
         "module_registry": "xkeen-ui/services/module_registry.py",
         "profile_installer": "xkeen-ui/scripts/module_profile_install.py",
         "static_package_validator": "xkeen-ui/services/module_package_contract.py",
+        "panel_profile_runbook": "docs/modular-panel-stage8-panel-profile.md",
     }
 
     module_ids = [item["id"] for item in payload["modules"]]
@@ -288,7 +290,13 @@ def test_stage8_contract_describes_closed_lifecycle_api(tmp_path) -> None:
         ("POST", "/api/modules/recovery", 200),
         ("POST", "/api/modules/restart", 200),
     ]
-    assert lifecycle["operations"] == ["install", "repair", "remove"]
+    assert lifecycle["operations"] == [
+        "install",
+        "repair",
+        "remove",
+        "panel-update",
+        "profile-transition",
+    ]
     assert lifecycle["execution"] == "detached module transaction runner"
     assert lifecycle["plan_guard"] == "lowercase SHA-256 of canonical server plan and dependency diff"
     assert lifecycle["update_available"] is False
@@ -313,5 +321,96 @@ def test_stage8_lifecycle_document_and_roadmap_are_closed() -> None:
     ):
         assert fragment in lifecycle
     assert "8.3 и 8.4 закрыты 6 октября 2026 года" in plan
-    assert "следующий — подэтап 8.5" in plan
+    assert "следующий — подэтап 8.6" in plan
     assert "modular-panel-stage8-lifecycle-api.md" in docs_index
+
+
+def test_stage8_contract_describes_closed_panel_and_profile_transactions(tmp_path) -> None:
+    payload, markdown = _generate(tmp_path)
+    panel_profile = payload["panel_profile"]
+
+    assert panel_profile["stage"] == {
+        "id": "8.5",
+        "status": "closed",
+        "closed_on": "2026-10-07",
+    }
+    assert panel_profile["panel_descriptor_fields"] == [
+        "archive",
+        "size",
+        "sha256",
+        "version",
+        "signing_key_id",
+        "architectures",
+    ]
+    assert panel_profile["operations"] == {
+        "panel-update": {
+            "scope": "panel",
+            "sequence": [
+                "catalog",
+                "download",
+                "verify",
+                "plan",
+                "apply",
+                "state",
+                "restart",
+                "health",
+                "commit_or_full_rollback",
+            ],
+        },
+        "profile-transition": {
+            "scope": "profile",
+            "sequence": [
+                "current_release",
+                "download",
+                "verify",
+                "plan",
+                "apply",
+                "state",
+                "restart",
+                "health",
+                "commit_or_full_rollback",
+            ],
+        },
+    }
+    assert panel_profile["profile_transition"] == {
+        "pending_fields": ["transition_required", "transition_target"],
+        "restart_guard": "profile_transition_required",
+        "stale_plan_code": "operation_plan_stale",
+        "module_id_forbidden": True,
+    }
+    assert panel_profile["devtools"] == {
+        "stable": "delegates panel-update plan/apply/status to ModuleLifecycleService",
+        "main": "legacy branch update path marked development_only",
+        "rollback": "legacy panel backup rollback; never a module transaction rollback",
+    }
+    assert panel_profile["rollback_scopes"] == {
+        "module": "selected module files and state",
+        "panel": "all replaced managed panel files and state",
+        "profile": "all added/removed managed profile files and state",
+    }
+    assert "## Panel update и profile transition 8.5" in markdown
+
+
+def test_stage8_panel_profile_operator_contract_and_roadmap_are_closed() -> None:
+    assert PANEL_PROFILE_DOC.is_file()
+    operator = PANEL_PROFILE_DOC.read_text(encoding="utf-8")
+    plan = PLAN.read_text(encoding="utf-8")
+    docs_index = DOCS_INDEX.read_text(encoding="utf-8")
+
+    for fragment in (
+        '"operation": "panel-update"',
+        '"operation": "profile-transition"',
+        "transition_required",
+        "profile_transition_required",
+        "operation_plan_stale",
+        "rollback_failed",
+        "POST /api/modules/recovery",
+        "Stable",
+        "development_only",
+        "Ручное восстановление",
+    ):
+        assert fragment in operator
+    assert "Подэтап 8.5" in plan
+    assert "закрыт 7 октября 2026 года" in plan
+    assert "следующий — подэтап 8.6" in plan
+    assert "modular-panel-stage8-panel-profile.md" in docs_index

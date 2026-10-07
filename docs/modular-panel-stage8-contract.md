@@ -82,7 +82,7 @@ Discovery ограничен `https://api.github.com/repos/umarcheh001/Xkeen-UI/
 ## Lifecycle API 8.4
 
 Подэтап 8.4 закрыт 2026-10-06. `xkeen-ui/services/module_lifecycle.py` повторно строит authoritative plan и передаёт его в detached module transaction runner; Flask request не меняет файлы панели.
-Допустимы только `install`, `repair`, `remove`. Plan guard — lowercase SHA-256 of canonical server plan and dependency diff. Независимое обновление версии модуля отложено до 8.5, поэтому `update_available` всегда `false`.
+Допустимы только `install`, `repair`, `remove`, `panel-update`, `profile-transition`. Plan guard — lowercase SHA-256 of canonical server plan and dependency diff. Независимые версии модулей не входят в текущую модель релиза, поэтому module-only `update_available` всегда `false`.
 
 | Method | Path | Success |
 | --- | --- | --- |
@@ -96,6 +96,15 @@ Discovery ограничен `https://api.github.com/repos/umarcheh001/Xkeen-UI/
 | `POST` | `/api/modules/restart` | `200` |
 
 Cancel посылает SIGTERM только точному live runner после проверки journal, status и Linux `/proc/<pid>/cmdline`. Recovery не перезапускает панель автоматически; restart имеет отдельный guard от активной операции, update lock и rollback-failed state.
+
+## Panel update и profile transition 8.5
+
+Подэтап 8.5 закрыт 2026-10-07. Signed catalog теперь содержит обязательный panel descriptor: `archive`, `size`, `sha256`, `version`, `signing_key_id`, `architectures`.
+`panel-update` использует scope `panel`, принимает только строго более новую stable-версию и заменяет весь managed target текущего профиля. `profile-transition` использует scope `profile`, остаётся на установленной версии и материализует профиль, сохранённый через `POST /api/modules/profile`.
+Обе full-scope операции передают в plan/apply только `operation` и server-generated `plan_id`; `module_id` запрещён. Любое изменение release/profile между review и apply возвращает `operation_plan_stale`.
+Profile response публикует `transition_required` и `transition_target`. Пока физический профиль не совпадает с желаемым, отдельный restart возвращает `profile_transition_required`.
+Panel/profile journal сохраняет каждый заменённый или удалённый managed-файл и state; ошибка после apply вызывает полный rollback своего scope. `rollback_failed` блокирует новые операции до ручного восстановления backup. Module rollback, full-scope transaction rollback и legacy DevTools backup rollback не смешиваются.
+Stable DevTools check/run/status делегируются `ModuleLifecycleService`; branch channel `main` сохраняет legacy development-only path. Подробные payload, error codes, cancel/recovery semantics и manual runbook: `docs/modular-panel-stage8-panel-profile.md`.
 
 ## Acceptance matrix
 

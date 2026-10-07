@@ -19,6 +19,68 @@ MODULE_REGISTRY = "xkeen-ui/services/module_registry.py"
 PROFILE_INSTALLER = "xkeen-ui/scripts/module_profile_install.py"
 STATIC_PACKAGE_VALIDATOR = "xkeen-ui/services/module_package_contract.py"
 
+PANEL_PROFILE = {
+    "stage": {
+        "id": "8.5",
+        "status": "closed",
+        "closed_on": "2026-10-07",
+    },
+    "panel_descriptor_fields": [
+        "archive",
+        "size",
+        "sha256",
+        "version",
+        "signing_key_id",
+        "architectures",
+    ],
+    "operations": {
+        "panel-update": {
+            "scope": "panel",
+            "sequence": [
+                "catalog",
+                "download",
+                "verify",
+                "plan",
+                "apply",
+                "state",
+                "restart",
+                "health",
+                "commit_or_full_rollback",
+            ],
+        },
+        "profile-transition": {
+            "scope": "profile",
+            "sequence": [
+                "current_release",
+                "download",
+                "verify",
+                "plan",
+                "apply",
+                "state",
+                "restart",
+                "health",
+                "commit_or_full_rollback",
+            ],
+        },
+    },
+    "profile_transition": {
+        "pending_fields": ["transition_required", "transition_target"],
+        "restart_guard": "profile_transition_required",
+        "stale_plan_code": "operation_plan_stale",
+        "module_id_forbidden": True,
+    },
+    "devtools": {
+        "stable": "delegates panel-update plan/apply/status to ModuleLifecycleService",
+        "main": "legacy branch update path marked development_only",
+        "rollback": "legacy panel backup rollback; never a module transaction rollback",
+    },
+    "rollback_scopes": {
+        "module": "selected module files and state",
+        "panel": "all replaced managed panel files and state",
+        "profile": "all added/removed managed profile files and state",
+    },
+}
+
 
 def _load_sources(root: Path):
     sys.path.insert(0, str(root / "xkeen-ui"))
@@ -164,6 +226,7 @@ def build_contract(root: Path) -> dict[str, Any]:
             "module_registry": MODULE_REGISTRY,
             "profile_installer": PROFILE_INSTALLER,
             "static_package_validator": STATIC_PACKAGE_VALIDATOR,
+            "panel_profile_runbook": "docs/modular-panel-stage8-panel-profile.md",
         },
         "modules": _module_payload(definitions),
         "profiles": _profile_payload(presets),
@@ -306,12 +369,13 @@ def build_contract(root: Path) -> dict[str, Any]:
                 {"method": "POST", "path": "/api/modules/recovery", "success_status": 200},
                 {"method": "POST", "path": "/api/modules/restart", "success_status": 200},
             ],
-            "operations": ["install", "repair", "remove"],
+            "operations": ["install", "repair", "remove", "panel-update", "profile-transition"],
             "execution": "detached module transaction runner",
             "plan_guard": "lowercase SHA-256 of canonical server plan and dependency diff",
             "update_available": False,
             "recovery_restarts_implicitly": False,
         },
+        "panel_profile": PANEL_PROFILE,
         "acceptance_matrix": acceptance,
         "deferred": [
             "arbitrary GitHub repositories",
@@ -334,6 +398,7 @@ def render_markdown(payload: dict[str, Any]) -> str:
     trust_client = payload["trust_client"]
     ci_publication = payload["ci_publication"]
     lifecycle_api = payload["lifecycle_api"]
+    panel_profile = payload["panel_profile"]
     lines = [
         "# Этап 8.0: контракты и границы",
         "",
@@ -419,7 +484,7 @@ def render_markdown(payload: dict[str, Any]) -> str:
             "## Lifecycle API 8.4",
             "",
             f"Подэтап {lifecycle_api['stage']['id']} закрыт {lifecycle_api['stage']['closed_on']}. `{lifecycle_api['service']}` повторно строит authoritative plan и передаёт его в {lifecycle_api['execution']}; Flask request не меняет файлы панели.",
-            f"Допустимы только `{ '`, `'.join(lifecycle_api['operations']) }`. Plan guard — {lifecycle_api['plan_guard']}. Независимое обновление версии модуля отложено до 8.5, поэтому `update_available` всегда `false`.",
+            f"Допустимы только `{ '`, `'.join(lifecycle_api['operations']) }`. Plan guard — {lifecycle_api['plan_guard']}. Независимые версии модулей не входят в текущую модель релиза, поэтому module-only `update_available` всегда `false`.",
             "",
             "| Method | Path | Success |",
             "| --- | --- | --- |",
@@ -429,6 +494,16 @@ def render_markdown(payload: dict[str, Any]) -> str:
             ],
             "",
             "Cancel посылает SIGTERM только точному live runner после проверки journal, status и Linux `/proc/<pid>/cmdline`. Recovery не перезапускает панель автоматически; restart имеет отдельный guard от активной операции, update lock и rollback-failed state.",
+            "",
+            "## Panel update и profile transition 8.5",
+            "",
+            f"Подэтап {panel_profile['stage']['id']} закрыт {panel_profile['stage']['closed_on']}. Signed catalog теперь содержит обязательный panel descriptor: "
+            + ", ".join(f"`{field}`" for field in panel_profile["panel_descriptor_fields"]) + ".",
+            "`panel-update` использует scope `panel`, принимает только строго более новую stable-версию и заменяет весь managed target текущего профиля. `profile-transition` использует scope `profile`, остаётся на установленной версии и материализует профиль, сохранённый через `POST /api/modules/profile`.",
+            "Обе full-scope операции передают в plan/apply только `operation` и server-generated `plan_id`; `module_id` запрещён. Любое изменение release/profile между review и apply возвращает `operation_plan_stale`.",
+            f"Profile response публикует `{panel_profile['profile_transition']['pending_fields'][0]}` и `{panel_profile['profile_transition']['pending_fields'][1]}`. Пока физический профиль не совпадает с желаемым, отдельный restart возвращает `{panel_profile['profile_transition']['restart_guard']}`.",
+            "Panel/profile journal сохраняет каждый заменённый или удалённый managed-файл и state; ошибка после apply вызывает полный rollback своего scope. `rollback_failed` блокирует новые операции до ручного восстановления backup. Module rollback, full-scope transaction rollback и legacy DevTools backup rollback не смешиваются.",
+            "Stable DevTools check/run/status делегируются `ModuleLifecycleService`; branch channel `main` сохраняет legacy development-only path. Подробные payload, error codes, cancel/recovery semantics и manual runbook: `docs/modular-panel-stage8-panel-profile.md`.",
             "",
             "## Acceptance matrix",
             "",

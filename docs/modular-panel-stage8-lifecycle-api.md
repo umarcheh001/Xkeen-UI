@@ -1,7 +1,8 @@
 # Этап 8.4: Lifecycle API
 
 **Статус:** закрыт 6 октября 2026 года  
-**Следующий подэтап:** 8.5, обновление panel archive и profile transition
+**Расширение:** full-scope операции подэтапа 8.5 описаны в
+`modular-panel-stage8-panel-profile.md`
 
 Lifecycle API связывает подписанный каталог Этапа 8.2 с транзакционным
 движком Этапа 8.3. HTTP request только проверяет ввод, строит план и запускает
@@ -32,10 +33,11 @@ health check и rollback не выполняются в процессе Flask.
 
 ## Plan и apply
 
-Plan принимает только `install`, `repair` или `remove` и всегда затрагивает
-ровно выбранный модуль. Отсутствующие зависимости, конфликты, dependants,
-активное ядро и нехватка места возвращаются как `applicable: false` с
-`blockers`; зависимости не устанавливаются автоматически.
+Module-only plan принимает `install`, `repair` или `remove` и всегда затрагивает
+ровно выбранный модуль. Full-scope `panel-update` и `profile-transition`
+добавлены в 8.5 и описаны отдельным контрактом. Отсутствующие зависимости,
+конфликты, dependants, активное ядро и нехватка места возвращаются как
+`applicable: false` с `blockers`; зависимости не устанавливаются автоматически.
 
 Для применимого плана сервер выдаёт `plan_id`: lowercase SHA-256 canonical JSON
 полного transaction plan и dependency diff. Apply заново читает installed
@@ -43,9 +45,9 @@ state и exact-release catalog, повторно строит план и сра
 изменение даёт `module_plan_stale`; клиентские file lists, URL, checksum и
 размеры не принимаются.
 
-Версия модуля равна версии установленной панели. В 8.4 нет отдельной операции
-update, поэтому `update_available` всегда `false`; переход версии относится к
-подэтапу 8.5.
+Версия модуля равна версии установленной панели. Независимой module version в
+текущей модели релиза нет, поэтому module-only `update_available` всегда
+`false`; версию всей панели меняет `panel-update` из подэтапа 8.5.
 
 ## Cancel, recovery и restart
 

@@ -85,6 +85,10 @@ def test_stage0_inventory_generator_runs_and_covers_required_contract(tmp_path):
     assert all(item["module_id"] in EXPECTED_MODULES for item in units)
     assert all((ROOT / item["path"]).is_file() for item in units)
 
+    units_by_path = {item["path"]: item for item in units}
+    assert units_by_path["xkeen-ui/routes/devtools.py"]["module_id"] == "core"
+    assert units_by_path["xkeen-ui/templates/devtools.html"]["module_id"] == "tool.advanced-diagnostics"
+
     kinds = {item["kind"] for item in units}
     for required_kind in (
         "backend_route",

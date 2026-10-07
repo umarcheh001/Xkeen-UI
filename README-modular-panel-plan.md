@@ -1,8 +1,8 @@
 # План модульной архитектуры панели Xkeen UI
 
 **Статус:** Этапы 0, 1, 2, 3, 3R, 3R.1, 4, 5, 6 и 7, а также
-подэтапы 8.0–8.4 закрыты; следующий — подэтап 8.5<br>
-**Дата:** 6 октября 2026 года
+подэтапы 8.0–8.5 закрыты; следующий — подэтап 8.6<br>
+**Дата:** 7 октября 2026 года
 **Область:** облегчение панели, профили установки и официальный каталог модулей
 
 **Текущий прогресс:** Этапы 0–3 и 3R, подэтапы 4.1, 4.2 и 4.3 закрыты;
@@ -17,7 +17,8 @@ manifest и единый `page_context`. Подэтап 4.6 закрепил ser
 года. Этап 7 профилей установщика закрыт 2 октября 2026 года. Подэтап 8.0 —
 Контракты и границы — закрыт 3 октября 2026 года. Подэтап 8.1 — Упаковка и
 release assets — также закрыт 3 октября 2026 года. Подэтап 8.2 — Trust и
-клиент каталога — закрыт 5 октября 2026 года. Подэтапы 8.3 и 8.4 закрыты 6 октября 2026 года; следующий — подэтап 8.5.
+клиент каталога — закрыт 5 октября 2026 года. Подэтапы 8.3 и 8.4 закрыты 6 октября 2026 года. Подэтап 8.5 — Panel update и profile transition — закрыт
+7 октября 2026 года; следующий — подэтап 8.6.
 
 Этап 8 подготовлен как отдельный план после завершения Этапов 6 и 7. Подэтап
 8.0 закрыл статические контракты упаковки и обновления, 8.1 выпустил
@@ -1518,9 +1519,10 @@ immutable-хранилище артефактов:
   новую версию происходит вместе с панелью;
 - manifest с allow-list путей, чтобы архив не мог выйти за свои файлы.
 
-Пакет модуля не может перезаписывать файлы core или другого модуля. Перевод
-установщика профилей на ту же карту владения, что у пакетов, остаётся долгом
-к подэтапу 8.5.
+Пакет модуля не может перезаписывать файлы core или другого модуля. Начиная с
+подэтапа 8.5 release builder, установщик профилей и transaction planner
+используют одну `module-ownership.json`; расхождение ownership отклоняется до
+изменения панели.
 
 ### Manifest модуля
 
@@ -1710,9 +1712,26 @@ Design: `docs/superpowers/specs/2026-10-06-modular-panel-stage8-4-lifecycle-api-
 
 #### 8.5. Panel update и profile transition
 
-Подключить единый panel archive для обновления core/panel, сохранить profile и
-config, связать с `POST /api/modules/profile` Этапа 7 и разделить rollback
-одного модуля от rollback всей панели.
+**Статус:** закрыт 7 октября 2026 года.
+
+Подписанный catalog теперь содержит обязательный panel descriptor, а единый
+panel archive проходит size/SHA-256, path, mutable-state и exact-ownership
+preflight. Lifecycle API принимает full-scope `panel-update` и
+`profile-transition` без `module_id`, повторно строит authoritative plan при
+apply и запускает тот же detached runner. Panel update требует более новую
+stable-версию и сохраняет profile/config/editor state; profile transition
+остаётся на текущей версии и физически применяет registry state из
+`POST /api/modules/profile`. Пока переход не выполнен, отдельный restart
+блокируется кодом `profile_transition_required`.
+
+Journal и recovery различают scope `module`, `panel` и `profile`, поэтому
+rollback одного модуля не смешивается с полным rollback панели/профиля.
+Stable DevTools update делегируется Lifecycle API, а branch channel `main`
+остаётся явным `development_only`. Контракт и recovery runbook:
+`docs/modular-panel-stage8-panel-profile.md`. Design:
+`docs/superpowers/specs/2026-10-07-modular-panel-stage8-5-panel-profile-design.md`;
+план:
+`docs/superpowers/plans/2026-10-07-modular-panel-stage8-5-panel-profile.md`.
 
 #### 8.6. UI менеджера
 

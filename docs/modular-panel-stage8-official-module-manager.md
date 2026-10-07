@@ -1,8 +1,7 @@
 # Этап 8: менеджер официальных модулей
 
-**Статус:** подэтапы 8.0–8.4 закрыты; следующий — 8.5
-«Panel update и profile transition»<br>
-**Дата:** 6 октября 2026 года
+**Статус:** подэтапы 8.0–8.5 закрыты; следующий — 8.6 «UI менеджера»<br>
+**Дата:** 7 октября 2026 года
 
 Этот документ фиксирует implementation contract для Этапа 8. Полный roadmap
 остаётся в [`README-modular-panel-plan.md`](../README-modular-panel-plan.md).
@@ -101,15 +100,23 @@ health -> commit/rollback`.
 
 ### Panel update
 
-Единый panel archive обновляет core-owned payload. До переключения создаются
-backup и snapshot registry. После health-check фиксируется новая версия либо
-выполняется полный rollback. Профиль и enabled/disabled state сохраняются.
+Единый signed panel archive обновляет весь managed payload текущего профиля.
+Lifecycle plan требует строго более новую stable-версию; apply повторно
+проверяет catalog, descriptor, archive и plan digest. До замены journal
+сохраняет каждый затрагиваемый файл и state. После health-check фиксируются
+новая версия и target ownership либо выполняется полный rollback scope
+`panel`. Профиль, Custom module set, editor variant, конфигурации и
+enabled/disabled state сохраняются.
 
 ### Profile transition
 
-Переход профиля может добавить и удалить несколько модулей, поэтому остаётся
-транзакцией Этапа 7 с diff, свободным местом, backup и перезапуском. Нельзя
-маскировать его как module-only update.
+`POST /api/modules/profile` сохраняет желаемый registry state и сообщает
+`transition_required`/`transition_target`. Переход может добавить и удалить
+несколько модулей, поэтому выполняется отдельной full-scope транзакцией
+`profile-transition` на текущей версии release с diff, проверкой места,
+journal, restart и health. Пока physical payload не совпадает с желаемым,
+restart блокируется `profile_transition_required`. Нельзя маскировать переход
+как module-only update.
 
 ## Уведомления
 
@@ -127,7 +134,7 @@ Core выполняет тихий poll раз в сутки и поддержи
 3. **8.2 Trust:** закрыт; allow-list, signatures, key rotation, cache/offline policy.
 4. **8.3 Updater:** закрыт; preflight, safe unpack, backup, journal, detached runner и rollback.
 5. **8.4 API:** закрыт; list/plan/apply/status/cancel/recovery/restart и operation log. Контракт: [`modular-panel-stage8-lifecycle-api.md`](modular-panel-stage8-lifecycle-api.md).
-6. **8.5 Panel/profile:** panel archive update и связь с profile transaction.
+6. **8.5 Panel/profile:** закрыт; signed panel update, physical profile transition и scoped rollback. Контракт: [`modular-panel-stage8-panel-profile.md`](modular-panel-stage8-panel-profile.md).
 7. **8.6 UI:** installed/available, update badge, dependency diff, progress и restart.
 8. **8.7 Notifications:** daily/manual poll, deduplication и stale/error state.
 9. **8.8 Recovery:** failure matrix, legacy migration, stable rollout и rollback runbook.
@@ -140,9 +147,9 @@ Core выполняет тихий poll раз в сутки и поддержи
 
 - [ ] каталог с неизвестным ключом, изменённым checksum или неподдерживаемым API отклонён;
 - [ ] module-only update изменяет только выбранный модуль;
-- [ ] panel update сохраняет profile/config/state;
-- [ ] profile transition использует отдельный transaction path;
-- [ ] crash после restart автоматически возвращает предыдущую версию;
+- [x] panel update сохраняет profile/config/state;
+- [x] profile transition использует отдельный transaction path;
+- [x] crash после restart автоматически возвращает предыдущую версию;
 - [ ] offline использует кэш и не блокирует старт;
 - [ ] новая версия модуля даёт одно dismissible уведомление;
 - [ ] архив с traversal/symlink/script hook не устанавливается;

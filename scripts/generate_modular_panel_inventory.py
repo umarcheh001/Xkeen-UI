@@ -426,9 +426,12 @@ class ModularPanelInventoryGenerator:
             or "mihomo_backups.py" in p
         ):
             module_id = "tool.backups"
+        elif p.endswith("/routes/devtools.py"):
+            # Stable update, core.log and recovery endpoints are registered
+            # unconditionally; only the optional DevTools UI stays removable.
+            module_id = "core"
         elif (
-            "/routes/devtools.py" in p
-            or "/services/devtools/" in p
+            "/services/devtools/" in p
             or "/features/devtools" in p
             or "/templates/devtools.html" in p
             or "/pages/devtools." in p
