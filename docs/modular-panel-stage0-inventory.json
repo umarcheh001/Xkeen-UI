@@ -36,13 +36,13 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 500,
-      "size_bytes": 6860736,
+      "unit_count": 501,
+      "size_bytes": 6875414,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
         "backend_service": 72,
-        "backend_test": 222,
+        "backend_test": 223,
         "configuration": 10,
         "frontend_bundle": 9,
         "frontend_entrypoint": 2,
@@ -2138,7 +2138,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_lifecycle.py",
-      "size_bytes": 35074,
+      "size_bytes": 35857,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -2267,7 +2267,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_transactions/install_state.py",
-      "size_bytes": 7645,
+      "size_bytes": 7749,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -2324,7 +2324,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_transactions/plan.py",
-      "size_bytes": 22461,
+      "size_bytes": 24425,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -5774,7 +5774,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_panel_profile_transaction_plan.py",
-      "size_bytes": 6015,
+      "size_bytes": 6223,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -5887,6 +5887,24 @@
       "environment_variables": [
         "XKEEN_UI_STATE_DIR"
       ],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_profile_transition_diff.py",
+      "size_bytes": 11619,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
       "removable": false
     },
     {

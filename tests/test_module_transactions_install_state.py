@@ -139,6 +139,9 @@ def test_full_scope_state_files_describe_the_target_profile(tmp_path: Path) -> N
             "editor_variant": "light",
         },
         files_add=tuple(sorted(set(OWNERSHIP["core"]) | set(OWNERSHIP["engine.mihomo"]) | set(OWNERSHIP["tool.editor"]))),
+        # Как у настоящего плана: уходящий модуль назван явно, управляемый
+        # набор считается от прежнего, а не подменяется списком добавленного.
+        files_remove=tuple(sorted(OWNERSHIP["engine.xray"])),
         installed_after=("core", "engine.mihomo", "tool.editor"),
     )
 

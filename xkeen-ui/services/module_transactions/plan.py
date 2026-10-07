@@ -100,6 +100,40 @@ def load_ownership_map(panel_root: Path) -> OwnershipMap:
     return OwnershipMap(modules=normalized, frontend={"bridge": bridge, "build": build})
 
 
+def installed_panel_listing(panel_root: Path) -> dict[str, Any]:
+    """The installed release described the way a verified panel archive is.
+
+    A profile transition stays on the installed release, whose ownership map
+    already lies in the panel: what the target profile consists of is known
+    without downloading anything. Sizes are those of the files on the storage;
+    a file that is not there counts as zero and has to come from the archive.
+    """
+
+    root = Path(panel_root)
+    try:
+        raw = json.loads((root / OWNERSHIP_MAP_FILENAME).read_text(encoding="utf-8"))
+        modules = raw["modules"]
+        if not isinstance(modules, dict) or any(
+            not isinstance(paths, list) or any(not isinstance(path, str) for path in paths)
+            for paths in modules.values()
+        ):
+            raise ValueError("invalid ownership map")
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        raise ModuleTransactionError(
+            "module_ownership_unavailable",
+            "this panel build does not describe which files its modules own",
+        ) from error
+    return {
+        "ownership": raw,
+        "payload_sizes": {
+            path: _file_size(root / path)
+            for paths in modules.values()
+            for path in paths
+            if _safe_relative(path)
+        },
+    }
+
+
 def read_panel_version(panel_root: Path) -> str:
     """The release the panel was built from; only such a build has a catalog."""
 
@@ -453,20 +487,34 @@ def _full_scope_plan(
     )
     if scope == "profile" and payload_matches and metadata_matches:
         _fail("profile_transition_not_required", "the desired profile is already installed")
-    state_only = scope == "profile" and payload_matches
-    files_add = () if state_only else tuple(sorted(target_paths))
     files_remove = tuple(sorted(installed_paths - target_paths))
-    archive = ArchiveSource(
+    archive: ArchiveSource | None = ArchiveSource(
         archive=str(descriptor["archive"]),
         size=int(descriptor["size"]),
         sha256=str(descriptor["sha256"]),
     )
+    if scope == "profile":
+        # The release stays the same, so a file that is already in place is
+        # the file the target wants: only what is missing gets laid. Taking a
+        # module away then needs neither the archive nor the network.
+        files_add = tuple(
+            sorted(
+                path
+                for path in target_paths
+                if path not in installed_paths or not (Path(panel_root) / path).is_file()
+            )
+        )
+        if not files_add:
+            archive = None
+        backup = sum(_file_size(Path(panel_root) / path) for path in (*files_add, *files_remove))
+    else:
+        files_add = tuple(sorted(target_paths))
+        backup = sum(_file_size(Path(panel_root) / path) for path in installed_paths | target_paths)
     if target_sizes is not None:
         expanded = sum(target_sizes.get(path, 0) for path in files_add)
     else:
         expanded = sum(_file_size(Path(target_panel_root) / path) for path in files_add)
-    backup = sum(_file_size(Path(panel_root) / path) for path in installed_paths | target_paths)
-    required = (archive.size + expanded + backup) * 6 // 5
+    required = ((archive.size if archive is not None else 0) + expanded + backup) * 6 // 5
     if free_bytes is None:
         probe = transactions_root(Path(panel_root)).parent
         free_bytes = shutil.disk_usage(probe if probe.exists() else panel_root).free

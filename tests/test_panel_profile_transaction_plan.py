@@ -82,7 +82,10 @@ def test_profile_transition_stays_on_release_and_uses_desired_registry_profile(t
         "editor_variant": "light",
     }
     assert "routes/mihomo.py" in plan.files_remove
-    assert "routes/routing/__init__.py" in plan.files_add
+    # Релиз тот же: файлы остающегося движка уже на месте и не перекладываются.
+    assert "routes/routing/__init__.py" not in plan.files_add
+    assert plan.files_add == ()
+    assert plan.archive is None
     assert "secret.key" not in set(plan.files_add) | set(plan.files_remove)
 
 

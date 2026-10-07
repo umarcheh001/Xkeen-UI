@@ -30,6 +30,7 @@ from services.module_transactions.plan import (
     build_plan,
     build_panel_update_plan,
     build_profile_transition_plan,
+    installed_panel_listing,
     plan_to_json,
     read_installed_modules,
     read_panel_version,
@@ -533,15 +534,30 @@ class ModuleLifecycleService:
                         current_version=source_version,
                         target_version=target_version,
                     )
-            checked = self._checked_panel_archive(client, snapshot, architecture)
             builder = build_panel_update_plan if operation == "panel-update" else build_profile_transition_plan
-            plan = builder(
-                panel_root=self.panel_root,
-                state_dir=self.state_dir,
-                catalog=snapshot.catalog,
-                target_archive=checked,
-                architecture=architecture,
-            )
+            plan = None
+            if operation == "profile-transition":
+                # The release does not change, and its ownership map is in the
+                # panel already. A transition that only takes files away is
+                # planned from it and never needs the archive.
+                local = builder(
+                    panel_root=self.panel_root,
+                    state_dir=self.state_dir,
+                    catalog=snapshot.catalog,
+                    target_archive=installed_panel_listing(self.panel_root),
+                    architecture=architecture,
+                )
+                if not local.files_add:
+                    plan = local
+                    self._drop_archive_cache()
+            if plan is None:
+                plan = builder(
+                    panel_root=self.panel_root,
+                    state_dir=self.state_dir,
+                    catalog=snapshot.catalog,
+                    target_archive=self._checked_panel_archive(client, snapshot, architecture),
+                    architecture=architecture,
+                )
         except ModuleTransactionError as error:
             # Nothing will be launched from this plan: the archive has no reader.
             self._drop_archive_cache()

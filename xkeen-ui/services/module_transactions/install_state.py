@@ -102,7 +102,9 @@ def state_file_updates(panel_root: Path, plan: Plan) -> dict[str, bytes]:
             and all(isinstance(path, str) for path in managed_paths)
             else set()
         )
-        target_paths = set(plan.files_add) if plan.files_add else current_paths - set(plan.files_remove)
+        # A profile transition lays only what was missing: the rest of
+        # the managed set is what was there before.
+        target_paths = (current_paths - set(plan.files_remove)) | set(plan.files_add)
         return {
             "modules.json": _dump(modules_state),
             "module-installed.json": _dump(
