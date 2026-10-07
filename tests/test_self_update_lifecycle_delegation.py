@@ -96,6 +96,8 @@ def test_stable_status_projects_lifecycle_operation(tmp_path) -> None:
     assert payload["status"]["state"] == "running"
     assert payload["status"]["step"] == "downloading"
     assert payload["status"]["operation_id"] == "20261007T120000Z-abcdef"
+    assert payload["backup_dir"] is None
+    assert str(tmp_path) not in str(payload)
     assert lifecycle.calls == [("status",)]
 
 

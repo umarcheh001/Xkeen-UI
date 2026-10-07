@@ -522,7 +522,17 @@
       "module": "selected module files and state",
       "panel": "all replaced managed panel files and state",
       "profile": "all added/removed managed profile files and state"
-    }
+    },
+    "stable_error_codes": [
+      "panel_update_unavailable",
+      "panel_version_current",
+      "panel_archive_invalid",
+      "profile_transition_required",
+      "profile_transition_not_required",
+      "profile_payload_unavailable",
+      "profile_target_invalid",
+      "operation_free_space"
+    ]
   },
   "acceptance_matrix": [
     {

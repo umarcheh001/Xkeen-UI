@@ -105,6 +105,7 @@ Cancel посылает SIGTERM только точному live runner посл
 Profile response публикует `transition_required` и `transition_target`. Пока физический профиль не совпадает с желаемым, отдельный restart возвращает `profile_transition_required`.
 Panel/profile journal сохраняет каждый заменённый или удалённый managed-файл и state; ошибка после apply вызывает полный rollback своего scope. `rollback_failed` блокирует новые операции до ручного восстановления backup. Module rollback, full-scope transaction rollback и legacy DevTools backup rollback не смешиваются.
 Stable DevTools check/run/status делегируются `ModuleLifecycleService`; branch channel `main` сохраняет legacy development-only path. Подробные payload, error codes, cancel/recovery semantics и manual runbook: `docs/modular-panel-stage8-panel-profile.md`.
+Stable full-scope codes: `panel_update_unavailable`, `panel_version_current`, `panel_archive_invalid`, `profile_transition_required`, `profile_transition_not_required`, `profile_payload_unavailable`, `profile_target_invalid`, `operation_free_space`.
 
 ## Acceptance matrix
 

@@ -94,6 +94,15 @@ def state_file_updates(panel_root: Path, plan: Plan) -> dict[str, bytes]:
             item["enabled"] = module_id in selected
             current_modules[module_id] = item
         modules_state["modules"] = current_modules
+        managed = _load(Path(panel_root) / "install-managed.json")
+        managed_paths = managed.get("paths") if isinstance(managed, dict) else None
+        current_paths = (
+            {str(path) for path in managed_paths}
+            if isinstance(managed_paths, list)
+            and all(isinstance(path, str) for path in managed_paths)
+            else set()
+        )
+        target_paths = set(plan.files_add) if plan.files_add else current_paths - set(plan.files_remove)
         return {
             "modules.json": _dump(modules_state),
             "module-installed.json": _dump(
@@ -107,7 +116,7 @@ def state_file_updates(panel_root: Path, plan: Plan) -> dict[str, bytes]:
                     "editor_variant": variant,
                 }
             ),
-            "install-managed.json": _dump({"schema_version": 1, "paths": sorted(plan.files_add)}),
+            "install-managed.json": _dump({"schema_version": 1, "paths": sorted(target_paths)}),
         }
     if plan.operation == "repair":
         return {}

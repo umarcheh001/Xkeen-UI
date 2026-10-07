@@ -224,6 +224,30 @@ def test_full_scope_apply_rejects_profile_change_after_review(tmp_path):
     assert raised.value.code == "operation_plan_stale"
 
 
+def test_full_scope_apply_revalidates_reviewed_plan_inside_launcher(tmp_path):
+    panel = make_panel(tmp_path)
+    registry = ModuleRegistry(str(panel.state), which=lambda _name: "/bin/tool")
+    registry.set_profile("mihomo-minimal")
+
+    def race(_plan, **kwargs):
+        registry.set_profile("full")
+        kwargs["prepare_plan"]()
+        pytest.fail("stale plan must not launch")
+
+    service, _ = make_service(
+        panel,
+        make_release(),
+        registry=registry,
+        launch_operation=race,
+    )
+    reviewed = service.plan("profile-transition", None)
+
+    with pytest.raises(ModuleLifecycleError) as raised:
+        service.apply("profile-transition", None, reviewed["plan_id"])
+
+    assert raised.value.code == "operation_plan_stale"
+
+
 def test_restart_is_blocked_while_profile_transition_is_pending(tmp_path):
     panel = make_panel(tmp_path)
     registry = ModuleRegistry(str(panel.state), which=lambda _name: "/bin/tool")
@@ -237,6 +261,101 @@ def test_restart_is_blocked_while_profile_transition_is_pending(tmp_path):
     assert pending["transition_required"] is True
     assert pending["transition_target"]["profile"] == "mihomo-minimal"
     assert raised.value.code == "profile_transition_required"
+
+
+@pytest.mark.parametrize(
+    ("operation", "module_id"),
+    [("panel-update", None), ("repair", "engine.xray")],
+)
+def test_non_profile_operations_are_blocked_while_profile_transition_is_pending(
+    tmp_path, operation, module_id
+):
+    panel = make_panel(tmp_path)
+    registry = ModuleRegistry(str(panel.state), which=lambda _name: "/bin/tool")
+    registry.set_profile("mihomo-minimal")
+    service, _ = make_service(panel, make_release(version="2.11.0"), registry=registry)
+
+    with pytest.raises(ModuleLifecycleError) as raised:
+        service.plan(operation, module_id)
+
+    assert raised.value.code == "profile_transition_required"
+
+
+def test_full_scope_plans_expose_stable_design_error_codes(tmp_path, monkeypatch):
+    panel = make_panel(tmp_path)
+    service, _ = make_service(panel, make_release(version=VERSION))
+    current = service.plan("panel-update", None)
+    assert current["blockers"][0]["code"] == "panel_version_current"
+
+    monkeypatch.setattr(
+        "services.module_transactions.plan.shutil.disk_usage",
+        lambda _path: SimpleNamespace(free=0),
+    )
+    registry = ModuleRegistry(str(panel.state), which=lambda _name: "/bin/tool")
+    registry.set_profile("mihomo-minimal")
+    service, _ = make_service(panel, make_release(), registry=registry)
+    no_space = service.plan("profile-transition", None)
+    assert no_space["blockers"][0]["code"] == "operation_free_space"
+
+
+def test_invalid_profile_target_uses_stable_public_code(tmp_path):
+    panel = make_panel(tmp_path)
+    desired = panel.read_json("modules.json")
+    desired["editor"]["variant"] = "unsupported"
+    panel.path("modules.json").write_text(json.dumps(desired), encoding="utf-8")
+    service, _ = make_service(panel, make_release())
+
+    with pytest.raises(ModuleLifecycleError) as raised:
+        service.plan("profile-transition", None)
+
+    assert raised.value.code == "profile_target_invalid"
+
+
+@pytest.mark.parametrize(
+    ("operation", "lower_code", "public_code"),
+    [
+        ("panel-update", "catalog_panel_not_object", "panel_update_unavailable"),
+        ("profile-transition", "catalog_archive_unavailable", "profile_payload_unavailable"),
+    ],
+)
+def test_full_scope_catalog_failures_use_stable_public_codes(
+    tmp_path, operation, lower_code, public_code
+):
+    from services.module_catalog_client import CatalogClientError
+
+    class FailedCatalog:
+        def get_catalog(self, **_kwargs):
+            raise CatalogClientError(lower_code, "unavailable")
+
+        def get_release_catalog(self, _version):
+            raise CatalogClientError(lower_code, "unavailable")
+
+    service, _ = make_service(
+        make_panel(tmp_path),
+        make_release(),
+        catalog_factory=lambda _version, _architecture: FailedCatalog(),
+    )
+
+    with pytest.raises(ModuleLifecycleError) as raised:
+        service.plan(operation, None)
+
+    assert raised.value.code == public_code
+
+
+def test_invalid_panel_archive_uses_stable_public_code(tmp_path):
+    from services.module_catalog_client import CatalogClientError
+
+    service, catalog = make_service(make_panel(tmp_path), make_release(version="2.11.0"))
+
+    def reject(_snapshot, _destination):
+        raise CatalogClientError("catalog_archive_checksum_mismatch", "bad digest")
+
+    catalog.download_verified_panel_archive = reject
+
+    with pytest.raises(ModuleLifecycleError) as raised:
+        service.plan("panel-update", None)
+
+    assert raised.value.code == "panel_archive_invalid"
 
 
 def test_missing_dependency_is_a_visible_blocker_not_an_automatic_install(tmp_path):
@@ -358,14 +477,16 @@ def test_apply_rebuilds_and_launches_only_the_reviewed_server_plan(tmp_path):
     assert len(launcher.plans) == 1
     assert launcher.plans[0].module_id == "tool.terminal"
     assert launcher.plans[0].files_add == tuple(sorted(OWNERSHIP["tool.terminal"]))
-    assert launcher.kwargs == [
-        {
-            "panel_root": panel.root,
-            "state_dir": panel.state,
-            "health_url": "http://127.0.0.1:8088/login",
-            "restart_cmd": ("xkeen", "-restart"),
-        }
-    ]
+    assert len(launcher.kwargs) == 1
+    launch_kwargs = launcher.kwargs[0]
+    prepare_plan = launch_kwargs.pop("prepare_plan")
+    assert callable(prepare_plan)
+    assert launch_kwargs == {
+        "panel_root": panel.root,
+        "state_dir": panel.state,
+        "health_url": "http://127.0.0.1:8088/login",
+        "restart_cmd": ("xkeen", "-restart"),
+    }
 
 
 def test_apply_rejects_plan_when_installed_state_changed(tmp_path):

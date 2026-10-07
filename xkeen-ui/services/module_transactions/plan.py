@@ -350,6 +350,27 @@ def _read_managed_paths(state_dir: Path) -> tuple[str, ...]:
         ) from error
 
 
+def _read_installed_profile(state_dir: Path) -> tuple[str, frozenset[str], str]:
+    try:
+        document = json.loads((Path(state_dir) / "install-profile.json").read_text(encoding="utf-8"))
+        profile = document["profile"]
+        modules = document["module_ids"]
+        editor_variant = document["editor_variant"]
+        if (
+            not isinstance(profile, str)
+            or not isinstance(modules, list)
+            or any(not isinstance(module_id, str) for module_id in modules)
+            or not isinstance(editor_variant, str)
+        ):
+            raise ValueError("invalid installed profile")
+        return profile, frozenset(modules), editor_variant
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        raise ModuleTransactionError(
+            "profile_installed_state_unavailable",
+            "the physical install profile cannot be read",
+        ) from error
+
+
 def _full_scope_plan(
     *,
     scope: str,
@@ -400,11 +421,19 @@ def _full_scope_plan(
         raise ModuleTransactionError(error.code, "the desired physical profile is invalid", **error.details) from error
     installed_paths = set(_read_managed_paths(state_dir))
     installed_modules = set(read_installed_modules(state_dir))
+    installed_profile, installed_profile_modules, installed_editor_variant = _read_installed_profile(state_dir)
     target_paths = set(target.payload_files)
     target_modules = set(target.module_ids)
-    if scope == "profile" and installed_paths == target_paths and installed_modules == target_modules:
+    payload_matches = installed_paths == target_paths and installed_modules == target_modules
+    metadata_matches = (
+        installed_profile == target.profile
+        and installed_profile_modules == target_modules
+        and installed_editor_variant == target.editor_variant
+    )
+    if scope == "profile" and payload_matches and metadata_matches:
         _fail("profile_transition_not_required", "the desired profile is already installed")
-    files_add = tuple(sorted(target_paths))
+    state_only = scope == "profile" and payload_matches
+    files_add = () if state_only else tuple(sorted(target_paths))
     files_remove = tuple(sorted(installed_paths - target_paths))
     archive = ArchiveSource(
         archive=str(descriptor["archive"]),

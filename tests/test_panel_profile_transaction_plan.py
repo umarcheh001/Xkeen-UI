@@ -102,6 +102,30 @@ def test_profile_transition_refuses_already_matching_physical_payload(tmp_path: 
     assert raised.value.code == "profile_transition_not_required"
 
 
+def test_profile_transition_allows_state_only_profile_metadata_change(tmp_path: Path) -> None:
+    panel = make_panel(tmp_path, version="1.2.3")
+    desired = panel.read_json("modules.json")
+    desired["profile"] = "custom"
+    _json(panel.path("modules.json"), desired)
+
+    plan = build_profile_transition_plan(
+        panel_root=panel.root,
+        state_dir=panel.state,
+        catalog=_catalog("1.2.3"),
+        target_panel_root=_target_source(tmp_path),
+        architecture=ARCHITECTURE,
+        free_bytes=1 << 40,
+    )
+
+    assert plan.target_profile == {
+        "profile": "custom",
+        "module_ids": ["core", "engine.xray", "tool.editor"],
+        "editor_variant": "light",
+    }
+    assert plan.files_add == ()
+    assert plan.files_remove == ()
+
+
 def test_panel_update_requires_newer_release_and_preserves_custom_profile(tmp_path: Path) -> None:
     panel = make_panel(tmp_path, version="1.2.3", installed=("core", "tool.files"))
     _json(

@@ -79,6 +79,16 @@ PANEL_PROFILE = {
         "panel": "all replaced managed panel files and state",
         "profile": "all added/removed managed profile files and state",
     },
+    "stable_error_codes": [
+        "panel_update_unavailable",
+        "panel_version_current",
+        "panel_archive_invalid",
+        "profile_transition_required",
+        "profile_transition_not_required",
+        "profile_payload_unavailable",
+        "profile_target_invalid",
+        "operation_free_space",
+    ],
 }
 
 
@@ -504,6 +514,7 @@ def render_markdown(payload: dict[str, Any]) -> str:
             f"Profile response публикует `{panel_profile['profile_transition']['pending_fields'][0]}` и `{panel_profile['profile_transition']['pending_fields'][1]}`. Пока физический профиль не совпадает с желаемым, отдельный restart возвращает `{panel_profile['profile_transition']['restart_guard']}`.",
             "Panel/profile journal сохраняет каждый заменённый или удалённый managed-файл и state; ошибка после apply вызывает полный rollback своего scope. `rollback_failed` блокирует новые операции до ручного восстановления backup. Module rollback, full-scope transaction rollback и legacy DevTools backup rollback не смешиваются.",
             "Stable DevTools check/run/status делегируются `ModuleLifecycleService`; branch channel `main` сохраняет legacy development-only path. Подробные payload, error codes, cancel/recovery semantics и manual runbook: `docs/modular-panel-stage8-panel-profile.md`.",
+            "Stable full-scope codes: " + ", ".join(f"`{code}`" for code in panel_profile["stable_error_codes"]) + ".",
             "",
             "## Acceptance matrix",
             "",

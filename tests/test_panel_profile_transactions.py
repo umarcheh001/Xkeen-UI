@@ -94,6 +94,37 @@ def test_profile_transition_commits_exact_target_and_preserves_user_files(tmp_pa
     assert panel.read_json("install-profile.json")["profile"] == "mihomo-minimal"
 
 
+def test_state_only_profile_transition_commits_metadata_without_replacing_payload(tmp_path: Path) -> None:
+    panel = make_panel(tmp_path)
+    _set_desired(panel, "custom", {"core", "engine.xray", "tool.editor"})
+    release = make_release()
+    plan = build_profile_transition_plan(
+        panel_root=panel.root,
+        state_dir=panel.state,
+        catalog=release.catalog,
+        target_panel_root=_target_source(tmp_path, release.version),
+        architecture=ARCHITECTURE,
+        free_bytes=1 << 40,
+    )
+    before = snapshot(panel.root)
+    managed_before = panel.read_json("install-managed.json")
+
+    result, journal, restarts = _run(panel, plan, release)
+
+    assert result == "committed"
+    assert not journal.dir.exists()
+    assert restarts == ["restart"]
+    assert plan.files_add == plan.files_remove == ()
+    assert panel.read_json("install-profile.json")["profile"] == "custom"
+    assert panel.read_json("install-managed.json") == managed_before
+    assert changed_paths(before, snapshot(panel.root)) <= {
+        "install-profile.json",
+        "module-catalog/catalog-2.10.0.json",
+        "module-operations/status.json",
+        "modules.json",
+    }
+
+
 def test_panel_update_commits_new_release_and_preserves_custom_profile(tmp_path: Path) -> None:
     panel = make_panel(tmp_path, version="2.10.0", installed=("core", "tool.files"))
     _set_desired(panel, "custom", {"core", "tool.files"})

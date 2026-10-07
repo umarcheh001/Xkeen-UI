@@ -397,7 +397,7 @@ def test_launch_returns_id_and_status_reaches_committed(stand) -> None:
 
     assert read_status(stand.panel.state)["operation_id"] == operation_id
     deadline = time.monotonic() + 30
-    while time.monotonic() < deadline and read_status(stand.panel.state)["result"] == "running":
+    while time.monotonic() < deadline and read_status(stand.panel.state)["result"] in (None, "running"):
         time.sleep(0.2)
     status = read_status(stand.panel.state)
     assert status["result"] == "committed", status
@@ -424,6 +424,42 @@ def test_launch_clears_a_dead_operation_first(stand) -> None:
     assert set(OWNERSHIP["tool.files"]) <= set(after)
     assert not set(OWNERSHIP["tool.terminal"]) & set(after)
     assert before["app.py"] == after["app.py"]
+
+
+def test_launch_rebuilds_plan_after_recovering_dead_operation(stand) -> None:
+    before = snapshot(stand.panel.root)
+    journal = _prepare(stand)
+    _runner(stand, "run", "--fail-at", "state", operation_id=journal.meta()["operation_id"])
+    stale_plan = build_plan(
+        "install", "tool.files", **{**stand.panel.kwargs, "catalog": stand.release.catalog}
+    )
+    prepared = []
+
+    def prepare_plan():
+        assert Journal.find(stand.panel.root) is None
+        current = snapshot(stand.panel.root)
+        assert current["app.py"] == before["app.py"]
+        prepared.append(True)
+        return build_plan(
+            "install", "tool.files", **{**stand.panel.kwargs, "catalog": stand.release.catalog}
+        )
+
+    launcher.launch(
+        stale_plan,
+        panel_root=stand.panel.root,
+        state_dir=stand.panel.state,
+        health_url=stand.health_url,
+        restart_cmd=stand.restart_cmd,
+        script=RUNNER,
+        extra_args=["--release-dir", str(stand.release_dir), "--architecture", ARCHITECTURE],
+        prepare_plan=prepare_plan,
+    )
+
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline and read_status(stand.panel.state)["result"] in (None, "running"):
+        time.sleep(0.2)
+    assert prepared == [True]
+    assert read_status(stand.panel.state)["result"] == "committed"
 
 
 def test_recover_works_when_the_signature_library_cannot_be_imported(stand) -> None:

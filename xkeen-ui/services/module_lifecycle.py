@@ -90,6 +90,20 @@ _CATALOG_COMPATIBILITY_ERRORS = frozenset(
         "catalog_schema_unsupported",
     }
 )
+_PROFILE_TARGET_ERRORS = frozenset(
+    {
+        "profile_state_unavailable",
+        "profile_installed_state_unavailable",
+        "profile_ownership_unavailable",
+        "profile_release_mismatch",
+        "profile_unknown",
+        "profile_modules_forbidden",
+        "profile_modules_invalid",
+        "profile_dependency_missing",
+        "profile_module_conflict",
+        "profile_editor_variant_invalid",
+    }
+)
 
 
 class ModuleLifecycleError(Exception):
@@ -396,7 +410,11 @@ class ModuleLifecycleService:
                 )
         except ModuleTransactionError as error:
             if error.code in _PLAN_BLOCKERS | {"panel_update_not_newer", "profile_transition_not_required"}:
-                blocker = {"code": error.code, "message": error.message, **error.details}
+                public_code = {
+                    "panel_update_not_newer": "panel_version_current",
+                    "module_free_space": "operation_free_space",
+                }.get(error.code, error.code)
+                blocker = {"code": public_code, "message": error.message, **error.details}
                 return None, {
                     "ok": True,
                     "scope": "panel" if operation == "panel-update" else "profile",
@@ -416,9 +434,44 @@ class ModuleLifecycleService:
                     "applicable": False,
                     "plan_id": None,
                 }
+            if error.code in _PROFILE_TARGET_ERRORS:
+                raise ModuleLifecycleError(
+                    "profile_target_invalid",
+                    "the desired profile cannot form a valid physical payload",
+                    status=409,
+                ) from error
             _raise_domain(error)
         except Exception as error:
-            if getattr(error, "code", None):
+            code = str(getattr(error, "code", None) or "")
+            if code.startswith("panel_archive_") or code in {
+                "catalog_archive_checksum_mismatch",
+                "catalog_archive_size_mismatch",
+            }:
+                raise ModuleLifecycleError(
+                    "panel_archive_invalid",
+                    "the panel archive failed verification",
+                    status=409,
+                ) from error
+            if operation == "profile-transition" and code in {
+                "catalog_archive_unavailable",
+                "catalog_panel_not_object",
+                "catalog_release_not_found",
+            }:
+                raise ModuleLifecycleError(
+                    "profile_payload_unavailable",
+                    "the exact-release panel payload is unavailable",
+                    status=503,
+                ) from error
+            if operation == "panel-update" and code in {
+                "catalog_panel_not_object",
+                "catalog_release_not_found",
+            }:
+                raise ModuleLifecycleError(
+                    "panel_update_unavailable",
+                    "no trusted compatible panel update is available",
+                    status=503,
+                ) from error
+            if code:
                 _raise_domain(error)
             raise
 
@@ -542,8 +595,22 @@ class ModuleLifecycleService:
         return plan, payload
 
     def plan(self, operation: str, module_id: str | None = None) -> dict[str, Any]:
+        normalized_operation, _normalized_module = self._validate_operation(operation, module_id)
+        self._ensure_profile_settled(normalized_operation)
         _plan, payload = self._plan_and_payload(operation, module_id)
         return payload
+
+    def _ensure_profile_settled(self, operation: str) -> None:
+        if operation == "profile-transition":
+            return
+        pending = self.profile_transition_status()
+        if pending["transition_required"]:
+            raise ModuleLifecycleError(
+                "profile_transition_required",
+                "the configured profile must be physically applied before another operation",
+                status=409,
+                transition_target=pending["transition_target"],
+            )
 
     def apply(
         self,
@@ -576,6 +643,25 @@ class ModuleLifecycleService:
                 status=409,
             )
 
+        self._ensure_profile_settled(operation)
+
+        def prepare_plan() -> Plan:
+            rebuilt, current = self._plan_and_payload(operation, module_id)
+            matches = (
+                rebuilt is not None
+                and current["applicable"]
+                and hmac.compare_digest(current["plan_id"], plan_id)
+            )
+            if not matches:
+                raise ModuleLifecycleError(
+                    stale_code,
+                    "the reviewed module plan is stale",
+                    status=409,
+                    blockers=current["blockers"],
+                )
+            self._ensure_profile_settled(operation)
+            return rebuilt
+
         try:
             operation_id = self._launch_operation(
                 plan,
@@ -583,6 +669,7 @@ class ModuleLifecycleService:
                 state_dir=self.state_dir,
                 health_url=self.health_url,
                 restart_cmd=self.restart_cmd,
+                prepare_plan=prepare_plan,
             )
         except ModuleTransactionError as error:
             _raise_domain(error)

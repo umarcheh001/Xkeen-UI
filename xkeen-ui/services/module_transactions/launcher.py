@@ -192,6 +192,7 @@ def launch(
     python: str = sys.executable,
     script: Path | None = None,
     extra_args: Sequence[str] = (),
+    prepare_plan: Callable[[], Plan] | None = None,
 ) -> str:
     """Record the operation and start its runner; returns the operation id."""
 
@@ -216,6 +217,8 @@ def launch(
                 "operation_rollback_failed",
                 "the previous operation could not be undone; repeat the undo or reinstall the panel",
             )
+        if prepare_plan is not None:
+            plan = prepare_plan()
         operation_id = new_operation_id()
         journal = Journal.create(
             panel_root, plan, operation_id, extra={"health_url": str(health_url), "restart_cmd": [str(part) for part in restart_cmd]}

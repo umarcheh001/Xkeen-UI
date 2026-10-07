@@ -388,6 +388,16 @@ def test_stage8_contract_describes_closed_panel_and_profile_transactions(tmp_pat
         "panel": "all replaced managed panel files and state",
         "profile": "all added/removed managed profile files and state",
     }
+    assert panel_profile["stable_error_codes"] == [
+        "panel_update_unavailable",
+        "panel_version_current",
+        "panel_archive_invalid",
+        "profile_transition_required",
+        "profile_transition_not_required",
+        "profile_payload_unavailable",
+        "profile_target_invalid",
+        "operation_free_space",
+    ]
     assert "## Panel update и profile transition 8.5" in markdown
 
 

@@ -322,7 +322,7 @@ def create_devtools_blueprint(
                     "status": status,
                     "lock": None,
                     "log_tail": lifecycle.get("log", []),
-                    "backup_dir": get_backup_dir(ui_state_dir),
+                    "backup_dir": None,
                     "backups": [],
                     "has_backup": False,
                     "reconciled": False,

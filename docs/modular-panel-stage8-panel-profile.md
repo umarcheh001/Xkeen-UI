@@ -1,6 +1,7 @@
 # Этап 8.5: Panel update и profile transition
 
-**Статус:** закрыт 7 октября 2026 года  
+**Статус:** закрыт 7 октября 2026 года
+
 **Следующий подэтап:** 8.6, UI менеджера
 
 Подэтап 8.5 расширяет Lifecycle API двумя full-scope операциями. Обновление
@@ -119,12 +120,13 @@ branch updater и явно возвращает `development_only: true`.
 | Граница | Коды |
 | --- | --- |
 | Request | `lifecycle_field_required`, `unsupported_lifecycle_fields`, `module_plan_id_invalid` |
-| Panel descriptor | `catalog_panel_required_field`, `catalog_panel_field_unknown`, `catalog_panel_version_mismatch`, `catalog_panel_archive_not_filename`, `catalog_panel_size_invalid`, `catalog_panel_sha256_invalid`, `catalog_panel_architectures_invalid`, `catalog_panel_signing_key_invalid`, `catalog_signing_key_unknown`, `catalog_signing_key_mismatch` |
-| Catalog asset | `catalog_panel_not_object`, `catalog_archive_unavailable`, `catalog_archive_size_mismatch`, `catalog_archive_checksum_mismatch` |
-| Panel archive | `panel_archive_missing`, `panel_archive_size_mismatch`, `panel_archive_checksum_mismatch`, `panel_archive_path_unsafe`, `panel_archive_member_duplicate`, `panel_archive_root_invalid`, `panel_archive_member_type_forbidden`, `panel_archive_user_path_forbidden`, `panel_archive_expanded_too_large`, `panel_archive_ownership_missing`, `panel_archive_ownership_invalid`, `panel_archive_ownership_mismatch`, `panel_archive_invalid` |
-| State/planning | `panel_version_unsupported`, `module_state_unavailable`, `module_ownership_unavailable`, `profile_state_unavailable`, `profile_installed_state_unavailable`, `profile_ownership_unavailable`, `panel_update_not_newer`, `profile_release_mismatch`, `profile_transition_not_required`, `profile_unknown`, `profile_modules_forbidden`, `profile_modules_invalid`, `profile_dependency_missing`, `profile_module_conflict`, `profile_editor_variant_invalid`, `module_free_space` |
-| Runner verification | `operation_plan_stale`, `module_version_mismatch`, `module_ownership_conflict`, `archive_path_unsafe`, `archive_link_forbidden`, `archive_invalid`, `archive_member_missing` |
-| Apply/restart | `operation_in_progress`, `operation_recovery_required`, `operation_rollback_failed`, `profile_transition_required`, `module_restart_failed` |
+| Stable full-scope API | `panel_update_unavailable`, `panel_version_current`, `panel_archive_invalid`, `profile_transition_required`, `profile_transition_not_required`, `profile_payload_unavailable`, `profile_target_invalid`, `operation_free_space` |
+| Existing apply/restart | `operation_plan_stale`, `operation_in_progress`, `operation_recovery_required`, `operation_rollback_failed`, `module_restart_failed` |
+
+Внутренние validator diagnostics (`catalog_panel_*`, `panel_archive_*`,
+`profile_*`, `archive_*`) сохраняются в тестах и локальных логах, но Lifecycle
+API сворачивает их в стабильные full-scope codes выше. Existing catalog,
+trust, concurrency, health, cancellation и rollback codes не переименовываются.
 
 Compatibility/catalog errors сохраняют правила HTTP Lifecycle API: invalid
 request получает 400, несовместимый или stale plan — 409, trust/transport

@@ -151,6 +151,28 @@ def test_full_scope_state_files_describe_the_target_profile(tmp_path: Path) -> N
     assert _json(updates["install-managed.json"])["paths"] == list(plan.files_add)
 
 
+def test_state_only_profile_transition_preserves_managed_paths(tmp_path: Path) -> None:
+    panel = make_panel(tmp_path)
+    module_plan = build_plan("repair", "engine.xray", **panel.kwargs)
+    plan = replace(
+        module_plan,
+        scope="profile",
+        operation="profile-transition",
+        module_id=None,
+        target_profile={
+            "profile": "custom",
+            "module_ids": ["core", "engine.xray", "tool.editor"],
+            "editor_variant": "light",
+        },
+        files_add=(),
+        files_remove=(),
+    )
+
+    updates = state_file_updates(panel.root, plan)
+
+    assert _json(updates["install-managed.json"])["paths"] == panel.read_json("install-managed.json")["paths"]
+
+
 def test_install_keeps_fields_the_engine_does_not_know(tmp_path: Path) -> None:
     panel = make_panel(tmp_path)
     modules = panel.read_json("modules.json")
