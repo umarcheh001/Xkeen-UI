@@ -230,8 +230,13 @@ class Journal:
 
     # -- changing the panel tree -------------------------------------------
 
-    def apply_file(self, relative: str, source: Path) -> None:
-        """Put a new file of the module in place, keeping what it replaces."""
+    def apply_file(self, relative: str, source: Path, *, consume: bool = False) -> None:
+        """Put a new file of the module in place, keeping what it replaces.
+
+        A source that is given away (``consume``) is moved, not copied: the
+        staged payload and the panel are on one storage, and a release that
+        lies there twice is room the router may not have.
+        """
 
         if relative not in self.plan.files_add:
             self._unsafe(relative, "the path is not part of the operation plan")
@@ -242,9 +247,22 @@ class Journal:
         self._record("replace" if target.is_file() else "add", relative)
         if target.is_file():
             self._keep(relative, target)
+        if consume:
+            try:
+                os.replace(source, target)
+                return
+            except OSError:
+                # Another storage, or a file system that will not rename over
+                # the target: fall back to the copy and drop the source after.
+                pass
         temporary = target.with_name(target.name + _TEMP_SUFFIX)
         shutil.copy2(source, temporary)
         os.replace(temporary, target)
+        if consume:
+            try:
+                Path(source).unlink()
+            except OSError:
+                pass
 
     def remove_file(self, relative: str) -> None:
         if relative not in self.plan.files_remove:

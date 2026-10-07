@@ -7,7 +7,9 @@ user before anything starts, and the runner executes the same plan later.
 from __future__ import annotations
 
 import json
+import os
 import shutil
+import uuid
 from dataclasses import asdict, dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Mapping
@@ -192,6 +194,51 @@ def _module_files(ownership: OwnershipMap, module_id: str) -> tuple[str, ...]:
     return tuple(sorted(set(files)))
 
 
+_LINK_SUPPORT: dict[tuple[int, int], bool] = {}
+
+
+def hard_links_supported(panel_root: Path) -> bool:
+    """Whether a replaced file can be kept as a hard link, which takes no room.
+
+    The journal keeps what an operation replaces next to the panel. As a
+    link that costs nothing; as a real copy it costs the size of everything
+    replaced, and the plan has to ask for that room. The answer is found by
+    trying, with two empty files that are removed at once.
+    """
+
+    panel_root = Path(panel_root)
+    beside = transactions_root(panel_root).parent
+    try:
+        key = (panel_root.stat().st_dev, beside.stat().st_dev)
+    except OSError:
+        return False
+    if key in _LINK_SUPPORT:
+        return _LINK_SUPPORT[key]
+    name = f".xk-link-probe-{os.getpid()}-{uuid.uuid4().hex[:8]}"
+    source, target = panel_root / name, beside / (name + ".kept")
+    supported = False
+    try:
+        source.write_bytes(b"")
+        os.link(source, target)
+        supported = True
+    except OSError:
+        supported = False
+    finally:
+        for path in (target, source):
+            try:
+                path.unlink()
+            except OSError:
+                pass
+    _LINK_SUPPORT[key] = supported
+    return supported
+
+
+def _backup_cost(panel_root: Path, replaced_bytes: int) -> int:
+    """Room the copy of replaced and removed files takes while an operation runs."""
+
+    return 0 if hard_links_supported(panel_root) else replaced_bytes
+
+
 def _file_size(path: Path) -> int:
     try:
         return path.stat().st_size if path.is_file() else 0
@@ -284,9 +331,10 @@ def build_plan(
         # compressed, so four archive sizes is a generous ceiling.
         incoming = archive.size + 4 * archive.size
 
-    # A copy of every replaced or removed file may be a real copy, not a link.
+    # A copy of every replaced or removed file is a link where the storage
+    # can make one, and a real copy otherwise.
     replaced = sum(_file_size(panel_root / path) for path in (*files_add, *files_remove))
-    required = (incoming + replaced) * 6 // 5
+    required = (incoming + _backup_cost(panel_root, replaced)) * 6 // 5
     if free_bytes is None:
         probe = transactions_root(panel_root).parent
         free_bytes = shutil.disk_usage(probe if probe.exists() else panel_root).free
@@ -544,7 +592,11 @@ def _full_scope_plan(
         expanded = sum(target_sizes.get(path, 0) for path in files_add)
     else:
         expanded = sum(_file_size(Path(target_panel_root) / path) for path in files_add)
-    required = ((archive.size if archive is not None else 0) + expanded + backup) * 6 // 5
+    # The archive and one unpacked copy of what is laid: the runner moves the
+    # unpacked files into the panel and drops the archive once it is unpacked.
+    required = (
+        (archive.size if archive is not None else 0) + expanded + _backup_cost(Path(panel_root), backup)
+    ) * 6 // 5
     if free_bytes is None:
         probe = transactions_root(Path(panel_root)).parent
         free_bytes = shutil.disk_usage(probe if probe.exists() else panel_root).free

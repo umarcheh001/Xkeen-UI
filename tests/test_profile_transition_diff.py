@@ -109,7 +109,9 @@ def test_removing_a_module_plans_only_its_files_and_no_archive(tmp_path):
     assert "tool.terminal" not in plan.installed_after
 
 
-def test_removal_needs_room_only_for_the_copy_of_what_it_removes(tmp_path):
+def test_removal_needs_room_only_for_the_copy_of_what_it_removes(tmp_path, monkeypatch):
+    # Накопитель без жёстких ссылок: прежние файлы приходится копировать.
+    monkeypatch.setattr("services.module_transactions.plan.hard_links_supported", lambda _root: False)
     panel = make_panel(tmp_path, installed=FULL)
     _desire(panel, set(FULL) - {"tool.terminal"})
     removed_bytes = sum(len(file_bytes(path)) for path in TERMINAL)
@@ -158,6 +160,17 @@ def test_a_kept_file_that_went_missing_is_laid_again(tmp_path):
 
     assert plan.files_add == ("static/js/core.js",)
     assert plan.archive is not None
+
+
+def test_removal_needs_no_room_where_the_copy_is_a_link(tmp_path, monkeypatch):
+    monkeypatch.setattr("services.module_transactions.plan.hard_links_supported", lambda _root: True)
+    panel = make_panel(tmp_path, installed=FULL)
+    _desire(panel, set(FULL) - {"tool.terminal"})
+
+    plan = _plan(panel, make_release(), installed_panel_listing(panel.root), free_bytes=0)
+
+    assert plan.required_free_bytes == 0
+    assert set(plan.files_remove) == TERMINAL
 
 
 # --- исполнение ---------------------------------------------------------------------

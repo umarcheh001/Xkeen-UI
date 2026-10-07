@@ -194,6 +194,8 @@ def run_operation(
                         module_id=plan.module_id,
                     )
                 extract_payload(archive_path, journal.staging / "payload", plan.files_add)
+                # Unpacked: the archive is only taking room from here on.
+                archive_path.unlink(missing_ok=True)
             else:
                 descriptor = snapshot.catalog.get("panel")
                 if not isinstance(descriptor, dict) or (
@@ -234,6 +236,7 @@ def run_operation(
                         "the panel archive does not contain every planned target file",
                     )
                 extract_panel_payload(archive_path, journal.staging / "payload", plan.files_add)
+                archive_path.unlink(missing_ok=True)
                 catalog_source_commit = str(snapshot.catalog.get("source_commit") or "")
     except Exception as error:
         journal.commit()
@@ -244,7 +247,8 @@ def run_operation(
         enter("applying")
         payload = journal.staging / "payload"
         for relative in plan.files_add:
-            journal.apply_file(relative, payload.joinpath(*relative.split("/")))
+            # Moved, not copied: the release must not lie on the storage twice.
+            journal.apply_file(relative, payload.joinpath(*relative.split("/")), consume=True)
         for relative in plan.files_remove:
             journal.remove_file(relative)
         journal.align_precompressed()
