@@ -806,6 +806,48 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     box.appendChild(lines);
   }
 
+  // Релиз может назвать самую старую панель, которая способна обновиться на
+  // него сама. Панели старше обновление из окна не поможет: оно откажет на
+  // первом же шаге, поэтому причина и выход названы сразу.
+  function _installerRequiredSummary(check, verLabel) {
+    const since = check && check.min_updater ? String(check.min_updater) : '';
+    return 'Версию ' + verLabel + ' на эту панель ставит установщик'
+      + (since ? ': сама панель обновляется на неё начиная с ' + since + '.' : '.');
+  }
+
+  function _renderInstallerRequired(check, verLabel) {
+    const box = byId('dt-update-security');
+    if (!box) return;
+    _clearEl(box);
+    try { box.style.display = ''; } catch (e) {}
+    try { box.className = 'dt-alert warn'; } catch (e) {}
+
+    const title = document.createElement('strong');
+    title.textContent = '⚠️ Эту версию ставит установщик';
+    box.appendChild(title);
+
+    const lines = document.createElement('div');
+    lines.className = 'dt-alert-lines';
+    const addLine = (text) => {
+      const d = document.createElement('div');
+      d.textContent = String(text || '');
+      lines.appendChild(d);
+    };
+
+    addLine(_installerRequiredSummary(check, verLabel));
+    addLine('Установленная панель слишком старая, чтобы разложить этот релиз сама: кнопка «Обновить» здесь не поможет.');
+
+    const cmd = document.createElement('code');
+    cmd.textContent = 'install.sh';
+    const cmdLine = document.createElement('div');
+    cmdLine.appendChild(document.createTextNode('Скачайте архив релиза ' + verLabel + ' и запустите из него '));
+    cmdLine.appendChild(cmd);
+    cmdLine.appendChild(document.createTextNode(' — так же, как при первой установке.'));
+    lines.appendChild(cmdLine);
+
+    box.appendChild(lines);
+  }
+
   const state = {
     pollTimer: null,
     lastCheck: null,
@@ -982,7 +1024,20 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
 
     // Policy block: if security says will_block_run, show as error verdict and disable Update.
     const willBlock = !!(data && data.security && data.security.will_block_run);
-    if (willBlock) {
+    const lifecycleCheck = (data && data.lifecycle_check && typeof data.lifecycle_check === 'object') ? data.lifecycle_check : null;
+    const needsInstaller = !!(updateAvail && lifecycleCheck && lifecycleCheck.requires_installer);
+    if (needsInstaller) {
+      const installerSummary = _installerRequiredSummary(lifecycleCheck, verLabel);
+      _setText('dt-update-verdict', '⚠️ ' + verLabel + ' ставит установщик');
+      _setClass('dt-update-verdict', 'dt-pill dt-pill-warn');
+      _setClass('dt-update-latest-version', 'dt-value dt-value-warn');
+      _renderInstallerRequired(lifecycleCheck, verLabel);
+      if (btnRun) {
+        _setRunBlockedState(btnRun, true, 'installer', installerSummary);
+        try { btnRun.disabled = false; } catch (e) {}
+        try { btnRun.title = installerSummary; } catch (e) {}
+      }
+    } else if (willBlock) {
       const blockedSummary = _summarizeSecurityBlock(data && data.security);
       _setText('dt-update-verdict', '⛔ Обновление заблокировано политикой безопасности');
       _setClass('dt-update-verdict', 'dt-pill dt-pill-bad');

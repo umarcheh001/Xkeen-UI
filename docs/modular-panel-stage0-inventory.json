@@ -36,8 +36,8 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 528,
-      "size_bytes": 7059883,
+      "unit_count": 529,
+      "size_bytes": 7063453,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -49,7 +49,7 @@
         "frontend_feature": 28,
         "frontend_javascript": 35,
         "frontend_runtime": 2,
-        "frontend_test": 48,
+        "frontend_test": 49,
         "frontend_ui": 17,
         "stylesheet": 5,
         "template": 31
@@ -365,7 +365,7 @@
       ],
       "removable": true,
       "unit_count": 25,
-      "size_bytes": 598192,
+      "size_bytes": 601213,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 8,
@@ -9942,6 +9942,24 @@
       "kind": "frontend_test",
       "path": "e2e/devtools_tools_zones.spec.mjs",
       "size_bytes": 21667,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "frontend_test",
+      "path": "e2e/devtools_update_requires_installer.spec.mjs",
+      "size_bytes": 3570,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -20041,7 +20059,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/devtools/update.js",
-      "size_bytes": 67131,
+      "size_bytes": 70152,
       "depends_on": [
         "core"
       ],
@@ -30599,7 +30617,7 @@
         },
         "tool.advanced-diagnostics": {
           "unit_count": 25,
-          "size_bytes": 598192
+          "size_bytes": 601213
         }
       },
       "next_stage": "Этапы 4, 5 и 6."
