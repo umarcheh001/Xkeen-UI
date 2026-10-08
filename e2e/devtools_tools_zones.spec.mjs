@@ -6,17 +6,23 @@ async function openTools(page, viewport) {
   await page.route('**/api/devtools/update/info', (route) => route.fulfill({ json: {
     ok: true,
     build: { version: '2.10.0', repo: 'umarcheh001/Xkeen-UI', channel: 'main', commit: 'abc1234' },
-    capabilities: { curl: true, tar: true, sha256sum: true },
+    capabilities: { curl: true, tar: true, tar_exclude: true, sha256sum: true },
     settings: { repo: 'umarcheh001/Xkeen-UI', channel: 'main', branch: 'main' },
     security: {},
   } }));
   await page.route('**/api/devtools/update/status*', (route) => route.fulfill({ json: {
     ok: true, status: { state: 'idle' }, log_tail: [],
     lock: { exists: false, alive: false, stale: false }, backups: [], has_backup: false,
+    reconciled: false, development_only: true,
   } }));
   await page.route('**/api/devtools/update/check', (route) => route.fulfill({ json: {
-    ok: true, channel: 'main', current: { version: '2.10.0' },
-    latest: { kind: 'main', branch: 'main', sha: 'abc1234' }, update_available: false,
+    ok: true, error: null, repo: 'umarcheh001/Xkeen-UI', channel: 'main', branch: 'main',
+    current: { version: '2.10.0', repo: 'umarcheh001/Xkeen-UI', channel: 'main', commit: 'abc1234' },
+    latest: { kind: 'main', branch: 'main', sha: 'abc1234', short_sha: 'abc1234',
+      tarball_url: 'https://example.test/main.tar.gz' },
+    update_available: false, stale: false, meta: null,
+    security: { settings: {}, download: { url: 'https://example.test/main.tar.gz', ok: true, reason: null },
+      checksum: null, warnings: [], will_block_run: false }, development_only: true,
   } }));
   const envLoaded = page.waitForResponse((res) => new URL(res.url()).pathname === '/api/devtools/env');
   const updateLoaded = page.waitForResponse((res) => new URL(res.url()).pathname === '/api/devtools/update/info');
@@ -326,10 +332,14 @@ test.describe('DevTools Tools zones', () => {
     // ...а строка итога по логу стоит сразу под статусом, а не у нижнего края.
     expect(row.logTop - row.substatusBottom).toBeLessThanOrEqual(12);
 
-    // Блок лога обрамлён одинаково: сверху — столько же, сколько снизу до края карточки.
+    // Блок следует сразу за статусом, а снизу остаётся обычное поле тела карточки.
+    // Верхние вертикальные margin у пустого substatus и log summary схлопываются.
     const above = row.logTop - row.substatusBottom;
     const below = row.updateBottom - row.logBottom;
-    expect(Math.abs(above - below)).toBeLessThanOrEqual(8);
+    expect(above).toBeGreaterThanOrEqual(0);
+    expect(above).toBeLessThanOrEqual(12);
+    expect(below).toBeGreaterThanOrEqual(above);
+    expect(below).toBeLessThanOrEqual(16);
 
     // Свободной высоты посреди карточки не копится: зазор под вердиктом
     // остаётся обычным, не больше полей вокруг блока лога.

@@ -90,7 +90,17 @@ test.describe('DevTools update channel boundary', () => {
     await page.route('**/api/devtools/update/status**', (route) => route.fulfill({ json: { ok: true, status: { state: 'idle' }, log_tail: [] } }));
     await page.route('**/api/devtools/update/check', (route) => {
       checkBodies.push(route.request().postDataJSON());
-      return route.fulfill({ json: { ok: true, channel: 'main', current: { version: '2.10.0' }, latest: { kind: 'main', tag: 'abc1234', tarball_url: 'https://example.test/main.tar.gz' }, update_available: false } });
+      const tarballUrl = 'https://codeload.github.com/umarcheh001/Xkeen-UI/tar.gz/abc1234';
+      return route.fulfill({ json: {
+        ok: true, error: null, repo: 'umarcheh001/Xkeen-UI', channel: 'main', branch: 'main',
+        current: { version: '2.10.0', commit: 'abc1234' },
+        latest: { kind: 'main', branch: 'main', sha: 'abc1234', short_sha: 'abc1234',
+          committed_at: null, message: null, html_url: null, tarball_url: tarballUrl },
+        update_available: false, stale: false, meta: { repo: 'umarcheh001/Xkeen-UI', branch: 'main' },
+        development_only: true,
+        security: { settings: {}, download: { url: tarballUrl, ok: true, reason: null },
+          checksum: null, warnings: [], will_block_run: false },
+      } });
     });
 
     await page.goto('/devtools');
@@ -419,6 +429,44 @@ test.describe('Module manager loading', () => {
 });
 
 test.describe('Module lifecycle review', () => {
+  for (const { name, width, height } of [
+    { name: 'desktop', width: 1440, height: 960 },
+    { name: 'mobile', width: 390, height: 844 },
+  ]) {
+    test(`open plan dialog is centered and reachable on ${name}`, async ({ page }) => {
+      await page.setViewportSize({ width, height });
+      await installIdleLifecycleRoutes(page);
+      await page.route('**/api/modules/operations/plan', (route) => route.fulfill({ json: {
+        ...installPlan, affected_module_ids: ['a'.repeat(120)],
+      } }));
+      await page.goto('/modules');
+      await page.getByRole('tab', { name: 'Доступные' }).click();
+      await page.getByRole('button', { name: 'Установить Терминал' }).click();
+      const dialog = page.getByRole('dialog', { name: 'План установки' });
+      await expect(dialog).toBeVisible();
+
+      const geometry = await dialog.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          viewportWidth: innerWidth, viewportHeight: innerHeight,
+          left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom,
+          centerOffset: (rect.left + rect.right - innerWidth) / 2,
+          scrollWidth: element.scrollWidth, clientWidth: element.clientWidth,
+        };
+      });
+      expect(Math.abs(geometry.centerOffset), JSON.stringify(geometry)).toBeLessThanOrEqual(2);
+      expect(geometry.left).toBeGreaterThanOrEqual(0);
+      expect(geometry.right).toBeLessThanOrEqual(width);
+      expect(geometry.top).toBeGreaterThanOrEqual(0);
+      expect(geometry.bottom).toBeLessThanOrEqual(height);
+      expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth);
+      await dialog.getByRole('button', { name: 'Применить план' }).scrollIntoViewIfNeeded();
+      await expect(dialog.getByRole('button', { name: 'Применить план' })).toBeInViewport();
+      await expect(dialog.getByRole('button', { name: 'Отменить' })).toBeInViewport();
+      await page.screenshot({ path: `test-results/modules-plan-dialog-${name}.png` });
+    });
+  }
+
   test('retains apply result while inactive and resumes monitoring on activation', async ({ page }) => {
     let releaseApply;
     let statusLoads = 0;
@@ -522,6 +570,25 @@ test.describe('Module lifecycle review', () => {
     const dialog = page.getByRole('dialog', { name: 'План установки' });
     await expect(dialog).toContainText('Не хватает зависимости');
     await expect(dialog.getByRole('button', { name: 'Применить план' })).toHaveCount(0);
+  });
+
+  test('installer-only stable panel update cannot reach apply', async ({ page }) => {
+    let applyCalls = 0;
+    await installIdleLifecycleRoutes(page);
+    await page.route('**/api/modules/operations/plan', (route) => route.fulfill({
+      status: 409, json: { ok: false, code: 'panel_update_requires_installer',
+        details: { min_updater: '2.10.5', current_version: '2.10.0' } },
+    }));
+    await page.route('**/api/modules/operations/apply', (route) => {
+      applyCalls += 1;
+      return route.fulfill({ json: { ok: true } });
+    });
+    await page.goto('/modules');
+    await page.getByRole('button', { name: 'Обновить панель' }).click();
+
+    await expect(page.locator('#modules-error')).toContainText('panel_update_requires_installer');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect(applyCalls).toBe(0);
   });
 
   for (const code of ['module_plan_stale', 'operation_plan_stale']) {
