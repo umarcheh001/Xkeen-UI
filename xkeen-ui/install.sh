@@ -144,24 +144,25 @@ ui_clock() {
 
 # Шкала: пройденные шаги — залитый квадрат, текущий — обведённый, остальные
 # пустые. Между этапами двойной пробел, чтобы были видны их границы.
+# Печатает в стандартный вывод: шкала — часть кадра, а кадр собирается целиком.
 ui_squares() {
   _ui_done="$1"
   _ui_cur="$2"
   _ui_idx=0
   _ui_first_group=1
   for _ui_count in $UI_PLAN; do
-    [ "$_ui_first_group" -eq 1 ] || printf '  ' >&"$INSTALL_UI_FD" 2>/dev/null || true
+    [ "$_ui_first_group" -eq 1 ] || printf '  '
     _ui_first_group=0
     _ui_i=0
     while [ "$_ui_i" -lt "$_ui_count" ]; do
       _ui_idx=$(( _ui_idx + 1 ))
-      [ "$_ui_i" -eq 0 ] || printf ' ' >&"$INSTALL_UI_FD" 2>/dev/null || true
+      [ "$_ui_i" -eq 0 ] || printf ' '
       if [ "$_ui_idx" -le "$_ui_done" ]; then
-        printf '%b■%b' "$UI_CYAN" "$UI_RESET" >&"$INSTALL_UI_FD" 2>/dev/null || true
+        printf '%b■%b' "$UI_CYAN" "$UI_RESET"
       elif [ "$_ui_idx" -eq "$_ui_cur" ]; then
-        printf '%b▣%b' "$UI_YELLOW" "$UI_RESET" >&"$INSTALL_UI_FD" 2>/dev/null || true
+        printf '%b▣%b' "$UI_YELLOW" "$UI_RESET"
       else
-        printf '%b□%b' "$UI_DIM" "$UI_RESET" >&"$INSTALL_UI_FD" 2>/dev/null || true
+        printf '%b□%b' "$UI_DIM" "$UI_RESET"
       fi
       _ui_i=$(( _ui_i + 1 ))
     done
@@ -197,29 +198,40 @@ ui_state_write() {
 }
 
 # Нижний блок: две строки, курсор остаётся в начале первой из них.
+#
+# Кадр собирается целиком и уходит в терминал одной записью. Раньше он
+# печатался по частям, и заморозка тикера посреди кадра оставляла курсор на
+# второй строке блока: установщик печатал свою строку поверх шкалы, а после
+# разморозки тикер дорисовывал хвост старого кадра уже поверх новых строк.
 ui_sticky_draw() {
   [ "$UI_PROGRESS_TTY" -eq 1 ] || return 0
   [ -n "$UI_STATE_FILE" ] && [ -f "$UI_STATE_FILE" ] || return 0
   { read -r _ui_nums; read -r _ui_label; } < "$UI_STATE_FILE" 2>/dev/null || return 0
-  [ -n "$_ui_label" ] || return 0
+  # Шага нет — блоку на экране делать нечего. Тикер так убирает кадр, который
+  # успел собрать до заморозки и напечатал уже после закрытия шага.
+  [ -n "$_ui_label" ] || { ui_sticky_clear; return 0; }
   set -- $_ui_nums
   [ $# -ge 5 ] || return 0
   _ui_done="$1"; _ui_cur="$2"; _ui_stage="$3"; _ui_run="$4"; _ui_step_at="$5"
   UI_SPIN_N=$(( UI_SPIN_N + 1 ))
-  _ui_frame=$(ui_spin_frame)
-  printf '\r\033[K  %b%s%b  %s  %b%s%b\n' \
-    "$UI_CYAN" "$_ui_frame" "$UI_RESET" "$_ui_label" \
-    "$UI_DIM" "$(ui_since "$_ui_step_at")" "$UI_RESET" >&"$INSTALL_UI_FD" 2>/dev/null || true
-  printf '\033[K  ' >&"$INSTALL_UI_FD" 2>/dev/null || true
-  ui_squares "$_ui_done" "$_ui_cur"
-  printf '  %s/%s  %bэтап %s/5  ·  всего %s%b\033[1A\r' \
-    "$_ui_done" "$UI_STEP_TOTAL" \
-    "$UI_DIM" "$_ui_stage" "$(ui_clock "$_ui_run")" "$UI_RESET" >&"$INSTALL_UI_FD" 2>/dev/null || true
+  _ui_picture="$(
+    printf '\r\033[K  %b%s%b  %s  %b%s%b\n' \
+      "$UI_CYAN" "$(ui_spin_frame)" "$UI_RESET" "$_ui_label" \
+      "$UI_DIM" "$(ui_since "$_ui_step_at")" "$UI_RESET"
+    printf '\033[K  '
+    ui_squares "$_ui_done" "$_ui_cur"
+    printf '  %s/%s  %bэтап %s/5  ·  всего %s%b\033[1A\r' \
+      "$_ui_done" "$UI_STEP_TOTAL" \
+      "$UI_DIM" "$_ui_stage" "$(ui_clock "$_ui_run")" "$UI_RESET"
+  )"
+  printf '%s' "$_ui_picture" >&"$INSTALL_UI_FD" 2>/dev/null || true
   UI_STICKY=1
 }
 
+# Пока тикер жив, блок гасится всегда, а не только когда его рисовал сам
+# установщик: кадр мог напечатать тикер, и установщик об этом не знает.
 ui_sticky_clear() {
-  [ "$UI_STICKY" -eq 1 ] || return 0
+  [ "$UI_STICKY" -eq 1 ] || [ -n "$UI_TICKER" ] || return 0
   printf '\r\033[K\n\033[K\033[1A\r' >&"$INSTALL_UI_FD" 2>/dev/null || true
   UI_STICKY=0
 }
@@ -294,6 +306,8 @@ ui_progress_stop() {
     kill "$UI_TICKER" 2>/dev/null || true
     wait "$UI_TICKER" 2>/dev/null || true
     UI_TICKER=""
+    # Последний кадр тикер мог напечатать уже после просьбы остановиться.
+    UI_STICKY=1
   fi
   if [ "$UI_PROGRESS_TTY" -eq 1 ]; then
     ui_sticky_clear

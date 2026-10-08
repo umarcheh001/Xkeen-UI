@@ -36,13 +36,13 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 525,
-      "size_bytes": 7025875,
+      "unit_count": 526,
+      "size_bytes": 7033588,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
         "backend_service": 74,
-        "backend_test": 242,
+        "backend_test": 243,
         "configuration": 10,
         "frontend_bundle": 9,
         "frontend_entrypoint": 2,
@@ -4226,6 +4226,24 @@
     {
       "module_id": "core",
       "kind": "backend_test",
+      "path": "tests/test_install_progress_no_tearing.py",
+      "size_bytes": 6546,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
       "path": "tests/test_install_progress_ui.py",
       "size_bytes": 9437,
       "depends_on": [],
@@ -7810,7 +7828,7 @@
       "module_id": "core",
       "kind": "configuration",
       "path": "xkeen-ui/install.sh",
-      "size_bytes": 72651,
+      "size_bytes": 73818,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
