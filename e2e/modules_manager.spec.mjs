@@ -99,6 +99,45 @@ test.describe('DevTools update channel boundary', () => {
     await page.locator('#dt-update-check').click();
     await expect.poll(() => checkBodies.some((body) => body.force_refresh === true)).toBe(true);
   });
+
+  for (const channel of ['main', 'stable']) {
+    test(`${channel} DevTools recovers after the first info request fails`, async ({ page }) => {
+      let allowInfo = false;
+      const legacyRequests = [];
+      await page.route('**/api/devtools/update/info', (route) => route.fulfill(
+        allowInfo ? { json: updateInfo(channel) } : { status: 503, json: { ok: false, error: 'temporary failure' } },
+      ));
+      await page.route(/\/api\/devtools\/update\/(?:check|status|run|rollback)(?:\?|$)/, (route) => {
+        legacyRequests.push({ path: new URL(route.request().url()).pathname, body: route.request().postDataJSON() });
+        return route.fulfill({ json: { ok: true, channel, status: { state: 'idle' }, log_tail: [] } });
+      });
+
+      await page.goto('/devtools');
+      await expect(page.locator('#dt-update-status')).toContainText('temporary failure');
+      await expect(page.locator('[data-dt-main-update-controls]')).toBeHidden();
+      allowInfo = true;
+      await page.evaluate(async () => {
+        const { getDevtoolsNamespace } = await import('/static/js/features/devtools_namespace.js');
+        getDevtoolsNamespace().devtoolsUpdate.activate();
+      });
+
+      if (channel === 'main') {
+        await expect(page.locator('[data-dt-main-update-controls]')).toBeVisible();
+        await page.evaluate(async () => {
+          const { getDevtoolsNamespace } = await import('/static/js/features/devtools_namespace.js');
+          getDevtoolsNamespace().devtoolsUpdate.activate();
+        });
+        await page.locator('#dt-update-check').click();
+        await expect.poll(() => legacyRequests.filter((request) => request.path.endsWith('/check') && request.body.force_refresh === true).length).toBe(1);
+        await page.waitForTimeout(250);
+        expect(legacyRequests.filter((request) => request.path.endsWith('/check') && request.body.force_refresh === true)).toHaveLength(1);
+      } else {
+        await expect(page.locator('[data-dt-modules-manager-notice]')).toBeVisible();
+        await page.waitForTimeout(1000);
+        expect(legacyRequests).toEqual([]);
+      }
+    });
+  }
 });
 
 test.describe('Module manager recovery and guards', () => {

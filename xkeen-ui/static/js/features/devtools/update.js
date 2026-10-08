@@ -11,6 +11,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
 
   const SH = getDevtoolsSharedApi() || {};
   let _inited = false;
+  let _mainUpdaterStarted = false;
   const toast = SH.toast || function (m, isErr) { try { console[(isErr ? 'error' : 'log')](m); } catch (e) {} };
   // Kind-aware toast helper: supports boolean (legacy) and 'info'|'success'|'error'.
   const toastKind = function (msg, kind) {
@@ -1568,26 +1569,34 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     try { setTimeout(() => checkLatest(false, true, true).catch(() => {}), 250); } catch (e) {}
   }
 
+  function selectUpdateChannel(info) {
+    const channel = String((info && info.settings && info.settings.channel) || '').toLowerCase();
+    if (channel === 'stable') {
+      openModulesManager();
+      return;
+    }
+    if (channel === 'main' && !_mainUpdaterStarted) {
+      _mainUpdaterStarted = true;
+      startLegacyMainUpdater();
+    }
+  }
+
   function init() {
     if (_inited) return;
     _inited = true;
 
-    loadInfo().then((info) => {
-      const channel = String((info && info.settings && info.settings.channel) || '').toLowerCase();
-      if (channel === 'stable') {
-        openModulesManager();
-        return;
-      }
-      if (channel === 'main') startLegacyMainUpdater();
-    }).catch(() => {});
+    loadInfo().then(selectUpdateChannel).catch(() => {});
   }
 
   function activate() {
     if (!_inited) return false;
     try {
-      if (!state.lastInfo) loadInfo().catch(() => {});
-      if (state.lastInfo && state.lastInfo.settings && state.lastInfo.settings.channel === 'main') {
+      if (!state.lastInfo) {
+        loadInfo().then(selectUpdateChannel).catch(() => {});
+      } else if (_mainUpdaterStarted) {
         loadStatus(true).catch(() => {});
+      } else {
+        selectUpdateChannel(state.lastInfo);
       }
     } catch (e) {}
     return true;
