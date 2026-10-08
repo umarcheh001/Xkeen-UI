@@ -10,6 +10,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import shutil
 import sys
 import threading
@@ -312,6 +313,17 @@ MODULE_DEFINITIONS: tuple[ModuleDefinition, ...] = (
 )
 
 MODULE_IDS = tuple(definition.id for definition in MODULE_DEFINITIONS)
+
+
+# What a module id looks like. A release newer than this build may name modules
+# the build has never heard of; their names still have to be names.
+_MODULE_ID_PATTERN = "^[a-z][a-z0-9]*(?:[.][a-z][a-z0-9]*(?:-[a-z0-9]+)*)*$"
+
+
+def is_module_id(value: object) -> bool:
+    """Whether a value has the shape of a module id, known to this build or not."""
+
+    return isinstance(value, str) and len(value) <= 64 and re.fullmatch(_MODULE_ID_PATTERN, value) is not None
 _DEFINITIONS_BY_ID = {definition.id: definition for definition in MODULE_DEFINITIONS}
 # Presets are kept beside the runtime registry so the installer, API and panel
 # use the same module graph. ``custom`` is intentionally resolved from the

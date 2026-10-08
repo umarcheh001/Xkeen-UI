@@ -698,7 +698,7 @@ def _catalog_entry(manifest: Mapping[str, Any], asset: BuiltAsset) -> dict[str, 
 
 
 def _panel_catalog_entry(panel: BuiltAsset, inputs: ReleaseInputs) -> dict[str, Any]:
-    return {
+    entry = {
         "archive": panel.path.name,
         "size": panel.size,
         "sha256": panel.sha256,
@@ -706,6 +706,13 @@ def _panel_catalog_entry(panel: BuiltAsset, inputs: ReleaseInputs) -> dict[str, 
         "signing_key_id": "release-2026",
         "architectures": normalize_architectures(inputs.architectures),
     }
+    if inputs.min_updater:
+        # The oldest panel that may update itself to this release; an older
+        # one is told to use the installer. Left out, any panel may.
+        if not _SEMVER_RE.fullmatch(str(inputs.min_updater)):
+            raise ReleaseBuildError(f"min-updater is not a semantic version: {inputs.min_updater}")
+        entry["min_updater"] = str(inputs.min_updater)
+    return entry
 
 
 def _write_json(path: Path, payload: Mapping[str, Any]) -> None:
@@ -728,6 +735,7 @@ class ReleaseInputs:
     source_commit: str
     architectures: Sequence[str] = DEFAULT_ARCHITECTURES
     min_core: str = DEFAULT_MIN_CORE
+    min_updater: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -900,6 +908,11 @@ def parse_args(argv: list[str] | None = None) -> ReleaseInputs:
     )
     parser.add_argument("--min-core", default=DEFAULT_MIN_CORE)
     parser.add_argument(
+        "--min-updater",
+        default=None,
+        help="oldest panel version that may update itself to this release; older ones are sent to the installer",
+    )
+    parser.add_argument(
         "--write-ownership-map",
         action="store_true",
         help="only write xkeen-ui/module-ownership.json under --root and exit",
@@ -913,6 +926,7 @@ def parse_args(argv: list[str] | None = None) -> ReleaseInputs:
         source_commit=args.source_commit,
         architectures=tuple(args.architectures or DEFAULT_ARCHITECTURES),
         min_core=args.min_core,
+        min_updater=args.min_updater,
     )
 
 

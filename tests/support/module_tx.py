@@ -284,19 +284,36 @@ def panel_archive(version: str, ownership: Mapping[str, tuple[str, ...]] = OWNER
     return buffer.getvalue()
 
 
-def _entry(module_id: str, version: str, size: int = 1, sha256: str = "0" * 64) -> dict[str, Any]:
-    definition = _definition(module_id)
+def _entry(
+    module_id: str,
+    version: str,
+    size: int = 1,
+    sha256: str = "0" * 64,
+    *,
+    definitions: Mapping[str, Mapping[str, Any]] | None = None,
+    min_core: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    # ``definitions`` describes modules the way a later release would: a module
+    # this panel build does not know, or a known one with other dependencies.
+    described = (definitions or {}).get(module_id)
+    if described is None:
+        definition = _definition(module_id)
+        described = {
+            "requires": list(definition.dependencies),
+            "conflicts": list(definition.conflicts),
+            "requires_restart": bool(definition.requires_restart),
+        }
     return {
         "id": module_id,
         "version": version,
         "channel": "stable",
         "panel_api": "1",
         "module_api": "1",
-        "min_core": "1.0.0",
+        "min_core": (min_core or {}).get(module_id, "1.0.0"),
         "architectures": ["aarch64", "mips", "mipsel"],
-        "requires": list(definition.dependencies),
-        "conflicts": list(definition.conflicts),
-        "requires_restart": bool(definition.requires_restart),
+        "requires": list(described["requires"]),
+        "conflicts": list(described["conflicts"]),
+        "requires_restart": bool(described["requires_restart"]),
         "archive": f"xkeen-module-{module_id}-{version}.tar.gz",
         "size": size,
         "sha256": sha256,
@@ -304,12 +321,19 @@ def _entry(module_id: str, version: str, size: int = 1, sha256: str = "0" * 64) 
     }
 
 
-def catalog_document(version: str = VERSION, ownership: Mapping[str, tuple[str, ...]] = OWNERSHIP) -> dict[str, Any]:
+def catalog_document(
+    version: str = VERSION,
+    ownership: Mapping[str, tuple[str, ...]] = OWNERSHIP,
+    *,
+    definitions: Mapping[str, Mapping[str, Any]] | None = None,
+    min_core: Mapping[str, str] | None = None,
+    panel_fields: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     """A catalog the way the trust boundary hands it over: validated and normalized."""
 
     modules = []
     for module_id in sorted(ownership):
-        entry = _entry(module_id, version)
+        entry = _entry(module_id, version, definitions=definitions, min_core=min_core)
         archive = module_archive(module_id, version, ownership, entry)
         entry["size"] = len(archive)
         entry["sha256"] = hashlib.sha256(archive).hexdigest()
@@ -327,6 +351,7 @@ def catalog_document(version: str = VERSION, ownership: Mapping[str, tuple[str, 
             "version": version,
             "signing_key_id": "release-2026",
             "architectures": ["aarch64", "mips", "mipsel"],
+            **dict(panel_fields or {}),
         },
         "modules": modules,
     }
@@ -387,13 +412,15 @@ class Release:
     def panel_url(self) -> str:
         return official_release_asset_url(self.version, f"xkeen-ui-panel-{self.version}.tar.gz")
 
-    def client(self, state_dir: Path) -> ModuleCatalogClient:
+    def client(self, state_dir: Path, *, core_version: str | None = None) -> ModuleCatalogClient:
+        # ``core_version`` is the version of the panel that asks. By default it
+        # is the release itself; a panel looking at a later release passes its own.
         return ModuleCatalogClient(
             state_dir,
             transport=self.transport,
             keyring=self.keyring,
             platform_architecture=ARCHITECTURE,
-            core_version=self.version,
+            core_version=self.version if core_version is None else core_version,
         )
 
 
@@ -402,11 +429,16 @@ def make_release(
     ownership: Mapping[str, tuple[str, ...]] = OWNERSHIP,
     *,
     archives: Mapping[str, bytes] | None = None,
+    definitions: Mapping[str, Mapping[str, Any]] | None = None,
+    min_core: Mapping[str, str] | None = None,
+    panel_fields: Mapping[str, Any] | None = None,
 ) -> Release:
     """A signed catalog with the archive of every module; ``archives`` overrides bodies."""
 
     key = Ed25519PrivateKey.generate()
-    document = catalog_document(version, ownership)
+    document = catalog_document(
+        version, ownership, definitions=definitions, min_core=min_core, panel_fields=panel_fields
+    )
     panel = panel_archive(version, ownership)
     bodies: dict[str, bytes] = {}
     for entry in document["modules"]:

@@ -19,7 +19,7 @@ from typing import AbstractSet, Any, Mapping
 from urllib.parse import urlsplit
 
 from services.module_catalog_trust import TRUSTED_SIGNING_KEY_IDS
-from services.module_registry import MODULE_DEFINITIONS, MODULE_IDS
+from services.module_registry import MODULE_DEFINITIONS, MODULE_IDS, is_module_id
 
 
 SUPPORTED_PANEL_API = "1"
@@ -185,8 +185,18 @@ def validate_catalog_entry(
     trusted_signing_key_ids: set[str] | frozenset[str] | None = None,
     platform_architecture: str | None = None,
     core_version: str | None = None,
+    catalog_module_ids: AbstractSet[str] | None = None,
 ) -> dict[str, Any]:
-    """Validate one stable catalog entry without fetching or trusting it."""
+    """Validate one stable catalog entry without fetching or trusting it.
+
+    ``catalog_module_ids`` is given for the catalog of another release: the
+    modules it names. Such an entry is not compared with the registry of this
+    build — a later release may add a module, drop one or change what a module
+    requires — but it has to be consistent with its own catalog. Without it the
+    entry describes this very build and must match its registry exactly.
+    """
+
+    own_release = catalog_module_ids is None
 
     entry = _mapping(catalog, "catalog")
     required = (
@@ -209,16 +219,23 @@ def validate_catalog_entry(
     if missing:
         _fail("catalog_required_field", "catalog entry is missing required fields", fields=missing)
 
-    module_id = str(entry["id"] or "").strip()
-    if module_id not in MODULE_IDS:
-        _fail("catalog_module_unknown", "module is not part of the official registry", module_id=module_id)
+    if own_release:
+        module_id = str(entry["id"] or "").strip()
+        if module_id not in MODULE_IDS:
+            _fail("catalog_module_unknown", "module is not part of the official registry", module_id=module_id)
+    else:
+        if not is_module_id(entry["id"]):
+            _fail("catalog_module_invalid", "module id does not look like a module id", module_id=str(entry["id"]))
+        module_id = entry["id"]
     version = validate_semver(entry["version"], "catalog_version")
     if entry["channel"] != "stable":
         _fail("catalog_channel_unsupported", "only stable releases are accepted")
     if entry["panel_api"] != SUPPORTED_PANEL_API or entry["module_api"] != SUPPORTED_MODULE_API:
         _fail("catalog_api_unsupported", "catalog API versions are not supported")
     min_core = validate_semver(entry["min_core"], "catalog_min_core")
-    if core_version is not None:
+    # A module of another release that needs a newer panel does not make the
+    # whole catalog unusable: it matters when that module itself is installed.
+    if core_version is not None and own_release:
         normalized_core = validate_semver(core_version, "current_core_version")
         if not _semver_at_least(normalized_core, min_core):
             _fail(
@@ -236,19 +253,22 @@ def validate_catalog_entry(
         )
     requires = _string_list(entry["requires"], "catalog_requires")
     conflicts = _string_list(entry["conflicts"], "catalog_conflicts")
-    known_modules = set(MODULE_IDS)
+    # Another release may depend on its own new modules as well as on the ones
+    # this build knows.
+    known_modules = set(MODULE_IDS) if own_release else set(MODULE_IDS) | set(catalog_module_ids)
     unknown = sorted((set(requires) | set(conflicts)) - known_modules)
     if unknown:
         _fail("catalog_dependency_unknown", "catalog references unknown modules", module_ids=unknown)
     if module_id in requires or module_id in conflicts:
         _fail("catalog_self_reference", "catalog module cannot require or conflict with itself")
-    definition = _module_definition(module_id)
-    if requires != list(definition.dependencies) or conflicts != list(definition.conflicts):
-        _fail("catalog_dependency_mismatch", "catalog dependencies do not match the registry", module_id=module_id)
     if not isinstance(entry["requires_restart"], bool):
         _fail("catalog_requires_restart_invalid", "requires_restart must be boolean")
-    if entry["requires_restart"] != definition.requires_restart:
-        _fail("catalog_requires_restart_mismatch", "requires_restart does not match the registry")
+    if own_release:
+        definition = _module_definition(module_id)
+        if requires != list(definition.dependencies) or conflicts != list(definition.conflicts):
+            _fail("catalog_dependency_mismatch", "catalog dependencies do not match the registry", module_id=module_id)
+        if entry["requires_restart"] != definition.requires_restart:
+            _fail("catalog_requires_restart_mismatch", "requires_restart does not match the registry")
 
     archive = str(entry["archive"] or "").strip()
     expected_archive = f"xkeen-module-{module_id}-{version}.tar.gz"
@@ -292,17 +312,29 @@ def validate_panel_catalog_descriptor(
     signing_key_id: str,
     trusted_signing_key_ids: AbstractSet[str] | None = None,
     platform_architecture: str | None = None,
+    own_release: bool = True,
 ) -> dict[str, Any]:
-    """Validate the signed descriptor for the whole-panel release asset."""
+    """Validate the signed descriptor for the whole-panel release asset.
+
+    A descriptor of another release may carry fields this build does not know;
+    they are passed over. Refusing them would make every field added later a
+    release no installed panel can update to.
+    """
 
     panel = _mapping(descriptor, "catalog_panel")
     required = {"archive", "size", "sha256", "version", "signing_key_id", "architectures"}
+    optional = {"min_updater"}
     missing = sorted(required - set(panel))
     if missing:
         _fail("catalog_panel_required_field", "panel descriptor is missing required fields", fields=missing)
-    unknown = sorted(set(panel) - required)
-    if unknown:
+    unknown = sorted(set(panel) - required - optional)
+    if unknown and own_release:
         _fail("catalog_panel_field_unknown", "panel descriptor contains unknown fields", fields=unknown)
+    # The oldest panel that may update itself to this release. An older one is
+    # told to use the installer instead of being handed a release it cannot lay.
+    min_updater = (
+        validate_semver(panel["min_updater"], "catalog_panel_min_updater") if "min_updater" in panel else None
+    )
 
     version = validate_semver(panel["version"], "catalog_panel_version")
     expected_version = validate_semver(release_version, "catalog_release_version")
@@ -344,7 +376,7 @@ def validate_panel_catalog_descriptor(
             panel_signing_key_id=panel_key,
             signing_key_id=signing_key_id,
         )
-    return {
+    normalized = {
         "archive": archive,
         "size": size,
         "sha256": sha256,
@@ -352,6 +384,9 @@ def validate_panel_catalog_descriptor(
         "signing_key_id": panel_key,
         "architectures": architectures,
     }
+    if min_updater is not None:
+        normalized["min_updater"] = min_updater
+    return normalized
 
 
 def validate_catalog_document(
@@ -386,18 +421,32 @@ def validate_catalog_document(
     source_commit = catalog["source_commit"]
     if not isinstance(source_commit, str) or not source_commit.strip():
         _fail("catalog_source_commit_invalid", "catalog source_commit must be a non-empty string")
+    # The catalog of the release this panel is describes the panel itself and
+    # must match its registry. The catalog of any other release is trusted
+    # because it is signed, and is only required to be consistent with itself:
+    # a panel that held a later release to its own list of modules could never
+    # be updated to a release that changes the list.
+    own_release = core_version is None or compare_semver(
+        normalized_release, validate_semver(core_version, "current_core_version")
+    ) == 0
     normalized_panel = validate_panel_catalog_descriptor(
         _mapping(catalog["panel"], "catalog_panel"),
         release_version=normalized_release,
         signing_key_id=signing_key_id,
         trusted_signing_key_ids=trusted_signing_key_ids,
         platform_architecture=platform_architecture,
+        own_release=own_release,
     )
     modules = catalog["modules"]
     if not isinstance(modules, list):
         _fail("catalog_modules_invalid", "catalog modules must be a list")
     if not modules:
         _fail("catalog_modules_empty", "catalog modules must not be empty")
+    catalog_module_ids: frozenset[str] | None = None
+    if not own_release:
+        catalog_module_ids = frozenset(
+            item["id"] for item in modules if isinstance(item, Mapping) and isinstance(item.get("id"), str)
+        )
 
     normalized_modules: list[dict[str, Any]] = []
     seen_module_ids: set[str] = set()
@@ -407,6 +456,7 @@ def validate_catalog_document(
             trusted_signing_key_ids=trusted_signing_key_ids,
             platform_architecture=platform_architecture,
             core_version=core_version,
+            catalog_module_ids=catalog_module_ids,
         )
         if entry["id"] in seen_module_ids:
             _fail("catalog_module_duplicate", "catalog contains duplicate module IDs", module_id=entry["id"])

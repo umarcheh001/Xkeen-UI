@@ -225,7 +225,9 @@ def _run(args, *, client_factory, architecture, on_step) -> int:
         result = run_operation(
             journal,
             state_dir=state_dir,
-            client=client_factory(state_dir, resolved_architecture, plan.version),
+            # The version of the panel that runs, not of the release it lays:
+            # the catalog client holds only its own release to its registry.
+            client=client_factory(state_dir, resolved_architecture, plan.source_version or plan.version),
             architecture=resolved_architecture,
             restart=restart,
             wait_healthy=wait_healthy,

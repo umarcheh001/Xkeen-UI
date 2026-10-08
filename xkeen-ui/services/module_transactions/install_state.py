@@ -81,6 +81,9 @@ def state_file_updates(panel_root: Path, plan: Plan) -> dict[str, bytes]:
         if not profile or variant not in {"light", "full", "advanced"} or not isinstance(raw_modules, list):
             return {}
         selected = {str(module_id) for module_id in raw_modules}
+        # A release may bring modules this build does not know: they are
+        # recorded after the known ones, by their own names.
+        recorded = (*MODULE_ORDER, *sorted(selected - set(MODULE_ORDER)))
         modules_state = _load(Path(panel_root) / "modules.json")
         modules_state = dict(modules_state) if isinstance(modules_state, dict) else {"schema_version": 1}
         if plan.scope == "profile" or not isinstance(modules_state.get("profile"), str):
@@ -94,7 +97,7 @@ def state_file_updates(panel_root: Path, plan: Plan) -> dict[str, bytes]:
         modules_state.pop(PHYSICAL_REQUEST_KEY, None)
         current_modules = modules_state.get("modules")
         current_modules = dict(current_modules) if isinstance(current_modules, dict) else {}
-        for module_id in MODULE_ORDER:
+        for module_id in recorded:
             item = current_modules.get(module_id)
             item = dict(item) if isinstance(item, dict) else {}
             # Installed is not the same as switched on: a module that stays
@@ -116,13 +119,13 @@ def state_file_updates(panel_root: Path, plan: Plan) -> dict[str, bytes]:
         return {
             "modules.json": _dump(modules_state),
             "module-installed.json": _dump(
-                {"schema_version": 1, "modules": {module_id: module_id in selected for module_id in MODULE_ORDER}}
+                {"schema_version": 1, "modules": {module_id: module_id in selected for module_id in recorded}}
             ),
             "install-profile.json": _dump(
                 {
                     "schema_version": 1,
                     "profile": profile,
-                    "module_ids": [module_id for module_id in MODULE_ORDER if module_id in selected],
+                    "module_ids": [module_id for module_id in recorded if module_id in selected],
                     "editor_variant": variant,
                 }
             ),

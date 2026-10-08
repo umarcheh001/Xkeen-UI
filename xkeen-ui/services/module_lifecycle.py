@@ -405,6 +405,13 @@ class ModuleLifecycleService:
             snapshot = client.get_catalog(force_refresh=bool(force_refresh))
             target_version = str(snapshot.catalog.get("release_version") or "")
             newer = compare_semver(target_version, source_version) > 0
+            descriptor = snapshot.catalog.get("panel")
+            min_updater = descriptor.get("min_updater") if isinstance(descriptor, Mapping) else None
+            # The release may say this panel is too old to lay it by itself:
+            # the owner learns it here, before pressing "update".
+            requires_installer = bool(
+                newer and isinstance(min_updater, str) and compare_semver(source_version, min_updater) < 0
+            )
         except ModuleTransactionError as error:
             _raise_domain(error)
         except Exception as error:
@@ -414,6 +421,8 @@ class ModuleLifecycleService:
             "source_version": source_version,
             "target_version": target_version,
             "update_available": newer,
+            "requires_installer": requires_installer,
+            "min_updater": min_updater if requires_installer else None,
         }
 
     def _release_context(self):

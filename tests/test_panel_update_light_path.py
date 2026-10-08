@@ -129,6 +129,8 @@ def test_update_check_reads_only_the_signed_catalog_when_an_update_exists(tmp_pa
         "source_version": "2.10.0",
         "target_version": "2.11.0",
         "update_available": True,
+        "requires_installer": False,
+        "min_updater": None,
     }
     assert _panel_downloads(release) == 0
     assert catalog.latest_requests == 1

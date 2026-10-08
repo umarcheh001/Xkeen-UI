@@ -15,7 +15,7 @@ from services.module_package_contract import (
     ModulePackageContractError,
     validate_panel_catalog_descriptor,
 )
-from services.module_registry import MODULE_IDS
+from services.module_registry import is_module_id
 
 
 MAX_PANEL_EXPANDED_BYTES = 256 * 1024 * 1024
@@ -84,15 +84,19 @@ def _validate_ownership(payload: bytes, managed_files: set[str]) -> dict[str, An
         raw = json.loads(payload.decode("utf-8"))
     except (UnicodeDecodeError, ValueError) as error:
         _fail("panel_archive_ownership_invalid", "module ownership is not valid UTF-8 JSON")
-    if not isinstance(raw, Mapping) or set(raw) != {"schema_version", "modules", "frontend"}:
+    # Keys a later release adds are passed over: the archive is the one the
+    # signed catalog names, and what this build needs from the map is below.
+    if not isinstance(raw, Mapping) or not {"schema_version", "modules", "frontend"} <= set(raw):
         _fail("panel_archive_ownership_invalid", "module ownership has an invalid shape")
     if raw["schema_version"] != 1 or not isinstance(raw["modules"], Mapping) or not isinstance(raw["frontend"], Mapping):
         _fail("panel_archive_ownership_invalid", "module ownership has an unsupported schema")
     modules: dict[str, list[str]] = {}
     claimed: set[str] = set()
     for module_id, paths in raw["modules"].items():
-        if module_id not in MODULE_IDS:
-            _fail("panel_archive_ownership_invalid", "module ownership names an unknown module", module_id=module_id)
+        # A later release may own files through modules this build does not
+        # know; the name only has to be a module name.
+        if not is_module_id(module_id):
+            _fail("panel_archive_ownership_invalid", "module ownership names an invalid module", module_id=str(module_id))
         normalized = _string_paths(paths, module_id=module_id)
         overlap = claimed.intersection(normalized)
         if overlap:
@@ -107,7 +111,9 @@ def _validate_ownership(payload: bytes, managed_files: set[str]) -> dict[str, An
             extra=sorted(claimed - managed_files),
         )
     frontend = dict(raw["frontend"])
-    if set(frontend) != {"bridge", "build"} or any(not isinstance(value, Mapping) for value in frontend.values()):
+    if not {"bridge", "build"} <= set(frontend) or any(
+        not isinstance(frontend[key], Mapping) for key in ("bridge", "build")
+    ):
         _fail("panel_archive_ownership_invalid", "frontend ownership manifests have an invalid shape")
     return {
         "schema_version": 1,

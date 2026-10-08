@@ -560,6 +560,29 @@ def _full_scope_plan(
         _fail("catalog_panel_invalid", "the trusted catalog has no matching panel descriptor")
     if architecture not in descriptor.get("architectures", ()):
         _fail("catalog_architecture_unsupported", "the panel is not published for this router", architecture=architecture)
+    min_updater = descriptor.get("min_updater")
+    if scope == "panel" and isinstance(min_updater, str) and compare_semver(source_version, min_updater) < 0:
+        # The release says this panel is too old to lay it by itself. That is
+        # not a broken catalog: the owner is told to run the installer.
+        _fail(
+            "panel_update_requires_installer",
+            "this panel is too old to update itself to the release; run the installer",
+            current_version=source_version,
+            target_version=target_version,
+            min_updater=min_updater,
+        )
+    release_dependencies: dict[str, dict[str, list[str]]] | None = None
+    if scope == "panel":
+        # Another release: its modules and what they require are read from
+        # its own catalog, not from the registry of the panel that updates.
+        release_dependencies = {
+            str(entry["id"]): {
+                "requires": [str(item) for item in entry.get("requires", ())],
+                "conflicts": [str(item) for item in entry.get("conflicts", ())],
+            }
+            for entry in catalog.get("modules", ())
+            if isinstance(entry, Mapping) and isinstance(entry.get("id"), str)
+        }
     installed_profile, installed_profile_modules, installed_editor_variant = _read_installed_profile(state_dir)
     if scope == "profile":
         requested = _read_requested_profile(state_dir)
@@ -590,6 +613,7 @@ def _full_scope_plan(
                 profile=profile,
                 module_ids=requested_modules,
                 editor_variant=editor_variant,
+                release_dependencies=release_dependencies,
             )
         else:
             target_sizes = None
@@ -600,6 +624,7 @@ def _full_scope_plan(
                 profile=profile,
                 module_ids=requested_modules,
                 editor_variant=editor_variant,
+                release_dependencies=release_dependencies,
             )
     except ProfilePlanError as error:
         raise ModuleTransactionError(error.code, "the desired physical profile is invalid", **error.details) from error

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Collection, Mapping, Sequence
 
-from services.module_registry import MODULE_DEFINITIONS, MODULE_IDS
+from services.module_registry import MODULE_DEFINITIONS, MODULE_IDS, is_module_id
 
 
 PRESETS: Mapping[str, tuple[str, ...]] = {
@@ -82,7 +82,9 @@ def _safe_relative(value: str) -> bool:
     )
 
 
-def _load_ownership(panel_source: Path) -> tuple[dict[str, tuple[str, ...]], dict[str, dict[str, Any]]]:
+def _load_ownership(
+    panel_source: Path, *, other_release: bool = False
+) -> tuple[dict[str, tuple[str, ...]], dict[str, dict[str, Any]]]:
     try:
         raw = json.loads((panel_source / "module-ownership.json").read_text(encoding="utf-8"))
     except (OSError, ValueError) as error:
@@ -90,16 +92,27 @@ def _load_ownership(panel_source: Path) -> tuple[dict[str, tuple[str, ...]], dic
             "profile_ownership_unavailable",
             "panel ownership metadata cannot build a physical profile",
         ) from error
-    return _normalize_ownership(raw, lambda relative: (panel_source / relative).is_file())
+    return _normalize_ownership(
+        raw, lambda relative: (panel_source / relative).is_file(), other_release=other_release
+    )
+
+
+def ordered_module_ids(module_ids: Collection[str]) -> tuple[str, ...]:
+    """Modules this build knows in its own order, then the ones it does not."""
+
+    present = set(module_ids)
+    known = [module_id for module_id in MODULE_IDS if module_id in present]
+    return (*known, *sorted(present - set(MODULE_IDS)))
 
 
 def _normalize_ownership(
-    raw: Any, has_payload: Callable[[str], bool]
+    raw: Any, has_payload: Callable[[str], bool], *, other_release: bool = False
 ) -> tuple[dict[str, tuple[str, ...]], dict[str, dict[str, Any]]]:
     """Check an ownership map against the payload it describes.
 
     The payload may be a directory or the listing of an archive: what matters
-    is that every owned path is really there.
+    is that every owned path is really there. The map of another release may
+    name other modules than this build does: one more, one less.
     """
 
     try:
@@ -109,11 +122,14 @@ def _normalize_ownership(
         raw_frontend = raw["frontend"]
         if not isinstance(raw_modules, Mapping) or not isinstance(raw_frontend, Mapping):
             raise ValueError("invalid ownership map")
-        if set(raw_modules) != set(MODULE_IDS):
+        if other_release:
+            if "core" not in raw_modules or not all(is_module_id(module_id) for module_id in raw_modules):
+                raise ValueError("invalid module ownership")
+        elif set(raw_modules) != set(MODULE_IDS):
             raise ValueError("incomplete module ownership")
         modules: dict[str, tuple[str, ...]] = {}
         claimed: set[str] = set()
-        for module_id in MODULE_IDS:
+        for module_id in ordered_module_ids(raw_modules):
             paths = raw_modules[module_id]
             if not isinstance(paths, list) or any(not isinstance(path, str) for path in paths):
                 raise ValueError("invalid ownership paths")
@@ -137,6 +153,61 @@ def _normalize_ownership(
             "panel ownership metadata cannot build a physical profile",
         ) from error
     return modules, {"bridge": dict(bridge), "build": dict(build)}
+
+
+def _selected_for_release(
+    profile: str,
+    requested: Sequence[str] | None,
+    available: Collection[str],
+    dependencies: Mapping[str, Mapping[str, Sequence[str]]],
+) -> tuple[str, ...]:
+    """What a profile means in a release whose modules differ from this build's.
+
+    The full profile is everything the release has: a module the release added
+    comes with it. A chosen set stays what the owner chose — less the modules
+    the release no longer has, plus whatever the chosen ones now require.
+    """
+
+    present = set(available)
+    if profile in {"full", "legacy-full"}:
+        if requested is not None:
+            _fail("profile_modules_forbidden", "canonical profiles do not accept module_ids")
+        selected = set(present)
+    elif profile in PRESETS:
+        if requested is not None:
+            _fail("profile_modules_forbidden", "canonical profiles do not accept module_ids")
+        selected = set(PRESETS[profile]) & present
+    elif profile == "custom":
+        if not isinstance(requested, Sequence) or isinstance(requested, (str, bytes)):
+            _fail("profile_modules_invalid", "custom profile requires module_ids")
+        wanted = {str(module_id) for module_id in requested}
+        if not wanted or "core" not in wanted:
+            _fail("profile_modules_invalid", "custom profile contains invalid modules")
+        selected = wanted & present
+    else:
+        _fail("profile_unknown", "profile is not supported", profile=profile)
+    if "core" not in selected:
+        _fail("profile_modules_invalid", "the release does not contain the core module")
+
+    def listed(module_id: str, field: str) -> tuple[str, ...]:
+        described = dependencies.get(module_id)
+        if described is None:
+            return ()
+        return tuple(str(item) for item in described.get(field, ()))
+
+    queue = sorted(selected)
+    while queue:
+        for dependency in listed(queue.pop(), "requires"):
+            if dependency in selected:
+                continue
+            if dependency not in present:
+                _fail("profile_dependency_missing", "profile omits required modules", module_ids=[dependency])
+            selected.add(dependency)
+            queue.append(dependency)
+    conflicts = sorted({conflict for module_id in selected for conflict in listed(module_id, "conflicts") if conflict in selected})
+    if conflicts:
+        _fail("profile_module_conflict", "profile contains conflicting modules", module_ids=conflicts)
+    return ordered_module_ids(selected)
 
 
 def _selected_modules(profile: str, requested: Sequence[str] | None) -> tuple[str, ...]:
@@ -227,11 +298,23 @@ def build_profile_target(
     profile: str,
     module_ids: Sequence[str] | None,
     editor_variant: str | None,
+    release_dependencies: Mapping[str, Mapping[str, Sequence[str]]] | None = None,
 ) -> ProfileTarget:
-    """Return the exact declarative payload and state for one physical profile."""
+    """Return the exact declarative payload and state for one physical profile.
 
-    modules, frontend_source = _load_ownership(Path(panel_source))
-    return _profile_target(modules, frontend_source, profile=profile, module_ids=module_ids, editor_variant=editor_variant)
+    ``release_dependencies`` says the tree is another release: what its catalog
+    tells about each module. The profile is then worked out from that release.
+    """
+
+    modules, frontend_source = _load_ownership(Path(panel_source), other_release=release_dependencies is not None)
+    return _profile_target(
+        modules,
+        frontend_source,
+        profile=profile,
+        module_ids=module_ids,
+        editor_variant=editor_variant,
+        release_dependencies=release_dependencies,
+    )
 
 
 def build_profile_target_from_ownership(
@@ -241,6 +324,7 @@ def build_profile_target_from_ownership(
     profile: str,
     module_ids: Sequence[str] | None,
     editor_variant: str | None,
+    release_dependencies: Mapping[str, Mapping[str, Sequence[str]]] | None = None,
 ) -> ProfileTarget:
     """The same target, described by an ownership map and the list of files it covers.
 
@@ -249,8 +333,17 @@ def build_profile_target_from_ownership(
     """
 
     present = frozenset(payload_files)
-    modules, frontend_source = _normalize_ownership(ownership, present.__contains__)
-    return _profile_target(modules, frontend_source, profile=profile, module_ids=module_ids, editor_variant=editor_variant)
+    modules, frontend_source = _normalize_ownership(
+        ownership, present.__contains__, other_release=release_dependencies is not None
+    )
+    return _profile_target(
+        modules,
+        frontend_source,
+        profile=profile,
+        module_ids=module_ids,
+        editor_variant=editor_variant,
+        release_dependencies=release_dependencies,
+    )
 
 
 def _profile_target(
@@ -260,8 +353,15 @@ def _profile_target(
     profile: str,
     module_ids: Sequence[str] | None,
     editor_variant: str | None,
+    release_dependencies: Mapping[str, Mapping[str, Sequence[str]]] | None = None,
 ) -> ProfileTarget:
-    selected = _selected_modules(str(profile), module_ids)
+    if release_dependencies is None:
+        selected = _selected_modules(str(profile), module_ids)
+    else:
+        selected = _selected_for_release(str(profile), module_ids, modules, release_dependencies)
+    # Every module either build knows gets a line in the records: the ones the
+    # release dropped as "not installed", the ones it added by their own names.
+    recorded = ordered_module_ids({*MODULE_IDS, *modules})
     default_variant = "full" if profile in {"full", "legacy-full"} else "light"
     variant = default_variant if editor_variant is None else str(editor_variant)
     if variant not in EDITOR_VARIANTS:
@@ -281,11 +381,11 @@ def _profile_target(
             "profile": profile,
             "restart_required": False,
             "editor": {"variant": variant},
-            "modules": {module_id: {"enabled": module_id in module_set} for module_id in MODULE_IDS},
+            "modules": {module_id: {"enabled": module_id in module_set} for module_id in recorded},
         },
         "module-installed.json": {
             "schema_version": 1,
-            "modules": {module_id: module_id in module_set for module_id in MODULE_IDS},
+            "modules": {module_id: module_id in module_set for module_id in recorded},
         },
         "install-profile.json": {
             "schema_version": 1,
