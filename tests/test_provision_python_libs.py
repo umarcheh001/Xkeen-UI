@@ -127,7 +127,8 @@ def test_an_unreachable_entware_does_not_stop_what_pip_can_bring(tmp_path):
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert any("pip install" in line and line.rstrip().endswith("cryptography") for line in python)
     # Entware молчит: у него больше ничего не просят.
-    assert [line for line in opkg if "install" in line] == []
+    # (`list-installed` — справка о том, что уже стоит: к источнику пакетов она не ходит.)
+    assert [line for line in opkg if line.split()[:1] == ["install"]] == []
     assert "ws=on" in proc.stdout
 
 

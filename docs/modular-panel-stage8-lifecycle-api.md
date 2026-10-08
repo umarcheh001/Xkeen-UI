@@ -34,8 +34,8 @@ health check и rollback не выполняются в процессе Flask.
 ## Plan и apply
 
 Module-only plan принимает `install`, `repair` или `remove` и всегда затрагивает
-ровно выбранный модуль. Full-scope `panel-update` и `profile-transition`
-добавлены в 8.5 и описаны отдельным контрактом. Отсутствующие зависимости,
+ровно выбранный модуль. Full-scope `panel-update`, `profile-transition` и
+`panel-rollback` описаны отдельным контрактом. Отсутствующие зависимости,
 конфликты, dependants, активное ядро и нехватка места возвращаются как
 `applicable: false` с `blockers`; зависимости не устанавливаются автоматически.
 

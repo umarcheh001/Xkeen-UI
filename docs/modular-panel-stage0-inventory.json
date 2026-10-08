@@ -36,13 +36,13 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 536,
-      "size_bytes": 7138927,
+      "unit_count": 539,
+      "size_bytes": 7194368,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
-        "backend_service": 75,
-        "backend_test": 251,
+        "backend_service": 76,
+        "backend_test": 253,
         "configuration": 10,
         "frontend_bundle": 9,
         "frontend_entrypoint": 2,
@@ -800,7 +800,7 @@
       "module_id": "core",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/devtools.py",
-      "size_bytes": 43223,
+      "size_bytes": 44733,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -951,7 +951,7 @@
       "module_id": "core",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/modules.py",
-      "size_bytes": 16159,
+      "size_bytes": 16148,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -2138,7 +2138,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_lifecycle.py",
-      "size_bytes": 42905,
+      "size_bytes": 45813,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -2252,7 +2252,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_transactions/executor.py",
-      "size_bytes": 21683,
+      "size_bytes": 24119,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -2306,7 +2306,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_transactions/journal.py",
-      "size_bytes": 18534,
+      "size_bytes": 19790,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -2345,7 +2345,25 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_transactions/plan.py",
-      "size_bytes": 31505,
+      "size_bytes": 33886,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_service",
+      "path": "xkeen-ui/services/module_transactions/previous_version.py",
+      "size_bytes": 7969,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -6090,6 +6108,26 @@
     {
       "module_id": "core",
       "kind": "backend_test",
+      "path": "tests/test_panel_rollback_to_previous_version.py",
+      "size_bytes": 15198,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [
+        "XKEEN_UI_UPDATE_CHANNEL"
+      ],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
       "path": "tests/test_panel_service.py",
       "size_bytes": 3402,
       "depends_on": [
@@ -6403,7 +6441,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_provision_python_libs.py",
-      "size_bytes": 6080,
+      "size_bytes": 6236,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -7542,7 +7580,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_uninstall_is_clean.py",
-      "size_bytes": 8583,
+      "size_bytes": 15383,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -7556,9 +7594,29 @@
       "environment_variables": [
         "XKEEN_LOG_DIR",
         "XKEEN_UI_BACKUP_DIR",
+        "XKEEN_UI_UNINSTALL_ASK",
         "XKEEN_UI_UNINSTALL_ROOT",
-        "XKEEN_UI_UPDATE_DIR"
+        "XKEEN_UI_UPDATE_DIR",
+        "XKEEN_XRAY_CONFIGS_DIR"
       ],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_uninstall_releases_router_settings.py",
+      "size_bytes": 6780,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
       "removable": false
     },
     {
@@ -8025,7 +8083,7 @@
       "module_id": "core",
       "kind": "configuration",
       "path": "xkeen-ui/install.sh",
-      "size_bytes": 69226,
+      "size_bytes": 69437,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -8053,7 +8111,7 @@
       "module_id": "core",
       "kind": "configuration",
       "path": "xkeen-ui/uninstall.sh",
-      "size_bytes": 11087,
+      "size_bytes": 18934,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -8072,6 +8130,7 @@
         "XKEEN_UI_INIT_OWNER",
         "XKEEN_UI_INIT_SCRIPT",
         "XKEEN_UI_PYTHONPYCACHEPREFIX",
+        "XKEEN_UI_UNINSTALL_ASK",
         "XKEEN_UI_UNINSTALL_PURGE",
         "XKEEN_UI_UNINSTALL_ROOT",
         "XKEEN_UI_UPDATE_DIR"

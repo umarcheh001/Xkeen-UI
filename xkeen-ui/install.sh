@@ -1664,6 +1664,8 @@ if [ -f "$UI_DIR/scripts/module_transaction.py" ]; then
     >/dev/null 2>&1 || true
 fi
 rm -rf "$UI_DIR.module-transactions"
+# Копия прежней версии для отката описывала дерево, которое установщик заменил.
+rm -rf "$UI_DIR.previous-version" "$UI_DIR.previous-version.old"
 
 log_install "[=] Итог установки:"
 ui_step_done

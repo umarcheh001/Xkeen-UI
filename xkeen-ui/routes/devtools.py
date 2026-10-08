@@ -316,6 +316,11 @@ def create_devtools_blueprint(
                 "result": result,
                 "scope": lifecycle.get("scope"),
             }
+            # The way back is the copy the last update left next to the panel.
+            try:
+                previous = lifecycle_service.previous_version()
+            except Exception:
+                previous = {"available": False}
             return jsonify(
                 {
                     "ok": True,
@@ -324,7 +329,8 @@ def create_devtools_blueprint(
                     "log_tail": lifecycle.get("log", []),
                     "backup_dir": None,
                     "backups": [],
-                    "has_backup": False,
+                    "has_backup": bool(previous.get("available")),
+                    "previous_version": previous,
                     "reconciled": False,
                     "lifecycle": lifecycle,
                 }
@@ -786,6 +792,33 @@ def create_devtools_blueprint(
 
         PR/Commit 7 (self-update): restore the latest backup created by the updater.
         """
+
+        if lifecycle_service is not None and _update_channel() == "stable":
+            # The stable channel goes back through the same journaled engine
+            # that updated the panel, from the copy that update left behind.
+            try:
+                plan = lifecycle_service.plan("panel-rollback", None)
+                if not plan.get("applicable") or not plan.get("plan_id"):
+                    return jsonify(
+                        {
+                            "ok": False,
+                            "error": "no_backup",
+                            "started": False,
+                            "blockers": plan.get("blockers", []),
+                        }
+                    )
+                applied = lifecycle_service.apply("panel-rollback", None, plan["plan_id"])
+            except Exception as error:
+                return _lifecycle_failure(error)
+            return jsonify(
+                {
+                    "ok": True,
+                    "started": True,
+                    "operation_id": applied.get("operation_id"),
+                    "status": applied.get("status"),
+                    "lifecycle": applied,
+                }
+            ), 202
 
         # Ensure storage exists.
         try:

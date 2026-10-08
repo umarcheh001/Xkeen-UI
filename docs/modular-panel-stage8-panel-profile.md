@@ -162,10 +162,56 @@ Boot recovery вызывается init/install path до запуска пан�
 | `panel` | Все заменённые managed-файлы текущего профиля, BUILD и state |
 | `profile` | Все добавленные/удалённые managed-файлы профиля и state |
 
-Legacy DevTools rollback не является rollback транзакции: он работает с
-историческим full-panel backup. Stable DevTools check/run/status делегируются
-`ModuleLifecycleService` как `panel-update`; channel `main` сохраняет прежний
-branch updater и явно возвращает `development_only: true`.
+Stable DevTools check/run/status делегируются `ModuleLifecycleService` как
+`panel-update`, а rollback — как `panel-rollback` (см. «Возврат на прежнюю
+версию»). Channel `main` сохраняет прежний branch updater с его full-panel
+backup и явно возвращает `development_only: true`.
+
+## Возврат на прежнюю версию
+
+Обновление панели хранит всё, что заменяет: этим оно отменяет себя, если новый
+релиз не запустился. После подтверждённого `panel-update` каталог операции не
+удаляется, а одним переименованием уходит в `<panel>.previous-version`: копии
+заменённых, удалённых и переписанных файлов (записи установщика, `BUILD.json`,
+manifest-ы фронтенда, `uninstall.sh` — среди них) и журнал того, что было
+добавлено. Места это занимает столько, сколько обновление изменило.
+
+Возврат — третья full-scope операция:
+
+```json
+{"operation": "panel-rollback"}
+```
+
+Она проходит тот же plan/apply и тот же detached runner, но ни каталог, ни
+архив ей не нужны: источник — копия рядом с панелью, сеть не используется.
+Runner кладёт из копии каждый сохранённый файл и удаляет каждый добавленный
+обновлением, затем запускает `provision_env.sh apply` возвращённой версии,
+перезапускает панель и ждёт её. Операция ведётся под своим журналом: если
+прежняя версия не запустилась или пропало питание, дерево возвращается к
+обновлённому состоянию, а копия остаётся для новой попытки. После успешного
+возврата копия удаляется.
+
+Копия описывает один шаг назад и только то дерево, которое оставило
+обновление. Plan отвечает `applicable: false` с blocker
+`panel_rollback_unavailable` и полем `reason`:
+
+| `reason` | Что случилось |
+| --- | --- |
+| `no_previous_version` | Обновлений из панели не было, либо копия уже использована или сброшена |
+| `panel_version_changed` | Версия панели не та, что оставило обновление |
+| `panel_changed_since_update` | `install-managed.json` изменился: ставили или удаляли модуль, меняли профиль |
+| `previous_version_incomplete` | В копии не хватает файла |
+| `previous_version_unreadable` | Запись или журнал копии не читаются |
+
+Любая следующая подтверждённая операция (модуль, профиль, новое обновление) и
+`install.sh` копию сбрасывают; новое обновление оставляет свою. Библиотеки
+Python и дополнения (`xk-geodat`, утилита ссылок), обновлённые на шаге
+`prepare`, назад не возвращаются.
+
+`GET /api/modules/installed` отдаёт `previous_version` (`available`, `version`,
+`kept_at`, `size`, `reason`). На stable-канале `GET /api/devtools/update/status`
+выставляет по нему `has_backup`, а `POST /api/devtools/update/rollback`
+запускает `panel-rollback`.
 
 ## Переход профиля — только разница
 

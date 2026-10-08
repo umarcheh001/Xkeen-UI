@@ -231,6 +231,37 @@ class Journal:
         except OSError:
             pass
 
+    def keep_as(self, destination: Path, record: Mapping[str, Any], *, record_name: str) -> bool:
+        """Move a confirmed operation aside with its copies; ``False`` if it could not be.
+
+        The copies of what the operation replaced are the previous state of
+        the tree. One rename takes the directory out of sight of ``find``,
+        exactly like ``commit`` does, so a power cut leaves either an
+        operation that is confirmed or a kept copy, never half of each.
+        """
+
+        destination = Path(destination)
+        stale = destination.with_name(destination.name + ".old")
+        try:
+            shutil.rmtree(self.staging, ignore_errors=True)
+            _atomic_write_json(str(self.dir / record_name), dict(record))
+            shutil.rmtree(stale, ignore_errors=True)
+            if destination.exists():
+                os.replace(destination, stale)
+            os.replace(self.dir, destination)
+        except OSError:
+            try:
+                (self.dir / record_name).unlink()
+            except OSError:
+                pass
+            return False
+        shutil.rmtree(stale, ignore_errors=True)
+        try:
+            self.dir.parent.rmdir()
+        except OSError:
+            pass
+        return True
+
     def _save(self) -> None:
         _atomic_write_json(str(self.dir / "operation.json"), self._meta)
 

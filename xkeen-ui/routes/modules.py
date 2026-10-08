@@ -8,7 +8,7 @@ from flask import Blueprint, jsonify, request
 
 from routes.common.errors import error_response, exception_response
 from services import request_limits
-from services.module_lifecycle import ModuleLifecycleError, ModuleLifecycleService
+from services.module_lifecycle import FULL_SCOPE_OPERATIONS, ModuleLifecycleError, ModuleLifecycleService
 from services.module_registry import MODULE_IDS, PROFILE_PRESETS, ModuleRegistry, ModuleRegistryError
 
 
@@ -126,7 +126,7 @@ def create_modules_blueprint(
         if failure is not None:
             return failure
         operation = payload["operation"]
-        full_scope = operation in {"panel-update", "profile-transition"}
+        full_scope = operation in FULL_SCOPE_OPERATIONS
         if not full_scope and "module_id" not in payload:
             return error_response("required lifecycle field is missing", 400, ok=False, code="lifecycle_field_required", fields=["module_id"])
         if full_scope and "module_id" in payload:
@@ -144,7 +144,7 @@ def create_modules_blueprint(
         if failure is not None:
             return failure
         operation = payload["operation"]
-        full_scope = operation in {"panel-update", "profile-transition"}
+        full_scope = operation in FULL_SCOPE_OPERATIONS
         if not full_scope and "module_id" not in payload:
             return error_response("required lifecycle field is missing", 400, ok=False, code="lifecycle_field_required", fields=["module_id"])
         if full_scope and "module_id" in payload:

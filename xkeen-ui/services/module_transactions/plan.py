@@ -24,6 +24,7 @@ from services.module_profile_plan import (
 )
 from services.module_registry import MODULE_IDS
 
+from .previous_version import read_previous_version
 from .state import ModuleTransactionError, transactions_root
 
 
@@ -737,6 +738,60 @@ def build_panel_update_plan(
         architecture=architecture,
         require_newer=True,
         free_bytes=free_bytes,
+    )
+
+
+ROLLBACK_OPERATION = "panel-rollback"
+
+
+def build_panel_rollback_plan(
+    *,
+    panel_root: Path,
+    state_dir: Path,
+    free_bytes: int | None = None,
+) -> Plan:
+    """Go back to the release the panel ran before its last update.
+
+    The source is the copy the update left next to the panel, not an
+    archive: nothing is downloaded. Every file the update replaced, removed
+    or rewrote is laid from the copy, every file it added is removed — the
+    records of the installer among them, so the tree ends up exactly as it
+    was. The operation is journaled like any other and can be undone.
+    """
+
+    panel_root = Path(panel_root)
+    previous = read_previous_version(panel_root)
+    files_add = tuple(sorted(previous.restore))
+    files_remove = tuple(sorted(path for path in previous.added if (panel_root / path).is_file()))
+    installed_after: tuple[str, ...] = ()
+    try:
+        kept = json.loads(previous.copy_of("module-installed.json").read_text(encoding="utf-8"))["modules"]
+        if isinstance(kept, dict):
+            installed_after = tuple(sorted(str(module_id) for module_id, present in kept.items() if present is True))
+    except (OSError, ValueError, KeyError, TypeError):
+        # The update did not touch the record: the modules stay as they are.
+        installed_after = tuple(sorted(read_installed_modules(Path(state_dir))))
+    replaced = sum(_file_size(panel_root / path) for path in (*files_add, *files_remove))
+    required = (previous.size + _backup_cost(panel_root, replaced)) * 6 // 5
+    if free_bytes is None:
+        probe = transactions_root(panel_root).parent
+        free_bytes = shutil.disk_usage(probe if probe.exists() else panel_root).free
+    if free_bytes < required:
+        _fail("module_free_space", "not enough free space for the operation and its rollback copy", required=required, free=free_bytes)
+    return Plan(
+        scope="panel",
+        operation=ROLLBACK_OPERATION,
+        module_id=None,
+        version=previous.from_version,
+        source_version=previous.to_version,
+        target_version=previous.from_version,
+        target_profile=None,
+        files_add=files_add,
+        files_remove=files_remove,
+        archive=None,
+        required_free_bytes=required,
+        restart_required=True,
+        installed_after=installed_after,
     )
 
 

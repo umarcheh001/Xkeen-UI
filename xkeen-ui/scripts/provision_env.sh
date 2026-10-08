@@ -926,6 +926,50 @@ verify_python_package_files() {
   return 0
 }
 
+# --- Что из Python поставила сама панель ---------------------------------------
+# Чистое удаление панели убирает и библиотеки, которые она принесла, — но только
+# их: то, что стояло на роутере до панели или пришло пакетом Entware, не её.
+# Поэтому до и после установки снимается список пакетов pip, а разница
+# дописывается в файл в каталоге панели.
+
+provision_pip_names() {
+  # Имена пакетов pip, по одному в строке, в нижнем регистре.
+  "$PYTHON_BIN" -m pip list --format=freeze --disable-pip-version-check 2>/dev/null \
+    | sed 's/[=@ ].*$//' | tr 'A-Z_' 'a-z-' | grep -E '^[a-z0-9][a-z0-9.-]*$' | sort -u
+}
+
+provision_entware_python_names() {
+  # Библиотеки, пришедшие пакетами Entware (python3-foo -> foo): их ставил opkg.
+  { opkg list-installed 2>/dev/null || true; } \
+    | sed -n 's/^python3-\([A-Za-z0-9._-]*\).*$/\1/p' | tr 'A-Z_' 'a-z-' | sort -u
+}
+
+provision_pip_record_begin() {
+  PROVISION_PIP_BEFORE="${TMPDIR:-/tmp}/xkeen-pip-before-$$"
+  provision_pip_names > "$PROVISION_PIP_BEFORE" 2>/dev/null || : > "$PROVISION_PIP_BEFORE"
+}
+
+provision_pip_record_end() {
+  [ -n "${PROVISION_PIP_BEFORE:-}" ] && [ -f "$PROVISION_PIP_BEFORE" ] || return 0
+  _pp_record="${XKEEN_UI_PIP_RECORD:-$UI_DIR/var/pip-installed-by-panel.txt}"
+  _pp_skip="${TMPDIR:-/tmp}/xkeen-pip-skip-$$"
+  {
+    cat "$PROVISION_PIP_BEFORE"
+    provision_entware_python_names
+    # Сам pip и его спутники принадлежат пакету Entware python3-pip.
+    printf '%s\n' pip setuptools wheel
+    [ -f "$_pp_record" ] && cat "$_pp_record"
+  } 2>/dev/null | sort -u > "$_pp_skip"
+  _pp_new="$(provision_pip_names | grep -vxF -f "$_pp_skip" || true)"
+  if [ -n "$_pp_new" ]; then
+    mkdir -p "$(dirname "$_pp_record")" 2>/dev/null || true
+    printf '%s\n' "$_pp_new" >> "$_pp_record" 2>/dev/null || true
+    echo "[*] Библиотеки Python, поставленные панелью, записаны в $_pp_record"
+  fi
+  rm -f "$PROVISION_PIP_BEFORE" "$_pp_skip" 2>/dev/null || true
+  PROVISION_PIP_BEFORE=""
+}
+
 provision_python_libs_check() {
   # Что из нужного уже есть: выставляет NEED_FLASK, NEED_CRYPTOGRAPHY, NEED_GEVENT.
 
@@ -1023,6 +1067,7 @@ provision_python_libs_install() {
     fi
 
     print_pip_index_candidates
+    provision_pip_record_begin
 
     if ! pip_install_with_fallback "bootstrap" pip setuptools wheel; then
       echo "[!] Не удалось обновить pip/setuptools/wheel через доступные индексы."
@@ -1082,6 +1127,7 @@ provision_python_libs_install() {
         echo "      XKEEN_PIP_INDEX_URL=$PIP_FALLBACK_INDEX_DEFAULT XKEEN_GEVENT_PIP_SPEC=$GEVENT_PIP_SPEC $PYTHON_BIN -m pip install --upgrade \"\$XKEEN_GEVENT_PIP_SPEC\" gevent-websocket"
       fi
     fi
+    provision_pip_record_end || true
   fi
 
   # Финальная проверка: flask обязателен

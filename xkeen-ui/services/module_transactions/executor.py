@@ -14,7 +14,14 @@ from typing import TYPE_CHECKING, Any, Callable
 from .extract import extract_panel_payload, extract_payload, read_panel_member
 from .install_state import rebuild_frontend_manifests, state_file_updates
 from .journal import Journal
-from .plan import load_ownership_map
+from .plan import ROLLBACK_OPERATION, load_ownership_map
+from .previous_version import (
+    RECORD_FILENAME,
+    drop_previous_version,
+    previous_version_root,
+    read_previous_version,
+    record_for,
+)
 from .state import ModuleTransactionError, pid_alive, read_status, write_status
 
 if TYPE_CHECKING:
@@ -167,6 +174,8 @@ def run_operation(
 
     plan = journal.plan
     meta = journal.meta()
+    going_back = plan.operation == ROLLBACK_OPERATION
+    previous = None
     status: dict[str, Any] = {
         "operation_id": meta.get("operation_id"),
         "scope": plan.scope,
@@ -217,6 +226,14 @@ def run_operation(
     uninstall_script: bytes | None = None
     try:
         enter("prepared")
+        if going_back:
+            # The copy is read again: the plan was built by the panel, and
+            # the tree or the copy may have changed since.
+            previous = read_previous_version(journal.panel_root)
+            if set(previous.restore) != set(plan.files_add) or not set(plan.files_remove) <= set(previous.added):
+                raise ModuleTransactionError(
+                    "operation_plan_stale", "the previous version no longer matches the planned operation"
+                )
         if plan.archive is not None:
             enter("downloading")
             snapshot = client.get_release_catalog(plan.version)
@@ -318,17 +335,26 @@ def run_operation(
         enter("applying")
         payload = journal.staging / "payload"
         for relative in plan.files_add:
+            if previous is not None:
+                # Copied: the previous version stays whole until this
+                # operation is confirmed, so it can be tried again.
+                journal.apply_file(relative, previous.copy_of(relative))
+                continue
             # Moved, not copied: the release must not lie on the storage twice.
             journal.apply_file(relative, payload.joinpath(*relative.split("/")), consume=True)
         for relative in plan.files_remove:
             journal.remove_file(relative)
-        journal.align_precompressed()
+        if previous is None:
+            journal.align_precompressed()
 
         enter("state")
         root = journal.panel_root
-        shared = rebuild_frontend_manifests(root, load_ownership_map(root).frontend)
-        shared.update(state_file_updates(root, plan))
-        if plan.scope == "panel":
+        # Going back lays the records of the installer and the frontend
+        # manifests from the copy, as files: nothing is worked out anew.
+        shared = {} if going_back else rebuild_frontend_manifests(root, load_ownership_map(root).frontend)
+        if not going_back:
+            shared.update(state_file_updates(root, plan))
+        if plan.scope == "panel" and not going_back:
             shared["BUILD.json"] = _build_stamp(root, plan.target_version, catalog_source_commit)
             if uninstall_script:
                 shared[UNINSTALL_SCRIPT] = uninstall_script
@@ -404,8 +430,35 @@ def run_operation(
     except Exception:
         status["step"] = "committed"
     journal.flush()
-    journal.commit()
+    _settle_previous_version(journal)
     return finish("committed")
+
+
+def _settle_previous_version(journal: Journal) -> None:
+    """Confirm an operation and decide what becomes of the way back.
+
+    A confirmed update of the panel is itself the way back: its copies are
+    the previous release. Any other confirmed operation changed the tree
+    the kept copy described, so that copy goes.
+    """
+
+    plan = journal.plan
+    root = journal.panel_root
+    if plan.operation == "panel-update":
+        try:
+            record = record_for(
+                root,
+                operation_id=journal.meta().get("operation_id"),
+                from_version=plan.source_version,
+                to_version=plan.target_version,
+            )
+            if journal.keep_as(previous_version_root(root), record, record_name=RECORD_FILENAME):
+                return
+        except Exception:
+            # The update is confirmed whatever happens to the copy.
+            pass
+    journal.commit()
+    drop_previous_version(root)
 
 
 _UNTOUCHED_STEPS = frozenset({"prepared", "downloading", "verifying"})
@@ -471,7 +524,10 @@ def recover(
     step = meta.get("step")
 
     if readable and step == "committed":
+        # Confirmed, but cut short before its copies were kept or dropped:
+        # the way back that was there describes the tree before it.
         journal.commit()
+        drop_previous_version(panel_root)
         result = "committed"
     elif readable and step in _UNTOUCHED_STEPS:
         journal.commit()

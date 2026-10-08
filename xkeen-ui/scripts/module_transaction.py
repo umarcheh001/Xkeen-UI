@@ -42,6 +42,7 @@ if str(PANEL_DIR) not in sys.path:
 from services.module_transactions.cancel_channel import CancelListener  # noqa: E402
 from services.module_transactions.executor import OperationCancelled, recover, run_operation, wait_for_panel  # noqa: E402
 from services.module_transactions.journal import Journal  # noqa: E402
+from services.module_transactions.previous_version import drop_previous_version  # noqa: E402
 from services.module_transactions.provision import PROVISION_TIMEOUTS_S, build_provision  # noqa: E402,F401
 from services.module_transactions.state import (  # noqa: E402
     ModuleTransactionError,
@@ -222,6 +223,9 @@ def _busy(args) -> int:
 def _forget(args) -> int:
     panel_root, state_dir = Path(args.panel_root), Path(args.state_dir)
     shutil.rmtree(transactions_root(panel_root), ignore_errors=True)
+    # The copy of the previous release described the tree the installer has
+    # just replaced.
+    drop_previous_version(panel_root)
     status = read_status(state_dir)
     if status.get("result") in ("running", "rollback_failed"):
         status.update(

@@ -29,8 +29,10 @@ from services.module_transactions.launcher import (
 from services.module_transactions.plan import (
     OPERATIONS,
     REPAIR_ONLY_MODULES as _REPAIR_ONLY_MODULES,
+    ROLLBACK_OPERATION,
     Plan,
     build_plan,
+    build_panel_rollback_plan,
     build_panel_update_plan,
     build_profile_transition_plan,
     installed_panel_listing,
@@ -38,13 +40,15 @@ from services.module_transactions.plan import (
     read_installed_modules,
     read_panel_version,
 )
+from services.module_transactions.previous_version import describe_previous_version
 from services.module_transactions.state import ModuleTransactionError
 
 if TYPE_CHECKING:
     from services.module_catalog_client import ModuleCatalogClient
 
 
-_FULL_SCOPE_OPERATIONS = frozenset({"panel-update", "profile-transition"})
+FULL_SCOPE_OPERATIONS = frozenset({"panel-update", "profile-transition", ROLLBACK_OPERATION})
+_FULL_SCOPE_OPERATIONS = FULL_SCOPE_OPERATIONS
 _PLAN_BLOCKERS = frozenset(
     {
         "module_already_installed",
@@ -569,6 +573,9 @@ class ModuleLifecycleService:
             "editor": registry.get("editor"),
             "restart_required": bool(registry.get("restart_required")),
             "installed_module_ids": ordered_ids,
+            # Whether the panel can go back to the release it ran before its
+            # last update, and to which one.
+            "previous_version": describe_previous_version(self.panel_root),
             "modules": [
                 item
                 for item in registry.get("modules", [])
@@ -652,7 +659,60 @@ class ModuleLifecycleService:
             )
         return normalized_operation, normalized_module
 
+    def previous_version(self) -> dict[str, Any]:
+        return {"ok": True, **describe_previous_version(self.panel_root)}
+
+    def _rollback_plan_and_payload(self) -> tuple[Plan | None, dict[str, Any]]:
+        """Going back needs neither the catalog nor the network: the copy lies next to the panel."""
+
+        payload: dict[str, Any] = {
+            "ok": True,
+            "scope": "panel",
+            "operation": ROLLBACK_OPERATION,
+            "module_id": None,
+            "target_profile": None,
+            "restart_required": True,
+            "dependency_diff": {},
+        }
+        try:
+            plan = build_panel_rollback_plan(panel_root=self.panel_root, state_dir=self.state_dir)
+        except ModuleTransactionError as error:
+            if error.code not in {"panel_rollback_unavailable", "module_free_space"}:
+                _raise_domain(error)
+            code = "operation_free_space" if error.code == "module_free_space" else error.code
+            described = describe_previous_version(self.panel_root)
+            return None, {
+                **payload,
+                "source_version": None,
+                "target_version": described.get("version"),
+                "affected_module_ids": [],
+                "files_add": [],
+                "files_remove": [],
+                "required_free_bytes": int(error.details.get("required", 0)),
+                "installed_after": [],
+                "blockers": [{"code": code, "message": error.message, **error.details}],
+                "applicable": False,
+                "plan_id": None,
+            }
+        encoded = plan_to_json(plan)
+        return plan, {
+            **payload,
+            "version": plan.version,
+            "source_version": plan.source_version,
+            "target_version": plan.target_version,
+            "affected_module_ids": list(plan.installed_after),
+            "files_add": encoded["files_add"],
+            "files_remove": encoded["files_remove"],
+            "required_free_bytes": plan.required_free_bytes,
+            "installed_after": encoded["installed_after"],
+            "blockers": [],
+            "applicable": True,
+            "plan_id": _plan_digest(plan, {}),
+        }
+
     def _full_scope_plan_and_payload(self, operation: str) -> tuple[Plan | None, dict[str, Any]]:
+        if operation == ROLLBACK_OPERATION:
+            return self._rollback_plan_and_payload()
         try:
             source_version = read_panel_version(self.panel_root)
             architecture = self._architecture_provider()
@@ -864,7 +924,9 @@ class ModuleLifecycleService:
         return payload
 
     def _ensure_profile_settled(self, operation: str) -> None:
-        if operation == "profile-transition":
+        # Going back puts the installer records back as they were, a pending
+        # request among them: it has nothing to wait for.
+        if operation in {"profile-transition", ROLLBACK_OPERATION}:
             return
         pending = self.profile_transition_status()
         if pending["transition_required"]:
@@ -900,7 +962,7 @@ class ModuleLifecycleService:
                 status=503,
             )
 
-        if operation not in _FULL_SCOPE_OPERATIONS:
+        if operation not in _FULL_SCOPE_OPERATIONS or operation == ROLLBACK_OPERATION:
             return self._apply(operation, module_id, plan_id, {})
         try:
             # The runner takes the archive this process has already verified.
