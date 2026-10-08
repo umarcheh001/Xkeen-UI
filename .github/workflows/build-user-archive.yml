@@ -54,7 +54,21 @@ jobs:
         run: npm run frontend:build
 
       - name: Run Python tests
-        run: python -m pytest -q
+        run: |
+          set -o pipefail
+          python -m pytest -q 2>&1 | tee "$RUNNER_TEMP/pytest.log"
+
+      # Журнал шага виден только участникам репозитория, а заметки — всем:
+      # по ним понятно, какой тест упал и с чем, не открывая журнал.
+      - name: Name the failed tests
+        if: failure()
+        run: |
+          log="$RUNNER_TEMP/pytest.log"; [ -f "$log" ] || exit 0
+          grep -E '^(FAILED|ERROR) ' "$log" | head -n 8 | while IFS= read -r line; do
+            echo "::error title=pytest::$line"
+          done
+          details="$(grep -E '^E  ' "$log" | head -n 60 | cut -c1-300 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
+          [ -z "$details" ] || echo "::error title=pytest details::$details"
 
       - name: Verify frontend build
         run: node scripts/verify_frontend_build.mjs

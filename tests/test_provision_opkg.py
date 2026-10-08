@@ -44,6 +44,7 @@ case "$FAKE_OPKG:$with_conf" in
   fail-mirror:1) exit 0 ;;
   partial:*) mkdir -p "$FAKE_LISTS"; echo "Package: python3" > "$FAKE_LISTS/entware"; exit 2 ;;
   children:*) sh -c 'sleep 30 & echo $! > "$FAKE_CHILD"; wait' & wait ;;
+  stubborn:*) sh -c 'trap "" TERM; sleep 30 & echo $! > "$FAKE_CHILD"; wait' & wait ;;
 esac
 exit 0
 """
@@ -207,20 +208,39 @@ def test_an_old_list_does_not_pass_for_a_fresh_one(stand):
     assert calls == ["update"]
 
 
-@pytest.mark.skipif(os.name == "nt", reason="дерево процессов проверяется на Linux")
-def test_what_the_hung_command_started_is_stopped_with_it(stand):
+def _state_of_what_the_hung_command_started(stand, mode: str) -> str:
     tmp_path, _opkg, _conf = stand
     child = tmp_path / "child.pid"
 
-    proc, _calls, _elapsed = _run(
+    proc, calls, elapsed = _run(
         stand,
-        'provision_run_limited 2 "$OPKG_BIN" update || true; sleep 1; '
+        'provision_run_limited 2 "$OPKG_BIN" update && echo "rc=0" || echo "rc=$?"; sleep 1; '
         # Не `kill -0`: снятый процесс, которого ещё никто не забрал, на Linux
         # числится существующим. Смотрим состояние: нет записи или «Z» — снят.
-        f'state="$(cat "/proc/$(cat "{child.as_posix()}")/stat" 2>/dev/null || true)"; '
+        f'state="$(cat "/proc/$(cat "{child.as_posix()}")/stat" 2>/dev/null || true)"; echo "state=[$state]"; '
         'case "$state" in ""|*") Z "*) echo gone ;; *) echo alive ;; esac',
-        "children",
+        mode,
         FAKE_CHILD=child.as_posix(),
     )
 
-    assert "gone" in proc.stdout
+    # Тест пропускается на Windows, и разбирать его приходится по журналу сервера:
+    # всё, что нужно для разбора, должно быть в самом сообщении.
+    report = "\n".join([proc.stdout, f"stderr: {proc.stderr}", f"calls: {calls}, elapsed: {elapsed:.1f}"])
+    assert "rc=124" in proc.stdout, report
+    return report
+
+
+@pytest.mark.skipif(os.name == "nt", reason="дерево процессов проверяется на Linux")
+def test_what_the_hung_command_started_is_stopped_with_it(stand):
+    report = _state_of_what_the_hung_command_started(stand, "children")
+
+    assert "gone" in report, report
+
+
+@pytest.mark.skipif(os.name == "nt", reason="дерево процессов проверяется на Linux")
+def test_what_ignores_the_polite_request_is_stopped_all_the_same(stand):
+    # Вежливую просьбу завершиться процесс вправе не услышать: загрузка, которую
+    # запустил зависший запрос, не должна после этого остаться висеть.
+    report = _state_of_what_the_hung_command_started(stand, "stubborn")
+
+    assert "gone" in report, report

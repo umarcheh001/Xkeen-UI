@@ -414,23 +414,23 @@ provision_fail() {
   echo "[!] $1"
 }
 
-provision_kill_children() {
-  # Снять процессы, запущенные процессом $1. На роутере нет ни pkill, ни
-  # `ps -o`, поэтому родитель читается из /proc/<pid>/stat: после имени в
-  # скобках идут состояние и номер родителя.
-  _pk_parent="$1"
-  for _pk_stat in /proc/[0-9]*/stat; do
-    [ -r "$_pk_stat" ] || continue
-    _pk_line="$(cat "$_pk_stat" 2>/dev/null)" || continue
-    _pk_child="${_pk_line%% *}"
-    _pk_after_name="${_pk_line##*) }"
-    _pk_ppid="${_pk_after_name#* }"
-    _pk_ppid="${_pk_ppid%% *}"
-    [ "$_pk_ppid" = "$_pk_parent" ] || continue
-    # opkg запускает wget через оболочку: снимать надо и внуков. В подоболочке,
-    # чтобы вложенный обход не затёр переменные этого.
-    ( provision_kill_children "$_pk_child" )
-    kill "$_pk_child" 2>/dev/null || true
+provision_descendants() {
+  # Назвать все процессы, запущенные процессом $1, вместе с их потомками. На
+  # роутере нет ни pkill, ни `ps -o`, поэтому родитель читается из
+  # /proc/<pid>/stat: после имени в скобках идут состояние и номер родителя.
+  _pd_parent="$1"
+  for _pd_stat in /proc/[0-9]*/stat; do
+    [ -r "$_pd_stat" ] || continue
+    _pd_line="$(cat "$_pd_stat" 2>/dev/null)" || continue
+    _pd_child="${_pd_line%% *}"
+    _pd_after_name="${_pd_line##*) }"
+    _pd_ppid="${_pd_after_name#* }"
+    _pd_ppid="${_pd_ppid%% *}"
+    [ "$_pd_ppid" = "$_pd_parent" ] || continue
+    echo "$_pd_child"
+    # opkg запускает wget через оболочку: нужны и внуки. В подоболочке, чтобы
+    # вложенный обход не затёр переменные этого.
+    ( provision_descendants "$_pd_child" )
   done
 }
 
@@ -461,10 +461,18 @@ provision_run_limited() {
       # она успевает запустить следующего (opkg переходит к следующему
       # источнику), и тот остаётся сиротой.
       kill -STOP "$_pl_pid" 2>/dev/null || true
-      provision_kill_children "$_pl_pid"
+      _pl_tree="$(provision_descendants "$_pl_pid")"
+      for _pl_child in $_pl_tree; do
+        kill "$_pl_child" 2>/dev/null || true
+      done
       kill "$_pl_pid" 2>/dev/null || true
       kill -CONT "$_pl_pid" 2>/dev/null || true
       sleep 1
+      # Просьбу завершиться процесс вправе не услышать, а после гибели команды
+      # её потомков по родителю уже не найти: список собран заранее.
+      for _pl_child in $_pl_tree; do
+        kill -9 "$_pl_child" 2>/dev/null || true
+      done
       kill -9 "$_pl_pid" 2>/dev/null || true
       wait "$_pl_pid" 2>/dev/null || true
       return 124
