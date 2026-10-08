@@ -288,6 +288,10 @@ def test_service_reports_no_room_for_a_removal_as_a_blocker(tmp_path, monkeypatc
     registry.set_profile("custom", module_ids=[module for module in FULL if module != "tool.terminal"])
     service, _ = make_service(panel, make_release(), registry=registry)
     monkeypatch.setattr("services.module_transactions.plan.shutil.disk_usage", lambda _path: SimpleNamespace(free=0))
+    # Накопитель без жёстких ссылок: убираемое копируется для отката и занимает
+    # место. Со ссылками удаление места не требует, и блокировки законно нет;
+    # ответ про ссылки запоминается на весь прогон, поэтому задан здесь явно.
+    monkeypatch.setattr("services.module_transactions.plan.hard_links_supported", lambda _root: False)
 
     payload = service.plan("profile-transition", None)
 
