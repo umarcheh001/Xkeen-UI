@@ -4,6 +4,7 @@ from tests.support.panel_render import ROOT, build_panel_app
 
 
 PAGES = ROOT / "xkeen-ui" / "static" / "js" / "pages"
+MANAGER = ROOT / "xkeen-ui" / "static" / "js" / "features" / "module_manager"
 
 
 def test_modules_page_is_core_owned_and_uses_its_canonical_entry(tmp_path, monkeypatch):
@@ -49,3 +50,14 @@ def test_modules_screen_has_a_lifecycle_adapter_and_accessible_shell():
     assert "bootModulesScreen" in bootstrap
     assert "getModulesTopLevelApi" in bootstrap
     assert "wireTopLevelNavigation(document)" in init
+
+
+def test_manager_source_is_isolated_and_entry_stays_thin():
+    sources = [path.read_text(encoding="utf-8") for path in MANAGER.glob("*.js")]
+    assert sources
+    assert all("features/devtools/" not in source for source in sources)
+    assert all("features/compat/devtools.js" not in source for source in sources)
+    entry = (PAGES / "modules.entry.js").read_text(encoding="utf-8")
+    assert "bootTopLevelShell" in entry
+    assert "bootModulesScreen" in entry
+    assert "/api/modules/" not in entry

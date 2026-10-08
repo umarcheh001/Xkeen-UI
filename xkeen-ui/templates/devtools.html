@@ -70,7 +70,7 @@
             aria-label="Переключить тему" title="Переключить светлую/тёмную тему"
           ><svg class="xk-action-icon theme-toggle-icon" aria-hidden="true" focusable="false"><use href="{{ url_for('static', filename='icons/operator.svg') }}#xk-sun"></use></svg><span class="theme-toggle-text">Светлая тема</span></button>
           <a href="{{ url_for('index') }}" class="btn-link dt-header-btn dt-header-btn-back" data-xk-top-nav="1">← Назад</a>
-          <a href="{{ url_for('modules_page') }}" class="btn-link dt-header-btn" data-xk-top-nav="1">Модули и обновления</a>
+          <a href="{{ url_for('modules_page') }}" class="btn-link dt-header-btn" data-xk-top-nav="1">Модули и обновления<span data-xk-modules-update-badge hidden></span></a>
           <a
             href="#dt-update-card"
             id="xk-update-link"

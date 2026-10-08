@@ -569,6 +569,7 @@ class ModuleLifecycleService:
         ordered_ids = [module_id for module_id in MODULE_IDS if module_id in installed_ids]
         return {
             "ok": True,
+            "panel_version": read_panel_version(self.panel_root),
             "profile": registry.get("profile"),
             "editor": registry.get("editor"),
             "restart_required": bool(registry.get("restart_required")),

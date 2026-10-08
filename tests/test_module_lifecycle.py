@@ -34,6 +34,7 @@ def test_installed_uses_actual_install_manifest_without_fetching_catalog(tmp_pat
     payload = service.installed()
 
     assert payload["ok"] is True
+    assert payload["panel_version"] == VERSION
     assert payload["installed_module_ids"] == ["core", "engine.xray", "tool.editor"]
     assert {item["id"] for item in payload["modules"]} == {
         "core",

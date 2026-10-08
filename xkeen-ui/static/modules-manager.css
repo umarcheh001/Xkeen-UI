@@ -27,6 +27,39 @@ body.modules-page .modules-card-host {
   gap: 12px;
 }
 
+body.modules-page .modules-summary,
+body.modules-page .modules-list { padding: 12px 0; }
+
+body.modules-page .modules-summary h2,
+body.modules-page .modules-list h2 { font-size: 1.2rem; margin: 0 0 12px; }
+
+body.modules-page .modules-row,
+body.modules-page .modules-card {
+  border: 1px solid var(--border-color, #77818c);
+  border-radius: 6px;
+  padding: 14px;
+  margin-bottom: 8px;
+}
+
+body.modules-page .modules-row { display: flex; justify-content: space-between; align-items: center; gap: 18px; }
+body.modules-page .modules-row h3,
+body.modules-page .modules-card h2 { font-size: 1rem; margin: 0 0 4px; }
+body.modules-page .modules-row p,
+body.modules-page .modules-card p { margin: 4px 0; }
+body.modules-page .modules-switch { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+body.modules-page .modules-switch input { width: 18px; height: 18px; }
+body.modules-page .modules-card-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+[data-xk-modules-update-badge]:not([hidden]) {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 5px;
+  border-radius: 3px;
+  background: #a83432;
+  color: #fff;
+  font-size: 0.7em;
+}
+
 body.modules-page .modules-plan-confirm {
   width: min(520px, calc(100vw - 32px));
   max-height: calc(100vh - 32px);

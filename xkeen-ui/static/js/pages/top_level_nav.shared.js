@@ -1,5 +1,6 @@
 import { getXkeenPageName } from '../features/xkeen_runtime.js';
 import { getTopLevelRouterApi } from './top_level_router.js';
+import { syncModulesUpdateBadges } from '../features/module_manager/badge.js';
 
 function getDocumentRef(root) {
   if (root && typeof root.querySelectorAll === 'function') return root;
@@ -131,6 +132,7 @@ export function navigateTopLevelHref(rawHref, opts) {
 export function wireTopLevelNavigation(root) {
   const scope = getDocumentRef(root);
   if (!scope) return 0;
+  syncModulesUpdateBadges(scope);
 
   let wiredCount = 0;
   const nodes = scope.querySelectorAll('[data-xk-top-nav]');
