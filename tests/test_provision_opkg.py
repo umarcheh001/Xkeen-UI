@@ -44,6 +44,7 @@ case "$FAKE_OPKG:$with_conf" in
   fail-mirror:1) exit 0 ;;
   partial:*) mkdir -p "$FAKE_LISTS"; echo "Package: python3" > "$FAKE_LISTS/entware"; exit 2 ;;
   children:*) sh -c 'sleep 30 & echo $! > "$FAKE_CHILD"; wait' & wait ;;
+  litter:*) mkdir -p "$FAKE_TMP/opkg-$$"; echo x > "$FAKE_TMP/opkg-$$/list"; exec sleep 30 ;;
   stubborn:*) sh -c 'trap "" TERM; sleep 30 & echo $! > "$FAKE_CHILD"; wait' & wait ;;
 esac
 exit 0
@@ -244,3 +245,34 @@ def test_what_ignores_the_polite_request_is_stopped_all_the_same(stand):
     report = _state_of_what_the_hung_command_started(stand, "stubborn")
 
     assert "gone" in report, report
+
+
+def test_a_request_that_was_cut_off_does_not_leave_its_temporary_folder(stand):
+    tmp_path, _opkg, _conf = stand
+    scratch = tmp_path / "opkg-tmp"
+    earlier = scratch / "opkg-earlier"
+    earlier.mkdir(parents=True)
+
+    proc, calls, _elapsed = _run(
+        stand,
+        "provision_opkg_update || echo refused",
+        "litter",
+        FAKE_TMP=scratch.as_posix(),
+        XKEEN_OPKG_TMP_DIR=scratch.as_posix(),
+        XKEEN_OPKG_FALLBACK="0",
+    )
+
+    assert "refused" in proc.stdout, proc.stdout + proc.stderr
+    assert calls == ["update"]
+    # Снятый opkg свой каталог не убирает: за него это делает тот, кто снял.
+    # Чужой каталог, лежавший там раньше, остаётся.
+    assert sorted(path.name for path in scratch.iterdir()) == ["opkg-earlier"]
+
+
+def test_the_temporary_folder_of_opkg_is_read_from_its_settings(stand):
+    tmp_path, _opkg, conf = stand
+    conf.write_text(MIRROR_CONF + "option tmp_dir /somewhere/else\n", encoding="utf-8")
+
+    proc, _calls, _elapsed = _run(stand, f'provision_opkg_tmp_dir "{conf.as_posix()}"', "ok")
+
+    assert proc.stdout.strip() == "/somewhere/else"

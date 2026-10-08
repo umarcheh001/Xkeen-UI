@@ -37,7 +37,7 @@
       ],
       "removable": false,
       "unit_count": 530,
-      "size_bytes": 7087856,
+      "size_bytes": 7089080,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -6296,7 +6296,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_provision_opkg.py",
-      "size_bytes": 10553,
+      "size_bytes": 11846,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -6310,6 +6310,7 @@
       "environment_variables": [
         "XKEEN_OPKG_CONF",
         "XKEEN_OPKG_FALLBACK",
+        "XKEEN_OPKG_TMP_DIR",
         "XKEEN_OPKG_UPDATE_TIMEOUT"
       ],
       "removable": false
@@ -6341,7 +6342,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_provision_python_libs.py",
-      "size_bytes": 6149,
+      "size_bytes": 6080,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],

@@ -155,4 +155,4 @@ def test_the_installer_calls_the_shared_steps_and_owns_the_screen():
         assert name in shared
     # Ни один запрос списка пакетов не идёт мимо предела времени.
     for text in (installer, shared):
-        assert '"$OPKG_BIN" update' not in text.replace('provision_run_limited "$_pu_limit" "$OPKG_BIN" update', "")
+        assert '"$OPKG_BIN" update' not in text

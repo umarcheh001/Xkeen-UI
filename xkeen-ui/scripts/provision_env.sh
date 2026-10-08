@@ -533,6 +533,38 @@ provision_opkg_main_list_fresh() {
   [ "$(provision_file_mtime "$_pm_dir/$_pm_name")" -ge "$_pm_since" ]
 }
 
+provision_opkg_tmp_dir() {
+  # Где opkg держит свои временные каталоги: `option tmp_dir` в настройках,
+  # иначе место по умолчанию в Entware.
+  _pt_dir="$(sed -n 's/^option[[:space:]][[:space:]]*tmp_dir[[:space:]][[:space:]]*\([^[:space:]]*\).*/\1/p' "$1" 2>/dev/null | head -n 1)"
+  echo "${XKEEN_OPKG_TMP_DIR:-${_pt_dir:-/opt/tmp}}"
+}
+
+provision_opkg_limited() {
+  # $1 — предел в секундах, $2 — настройки opkg, дальше его аргументы.
+  #
+  # opkg, снятый по пределу времени, свой временный каталог за собой не
+  # убирает: после каждого зависшего запроса на накопителе оставался бы
+  # `opkg-XXXXXX`. Убираются только каталоги, появившиеся за этот вызов; второй
+  # opkg в это же время работать не может — у него общий замок.
+  _pq_limit="$1"
+  _pq_dir="$(provision_opkg_tmp_dir "$2")"
+  shift 2
+  _pq_before="$(ls -d "$_pq_dir"/opkg-* 2>/dev/null || true)"
+  _pq_status=0
+  provision_run_limited "$_pq_limit" "$OPKG_BIN" "$@" || _pq_status=$?
+  if [ "$_pq_status" -eq 124 ]; then
+    for _pq_left in "$_pq_dir"/opkg-*; do
+      [ -d "$_pq_left" ] || continue
+      if printf '%s\n' "$_pq_before" | grep -qxF "$_pq_left"; then
+        continue
+      fi
+      rm -rf "$_pq_left" 2>/dev/null || true
+    done
+  fi
+  return "$_pq_status"
+}
+
 provision_opkg_update() {
   # Обновить списки пакетов. 0 — списки есть (с зеркала роутера или с
   # официального источника, тогда PROVISION_OPKG_CONF указывает на временные
@@ -546,7 +578,7 @@ provision_opkg_update() {
   PROVISION_OPKG_CONF=""
   _pu_status=0
   _pu_started="$(date +%s 2>/dev/null || echo 0)"
-  provision_run_limited "$_pu_limit" "$OPKG_BIN" update || _pu_status=$?
+  provision_opkg_limited "$_pu_limit" "$_pu_conf" update || _pu_status=$?
   [ "$_pu_status" -eq 0 ] && return 0
   if provision_opkg_main_list_fresh "$_pu_conf" "$_pu_started"; then
     echo "[*] Часть источников пакетов не ответила, но основной список Entware получен."
@@ -579,7 +611,7 @@ provision_opkg_update() {
   echo "[*] Беру список пакетов с официального источника $PROVISION_OPKG_OFFICIAL (настройки роутера не меняются)..."
   _pu_status=0
   _pu_started="$(date +%s 2>/dev/null || echo 0)"
-  provision_run_limited "$_pu_limit" "$OPKG_BIN" -f "$PROVISION_OPKG_TMP/opkg.conf" update || _pu_status=$?
+  provision_opkg_limited "$_pu_limit" "$PROVISION_OPKG_TMP/opkg.conf" -f "$PROVISION_OPKG_TMP/opkg.conf" update || _pu_status=$?
   if [ "$_pu_status" -ne 0 ] && ! provision_opkg_main_list_fresh "$PROVISION_OPKG_TMP/opkg.conf" "$_pu_started"; then
     echo "[!] Официальный источник Entware тоже не ответил."
     provision_opkg_cleanup
