@@ -14,6 +14,7 @@ export function createModuleManagerController({ root, api, pollMs }) {
   };
   let initialLoad = null;
   let catalogLoad = null;
+  let catalogGeneration = 0;
   let tabsWired = false;
   let active = true;
   let busy = false;
@@ -30,8 +31,8 @@ export function createModuleManagerController({ root, api, pollMs }) {
   function recoveryRequired() { return ['interrupted', 'rollback_failed'].includes(state.status?.result); }
   function mutationsLocked() { return !statusFresh || busy || state.status?.result === 'running' || recoveryRequired(); }
   function canRestart() {
-    return statusFresh && state.status?.restart_required === true
-      && ['committed', 'rolled_back'].includes(state.status.result)
+    return statusFresh && (state.status?.restart_required === true || state.installed?.restart_required === true)
+      && ['idle', 'committed', 'rolled_back'].includes(state.status?.result)
       && state.installed?.transition_required === false && !restartRequested;
   }
 
@@ -94,7 +95,7 @@ export function createModuleManagerController({ root, api, pollMs }) {
     } else {
       host.textContent = 'Загрузка модулей…';
     }
-    if (state.status && state.status.result !== 'idle') renderOperationStatus(statusHost, state.status, {
+    if (state.status && (state.status.result !== 'idle' || canRestart())) renderOperationStatus(statusHost, state.status, {
       onCancel: requestCancel, onRecovery: requestRecovery, onRestart: requestRestart,
       canRestart: canRestart(), busy: !statusFresh || busy || cancelPending,
     });
@@ -135,6 +136,9 @@ export function createModuleManagerController({ root, api, pollMs }) {
 
   async function refreshInstalledAfterTerminal() {
     state.plan = null;
+    state.catalog = null;
+    catalogGeneration += 1;
+    catalogLoad = null;
     state.selectedTab = 'installed';
     statusFresh = false;
     statusRefreshPending = true;
@@ -277,11 +281,19 @@ export function createModuleManagerController({ root, api, pollMs }) {
     state.selectedTab = name;
     render();
     if (name === 'available' && !state.catalog) {
-      if (!catalogLoad) catalogLoad = api.loadAvailable().then((catalog) => {
-        state.catalog = catalog;
-        clearError();
-        if (active && state.selectedTab === 'available') render();
-      }).catch(showError).finally(() => { catalogLoad = null; });
+      if (!catalogLoad) {
+        const generation = catalogGeneration;
+        catalogLoad = api.loadAvailable().then((catalog) => {
+          if (generation !== catalogGeneration) return;
+          state.catalog = catalog;
+          clearError();
+          if (active && state.selectedTab === 'available') render();
+        }).catch((error) => {
+          if (generation === catalogGeneration) showError(error);
+        }).finally(() => {
+          if (generation === catalogGeneration) catalogLoad = null;
+        });
+      }
       await catalogLoad;
     }
   }
@@ -321,13 +333,22 @@ export function createModuleManagerController({ root, api, pollMs }) {
 
   return {
     init, requestPlan, applyReviewedPlan, refreshInstalledAfterTerminal,
-    activate() {
+    async activate() {
+      const reentering = !active;
       active = true;
+      if (reentering && initialLoad) {
+        await initialLoad;
+        if (state.status?.result !== 'running') {
+          statusFresh = false;
+          render();
+          await refreshStatus();
+        }
+      }
       render();
       if (state.status?.result === 'running') schedulePoll();
-      else if (state.status?.operation_id && terminalRefreshed !== state.status.operation_id) {
+      else if (statusFresh && state.status?.operation_id && terminalRefreshed !== state.status.operation_id) {
         terminalRefreshed = state.status.operation_id;
-        void refreshInstalledAfterTerminal();
+        await refreshInstalledAfterTerminal();
       }
       return init();
     },

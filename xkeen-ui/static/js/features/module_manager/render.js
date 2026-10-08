@@ -97,13 +97,14 @@ export function renderPlan(dialog, plan) {
   }
   apply.hidden = plan.applicable !== true || !plan.plan_id;
   apply.disabled = false;
+  dialog.querySelector('#modules-plan-cancel').disabled = false;
 }
 
 export function renderOperationStatus(host, status, { onCancel, onRecovery, onRestart, canRestart = false, busy = false } = {}) {
   host.replaceChildren();
-  if (!status || status.result === 'idle') return;
+  if (!status || (status.result === 'idle' && !canRestart)) return;
   const area = node('section', 'modules-operation');
-  area.append(node('h2', '', 'Операция с модулями'));
+  area.append(node('h2', '', status.result === 'idle' ? 'Перезапуск панели' : 'Операция с модулями'));
   for (const [label, value] of [
     ['Шаг', status.step], ['Результат', status.result],
     ['Начало', status.started_at], ['Завершение', status.finished_at],

@@ -151,6 +151,68 @@ test.describe('DevTools update channel boundary', () => {
 });
 
 test.describe('Module manager recovery and guards', () => {
+  test('offers explicit restart after a registry toggle while lifecycle is idle', async ({ page }) => {
+    let enabled = false;
+    let restartCalls = 0;
+    await installIdleLifecycleRoutes(page);
+    await page.route('**/api/modules/installed', (route) => route.fulfill({ json: {
+      ...installedSnapshot, restart_required: enabled,
+      modules: installedSnapshot.modules.map((item) => item.id === 'engine.mihomo' ? { ...item, enabled } : item),
+    } }));
+    await page.route('**/api/modules/engine.mihomo', (route) => {
+      enabled = route.request().postDataJSON().enabled;
+      return route.fulfill({ json: { ok: true, restart_required: true } });
+    });
+    await page.route('**/api/modules/restart', (route) => {
+      restartCalls += 1;
+      return route.fulfill({ json: { ok: true, restart_requested: true } });
+    });
+    await page.goto('/modules');
+    await page.getByRole('switch', { name: 'Включить Mihomo' }).click();
+    await expect(page.locator('.modules-summary')).toContainText('Требуется перезапуск');
+    const restart = page.getByRole('button', { name: 'Перезапустить панель' });
+    await expect(restart).toBeEnabled();
+    expect(restartCalls).toBe(0);
+    await restart.click();
+    await expect(page.locator('#modules-operation-status')).toContainText('Перезапуск запрошен');
+    expect(restartCalls).toBe(1);
+  });
+
+  for (const previousStatus of [idleStatus, { ...runningStatus, result: 'committed', step: 'done' }]) {
+    test(`refreshes ${previousStatus.result} status when the manager is reactivated`, async ({ page }) => {
+      let currentStatus = previousStatus;
+      let statusCalls = 0;
+      let catalogCalls = 0;
+      await installIdleLifecycleRoutes(page);
+      await page.route('**/api/modules/operations/status', (route) => {
+        statusCalls += 1;
+        return route.fulfill({ json: currentStatus });
+      });
+      await page.route('**/api/modules/available', (route) => {
+        catalogCalls += 1;
+        return route.fulfill({ json: availableSnapshot });
+      });
+      await page.goto('/modules');
+      await expect(page.getByRole('button', { name: 'Обновить панель' })).toBeEnabled();
+      await page.evaluate(async () => {
+        const { getModulesController } = await import('/static/js/pages/modules.init.js');
+        getModulesController().deactivate();
+        await getModulesController().activate();
+        getModulesController().deactivate();
+      });
+      const beforeReturn = statusCalls;
+      currentStatus = { ...interruptedStatus, operation_id: 'op-external' };
+      await page.evaluate(async () => {
+        const { getModulesController } = await import('/static/js/pages/modules.init.js');
+        await getModulesController().activate();
+      });
+      await expect(page.getByRole('button', { name: 'Восстановить операцию' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Обновить панель' })).toBeDisabled();
+      expect(statusCalls).toBeGreaterThan(beforeReturn);
+      expect(catalogCalls).toBe(0);
+    });
+  }
+
   test('recovers interrupted operation without restarting', async ({ page }) => {
     let recoveryCalls = 0;
     let restartCalls = 0;
@@ -429,6 +491,103 @@ test.describe('Module manager loading', () => {
 });
 
 test.describe('Module lifecycle review', () => {
+  test('ignores a pre-terminal catalog response that arrives after installed refresh', async ({ page }) => {
+    let status = runningStatus;
+    let releaseCatalog;
+    let catalogCalls = 0;
+    await installIdleLifecycleRoutes(page);
+    await page.route('**/api/modules/operations/status', (route) => route.fulfill({ json: status }));
+    await page.route('**/api/modules/available', async (route) => {
+      catalogCalls += 1;
+      if (catalogCalls === 1) {
+        await new Promise((resolve) => { releaseCatalog = resolve; });
+        return route.fulfill({ json: availableSnapshot });
+      }
+      return route.fulfill({ json: { ...availableSnapshot, modules: [] } });
+    });
+    await page.goto('/modules');
+    await page.getByRole('tab', { name: 'Доступные' }).click();
+    await expect.poll(() => Boolean(releaseCatalog)).toBe(true);
+    status = { ...runningStatus, result: 'committed', step: 'done' };
+    await expect(page.getByRole('tab', { name: 'Установленные' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('button', { name: 'Обновить панель' })).toBeEnabled();
+    const staleResponse = page.waitForResponse('**/api/modules/available');
+    releaseCatalog();
+    await staleResponse;
+    await page.getByRole('tab', { name: 'Доступные' }).click();
+    await expect(page.getByText('Доступных модулей нет.')).toBeVisible();
+    expect(catalogCalls).toBe(2);
+  });
+
+  test('discards catalog after terminal refresh and fetches fresh actions on next Available selection', async ({ page }) => {
+    let status = idleStatus;
+    let catalogCalls = 0;
+    let installedCalls = 0;
+    await installIdleLifecycleRoutes(page);
+    await page.route('**/api/modules/installed', (route) => {
+      installedCalls += 1;
+      return route.fulfill({ json: installedSnapshot });
+    });
+    await page.route('**/api/modules/operations/status', (route) => route.fulfill({ json: status }));
+    await page.route('**/api/modules/available', (route) => {
+      catalogCalls += 1;
+      return route.fulfill({ json: status.result === 'committed' ? {
+        ...availableSnapshot, modules: [{ ...availableSnapshot.modules[0], lifecycle_actions: ['repair', 'remove'] }],
+      } : availableSnapshot });
+    });
+    await page.route('**/api/modules/operations/plan', (route) => route.fulfill({ json: installPlan }));
+    await page.route('**/api/modules/operations/apply', (route) => {
+      status = { ...runningStatus, result: 'committed', step: 'done' };
+      return route.fulfill({ status: 202, json: { ok: true, operation_id: status.operation_id, status } });
+    });
+    await page.goto('/modules');
+    await page.getByRole('tab', { name: 'Доступные' }).click();
+    await page.getByRole('button', { name: 'Установить Терминал' }).click();
+    await page.getByRole('button', { name: 'Применить план' }).click();
+    await expect(page.getByRole('tab', { name: 'Установленные' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('button', { name: 'Обновить панель' })).toBeEnabled();
+    expect(installedCalls).toBe(2);
+    expect(catalogCalls).toBe(1);
+    await page.getByRole('tab', { name: 'Доступные' }).click();
+    await expect(page.getByRole('button', { name: 'Восстановить Терминал' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Установить Терминал' })).toHaveCount(0);
+    expect(catalogCalls).toBe(2);
+  });
+
+  test('resets dialog dismissal and operation cancel controls for a second plan', async ({ page }) => {
+    let status = idleStatus;
+    let applyCalls = 0;
+    let cancelCalls = 0;
+    await installIdleLifecycleRoutes(page);
+    await page.route('**/api/modules/operations/status', (route) => route.fulfill({ json: status }));
+    await page.route('**/api/modules/operations/plan', (route) => route.fulfill({ json: {
+      ...installPlan, operation: 'panel-update', module_id: null, scope: 'panel',
+    } }));
+    await page.route('**/api/modules/operations/apply', (route) => {
+      applyCalls += 1;
+      status = { ...runningStatus, operation_id: `op-${applyCalls}`, result: applyCalls === 1 ? 'committed' : 'running' };
+      return route.fulfill({ status: 202, json: { ok: true, operation_id: status.operation_id, status } });
+    });
+    await page.route('**/api/modules/operations/op-2/cancel', (route) => {
+      cancelCalls += 1;
+      return route.fulfill({ status: 202, json: { ok: true, operation_id: 'op-2', cancel_requested: true } });
+    });
+    await page.goto('/modules');
+    await page.getByRole('button', { name: 'Обновить панель' }).click();
+    await page.getByRole('button', { name: 'Применить план' }).click();
+    await expect(page.getByRole('button', { name: 'Обновить панель' })).toBeEnabled();
+    await page.getByRole('button', { name: 'Обновить панель' }).click();
+    const dismiss = page.getByRole('dialog').getByRole('button', { name: 'Отменить', exact: true });
+    await expect(dismiss).toBeEnabled();
+    await dismiss.click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Обновить панель' }).click();
+    await page.getByRole('button', { name: 'Применить план' }).click();
+    await page.getByRole('button', { name: 'Отменить операцию' }).click();
+    expect(applyCalls).toBe(2);
+    expect(cancelCalls).toBe(1);
+  });
+
   for (const { name, width, height } of [
     { name: 'desktop', width: 1440, height: 960 },
     { name: 'mobile', width: 390, height: 844 },
