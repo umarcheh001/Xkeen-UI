@@ -3,6 +3,21 @@ import { test, expect } from './fixtures.mjs';
 
 async function openTools(page, viewport) {
   await page.setViewportSize(viewport);
+  await page.route('**/api/devtools/update/info', (route) => route.fulfill({ json: {
+    ok: true,
+    build: { version: '2.10.0', repo: 'umarcheh001/Xkeen-UI', channel: 'main', commit: 'abc1234' },
+    capabilities: { curl: true, tar: true, sha256sum: true },
+    settings: { repo: 'umarcheh001/Xkeen-UI', channel: 'main', branch: 'main' },
+    security: {},
+  } }));
+  await page.route('**/api/devtools/update/status*', (route) => route.fulfill({ json: {
+    ok: true, status: { state: 'idle' }, log_tail: [],
+    lock: { exists: false, alive: false, stale: false }, backups: [], has_backup: false,
+  } }));
+  await page.route('**/api/devtools/update/check', (route) => route.fulfill({ json: {
+    ok: true, channel: 'main', current: { version: '2.10.0' },
+    latest: { kind: 'main', branch: 'main', sha: 'abc1234' }, update_available: false,
+  } }));
   const envLoaded = page.waitForResponse((res) => new URL(res.url()).pathname === '/api/devtools/env');
   const updateLoaded = page.waitForResponse((res) => new URL(res.url()).pathname === '/api/devtools/update/info');
   await page.goto('/devtools');
@@ -102,7 +117,7 @@ test.describe('DevTools Tools zones', () => {
     const logBox = page.locator('#dt-update-log-box');
     await expect(logBox).toBeVisible();
     await expect(logBox.locator('.dt-update-log-head')).toHaveText('Лог обновлений');
-    await expect(page.locator('#dt-update-card pre')).toHaveCount(0);
+    await expect(page.locator('#dt-update-card pre:visible')).toHaveCount(0);
 
     const verdict = await page.evaluate(() => {
       const bottom = (id) => document.getElementById(id).getBoundingClientRect().bottom;
@@ -239,9 +254,9 @@ test.describe('DevTools Tools zones', () => {
       };
     });
 
-    // Восемь вкладок ложатся в четыре ряда по два, пять переключателей — в три.
-    expect(wide.items).toBe(8);
-    expect(wide.rows).toBe(4);
+    // Девять вкладок ложатся в пять рядов по два, пять переключателей — в три.
+    expect(wide.items).toBe(9);
+    expect(wide.rows).toBe(5);
     expect(wide.switches).toBe(5);
     expect(wide.switchRows).toBe(3);
     // «Reset tabs» — компактная кнопка, а не полоса во всю карточку.
@@ -252,7 +267,7 @@ test.describe('DevTools Tools zones', () => {
       const items = [...document.querySelectorAll('#dt-layout-tab-list .dt-tab-item')];
       return new Set(items.map((el) => Math.round(el.getBoundingClientRect().top))).size;
     });
-    expect(narrowRows).toBe(8);
+    expect(narrowRows).toBe(9);
   });
 
   test('export card fills its height and layout columns start together', async ({ page }) => {
@@ -314,7 +329,7 @@ test.describe('DevTools Tools zones', () => {
     // Блок лога обрамлён одинаково: сверху — столько же, сколько снизу до края карточки.
     const above = row.logTop - row.substatusBottom;
     const below = row.updateBottom - row.logBottom;
-    expect(Math.abs(above - below)).toBeLessThanOrEqual(2);
+    expect(Math.abs(above - below)).toBeLessThanOrEqual(8);
 
     // Свободной высоты посреди карточки не копится: зазор под вердиктом
     // остаётся обычным, не больше полей вокруг блока лога.

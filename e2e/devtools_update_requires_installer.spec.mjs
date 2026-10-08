@@ -12,9 +12,9 @@ function mockUpdate(page, check) {
       contentType: 'application/json',
       body: JSON.stringify({
         ok: true,
-        build: { version: '2.10.0', repo: 'umarcheh001/Xkeen-UI', channel: 'stable', commit: 'abc1234' },
+        build: { version: '2.10.0', repo: 'umarcheh001/Xkeen-UI', channel: 'main', commit: 'abc1234' },
         capabilities: { curl: true, tar: true, sha256sum: true },
-        settings: { repo: 'umarcheh001/Xkeen-UI', channel: 'stable', branch: 'main' },
+        settings: { repo: 'umarcheh001/Xkeen-UI', channel: 'main', branch: 'main' },
         security: {},
       }),
     })),
@@ -49,7 +49,7 @@ function mockUpdate(page, check) {
   ]).then(() => ({ runHits: () => runHits }));
 }
 
-test('a panel too old for the release is sent to the installer', async ({ page }) => {
+test('main updater sends a panel too old for the release to the installer', async ({ page }) => {
   const calls = await mockUpdate(page, { requires_installer: true, min_updater: '2.10.5' });
 
   await page.goto('/devtools');
@@ -71,7 +71,7 @@ test('a panel too old for the release is sent to the installer', async ({ page }
   expect(calls.runHits()).toBe(0);
 });
 
-test('a panel new enough is offered the update as usual', async ({ page }) => {
+test('main updater offers the update to a panel new enough', async ({ page }) => {
   await mockUpdate(page, { requires_installer: false, min_updater: null });
 
   await page.goto('/devtools');

@@ -33,12 +33,12 @@
           "accessible_label": "Добавить"
         },
         {
-          "location": "xkeen-ui/templates/mihomo_generator.html:L2061",
+          "location": "xkeen-ui/templates/mihomo_generator.html:L2062",
           "control_type": "text+icon",
           "accessible_label": "Добавить подписку"
         },
         {
-          "location": "xkeen-ui/templates/mihomo_generator.html:L2133",
+          "location": "xkeen-ui/templates/mihomo_generator.html:L2134",
           "control_type": "text+icon",
           "accessible_label": "Добавить узел"
         },
@@ -191,7 +191,7 @@
           "accessible_label": "Применить"
         },
         {
-          "location": "xkeen-ui/templates/mihomo_generator.html:L2201",
+          "location": "xkeen-ui/templates/mihomo_generator.html:L2202",
           "control_type": "icon-only",
           "accessible_label": "Сохранить и применить на роутере"
         },
@@ -676,17 +676,17 @@
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/templates/mihomo_generator.html:L2229",
+          "location": "xkeen-ui/templates/mihomo_generator.html:L2230",
           "control_type": "icon-only",
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/templates/mihomo_generator.html:L2288",
+          "location": "xkeen-ui/templates/mihomo_generator.html:L2289",
           "control_type": "icon-only",
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/templates/mihomo_generator.html:L2403",
+          "location": "xkeen-ui/templates/mihomo_generator.html:L2404",
           "control_type": "icon-only",
           "accessible_label": "Закрыть"
         },
@@ -1345,12 +1345,12 @@
           "accessible_label": "Копировать"
         },
         {
-          "location": "xkeen-ui/templates/mihomo_generator.html:L2192",
+          "location": "xkeen-ui/templates/mihomo_generator.html:L2193",
           "control_type": "icon-only",
           "accessible_label": "Копировать в буфер обмена"
         },
         {
-          "location": "xkeen-ui/templates/mihomo_generator.html:L2273",
+          "location": "xkeen-ui/templates/mihomo_generator.html:L2274",
           "control_type": "text+icon",
           "accessible_label": "Скопировать детали"
         },
@@ -1550,7 +1550,7 @@
           "accessible_label": "Форматировать"
         },
         {
-          "location": "xkeen-ui/templates/mihomo_generator.html:L2186",
+          "location": "xkeen-ui/templates/mihomo_generator.html:L2187",
           "control_type": "icon-only",
           "accessible_label": "Сгенерировать предпросмотр"
         },
@@ -1833,12 +1833,12 @@
           "accessible_label": "Импортировать"
         },
         {
-          "location": "xkeen-ui/templates/mihomo_generator.html:L2136",
+          "location": "xkeen-ui/templates/mihomo_generator.html:L2137",
           "control_type": "text+icon",
           "accessible_label": "Вставьте список ссылок (vless/trojan/vmess/ss/hysteria2/hy2/tailscale) и/или https подписок"
         },
         {
-          "location": "xkeen-ui/templates/mihomo_generator.html:L2393",
+          "location": "xkeen-ui/templates/mihomo_generator.html:L2394",
           "control_type": "text+icon",
           "accessible_label": "Импортировать"
         },
@@ -1975,7 +1975,7 @@
           "accessible_label": "Список"
         },
         {
-          "location": "xkeen-ui/templates/mihomo_generator.html:L2075",
+          "location": "xkeen-ui/templates/mihomo_generator.html:L2076",
           "control_type": "text+icon",
           "accessible_label": "Обновить список"
         },
@@ -2308,12 +2308,12 @@
           "accessible_label": "Нормализовать"
         },
         {
-          "location": "xkeen-ui/templates/mihomo_generator.html:L2081",
+          "location": "xkeen-ui/templates/mihomo_generator.html:L2082",
           "control_type": "text+icon",
           "accessible_label": "Выровнять расписание"
         },
         {
-          "location": "xkeen-ui/templates/mihomo_generator.html:L2139",
+          "location": "xkeen-ui/templates/mihomo_generator.html:L2140",
           "control_type": "text+icon",
           "accessible_label": "Заполнить пустые имена/группы и нормализовать текущие узлы по шаблонам из импорта"
         },
@@ -2566,7 +2566,7 @@
           "accessible_label": "Предпросмотр"
         },
         {
-          "location": "xkeen-ui/templates/mihomo_generator.html:L2272",
+          "location": "xkeen-ui/templates/mihomo_generator.html:L2273",
           "control_type": "text+icon",
           "accessible_label": "Перейти к ошибке"
         },
@@ -2689,7 +2689,7 @@
           "accessible_label": "Обновить"
         },
         {
-          "location": "xkeen-ui/templates/mihomo_generator.html:L2078",
+          "location": "xkeen-ui/templates/mihomo_generator.html:L2079",
           "control_type": "text+icon",
           "accessible_label": "Обновить просроченные"
         },
@@ -2963,7 +2963,7 @@
           "accessible_label": "Восстановить"
         },
         {
-          "location": "xkeen-ui/templates/mihomo_generator.html:L2189",
+          "location": "xkeen-ui/templates/mihomo_generator.html:L2190",
           "control_type": "icon-only",
           "accessible_label": "Сбросить предпросмотр"
         },
@@ -3045,7 +3045,7 @@
           "accessible_label": "Сохранить"
         },
         {
-          "location": "xkeen-ui/templates/mihomo_generator.html:L2195",
+          "location": "xkeen-ui/templates/mihomo_generator.html:L2196",
           "control_type": "icon-only",
           "accessible_label": "Скачать config.yaml"
         },
@@ -3538,7 +3538,7 @@
           "accessible_label": "Удалить"
         },
         {
-          "location": "xkeen-ui/templates/mihomo_generator.html:L2211",
+          "location": "xkeen-ui/templates/mihomo_generator.html:L2212",
           "control_type": "text+icon",
           "accessible_label": "Очистить"
         },
@@ -3650,7 +3650,7 @@
           "accessible_label": "Проверить"
         },
         {
-          "location": "xkeen-ui/templates/mihomo_generator.html:L2198",
+          "location": "xkeen-ui/templates/mihomo_generator.html:L2199",
           "control_type": "icon-only",
           "accessible_label": "Проверить config.yaml через mihomo -t"
         },

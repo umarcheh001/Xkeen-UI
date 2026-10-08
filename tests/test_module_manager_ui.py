@@ -1,5 +1,7 @@
 """Core-owned Modules screen route and host contract."""
 
+import json
+
 from tests.support.panel_render import ROOT, build_panel_app
 
 
@@ -10,17 +12,42 @@ MANAGER = ROOT / "xkeen-ui" / "static" / "js" / "features" / "module_manager"
 def test_modules_page_is_core_owned_and_uses_its_canonical_entry(tmp_path, monkeypatch):
     monkeypatch.setenv("XKEEN_UI_FRONTEND_SOURCE_FALLBACK", "1")
     app = build_panel_app(["core"], tmp_path)
+    app.extensions["xkeen_ui_assets"].static_folder = str(tmp_path)
     response = app.test_client().get("/modules")
 
     assert response.status_code == 200
     html = response.get_data(as_text=True)
     assert 'data-xk-top-level-screen="modules"' in html
+    assert 'src="/static/js/pages/modules.entry.js?v=0"' in html
     assert 'window.XKeen.pageConfig = pageConfig;' in html
     assert "frontend_page_entry_url('modules')" in (ROOT / "xkeen-ui/templates/modules.html").read_text(encoding="utf-8")
     assert "devtools.screen.bootstrap.js" not in html
     assert 'href="/"' in html
     assert 'href="/devtools"' not in html
     assert 'href="/modules"' in app.test_client().get("/").get_data(as_text=True)
+
+
+def test_modules_page_renders_production_build_entry(tmp_path, monkeypatch):
+    monkeypatch.setenv("XKEEN_UI_FRONTEND_SOURCE_FALLBACK", "0")
+    build_root = tmp_path / "frontend-build"
+    manifest = build_root / ".vite" / "manifest.json"
+    bridge = build_root / "assets" / "modules-bridge.js"
+    other_bridge = build_root / "assets" / "panel-bridge.js"
+    manifest.parent.mkdir(parents=True)
+    bridge.parent.mkdir(parents=True)
+    manifest.write_text(json.dumps({
+        "static/js/pages/modules.entry.js": {"file": "assets/modules-bridge.js"},
+        "static/js/pages/panel.entry.js": {"file": "assets/panel-bridge.js"},
+    }), encoding="utf-8")
+    bridge.write_text("export {};\n", encoding="utf-8")
+    other_bridge.write_text("export {};\n", encoding="utf-8")
+
+    app = build_panel_app(["core"], tmp_path)
+    app.extensions["xkeen_ui_assets"].static_folder = str(tmp_path)
+    response = app.test_client().get("/modules")
+
+    assert response.status_code == 200
+    assert 'src="/static/frontend-build/assets/modules-bridge.js?v=' in response.get_data(as_text=True)
 
 
 def test_top_level_registry_exposes_modules_route_and_core_navigation():
