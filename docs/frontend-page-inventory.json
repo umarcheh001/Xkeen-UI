@@ -262,6 +262,7 @@
             "XKeen.ui.editorCapabilities"
           ],
           "lazy_features": [
+            "backups",
             "serviceStatus",
             "xrayLogs",
             "routingTemplates",
@@ -274,8 +275,7 @@
             "mihomoHwidSub",
             "xkeenTexts",
             "commandsList",
-            "coresStatus",
-            "backups"
+            "coresStatus"
           ]
         },
         {

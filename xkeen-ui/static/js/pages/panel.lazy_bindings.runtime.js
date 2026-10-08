@@ -588,10 +588,10 @@ function consumeReplayFlag(el) {
 const OUTBOUNDS_CARD_SYNC_EVENT = 'xkeen:outbounds-card-sync';
 let outboundsCardActivation = null;
 
-function toggleOutboundsCardNow() {
-  const header = document.getElementById('outbounds-header');
-  const body = document.getElementById('outbounds-body');
-  const arrow = document.getElementById('outbounds-arrow');
+function toggleCardNow(name, storageKey) {
+  const header = document.getElementById(`${name}-header`);
+  const body = document.getElementById(`${name}-body`);
+  const arrow = document.getElementById(`${name}-arrow`);
   if (!header || !body || !arrow) return false;
   const open = body.style.display === 'none';
   body.style.display = open ? 'block' : 'none';
@@ -601,9 +601,46 @@ function toggleOutboundsCardNow() {
     if (header.dataset) header.dataset.xkCollapseOpen = open ? '1' : '0';
   } catch (error) {}
   try {
-    if (window.localStorage) window.localStorage.setItem('xkeen_outbounds_open', open ? '1' : '0');
+    if (window.localStorage) window.localStorage.setItem(storageKey, open ? '1' : '0');
   } catch (error) {}
   return true;
+}
+
+function toggleOutboundsCardNow() {
+  return toggleCardNow('outbounds', 'xkeen_outbounds_open');
+}
+
+// «Входящие подключения» — то же самое: карточка переключается сразу, модуль
+// догружается за ней. Открытой карточке от модуля нужно только содержимое, и
+// он кладёт его сам, когда приходит.
+let inboundsCardActivation = null;
+
+function toggleInboundsCardNow() {
+  return toggleCardNow('inbounds', 'xkeen_inbounds_open');
+}
+
+function activateInboundsCard(reason) {
+  if (inboundsCardActivation) return;
+  inboundsCardActivation = ensurePanelLazyFeature('inbounds', { reason })
+    .catch(() => {})
+    .then(() => { inboundsCardActivation = null; });
+}
+
+// «Бэкапы Xray» сворачивает общий механизм карточек маршрутизации, и он
+// подключён ещё до модуля: нажатию достаточно не мешать. От модуля нужен
+// только список копий — он запрашивается, а нажатие идёт своей дорогой.
+let backupsCardActivation = null;
+
+function activateBackupsCard() {
+  if (backupsCardActivation) return;
+  backupsCardActivation = ensurePanelLazyFeature('backups')
+    .then((ready) => {
+      if (!ready) return;
+      const api = getPanelLazyFeatureApi('backups');
+      if (api && typeof api.load === 'function') api.load();
+    })
+    .catch(() => {})
+    .then(() => { backupsCardActivation = null; });
 }
 
 function activateOutboundsCard(reason) {
@@ -809,6 +846,10 @@ export function wirePanelLazyFeatureClicks() {
     const backupsHeader = raw.closest('#routing-backups-header');
     if (backupsHeader && !isPanelLazyFeatureReady('backups')) {
       if (consumeReplayFlag(backupsHeader)) return;
+      if (backupsHeader.dataset && backupsHeader.dataset.xkCollapseWired === '1') {
+        activateBackupsCard();
+        return;
+      }
       event.preventDefault();
       event.stopImmediatePropagation();
       ensurePanelLazyFeature('backups').then((ready) => {
@@ -819,6 +860,14 @@ export function wirePanelLazyFeatureClicks() {
         } catch (error) {}
         replayDeferredClick(backupsHeader);
       });
+      return;
+    }
+
+    const inboundsCardHeader = raw.closest('#inbounds-header');
+    if (inboundsCardHeader && !isPanelLazyFeatureReady('inbounds') && toggleInboundsCardNow()) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      activateInboundsCard('interaction');
       return;
     }
 
@@ -883,6 +932,10 @@ export function wirePanelLazyFeatureClicks() {
     if (inboundsHeader && !isPanelLazyFeatureReady('inbounds')) {
       event.preventDefault();
       event.stopImmediatePropagation();
+      if (toggleInboundsCardNow()) {
+        activateInboundsCard('keyboard-interaction');
+        return;
+      }
       ensurePanelLazyFeature('inbounds', { reason: 'keyboard-interaction' }).then((ready) => {
         if (ready) replayDeferredClick(inboundsHeader);
       });

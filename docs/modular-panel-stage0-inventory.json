@@ -36,8 +36,8 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 522,
-      "size_bytes": 7008413,
+      "unit_count": 523,
+      "size_bytes": 7013569,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -49,7 +49,7 @@
         "frontend_feature": 28,
         "frontend_javascript": 35,
         "frontend_runtime": 2,
-        "frontend_test": 47,
+        "frontend_test": 48,
         "frontend_ui": 17,
         "stylesheet": 5,
         "template": 31
@@ -9086,7 +9086,7 @@
       "module_id": "core",
       "kind": "frontend_javascript",
       "path": "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js",
-      "size_bytes": 37286,
+      "size_bytes": 39436,
       "depends_on": [
         "tool.terminal",
         "engine.xray",
@@ -9959,6 +9959,24 @@
       "kind": "frontend_test",
       "path": "e2e/header_empty_control_row.spec.mjs",
       "size_bytes": 397,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "frontend_test",
+      "path": "e2e/lazy_cards_first_click.spec.mjs",
+      "size_bytes": 3006,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
