@@ -219,6 +219,14 @@ def _dependency_diff(
     }
 
 
+def _lifecycle_actions(module_id: str, installed: bool) -> list[str]:
+    if module_id == "core" or (module_id in _REPAIR_ONLY_MODULES and not installed):
+        return []
+    if module_id in _REPAIR_ONLY_MODULES:
+        return ["repair"]
+    return ["repair", "remove"] if installed else ["install"]
+
+
 def _plan_digest(plan: Plan, dependency_diff: Mapping[str, Any]) -> str:
     canonical = json.dumps(
         {"plan": plan_to_json(plan), "dependency_diff": dependency_diff},
@@ -578,7 +586,13 @@ class ModuleLifecycleService:
             # last update, and to which one.
             "previous_version": describe_previous_version(self.panel_root),
             "modules": [
-                item
+                {
+                    **item,
+                    "lifecycle_actions": (
+                        _lifecycle_actions(str(item.get("id")), True)
+                        if lifecycle["available"] else []
+                    ),
+                }
                 for item in registry.get("modules", [])
                 if item.get("id") in installed_ids
             ],
@@ -597,17 +611,9 @@ class ModuleLifecycleService:
             entry = dict(raw_entry)
             module_id = str(entry.get("id") or "")
             installed = module_id in installed_ids
-            if module_id == "core" or (module_id in _REPAIR_ONLY_MODULES and not installed):
-                actions: list[str] = []
-            elif module_id in _REPAIR_ONLY_MODULES:
-                actions = ["repair"]
-            elif installed:
-                actions = ["repair", "remove"]
-            else:
-                actions = ["install"]
             entry.update(
                 installed=installed,
-                lifecycle_actions=actions,
+                lifecycle_actions=_lifecycle_actions(module_id, installed),
                 update_available=False,
             )
             modules.append(entry)

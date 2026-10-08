@@ -52,7 +52,8 @@ export function createModuleManagerController({ root, api, pollMs }) {
     if (state.status && state.status.result !== 'idle') renderOperationStatus(statusHost, state.status, requestCancel, cancelPending);
   }
 
-  function closePlan({ restoreFocus = true } = {}) {
+  function closePlan({ restoreFocus = true, force = false } = {}) {
+    if (busy && !force) return;
     state.plan = null;
     if (dialog?.open) dialog.close();
     if (restoreFocus && returnFocus?.isConnected) returnFocus.focus();
@@ -107,7 +108,7 @@ export function createModuleManagerController({ root, api, pollMs }) {
     } else {
       stopPolling();
       const terminalId = state.status.operation_id;
-      if (terminalId && terminalRefreshed !== terminalId) {
+      if (active && terminalId && terminalRefreshed !== terminalId) {
         terminalRefreshed = terminalId;
         void refreshInstalledAfterTerminal();
       }
@@ -137,14 +138,17 @@ export function createModuleManagerController({ root, api, pollMs }) {
     if (!plan?.applicable || !plan.plan_id || busy || state.status?.result === 'running') return;
     busy = true;
     dialog.querySelector('#modules-plan-apply').disabled = true;
+    dialog.querySelector('#modules-plan-cancel').disabled = true;
     try {
       const applied = await api.apply(plan.operation, plan.module_id, plan.plan_id);
-      closePlan({ restoreFocus: false });
-      if (!active) return;
+      closePlan({ restoreFocus: false, force: true });
       observeStatus(applied.status, applied.operation_id);
     } catch (error) {
-      if (['module_plan_stale', 'operation_plan_stale'].includes(error?.code)) closePlan();
-      else dialog.querySelector('#modules-plan-apply').disabled = false;
+      if (['module_plan_stale', 'operation_plan_stale'].includes(error?.code)) closePlan({ force: true });
+      else {
+        dialog.querySelector('#modules-plan-apply').disabled = false;
+        dialog.querySelector('#modules-plan-cancel').disabled = false;
+      }
       showError(error);
     } finally {
       busy = false;
@@ -222,11 +226,20 @@ export function createModuleManagerController({ root, api, pollMs }) {
 
   return {
     init, requestPlan, applyReviewedPlan, refreshInstalledAfterTerminal,
-    activate() { active = true; render(); if (state.status?.result === 'running') schedulePoll(); return init(); },
-    deactivate() { active = false; stopPolling(); closePlan({ restoreFocus: false }); },
+    activate() {
+      active = true;
+      render();
+      if (state.status?.result === 'running') schedulePoll();
+      else if (state.status?.operation_id && terminalRefreshed !== state.status.operation_id) {
+        terminalRefreshed = state.status.operation_id;
+        void refreshInstalledAfterTerminal();
+      }
+      return init();
+    },
+    deactivate() { active = false; stopPolling(); closePlan({ restoreFocus: false, force: true }); },
     serializeState() { return { selectedTab: state.selectedTab }; },
     restoreState(saved) {
-      closePlan({ restoreFocus: false });
+      closePlan({ restoreFocus: false, force: true });
       if (saved?.selectedTab === 'available') return selectTab('available');
       return selectTab('installed');
     },

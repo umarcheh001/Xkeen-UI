@@ -9,7 +9,7 @@ const installedSnapshot = {
   lifecycle: { available: true, code: null },
   modules: [
     { id: 'core', name: 'Xkeen UI Core', version: '1.0.0', enabled: true, can_disable: false },
-    { id: 'engine.mihomo', name: 'Mihomo', version: '1.19.0', enabled: false, can_disable: true },
+    { id: 'engine.mihomo', name: 'Mihomo', version: '1.19.0', enabled: false, can_disable: true, lifecycle_actions: ['repair', 'remove'] },
   ],
 };
 const idleStatus = { ok: true, result: 'idle' };
@@ -65,6 +65,8 @@ test.describe('Module manager loading', () => {
     await expect(page.getByRole('heading', { name: 'Модули и обновления' })).toBeVisible();
     await expect(page.locator('.modules-summary')).toContainText('Xkeen UI 2.10.0');
     await expect(page.locator('.modules-row').first()).toContainText('Xkeen UI Core 1.0.0');
+    await expect(page.getByRole('button', { name: 'Восстановить Mihomo' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Удалить Mihomo' })).toBeVisible();
     expect(initialCalls.sort()).toEqual(['installed', 'status']);
     expect(availableCalls).toBe(0);
 
@@ -137,6 +139,64 @@ test.describe('Module manager loading', () => {
 });
 
 test.describe('Module lifecycle review', () => {
+  test('retains apply result while inactive and resumes monitoring on activation', async ({ page }) => {
+    let releaseApply;
+    let statusLoads = 0;
+    await installIdleLifecycleRoutes(page);
+    await page.route('**/api/modules/operations/status', (route) => {
+      statusLoads += 1;
+      return route.fulfill({ json: statusLoads === 1 ? idleStatus : runningStatus });
+    });
+    await page.route('**/api/modules/operations/plan', (route) => route.fulfill({ json: installPlan }));
+    await page.route('**/api/modules/operations/apply', async (route) => {
+      await new Promise((resolve) => { releaseApply = resolve; });
+      await route.fulfill({ status: 202, json: { ok: true, operation_id: 'op-123', status: runningStatus } });
+    });
+    await page.goto('/modules');
+    await page.getByRole('tab', { name: 'Доступные' }).click();
+    await page.getByRole('button', { name: 'Установить Терминал' }).click();
+    await page.getByRole('button', { name: 'Применить план' }).click();
+    await expect.poll(() => Boolean(releaseApply)).toBe(true);
+    await page.evaluate(async () => {
+      const { getModulesController } = await import('/static/js/pages/modules.init.js');
+      getModulesController().deactivate();
+    });
+    const applied = page.waitForResponse('**/api/modules/operations/apply');
+    releaseApply();
+    await applied;
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect(statusLoads).toBe(1);
+    await page.evaluate(async () => {
+      const { getModulesController } = await import('/static/js/pages/modules.init.js');
+      await getModulesController().activate();
+    });
+    await expect(page.locator('#modules-operation-status')).toContainText('download');
+    await expect.poll(() => statusLoads).toBeGreaterThan(1);
+  });
+
+  test('locks dismissal while reviewed plan is being applied', async ({ page }) => {
+    let releaseApply;
+    let applyCalls = 0;
+    await installIdleLifecycleRoutes(page);
+    await page.route('**/api/modules/operations/plan', (route) => route.fulfill({ json: installPlan }));
+    await page.route('**/api/modules/operations/apply', async (route) => {
+      applyCalls += 1;
+      await new Promise((resolve) => { releaseApply = resolve; });
+      await route.fulfill({ status: 202, json: { ok: true, operation_id: 'op-123', status: runningStatus } });
+    });
+    await page.goto('/modules');
+    await page.getByRole('tab', { name: 'Доступные' }).click();
+    await page.getByRole('button', { name: 'Установить Терминал' }).click();
+    await page.getByRole('button', { name: 'Применить план' }).click();
+    await expect.poll(() => Boolean(releaseApply)).toBe(true);
+    await expect(page.getByRole('button', { name: 'Отменить', exact: true })).toBeDisabled();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: 'План установки' })).toBeVisible();
+    expect(applyCalls).toBe(1);
+    releaseApply();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  });
+
   test('requires a reviewed server plan before apply and returns focus on dismissal', async ({ page }) => {
     const planBodies = [];
     const applyBodies = [];

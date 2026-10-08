@@ -42,6 +42,12 @@ def test_installed_uses_actual_install_manifest_without_fetching_catalog(tmp_pat
         "tool.editor",
     }
     assert payload["lifecycle"] == {"available": True, "code": None}
+    actions = {item["id"]: item["lifecycle_actions"] for item in payload["modules"]}
+    assert actions == {
+        "core": [],
+        "engine.xray": ["repair", "remove"],
+        "tool.editor": ["repair"],
+    }
     assert catalog.requested_versions == []
 
 
@@ -58,6 +64,7 @@ def test_installed_remains_readable_when_install_manifest_is_missing(tmp_path):
         "code": "module_state_unavailable",
     }
     assert payload["installed_module_ids"]
+    assert all(item["lifecycle_actions"] == [] for item in payload["modules"])
     assert catalog.requested_versions == []
 
 

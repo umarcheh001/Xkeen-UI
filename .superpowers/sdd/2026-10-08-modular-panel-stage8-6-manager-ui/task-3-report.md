@@ -32,3 +32,22 @@ The manager now requests a public server plan for an allowed module or full-scop
 - Running status alone schedules polling; the timer and in-flight response generation are invalidated on deactivation and terminal status. Cancel is treated as a request, without inventing a terminal result.
 - The renderer gates `profile-transition` on a server-provided `transition_required` field. `ModuleLifecycleService.installed()` does not currently include that field; explicit profile-transition UI gating remains for Task 4, as directed. The frontend keeps the guard ready without expanding backend scope here.
 - Browser tests require `XKEEN_UI_FRONTEND_SOURCE_FALLBACK=1` in this worktree because no built `modules` entry exists. The local server also reports a missing optional `gevent` dependency and runs its development fallback; it did not affect the verified cases.
+
+## Review fix round
+
+The controller now retains a successful apply response even if its view deactivates while the request is pending. Activation renders the cached running status and resumes polling; a cached terminal status gets its one installed/status refresh then. Confirmation Cancel is disabled during apply, and Escape cannot dismiss that submitted dialog. Installed rows now receive `lifecycle_actions` from the server's shared action policy. If the install manifest cannot be trusted, the installed response exposes no lifecycle actions.
+
+Regression RED evidence:
+
+- `python -m pytest tests/test_module_lifecycle.py -q -k 'installed_uses_actual_install_manifest or installed_remains_readable_when_install_manifest_is_missing'`: 2 failed with `KeyError: 'lifecycle_actions'`.
+- `$env:XKEEN_UI_FRONTEND_SOURCE_FALLBACK='1'; npx playwright test e2e/modules_manager.spec.mjs --project=chromium --grep 'retains apply result|locks dismissal' --reporter=dot`: 2 failed. The inactive apply case had an empty status region after activation; the submitted dialog's Cancel button was enabled.
+
+Regression GREEN evidence:
+
+- The two focused Python cases passed (`2 passed, 46 deselected`).
+- The two focused Playwright cases passed (`2 passed`).
+- `$env:XKEEN_UI_FRONTEND_SOURCE_FALLBACK='1'; npx playwright test e2e/modules_manager.spec.mjs --project=chromium --reporter=dot`: `13 passed (23.6s)`.
+- `python -m pytest tests/test_module_lifecycle.py tests/test_module_manager_ui.py -q`: `52 passed in 2.55s`.
+- `git diff --check`: exit 0.
+
+Review fix files: `xkeen-ui/static/js/features/module_manager/controller.js`, `xkeen-ui/services/module_lifecycle.py`, `e2e/modules_manager.spec.mjs`, and `tests/test_module_lifecycle.py`. The report itself was appended. A full Python run exposed a misplaced helper that temporarily interrupted `_dependency_diff`; it was relocated before the successful 52-case run.
