@@ -4,6 +4,7 @@ const installedSnapshot = {
   ok: true,
   panel_version: '2.10.0',
   profile: 'mihomo-minimal',
+  transition_required: false,
   editor: { variant: 'codemirror' },
   restart_required: false,
   lifecycle: { available: true, code: null },
@@ -105,6 +106,16 @@ test.describe('Module manager recovery and guards', () => {
     await expect(page.getByRole('dialog', { name: 'План перехода профиля' })).toBeVisible();
   });
 
+  test('does not offer restart without an authoritative installed profile guard', async ({ page }) => {
+    await installLifecycleRoutes(page, { status: restartStatus });
+    await page.route('**/api/modules/installed', (route) => route.fulfill({ status: 503, json: {
+      ok: false, code: 'module_state_unavailable', message: '/private/state',
+    } }));
+    await page.goto('/modules');
+    await expect(page.locator('#modules-error')).toContainText('module_state_unavailable');
+    await expect(page.getByRole('button', { name: 'Перезапустить панель' })).toHaveCount(0);
+  });
+
   test('maps catalog errors without printing remote message and preserves installed cards', async ({ page }) => {
     await installLifecycleRoutes(page);
     await page.route('**/api/modules/available', (route) => route.fulfill({ status: 503, json: {
@@ -128,6 +139,49 @@ test.describe('Module manager recovery and guards', () => {
     await expect(page.locator('.modules-row').first()).toContainText('Xkeen UI Core');
     await expect(page.locator('#modules-error')).toContainText('operation_in_progress');
     await expect(page.locator('#modules-error')).not.toContainText('/private/operation.log');
+    await expect(page.getByRole('button', { name: 'Обновить панель' })).toBeDisabled();
+    await expect(page.getByRole('switch', { name: 'Включить Mihomo' })).toBeDisabled();
+    await page.getByRole('tab', { name: 'Доступные' }).click();
+    await expect(page.getByRole('button', { name: 'Установить Терминал' })).toBeDisabled();
+  });
+
+  test('locks stale terminal actions until a failed status refresh succeeds', async ({ page }) => {
+    let statusLoads = 0;
+    let planCalls = 0;
+    let restartCalls = 0;
+    let toggleCalls = 0;
+    await installLifecycleRoutes(page, { status: restartStatus });
+    await page.route('**/api/modules/operations/status', (route) => {
+      statusLoads += 1;
+      return statusLoads === 2
+        ? route.fulfill({ status: 503, json: { ok: false, code: 'module_request_failed', message: '/private/path' } })
+        : route.fulfill({ json: restartStatus });
+    });
+    await page.route('**/api/modules/operations/plan', (route) => { planCalls += 1; return route.fulfill({ json: installPlan }); });
+    await page.route('**/api/modules/restart', (route) => { restartCalls += 1; return route.fulfill({ json: { ok: true, restart_requested: true } }); });
+    await page.route('**/api/modules/engine.mihomo', (route) => { toggleCalls += 1; return route.fulfill({ json: installedSnapshot }); });
+    await page.goto('/modules');
+    await expect(page.getByRole('button', { name: 'Перезапустить панель' })).toBeVisible();
+    await page.evaluate(async () => {
+      const { getModulesController } = await import('/static/js/pages/modules.init.js');
+      await getModulesController().refreshInstalledAfterTerminal();
+    });
+    await expect(page.locator('.modules-row').first()).toContainText('Xkeen UI Core');
+    await expect(page.getByRole('button', { name: 'Обновить панель' })).toBeDisabled();
+    await expect(page.getByRole('switch', { name: 'Включить Mihomo' })).toBeDisabled();
+    await page.evaluate(() => document.querySelector('input[role="switch"]').click());
+    await expect(page.getByRole('button', { name: 'Перезапустить панель' })).toHaveCount(0);
+    await page.getByRole('tab', { name: 'Доступные' }).click();
+    await expect(page.getByRole('button', { name: 'Установить Терминал' })).toBeDisabled();
+    await page.evaluate(async () => {
+      const { getModulesController } = await import('/static/js/pages/modules.init.js');
+      await getModulesController().requestPlan('install', 'tool.terminal');
+    });
+    expect({ planCalls, restartCalls, toggleCalls }).toEqual({ planCalls: 0, restartCalls: 0, toggleCalls: 0 });
+    await page.getByRole('button', { name: 'Обновить состояние' }).click();
+    await page.getByRole('tab', { name: 'Установленные' }).click();
+    await expect(page.getByRole('button', { name: 'Обновить панель' })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Перезапустить панель' })).toBeVisible();
   });
 
   test('explains public lifecycle failure families without remote details', async ({ page }) => {
@@ -135,16 +189,17 @@ test.describe('Module manager recovery and guards', () => {
     await page.goto('/modules');
     const descriptions = await page.evaluate(async () => {
       const { describeLifecycleFailure } = await import('/static/js/features/module_manager/render.js');
-      return ['catalog_stale', 'catalog_trust_failed', 'module_archive_invalid', 'module_free_space',
+      return ['catalog_stale', 'catalog_trust_failed', 'module_archive_invalid', 'module_free_space', 'operation_free_space',
         'operation_in_progress', 'module_plan_stale', 'profile_transition_required', 'operation_rollback_failed']
         .map((code) => describeLifecycleFailure({ code, message: '/private/file' }));
     });
-    expect(descriptions).toHaveLength(8);
+    expect(descriptions).toHaveLength(9);
     for (const description of descriptions) {
       expect(description).toMatch(/[А-Яа-я]/);
       expect(description).not.toContain('/private/file');
     }
     expect(descriptions.at(-1)).toContain('ручная проверка');
+    expect(descriptions[4]).toContain('Недостаточно свободного места');
   });
 
   test('keeps expanded operation and plan readable on mobile', async ({ page }) => {

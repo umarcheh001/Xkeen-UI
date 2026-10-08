@@ -32,3 +32,17 @@ The broad Python suite was not used as a gate; the brief records its unrelated m
 ## Self-review
 
 No automatic restart path remains. A rollback failure cannot expose recovery, restart, plan, toggle, or lifecycle action controls. All dynamic operation and catalog text uses `textContent`/text nodes. Known installed cards remain available after independent request failures. The remaining external dependency is the normal server environment used by the Playwright fixture.
+
+## Review Round 1 Fixes
+
+The review identified three gaps. The new backend test first failed with `KeyError: 'transition_required'`; `ModuleLifecycleService.installed()` now publishes the same authoritative transition result used by the restart guard. Browser regressions first failed because status failures left buttons enabled and because `operation_free_space` rendered generic guidance. The controller now treats status as unknown until a successful read, locks plans, toggles, cancel/recovery controls, and restart while unknown, and offers only a read-only "Обновить состояние" request. Restart additionally requires an explicit `transition_required: false` from the installed response. `operation_free_space` now uses the disk-space message.
+
+Changed in this round: `xkeen-ui/services/module_lifecycle.py`, `xkeen-ui/static/js/features/module_manager/controller.js`, `xkeen-ui/static/js/features/module_manager/render.js`, `xkeen-ui/templates/modules.html`, `tests/test_module_lifecycle.py`, and `e2e/modules_manager.spec.mjs`.
+
+Verification after the fixes:
+
+- `XKEEN_UI_FRONTEND_SOURCE_FALLBACK=1 npx playwright test e2e/modules_manager.spec.mjs --project=chromium`: **23 passed**.
+- `python -m pytest tests/test_module_lifecycle.py tests/test_module_lifecycle_routes.py tests/test_module_manager_ui.py -q`: **68 passed**.
+- `git diff --check`: passed.
+
+Self-review: installed profile state comes from the server, not client inference. A missing installed response cannot enable restart. Failed or stale status cannot enable any lifecycle mutation; a successful status GET restores availability. No recovery or restart is dispatched automatically, and error text remains sanitized.

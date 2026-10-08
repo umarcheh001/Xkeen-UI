@@ -51,6 +51,17 @@ def test_installed_uses_actual_install_manifest_without_fetching_catalog(tmp_pat
     assert catalog.requested_versions == []
 
 
+def test_installed_exposes_authoritative_profile_transition_guard(tmp_path):
+    panel = make_panel(tmp_path)
+    registry = ModuleRegistry(str(panel.state), which=lambda _name: "/bin/tool")
+    service, _ = make_service(panel, make_release(), registry=registry)
+
+    assert service.installed()["transition_required"] is False
+    registry.set_profile("mihomo-minimal")
+    assert service.installed()["transition_required"] is True
+    assert service.profile_transition_status()["transition_required"] is True
+
+
 def test_installed_remains_readable_when_install_manifest_is_missing(tmp_path):
     panel = make_panel(tmp_path)
     service, catalog = make_service(panel, make_release())

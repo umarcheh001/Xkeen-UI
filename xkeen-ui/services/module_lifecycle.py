@@ -581,6 +581,7 @@ class ModuleLifecycleService:
             "profile": registry.get("profile"),
             "editor": registry.get("editor"),
             "restart_required": bool(registry.get("restart_required")),
+            "transition_required": self.profile_transition_status()["transition_required"],
             "installed_module_ids": ordered_ids,
             # Whether the panel can go back to the release it ran before its
             # last update, and to which one.

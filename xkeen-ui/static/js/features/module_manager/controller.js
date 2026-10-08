@@ -6,6 +6,7 @@ export function createModuleManagerController({ root, api, pollMs }) {
   const host = root.querySelector('#modules-card-host');
   const statusHost = root.querySelector('#modules-operation-status');
   const errorHost = root.querySelector('#modules-error');
+  const refreshStatusButton = root.querySelector('#modules-refresh-status');
   const dialog = root.querySelector('#modules-plan-confirm');
   const tabs = {
     installed: root.querySelector('#modules-tab-installed'),
@@ -22,13 +23,16 @@ export function createModuleManagerController({ root, api, pollMs }) {
   let returnFocus = null;
   let terminalRefreshed = null;
   let restartRequested = false;
+  let statusFresh = false;
+  let statusChecked = false;
+  let statusRefreshPending = false;
 
   function recoveryRequired() { return ['interrupted', 'rollback_failed'].includes(state.status?.result); }
-  function mutationsLocked() { return busy || state.status?.result === 'running' || recoveryRequired(); }
+  function mutationsLocked() { return !statusFresh || busy || state.status?.result === 'running' || recoveryRequired(); }
   function canRestart() {
-    return state.status?.restart_required === true
+    return statusFresh && state.status?.restart_required === true
       && ['committed', 'rolled_back'].includes(state.status.result)
-      && !state.installed?.transition_required && !restartRequested;
+      && state.installed?.transition_required === false && !restartRequested;
   }
 
   function showError(error) {
@@ -39,6 +43,31 @@ export function createModuleManagerController({ root, api, pollMs }) {
   }
 
   function clearError() { if (errorHost) errorHost.textContent = ''; }
+
+  function invalidateStatus(error) {
+    statusFresh = false;
+    statusChecked = true;
+    closePlan({ force: true });
+    showError(error);
+    if (active) render();
+  }
+
+  async function refreshStatus() {
+    if (statusFresh || busy || statusRefreshPending) return;
+    busy = true;
+    if (refreshStatusButton) refreshStatusButton.disabled = true;
+    try {
+      const status = await api.loadStatus();
+      statusFresh = true;
+      statusChecked = true;
+      state.status = status;
+      reconcileModulesUpdateStatus(status);
+      clearError();
+      if (status.result === 'running') schedulePoll();
+      else stopPolling();
+    } catch (error) { invalidateStatus(error); }
+    finally { busy = false; if (active) render(); }
+  }
 
   function stopPolling() {
     pollGeneration += 1;
@@ -53,6 +82,10 @@ export function createModuleManagerController({ root, api, pollMs }) {
     }
     host.setAttribute('aria-labelledby', tabs[state.selectedTab].id);
     const actionsDisabled = mutationsLocked();
+    if (refreshStatusButton) {
+      refreshStatusButton.hidden = statusFresh || !statusChecked;
+      refreshStatusButton.disabled = busy || statusRefreshPending;
+    }
     if (state.selectedTab === 'available') {
       if (state.catalog) renderAvailable(host, state.catalog, requestPlan, actionsDisabled);
       else host.textContent = 'Загрузка каталога…';
@@ -63,7 +96,7 @@ export function createModuleManagerController({ root, api, pollMs }) {
     }
     if (state.status && state.status.result !== 'idle') renderOperationStatus(statusHost, state.status, {
       onCancel: requestCancel, onRecovery: requestRecovery, onRestart: requestRestart,
-      canRestart: canRestart(), busy: busy || cancelPending,
+      canRestart: canRestart(), busy: !statusFresh || busy || cancelPending,
     });
     else statusHost.replaceChildren();
     if (restartRequested) statusHost.append(document.createTextNode('Перезапуск запрошен'));
@@ -103,20 +136,29 @@ export function createModuleManagerController({ root, api, pollMs }) {
   async function refreshInstalledAfterTerminal() {
     state.plan = null;
     state.selectedTab = 'installed';
+    statusFresh = false;
+    statusRefreshPending = true;
+    if (active) render();
     const [installedResult, statusResult] = await Promise.allSettled([api.loadInstalled(), api.loadStatus()]);
+    if (statusResult.status === 'fulfilled') {
+      state.status = statusResult.value;
+      statusFresh = true;
+      statusChecked = true;
+      reconcileModulesUpdateStatus(state.status);
+      clearError();
+    } else invalidateStatus(statusResult.reason);
     if (installedResult.status === 'fulfilled') {
       state.installed = installedResult.value;
       reconcileModulesUpdateBadge(state.installed);
     } else showError(installedResult.reason);
-    if (statusResult.status === 'fulfilled') {
-      state.status = statusResult.value;
-      reconcileModulesUpdateStatus(state.status);
-    } else showError(statusResult.reason);
+    statusRefreshPending = false;
     if (active) render();
   }
 
   function observeStatus(status, operationId) {
     state.status = { ...status, operation_id: status.operation_id || operationId };
+    statusFresh = true;
+    statusChecked = true;
     restartRequested = false;
     if (state.status.result !== 'running') cancelPending = false;
     reconcileModulesUpdateStatus(state.status);
@@ -144,7 +186,7 @@ export function createModuleManagerController({ root, api, pollMs }) {
         if (active && generation === pollGeneration) observeStatus(status, state.status?.operation_id);
       } catch (error) {
         if (active && generation === pollGeneration) {
-          showError(error);
+          invalidateStatus(error);
           schedulePoll();
         }
       }
@@ -176,7 +218,7 @@ export function createModuleManagerController({ root, api, pollMs }) {
 
   async function requestCancel() {
     const operationId = state.status?.operation_id;
-    if (!operationId || state.status?.result !== 'running' || cancelPending) return;
+    if (!statusFresh || !operationId || state.status?.result !== 'running' || cancelPending) return;
     cancelPending = true;
     render();
     try {
@@ -205,7 +247,7 @@ export function createModuleManagerController({ root, api, pollMs }) {
   }
 
   async function requestRecovery() {
-    if (state.status?.result !== 'interrupted' || busy) return;
+    if (!statusFresh || state.status?.result !== 'interrupted' || busy) return;
     busy = true;
     render();
     try {
@@ -252,21 +294,25 @@ export function createModuleManagerController({ root, api, pollMs }) {
       dialog?.querySelector('#modules-plan-cancel').addEventListener('click', () => closePlan());
       dialog?.querySelector('#modules-plan-apply').addEventListener('click', () => { void applyReviewedPlan(); });
       dialog?.addEventListener('cancel', (event) => { event.preventDefault(); closePlan(); });
+      refreshStatusButton?.addEventListener('click', () => { void refreshStatus(); });
       tabsWired = true;
     }
     render();
     initialLoad = Promise.allSettled([api.loadInstalled(), api.loadStatus()]).then(([installedResult, statusResult]) => {
+      if (statusResult.status === 'fulfilled') {
+        state.status = statusResult.value;
+        statusFresh = true;
+        statusChecked = true;
+        reconcileModulesUpdateStatus(state.status);
+        clearError();
+      } else invalidateStatus(statusResult.reason);
       if (installedResult.status === 'fulfilled') {
         state.installed = installedResult.value;
         reconcileModulesUpdateBadge(state.installed);
       } else showError(installedResult.reason);
-      if (statusResult.status === 'fulfilled') {
-        state.status = statusResult.value;
-        reconcileModulesUpdateStatus(state.status);
-      } else showError(statusResult.reason);
       if (active) {
         render();
-        if (state.status?.result === 'running') schedulePoll();
+        if (statusFresh && state.status?.result === 'running') schedulePoll();
       }
       if (installedResult.status === 'rejected' || statusResult.status === 'rejected') initialLoad = null;
     });

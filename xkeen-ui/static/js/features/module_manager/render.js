@@ -29,6 +29,7 @@ const FAILURE_MESSAGES = {
   profile_transition_required: 'Сначала примените переход профиля.',
   operation_rollback_failed: 'Восстановление файлов не завершилось. Требуется ручная проверка установки и состояния панели.',
   module_free_space: 'Недостаточно свободного места.',
+  operation_free_space: 'Недостаточно свободного места.',
   module_engine_active: 'Модуль используется активным движком.',
   module_dependency_missing: 'Не хватает зависимости.',
   panel_version_current: 'Обновлений нет.',
