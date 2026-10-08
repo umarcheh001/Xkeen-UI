@@ -63,3 +63,12 @@ def test_manager_source_is_isolated_and_entry_stays_thin():
     assert "bootTopLevelShell" in entry
     assert "bootModulesScreen" in entry
     assert "/api/modules/" not in entry
+
+
+def test_stable_devtools_update_is_a_modules_link_not_a_second_runner():
+    source = (ROOT / "xkeen-ui/static/js/features/devtools/update.js").read_text(encoding="utf-8")
+    notifier = (ROOT / "xkeen-ui/static/js/features/update_notifier.js").read_text(encoding="utf-8")
+
+    assert "openModulesManager" in source
+    assert "startLegacyMainUpdater" in source
+    assert "stable" in notifier and "_stopSchedule" in notifier

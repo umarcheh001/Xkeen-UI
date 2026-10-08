@@ -120,6 +120,13 @@
             <h2 class="dt-update-head" style="margin:0;">Обновление панели</h2>
             <div class="dt-update-body">
 
+              <div data-dt-modules-manager-notice hidden class="dt-modules-manager-notice">
+                <p class="small" style="margin:0 0 10px;">Стабильные обновления управляются в разделе «Модули и обновления».</p>
+                <a href="{{ url_for('modules_page') }}" class="btn-link dt-header-btn" data-xk-top-nav="1">Модули и обновления</a>
+              </div>
+
+              <div data-dt-main-update-controls hidden>
+
               <div class="small" style="margin-bottom:10px; opacity:0.9;">
                 Проверка и установка обновлений Xkeen‑UI из GitHub (stable releases или main tarball).
                 Во время обновления панель перезапустится — вкладка может временно оборваться.
@@ -195,6 +202,8 @@
                   <span id="dt-update-log-verdict-text" class="small">Обновления ещё не запускались</span>
                   <button type="button" id="dt-update-log-open" class="btn-secondary" style="display:none;" title="Открыть update.log целиком во вкладке Logs.">Открыть полный лог</button>
                 </div>
+              </div>
+
               </div>
 
             </div>

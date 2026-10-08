@@ -50,14 +50,68 @@ const interruptedStatus = { ...runningStatus, result: 'interrupted', step: 'reco
 const rollbackFailedStatus = { ...interruptedStatus, result: 'rollback_failed', error_code: 'operation_rollback_failed' };
 const restartStatus = { ...runningStatus, result: 'committed', step: 'done', restart_required: true };
 
+test.describe('DevTools update channel boundary', () => {
+  const updateInfo = (channel) => ({
+    ok: true,
+    build: { version: '2.10.0', repo: 'umarcheh001/Xkeen-UI', channel, commit: 'abc1234' },
+    settings: { repo: 'umarcheh001/Xkeen-UI', channel, branch: 'main' },
+    capabilities: { curl: true, tar: true, sha256sum: true },
+    security: { sha_strict: '1', require_sha: '1' },
+  });
+
+  test('stable DevTools links to Modules without legacy update requests', async ({ page }) => {
+    const legacyRequests = [];
+    await page.route('**/api/devtools/update/info', (route) => route.fulfill({ json: updateInfo('stable') }));
+    await page.route(/\/api\/devtools\/update\/(?:check|status|run|rollback)(?:\?|$)/, (route) => {
+      legacyRequests.push(`${route.request().method()} ${new URL(route.request().url()).pathname}`);
+      return route.fulfill({ json: { ok: true, status: { state: 'idle' } } });
+    });
+    await installIdleLifecycleRoutes(page);
+
+    await page.goto('/devtools');
+    const notice = page.locator('[data-dt-modules-manager-notice]');
+    await expect(notice).toBeVisible();
+    await expect(page.locator('[data-dt-main-update-controls]')).toBeHidden();
+    await expect(page.locator('#xk-update-link')).toBeHidden();
+    await page.waitForTimeout(1000);
+    expect(legacyRequests).toEqual([]);
+
+    const link = notice.getByRole('link', { name: 'Модули и обновления' });
+    await expect(link).toHaveAttribute('data-xk-top-nav', '1');
+    await link.click();
+    await expect(page).toHaveURL(/\/modules$/);
+    await expect(page.locator('.modules-summary')).toBeVisible();
+    expect(legacyRequests).toEqual([]);
+  });
+
+  test('main DevTools retains the manual legacy check', async ({ page }) => {
+    const checkBodies = [];
+    await page.route('**/api/devtools/update/info', (route) => route.fulfill({ json: updateInfo('main') }));
+    await page.route('**/api/devtools/update/status**', (route) => route.fulfill({ json: { ok: true, status: { state: 'idle' }, log_tail: [] } }));
+    await page.route('**/api/devtools/update/check', (route) => {
+      checkBodies.push(route.request().postDataJSON());
+      return route.fulfill({ json: { ok: true, channel: 'main', current: { version: '2.10.0' }, latest: { kind: 'main', tag: 'abc1234', tarball_url: 'https://example.test/main.tar.gz' }, update_available: false } });
+    });
+
+    await page.goto('/devtools');
+    await expect(page.locator('[data-dt-main-update-controls]')).toBeVisible();
+    await expect(page.locator('[data-dt-modules-manager-notice]')).toBeHidden();
+    await page.locator('#dt-update-check').click();
+    await expect.poll(() => checkBodies.some((body) => body.force_refresh === true)).toBe(true);
+  });
+});
+
 test.describe('Module manager recovery and guards', () => {
   test('recovers interrupted operation without restarting', async ({ page }) => {
     let recoveryCalls = 0;
     let restartCalls = 0;
+    let currentStatus = interruptedStatus;
     await installLifecycleRoutes(page, { status: interruptedStatus });
+    await page.route('**/api/modules/operations/status', (route) => route.fulfill({ json: currentStatus }));
     await page.route('**/api/modules/recovery', (route) => {
       recoveryCalls += 1;
-      return route.fulfill({ json: { ...interruptedStatus, result: 'rolled_back', recovered: true } });
+      currentStatus = { ...interruptedStatus, result: 'rolled_back', recovered: true };
+      return route.fulfill({ json: currentStatus });
     });
     await page.route('**/api/modules/restart', (route) => {
       restartCalls += 1;

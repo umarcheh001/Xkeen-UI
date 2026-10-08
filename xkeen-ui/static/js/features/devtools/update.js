@@ -1249,12 +1249,15 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
       const data = await getJSON('/api/devtools/update/info');
       state.lastInfo = data;
       _renderInfo(data);
+      return data;
     } catch (e) {
       _setStatus('Ошибка: ' + (e && e.message ? e.message : String(e)), 'bad');
+      return null;
     }
   }
 
   async function checkLatest(forceRefresh, silentToast, silentStatus) {
+    if (!state.lastInfo || !state.lastInfo.settings || state.lastInfo.settings.channel !== 'main') return;
     try {
       if (!silentStatus) {
         _setText('dt-update-verdict', 'Проверяем GitHub…');
@@ -1279,6 +1282,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   }
 
   async function loadStatus(isSilent) {
+    if (!state.lastInfo || !state.lastInfo.settings || state.lastInfo.settings.channel !== 'main') return;
     try {
       const tail = 200;
       const data = await getJSON('/api/devtools/update/status?tail=' + tail);
@@ -1319,6 +1323,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   }
 
   async function runRollback() {
+    if (!state.lastInfo || !state.lastInfo.settings || state.lastInfo.settings.channel !== 'main') return;
     try {
       const ok = await confirmAction({
         title: 'Откатить панель?',
@@ -1354,6 +1359,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   }
 
   async function runUpdate() {
+    if (!state.lastInfo || !state.lastInfo.settings || state.lastInfo.settings.channel !== 'main') return;
     try {
       const btnRun = byId('dt-update-run');
       if (_showBlockedUpdateReason(btnRun)) return;
@@ -1530,9 +1536,14 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     } catch (e) {}
   }
 
-  function init() {
-    if (_inited) return;
-    _inited = true;
+  function openModulesManager() {
+    const notice = document.querySelector('[data-dt-modules-manager-notice]');
+    if (notice) notice.hidden = false;
+  }
+
+  function startLegacyMainUpdater() {
+    const controls = document.querySelector('[data-dt-main-update-controls]');
+    if (controls) controls.hidden = false;
 
     const btnCheck = byId('dt-update-check');
     const btnRun = byId('dt-update-run');
@@ -1552,17 +1563,32 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     try { _initAutoCheckControls(); } catch (e) {}
 
     // Initial paint
-    loadInfo().catch(() => {});
     loadStatus(true).catch(() => {});
     // UX: populate "Latest" on load (silently; no temporary "Checking…" status).
     try { setTimeout(() => checkLatest(false, true, true).catch(() => {}), 250); } catch (e) {}
+  }
+
+  function init() {
+    if (_inited) return;
+    _inited = true;
+
+    loadInfo().then((info) => {
+      const channel = String((info && info.settings && info.settings.channel) || '').toLowerCase();
+      if (channel === 'stable') {
+        openModulesManager();
+        return;
+      }
+      if (channel === 'main') startLegacyMainUpdater();
+    }).catch(() => {});
   }
 
   function activate() {
     if (!_inited) return false;
     try {
       if (!state.lastInfo) loadInfo().catch(() => {});
-      loadStatus(true).catch(() => {});
+      if (state.lastInfo && state.lastInfo.settings && state.lastInfo.settings.channel === 'main') {
+        loadStatus(true).catch(() => {});
+      }
     } catch (e) {}
     return true;
   }

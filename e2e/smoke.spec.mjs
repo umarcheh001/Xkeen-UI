@@ -119,9 +119,9 @@ test('devtools page renders update and env sections', async ({ page }) => {
 
   await expect(page).toHaveTitle(/DevTools/i);
   await expect(page.locator('#dt-update-card')).toBeVisible();
-  // Карточка обновления не сворачивается — её кнопки видны сразу, без раскрытия.
-  await expect(page.locator('#dt-update-check')).toBeVisible();
-  await expect(page.locator('#dt-update-run')).toBeVisible();
+  await expect(page.locator('[data-dt-modules-manager-notice]')).toBeVisible();
+  await expect(page.locator('#dt-update-check')).toBeHidden();
+  await expect(page.locator('#dt-update-run')).toBeHidden();
   await expect(page.locator('#dt-env-card')).toBeVisible();
 });
 
@@ -141,7 +141,7 @@ test('devtools update card completes load-info and manual check flow', async ({ 
         build: {
           version: '1.6.0',
           repo: 'umarcheh001/Xkeen-UI',
-          channel: 'stable',
+          channel: 'main',
           commit: 'abc1234',
           built_utc: '2026-04-10T21:00:00Z',
         },
@@ -152,7 +152,7 @@ test('devtools update card completes load-info and manual check flow', async ({ 
         },
         settings: {
           repo: 'umarcheh001/Xkeen-UI',
-          channel: 'stable',
+          channel: 'main',
           branch: 'main',
         },
         security: {
@@ -174,17 +174,18 @@ test('devtools update card completes load-info and manual check flow', async ({ 
         ok: true,
         error: null,
         repo: 'umarcheh001/Xkeen-UI',
-        channel: 'stable',
+        channel: 'main',
         branch: 'main',
         current: {
           version: '1.6.0',
           repo: 'umarcheh001/Xkeen-UI',
-          channel: 'stable',
+          channel: 'main',
           commit: 'abc1234',
         },
         latest: {
-          kind: 'stable',
-          tag: 'v1.7.4',
+          kind: 'main',
+          tag: 'abc1234',
+          short_sha: 'abc1234',
           published_at: '2026-04-11T00:00:00Z',
           asset: {
             name: 'xkeen-ui-routing.tar.gz',
@@ -232,11 +233,11 @@ test('devtools update card completes load-info and manual check flow', async ({ 
   await expect.poll(() => checkHits).toBeGreaterThan(0);
 
   await expect(page.locator('#dt-update-repo')).toContainText('umarcheh001/Xkeen-UI');
-  await expect(page.locator('#dt-update-channel')).toContainText('stable');
+  await expect(page.locator('#dt-update-channel')).toContainText('main');
   await expect(page.locator('#dt-update-branch')).toContainText('main');
   await expect(page.locator('#dt-update-current-version')).toContainText('1.6.0');
-  await expect(page.locator('#dt-update-latest-kind')).toContainText('stable');
-  await expect(page.locator('#dt-update-latest-version')).toContainText('v1.7.4');
+  await expect(page.locator('#dt-update-latest-kind')).toContainText('main');
+  await expect(page.locator('#dt-update-latest-version')).toContainText('abc1234');
   await expect(page.locator('#dt-update-verdict')).toContainText('Доступно обновление');
 
   await page.locator('#dt-update-check').click();

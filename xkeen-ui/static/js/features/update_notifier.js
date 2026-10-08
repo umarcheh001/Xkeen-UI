@@ -16,6 +16,8 @@ let updateNotifierModuleApi = null;
   let _timer = null;
   let _shellUnsubscribe = null;
   let _versionSyncPromise = null;
+  let _channelInfoPromise = null;
+  let _resolvedChannel = '';
 
   const LS_LAST_CHECK = 'xk_update_notify_last_check_ts';
   const LS_LAST_RESULT = 'xk_update_notify_last_result';
@@ -464,6 +466,25 @@ let updateNotifierModuleApi = null;
     }
   }
 
+  async function _loadChannelInfo() {
+    if (_resolvedChannel) return _resolvedChannel;
+    if (_channelInfoPromise) return _channelInfoPromise;
+    _channelInfoPromise = _getJSON(BUILD_INFO_URL, 1200).then(({ ok, data }) => {
+      if (!ok || !data || !data.ok) return '';
+      const settings = data.settings && typeof data.settings === 'object' ? data.settings : {};
+      const build = data.build && typeof data.build === 'object' ? data.build : {};
+      _resolvedChannel = String(settings.channel || build.channel || '').trim().toLowerCase();
+      return _resolvedChannel;
+    }).catch(() => '').finally(() => { _channelInfoPromise = null; });
+    return _channelInfoPromise;
+  }
+
+  function _hideLegacyLink() {
+    _stopSchedule();
+    _setLinkState({ visible: false, hasUpdate: false, label: '' });
+    _setUpdateLoadingState(false);
+  }
+
   function _loadCachedResult() {
     try {
       const raw = window.localStorage.getItem(LS_LAST_RESULT);
@@ -501,6 +522,10 @@ let updateNotifierModuleApi = null;
   }
 
   async function _checkOnce({ silent }) {
+    if (await _loadChannelInfo() !== 'main') {
+      _hideLegacyLink();
+      return;
+    }
     const linkEl = _getUpdateLinkEl();
     if (!linkEl) return;
 
@@ -594,7 +619,13 @@ let updateNotifierModuleApi = null;
     _timer = null;
   }
 
-  function _applySettings() {
+  async function _applySettingsForChannel() {
+    const channel = await _loadChannelInfo();
+    if (channel !== 'main') {
+      _hideLegacyLink();
+      return Object.assign(_readSettings(), { channel });
+    }
+
     const s = _readSettings();
     let hasResolvedVisualState = false;
     _setUpdateLoadingState(true);
@@ -709,6 +740,11 @@ let updateNotifierModuleApi = null;
     return s;
   }
 
+  function _applySettings() {
+    void _applySettingsForChannel();
+    return _readSettings();
+  }
+
   // Public helper for other modules (e.g. DevTools update runner UI).
   api.resetCache = function resetCache() {
     try { window.localStorage.removeItem(LS_LAST_RESULT); } catch (e) {}
@@ -736,6 +772,7 @@ let updateNotifierModuleApi = null;
     if (!linkEl) return; // page doesn't have the indicator
 
     _ensureShellBinding();
+    _hideLegacyLink();
 
     // Allow one-off override, but prefer stored settings.
     const s = _readSettings();
@@ -748,7 +785,7 @@ let updateNotifierModuleApi = null;
       _writeSettings({ enabled: s.enabled, intervalHours: s.intervalHours });
     }
 
-    _applySettings();
+    void _applySettings();
   };
 
   api.getSettings = function getSettings() {

@@ -66,6 +66,28 @@ class DevtoolsUpdateSmokeTests(unittest.TestCase):
         self.assertIn("tar_exclude", payload["capabilities"])
         self.assertEqual(payload["security"]["sha_strict"], "1")
 
+    def test_update_info_endpoint_preserves_main_channel_for_legacy_devtools(self):
+        devtools = _reload("routes.devtools")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            app = Flask("devtools-update-main-info-smoke")
+            app.register_blueprint(devtools.create_devtools_blueprint(tmp))
+            with patch.object(
+                devtools,
+                "get_build_info",
+                return_value={
+                    "version": "dev-abc1234",
+                    "repo": "umarcheh001/Xkeen-UI",
+                    "channel": "main",
+                    "branch": "main",
+                    "commit": "abc1234",
+                },
+            ):
+                response = app.test_client().get("/api/devtools/update/info")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["settings"]["channel"], "main")
+
     def test_update_run_reports_busybox_tar_without_exclude_as_actionable_backup_error(self):
         devtools = _reload("routes.devtools")
 

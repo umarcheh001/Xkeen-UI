@@ -43,6 +43,15 @@ details.dt-collapsible:not([open]) .dt-collapsible-icon {
   margin-top: 10px;
 }
 
+[data-dt-main-update-controls][hidden],
+[data-dt-modules-manager-notice][hidden] {
+  display: none !important;
+}
+
+.dt-modules-manager-notice {
+  padding: 2px 0 4px;
+}
+
 /* Theme editor: sliders in ONE column to avoid overlap */
 .dt-theme-sliders {
   display: flex !important;
