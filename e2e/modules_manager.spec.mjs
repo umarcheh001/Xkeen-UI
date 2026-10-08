@@ -151,6 +151,57 @@ test.describe('DevTools update channel boundary', () => {
 });
 
 test.describe('Module manager recovery and guards', () => {
+  test('reconciles external profile and registry changes on re-entry and invalidates catalog', async ({ page }) => {
+    let installed = { ...installedSnapshot, restart_required: true };
+    let catalogCalls = 0;
+    await installIdleLifecycleRoutes(page);
+    await page.route('**/api/modules/installed', (route) => route.fulfill({ json: installed }));
+    await page.route('**/api/modules/available', (route) => {
+      catalogCalls += 1;
+      return route.fulfill({ json: installed.transition_required ? { ...availableSnapshot, modules: [] } : availableSnapshot });
+    });
+    await page.goto('/modules');
+    await expect(page.getByRole('button', { name: 'Перезапустить панель' })).toBeEnabled();
+    await page.getByRole('tab', { name: 'Доступные' }).click();
+    await expect(page.getByRole('button', { name: 'Установить Терминал' })).toBeVisible();
+    await page.getByRole('tab', { name: 'Установленные' }).click();
+    await page.evaluate(async () => (await import('/static/js/pages/modules.init.js')).getModulesController().deactivate());
+    installed = { ...installed, profile: 'full', transition_required: true,
+      modules: installed.modules.map((item) => ({ ...item, enabled: true })) };
+    await page.evaluate(async () => (await import('/static/js/pages/modules.init.js')).getModulesController().activate());
+    await expect(page.locator('.modules-summary')).toContainText('Профиль: full');
+    await expect(page.getByRole('switch', { name: 'Включить Mihomo' })).toBeChecked();
+    await expect(page.getByRole('button', { name: 'Применить профиль' })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Перезапустить панель' })).toHaveCount(0);
+    expect(catalogCalls).toBe(1);
+    await page.getByRole('tab', { name: 'Доступные' }).click();
+    await expect(page.getByText('Доступных модулей нет.')).toBeVisible();
+    expect(catalogCalls).toBe(2);
+  });
+
+  test('keeps re-entry locked after installed reconciliation fails until both snapshots recover', async ({ page }) => {
+    let unavailable = false;
+    await installLifecycleRoutes(page, { installed: { ...installedSnapshot, restart_required: true } });
+    await page.route('**/api/modules/installed', (route) => route.fulfill(unavailable
+      ? { status: 503, json: { ok: false, code: 'module_state_unavailable' } }
+      : { json: { ...installedSnapshot, restart_required: true } }));
+    await page.goto('/modules');
+    await expect(page.getByRole('button', { name: 'Перезапустить панель' })).toBeEnabled();
+    await page.evaluate(async () => (await import('/static/js/pages/modules.init.js')).getModulesController().deactivate());
+    unavailable = true;
+    await page.evaluate(async () => (await import('/static/js/pages/modules.init.js')).getModulesController().activate());
+    await expect(page.getByRole('button', { name: 'Обновить панель' })).toBeDisabled();
+    await expect(page.getByRole('switch', { name: 'Включить Mihomo' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Перезапустить панель' })).toHaveCount(0);
+    await expect(page.locator('#modules-error')).toContainText('module_state_unavailable');
+    await page.locator('#modules-refresh-status').click();
+    await expect(page.getByRole('button', { name: 'Обновить панель' })).toBeDisabled();
+    unavailable = false;
+    await page.locator('#modules-refresh-status').click();
+    await expect(page.getByRole('button', { name: 'Обновить панель' })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Перезапустить панель' })).toBeEnabled();
+  });
+
   test('offers explicit restart after a registry toggle while lifecycle is idle', async ({ page }) => {
     let enabled = false;
     let restartCalls = 0;
@@ -491,6 +542,46 @@ test.describe('Module manager loading', () => {
 });
 
 test.describe('Module lifecycle review', () => {
+  for (const conflictAt of ['plan', 'apply']) {
+    for (const statusUnavailable of [false, true]) {
+      test(`reconciles ${conflictAt} operation conflict with ${statusUnavailable ? 'failed' : 'successful'} status fetch`, async ({ page }) => {
+        let conflicted = false;
+        let statusCalls = 0;
+        await installIdleLifecycleRoutes(page);
+        await page.route('**/api/modules/operations/status', (route) => {
+          statusCalls += 1;
+          return route.fulfill(conflicted && statusUnavailable
+            ? { status: 503, json: { ok: false, code: 'module_status_unavailable' } }
+            : { json: conflicted ? { ...runningStatus, operation_id: 'op-external' } : idleStatus });
+        });
+        await page.route('**/api/modules/operations/plan', (route) => {
+          if (conflictAt === 'plan') conflicted = true;
+          return route.fulfill(conflicted
+            ? { status: 409, json: { ok: false, code: 'operation_in_progress' } }
+            : { json: { ...installPlan, operation: 'panel-update', module_id: null } });
+        });
+        await page.route('**/api/modules/operations/apply', (route) => {
+          conflicted = true;
+          return route.fulfill({ status: 409, json: { ok: false, code: 'operation_in_progress' } });
+        });
+        await page.goto('/modules');
+        await page.getByRole('button', { name: 'Обновить панель' }).click();
+        if (conflictAt === 'apply') await page.getByRole('button', { name: 'Применить план' }).click();
+        await expect(page.getByRole('dialog')).toHaveCount(0);
+        await expect(page.getByRole('button', { name: 'Обновить панель' })).toBeDisabled();
+        await expect.poll(() => statusCalls).toBeGreaterThan(1);
+        if (statusUnavailable) {
+          await expect(page.locator('#modules-error')).toContainText('module_status_unavailable');
+          await expect(page.locator('#modules-refresh-status')).toBeVisible();
+        } else {
+          await expect(page.locator('#modules-operation-status')).toContainText('download');
+          await expect(page.getByRole('button', { name: 'Отменить операцию' })).toBeEnabled();
+          await expect.poll(() => statusCalls).toBeGreaterThan(2);
+        }
+      });
+    }
+  }
+
   test('ignores a pre-terminal catalog response that arrives after installed refresh', async ({ page }) => {
     let status = runningStatus;
     let releaseCatalog;

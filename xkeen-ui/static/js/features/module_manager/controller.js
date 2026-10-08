@@ -25,13 +25,14 @@ export function createModuleManagerController({ root, api, pollMs }) {
   let terminalRefreshed = null;
   let restartRequested = false;
   let statusFresh = false;
+  let installedFresh = false;
   let statusChecked = false;
   let statusRefreshPending = false;
 
   function recoveryRequired() { return ['interrupted', 'rollback_failed'].includes(state.status?.result); }
-  function mutationsLocked() { return !statusFresh || busy || state.status?.result === 'running' || recoveryRequired(); }
+  function mutationsLocked() { return !statusFresh || !installedFresh || busy || state.status?.result === 'running' || recoveryRequired(); }
   function canRestart() {
-    return statusFresh && (state.status?.restart_required === true || state.installed?.restart_required === true)
+    return statusFresh && installedFresh && (state.status?.restart_required === true || state.installed?.restart_required === true)
       && ['idle', 'committed', 'rolled_back'].includes(state.status?.result)
       && state.installed?.transition_required === false && !restartRequested;
   }
@@ -54,18 +55,11 @@ export function createModuleManagerController({ root, api, pollMs }) {
   }
 
   async function refreshStatus() {
-    if (statusFresh || busy || statusRefreshPending) return;
+    if ((statusFresh && installedFresh) || busy || statusRefreshPending) return;
     busy = true;
     if (refreshStatusButton) refreshStatusButton.disabled = true;
     try {
-      const status = await api.loadStatus();
-      statusFresh = true;
-      statusChecked = true;
-      state.status = status;
-      reconcileModulesUpdateStatus(status);
-      clearError();
-      if (status.result === 'running') schedulePoll();
-      else stopPolling();
+      await refreshInstalledAfterTerminal();
     } catch (error) { invalidateStatus(error); }
     finally { busy = false; if (active) render(); }
   }
@@ -84,7 +78,7 @@ export function createModuleManagerController({ root, api, pollMs }) {
     host.setAttribute('aria-labelledby', tabs[state.selectedTab].id);
     const actionsDisabled = mutationsLocked();
     if (refreshStatusButton) {
-      refreshStatusButton.hidden = statusFresh || !statusChecked;
+      refreshStatusButton.hidden = (statusFresh && installedFresh) || !statusChecked;
       refreshStatusButton.disabled = busy || statusRefreshPending;
     }
     if (state.selectedTab === 'available') {
@@ -97,7 +91,7 @@ export function createModuleManagerController({ root, api, pollMs }) {
     }
     if (state.status && (state.status.result !== 'idle' || canRestart())) renderOperationStatus(statusHost, state.status, {
       onCancel: requestCancel, onRecovery: requestRecovery, onRestart: requestRestart,
-      canRestart: canRestart(), busy: !statusFresh || busy || cancelPending,
+      canRestart: canRestart(), busy: !statusFresh || !installedFresh || busy || cancelPending,
     });
     else statusHost.replaceChildren();
     if (restartRequested) statusHost.append(document.createTextNode('Перезапуск запрошен'));
@@ -127,20 +121,24 @@ export function createModuleManagerController({ root, api, pollMs }) {
       dialog.showModal();
       dialog.querySelector('#modules-plan-title').focus();
     } catch (error) {
-      showError(error);
+      if (error?.code === 'operation_in_progress') await refreshInstalledAfterTerminal();
+      else showError(error);
     } finally {
       busy = false;
-      if (trigger?.isConnected) trigger.disabled = false;
+      if (trigger?.isConnected) trigger.disabled = mutationsLocked();
+      if (active && !state.plan) render();
     }
   }
 
   async function refreshInstalledAfterTerminal() {
-    state.plan = null;
+    stopPolling();
+    closePlan({ restoreFocus: false, force: true });
     state.catalog = null;
     catalogGeneration += 1;
     catalogLoad = null;
     state.selectedTab = 'installed';
     statusFresh = false;
+    installedFresh = false;
     statusRefreshPending = true;
     if (active) render();
     const [installedResult, statusResult] = await Promise.allSettled([api.loadInstalled(), api.loadStatus()]);
@@ -153,9 +151,17 @@ export function createModuleManagerController({ root, api, pollMs }) {
     } else invalidateStatus(statusResult.reason);
     if (installedResult.status === 'fulfilled') {
       state.installed = installedResult.value;
+      installedFresh = true;
       reconcileModulesUpdateBadge(state.installed);
     } else showError(installedResult.reason);
     statusRefreshPending = false;
+    if (statusFresh) {
+      if (state.status.result === 'running') schedulePoll();
+      else {
+        cancelPending = false;
+        terminalRefreshed = state.status.operation_id || null;
+      }
+    }
     if (active) render();
   }
 
@@ -208,12 +214,15 @@ export function createModuleManagerController({ root, api, pollMs }) {
       closePlan({ restoreFocus: false, force: true });
       observeStatus(applied.status, applied.operation_id);
     } catch (error) {
-      if (['module_plan_stale', 'operation_plan_stale'].includes(error?.code)) closePlan({ force: true });
+      if (error?.code === 'operation_in_progress') await refreshInstalledAfterTerminal();
       else {
-        dialog.querySelector('#modules-plan-apply').disabled = false;
-        dialog.querySelector('#modules-plan-cancel').disabled = false;
+        if (['module_plan_stale', 'operation_plan_stale'].includes(error?.code)) closePlan({ force: true });
+        else {
+          dialog.querySelector('#modules-plan-apply').disabled = false;
+          dialog.querySelector('#modules-plan-cancel').disabled = false;
+        }
+        showError(error);
       }
-      showError(error);
     } finally {
       busy = false;
       if (active) render();
@@ -222,7 +231,7 @@ export function createModuleManagerController({ root, api, pollMs }) {
 
   async function requestCancel() {
     const operationId = state.status?.operation_id;
-    if (!statusFresh || !operationId || state.status?.result !== 'running' || cancelPending) return;
+    if (!statusFresh || !installedFresh || !operationId || state.status?.result !== 'running' || cancelPending) return;
     cancelPending = true;
     render();
     try {
@@ -251,7 +260,7 @@ export function createModuleManagerController({ root, api, pollMs }) {
   }
 
   async function requestRecovery() {
-    if (!statusFresh || state.status?.result !== 'interrupted' || busy) return;
+    if (!statusFresh || !installedFresh || state.status?.result !== 'interrupted' || busy) return;
     busy = true;
     render();
     try {
@@ -320,6 +329,7 @@ export function createModuleManagerController({ root, api, pollMs }) {
       } else invalidateStatus(statusResult.reason);
       if (installedResult.status === 'fulfilled') {
         state.installed = installedResult.value;
+        installedFresh = true;
         reconcileModulesUpdateBadge(state.installed);
       } else showError(installedResult.reason);
       if (active) {
@@ -338,11 +348,7 @@ export function createModuleManagerController({ root, api, pollMs }) {
       active = true;
       if (reentering && initialLoad) {
         await initialLoad;
-        if (state.status?.result !== 'running') {
-          statusFresh = false;
-          render();
-          await refreshStatus();
-        }
+        await refreshInstalledAfterTerminal();
       }
       render();
       if (state.status?.result === 'running') schedulePoll();
