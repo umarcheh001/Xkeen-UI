@@ -67,6 +67,34 @@ def extract_payload(archive: Path, destination: Path, only: Collection[str]) -> 
     return tuple(sorted(extracted))
 
 
+def read_panel_member(archive: Path, relative: str, *, max_bytes: int) -> bytes | None:
+    """One small file of a verified panel archive; ``None`` when it is not there.
+
+    For what the release carries outside of any module (the uninstall
+    script): too few bytes to stage as a file, and no reason to fail an
+    update over.
+    """
+
+    if not _safe(relative):
+        return None
+    wanted = "xkeen-ui/" + relative
+    try:
+        with tarfile.open(archive, "r:gz") as source:
+            for member in source:
+                if member.name != wanted:
+                    continue
+                if not member.isreg() or member.size > int(max_bytes):
+                    return None
+                stream = source.extractfile(member)
+                if stream is None:
+                    return None
+                with stream:
+                    return stream.read(int(max_bytes) + 1)[: int(max_bytes)]
+    except (tarfile.TarError, OSError, EOFError):
+        return None
+    return None
+
+
 def extract_panel_payload(archive: Path, destination: Path, only: Collection[str]) -> tuple[str, ...]:
     """Extract selected verified files from the single ``xkeen-ui/`` root."""
 

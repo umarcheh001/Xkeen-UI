@@ -281,6 +281,8 @@ def panel_archive(version: str, ownership: Mapping[str, tuple[str, ...]] = OWNER
         for relative in sorted({path for paths in ownership.values() for path in paths}):
             payload = _json_bytes(ownership_document) if relative == "module-ownership.json" else file_bytes(relative, version)
             add("xkeen-ui/" + relative, payload)
+        # The real archive carries the uninstall script outside of any module.
+        add("xkeen-ui/uninstall.sh", file_bytes("uninstall.sh", version))
     return buffer.getvalue()
 
 

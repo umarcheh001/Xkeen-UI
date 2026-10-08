@@ -85,8 +85,8 @@ def test_installer_drops_operation_leftovers_after_a_successful_start() -> None:
 def test_uninstall_removes_the_operation_directory() -> None:
     source = UNINSTALL.read_text(encoding="utf-8")
 
-    assert 'rm -rf "$UI_DIR.module-transactions"' in source
-    assert source.index('rm -rf "$UI_DIR"\n') < source.index('rm -rf "$UI_DIR.module-transactions"')
+    assert 'remove_tree "$UI_DIR.module-transactions"' in source
+    assert source.index('remove_tree "$UI_DIR"\n') < source.index('remove_tree "$UI_DIR.module-transactions"')
 
 
 def _run_fragment(

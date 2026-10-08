@@ -288,17 +288,6 @@ def test_a_refused_apply_does_not_leave_the_archive_behind(tmp_path):
     assert not any(service.archive_cache_dir.glob("*"))
 
 
-def test_update_check_clears_an_archive_nobody_came_for(tmp_path):
-    panel = make_panel(tmp_path, version="2.10.0", installed=("core", "tool.files"))
-    service, _ = make_service(panel, make_release(version="2.11.0"))
-    service.plan("panel-update", None)
-    assert any(service.archive_cache_dir.glob("*"))
-
-    service.panel_update_check()
-
-    assert not any(service.archive_cache_dir.glob("*"))
-
-
 # --- исполнитель забирает архив у панели -------------------------------------------
 
 

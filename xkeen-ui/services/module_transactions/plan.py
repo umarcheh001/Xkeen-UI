@@ -32,7 +32,8 @@ SCOPES = ("module", "panel", "profile")
 OWNERSHIP_MAP_FILENAME = "module-ownership.json"
 # The editor is a dependency of both engines and its variant belongs to the
 # installer, so it can only be laid out again, never added or taken away.
-_REPAIR_ONLY_MODULES = frozenset({"tool.editor"})
+REPAIR_ONLY_MODULES = frozenset({"tool.editor"})
+_REPAIR_ONLY_MODULES = REPAIR_ONLY_MODULES
 
 # Compatibility exports for Stage 8.3 callers; the predicate itself is shared
 # with the profile planner so these contracts cannot diverge in production.

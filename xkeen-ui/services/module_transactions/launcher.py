@@ -26,11 +26,33 @@ from .cancel_channel import send_cancel
 from .executor import recover
 from .journal import Journal
 from .plan import Plan
+from .provision import build_provision
 from .state import ModuleTransactionError, new_operation_id, read_status, write_status
 
 
 def _default_script() -> Path:
     return Path(__file__).resolve().parents[2] / "scripts" / "module_transaction.py"
+
+
+# One undo at a time in this process: the panel is asked for the status by
+# every open page, and two of them must not put the same files back together.
+_RECOVERY = threading.Lock()
+
+
+def recover_abandoned(panel_root: Path, state_dir: Path, *, panel_running: bool = False) -> str | None:
+    """Undo an operation nobody carries, the environment outside the folder included.
+
+    ``None`` also when another request of this panel is already doing it.
+    """
+
+    if not _RECOVERY.acquire(blocking=False):
+        return None
+    try:
+        return recover(
+            Path(panel_root), Path(state_dir), panel_running=panel_running, provision=build_provision(Path(panel_root))
+        )
+    finally:
+        _RECOVERY.release()
 
 
 def ensure_idle(
@@ -141,8 +163,11 @@ def launch(
     handed_off = False
     try:
         ensure_idle(panel_root, state_dir, lock_owner_pid=os.getpid())
+        if _RECOVERY.locked():
+            # Another request is putting the files of a dead operation back.
+            raise ModuleTransactionError("operation_in_progress", "an interrupted operation is being undone")
         # Whatever a dead runner left behind is undone before a new plan is laid.
-        if recover(panel_root, state_dir) == "rollback_failed":
+        if recover_abandoned(panel_root, state_dir) == "rollback_failed":
             raise ModuleTransactionError(
                 "operation_rollback_failed",
                 "the previous operation could not be undone; repeat the undo or reinstall the panel",
@@ -158,6 +183,7 @@ def launch(
             state_dir,
             {
                 "operation_id": operation_id,
+                "scope": plan.scope,
                 "operation": plan.operation,
                 "module_id": plan.module_id,
                 "version": plan.version,
@@ -237,5 +263,5 @@ def observe_status(panel_root: Path, state_dir: Path) -> dict[str, Any]:
         busy = False
     if busy:
         return status
-    recover(panel_root, state_dir, panel_running=True)
+    recover_abandoned(panel_root, state_dir, panel_running=True)
     return read_status(state_dir)

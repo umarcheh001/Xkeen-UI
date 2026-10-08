@@ -12,20 +12,23 @@ import json
 import os
 import re
 import shutil
+import threading
+import time
 import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 
 from services.module_registry import MODULE_IDS, ModuleRegistry
-from services.module_transactions.executor import recover
 from services.module_transactions.launcher import (
     ensure_restartable,
     launch,
     observe_status,
+    recover_abandoned as recover,
     request_cancel,
 )
 from services.module_transactions.plan import (
     OPERATIONS,
+    REPAIR_ONLY_MODULES as _REPAIR_ONLY_MODULES,
     Plan,
     build_plan,
     build_panel_update_plan,
@@ -41,7 +44,6 @@ if TYPE_CHECKING:
     from services.module_catalog_client import ModuleCatalogClient
 
 
-_REPAIR_ONLY_MODULES = frozenset({"tool.editor"})
 _FULL_SCOPE_OPERATIONS = frozenset({"panel-update", "profile-transition"})
 _PLAN_BLOCKERS = frozenset(
     {
@@ -75,8 +77,14 @@ _PUBLIC_STATUS_FIELDS = frozenset(
     }
 )
 _PACKAGE_NAME = re.compile(r"[a-z0-9][a-z0-9+.-]{0,63}")
+_PANEL_PATH = re.compile(r"[A-Za-z0-9._@+-]+(?:/[A-Za-z0-9._@+-]+)*")
+_ERROR_DETAIL_LIMIT = 300
+# Codes whose message is written by the panel's own shell script for the
+# owner to read; every other message may quote the system and stays inside.
+_DETAILED_STATUS_ERRORS = frozenset({"operation_environment_failed"})
 _PUBLIC_STATUS_ERRORS = {
     "operation_cancelled": "the module operation was cancelled",
+    "operation_environment_failed": "the router could not be prepared for the release",
     "operation_health_failed": "the panel did not become healthy after the module operation",
     "operation_in_progress": "another panel operation is already running",
     "operation_interrupted": "the module operation was interrupted",
@@ -96,6 +104,10 @@ _CATALOG_COMPATIBILITY_ERRORS = frozenset(
     }
 )
 PANEL_ARCHIVE_CACHE_DIRNAME = "panel-archive"
+# How long a verified archive waits for the owner to press "apply" after the
+# plan was shown. Every page of the panel checks for updates on its own, so a
+# check must not be what takes the archive away.
+ARCHIVE_CACHE_KEEP_S = 30 * 60
 _SHA256_HEX = re.compile(r"[0-9a-f]{64}")
 _PROFILE_TARGET_ERRORS = frozenset(
     {
@@ -257,6 +269,18 @@ def _public_status(status: Mapping[str, Any]) -> dict[str, Any]:
         if error_code
         else None
     )
+    # What a recovery screen has to show. The file named here lies in the
+    # panel folder; the system's own words about it stay in the status file.
+    failed_path = status.get("failed_path")
+    if isinstance(failed_path, str) and _PANEL_PATH.fullmatch(failed_path) and ".." not in failed_path.split("/"):
+        payload["failed_path"] = failed_path
+    if status.get("environment_restored") is False:
+        payload["environment_restored"] = False
+    detail = status.get("error")
+    if error_code in _DETAILED_STATUS_ERRORS and isinstance(detail, str):
+        line = " ".join("".join(character if character.isprintable() else " " for character in detail).split())
+        if line:
+            payload["error_detail"] = line[:_ERROR_DETAIL_LIMIT]
     return payload
 
 
@@ -298,6 +322,11 @@ class ModuleLifecycleService:
         self._ensure_restartable = ensure_restartable_operation
         self._archive_cache_dir = None if archive_cache_dir is None else Path(archive_cache_dir)
         self._archive_listing: tuple[tuple[Any, ...], dict[str, Any]] | None = None
+        # One request downloads and reads the archive at a time; the others
+        # wait and find it ready. While anybody does, nobody clears the cache.
+        self._archive_download = threading.Lock()
+        self._archive_guard = threading.Lock()
+        self._archive_users = 0
 
     @property
     def archive_cache_dir(self) -> Path:
@@ -316,8 +345,47 @@ class ModuleLifecycleService:
             )
         return self._archive_cache_dir
 
-    def _drop_archive_cache(self) -> None:
+    def _clear_archive_cache(self) -> None:
         shutil.rmtree(self.archive_cache_dir, ignore_errors=True)
+
+    def _drop_archive_cache(self) -> None:
+        """Remove the kept archive, unless another request is working with it.
+
+        A refused plan has no use for the archive, but the request next to
+        it may be in the middle of downloading the same one.
+        """
+
+        with self._archive_guard:
+            if self._archive_users:
+                return
+            self._clear_archive_cache()
+
+    def _sweep_archive_cache(self, current_digest: str | None) -> None:
+        """Remove what nobody will come for: another release, or one kept too long."""
+
+        with self._archive_guard:
+            if self._archive_users:
+                return
+            try:
+                entries = list(self.archive_cache_dir.iterdir())
+            except OSError:
+                return
+            now = time.time()
+            wanted = None if current_digest is None else f"{current_digest}.tar.gz"
+            for entry in entries:
+                try:
+                    recent = 0 <= now - entry.stat().st_mtime <= ARCHIVE_CACHE_KEEP_S
+                except OSError:
+                    recent = False
+                if recent and entry.is_file() and wanted is not None and entry.name == wanted:
+                    continue
+                if entry.is_dir():
+                    shutil.rmtree(entry, ignore_errors=True)
+                else:
+                    try:
+                        entry.unlink()
+                    except OSError:
+                        pass
 
     def _panel_archive(self, client: Any, snapshot: Any) -> tuple[Path, bool]:
         """The panel archive of a verified catalog and whether it was just downloaded."""
@@ -333,7 +401,7 @@ class ModuleLifecycleService:
         if target is not None and target.is_file():
             return target, False
         # One archive at a time: whatever is here belongs to another release.
-        self._drop_archive_cache()
+        self._clear_archive_cache()
         incoming = cache / f"incoming-{os.getpid()}-{uuid.uuid4().hex[:8]}"
         try:
             downloaded = client.download_verified_panel_archive(snapshot, incoming)
@@ -347,8 +415,19 @@ class ModuleLifecycleService:
     def _checked_panel_archive(self, client: Any, snapshot: Any, architecture: str) -> dict[str, Any]:
         """The verified listing of the panel archive; nothing is unpacked."""
 
-        from services.module_package_contract import ModulePackageContractError
         from services.panel_package_contract import validate_panel_archive
+
+        with self._archive_guard:
+            self._archive_users += 1
+        try:
+            with self._archive_download:
+                return self._read_panel_archive(client, snapshot, architecture, validate_panel_archive)
+        finally:
+            with self._archive_guard:
+                self._archive_users -= 1
+
+    def _read_panel_archive(self, client: Any, snapshot: Any, architecture: str, validate_panel_archive: Any) -> dict[str, Any]:
+        from services.module_package_contract import ModulePackageContractError
 
         while True:
             archive, fresh = self._panel_archive(client, snapshot)
@@ -379,7 +458,7 @@ class ModuleLifecycleService:
             except ModulePackageContractError:
                 # A kept copy may have rotted on the storage; a download that
                 # fails the same check is the release's own fault.
-                self._drop_archive_cache()
+                self._clear_archive_cache()
                 if fresh:
                     raise
 
@@ -423,8 +502,7 @@ class ModuleLifecycleService:
         """
 
         self._ensure_profile_settled("panel-update")
-        # A check means nobody is between a reviewed plan and its launch.
-        self._drop_archive_cache()
+        kept_digest: str | None = None
         try:
             from services.module_package_contract import compare_semver
 
@@ -440,10 +518,17 @@ class ModuleLifecycleService:
             requires_installer = bool(
                 newer and isinstance(min_updater, str) and compare_semver(source_version, min_updater) < 0
             )
+            digest = descriptor.get("sha256") if isinstance(descriptor, Mapping) else None
+            if newer and not requires_installer and isinstance(digest, str) and _SHA256_HEX.fullmatch(digest):
+                # The archive of this very release may be waiting between a
+                # plan that was shown and its "apply"; it is left for a while.
+                kept_digest = digest
         except ModuleTransactionError as error:
             _raise_domain(error)
         except Exception as error:
             self._raise_full_scope_error("panel-update", error)
+        finally:
+            self._sweep_archive_cache(kept_digest)
         return {
             "ok": True,
             "source_version": source_version,

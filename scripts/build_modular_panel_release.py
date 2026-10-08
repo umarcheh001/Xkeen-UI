@@ -31,6 +31,10 @@ from typing import Any, Mapping, Sequence
 SUPPORTED_ARCHITECTURES = ("aarch64", "mips", "mipsel")
 DEFAULT_ARCHITECTURES = SUPPORTED_ARCHITECTURES
 DEFAULT_MIN_CORE = "1.0.0"
+# The oldest panel that may update itself to the release being built; an older
+# one is sent to the installer. Raised in the commit that makes older panels
+# unable to lay this release by themselves, so the value travels with the tag.
+DEFAULT_MIN_UPDATER: str | None = None
 PACKAGE_DIRNAME = "xkeen-ui"
 _IGNORED_DIR_NAMES = {"__pycache__"}
 _IGNORED_FILE_NAMES = {".DS_Store", "BUILD.json"}
@@ -735,7 +739,7 @@ class ReleaseInputs:
     source_commit: str
     architectures: Sequence[str] = DEFAULT_ARCHITECTURES
     min_core: str = DEFAULT_MIN_CORE
-    min_updater: str | None = None
+    min_updater: str | None = DEFAULT_MIN_UPDATER
 
 
 @dataclass(frozen=True, slots=True)
@@ -909,7 +913,7 @@ def parse_args(argv: list[str] | None = None) -> ReleaseInputs:
     parser.add_argument("--min-core", default=DEFAULT_MIN_CORE)
     parser.add_argument(
         "--min-updater",
-        default=None,
+        default=DEFAULT_MIN_UPDATER,
         help="oldest panel version that may update itself to this release; older ones are sent to the installer",
     )
     parser.add_argument(

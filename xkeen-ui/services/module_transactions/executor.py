@@ -11,7 +11,7 @@ import urllib.request
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
-from .extract import extract_panel_payload, extract_payload
+from .extract import extract_panel_payload, extract_payload, read_panel_member
 from .install_state import rebuild_frontend_manifests, state_file_updates
 from .journal import Journal
 from .plan import load_ownership_map
@@ -98,6 +98,11 @@ def _take_kept_panel_archive(cache: Path | None, plan_archive: Any, staging: Pat
 
 
 PROVISION_SCRIPT = ("scripts", "provision_env.sh")
+# The uninstall script belongs to no module, so the ownership map does not
+# list it and the planned files never include it. The release carries it all
+# the same, and the panel has to end up with the one of its own release.
+UNINSTALL_SCRIPT = "uninstall.sh"
+_UNINSTALL_SCRIPT_MAX_BYTES = 256 * 1024
 
 
 def provision_script(journal: Journal, *, staged: bool) -> Path:
@@ -209,6 +214,7 @@ def run_operation(
 
     # Nothing in the panel changes until "applying": a failure here needs no undo.
     catalog_source_commit: str | None = None
+    uninstall_script: bytes | None = None
     try:
         enter("prepared")
         if plan.archive is not None:
@@ -293,6 +299,10 @@ def run_operation(
                         "the panel archive does not contain every planned target file",
                     )
                 extract_panel_payload(archive_path, journal.staging / "payload", plan.files_add)
+                if plan.scope == "panel":
+                    uninstall_script = read_panel_member(
+                        archive_path, UNINSTALL_SCRIPT, max_bytes=_UNINSTALL_SCRIPT_MAX_BYTES
+                    )
                 archive_path.unlink(missing_ok=True)
                 catalog_source_commit = str(snapshot.catalog.get("source_commit") or "")
                 if provision is not None and plan.scope == "panel":
@@ -320,6 +330,8 @@ def run_operation(
         shared.update(state_file_updates(root, plan))
         if plan.scope == "panel":
             shared["BUILD.json"] = _build_stamp(root, plan.target_version, catalog_source_commit)
+            if uninstall_script:
+                shared[UNINSTALL_SCRIPT] = uninstall_script
         for relative, content in sorted(shared.items()):
             target = root.joinpath(*relative.split("/"))
             if not target.is_file() or target.read_bytes() != content:
@@ -399,9 +411,17 @@ def run_operation(
 _UNTOUCHED_STEPS = frozenset({"prepared", "downloading", "verifying"})
 # From these steps on the panel may already run on the files of the operation.
 _RESTARTED_STEPS = frozenset({"restarting", "health", "rolling_back"})
+# From these steps on the shared script of the new files may have run.
+_PROVISIONED_STEPS = _RESTARTED_STEPS | {"state"}
 
 
-def recover(panel_root: Path, state_dir: Path, *, panel_running: bool = False) -> str | None:
+def recover(
+    panel_root: Path,
+    state_dir: Path,
+    *,
+    panel_running: bool = False,
+    provision: Callable[[str, Path], Any] | None = None,
+) -> str | None:
     """Finish an operation nobody is running any more; ``None`` when there is none.
 
     Runs before the panel starts (the init script, the installer) and before
@@ -410,6 +430,9 @@ def recover(panel_root: Path, state_dir: Path, *, panel_running: bool = False) -
     here - the caller is about to start it. A caller that is the running
     panel says so with ``panel_running``: the status then tells whether the
     panel has to be restarted to match the files that were put back.
+
+    ``provision`` puts back what the operation changed outside the panel
+    folder: once the previous files are in place, their own script is run.
     """
 
     panel_root = Path(panel_root)
@@ -434,6 +457,7 @@ def recover(panel_root: Path, state_dir: Path, *, panel_running: bool = False) -
     if status.get("operation_id") != operation_id:
         status = {
             "operation_id": operation_id,
+            "scope": journal.plan.scope if readable else None,
             "operation": journal.plan.operation if readable else None,
             "module_id": journal.plan.module_id if readable else None,
             "version": journal.plan.version if readable else None,
@@ -465,6 +489,14 @@ def recover(panel_root: Path, state_dir: Path, *, panel_running: bool = False) -
                 status["error_code"] = "operation_interrupted"
             write_status(state_dir, status)
             return "rollback_failed"
+        if provision is not None and (not readable or step in _PROVISIONED_STEPS):
+            # Before the record goes: a recovery that is cut short here is
+            # repeated by the next start, the environment included.
+            try:
+                provision("apply", journal.panel_root.joinpath(*PROVISION_SCRIPT))
+                status.pop("environment_restored", None)
+            except Exception:
+                status["environment_restored"] = False
         journal.flush()
         journal.commit()
         # Without a readable record there is no telling how far it went.

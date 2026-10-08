@@ -609,7 +609,8 @@ def test_status_redacts_internal_paths_and_unrecognized_fields(tmp_path):
     payload = service.status()
 
     assert payload["error"] == "the module operation could not be rolled back"
-    assert "failed_path" not in payload
+    # The file is one of the panel's own; what the system said about it is not shown.
+    assert payload["failed_path"] == "services/private.py"
     assert "failed_error" not in payload
     assert "secret" not in json.dumps(payload)
 

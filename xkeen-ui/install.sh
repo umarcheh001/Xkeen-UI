@@ -1544,6 +1544,9 @@ align_precompressed_mtimes "$UI_DIR/static"
 # Штамп сборки берётся из устанавливаемого архива, выбор владельца — из панели.
 provision_build_json "$SRC_DIR/BUILD.json" "$UI_DIR/BUILD.json"
 
+# Скрипт удаления не принадлежит ни одному модулю, раскладка профиля его не кладёт.
+provision_uninstall_script "$SRC_DIR/uninstall.sh" "$UI_DIR/uninstall.sh"
+
 ui_step_done
 ui_step "Терминал и редактор кода"
 if profile_has_module tool.terminal; then

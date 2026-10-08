@@ -356,6 +356,30 @@ provision_build_json() {
   fi
 }
 
+# --- Скрипт удаления панели -------------------------------------------------
+
+provision_uninstall_script() {
+  # $1 — uninstall.sh из устанавливаемого архива, $2 — куда класть.
+  #
+  # Скрипт не принадлежит ни одному модулю, поэтому раскладка профиля его не
+  # кладёт. Без него панель нечем удалить, но это не повод останавливать
+  # установку: любая неудача здесь — только строка в журнале.
+  _pu_source="$1"
+  _pu_target="$2"
+  _pu_new="$_pu_target.xk-new"
+
+  [ -f "$_pu_source" ] || return 0
+  if [ -f "$_pu_target" ] && cmp -s "$_pu_source" "$_pu_target" 2>/dev/null; then
+    return 0
+  fi
+  if cp -f "$_pu_source" "$_pu_new" 2>/dev/null && mv -f "$_pu_new" "$_pu_target" 2>/dev/null; then
+    return 0
+  fi
+  rm -f "$_pu_new" 2>/dev/null || true
+  echo "[!] Не удалось положить скрипт удаления панели: $_pu_target"
+  return 0
+}
+
 # --- Служба автозапуска -----------------------------------------------------
 
 provision_init_script() {

@@ -293,25 +293,17 @@ rm -f /opt/etc/xkeen-ui/auth.json
 
 ```sh
 sh /opt/etc/xkeen-ui/uninstall.sh
+# вместе с корзиной файлового менеджера и резервными копиями конфигов Xray:
+# sh /opt/etc/xkeen-ui/uninstall.sh --purge
 ```
 
-Дополнительная очистка:
-
-```sh
-rm -rf /opt/var/log/xkeen-ui
-rm -f /opt/var/log/xkeen-ui.log
-rm -f /opt/var/run/xkeen-ui.pid
-rm -f /opt/bin/sysmon
-rm -f /opt/bin/entware-backup
-rm -rf /opt/etc/xray/configs/backups
-```
-
-Удаление установленных панелью шаблонов Mihomo:
-
-```sh
-rm -f /opt/etc/mihomo/templates/custom.yaml
-rm -f /opt/etc/mihomo/templates/zkeen.yaml
-```
+Скрипт убирает всё, что принадлежит панели: её каталог и службу автозапуска,
+команды в `/opt/bin` (`sysmon`, `entware-backup` и другие), журналы, состояние
+обновлений, служебные каталоги в `/opt/var` и `/tmp`, встроенные шаблоны Mihomo.
+Конфиги Xray и Mihomo, DAT-файлы и изменённые вами шаблоны остаются. Корзина
+файлового менеджера (`/opt/var/trash`) и резервные копии конфигов Xray
+(`/opt/etc/xray/configs/backups`) — ваши данные: они удаляются только с ключом
+`--purge`, а что оставлено, скрипт перечисляет в конце.
 
 Если зависимости больше не используются другими сервисами:
 

@@ -15,28 +15,13 @@ from services.module_package_contract import (
     ModulePackageContractError,
     validate_panel_catalog_descriptor,
 )
+from services.module_profile_plan import user_owned
 from services.module_registry import is_module_id
 
 
 MAX_PANEL_EXPANDED_BYTES = 256 * 1024 * 1024
 MAX_OWNERSHIP_BYTES = 4 * 1024 * 1024
 _BOOTSTRAP_FILES = {"install.sh", "uninstall.sh"}
-_STATE_FILES = {"modules.json", "module-installed.json", "install-profile.json", "install-managed.json"}
-_USER_TOP_LEVEL = {"xray-jsonc", "var", "bin"}
-_USER_FILES = {
-    "secret.key",
-    "devtools.env",
-    "ui-settings.json",
-    "branding.json",
-    "terminal_theme.json",
-    "terminal_theme.css",
-}
-_USER_PREFIXES = (
-    "opt/etc/mihomo/profiles/",
-    "opt/etc/mihomo/backup/",
-    "templates/routing/",
-    "templates/observatory/",
-)
 _WINDOWS_DRIVE = re.compile(r"^[A-Za-z]:")
 
 
@@ -56,13 +41,9 @@ def _safe_member_path(value: object) -> str:
 
 
 def _user_owned(relative: str) -> bool:
-    return (
-        relative in _STATE_FILES
-        or relative in _USER_FILES
-        or relative == "opt/etc/mihomo/config.yaml"
-        or relative.startswith(_USER_PREFIXES)
-        or relative.split("/", 1)[0] in _USER_TOP_LEVEL
-    )
+    # One rule for the whole panel. The installer is the only file of the
+    # owner's that a release carries: the archive is also what bootstraps.
+    return relative not in _BOOTSTRAP_FILES and user_owned(relative)
 
 
 def _string_paths(value: object, *, module_id: str) -> list[str]:
