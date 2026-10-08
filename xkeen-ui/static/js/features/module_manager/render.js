@@ -14,13 +14,102 @@ function dependencies(card, label, items) {
   card.append(node('p', 'modules-meta', `${label}: ${items.join(', ')}`));
 }
 
-export function renderInstalled(host, snapshot, onToggle) {
+const ACTION_LABELS = {
+  install: 'Установить', repair: 'Восстановить', remove: 'Удалить',
+  'panel-update': 'Обновить панель', 'panel-rollback': 'Откатить панель',
+  'profile-transition': 'Применить профиль',
+};
+
+function actionButton(operation, moduleId, label, onPlan, disabled) {
+  const button = node('button', 'btn-secondary', label);
+  button.type = 'button';
+  button.dataset.operation = operation;
+  if (moduleId) button.dataset.moduleId = moduleId;
+  button.disabled = disabled;
+  button.addEventListener('click', () => onPlan(operation, moduleId, button));
+  return button;
+}
+
+function formatBytes(bytes) {
+  const amount = Number(bytes) || 0;
+  if (amount >= 1024 * 1024) return `${Math.ceil(amount / (1024 * 1024))} МБ`;
+  if (amount >= 1024) return `${Math.ceil(amount / 1024)} КБ`;
+  return `${amount} Б`;
+}
+
+function textList(parent, label, values) {
+  if (!Array.isArray(values) || !values.length) return;
+  parent.append(node('p', 'modules-meta', `${label}: ${values.map(String).join(', ')}`));
+}
+
+export function renderPlan(dialog, plan) {
+  const title = dialog.querySelector('#modules-plan-title');
+  const summary = dialog.querySelector('#modules-plan-summary');
+  const apply = dialog.querySelector('#modules-plan-apply');
+  const names = {
+    install: 'установки', repair: 'восстановления', remove: 'удаления',
+    'panel-update': 'обновления панели', 'panel-rollback': 'отката панели',
+    'profile-transition': 'перехода профиля',
+  };
+  title.textContent = `План ${names[plan.operation] || 'операции'}`;
+  summary.replaceChildren();
+  summary.append(node('p', '', `Область: ${plan.scope || (plan.module_id ? 'модуль' : 'панель')}`));
+  summary.append(node('p', '', `Действие: ${ACTION_LABELS[plan.operation] || plan.operation || 'Операция'}`));
+  textList(summary, 'Модули', plan.affected_module_ids);
+  if (plan.source_version) summary.append(node('p', '', `Исходная версия: ${plan.source_version}`));
+  if (plan.target_version || plan.version) summary.append(node('p', '', `Целевая версия: ${plan.target_version || plan.version}`));
+  summary.append(node('p', '', `Файлы: добавить ${plan.files_add?.length || 0}, удалить ${plan.files_remove?.length || 0}`));
+  summary.append(node('p', '', `Нужно места: ${formatBytes(plan.required_free_bytes)}`));
+  const diff = plan.dependency_diff && typeof plan.dependency_diff === 'object' ? plan.dependency_diff : {};
+  for (const [key, value] of Object.entries(diff)) textList(summary, `Зависимости ${key}`, value);
+  if (plan.restart_required) summary.append(node('p', 'modules-alert', 'Требуется перезапуск'));
+  for (const blocker of Array.isArray(plan.blockers) ? plan.blockers : []) {
+    summary.append(node('p', 'modules-alert', blocker?.message || blocker?.code || 'План заблокирован'));
+  }
+  apply.hidden = plan.applicable !== true || !plan.plan_id;
+  apply.disabled = false;
+}
+
+export function renderOperationStatus(host, status, onCancel, busy = false) {
+  host.replaceChildren();
+  if (!status || status.result === 'idle') return;
+  const area = node('section', 'modules-operation');
+  area.append(node('h2', '', 'Операция с модулями'));
+  for (const [label, value] of [
+    ['Шаг', status.step], ['Результат', status.result], ['Код ошибки', status.error_code],
+    ['Ошибка', status.error], ['Начало', status.started_at], ['Завершение', status.finished_at],
+  ]) {
+    if (value !== undefined && value !== null && value !== '') area.append(node('p', '', `${label}: ${value}`));
+  }
+  if (Array.isArray(status.log) && status.log.length) {
+    const list = node('ol', 'modules-operation-log');
+    for (const record of status.log) {
+      if (record && typeof record === 'object') list.append(node('li', '', [record.step, record.at].filter((part) => part !== undefined && part !== null).join(' · ')));
+    }
+    area.append(list);
+  }
+  if (status.result === 'running' && status.operation_id) {
+    const cancel = node('button', 'btn-secondary', 'Отменить операцию');
+    cancel.type = 'button';
+    cancel.disabled = busy;
+    cancel.addEventListener('click', onCancel);
+    area.append(cancel);
+  }
+  host.append(area);
+}
+
+export function renderInstalled(host, snapshot, onToggle, onPlan = () => {}, busy = false) {
   host.replaceChildren();
   const summary = node('section', 'modules-summary');
   summary.append(node('h2', '', 'Панель и профиль'));
   summary.append(node('p', '', snapshot.panel_version ? `Xkeen UI ${snapshot.panel_version}` : 'Версия панели неизвестна'));
   summary.append(node('p', '', `Профиль: ${snapshot.profile || 'не указан'}`));
   if (snapshot.restart_required) summary.append(node('p', 'modules-alert', 'Требуется перезапуск'));
+  const panelActions = node('div', 'modules-card-actions');
+  panelActions.append(actionButton('panel-update', null, ACTION_LABELS['panel-update'], onPlan, busy));
+  if (snapshot.previous_version?.available) panelActions.append(actionButton('panel-rollback', null, ACTION_LABELS['panel-rollback'], onPlan, busy));
+  if (snapshot.transition_required) panelActions.append(actionButton('profile-transition', null, ACTION_LABELS['profile-transition'], onPlan, busy));
+  summary.append(panelActions);
   host.append(summary);
   const list = node('section', 'modules-list');
   list.append(node('h2', '', 'Установленные модули'));
@@ -39,16 +128,21 @@ export function renderInstalled(host, snapshot, onToggle) {
       input.setAttribute('role', 'switch');
       input.setAttribute('aria-label', `Включить ${item.name || item.id}`);
       input.checked = item.enabled === true;
+      input.disabled = busy;
       input.addEventListener('change', () => onToggle(item.id, input.checked, input));
       label.append(input, node('span', '', 'Включён'));
       row.append(label);
+    }
+    const actions = Array.isArray(item.lifecycle_actions) ? item.lifecycle_actions : [];
+    for (const action of actions) {
+      if (ACTION_LABELS[action]) row.append(actionButton(action, item.id, `${ACTION_LABELS[action]} ${item.name || item.id}`, onPlan, busy));
     }
     list.append(row);
   });
   host.append(list);
 }
 
-export function renderAvailable(host, catalog) {
+export function renderAvailable(host, catalog, onPlan = () => {}, busy = false) {
   host.replaceChildren();
   const modules = Array.isArray(catalog.modules) ? catalog.modules : [];
   if (!modules.length) host.append(node('p', 'modules-empty', 'Доступных модулей нет.'));
@@ -62,12 +156,7 @@ export function renderAvailable(host, catalog) {
     if (actions.length) {
       const actionRow = node('div', 'modules-card-actions');
       actions.forEach((action) => {
-        const button = node('button', 'btn-secondary', { install: 'Установить', repair: 'Восстановить', remove: 'Удалить' }[action] || action);
-        button.type = 'button';
-        button.dataset.operation = String(action);
-        button.dataset.moduleId = String(item.id || '');
-        button.disabled = true;
-        actionRow.append(button);
+        if (ACTION_LABELS[action]) actionRow.append(actionButton(action, item.id, `${ACTION_LABELS[action]} ${item.name || item.id}`, onPlan, busy));
       });
       card.append(actionRow);
     }

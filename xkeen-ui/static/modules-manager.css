@@ -22,6 +22,17 @@ body.modules-page .modules-operation-status {
   margin-bottom: 12px;
 }
 
+body.modules-page .modules-operation {
+  border-left: 3px solid var(--accent-color, #247b76);
+  padding: 8px 12px;
+  background: var(--card-bg, #f5f7f8);
+}
+
+body.modules-page .modules-operation h2 { font-size: 1rem; margin: 0 0 6px; }
+body.modules-page .modules-operation p { margin: 3px 0; overflow-wrap: anywhere; }
+body.modules-page .modules-operation-log { margin: 8px 0; padding-left: 22px; }
+body.modules-page .modules-operation-log li { overflow-wrap: anywhere; }
+
 body.modules-page .modules-card-host {
   display: grid;
   gap: 12px;
@@ -77,3 +88,6 @@ body.modules-page .modules-plan-actions {
   gap: 8px;
   margin-top: 20px;
 }
+
+body.modules-page .modules-plan-confirm p { margin: 7px 0; overflow-wrap: anywhere; }
+body.modules-page .modules-plan-confirm [hidden] { display: none; }
