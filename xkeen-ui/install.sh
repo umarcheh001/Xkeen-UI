@@ -99,8 +99,8 @@ ui_error() {
 # перехвачен (curl | sh в файл, запуск из панели), нижний блок не печатается
 # вовсе, а шаги идут обычными строками: «→ шаг…» и «✓ шаг · 12 с».
 
-UI_PLAN="2 4 2 5 3"          # сколько шагов в каждом из пяти этапов
-UI_STEP_TOTAL=16             # сумма UI_PLAN; держится сторожевым тестом
+UI_PLAN="2 4 2 4 3"          # сколько шагов в каждом из пяти этапов
+UI_STEP_TOTAL=15             # сумма UI_PLAN; держится сторожевым тестом
 UI_STEP_DONE=0               # закрытых шагов
 UI_STEP_CURRENT=0            # номер идущего шага, 0 — ни одного
 UI_STAGE_NO=0
@@ -1475,7 +1475,7 @@ fi
 ui_step_done
 ui_success "Параметры панели подготовлены"
 ui_stage "04/05" "Установка файлов"
-ui_stage_plan 5
+ui_stage_plan 4
 ui_step "Каталоги и файлы панели"
 echo "[*] Создаю директории..."
 mkdir -p "$UI_DIR" "$INIT_DIR" "$LOG_DIR" "$RUN_DIR" "$BACKUP_DIR" "$JSONC_DIR"
@@ -1605,54 +1605,6 @@ provision_xray_dat_links "$XRAY_DAT_DIR" "$XRAY_BIN_DIR"
 # --- Compat fix: удалить отсутствующие geosite-списки из routing (xray) ---
 provision_routing_compat "$ROUTING_FILE"
 
-# --- Обновление порта в run_server.py / app.py ---
-
-RUN_SERVER="$UI_DIR/run_server.py"
-APP_FILE="$UI_DIR/app.py"
-
-ui_step_done
-ui_step "Порт в файлах панели"
-echo "[*] Обновляю порт в run_server.py / app.py..."
-UPDATED=0
-
-# run_server.py (текущая версия панели)
-if [ -f "$RUN_SERVER" ]; then
-  CHANGED_RUN=0
-
-  # Обновляем порт в ("0.0.0.0", PORT) — может быть на новой строке, поэтому ищем просто кортеж
-  if grep -q '"0\.0\.0\.0",[[:space:]]*[0-9]\+' "$RUN_SERVER"; then
-    if sed -i -E "s/(\"0\.0\.0\.0\",[[:space:]]*)[0-9]+/\1${PANEL_PORT}/g" "$RUN_SERVER"; then
-      CHANGED_RUN=1
-    fi
-  fi
-
-  # Обновляем fallback app.run(... port=PORT) внутри run_server.py (если есть)
-  if grep -q 'app\.run' "$RUN_SERVER"; then
-    if sed -i -E "s/(app\.run\([^)]*port[[:space:]]*=[[:space:]]*)[0-9]+/\1${PANEL_PORT}/g" "$RUN_SERVER"; then
-      CHANGED_RUN=1
-    fi
-  fi
-
-  if [ "$CHANGED_RUN" -eq 1 ]; then
-    echo "[*] Порт в run_server.py обновлён на $PANEL_PORT."
-    UPDATED=1
-  fi
-fi
-
-# app.py (для старых версий, где запуск был через app.run)
-if [ -f "$APP_FILE" ] && grep -q 'app\.run' "$APP_FILE"; then
-  if sed -i -E "s/(app\.run\([^)]*port[[:space:]]*=[[:space:]]*)[0-9]+/\1${PANEL_PORT}/g" "$APP_FILE"; then
-    echo "[*] Порт в app.py обновлён на $PANEL_PORT."
-    UPDATED=1
-  fi
-fi
-
-if [ "$UPDATED" -eq 0 ]; then
-  PORT_UPDATE_WARNING=1
-  echo "[!] Внимание: не удалось автоматически изменить порт ни в run_server.py, ни в app.py."
-  echo "    Порт может остаться по умолчанию, проверь файлы вручную."
-fi
-
 # --- Optional: xk-geodat (DAT GeoIP/GeoSite: "Содержимое" и "В routing") ---
 GEODAT_VERDICT="skip"
 if profile_has_module engine.xray && [ "${GEODAT_OPTION:-1}" = "1" ]; then
@@ -1765,9 +1717,6 @@ if [ "$GEODAT_VERDICT" = "off" ]; then
 fi
 if [ "${HAPP_OPTION:-0}" = "1" ] && [ ! -x "$UI_DIR/bin/happ-decrypt-universal" ]; then
   ui_warning "Режим разработчика для подписок не установился; его можно добавить позже из DevTools."
-fi
-if [ "${PORT_UPDATE_WARNING:-0}" -eq 1 ]; then
-  ui_warning "Проверьте порт панели в DevTools после первого входа."
 fi
 
 printf '      %bДиагностика:%b %s\n\n' "$UI_DIM" "$UI_RESET" "$INSTALL_LOG" >&3 2>/dev/null || true
