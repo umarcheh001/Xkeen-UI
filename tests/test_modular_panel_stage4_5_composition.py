@@ -58,7 +58,7 @@ def test_page_context_filters_each_surface_by_declared_owners():
         "panel/modals/editor.html",
     ]
     assert _paths(xray, "core_source_control_partials") == ["panel/slots/core_source_xray.html"]
-    assert _navigation_sections(xray) == ["routing", "xkeen", "xray-logs", "donate"]
+    assert _navigation_sections(xray) == ["routing", "xkeen", "xray-logs", "modules", "donate"]
 
     assert _paths(mihomo, "screen_partials") == [
         "panel/screens/mihomo.html",
@@ -71,12 +71,12 @@ def test_page_context_filters_each_surface_by_declared_owners():
         "panel/modals/editor.html",
     ]
     assert _paths(mihomo, "core_source_control_partials") == ["panel/slots/core_source_mihomo.html"]
-    assert _navigation_sections(mihomo) == ["mihomo", "xkeen", "mihomo-generator", "donate"]
+    assert _navigation_sections(mihomo) == ["mihomo", "xkeen", "modules", "mihomo-generator", "donate"]
 
     assert _paths(core, "screen_partials") == ["panel/screens/xkeen.html"]
     assert _paths(core, "modal_partials") == ["panel/modals/shared.html"]
     assert _paths(core, "core_source_control_partials") == []
-    assert _navigation_sections(core) == ["xkeen", "donate"]
+    assert _navigation_sections(core) == ["xkeen", "modules", "donate"]
 
 
 def test_page_context_is_deterministic_and_legacy_keeps_full_composition():
@@ -174,7 +174,7 @@ def _navigation_sections_from_html(html: str) -> list[str]:
 def test_core_only_html_has_no_optional_navigation_or_shell_markup(tmp_path):
     html = render_panel(["core"], tmp_path)
 
-    assert _navigation_sections_from_html(html) == ["xkeen", "donate"]
+    assert _navigation_sections_from_html(html) == ["xkeen", "modules", "donate"]
     for marker in (
         'id="view-routing"',
         'id="view-mihomo"',

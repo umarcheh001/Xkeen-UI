@@ -11,7 +11,7 @@ from typing import Any
 
 STAGE4_1_CONTRACT = "docs/modular-panel-stage4.1-contract.json"
 PANEL_TEMPLATE = "xkeen-ui/templates/panel.html"
-ROUTE_PATHS = {"mihomo_generator_page": "/mihomo_generator"}
+ROUTE_PATHS = {"modules_page": "/modules", "mihomo_generator_page": "/mihomo_generator"}
 
 
 def _load_stage4_1_contract(root: Path) -> dict[str, Any]:

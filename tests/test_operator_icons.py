@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import subprocess
 import sys
+from html.parser import HTMLParser
 from pathlib import Path
 
 from scripts.panel_template_source import compose_panel_template
@@ -34,6 +35,28 @@ THEME = ROOT / "xkeen-ui/static/js/ui/theme.js"
 FILE_MANAGER_ACTIONS = ROOT / "xkeen-ui/static/js/features/file_manager/actions.js"
 FILE_MANAGER_EDITOR = ROOT / "xkeen-ui/static/js/features/file_manager/editor.js"
 FILE_MANAGER_STORAGE = ROOT / "xkeen-ui/static/js/features/file_manager/storage.js"
+
+
+class _OperatorUseScanner(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.names: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag != "use":
+            return
+        for key, value in attrs:
+            if key not in {"href", "xlink:href"}:
+                continue
+            match = re.search(r"#xk-([a-z0-9-]+)$", value or "")
+            if match:
+                self.names.append(match.group(1))
+
+
+def _direct_operator_use_names(source: str) -> list[str]:
+    scanner = _OperatorUseScanner()
+    scanner.feed(source)
+    return scanner.names
 
 
 def header_markup() -> str:
@@ -123,10 +146,12 @@ def test_every_operator_use_reference_is_resolved_and_names_are_allowlisted():
         if "vendor" in path.parts or "frontend-build" in path.parts:
             continue
         source = path.read_text(encoding="utf-8", errors="replace")
-        for match in re.finditer(r'#xk-([a-z0-9-]+)', source):
-            references.append((path, match.group(1)))
+        references.extend((path, name) for name in _direct_operator_use_names(source))
     assert references
+    assert (ROOT / "xkeen-ui/templates/devtools.html", "sun") in references
+    assert all(name != "modules-manager" for _, name in references)
     assert all(name in symbols for _, name in references)
+    assert _direct_operator_use_names('<svg><use href="#xk-not-allowlisted"></use></svg>') == ["not-allowlisted"]
 
     helper = HELPER.read_text(encoding="utf-8")
     assert "KNOWN_ICON_NAMES" in helper

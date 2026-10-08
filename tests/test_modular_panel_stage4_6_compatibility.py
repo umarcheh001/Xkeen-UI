@@ -94,7 +94,14 @@ def test_stage4_6_contract_snapshot_is_generated_and_current(tmp_path):
     """Catch a deleted or stale compatibility baseline before profile tests run."""
 
     assert SNAPSHOT.is_file()
-    assert json.loads(SNAPSHOT.read_text(encoding="utf-8")) == _generate(tmp_path)
+    generated = _generate(tmp_path)
+    assert any(
+        all(item.get(key) == value for key, value in {
+            "section": "modules", "view": None, "id": None, "href": "/modules", "top_nav": True,
+        }.items())
+        for item in generated["navigation_manifest"]
+    )
+    assert json.loads(SNAPSHOT.read_text(encoding="utf-8")) == generated
 
 
 def test_profile_initial_html_matches_the_compatibility_baseline(tmp_path):

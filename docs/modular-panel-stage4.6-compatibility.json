@@ -282,6 +282,16 @@
     },
     {
       "owners": [
+        "core"
+      ],
+      "section": "modules",
+      "view": null,
+      "id": null,
+      "href": "/modules",
+      "top_nav": true
+    },
+    {
+      "owners": [
         "engine.mihomo"
       ],
       "section": "mihomo-generator",
@@ -368,6 +378,13 @@
           "id": "top-tab-files",
           "href": null,
           "top_nav": null
+        },
+        {
+          "section": "modules",
+          "view": null,
+          "id": null,
+          "href": "/modules",
+          "top_nav": "1"
         },
         {
           "section": "mihomo-generator",
@@ -554,6 +571,13 @@
           "top_nav": null
         },
         {
+          "section": "modules",
+          "view": null,
+          "id": null,
+          "href": "/modules",
+          "top_nav": "1"
+        },
+        {
           "section": "mihomo-generator",
           "view": null,
           "id": "top-tab-mihomo-generator",
@@ -712,6 +736,13 @@
           "top_nav": null
         },
         {
+          "section": "modules",
+          "view": null,
+          "id": null,
+          "href": "/modules",
+          "top_nav": "1"
+        },
+        {
           "section": "donate",
           "view": null,
           "id": "top-tab-donate",
@@ -849,6 +880,13 @@
           "top_nav": null
         },
         {
+          "section": "modules",
+          "view": null,
+          "id": null,
+          "href": "/modules",
+          "top_nav": "1"
+        },
+        {
           "section": "mihomo-generator",
           "view": null,
           "id": "top-tab-mihomo-generator",
@@ -977,6 +1015,13 @@
           "id": null,
           "href": null,
           "top_nav": null
+        },
+        {
+          "section": "modules",
+          "view": null,
+          "id": null,
+          "href": "/modules",
+          "top_nav": "1"
         },
         {
           "section": "donate",

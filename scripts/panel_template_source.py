@@ -131,6 +131,16 @@ DYNAMIC_NAVIGATION_ITEMS: tuple[dict[str, object], ...] = (
         "top_nav": False,
     },
     {
+        "owners": ("core",),
+        "section": "modules",
+        "label": "Модули и обновления",
+        "class_name": "top-tab-btn xk-top-tab xk-top-tab-modules",
+        "view": None,
+        "element_id": None,
+        "href_endpoint": "modules_page",
+        "top_nav": True,
+    },
+    {
         "owners": ("engine.mihomo",),
         "section": "mihomo-generator",
         "label": "Mihomo Генератор",

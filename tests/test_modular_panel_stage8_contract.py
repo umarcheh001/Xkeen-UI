@@ -321,7 +321,7 @@ def test_stage8_lifecycle_document_and_roadmap_are_closed() -> None:
     ):
         assert fragment in lifecycle
     assert "8.3 и 8.4 закрыты 6 октября 2026 года" in plan
-    assert "следующий — подэтап 8.6" in plan
+    assert "реализация подэтапа 8.6 ожидает итоговой проверки" in plan
     assert "modular-panel-stage8-lifecycle-api.md" in docs_index
 
 
@@ -422,5 +422,5 @@ def test_stage8_panel_profile_operator_contract_and_roadmap_are_closed() -> None
         assert fragment in operator
     assert "Подэтап 8.5" in plan
     assert "закрыт 7 октября 2026 года" in plan
-    assert "следующий — подэтап 8.6" in plan
+    assert "реализация подэтапа 8.6 ожидает итоговой проверки" in plan
     assert "modular-panel-stage8-panel-profile.md" in docs_index
