@@ -251,6 +251,12 @@ def observe_status(panel_root: Path, state_dir: Path) -> dict[str, Any]:
         return status
     operation_dir = Journal.find(panel_root)
     if operation_dir is None:
+        if status.get("step") == "committed":
+            # The runner confirmed the operation and put its record away, and
+            # was cut short before the last word in the status: it is done.
+            status.update(result="committed", finished_at=time.time())
+            write_status(state_dir, status)
+            return status
         # The record of the operation is gone (the installer cleared it).
         status.update(result="interrupted", finished_at=time.time())
         if not status.get("error_code"):

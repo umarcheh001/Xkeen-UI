@@ -313,6 +313,47 @@ def test_the_protection_is_released_with_the_settings_of_the_panel(tmp_path):
     assert router.python_calls()[0] == "configs=/opt/etc/xray/other"
 
 
+# --- запуск из терминала самой панели ----------------------------------------------------
+
+
+def test_started_from_the_panels_own_terminal_it_carries_on_apart_from_the_panel(tmp_path):
+    router = Router(tmp_path)
+    before = router.files()
+
+    proc = router.uninstall("--purge", "--force", XKEEN_UI_UNINSTALL_UNDER_PANEL="1")
+
+    assert proc.returncode == 0, _text(proc)
+    assert "продолжится само" in _text(proc)
+    # Сам он ничего не удалил: работу продолжает отдельный процесс в своём сеансе.
+    assert router.files() - {"tmp/xkeen-ui-uninstall.sh", "tmp/xkeen-ui-uninstall.log"} == before
+    (call,) = router.python_calls()
+    assert "os.setsid()" in call
+    assert call.rstrip().endswith("tmp/xkeen-ui-uninstall.sh --force")
+
+
+def test_the_part_that_carries_on_removes_everything_and_its_own_copy(tmp_path):
+    router = Router(tmp_path)
+    copy = router.root / "tmp" / "xkeen-ui-uninstall.sh"
+    copy.write_bytes(UNINSTALL.read_bytes())
+
+    proc = subprocess.run(
+        ["sh", copy.as_posix()],
+        capture_output=True,
+        stdin=subprocess.DEVNULL,
+        env={
+            **os.environ,
+            "XKEEN_UI_UNINSTALL_ROOT": router.root.as_posix(),
+            "PYTHON_BIN": router.python.as_posix(),
+            "XKEEN_UI_UNINSTALL_DETACHED": "1",
+            "XKEEN_UI_UNINSTALL_PURGE": "1",
+            "XKEEN_UI_UNINSTALL_UNDER_PANEL": "1",
+        },
+    )
+
+    assert proc.returncode == 0, _text(proc)
+    assert router.files() == set(FOREIGN_FILES)
+
+
 # --- перенесённые каталоги и чужое под знакомыми именами ---------------------------------
 
 

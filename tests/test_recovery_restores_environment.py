@@ -127,6 +127,26 @@ def test_the_panel_restores_the_environment_when_it_finds_a_dead_runner(tmp_path
     assert trace.read_text(encoding="utf-8").split() == ["apply"]
 
 
+def test_an_operation_confirmed_but_cut_short_before_its_last_word_is_done(tmp_path):
+    panel = make_panel(tmp_path)
+    # Исполнитель подтвердил операцию и убрал её запись, но итог дописать не успел.
+    write_status(panel.state, {"operation_id": "confirmed", "result": "running", "step": "committed"})
+
+    status = launcher.observe_status(panel.root, panel.state)
+
+    assert status["result"] == "committed"
+    assert not status.get("error_code")
+
+
+def test_an_operation_whose_record_is_gone_midway_is_interrupted(tmp_path):
+    panel = make_panel(tmp_path)
+    write_status(panel.state, {"operation_id": "cleared", "result": "running", "step": "applying"})
+
+    status = launcher.observe_status(panel.root, panel.state)
+
+    assert (status["result"], status["error_code"]) == ("interrupted", "operation_interrupted")
+
+
 def test_two_looks_at_a_dead_runner_do_not_undo_it_twice_at_once(tmp_path, monkeypatch):
     panel = _abandoned(tmp_path, "health")
     write_status(panel.state, {"operation_id": "abandoned-operation", "result": "running", "step": "health"})

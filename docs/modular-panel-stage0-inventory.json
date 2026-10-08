@@ -37,7 +37,7 @@
       ],
       "removable": false,
       "unit_count": 539,
-      "size_bytes": 7194368,
+      "size_bytes": 7199561,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -2324,7 +2324,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_transactions/launcher.py",
-      "size_bytes": 10624,
+      "size_bytes": 10965,
       "depends_on": [],
       "starts_background_task": true,
       "background_markers": [
@@ -6482,7 +6482,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_recovery_restores_environment.py",
-      "size_bytes": 6119,
+      "size_bytes": 7009,
       "depends_on": [],
       "starts_background_task": true,
       "background_markers": [
@@ -7580,7 +7580,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_uninstall_is_clean.py",
-      "size_bytes": 15383,
+      "size_bytes": 16983,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -7595,7 +7595,10 @@
         "XKEEN_LOG_DIR",
         "XKEEN_UI_BACKUP_DIR",
         "XKEEN_UI_UNINSTALL_ASK",
+        "XKEEN_UI_UNINSTALL_DETACHED",
+        "XKEEN_UI_UNINSTALL_PURGE",
         "XKEEN_UI_UNINSTALL_ROOT",
+        "XKEEN_UI_UNINSTALL_UNDER_PANEL",
         "XKEEN_UI_UPDATE_DIR",
         "XKEEN_XRAY_CONFIGS_DIR"
       ],
@@ -8111,7 +8114,7 @@
       "module_id": "core",
       "kind": "configuration",
       "path": "xkeen-ui/uninstall.sh",
-      "size_bytes": 18934,
+      "size_bytes": 21296,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -8131,8 +8134,10 @@
         "XKEEN_UI_INIT_SCRIPT",
         "XKEEN_UI_PYTHONPYCACHEPREFIX",
         "XKEEN_UI_UNINSTALL_ASK",
+        "XKEEN_UI_UNINSTALL_DETACHED",
         "XKEEN_UI_UNINSTALL_PURGE",
         "XKEEN_UI_UNINSTALL_ROOT",
+        "XKEEN_UI_UNINSTALL_UNDER_PANEL",
         "XKEEN_UI_UPDATE_DIR"
       ],
       "removable": false

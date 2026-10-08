@@ -167,6 +167,48 @@ if [ -z "$PURGE" ]; then
   fi
 fi
 
+panel_is_ancestor() {
+  # Запущен ли скрипт из терминала самой панели. Тогда остановка панели
+  # закрывает терминал, а вместе с ним гибнет и всё, что в нём запущено.
+  [ "${XKEEN_UI_UNINSTALL_UNDER_PANEL:-}" = "1" ] && return 0
+  [ -z "$ROOT" ] || return 1
+  _pa_pid=$$
+  _pa_depth=0
+  while [ "$_pa_pid" -gt 1 ] 2>/dev/null && [ "$_pa_depth" -lt 32 ]; do
+    _pa_stat="$(cat "/proc/$_pa_pid/stat" 2>/dev/null)" || return 1
+    _pa_after="${_pa_stat##*) }"
+    _pa_parent="${_pa_after#* }"
+    _pa_parent="${_pa_parent%% *}"
+    case "$_pa_parent" in
+      ''|*[!0-9]*) return 1 ;;
+    esac
+    if tr '\000' ' ' < "/proc/$_pa_parent/cmdline" 2>/dev/null | grep -q "$UI_DIR/"; then
+      return 0
+    fi
+    _pa_pid="$_pa_parent"
+    _pa_depth=$((_pa_depth + 1))
+  done
+  return 1
+}
+
+if [ "${XKEEN_UI_UNINSTALL_DETACHED:-0}" != "1" ] && [ -x "$PYTHON_BIN" ] && panel_is_ancestor; then
+  # Продолжаем отдельным процессом в своём сеансе: его остановка панели не
+  # заденет. Копия скрипта нужна потому, что сам он лежит в каталоге панели.
+  DETACHED_SCRIPT="$TMP_DIR/xkeen-ui-uninstall.sh"
+  DETACHED_LOG="$TMP_DIR/xkeen-ui-uninstall.log"
+  mkdir -p "$TMP_DIR" 2>/dev/null || true
+  if cp -f "$0" "$DETACHED_SCRIPT" 2>/dev/null; then
+    echo "[*] Удаление запущено из терминала панели: панель сейчас остановится, и терминал закроется."
+    echo "    Удаление продолжится само. Чем оно закончилось: $DETACHED_LOG"
+    FORCE_FLAG=""
+    [ "$FORCE" -eq 1 ] && FORCE_FLAG="--force"
+    XKEEN_UI_UNINSTALL_DETACHED=1 XKEEN_UI_UNINSTALL_PURGE="$PURGE" "$PYTHON_BIN" -c \
+      'import os, sys; os.setsid(); os.execv("/bin/sh", ["sh"] + sys.argv[1:])' \
+      "$DETACHED_SCRIPT" $FORCE_FLAG > "$DETACHED_LOG" 2>&1 < /dev/null &
+    exit 0
+  fi
+fi
+
 # Список библиотек Python, которые ставила сама панель, лежит в её каталоге.
 PIP_RECORD="$UI_DIR/var/pip-installed-by-panel.txt"
 PIP_INSTALLED_BY_PANEL=""
@@ -407,6 +449,13 @@ if [ -n "$LEFT" ]; then
   fi
 fi
 echo "[*] Рабочие конфиги Xray и Mihomo, DAT-файлы и пакеты Entware не тронуты."
+
+# Копия скрипта, с которой продолжалось удаление из терминала панели.
+if [ "${XKEEN_UI_UNINSTALL_DETACHED:-0}" = "1" ]; then
+  case "$0" in
+    "$TMP_DIR"/xkeen-ui-uninstall.sh) rm -f "$0" 2>/dev/null || true ;;
+  esac
+fi
 
 echo "========================================"
 echo "  ✔ Xkeen Web UI удалён"
