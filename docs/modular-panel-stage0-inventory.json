@@ -36,13 +36,13 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 526,
-      "size_bytes": 7033588,
+      "unit_count": 527,
+      "size_bytes": 7037120,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
         "backend_service": 74,
-        "backend_test": 243,
+        "backend_test": 244,
         "configuration": 10,
         "frontend_bundle": 9,
         "frontend_entrypoint": 2,
@@ -6266,6 +6266,28 @@
     {
       "module_id": "core",
       "kind": "backend_test",
+      "path": "tests/test_provision_packages.py",
+      "size_bytes": 6370,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [
+        "XKEEN_OPKG_CONF",
+        "XKEEN_OPKG_FALLBACK",
+        "XKEEN_OPKG_UPDATE_TIMEOUT"
+      ],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
       "path": "tests/test_provision_python_libs.py",
       "size_bytes": 6149,
       "depends_on": [],
@@ -7828,7 +7850,7 @@
       "module_id": "core",
       "kind": "configuration",
       "path": "xkeen-ui/install.sh",
-      "size_bytes": 73818,
+      "size_bytes": 70980,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],

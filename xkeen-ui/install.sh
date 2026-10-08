@@ -843,36 +843,9 @@ choose_panel_profile
 
 ui_step_done
 ui_step "Файловый менеджер"
-echo "[*] Проверяю наличие lftp для файлового менеджера..."
-
-if profile_has_module tool.files && ! command -v lftp >/dev/null 2>&1; then
-  ui_info "Добавляю файловый менеджер..."
-  echo "[*] lftp не найден. Пытаюсь установить lftp через Entware (opkg)..."
-
-  if command -v opkg >/dev/null 2>&1; then
-    OPKG_BIN="$(command -v opkg)"
-  elif [ -x "/opt/bin/opkg" ]; then
-    OPKG_BIN="/opt/bin/opkg"
-  else
-    echo "[!] Не найден пакетный менеджер opkg Entware."
-    echo "    Установи Entware и lftp вручную, затем запусти установщик ещё раз."
-    fail_install "Не найден Entware (opkg), необходимый для файлового менеджера."
-  fi
-
-  if ! provision_opkg_update; then
-    echo "[!] Не удалось выполнить 'opkg update' при установке lftp."
-    fail_install "Не удалось обновить пакеты Entware для установки lftp."
-  fi
-
-  if ! provision_opkg install lftp; then
-    echo "[!] Установка lftp через opkg завершилась с ошибкой."
-    fail_install "Не удалось установить lftp через Entware."
-  fi
-fi
-
-if profile_has_module tool.files && ! command -v lftp >/dev/null 2>&1; then
-  echo "[!] lftp не найден даже после установки."
-  fail_install "lftp не найден после установки."
+if profile_has_module tool.files; then
+  command -v lftp >/dev/null 2>&1 || ui_info "Добавляю файловый менеджер..."
+  provision_file_manager || fail_install "${PROVISION_ERROR:-Не удалось подготовить файловый менеджер.}"
 fi
 
 
@@ -880,35 +853,7 @@ fi
 
 ui_step_done
 ui_step "Утилиты системного монитора"
-echo "[*] Проверяю утилиты для системного монитора (sysmon)..."
-
-SYSMON_PKGS=""
-# coreutils-df — для df -h с человекочитаемыми размерами
-command -v df >/dev/null 2>&1 && df -h / >/dev/null 2>&1 || SYSMON_PKGS="$SYSMON_PKGS coreutils-df"
-# procps-ng-free — для free -h --mega (подробная информация об ОЗУ/Swap)
-command -v free >/dev/null 2>&1 && free -h >/dev/null 2>&1 || SYSMON_PKGS="$SYSMON_PKGS procps-ng-free"
-# procps-ng-uptime — для uptime -p (человекочитаемый аптайм)
-command -v uptime >/dev/null 2>&1 && uptime -p >/dev/null 2>&1 || SYSMON_PKGS="$SYSMON_PKGS procps-ng-uptime"
-
-if [ -n "$SYSMON_PKGS" ]; then
-  echo "[*] Устанавливаю пакеты для sysmon:$SYSMON_PKGS"
-  if command -v opkg >/dev/null 2>&1; then
-    OPKG_BIN="$(command -v opkg)"
-  elif [ -x "/opt/bin/opkg" ]; then
-    OPKG_BIN="/opt/bin/opkg"
-  fi
-  if [ -n "$OPKG_BIN" ]; then
-    provision_opkg_update >/dev/null 2>&1 || true
-    # shellcheck disable=SC2086
-    provision_opkg install $SYSMON_PKGS 2>/dev/null || \
-      echo "[!] Не все пакеты sysmon удалось установить (некритично, sysmon будет работать с фолбэками)."
-  else
-    echo "[!] opkg не найден — пропускаю установку пакетов sysmon."
-    echo "    Для полного вывода sysmon установи вручную: opkg install$SYSMON_PKGS"
-  fi
-else
-  echo "[*] Утилиты sysmon уже установлены."
-fi
+provision_sysmon_utils
 
 ui_step_done
 ui_success "Системные компоненты готовы"

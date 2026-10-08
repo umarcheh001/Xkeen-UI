@@ -1159,10 +1159,82 @@ provision_panel_port() {
   printf '%s' "$_pp_port"
 }
 
+provision_file_manager() {
+  # lftp для файлового менеджера. Ненулевой код — доставить не удалось,
+  # причина в PROVISION_ERROR: насколько это серьёзно, решает тот, кто вызвал.
+  PROVISION_ERROR=""
+  echo "[*] Проверяю наличие lftp для файлового менеджера..."
+  command -v lftp >/dev/null 2>&1 && return 0
+
+  echo "[*] lftp не найден. Пытаюсь установить lftp через Entware (opkg)..."
+  if ! ensure_opkg_bin; then
+    echo "    Установи Entware и lftp вручную, затем запусти установщик ещё раз."
+    provision_fail "Не найден Entware (opkg), необходимый для файлового менеджера."
+    return 1
+  fi
+  if ! provision_opkg_update; then
+    provision_fail "Не удалось обновить пакеты Entware для установки lftp."
+    return 1
+  fi
+  if ! provision_opkg install lftp; then
+    provision_fail "Не удалось установить lftp через Entware."
+    return 1
+  fi
+  if ! command -v lftp >/dev/null 2>&1; then
+    provision_fail "lftp не найден после установки."
+    return 1
+  fi
+  return 0
+}
+
+provision_sysmon_utils() {
+  # Утилиты для подробного вывода системного монитора. Монитор работает и без
+  # них, поэтому любая неудача здесь — только строка в журнале.
+  echo "[*] Проверяю утилиты для системного монитора (sysmon)..."
+
+  SYSMON_PKGS=""
+  # coreutils-df — для df -h с человекочитаемыми размерами
+  command -v df >/dev/null 2>&1 && df -h / >/dev/null 2>&1 || SYSMON_PKGS="$SYSMON_PKGS coreutils-df"
+  # procps-ng-free — для free -h --mega (подробная информация об ОЗУ/Swap)
+  command -v free >/dev/null 2>&1 && free -h >/dev/null 2>&1 || SYSMON_PKGS="$SYSMON_PKGS procps-ng-free"
+  # procps-ng-uptime — для uptime -p (человекочитаемый аптайм)
+  command -v uptime >/dev/null 2>&1 && uptime -p >/dev/null 2>&1 || SYSMON_PKGS="$SYSMON_PKGS procps-ng-uptime"
+
+  if [ -z "$SYSMON_PKGS" ]; then
+    echo "[*] Утилиты sysmon уже установлены."
+    return 0
+  fi
+
+  echo "[*] Устанавливаю пакеты для sysmon:$SYSMON_PKGS"
+  if ! ensure_opkg_bin; then
+    echo "[!] opkg не найден — пропускаю установку пакетов sysmon."
+    echo "    Для полного вывода sysmon установи вручную: opkg install$SYSMON_PKGS"
+    return 0
+  fi
+  provision_opkg_update >/dev/null 2>&1 || true
+  # shellcheck disable=SC2086
+  provision_opkg install $SYSMON_PKGS 2>/dev/null || \
+    echo "[!] Не все пакеты sysmon удалось установить (некритично, sysmon будет работать с фолбэками)."
+  return 0
+}
+
 provision_cmd_prepare() {
   provision_gevent_policy
   provision_python_libs_check
-  provision_python_libs_install
+  provision_python_libs_install || return 1
+
+  # Пакеты Entware для модулей. Ставятся здесь, а не в `apply`: запрос к
+  # источнику пакетов бывает долгим, а у `apply` короткий предел времени и его
+  # сбой откатывает обновление. Панель работает и без этих пакетов, поэтому
+  # неудача не останавливает обновление — в журнале остаётся, чего не хватило.
+  PROVISION_MODULES="$(provision_installed_modules)"
+  if provision_has_module tool.files; then
+    provision_file_manager || echo "[*] lftp для файлового менеджера доставить не удалось; обновление продолжается."
+  fi
+  provision_sysmon_utils || true
+  provision_opkg_cleanup 2>/dev/null || true
+  PROVISION_ERROR=""
+  return 0
 }
 
 provision_cmd_apply() {
