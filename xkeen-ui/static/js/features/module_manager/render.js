@@ -20,6 +20,34 @@ const ACTION_LABELS = {
   'profile-transition': 'Применить профиль',
 };
 
+const FAILURE_MESSAGES = {
+  catalog_unavailable: 'Каталог модулей временно недоступен.',
+  catalog_stale: 'Каталог устарел. Загрузите его снова.',
+  module_plan_stale: 'План устарел. Проверьте новый план.',
+  operation_plan_stale: 'План устарел. Проверьте новый план.',
+  operation_in_progress: 'Другая операция уже выполняется.',
+  profile_transition_required: 'Сначала примените переход профиля.',
+  operation_rollback_failed: 'Восстановление файлов не завершилось. Требуется ручная проверка установки и состояния панели.',
+  module_free_space: 'Недостаточно свободного места.',
+  module_engine_active: 'Модуль используется активным движком.',
+  module_dependency_missing: 'Не хватает зависимости.',
+  panel_version_current: 'Обновлений нет.',
+  module_conflict: 'Обнаружен конфликт модулей.',
+  module_required_by: 'Модуль требуется другим модулям.',
+  panel_archive_invalid: 'Архив панели не прошёл проверку.',
+  profile_payload_unavailable: 'Архив для перехода профиля недоступен.',
+};
+
+export function describeLifecycleFailure({ code } = {}) {
+  const safeCode = typeof code === 'string' && /^[a-z][a-z0-9_]{0,79}$/.test(code) ? code : 'module_request_failed';
+  let guidance = FAILURE_MESSAGES[safeCode];
+  if (!guidance && safeCode.startsWith('catalog_')) guidance = safeCode.includes('stale') || safeCode.includes('expired') ? 'Каталог устарел. Загрузите его снова.' : 'Не удалось проверить каталог модулей.';
+  if (!guidance && safeCode.includes('trust')) guidance = 'Не удалось подтвердить доверие к каталогу.';
+  if (!guidance && safeCode.includes('archive')) guidance = 'Не удалось проверить архив модуля.';
+  if (!guidance && safeCode.includes('rollback')) guidance = 'Восстановление файлов не завершилось. Требуется ручная проверка установки и состояния панели.';
+  return `${guidance || 'Не удалось выполнить операцию с модулями.'} (${safeCode})`;
+}
+
 function actionButton(operation, moduleId, label, onPlan, disabled) {
   const button = node('button', 'btn-secondary', label);
   button.type = 'button';
@@ -64,29 +92,35 @@ export function renderPlan(dialog, plan) {
   for (const [key, value] of Object.entries(diff)) textList(summary, `Зависимости ${key}`, value);
   if (plan.restart_required) summary.append(node('p', 'modules-alert', 'Требуется перезапуск'));
   for (const blocker of Array.isArray(plan.blockers) ? plan.blockers : []) {
-    summary.append(node('p', 'modules-alert', blocker?.message || blocker?.code || 'План заблокирован'));
+    summary.append(node('p', 'modules-alert', describeLifecycleFailure(blocker)));
   }
   apply.hidden = plan.applicable !== true || !plan.plan_id;
   apply.disabled = false;
 }
 
-export function renderOperationStatus(host, status, onCancel, busy = false) {
+export function renderOperationStatus(host, status, { onCancel, onRecovery, onRestart, canRestart = false, busy = false } = {}) {
   host.replaceChildren();
   if (!status || status.result === 'idle') return;
   const area = node('section', 'modules-operation');
   area.append(node('h2', '', 'Операция с модулями'));
   for (const [label, value] of [
-    ['Шаг', status.step], ['Результат', status.result], ['Код ошибки', status.error_code],
-    ['Ошибка', status.error], ['Начало', status.started_at], ['Завершение', status.finished_at],
+    ['Шаг', status.step], ['Результат', status.result],
+    ['Начало', status.started_at], ['Завершение', status.finished_at],
   ]) {
     if (value !== undefined && value !== null && value !== '') area.append(node('p', '', `${label}: ${value}`));
   }
+  if (status.result === 'rollback_failed') area.append(node('p', 'modules-alert', describeLifecycleFailure({ code: 'operation_rollback_failed' })));
+  else if (status.error_code) area.append(node('p', 'modules-alert', describeLifecycleFailure({ code: status.error_code })));
   if (Array.isArray(status.log) && status.log.length) {
-    const list = node('ol', 'modules-operation-log');
+    const log = node('pre', 'modules-operation-log-region');
+    const code = node('code', 'modules-operation-log');
     for (const record of status.log) {
-      if (record && typeof record === 'object') list.append(node('li', '', [record.step, record.at].filter((part) => part !== undefined && part !== null).join(' · ')));
+      if (record && typeof record === 'object') {
+        code.append(document.createTextNode(`${[record.step, record.at].filter((part) => part !== undefined && part !== null).join(' · ')}\n`));
+      }
     }
-    area.append(list);
+    log.append(code);
+    area.append(log);
   }
   if (status.result === 'running' && status.operation_id) {
     const cancel = node('button', 'btn-secondary', 'Отменить операцию');
@@ -94,6 +128,20 @@ export function renderOperationStatus(host, status, onCancel, busy = false) {
     cancel.disabled = busy;
     cancel.addEventListener('click', onCancel);
     area.append(cancel);
+  }
+  if (status.result === 'interrupted') {
+    const recover = node('button', 'btn-secondary', 'Восстановить операцию');
+    recover.type = 'button';
+    recover.disabled = busy;
+    recover.addEventListener('click', onRecovery);
+    area.append(recover);
+  }
+  if (canRestart) {
+    const restart = node('button', 'btn-secondary', 'Перезапустить панель');
+    restart.type = 'button';
+    restart.disabled = busy;
+    restart.addEventListener('click', onRestart);
+    area.append(restart);
   }
   host.append(area);
 }

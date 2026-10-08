@@ -11,6 +11,23 @@ body.modules-page .modules-header-main h1 {
   margin: 0;
 }
 
+body.modules-page .container-wide { box-sizing: border-box; max-width: 100%; }
+body.modules-page .modules-header-main .header-actions { min-width: 0; max-width: 100%; }
+body.modules-page .modules-header-main .theme-toggle-btn {
+  width: auto;
+  min-width: 0;
+  height: 40px;
+  flex: 0 1 auto;
+  font-size: 12px;
+}
+body.modules-page .modules-header-main .theme-toggle-icon {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  font-size: 16px;
+}
+
 body.modules-page .modules-tabs {
   display: flex;
   gap: 8px;
@@ -22,6 +39,12 @@ body.modules-page .modules-operation-status {
   margin-bottom: 12px;
 }
 
+body.modules-page .modules-error:not(:empty) {
+  margin: 0 0 12px;
+  color: var(--danger-color, #ad3030);
+  overflow-wrap: anywhere;
+}
+
 body.modules-page .modules-operation {
   border-left: 3px solid var(--accent-color, #247b76);
   padding: 8px 12px;
@@ -30,13 +53,16 @@ body.modules-page .modules-operation {
 
 body.modules-page .modules-operation h2 { font-size: 1rem; margin: 0 0 6px; }
 body.modules-page .modules-operation p { margin: 3px 0; overflow-wrap: anywhere; }
-body.modules-page .modules-operation-log { margin: 8px 0; padding-left: 22px; }
-body.modules-page .modules-operation-log li { overflow-wrap: anywhere; }
+body.modules-page .modules-operation-log-region { max-height: 180px; margin: 8px 0; overflow: auto; font-family: monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 body.modules-page .modules-card-host {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
 }
+
+body.modules-page .modules-card-host > *,
+body.modules-page .modules-row-body { min-width: 0; overflow-wrap: anywhere; }
 
 body.modules-page .modules-summary,
 body.modules-page .modules-list { padding: 12px 0; }
@@ -60,6 +86,9 @@ body.modules-page .modules-card p { margin: 4px 0; }
 body.modules-page .modules-switch { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
 body.modules-page .modules-switch input { width: 18px; height: 18px; }
 body.modules-page .modules-card-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+body.modules-page .modules-card-actions button,
+body.modules-page .modules-operation button,
+body.modules-page .modules-plan-actions button { min-height: 40px; }
 
 [data-xk-modules-update-badge]:not([hidden]) {
   display: inline-block;
@@ -72,7 +101,9 @@ body.modules-page .modules-card-actions { display: flex; flex-wrap: wrap; gap: 8
 }
 
 body.modules-page .modules-plan-confirm {
-  width: min(520px, calc(100vw - 32px));
+  width: min(760px, calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
+  box-sizing: border-box;
   max-height: calc(100vh - 32px);
   overflow: auto;
   border-radius: 8px;
@@ -91,3 +122,11 @@ body.modules-page .modules-plan-actions {
 
 body.modules-page .modules-plan-confirm p { margin: 7px 0; overflow-wrap: anywhere; }
 body.modules-page .modules-plan-confirm [hidden] { display: none; }
+
+@media (max-width: 600px) {
+  body.modules-page .modules-header-main .header-actions { width: 100%; justify-content: flex-start; }
+  body.modules-page .modules-row { flex-direction: column; align-items: stretch; }
+  body.modules-page .modules-switch { align-self: flex-start; }
+  body.modules-page .modules-plan-actions { flex-wrap: wrap; }
+  body.modules-page .modules-plan-actions button { flex: 1 1 140px; }
+}

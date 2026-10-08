@@ -39,6 +39,138 @@ async function installIdleLifecycleRoutes(page) {
   await page.route('**/api/modules/available', (route) => route.fulfill({ json: availableSnapshot }));
 }
 
+async function installLifecycleRoutes(page, { status = idleStatus, installed = installedSnapshot, available = availableSnapshot } = {}) {
+  await page.route('**/api/modules/installed', (route) => route.fulfill({ json: installed }));
+  await page.route('**/api/modules/operations/status', (route) => route.fulfill({ json: status }));
+  await page.route('**/api/modules/available', (route) => route.fulfill({ json: available }));
+}
+
+const interruptedStatus = { ...runningStatus, result: 'interrupted', step: 'recover', error_code: 'operation_interrupted' };
+const rollbackFailedStatus = { ...interruptedStatus, result: 'rollback_failed', error_code: 'operation_rollback_failed' };
+const restartStatus = { ...runningStatus, result: 'committed', step: 'done', restart_required: true };
+
+test.describe('Module manager recovery and guards', () => {
+  test('recovers interrupted operation without restarting', async ({ page }) => {
+    let recoveryCalls = 0;
+    let restartCalls = 0;
+    await installLifecycleRoutes(page, { status: interruptedStatus });
+    await page.route('**/api/modules/recovery', (route) => {
+      recoveryCalls += 1;
+      return route.fulfill({ json: { ...interruptedStatus, result: 'rolled_back', recovered: true } });
+    });
+    await page.route('**/api/modules/restart', (route) => {
+      restartCalls += 1;
+      return route.fulfill({ json: { ok: true, restart_requested: true } });
+    });
+    await page.goto('/modules');
+    await page.getByRole('button', { name: 'Восстановить операцию' }).click();
+    await expect(page.locator('#modules-operation-status')).toContainText('rolled_back');
+    expect(recoveryCalls).toBe(1);
+    expect(restartCalls).toBe(0);
+  });
+
+  test('locks mutations after rollback_failed and exposes manual recovery boundary', async ({ page }) => {
+    await installLifecycleRoutes(page, { status: rollbackFailedStatus });
+    await page.goto('/modules');
+    await expect(page.getByText('Восстановление файлов не завершилось')).toBeVisible();
+    await page.getByRole('tab', { name: 'Доступные' }).click();
+    await expect(page.getByRole('button', { name: 'Установить Терминал' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Восстановить операцию' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Перезапустить панель' })).toHaveCount(0);
+  });
+
+  test('offers guarded restart only after a restart-required terminal outcome', async ({ page }) => {
+    let restartCalls = 0;
+    await installLifecycleRoutes(page, { status: restartStatus });
+    await page.route('**/api/modules/restart', (route) => {
+      restartCalls += 1;
+      return route.fulfill({ json: { ok: true, restart_requested: true } });
+    });
+    await page.goto('/modules');
+    await page.screenshot({ path: 'test-results/modules-operation-desktop.png', fullPage: true });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.getByRole('button', { name: 'Перезапустить панель' }).click();
+    await expect(page.locator('#modules-operation-status')).toContainText('Перезапуск запрошен');
+    expect(restartCalls).toBe(1);
+  });
+
+  test('profile transition offers reviewed plan instead of restart', async ({ page }) => {
+    await installLifecycleRoutes(page, { status: restartStatus, installed: { ...installedSnapshot, transition_required: true } });
+    await page.route('**/api/modules/operations/plan', (route) => route.fulfill({ json: {
+      ...installPlan, operation: 'profile-transition', module_id: null, scope: 'panel',
+    } }));
+    await page.goto('/modules');
+    await expect(page.getByRole('button', { name: 'Перезапустить панель' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Применить профиль' }).click();
+    await expect(page.getByRole('dialog', { name: 'План перехода профиля' })).toBeVisible();
+  });
+
+  test('maps catalog errors without printing remote message and preserves installed cards', async ({ page }) => {
+    await installLifecycleRoutes(page);
+    await page.route('**/api/modules/available', (route) => route.fulfill({ status: 503, json: {
+      ok: false, code: 'catalog_unavailable', message: '<img src=x onerror="window.catalogInjected=1"> /private/path',
+    } }));
+    await page.goto('/modules');
+    await page.getByRole('tab', { name: 'Доступные' }).click();
+    await expect(page.locator('#modules-error')).toContainText('catalog_unavailable');
+    await expect(page.locator('#modules-error')).not.toContainText('/private/path');
+    await page.getByRole('tab', { name: 'Установленные' }).click();
+    await expect(page.locator('.modules-row').first()).toContainText('Xkeen UI Core');
+    expect(await page.evaluate(() => window.catalogInjected)).toBeUndefined();
+  });
+
+  test('keeps installed cards when operation status is unavailable', async ({ page }) => {
+    await installLifecycleRoutes(page);
+    await page.route('**/api/modules/operations/status', (route) => route.fulfill({ status: 503, json: {
+      ok: false, code: 'operation_in_progress', message: '/private/operation.log',
+    } }));
+    await page.goto('/modules');
+    await expect(page.locator('.modules-row').first()).toContainText('Xkeen UI Core');
+    await expect(page.locator('#modules-error')).toContainText('operation_in_progress');
+    await expect(page.locator('#modules-error')).not.toContainText('/private/operation.log');
+  });
+
+  test('explains public lifecycle failure families without remote details', async ({ page }) => {
+    await installLifecycleRoutes(page);
+    await page.goto('/modules');
+    const descriptions = await page.evaluate(async () => {
+      const { describeLifecycleFailure } = await import('/static/js/features/module_manager/render.js');
+      return ['catalog_stale', 'catalog_trust_failed', 'module_archive_invalid', 'module_free_space',
+        'operation_in_progress', 'module_plan_stale', 'profile_transition_required', 'operation_rollback_failed']
+        .map((code) => describeLifecycleFailure({ code, message: '/private/file' }));
+    });
+    expect(descriptions).toHaveLength(8);
+    for (const description of descriptions) {
+      expect(description).toMatch(/[А-Яа-я]/);
+      expect(description).not.toContain('/private/file');
+    }
+    expect(descriptions.at(-1)).toContain('ручная проверка');
+  });
+
+  test('keeps expanded operation and plan readable on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await installLifecycleRoutes(page, { status: { ...restartStatus, log: [{ step: 'a'.repeat(200), at: 1781000001 }] } });
+    await page.route('**/api/modules/operations/plan', (route) => route.fulfill({ json: {
+      ...installPlan, affected_module_ids: ['a'.repeat(120)],
+    } }));
+    await page.goto('/modules');
+    await expect(page.getByRole('button', { name: 'Перезапустить панель' })).toBeVisible();
+    await expect(page.locator('.modules-operation-log-region code')).toContainText('a'.repeat(200));
+    await page.screenshot({ path: 'test-results/modules-operation-mobile.png', fullPage: true });
+    const overflow = await page.evaluate(() => ({ width: document.documentElement.scrollWidth, viewport: innerWidth,
+      elements: [...document.querySelectorAll('body *')].filter((el) => el.getBoundingClientRect().right > innerWidth + 1).slice(0, 8).map((el) => [el.tagName, el.className, Math.round(el.getBoundingClientRect().right)]),
+    }));
+    expect(overflow.width <= overflow.viewport, JSON.stringify(overflow)).toBe(true);
+    await page.getByRole('button', { name: 'Обновить панель' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+    expect(await dialog.evaluate((element) => element.getBoundingClientRect().right <= innerWidth)).toBe(true);
+    expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await dialog.getByRole('button', { name: 'Отменить' }).click();
+    await expect(page.getByRole('button', { name: 'Обновить панель' })).toBeFocused();
+  });
+});
+
 test.describe('Module manager loading', () => {
   test('opens installed state without downloading the catalog', async ({ page }) => {
     const initialCalls = [];
@@ -262,7 +394,7 @@ test.describe('Module lifecycle review', () => {
       await page.getByRole('button', { name: catalog ? 'Установить Терминал' : 'Обновить панель' }).click();
       await page.getByRole('dialog').getByRole('button', { name: 'Применить план' }).click();
       await expect(page.getByRole('dialog')).toHaveCount(0);
-      await expect(page.locator('#modules-operation-status')).toContainText('План устарел');
+      await expect(page.locator('#modules-error')).toContainText('План устарел');
       expect(bodies).toHaveLength(1);
     });
   }

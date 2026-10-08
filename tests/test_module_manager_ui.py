@@ -41,6 +41,8 @@ def test_modules_screen_has_a_lifecycle_adapter_and_accessible_shell():
 
     assert 'id="xk-modules-manager"' in template
     assert 'aria-live="polite"' in template
+    assert 'id="modules-error"' in template
+    assert 'aria-live="assertive"' in template
     assert 'role="tablist"' in template
     assert 'id="modules-plan-confirm"' in template
     assert 'id="modules-plan-cancel"' in template

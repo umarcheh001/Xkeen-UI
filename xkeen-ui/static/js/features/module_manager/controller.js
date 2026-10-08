@@ -1,10 +1,11 @@
-import { renderInstalled, renderAvailable, renderPlan, renderOperationStatus } from './render.js';
+import { renderInstalled, renderAvailable, renderPlan, renderOperationStatus, describeLifecycleFailure } from './render.js';
 import { reconcileModulesUpdateBadge, reconcileModulesUpdatePlan, reconcileModulesUpdateStatus } from './badge.js';
 
 export function createModuleManagerController({ root, api, pollMs }) {
   const state = { installed: null, status: null, catalog: null, selectedTab: 'installed', plan: null };
   const host = root.querySelector('#modules-card-host');
   const statusHost = root.querySelector('#modules-operation-status');
+  const errorHost = root.querySelector('#modules-error');
   const dialog = root.querySelector('#modules-plan-confirm');
   const tabs = {
     installed: root.querySelector('#modules-tab-installed'),
@@ -20,13 +21,24 @@ export function createModuleManagerController({ root, api, pollMs }) {
   let pollGeneration = 0;
   let returnFocus = null;
   let terminalRefreshed = null;
+  let restartRequested = false;
+
+  function recoveryRequired() { return ['interrupted', 'rollback_failed'].includes(state.status?.result); }
+  function mutationsLocked() { return busy || state.status?.result === 'running' || recoveryRequired(); }
+  function canRestart() {
+    return state.status?.restart_required === true
+      && ['committed', 'rolled_back'].includes(state.status.result)
+      && !state.installed?.transition_required && !restartRequested;
+  }
 
   function showError(error) {
-    const message = error?.message || 'Не удалось загрузить модули.';
-    statusHost.textContent = message;
+    const message = describeLifecycleFailure(error);
+    if (errorHost) errorHost.textContent = message;
     if (!state.installed && state.selectedTab === 'installed') host.textContent = message;
     if (!state.catalog && state.selectedTab === 'available') host.textContent = message;
   }
+
+  function clearError() { if (errorHost) errorHost.textContent = ''; }
 
   function stopPolling() {
     pollGeneration += 1;
@@ -40,7 +52,7 @@ export function createModuleManagerController({ root, api, pollMs }) {
       tab.classList.toggle('active', state.selectedTab === name);
     }
     host.setAttribute('aria-labelledby', tabs[state.selectedTab].id);
-    const actionsDisabled = busy || state.status?.result === 'running';
+    const actionsDisabled = mutationsLocked();
     if (state.selectedTab === 'available') {
       if (state.catalog) renderAvailable(host, state.catalog, requestPlan, actionsDisabled);
       else host.textContent = 'Загрузка каталога…';
@@ -49,7 +61,12 @@ export function createModuleManagerController({ root, api, pollMs }) {
     } else {
       host.textContent = 'Загрузка модулей…';
     }
-    if (state.status && state.status.result !== 'idle') renderOperationStatus(statusHost, state.status, requestCancel, cancelPending);
+    if (state.status && state.status.result !== 'idle') renderOperationStatus(statusHost, state.status, {
+      onCancel: requestCancel, onRecovery: requestRecovery, onRestart: requestRestart,
+      canRestart: canRestart(), busy: busy || cancelPending,
+    });
+    else statusHost.replaceChildren();
+    if (restartRequested) statusHost.append(document.createTextNode('Перезапуск запрошен'));
   }
 
   function closePlan({ restoreFocus = true, force = false } = {}) {
@@ -61,7 +78,7 @@ export function createModuleManagerController({ root, api, pollMs }) {
   }
 
   async function requestPlan(operation, moduleId, trigger) {
-    if (busy || state.status?.result === 'running' || !dialog) return;
+    if (mutationsLocked() || !dialog) return;
     busy = true;
     state.plan = null;
     returnFocus = trigger || null;
@@ -70,6 +87,7 @@ export function createModuleManagerController({ root, api, pollMs }) {
       const plan = await api.plan(operation, moduleId);
       if (!active) return;
       state.plan = plan;
+      clearError();
       reconcileModulesUpdatePlan(plan);
       renderPlan(dialog, plan);
       dialog.showModal();
@@ -84,22 +102,22 @@ export function createModuleManagerController({ root, api, pollMs }) {
 
   async function refreshInstalledAfterTerminal() {
     state.plan = null;
-    state.catalog = null;
     state.selectedTab = 'installed';
-    try {
-      const [installed, status] = await Promise.all([api.loadInstalled(), api.loadStatus()]);
-      state.installed = installed;
-      state.status = status;
-      reconcileModulesUpdateBadge(installed);
-      reconcileModulesUpdateStatus(status);
-      if (active) render();
-    } catch (error) {
-      showError(error);
-    }
+    const [installedResult, statusResult] = await Promise.allSettled([api.loadInstalled(), api.loadStatus()]);
+    if (installedResult.status === 'fulfilled') {
+      state.installed = installedResult.value;
+      reconcileModulesUpdateBadge(state.installed);
+    } else showError(installedResult.reason);
+    if (statusResult.status === 'fulfilled') {
+      state.status = statusResult.value;
+      reconcileModulesUpdateStatus(state.status);
+    } else showError(statusResult.reason);
+    if (active) render();
   }
 
   function observeStatus(status, operationId) {
     state.status = { ...status, operation_id: status.operation_id || operationId };
+    restartRequested = false;
     if (state.status.result !== 'running') cancelPending = false;
     reconcileModulesUpdateStatus(state.status);
     if (active) render();
@@ -135,7 +153,7 @@ export function createModuleManagerController({ root, api, pollMs }) {
 
   async function applyReviewedPlan() {
     const plan = state.plan;
-    if (!plan?.applicable || !plan.plan_id || busy || state.status?.result === 'running') return;
+    if (!plan?.applicable || !plan.plan_id || mutationsLocked()) return;
     busy = true;
     dialog.querySelector('#modules-plan-apply').disabled = true;
     dialog.querySelector('#modules-plan-cancel').disabled = true;
@@ -172,18 +190,44 @@ export function createModuleManagerController({ root, api, pollMs }) {
   }
 
   async function toggleEnabled(moduleId, enabled, input) {
-    if (busy || state.status?.result === 'running') return;
+    if (mutationsLocked()) return;
     input.disabled = true;
     try {
       await api.setModuleEnabled(moduleId, enabled);
       state.installed = await api.loadInstalled();
       reconcileModulesUpdateBadge(state.installed);
-      statusHost.textContent = '';
+      clearError();
     } catch (error) {
       showError(error);
     } finally {
       if (active) render();
     }
+  }
+
+  async function requestRecovery() {
+    if (state.status?.result !== 'interrupted' || busy) return;
+    busy = true;
+    render();
+    try {
+      const recovered = await api.recover();
+      clearError();
+      observeStatus(recovered, recovered.operation_id || state.status?.operation_id);
+    } catch (error) { showError(error); }
+    finally { busy = false; if (active) render(); }
+  }
+
+  async function requestRestart() {
+    if (!canRestart() || busy) return;
+    busy = true;
+    render();
+    try {
+      const response = await api.restart();
+      if (response.restart_requested) {
+        restartRequested = true;
+        clearError();
+      }
+    } catch (error) { showError(error); }
+    finally { busy = false; if (active) render(); }
   }
 
   async function selectTab(name) {
@@ -193,6 +237,7 @@ export function createModuleManagerController({ root, api, pollMs }) {
     if (name === 'available' && !state.catalog) {
       if (!catalogLoad) catalogLoad = api.loadAvailable().then((catalog) => {
         state.catalog = catalog;
+        clearError();
         if (active && state.selectedTab === 'available') render();
       }).catch(showError).finally(() => { catalogLoad = null; });
       await catalogLoad;
@@ -210,17 +255,21 @@ export function createModuleManagerController({ root, api, pollMs }) {
       tabsWired = true;
     }
     render();
-    initialLoad = Promise.all([api.loadInstalled(), api.loadStatus()]).then(([installed, status]) => {
-      state.installed = installed;
-      state.status = status;
-      reconcileModulesUpdateBadge(installed);
-      reconcileModulesUpdateStatus(status);
-      statusHost.textContent = '';
+    initialLoad = Promise.allSettled([api.loadInstalled(), api.loadStatus()]).then(([installedResult, statusResult]) => {
+      if (installedResult.status === 'fulfilled') {
+        state.installed = installedResult.value;
+        reconcileModulesUpdateBadge(state.installed);
+      } else showError(installedResult.reason);
+      if (statusResult.status === 'fulfilled') {
+        state.status = statusResult.value;
+        reconcileModulesUpdateStatus(state.status);
+      } else showError(statusResult.reason);
       if (active) {
         render();
-        if (status.result === 'running') schedulePoll();
+        if (state.status?.result === 'running') schedulePoll();
       }
-    }).catch((error) => { showError(error); initialLoad = null; });
+      if (installedResult.status === 'rejected' || statusResult.status === 'rejected') initialLoad = null;
+    });
     return initialLoad;
   }
 
