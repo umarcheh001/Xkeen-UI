@@ -194,6 +194,8 @@ def test_installing_the_file_manager_from_the_panel_brings_lftp(tmp_path):
 
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert calls == ["update", "install lftp"]
+    # Пакет доставлен: сообщать исполнителю не о чем.
+    assert "[note]" not in proc.stdout
 
 
 def test_another_module_asks_entware_for_nothing(tmp_path):
@@ -212,3 +214,5 @@ def test_the_packages_step_never_fails_the_installation_of_a_module(tmp_path):
         assert proc.returncode == 0, case + proc.stdout + proc.stderr
         # Владельцу сказано, чего не хватило и как это поставить.
         assert "opkg install lftp" in proc.stdout, case
+        # И отдельной строкой — исполнителю, чтобы это попало в статус операции.
+        assert "[note] package_missing lftp" in proc.stdout.splitlines(), case

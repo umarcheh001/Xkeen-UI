@@ -245,9 +245,14 @@ def run_operation(
                     # manager). The module works without them, so whatever
                     # happens here the installation goes on.
                     try:
-                        provision("packages", provision_script(journal, staged=False))
+                        notes = provision("packages", provision_script(journal, staged=False))
                     except Exception:
-                        pass
+                        notes = [{"code": "packages_step_failed"}]
+                    warnings = [dict(note) for note in notes or () if isinstance(note, dict)]
+                    if warnings:
+                        # The module is installed all the same; the owner is
+                        # told what is still missing for it to work in full.
+                        status["warnings"] = warnings
             else:
                 descriptor = snapshot.catalog.get("panel")
                 if not isinstance(descriptor, dict) or (

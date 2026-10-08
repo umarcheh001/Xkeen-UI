@@ -71,8 +71,10 @@ _PUBLIC_STATUS_FIELDS = frozenset(
         "recovered",
         "restart_required",
         "panel_unresponsive",
+        "warnings",
     }
 )
+_PACKAGE_NAME = re.compile(r"[a-z0-9][a-z0-9+.-]{0,63}")
 _PUBLIC_STATUS_ERRORS = {
     "operation_cancelled": "the module operation was cancelled",
     "operation_health_failed": "the panel did not become healthy after the module operation",
@@ -211,12 +213,38 @@ def _plan_digest(plan: Plan, dependency_diff: Mapping[str, Any]) -> str:
     return hashlib.sha256(canonical).hexdigest()
 
 
+def _public_warnings(raw: Any) -> list[dict[str, str]]:
+    """What an operation finished without: only known kinds, nothing free-form.
+
+    The status file is written by the runner from what a shell script printed,
+    so every value is checked before it reaches a client.
+    """
+
+    warnings: list[dict[str, str]] = []
+    for entry in raw if isinstance(raw, list) else ():
+        if not isinstance(entry, Mapping):
+            continue
+        code = entry.get("code")
+        if code == "package_missing":
+            package = entry.get("package")
+            if isinstance(package, str) and _PACKAGE_NAME.fullmatch(package):
+                warnings.append(
+                    {"code": "package_missing", "package": package, "command": f"opkg install {package}"}
+                )
+        elif code == "packages_step_failed":
+            warnings.append({"code": "packages_step_failed"})
+    return warnings
+
+
 def _public_status(status: Mapping[str, Any]) -> dict[str, Any]:
     payload = {
         key: value
         for key, value in status.items()
-        if key in _PUBLIC_STATUS_FIELDS and key != "log"
+        if key in _PUBLIC_STATUS_FIELDS and key not in {"log", "warnings"}
     }
+    warnings = _public_warnings(status.get("warnings"))
+    if warnings:
+        payload["warnings"] = warnings
     raw_log = status.get("log")
     payload["log"] = [
         {key: entry[key] for key in ("step", "at") if key in entry}

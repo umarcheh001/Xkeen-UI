@@ -1263,7 +1263,12 @@ provision_cmd_packages() {
   # остаётся в журнале.
   case "${XKEEN_UI_OPERATION_MODULE:-}" in
     tool.files)
-      provision_file_manager || echo "[*] lftp для файлового менеджера доставить не удалось; поставить вручную: opkg install lftp"
+      if ! provision_file_manager; then
+        echo "[*] lftp для файлового менеджера доставить не удалось; поставить вручную: opkg install lftp"
+        # Строка для исполнителя: он запишет её в статус операции, и владелец
+        # увидит, чего не хватило, а не только то, что модуль установлен.
+        echo "[note] package_missing lftp"
+      fi
       ;;
   esac
   provision_opkg_cleanup 2>/dev/null || true

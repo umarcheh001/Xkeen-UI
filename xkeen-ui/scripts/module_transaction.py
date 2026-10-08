@@ -90,10 +90,10 @@ def build_provision(panel_root: Path, *, target_version: str | None = None, modu
     are brought for that module.
     """
 
-    def provision(phase: str, script: Path) -> None:
+    def provision(phase: str, script: Path) -> list[dict[str, str]]:
         script = Path(script)
         if not script.is_file():
-            return
+            return []
         environment = dict(os.environ, UI_DIR=str(panel_root), PYTHON_BIN=sys.executable)
         for name, value in (("XKEEN_UI_TARGET_VERSION", target_version), ("XKEEN_UI_OPERATION_MODULE", module_id)):
             # Never inherited: a value left in the environment of the panel
@@ -120,9 +120,16 @@ def build_provision(panel_root: Path, *, target_version: str | None = None, modu
             raise ModuleTransactionError(
                 "operation_environment_failed", "the router could not be prepared for the release", phase=phase
             ) from error
-        if process.returncode == 0:
-            return
         output = process.stdout.decode("utf-8", "replace") if process.stdout else ""
+        if process.returncode == 0:
+            # What the script could not bring but did not stop for: lines of
+            # the form "[note] <code> <subject>".
+            notes: list[dict[str, str]] = []
+            for line in output.splitlines():
+                parts = line.split()
+                if len(parts) == 3 and parts[0] == "[note]" and parts[1] == "package_missing":
+                    notes.append({"code": "package_missing", "package": parts[2]})
+            return notes
         # The script names the reason on its last line that starts with "[!]".
         reasons = [line[3:].strip() for line in output.splitlines() if line.startswith("[!]")]
         raise ModuleTransactionError(

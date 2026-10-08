@@ -305,3 +305,84 @@ def test_a_panel_without_the_shared_script_is_updated_as_before(tmp_path):
 
     # Панель, поставленная до появления общего скрипта: звать нечего.
     cli.build_provision(panel.root)("apply", panel.root / "scripts" / "provision_env.sh")
+
+
+# --- чего не хватило модулю, остаётся в статусе операции ---------------------------------
+
+
+def test_a_missing_package_is_recorded_in_the_status_of_the_operation(tmp_path):
+    panel = make_panel(tmp_path)
+    release = make_release()
+    plan = build_plan("install", "tool.files", **{**panel.kwargs, "catalog": release.catalog})
+
+    def provision(phase: str, _script: Path):
+        return [{"code": "package_missing", "package": "lftp"}] if phase == "packages" else []
+
+    assert _run(panel, plan, release, provision) == "committed"
+
+    # Модуль установлен, но владелец должен узнать, что для полной работы
+    # ему не хватает пакета.
+    assert read_status(panel.state)["warnings"] == [{"code": "package_missing", "package": "lftp"}]
+
+
+def test_a_packages_step_that_broke_is_recorded_too(tmp_path):
+    panel = make_panel(tmp_path)
+    release = make_release()
+    plan = build_plan("install", "tool.files", **{**panel.kwargs, "catalog": release.catalog})
+
+    def provision(phase: str, _script: Path):
+        if phase == "packages":
+            raise OSError("no shell")
+        return []
+
+    assert _run(panel, plan, release, provision) == "committed"
+    assert read_status(panel.state)["warnings"] == [{"code": "packages_step_failed"}]
+
+
+def test_an_operation_that_lacked_nothing_carries_no_warnings(tmp_path):
+    panel = make_panel(tmp_path)
+    release = make_release()
+    plan = build_plan("install", "tool.files", **{**panel.kwargs, "catalog": release.catalog})
+
+    assert _run(panel, plan, release, lambda _phase, _script: []) == "committed"
+    assert "warnings" not in read_status(panel.state)
+
+
+def test_the_runner_reads_what_the_script_could_not_bring(tmp_path):
+    cli = _cli()
+    panel = make_panel(tmp_path, version=OLD)
+    script = panel.root / "scripts" / "provision_env.sh"
+    script.parent.mkdir(parents=True, exist_ok=True)
+    script.write_bytes(
+        b'#!/bin/sh\necho "[*] working"\necho "[note] package_missing lftp"\necho "[note] something else entirely"\nexit 0\n'
+    )
+
+    notes = cli.build_provision(panel.root, module_id="tool.files")("packages", script)
+
+    assert notes == [{"code": "package_missing", "package": "lftp"}]
+
+
+def test_a_client_sees_the_warning_with_the_command_and_nothing_free_form():
+    from services.module_lifecycle import _public_status
+
+    public = _public_status(
+        {
+            "operation_id": "op",
+            "result": "committed",
+            "warnings": [
+                {"code": "package_missing", "package": "lftp"},
+                # Статус пишется по тому, что напечатал сценарий оболочки:
+                # до клиента доходит только проверенное.
+                {"code": "package_missing", "package": "lftp; rm -rf /"},
+                {"code": "something_else", "text": "<script>"},
+                {"code": "packages_step_failed", "detail": "/opt/secret"},
+                "not a record",
+            ],
+        }
+    )
+
+    assert public["warnings"] == [
+        {"code": "package_missing", "package": "lftp", "command": "opkg install lftp"},
+        {"code": "packages_step_failed"},
+    ]
+    assert "warnings" not in _public_status({"operation_id": "op", "result": "committed"})
