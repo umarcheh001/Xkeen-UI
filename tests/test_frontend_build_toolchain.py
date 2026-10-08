@@ -74,6 +74,15 @@ def test_frontend_build_verifier_passes_when_raw_manifest_exists():
     assert 'Frontend build bridge + raw build manifests verified, including required vendor assets.' in result.stdout
 
 
+def test_raw_build_manifest_contains_modules_entry():
+    if not RAW_BUILD_MANIFEST.is_file():
+        pytest.skip('raw build manifest is not present yet; run npm run frontend:build')
+    manifest = json.loads(RAW_BUILD_MANIFEST.read_text(encoding='utf-8'))
+    entry = manifest['js/pages/modules.entry.js']
+    assert entry['name'] == 'modules'
+    assert entry['isEntry'] is True
+
+
 def test_frontend_build_ci_and_status_docs_are_closed():
     workflow_text = CI_WORKFLOW.read_text(encoding='utf-8')
     assert 'uses: actions/setup-node@' in workflow_text

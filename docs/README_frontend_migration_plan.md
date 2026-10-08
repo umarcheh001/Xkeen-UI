@@ -53,7 +53,7 @@ Stages 7-9 тоже закрыты и теперь считаются часть
 
 ## Текущее состояние репозитория
 
-- Есть 5 canonical page entrypoints: `panel`, `backups`, `devtools`, `xkeen`, `mihomo_generator`.
+- Есть 6 canonical page entrypoints: `panel`, `backups`, `modules`, `devtools`, `xkeen`, `mihomo_generator`. `/modules` — core-owned экран менеджера модулей.
 - Manifest bridge синхронизируется `scripts/sync_frontend_build_manifest.py` и указывает на thin wrappers, которые импортируют canonical source entries.
 - Raw build manifest пишется в `xkeen-ui/static/frontend-build/.vite/manifest.build.json`.
 - Локальный основной workflow остаётся таким: `npm ci`, `npm run frontend:build`, `npm run frontend:verify:static`; полная локальная проверка по-прежнему доступна через `npm run frontend:verify`.

@@ -25,6 +25,12 @@ PAGE_SPECS = {
         "entry": "static/js/pages/backups.entry.js",
         "init": "static/js/pages/backups.init.js",
     },
+    "modules": {
+        "route": "/modules",
+        "template": "templates/modules.html",
+        "entry": "static/js/pages/modules.entry.js",
+        "init": "static/js/pages/modules.init.js",
+    },
     "devtools": {
         "route": "/devtools",
         "template": "templates/devtools.html",

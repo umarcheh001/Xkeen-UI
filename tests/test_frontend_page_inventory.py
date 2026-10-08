@@ -14,6 +14,7 @@ SNAPSHOT = ROOT / "docs" / "frontend-page-inventory.json"
 EXPECTED_PAGES = {
     "panel": "static/js/pages/panel.entry.js",
     "backups": "static/js/pages/backups.entry.js",
+    "modules": "static/js/pages/modules.entry.js",
     "devtools": "static/js/pages/devtools.entry.js",
     "xkeen": "static/js/pages/xkeen.entry.js",
     "mihomo_generator": "static/js/pages/mihomo_generator.entry.js",
@@ -65,6 +66,25 @@ def test_frontend_inventory_snapshot_is_committed_and_matches_generator(tmp_path
     assert output_path.read_text(encoding="utf-8") == SNAPSHOT.read_text(encoding="utf-8"), (
         "committed docs/frontend-page-inventory.json should stay in sync with the generator output"
     )
+
+
+def test_modules_inventory_captures_core_manager_graph(tmp_path):
+    output_path = tmp_path / "frontend-page-inventory.generated.json"
+    result = subprocess.run(
+        [sys.executable, str(GENERATOR), "--root", str(ROOT), "--json-out", str(output_path)],
+        cwd=ROOT, capture_output=True, text=True, check=False,
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+    page = json.loads(output_path.read_text(encoding="utf-8"))["pages"]["modules"]
+    assert page["route"] == "/modules"
+    assert page["template"] == "templates/modules.html"
+    assert page["init"] == "static/js/pages/modules.init.js"
+    files = {item["path"] for item in page["esm_bootstrap_files"]}
+    assert {
+        "static/js/pages/modules.screen.bootstrap.js",
+        "static/js/pages/modules.init.js",
+        "static/js/features/module_manager/controller.js",
+    } <= files
 
 
 def test_panel_inventory_captures_current_p2_screen_split_and_lazy_runtime(tmp_path):
@@ -232,7 +252,7 @@ def test_frontend_inventory_docs_freeze_source_graph_as_canonical_stage1_contrac
         "source entrypoints в `static/js/pages/*.entry.js` остаются канонической картой страниц",
         "build-managed wrappers из `static/frontend-build/assets/*-*.js` не являются отдельной архитектурой",
         "snapshot можно и нужно строить по source graph",
-        "все пять canonical page entrypoints используют общий `top_level_shell.shared.js`",
+        "все шесть canonical page entrypoints используют общий `top_level_shell.shared.js`",
         "hard navigation остаётся только fallback-path для direct URL entry, missing screen и transition failure",
     ]
 
@@ -240,26 +260,26 @@ def test_frontend_inventory_docs_freeze_source_graph_as_canonical_stage1_contrac
         assert fragment in inventory_doc, f"missing stage 1/3 freeze fragment in frontend-page-inventory.md: {fragment}"
 
 
-def test_top_level_navigation_docs_are_synchronized_for_all_five_canonical_routes():
+def test_top_level_navigation_docs_are_synchronized_for_all_six_canonical_routes():
     architecture_doc = (ROOT / "docs" / "frontend-target-architecture.md").read_text(encoding="utf-8")
     readme_doc = (ROOT / "docs" / "README.md").read_text(encoding="utf-8")
     plan_doc = (ROOT / "docs" / "top-level-navigation-plan.md").read_text(encoding="utf-8")
 
     architecture_fragments = [
-        "top-level entrypoints для `/`, `/backups`, `/devtools`, `/xkeen` и `/mihomo_generator` остаются thin wrappers над `bootTopLevelShell(...)`",
-        "все пять canonical page entrypoints используют общий `top_level_shell.shared.js`",
-        "top-level router для `/`, `/backups`, `/devtools`, `/xkeen` и `/mihomo_generator` использует фиксированный route registry",
+        "top-level entrypoints для `/`, `/backups`, `/modules`, `/devtools`, `/xkeen` и `/mihomo_generator` остаются thin wrappers над `bootTopLevelShell(...)`",
+        "все шесть canonical page entrypoints используют общий `top_level_shell.shared.js`",
+        "top-level router для `/`, `/backups`, `/modules`, `/devtools`, `/xkeen` и `/mihomo_generator` использует фиксированный route registry",
     ]
     for fragment in architecture_fragments:
-        assert fragment in architecture_doc, f"missing five-route top-level contract fragment in frontend-target-architecture.md: {fragment}"
+        assert fragment in architecture_doc, f"missing six-route top-level contract fragment in frontend-target-architecture.md: {fragment}"
 
-    assert "итог по уже закрытому переводу всех five canonical entrypoints" in readme_doc
+    assert "текущее расширение до шести маршрутов с `/modules`" in readme_doc
 
     plan_fragments = [
-        "# Итог: top-level navigation между `/`, `/backups`, `/devtools`, `/xkeen` и `/mihomo_generator`",
+        "# Итог: top-level navigation между `/`, `/backups`, `/modules`, `/devtools`, `/xkeen` и `/mihomo_generator`",
         "- `P10` — guardrails, verification, docs/inventory sync и финальная фиксация five-route runtime contract.",
         "- hard navigation остаётся только fallback-only path для direct URL entry, missing screen и transition failure.",
-        "Документ нужно читать только как закрывающую заметку по полностью завершённому five-route rollout.",
+        "текущий runtime contract охватывает шесть маршрутов, включая `/modules`.",
     ]
     for fragment in plan_fragments:
-        assert fragment in plan_doc, f"missing final five-route status fragment in top-level-navigation-plan.md: {fragment}"
+        assert fragment in plan_doc, f"missing current six-route status fragment in top-level-navigation-plan.md: {fragment}"

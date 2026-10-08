@@ -25,6 +25,11 @@ def test_source_entrypoints_bootstrap_pages_without_legacy_loader():
             "import { bootBackupsScreen } from './backups.screen.bootstrap.js';",
             "initialScreen: 'backups'",
         ],
+        "modules.entry.js": [
+            "import { bootTopLevelShell } from './top_level_shell.shared.js';",
+            "import { bootModulesScreen } from './modules.screen.bootstrap.js';",
+            "initialScreen: 'modules'",
+        ],
         "devtools.entry.js": [
             "import { bootTopLevelShell } from './top_level_shell.shared.js';",
             "import { registerPanelMihomoTopLevelScreens } from './top_level_panel_mihomo.shared.js';",
@@ -49,6 +54,7 @@ def test_source_entrypoints_bootstrap_pages_without_legacy_loader():
         "backups.entry.js": [
             "../features/update_notifier.js?v=",
         ],
+        "modules.entry.js": ["../features/devtools"],
         "devtools.entry.js": [
             "../features/update_notifier.js?v=",
             "../features/typography.js?v=",
@@ -80,6 +86,11 @@ def test_top_level_source_entrypoints_stay_thin_wrappers_over_shared_shell_boots
             "initialScreen: 'panel'",
             "await bootPanelScreen();",
             "registerPanelMihomoTopLevelScreens();",
+        ],
+        "modules.entry.js": [
+            "void bootTopLevelShell({",
+            "initialScreen: 'modules'",
+            "return bootModulesScreen();",
         ],
         "devtools.entry.js": [
             "void bootTopLevelShell({",
@@ -119,6 +130,7 @@ def test_top_level_bridge_assets_stay_import_only_over_canonical_source_entrypoi
     bridge_dir = ROOT / "xkeen-ui" / "static" / "frontend-build" / "assets"
     expectations = {
         "panel-bridge.js": "../../js/pages/panel.entry.js",
+        "modules-bridge.js": "../../js/pages/modules.entry.js",
         "devtools-bridge.js": "../../js/pages/devtools.entry.js",
         "mihomo_generator-bridge.js": "../../js/pages/mihomo_generator.entry.js",
     }
@@ -1125,6 +1137,7 @@ def test_templates_publish_final_page_config_contract():
     panel_src = compose_panel_template(ROOT)
     devtools_src = (ROOT / "xkeen-ui" / "templates" / "devtools.html").read_text(encoding="utf-8")
     mihomo_src = (ROOT / "xkeen-ui" / "templates" / "mihomo_generator.html").read_text(encoding="utf-8")
+    modules_src = (ROOT / "xkeen-ui" / "templates" / "modules.html").read_text(encoding="utf-8")
 
     panel_required = [
         "frontend_page_config(",
@@ -1176,6 +1189,8 @@ def test_templates_publish_final_page_config_contract():
 
     for fragment in panel_required:
         assert fragment in panel_src, f"missing panel final page-config fragment: {fragment}"
+    for fragment in ("frontend_page_config('modules'", "window.XKeen.pageConfig = pageConfig;", "frontend_page_entry_url('modules')"):
+        assert fragment in modules_src
     for fragment in panel_forbidden:
         assert fragment not in panel_src, f"panel template should publish only final pageConfig contract: {fragment}"
 

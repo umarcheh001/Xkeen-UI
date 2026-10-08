@@ -61,7 +61,17 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/features/module_manager/badge.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
           "path": "static/js/pages/top_level_backups_screen.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_modules_screen.js",
           "globals": [],
           "lazy_features": []
         },
@@ -669,7 +679,17 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/features/module_manager/badge.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
           "path": "static/js/pages/top_level_backups_screen.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_modules_screen.js",
           "globals": [],
           "lazy_features": []
         },
@@ -1115,6 +1135,319 @@
       "all_bootstrap_lazy_features": [],
       "lazy_runtime_inventory": null
     },
+    "modules": {
+      "route": "/modules",
+      "template": "templates/modules.html",
+      "entry": "static/js/pages/modules.entry.js",
+      "init": "static/js/pages/modules.init.js",
+      "shared_imports": [
+        "./top_level_shell.shared.js",
+        "./top_level_panel_mihomo.shared.js",
+        "./modules.screen.bootstrap.js"
+      ],
+      "dynamic_imports": [],
+      "template_script_tags": [
+        "{{ frontend_page_entry_url('modules') }}"
+      ],
+      "esm_bootstrap_files": [
+        {
+          "path": "static/js/pages/top_level_shell.shared.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_router.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/features/xkeen_runtime.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_screen_registry.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_panel_mihomo.shared.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_panel_screen.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_screen_host.shared.js",
+          "globals": [
+            "XKeen.pageConfig"
+          ],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_nav.shared.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/features/module_manager/badge.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_backups_screen.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_modules_screen.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_mihomo_generator_screen.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_devtools_screen.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_xkeen_screen.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/modules.screen.bootstrap.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/shell.shared.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/00_state.js",
+          "globals": [
+            "XKeen.core",
+            "XKeen.state",
+            "XKeen.util",
+            "XKeen.ui",
+            "XKeen.runtime",
+            "XKeen.env",
+            "XKeen.features"
+          ],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/01_bootstrap.js",
+          "globals": [
+            "XKeen.util"
+          ],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/core/xk_store.js",
+          "globals": [
+            "XKeen.core",
+            "XKeen.core.store",
+            "XKeen.store",
+            "XKeen.core.uiShell",
+            "XKeen.uiShell",
+            "XKeen.core.uiModal",
+            "XKeen.uiModal",
+            "XKeen.core.uiSettings",
+            "XKeen.uiSettings",
+            "XKeen.core.uiToast",
+            "XKeen.uiToast"
+          ],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/ui/toast.js",
+          "globals": [
+            "XKeen.ui",
+            "XKeen.ui.operatorIcons",
+            "XKeen.core",
+            "XKeen.core.uiToast",
+            "XKeen.uiToast",
+            "XKeen.ui.showToast",
+            "XKeen.ui.toast",
+            "XKeen.ui.notify",
+            "XKeen.ui.dismissToast",
+            "XKeen.ui.clearToasts",
+            "XKeen.ui.isToastActive"
+          ],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/ui/settings.js",
+          "globals": [
+            "XKeen.ui.settings.get",
+            "XKeen.ui.settings.fetch",
+            "XKeen.ui.settings.patch",
+            "XKeen.ui",
+            "XKeen.core",
+            "XKeen.core.http",
+            "XKeen.core.uiSettings",
+            "XKeen.ui.settings",
+            "XKeen.ui.settings.DEFAULTS",
+            "XKeen.ui.settings.isLoadedFromServer",
+            "XKeen.ui.settings.setLocal",
+            "XKeen.ui.settings.patchLocal",
+            "XKeen.ui.settings.fetchOnce",
+            "XKeen.ui.settings.subscribe",
+            "XKeen.ui.settings.clampEditorFontScale",
+            "XKeen.ui.settings.getEditorFontScale",
+            "XKeen.ui.settings.isEditorExpertModeEnabled"
+          ],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/features/service_status.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/features/restart_log.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/features/xray_log_line_class.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/ui/operator_icons.js",
+          "globals": [
+            "XKeen.ui",
+            "XKeen.ui.operatorIcons"
+          ],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/ui/operator_icons_manifest.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/features/feature_access.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/features/devtools_namespace.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/features/update_notifier.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/ui/theme.js",
+          "globals": [
+            "XKeen.ui",
+            "XKeen.state",
+            "XKeen.ui.applyTheme",
+            "XKeen.ui.initThemeToggle",
+            "XKeen.ui.syncThemeToggleButtons"
+          ],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/ui/spinner_fetch.js",
+          "globals": [
+            "XKeen.ui",
+            "XKeen.state",
+            "XKeen.ui.showGlobalXkeenSpinner",
+            "XKeen.ui.hideGlobalXkeenSpinner",
+            "XKeen.ui.showToast",
+            "XKeen.ui.showXrayPreflightError"
+          ],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/modules.init.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/features/module_manager/api.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/features/module_manager/controller.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/features/module_manager/render.js",
+          "globals": [],
+          "lazy_features": []
+        }
+      ],
+      "direct_init_globals": [],
+      "direct_init_lazy_features": [],
+      "all_bootstrap_globals": [
+        "XKeen.pageConfig",
+        "XKeen.core",
+        "XKeen.state",
+        "XKeen.util",
+        "XKeen.ui",
+        "XKeen.runtime",
+        "XKeen.env",
+        "XKeen.features",
+        "XKeen.core.store",
+        "XKeen.store",
+        "XKeen.core.uiShell",
+        "XKeen.uiShell",
+        "XKeen.core.uiModal",
+        "XKeen.uiModal",
+        "XKeen.core.uiSettings",
+        "XKeen.uiSettings",
+        "XKeen.core.uiToast",
+        "XKeen.uiToast",
+        "XKeen.ui.operatorIcons",
+        "XKeen.ui.showToast",
+        "XKeen.ui.toast",
+        "XKeen.ui.notify",
+        "XKeen.ui.dismissToast",
+        "XKeen.ui.clearToasts",
+        "XKeen.ui.isToastActive",
+        "XKeen.ui.settings.get",
+        "XKeen.ui.settings.fetch",
+        "XKeen.ui.settings.patch",
+        "XKeen.core.http",
+        "XKeen.ui.settings",
+        "XKeen.ui.settings.DEFAULTS",
+        "XKeen.ui.settings.isLoadedFromServer",
+        "XKeen.ui.settings.setLocal",
+        "XKeen.ui.settings.patchLocal",
+        "XKeen.ui.settings.fetchOnce",
+        "XKeen.ui.settings.subscribe",
+        "XKeen.ui.settings.clampEditorFontScale",
+        "XKeen.ui.settings.getEditorFontScale",
+        "XKeen.ui.settings.isEditorExpertModeEnabled",
+        "XKeen.ui.applyTheme",
+        "XKeen.ui.initThemeToggle",
+        "XKeen.ui.syncThemeToggleButtons",
+        "XKeen.ui.showGlobalXkeenSpinner",
+        "XKeen.ui.hideGlobalXkeenSpinner",
+        "XKeen.ui.showXrayPreflightError"
+      ],
+      "all_bootstrap_lazy_features": [],
+      "lazy_runtime_inventory": null
+    },
     "devtools": {
       "route": "/devtools",
       "template": "templates/devtools.html",
@@ -1174,7 +1507,17 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/features/module_manager/badge.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
           "path": "static/js/pages/top_level_backups_screen.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_modules_screen.js",
           "globals": [],
           "lazy_features": []
         },
@@ -1805,7 +2148,17 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/features/module_manager/badge.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
           "path": "static/js/pages/top_level_backups_screen.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_modules_screen.js",
           "globals": [],
           "lazy_features": []
         },
@@ -2581,6 +2934,11 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/features/module_manager/badge.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
           "path": "static/js/pages/top_level_panel_mihomo.shared.js",
           "globals": [],
           "lazy_features": []
@@ -2599,6 +2957,11 @@
         },
         {
           "path": "static/js/pages/top_level_backups_screen.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_modules_screen.js",
           "globals": [],
           "lazy_features": []
         },

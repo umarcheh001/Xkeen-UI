@@ -17,6 +17,7 @@ EXPECTED_BUILD_ENTRIES = {
     "panel": "static/js/pages/panel.entry.js",
     "xkeen": "static/js/pages/xkeen.entry.js",
     "backups": "static/js/pages/backups.entry.js",
+    "modules": "static/js/pages/modules.entry.js",
     "devtools": "static/js/pages/devtools.entry.js",
     "mihomo_generator": "static/js/pages/mihomo_generator.entry.js",
 }
@@ -179,7 +180,7 @@ def test_frontend_build_wrapper_sync_script_exists_and_passes_check_on_current_r
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "Synced 5 wrapper file(s)." in result.stdout
+    assert "Synced 6 wrapper file(s)." in result.stdout
 
 
 
@@ -343,6 +344,9 @@ def test_frontend_asset_helper_allows_source_fallback_in_testing_app_context(tmp
         assert resolution.source_fallback_enabled is True
         assert resolution.should_use_source_fallback is True
         assert helper.resolve_frontend_page_entry_filename("panel") == "js/pages/panel.entry.js"
+        modules = helper.get_build_bridge_resolution("modules")
+        assert modules.should_use_source_fallback is True
+        assert helper.resolve_frontend_page_entry_filename("modules") == "js/pages/modules.entry.js"
     finally:
         ui_assets.current_app = previous_current_app
         if previous is None:

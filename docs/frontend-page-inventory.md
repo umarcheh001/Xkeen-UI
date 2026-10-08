@@ -40,7 +40,8 @@ Inventory не является полным аудитом всего фрон�
 | Page | Route | Template | Entry | Init | Комментарий |
 |---|---|---|---|---|---|
 | `panel` | `/` | `templates/panel.html` | `static/js/pages/panel.entry.js` | `static/js/pages/panel.init.js` | Главная страница. Entry остаётся каноническим source entrypoint, но теперь поднимается через shared top-level shell bootstrap и split bundles для routing и Mihomo; template публикует только canonical `window.XKeen.pageConfig` и использует shared top-level host partials для head/spinner/theme bootstrap. |
-| `backups` | `/backups` | `templates/backups.html` | `static/js/pages/backups.entry.js` | `static/js/pages/backups.init.js` | ESM bootstrap через shared top-level shell wrapper и `backups.screen.bootstrap.js`; template публикует canonical `window.XKeen.pageConfig`, использует shared top-level host partials и остаётся частью того же five-route screen contract. |
+| `backups` | `/backups` | `templates/backups.html` | `static/js/pages/backups.entry.js` | `static/js/pages/backups.init.js` | ESM bootstrap через shared top-level shell wrapper и `backups.screen.bootstrap.js`; template публикует canonical `window.XKeen.pageConfig`, использует shared top-level host partials и остаётся частью общего screen contract. |
+| `modules` | `/modules` | `templates/modules.html` | `static/js/pages/modules.entry.js` | `static/js/pages/modules.init.js` | Core-owned менеджер модулей: shared shell, `modules.screen.bootstrap.js` и независимый `features/module_manager` без импорта DevTools. |
 | `devtools` | `/devtools` | `templates/devtools.html` | `static/js/pages/devtools.entry.js` | `static/js/pages/devtools.init.js` | ESM bootstrap с shared top-level shell wrapper и прямыми feature imports; template публикует только canonical `window.XKeen.pageConfig` и использует shared top-level host partials для head/spinner/theme bootstrap. |
 | `xkeen` | `/xkeen` | `templates/xkeen.html` | `static/js/pages/xkeen.entry.js` | `static/js/pages/xkeen.init.js` | ESM bootstrap через shared top-level shell wrapper и `xkeen.screen.bootstrap.js`; template публикует canonical `window.XKeen.pageConfig`, использует shared top-level host partials и поднимает composite lifecycle для `service_status` и `xkeen_texts`. |
 | `mihomo_generator` | `/mihomo_generator` | `templates/mihomo_generator.html` | `static/js/pages/mihomo_generator.entry.js` | `static/js/pages/mihomo_generator.init.js` | ESM bootstrap генератора Mihomo через shared top-level shell wrapper и shared top-level host partials для head/spinner/theme bootstrap. |
@@ -52,21 +53,21 @@ Inventory не является полным аудитом всего фрон�
 Текущее состояние:
 
 - `panel.entry.js` импортирует shared shell/runtime слои;
-- все пять canonical page entrypoints используют общий `top_level_shell.shared.js` как bootstrap-обёртку поверх canonical entrypoints;
-- top-level переходы между `/`, `/backups`, `/devtools`, `/xkeen` и `/mihomo_generator` идут через фиксированный route map и `pushState`/`popstate`, а hard navigation остаётся только fallback-path для direct URL entry, missing screen и transition failure;
+- все шесть canonical page entrypoints используют общий `top_level_shell.shared.js` как bootstrap-обёртку поверх canonical entrypoints;
+- top-level переходы между `/`, `/backups`, `/modules`, `/devtools`, `/xkeen` и `/mihomo_generator` идут через фиксированный route map и `pushState`/`popstate`, а hard navigation остаётся только fallback-path для direct URL entry, missing screen и transition failure;
 - feature bundles подгружаются динамически;
 - `panel.routing.bundle.js` и `panel.mihomo.bundle.js` являются частью канонического page split;
 - `runtime/lazy_runtime.js` всё ещё входит в bootstrap graph, но уже только как узкий generic runtime adapter.
 
 Это уже не legacy page bootstrap. Для stages 0-9 migration contract считается закрытым; оставшийся хвост compat/debt в рамках этого плана уже добран.
 
-### `backups`, `devtools`, `xkeen`, `mihomo_generator`
+### `backups`, `modules`, `devtools`, `xkeen`, `mihomo_generator`
 
 Текущее состояние:
 
 - поднимаются через обычные `*.entry.js`;
 - используют shared top-level shell bootstrap и в итоге вызывают `boot*Page()`/`boot*Screen()` без возврата к legacy page loader;
-- участвуют в одном canonical top-level screen registry, поэтому normal-path переходы между всеми пятью маршрутами не меняют HTML-документ;
+- участвуют в одном canonical top-level screen registry, поэтому normal-path переходы между всеми шестью маршрутами не меняют HTML-документ;
 - hard navigation остаётся только fallback-path для direct URL entry, missing screen и transition failure;
 - не используют `legacy_script_loader.js`;
 - являются хорошим ориентиром для новых страниц и финального ESM-first baseline.

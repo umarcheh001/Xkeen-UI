@@ -133,6 +133,7 @@ def test_stage0_inventory_generator_runs_and_covers_required_contract(tmp_path):
         "terminal-lazy",
         "file-manager-lazy",
         "backups-page",
+        "modules-page",
         "devtools-page",
         "xkeen-page",
         "mihomo-generator-page",
@@ -143,6 +144,9 @@ def test_stage0_inventory_generator_runs_and_covers_required_contract(tmp_path):
     assert "engine.mihomo" in bundles["panel-mihomo"]["module_ids"]
 
     surfaces = payload["ui_surfaces"]
+    pages = {item["id"]: item for item in surfaces["pages"]}
+    assert pages["modules"]["route"] == "/modules"
+    assert pages["modules"]["module_id"] == "core"
     views = {item["id"]: item["module_id"] for item in surfaces["panel_views"]}
     assert views == {
         "routing": "engine.xray",

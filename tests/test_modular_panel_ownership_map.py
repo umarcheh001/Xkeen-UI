@@ -68,6 +68,19 @@ def test_every_file_belongs_to_exactly_one_module(panel_source_root: Path) -> No
     assert all(files == sorted(files) for files in data["modules"].values())
 
 
+def test_manager_screen_and_controller_are_core_owned(panel_source_root: Path) -> None:
+    ownership = _load_builder().build_module_ownership(panel_source_root)
+    for path in (
+        "templates/modules.html",
+        "static/modules-manager.css",
+        "static/js/pages/modules.entry.js",
+        "static/js/pages/modules.init.js",
+        "static/js/pages/modules.screen.bootstrap.js",
+        "static/js/features/module_manager/controller.js",
+    ):
+        assert path in ownership["core"], path
+
+
 def test_map_contains_itself_and_full_frontend_manifests(panel_source_root: Path) -> None:
     builder = _load_builder()
     _write_frontend_manifests(panel_source_root)

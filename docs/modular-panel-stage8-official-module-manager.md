@@ -1,6 +1,6 @@
 # Этап 8: менеджер официальных модулей
 
-**Статус:** подэтапы 8.0–8.5 закрыты; следующий — 8.6 «UI менеджера»<br>
+**Статус:** подэтапы 8.0–8.5 закрыты; 8.6 «UI менеджера» реализован и ожидает итоговой проверки<br>
 **Дата:** 7 октября 2026 года
 
 Этот документ фиксирует implementation contract для Этапа 8. Полный roadmap
@@ -135,7 +135,7 @@ Core выполняет тихий poll раз в сутки и поддержи
 4. **8.3 Updater:** закрыт; preflight, safe unpack, backup, journal, detached runner и rollback.
 5. **8.4 API:** закрыт; list/plan/apply/status/cancel/recovery/restart и operation log. Контракт: [`modular-panel-stage8-lifecycle-api.md`](modular-panel-stage8-lifecycle-api.md).
 6. **8.5 Panel/profile:** закрыт; signed panel update, physical profile transition и scoped rollback. Контракт: [`modular-panel-stage8-panel-profile.md`](modular-panel-stage8-panel-profile.md).
-7. **8.6 UI:** installed/available, update badge, dependency diff, progress и restart.
+7. **8.6 UI:** core-owned `/modules` реализован: installed/available, update badge, dependency diff, progress и restart; итоговая проверка ожидается. Контракт: [`modular-panel-stage8-manager-ui.md`](modular-panel-stage8-manager-ui.md).
 8. **8.7 Notifications:** daily/manual poll, deduplication и stale/error state.
 9. **8.8 Recovery:** failure matrix, legacy migration, stable rollout и rollback runbook.
 

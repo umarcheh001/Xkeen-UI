@@ -95,6 +95,7 @@ FRONTEND_ROOTS: dict[str, str] = {
     "devtools-page": "static/js/pages/devtools.entry.js",
     "xkeen-page": "static/js/pages/xkeen.entry.js",
     "mihomo-generator-page": "static/js/pages/mihomo_generator.entry.js",
+    "modules-page": "static/js/pages/modules.entry.js",
 }
 
 CONFIG_PATHS = (
@@ -967,6 +968,13 @@ class ModularPanelInventoryGenerator:
                 "module_id": "tool.backups",
                 "template": "xkeen-ui/templates/backups.html",
                 "entry": "xkeen-ui/static/js/pages/backups.entry.js",
+            },
+            {
+                "id": "modules",
+                "route": "/modules",
+                "module_id": "core",
+                "template": "xkeen-ui/templates/modules.html",
+                "entry": "xkeen-ui/static/js/pages/modules.entry.js",
             },
             {
                 "id": "devtools",
