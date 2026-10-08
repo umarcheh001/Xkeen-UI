@@ -364,34 +364,57 @@ ui_step_warn() {
 
 # Обычное terminal echo оставляет ответ видимым во время набора. После Enter
 # перерисовываем строку с цветом ответа, не меняя настройки терминала.
+#
+# Ответ, не похожий ни на «да», ни на «нет» (опечатка, буква в другой
+# раскладке), согласием не считается: вопрос задаётся снова.
 ui_confirm_default_yes() {
   _ui_prompt="$1"
   UI_CONFIRM_ANSWER=""
+  _ui_slips=0
 
-  printf '      %s [%bY%b/%bn%b]: ' \
-    "$_ui_prompt" "$UI_GREEN" "$UI_RESET" "$UI_YELLOW" "$UI_RESET" >&3 2>/dev/null || true
-  IFS= read -r UI_CONFIRM_ANSWER < /dev/tty || UI_CONFIRM_ANSWER=""
-  if [ -n "$UI_RESET" ]; then
-    # read already moved to the next line after Enter. Move back, clear that
-    # prompt row and write the result in its semantic colour.
-    printf '%b[1A\r%b[2K      %s [%bY%b/%bn%b]: ' \
-      "$UI_ESC" "$UI_ESC" "$_ui_prompt" "$UI_GREEN" "$UI_RESET" "$UI_YELLOW" "$UI_RESET" >&3 2>/dev/null || true
+  while :; do
+    printf '      %s [%bY%b/%bn%b]: ' \
+      "$_ui_prompt" "$UI_GREEN" "$UI_RESET" "$UI_YELLOW" "$UI_RESET" >&3 2>/dev/null || true
+    IFS= read -r UI_CONFIRM_ANSWER < /dev/tty || UI_CONFIRM_ANSWER=""
+    _ui_understood=1
     case "$UI_CONFIRM_ANSWER" in
-      y|Y|yes|YES|Yes|д|Д|да|ДА|Да)
-        printf '%b%s%b' "$UI_GREEN" "$UI_CONFIRM_ANSWER" "$UI_RESET" >&3 2>/dev/null || true
-        ;;
-      n|N|no|NO|No|н|Н|нет|НЕТ|Нет)
-        printf '%b%s%b' "$UI_YELLOW" "$UI_CONFIRM_ANSWER" "$UI_RESET" >&3 2>/dev/null || true
-        ;;
-      '')
-        printf '%bY%b' "$UI_GREEN" "$UI_RESET" >&3 2>/dev/null || true
-        ;;
-      *)
-        printf '%b%s%b' "$UI_YELLOW" "$UI_CONFIRM_ANSWER" "$UI_RESET" >&3 2>/dev/null || true
-        ;;
+      y|Y|yes|YES|Yes|д|Д|да|ДА|Да|n|N|no|NO|No|н|Н|нет|НЕТ|Нет|'') ;;
+      *) _ui_understood=0 ;;
     esac
-  fi
-  printf '\n' >&3 2>/dev/null || true
+    if [ -n "$UI_RESET" ]; then
+      # read already moved to the next line after Enter. Move back, clear that
+      # prompt row and write the result in its semantic colour.
+      printf '%b[1A\r%b[2K      %s [%bY%b/%bn%b]: ' \
+        "$UI_ESC" "$UI_ESC" "$_ui_prompt" "$UI_GREEN" "$UI_RESET" "$UI_YELLOW" "$UI_RESET" >&3 2>/dev/null || true
+      case "$UI_CONFIRM_ANSWER" in
+        y|Y|yes|YES|Yes|д|Д|да|ДА|Да)
+          printf '%b%s%b' "$UI_GREEN" "$UI_CONFIRM_ANSWER" "$UI_RESET" >&3 2>/dev/null || true
+          ;;
+        n|N|no|NO|No|н|Н|нет|НЕТ|Нет)
+          printf '%b%s%b' "$UI_YELLOW" "$UI_CONFIRM_ANSWER" "$UI_RESET" >&3 2>/dev/null || true
+          ;;
+        '')
+          printf '%bY%b' "$UI_GREEN" "$UI_RESET" >&3 2>/dev/null || true
+          ;;
+        *)
+          printf '%b%s%b' "$UI_YELLOW" "$UI_CONFIRM_ANSWER" "$UI_RESET" >&3 2>/dev/null || true
+          ;;
+      esac
+    fi
+    printf '\n' >&3 2>/dev/null || true
+    [ "$_ui_understood" -eq 1 ] && break
+
+    _ui_slips=$((_ui_slips + 1))
+    if [ "$_ui_slips" -ge 3 ]; then
+      # Спрашивать без конца нельзя, но и молча выбирать за человека — тоже.
+      UI_CONFIRM_ANSWER=""
+      printf '      %bОтвет не распознан — оставляю вариант по умолчанию: да.%b\n' \
+        "$UI_YELLOW" "$UI_RESET" >&3 2>/dev/null || true
+      break
+    fi
+    printf '      %bНе понял ответ. Введите y (да) или n (нет); просто Enter — да.%b\n' \
+      "$UI_YELLOW" "$UI_RESET" >&3 2>/dev/null || true
+  done
 }
 
 choose_geodat_option() {
