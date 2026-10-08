@@ -18,6 +18,7 @@ export function renderInstalled(host, snapshot, onToggle) {
   host.replaceChildren();
   const summary = node('section', 'modules-summary');
   summary.append(node('h2', '', 'Панель и профиль'));
+  summary.append(node('p', '', snapshot.panel_version ? `Xkeen UI ${snapshot.panel_version}` : 'Версия панели неизвестна'));
   summary.append(node('p', '', `Профиль: ${snapshot.profile || 'не указан'}`));
   if (snapshot.restart_required) summary.append(node('p', 'modules-alert', 'Требуется перезапуск'));
   host.append(summary);

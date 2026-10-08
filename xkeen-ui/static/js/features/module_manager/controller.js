@@ -11,6 +11,7 @@ export function createModuleManagerController({ root, api, pollMs }) {
   };
   let initialLoad = null;
   let catalogLoad = null;
+  let tabsWired = false;
   let active = true;
 
   function showError(error) {
@@ -65,8 +66,11 @@ export function createModuleManagerController({ root, api, pollMs }) {
 
   function init() {
     if (initialLoad) return initialLoad;
-    tabs.installed.addEventListener('click', () => { void selectTab('installed'); });
-    tabs.available.addEventListener('click', () => { void selectTab('available'); });
+    if (!tabsWired) {
+      tabs.installed.addEventListener('click', () => { void selectTab('installed'); });
+      tabs.available.addEventListener('click', () => { void selectTab('available'); });
+      tabsWired = true;
+    }
     render();
     initialLoad = Promise.all([api.loadInstalled(), api.loadStatus()]).then(([installed, status]) => {
       state.installed = installed;

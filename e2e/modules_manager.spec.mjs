@@ -8,7 +8,7 @@ const installedSnapshot = {
   restart_required: false,
   lifecycle: { available: true, code: null },
   modules: [
-    { id: 'core', name: 'Xkeen UI', version: '2.10.0', enabled: true, can_disable: false },
+    { id: 'core', name: 'Xkeen UI Core', version: '1.0.0', enabled: true, can_disable: false },
     { id: 'engine.mihomo', name: 'Mihomo', version: '1.19.0', enabled: false, can_disable: true },
   ],
 };
@@ -45,7 +45,8 @@ test.describe('Module manager loading', () => {
 
     await page.goto('/modules');
     await expect(page.getByRole('heading', { name: 'Модули и обновления' })).toBeVisible();
-    await expect(page.getByText('Xkeen UI 2.10.0')).toBeVisible();
+    await expect(page.locator('.modules-summary')).toContainText('Xkeen UI 2.10.0');
+    await expect(page.locator('.modules-row').first()).toContainText('Xkeen UI Core 1.0.0');
     expect(initialCalls.sort()).toEqual(['installed', 'status']);
     expect(availableCalls).toBe(0);
 
@@ -76,7 +77,7 @@ test.describe('Module manager loading', () => {
     await page.route('**/api/modules/installed', (route) => route.fulfill({ json: installedSnapshot }));
     await page.route('**/api/modules/operations/status', (route) => route.fulfill({ json: idleStatus }));
     await page.goto('/modules');
-    await expect(page.getByText('Xkeen UI 2.10.0')).toBeVisible();
+    await expect(page.locator('.modules-summary')).toContainText('Xkeen UI 2.10.0');
     await page.evaluate(async () => {
       const badge = await import('/static/js/features/module_manager/badge.js');
       badge.reconcileModulesUpdatePlan({ operation: 'panel-update', applicable: true, source_version: '2.10.0', target_version: '2.11.0' });
@@ -88,5 +89,31 @@ test.describe('Module manager loading', () => {
       badge.reconcileModulesUpdatePlan({ operation: 'panel-update', applicable: false, blockers: [{ code: 'panel_version_current' }] });
     });
     await expect(page.locator('[data-xk-modules-update-badge]').first()).toHaveAttribute('hidden', '');
+  });
+
+  test('retries initial loading without registering duplicate tab listeners', async ({ page }) => {
+    await page.route('**/api/modules/installed', (route) => route.fulfill({ json: installedSnapshot }));
+    await page.route('**/api/modules/operations/status', (route) => route.fulfill({ json: idleStatus }));
+    await page.goto('/modules');
+    const result = await page.evaluate(async () => {
+      const { createModuleManagerController } = await import('/static/js/features/module_manager/controller.js');
+      const root = document.createElement('div');
+      root.innerHTML = '<button id="modules-tab-installed"></button><button id="modules-tab-available"></button><div id="modules-operation-status"></div><div id="modules-card-host"></div>';
+      let listeners = 0;
+      root.querySelectorAll('button').forEach((tab) => {
+        const add = tab.addEventListener.bind(tab);
+        tab.addEventListener = (...args) => { listeners += 1; return add(...args); };
+      });
+      let loads = 0;
+      const api = {
+        loadInstalled: () => (++loads === 1 ? Promise.reject({ message: 'Temporary failure' }) : Promise.resolve({ ok: true, panel_version: '2.10.0', modules: [] })),
+        loadStatus: () => Promise.resolve({ ok: true, result: 'idle' }),
+      };
+      const controller = createModuleManagerController({ root, api, pollMs: 0 });
+      await controller.init();
+      await controller.init();
+      return { loads, listeners };
+    });
+    expect(result).toEqual({ loads: 2, listeners: 2 });
   });
 });
