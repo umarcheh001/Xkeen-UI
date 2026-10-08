@@ -27,6 +27,7 @@ _SOURCE_ENTRIES = {
     "panel": "js/pages/panel.entry.js",
     "xkeen": "js/pages/xkeen.entry.js",
     "backups": "js/pages/backups.entry.js",
+    "modules": "js/pages/modules.entry.js",
     "devtools": "js/pages/devtools.entry.js",
     "mihomo_generator": "js/pages/mihomo_generator.entry.js",
 }

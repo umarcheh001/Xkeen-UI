@@ -3,6 +3,7 @@ import { ensureXkeenRoot } from '../features/xkeen_runtime.js';
 const TOP_LEVEL_SCREEN_ROUTES = Object.freeze({
   panel: '/',
   backups: '/backups',
+  modules: '/modules',
   devtools: '/devtools',
   xkeen: '/xkeen',
   mihomo_generator: '/mihomo_generator',

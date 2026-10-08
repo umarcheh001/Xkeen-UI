@@ -316,6 +316,7 @@ def test_top_level_navigation_controls_use_shared_helper_contract():
     host = Path('xkeen-ui/static/js/pages/top_level_screen_host.shared.js').read_text(encoding='utf-8')
     panel_screen = Path('xkeen-ui/static/js/pages/top_level_panel_screen.js').read_text(encoding='utf-8')
     backups_screen = Path('xkeen-ui/static/js/pages/top_level_backups_screen.js').read_text(encoding='utf-8')
+    modules_screen = Path('xkeen-ui/static/js/pages/top_level_modules_screen.js').read_text(encoding='utf-8')
     mihomo_screen = Path('xkeen-ui/static/js/pages/top_level_mihomo_generator_screen.js').read_text(encoding='utf-8')
     devtools_screen = Path('xkeen-ui/static/js/pages/top_level_devtools_screen.js').read_text(encoding='utf-8')
     xkeen_screen = Path('xkeen-ui/static/js/pages/top_level_xkeen_screen.js').read_text(encoding='utf-8')
@@ -323,6 +324,7 @@ def test_top_level_navigation_controls_use_shared_helper_contract():
     panel_shell = Path('xkeen-ui/static/js/pages/panel_shell.shared.js').read_text(encoding='utf-8')
     panel_entry = Path('xkeen-ui/static/js/pages/panel.entry.js').read_text(encoding='utf-8')
     backups_entry = Path('xkeen-ui/static/js/pages/backups.entry.js').read_text(encoding='utf-8')
+    modules_entry = Path('xkeen-ui/static/js/pages/modules.entry.js').read_text(encoding='utf-8')
     devtools_entry = Path('xkeen-ui/static/js/pages/devtools.entry.js').read_text(encoding='utf-8')
     xkeen_entry = Path('xkeen-ui/static/js/pages/xkeen.entry.js').read_text(encoding='utf-8')
     mihomo_entry = Path('xkeen-ui/static/js/pages/mihomo_generator.entry.js').read_text(encoding='utf-8')
@@ -353,6 +355,7 @@ def test_top_level_navigation_controls_use_shared_helper_contract():
     assert 'export function getTopLevelScreenRegistryApi()' in registry
     assert "panel: '/'" in registry
     assert "backups: '/backups'" in registry
+    assert "modules: '/modules'" in registry
     assert "devtools: '/devtools'" in registry
     assert "xkeen: '/xkeen'" in registry
     assert "mihomo_generator: '/mihomo_generator'" in registry
@@ -364,6 +367,8 @@ def test_top_level_navigation_controls_use_shared_helper_contract():
     assert "fetchTopLevelScreenSnapshot('panel', '/')" in panel_screen
     assert 'export function registerBackupsTopLevelScreen()' in backups_screen
     assert "fetchTopLevelScreenSnapshot('backups', '/backups')" in backups_screen
+    assert 'export function registerModulesTopLevelScreen()' in modules_screen
+    assert "fetchTopLevelScreenSnapshot('modules', '/modules')" in modules_screen
     assert 'export function registerMihomoGeneratorTopLevelScreen()' in mihomo_screen
     assert "fetchTopLevelScreenSnapshot('mihomo_generator', '/mihomo_generator')" in mihomo_screen
     assert 'export function registerDevtoolsTopLevelScreen()' in devtools_screen
@@ -376,9 +381,11 @@ def test_top_level_navigation_controls_use_shared_helper_contract():
     assert 'function shouldKeepBodyNodeGlobal(node) {' in host
     assert 'if (shouldKeepBodyNodeGlobal(node)) return false;' in host
     assert "import { registerBackupsTopLevelScreen } from './top_level_backups_screen.js';" in panel_mihomo_shared
+    assert "import { registerModulesTopLevelScreen } from './top_level_modules_screen.js';" in panel_mihomo_shared
     assert "import { registerDevtoolsTopLevelScreen } from './top_level_devtools_screen.js';" in panel_mihomo_shared
     assert "import { registerXkeenTopLevelScreen } from './top_level_xkeen_screen.js';" in panel_mihomo_shared
     assert "'backups'," in panel_mihomo_shared
+    assert "'modules'," in panel_mihomo_shared
     assert "'xkeen'," in panel_mihomo_shared
     assert "import { wireTopLevelNavigation } from './top_level_nav.shared.js';" in panel_shell
     assert "import { bootTopLevelShell } from './top_level_shell.shared.js';" in panel_entry
@@ -389,6 +396,10 @@ def test_top_level_navigation_controls_use_shared_helper_contract():
     assert "import { bootBackupsScreen } from './backups.screen.bootstrap.js';" in backups_entry
     assert "import { registerPanelMihomoTopLevelScreens } from './top_level_panel_mihomo.shared.js';" in backups_entry
     assert "initialScreen: 'backups'" in backups_entry
+    assert "import { bootTopLevelShell } from './top_level_shell.shared.js';" in modules_entry
+    assert "import { bootModulesScreen } from './modules.screen.bootstrap.js';" in modules_entry
+    assert "import { registerPanelMihomoTopLevelScreens } from './top_level_panel_mihomo.shared.js';" in modules_entry
+    assert "initialScreen: 'modules'" in modules_entry
     assert "import { bootTopLevelShell } from './top_level_shell.shared.js';" in devtools_entry
     assert "import { bootDevtoolsScreen } from './devtools.screen.bootstrap.js';" in devtools_entry
     assert "import { registerPanelMihomoTopLevelScreens } from './top_level_panel_mihomo.shared.js';" in devtools_entry
@@ -1325,6 +1336,7 @@ def test_p5_top_level_router_prefers_history_navigation_and_keeps_hard_navigatio
     assert 'const TOP_LEVEL_SCREEN_ROUTES = Object.freeze({' in registry
     assert "panel: '/'" in registry
     assert "backups: '/backups'" in registry
+    assert "modules: '/modules'" in registry
     assert "devtools: '/devtools'" in registry
     assert "xkeen: '/xkeen'" in registry
     assert "mihomo_generator: '/mihomo_generator'" in registry

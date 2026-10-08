@@ -1,0 +1,46 @@
+body.modules-page .modules-header-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+body.modules-page .modules-header-main h1 {
+  margin: 0;
+}
+
+body.modules-page .modules-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 20px 0 12px;
+}
+
+body.modules-page .modules-operation-status {
+  min-height: 1.5em;
+  margin-bottom: 12px;
+}
+
+body.modules-page .modules-card-host {
+  display: grid;
+  gap: 12px;
+}
+
+body.modules-page .modules-plan-confirm {
+  width: min(520px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  border-radius: 8px;
+}
+
+body.modules-page .modules-plan-confirm::backdrop {
+  background: rgb(0 0 0 / 55%);
+}
+
+body.modules-page .modules-plan-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}

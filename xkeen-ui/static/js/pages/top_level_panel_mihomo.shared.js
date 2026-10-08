@@ -1,5 +1,6 @@
 import { registerPanelTopLevelScreen } from './top_level_panel_screen.js';
 import { registerBackupsTopLevelScreen } from './top_level_backups_screen.js';
+import { registerModulesTopLevelScreen } from './top_level_modules_screen.js';
 import { registerMihomoGeneratorTopLevelScreen } from './top_level_mihomo_generator_screen.js';
 import { registerDevtoolsTopLevelScreen } from './top_level_devtools_screen.js';
 import { registerXkeenTopLevelScreen } from './top_level_xkeen_screen.js';
@@ -7,6 +8,7 @@ import { registerXkeenTopLevelScreen } from './top_level_xkeen_screen.js';
 const CANONICAL_TOP_LEVEL_SCREEN_NAMES = Object.freeze([
   'panel',
   'backups',
+  'modules',
   'devtools',
   'xkeen',
   'mihomo_generator',
@@ -15,6 +17,7 @@ const CANONICAL_TOP_LEVEL_SCREEN_NAMES = Object.freeze([
 const IMPLEMENTED_TOP_LEVEL_SCREEN_REGISTRARS = Object.freeze({
   panel: registerPanelTopLevelScreen,
   backups: registerBackupsTopLevelScreen,
+  modules: registerModulesTopLevelScreen,
   devtools: registerDevtoolsTopLevelScreen,
   xkeen: registerXkeenTopLevelScreen,
   mihomo_generator: registerMihomoGeneratorTopLevelScreen,

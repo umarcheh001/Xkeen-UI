@@ -115,6 +115,7 @@ PANEL_NAVIGATION: tuple[PanelNavigationEntry, ...] = (
     PanelNavigationEntry(("engine.xray",), "xray-logs", "Логи Xray", "top-tab-btn xk-top-tab xk-top-tab-logs", view="xray-logs"),
     PanelNavigationEntry(("tool.terminal",), "commands", "Команды", "top-tab-btn xk-top-tab xk-top-tab-commands", view="commands"),
     PanelNavigationEntry(("tool.files",), "files", "Файлы", "top-tab-btn xk-top-tab xk-top-tab-files", view="files", element_id="top-tab-files"),
+    PanelNavigationEntry(("core",), "modules", "Модули и обновления", "top-tab-btn xk-top-tab xk-top-tab-modules", href_endpoint="modules_page", top_nav=True),
     PanelNavigationEntry(("engine.mihomo",), "mihomo-generator", "Mihomo Генератор", "top-tab-btn xk-top-tab xk-top-tab-generator", element_id="top-tab-mihomo-generator", href_endpoint="mihomo_generator_page", top_nav=True),
     PanelNavigationEntry(("core",), "donate", "Поддержать", "top-tab-btn xk-top-tab xk-top-tab-donate", element_id="top-tab-donate"),
 )
@@ -574,6 +575,13 @@ def register_pages_routes(
             return _no_cache(make_response(render_template("xkeen.html")))
         except Exception:
             return render_template("xkeen.html")
+
+    @app.get("/modules")
+    def modules_page():
+        try:
+            return _no_cache(make_response(render_template("modules.html")))
+        except Exception:
+            return render_template("modules.html")
 
     if active_module_ids is None or "engine.mihomo" in active_module_ids:
 

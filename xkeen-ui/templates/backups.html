@@ -70,6 +70,7 @@
             data-xk-top-nav="1"
             title="Назад на главную панель"
           >← Назад</a>
+          <a href="{{ url_for('modules_page') }}" class="service-core-text xk-header-btn" data-xk-top-nav="1">Модули и обновления</a>
           {% if ui_endpoint_available('devtools_page') %}
           <a
             href="{{ url_for('devtools_page') }}"

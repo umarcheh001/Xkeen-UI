@@ -10,6 +10,7 @@ const CANONICAL_PAGE_ENTRIES = {
   panel: path.resolve(pageDir, 'panel.entry.js'),
   xkeen: path.resolve(pageDir, 'xkeen.entry.js'),
   backups: path.resolve(pageDir, 'backups.entry.js'),
+  modules: path.resolve(pageDir, 'modules.entry.js'),
   devtools: path.resolve(pageDir, 'devtools.entry.js'),
   mihomo_generator: path.resolve(pageDir, 'mihomo_generator.entry.js'),
 };

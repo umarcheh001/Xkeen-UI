@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Xkeen UI — Модули и обновления</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  {% include '_top_level_host_head_assets.html' %}
+  {% set modules_page_config = frontend_page_config('modules', frontend_modules=standalone_frontend_modules|default(none)) %}
+  <script>
+    window.XKeen = window.XKeen || {};
+    var pageConfig = {{ modules_page_config|tojson }};
+    window.XKeen.pageConfig = pageConfig;
+  </script>
+  {% include '_top_level_host_theme_bootstrap.html' %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260907a') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='modules-manager.css') }}">
+</head>
+<body class="modules-page" data-xk-top-level-screen="modules">
+  {% set top_level_spinner_text = 'Выполняется операция с модулями…' %}
+  {% include '_top_level_global_spinner.html' %}
+
+  <div class="container container-wide" id="xk-modules-manager">
+    <header class="panel-header modules-header">
+      <div class="modules-header-main">
+        <h1>Модули и обновления</h1>
+        <div class="header-actions">
+          <div class="xk-global-header-activity" data-xk-global-spinner-anchor aria-live="polite" aria-atomic="true" aria-label="Операция выполняется…">
+            <span class="xk-global-header-activity__icon" aria-hidden="true"></span>
+            <span class="xk-visually-hidden" data-xk-global-spinner-text>Операция выполняется…</span>
+          </div>
+          <button type="button" id="theme-toggle-btn" class="theme-toggle-btn theme-toggle-header xk-header-btn xk-header-btn-theme" aria-label="Переключить тему"><span class="theme-toggle-icon" aria-hidden="true">☀</span><span class="theme-toggle-text">Светлая тема</span></button>
+          <a href="{{ url_for('index') }}" class="service-core-text xk-header-btn" data-xk-top-nav="1">← Назад</a>
+          {% if ui_endpoint_available('devtools_page') %}
+          <a href="{{ url_for('devtools_page') }}" class="service-core-text xk-header-btn" data-xk-top-nav="1">DevTools</a>
+          {% endif %}
+          {% set logout_button_class = 'service-core-text xk-header-btn xk-header-btn-logout' %}
+          {% include '_logout_button.html' %}
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <div class="modules-tabs top-tabs" role="tablist" aria-label="Каталог модулей">
+        <button type="button" id="modules-tab-installed" class="top-tab-btn active" role="tab" aria-selected="true" aria-controls="modules-card-host">Установленные</button>
+        <button type="button" id="modules-tab-available" class="top-tab-btn" role="tab" aria-selected="false" aria-controls="modules-card-host">Доступные</button>
+      </div>
+      <div id="modules-operation-status" class="modules-operation-status" role="status" aria-live="polite" aria-atomic="true"></div>
+      <div id="modules-card-host" class="modules-card-host" role="tabpanel" aria-labelledby="modules-tab-installed"></div>
+    </main>
+
+    <dialog id="modules-plan-confirm" class="modules-plan-confirm" aria-labelledby="modules-plan-title">
+      <h2 id="modules-plan-title">Подтвердить изменения</h2>
+      <div id="modules-plan-summary"></div>
+      <div class="modules-plan-actions">
+        <button type="button" id="modules-plan-cancel" class="btn-secondary">Отменить</button>
+        <button type="button" id="modules-plan-apply" class="btn-primary">Применить</button>
+      </div>
+    </dialog>
+  </div>
+  <script type="module" src="{{ frontend_page_entry_url('modules') }}"></script>
+</body>
+</html>

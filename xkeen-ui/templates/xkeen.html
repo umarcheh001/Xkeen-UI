@@ -65,6 +65,7 @@
             class="theme-toggle-btn theme-toggle-header"
             aria-label="Переключить тему"
           ><span class="theme-toggle-icon" aria-hidden="true">☀</span><span class="theme-toggle-text">Светлая тема</span></button>
+          <a href="{{ url_for('modules_page') }}" class="btn-link" data-xk-top-nav="1">Модули и обновления</a>
           {% if ui_endpoint_available('devtools_page') %}
           <a href="{{ url_for('devtools_page') }}" class="btn-link" data-xk-top-nav="1" title="DevTools">DevTools</a>
           <a
