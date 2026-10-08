@@ -43,7 +43,7 @@ def test_init_script_recovers_before_it_starts_the_panel() -> None:
 
     recovery = start_service.index(BEGIN)
     assert start_service.index('audit_boot "[start] target=$TARGET"') < recovery
-    assert recovery < start_service.index('if [ -f "$PID_FILE" ] && kill -0')
+    assert recovery < start_service.index('RUNNING_PID="$(panel_pid)"')
     fragment = _fragment(start_service)
     assert '"$UI_DIR.module-transactions"' in fragment
     assert '"$UI_DIR/scripts/module_transaction.py" recover' in fragment

@@ -22,6 +22,29 @@ audit_boot() {
   echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> /opt/var/log/xkeen-ui-boot.log 2>/dev/null || true
 }
 
+panel_pid() {
+  # Назвать номер процесса панели — только если под ним и вправду панель.
+  #
+  # Файл с номером лежит на накопителе и переживает перезагрузку, а номера
+  # процессов при загрузке роутера повторяются почти один в один. Прежний номер
+  # легко достаётся другому процессу, и по одной проверке «номер занят» служба
+  # решила бы, что панель уже запущена, а `stop` снял бы чужой процесс.
+  [ -f "$PID_FILE" ] || return 1
+  _pp_pid="$(cat "$PID_FILE" 2>/dev/null)"
+  case "$_pp_pid" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  kill -0 "$_pp_pid" 2>/dev/null || return 1
+  if [ -r "/proc/$_pp_pid/cmdline" ]; then
+    _pp_cmd="$(tr '\000' ' ' < "/proc/$_pp_pid/cmdline" 2>/dev/null)"
+    case "$_pp_cmd" in
+      *"$RUN_SERVER"*|*"$APP_PY"*) ;;
+      *) return 1 ;;
+    esac
+  fi
+  echo "$_pp_pid"
+}
+
 warm_bytecode_cache() {
   # Кэш байткода живёт в PYTHONPYCACHEPREFIX, то есть в tmpfs, и перезагрузка
   # роутера стирает его целиком. Импорты у панели ленивые, поэтому часть
@@ -130,9 +153,10 @@ start_service() {
   fi
   # <<< module-operation-recovery
 
-  if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE" 2>/dev/null)" 2>/dev/null; then
-    audit_boot "[start] already running, PID $(cat "$PID_FILE")"
-    echo "Сервис уже запущен (PID $(cat "$PID_FILE"))."
+  RUNNING_PID="$(panel_pid)" || RUNNING_PID=""
+  if [ -n "$RUNNING_PID" ]; then
+    audit_boot "[start] already running, PID $RUNNING_PID"
+    echo "Сервис уже запущен (PID $RUNNING_PID)."
     return 0
   fi
 
@@ -221,8 +245,9 @@ start_service() {
 
 stop_service() {
   if [ -f "$PID_FILE" ]; then
-    PID="$(cat "$PID_FILE")"
-    if kill -0 "$PID" 2>/dev/null; then
+    # Чужой процесс под прежним номером панели не трогаем.
+    PID="$(panel_pid)" || PID=""
+    if [ -n "$PID" ]; then
       echo "Останавливаю Xkeen Web UI (PID $PID)..."
       kill "$PID" 2>/dev/null || true
       sleep 1
@@ -238,8 +263,9 @@ stop_service() {
 }
 
 status_service() {
-  if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
-    echo "Xkeen Web UI запущен, PID $(cat "$PID_FILE")."
+  RUNNING_PID="$(panel_pid)" || RUNNING_PID=""
+  if [ -n "$RUNNING_PID" ]; then
+    echo "Xkeen Web UI запущен, PID $RUNNING_PID."
     return 0
   fi
   echo "Xkeen Web UI не запущен."
