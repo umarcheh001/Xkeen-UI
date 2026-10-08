@@ -77,14 +77,17 @@ def _default_client(state_dir: Path, architecture: str, version: str):
     return ModuleCatalogClient(state_dir, platform_architecture=architecture, core_version=version)
 
 
-PROVISION_TIMEOUTS_S = {"prepare": 1500.0, "apply": 300.0}
+PROVISION_TIMEOUTS_S = {"prepare": 1500.0, "apply": 300.0, "packages": 600.0}
 
 
-def build_provision(panel_root: Path):
+def build_provision(panel_root: Path, *, target_version: str | None = None, module_id: str | None = None):
     """How the runner asks the panel's shared script to bring the router in line.
 
     The script is the one the installer uses; here it is run as a command.
     A panel installed before the script existed has none: nothing is called.
+    The script is told which release the panel is updated to and which module
+    the operation is about: add-ons are compared with that release, packages
+    are brought for that module.
     """
 
     def provision(phase: str, script: Path) -> None:
@@ -92,6 +95,12 @@ def build_provision(panel_root: Path):
         if not script.is_file():
             return
         environment = dict(os.environ, UI_DIR=str(panel_root), PYTHON_BIN=sys.executable)
+        for name, value in (("XKEEN_UI_TARGET_VERSION", target_version), ("XKEEN_UI_OPERATION_MODULE", module_id)):
+            # Never inherited: a value left in the environment of the panel
+            # would describe some other operation.
+            environment.pop(name, None)
+            if value:
+                environment[name] = str(value)
         try:
             process = subprocess.run(
                 ["sh", script.as_posix() if os.name == "nt" else str(script), phase],
@@ -234,7 +243,11 @@ def _run(args, *, client_factory, architecture, on_step) -> int:
             on_step=on_step,
             shield=lambda: signal.signal(signal.SIGTERM, signal.SIG_IGN),
             panel_archive_cache=Path(args.archive_cache) if args.archive_cache else None,
-            provision=build_provision(panel_root),
+            provision=build_provision(
+                panel_root,
+                target_version=plan.target_version if plan.scope == "panel" else None,
+                module_id=plan.module_id,
+            ),
         )
     finally:
         if listener is not None:

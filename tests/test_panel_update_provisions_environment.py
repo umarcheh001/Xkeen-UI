@@ -159,9 +159,65 @@ def test_a_module_operation_applies_but_has_nothing_to_prepare(tmp_path):
 
     result = _run(panel, plan, release, lambda phase, _script: phases.append(phase))
 
-    # Библиотеки нужны релизу, а не модулю; команды и шаблоны — модулю тоже.
+    # Библиотеки нужны релизу, а не модулю; модулю — его пакеты Entware (до
+    # раскладки файлов), а после неё команды и шаблоны.
     assert result == "committed"
-    assert phases == ["apply"]
+    assert phases == ["packages", "apply"]
+
+
+def test_packages_that_could_not_be_brought_do_not_stop_the_module(tmp_path):
+    panel = make_panel(tmp_path)
+    release = make_release()
+    plan = build_plan("install", "tool.files", **{**panel.kwargs, "catalog": release.catalog})
+    phases: list[str] = []
+
+    def provision(phase: str, _script: Path) -> None:
+        phases.append(phase)
+        if phase == "packages":
+            raise ModuleTransactionError("operation_environment_failed", "источник пакетов не ответил")
+
+    result = _run(panel, plan, release, provision)
+
+    # Модуль работает и без пакета: он ставится, а нехватка остаётся в журнале.
+    assert result == "committed"
+    assert phases == ["packages", "apply"]
+    assert panel.path("static/js/pages/file_manager.lazy.entry.js").is_file()
+
+
+def test_removing_a_module_brings_no_packages(tmp_path):
+    panel = make_panel(tmp_path, installed=("core", "tool.editor", "engine.xray", "tool.files"))
+    plan = build_plan("remove", "tool.files", **panel.kwargs)
+    phases: list[str] = []
+
+    result = _run(panel, plan, make_release(), lambda phase, _script: phases.append(phase))
+
+    assert result == "committed"
+    assert "packages" not in phases
+
+
+def test_the_runner_tells_the_script_what_the_operation_is_about(tmp_path):
+    cli = _cli()
+    panel = make_panel(tmp_path, version=OLD)
+    trace = tmp_path / "trace.txt"
+    script = panel.root / "scripts" / "provision_env.sh"
+    script.parent.mkdir(parents=True, exist_ok=True)
+    script.write_bytes(
+        (
+            '#!/bin/sh\necho "$1 target=[${XKEEN_UI_TARGET_VERSION:-}] module=[${XKEEN_UI_OPERATION_MODULE:-}]" >> "'
+            + trace.as_posix()
+            + '"\n'
+        ).encode("utf-8")
+    )
+
+    with patch.dict(os.environ, {"XKEEN_UI_TARGET_VERSION": "9.9.9", "XKEEN_UI_OPERATION_MODULE": "tool.stale"}):
+        cli.build_provision(panel.root, target_version=NEW)("prepare", script)
+        cli.build_provision(panel.root, module_id="tool.files")("packages", script)
+
+    # Значения, оставшиеся в окружении панели от другой операции, не подхватываются.
+    assert trace.read_text(encoding="utf-8").splitlines() == [
+        f"prepare target=[{NEW}] module=[]",
+        "packages target=[] module=[tool.files]",
+    ]
 
 
 def test_the_release_brings_its_own_script_for_the_preparation(tmp_path):

@@ -47,6 +47,28 @@ def install_all(
     return result
 
 
+def refresh_engine(
+    bin_path: str | None = None,
+    *,
+    release_base: str = "",
+    fetch=None,
+    run=None,
+    platform: Callable[[], dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Bring an installed engine in line with a release; the keys are not touched.
+
+    The keys come from a third-party source and are only fetched when the
+    owner asks for them.
+    """
+    return engine.refresh_engine(
+        bin_path or engine.default_bin_path(),
+        asset=_asset(platform),
+        release_base=release_base,
+        fetch=fetch or engine.fetch_url,
+        run=run or engine.run_command,
+    )
+
+
 def install_uploaded_engine(bin_path: str | None, local_file: str, *, run=None, platform=None) -> dict[str, Any]:
     bin_path = bin_path or engine.default_bin_path()
     return {

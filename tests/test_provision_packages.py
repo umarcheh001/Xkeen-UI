@@ -148,3 +148,67 @@ def test_the_installer_and_the_update_share_the_two_steps():
     # Пакеты ставятся в одном месте — в общем скрипте.
     assert "opkg install lftp" not in installer.replace("provision_opkg install lftp", "")
     assert "provision_opkg install lftp" not in installer
+
+
+# --- команда `packages`: пакеты модуля, который ставится из панели ---------------------
+
+
+def _packages(tmp_path: Path, module: str, *, opkg: str | None = "ok"):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    if opkg is not None:
+        (bin_dir / "opkg").write_bytes(FAKE_OPKG.encode("utf-8"))
+        os.chmod(bin_dir / "opkg", 0o755)
+    conf = tmp_path / "opkg.conf"
+    conf.write_text("src/gz entware http://bin.entware.net/aarch64-k3.10\n", encoding="utf-8")
+    ui = tmp_path / "xkeen-ui"
+    (ui / "scripts").mkdir(parents=True)
+    (ui / "scripts" / "provision_env.sh").write_bytes(LIB.read_bytes())
+    log = tmp_path / "opkg.log"
+    proc = subprocess.run(
+        ["sh", (ui / "scripts" / "provision_env.sh").as_posix(), "packages"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=120,
+        env={
+            **os.environ,
+            "PATH": bin_dir.as_posix() + os.pathsep + "/usr/bin" + os.pathsep + "/bin",
+            "UI_DIR": ui.as_posix(),
+            "FAKE_BIN": bin_dir.as_posix(),
+            "FAKE_OPKG": opkg or "",
+            "FAKE_OPKG_LOG": log.as_posix(),
+            "XKEEN_OPKG_CONF": conf.as_posix(),
+            "XKEEN_OPKG_UPDATE_TIMEOUT": "5",
+            "XKEEN_OPKG_FALLBACK": "0",
+            "XKEEN_UI_OPERATION_MODULE": module,
+            "TMPDIR": tmp_path.as_posix(),
+        },
+    )
+    calls = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
+    return proc, calls
+
+
+def test_installing_the_file_manager_from_the_panel_brings_lftp(tmp_path):
+    proc, calls = _packages(tmp_path, "tool.files")
+
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert calls == ["update", "install lftp"]
+
+
+def test_another_module_asks_entware_for_nothing(tmp_path):
+    proc, calls = _packages(tmp_path, "tool.terminal")
+
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert calls == []
+
+
+def test_the_packages_step_never_fails_the_installation_of_a_module(tmp_path):
+    for case, opkg in (("none", None), ("dead", "dead"), ("no-install", "no-install")):
+        folder = tmp_path / case
+        folder.mkdir()
+        proc, _calls = _packages(folder, "tool.files", opkg=opkg)
+
+        assert proc.returncode == 0, case + proc.stdout + proc.stderr
+        # Владельцу сказано, чего не хватило и как это поставить.
+        assert "opkg install lftp" in proc.stdout, case

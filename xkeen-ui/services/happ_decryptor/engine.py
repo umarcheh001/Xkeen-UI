@@ -291,6 +291,35 @@ def install_engine(
                 pass
 
 
+def refresh_engine(
+    bin_path: str,
+    *,
+    asset: str,
+    release_base: str = "",
+    fetch: Fetch | None = None,
+    run: Run | None = None,
+) -> dict[str, Any]:
+    """Replace an installed engine when the release publishes another one.
+
+    The engine is compared with the release by its checksum, which costs one
+    small file. Nothing is downloaded when they are equal, nothing is touched
+    when the release does not say, and an engine nobody installed is not
+    brought: a panel update must not install an add-on on its own.
+    """
+    if not os.path.isfile(bin_path):
+        return {"changed": False, "reason": "not_installed"}
+    fetch = fetch or fetch_url
+    base = release_base or str(os.environ.get(RELEASE_URL_ENV) or "").strip() or DEFAULT_RELEASE_URL
+    base = base if base.endswith("/") else base + "/"
+    try:
+        published = _published_sha256(fetch, base, asset, os.path.dirname(bin_path) or ".")
+    except HappDecryptorError:
+        return {"changed": False, "reason": "unknown"}
+    if _sha256_file(bin_path) == published:
+        return {"changed": False, "reason": "same"}
+    return {"changed": True, **install_engine(bin_path, asset=asset, release_base=base, fetch=fetch, run=run)}
+
+
 def selftest(bin_path: str, assets_dir: str, run: Run) -> dict[str, Any] | None:
     _rc, out, _err = _safe_run(run, [bin_path, "-selftest", "-assets", assets_dir])
     try:

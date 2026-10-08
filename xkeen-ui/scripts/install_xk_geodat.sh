@@ -48,14 +48,23 @@ file_magic_hex() {
   F="$1"
   [ -f "$F" ] || return 1
 
+  # Интерпретатор может найтись, но не запуститься: тогда первые байты
+  # читаются запасным способом, а не считаются нечитаемыми.
   if [ -n "$PY_BIN" ]; then
-    "$PY_BIN" -c 'import sys,binascii; p=sys.argv[1]; b=open(p,"rb").read(4); sys.stdout.write(binascii.hexlify(b).decode("ascii"))' "$F" 2>/dev/null || true
-    return 0
+    _fm_hex="$("$PY_BIN" -c 'import sys,binascii; p=sys.argv[1]; b=open(p,"rb").read(4); sys.stdout.write(binascii.hexlify(b).decode("ascii"))' "$F" 2>/dev/null || true)"
+    if [ -n "$_fm_hex" ]; then
+      printf '%s' "$_fm_hex"
+      return 0
+    fi
   fi
 
   # Fallback: parse first 4 bytes from hexdump -C.
   if command -v hexdump >/dev/null 2>&1; then
     hexdump -n 4 -C "$F" 2>/dev/null | head -n1 | awk '{print $2 $3 $4 $5}' | tr -d ' \t\r\n'
+    return 0
+  fi
+  if command -v od >/dev/null 2>&1; then
+    od -An -tx1 -N4 "$F" 2>/dev/null | tr -d ' \t\r\n'
     return 0
   fi
 
@@ -111,7 +120,7 @@ verify_sha256sums_if_available() {
 
   # 1) Preferred: SHA256SUMS
   if fetch_url "$SUMS_URL" "$SUMS_TMP" 2>/dev/null; then
-    EXPECTED="$(grep -E "[[:space:]\*]${ASSET_NAME}\$" "$SUMS_TMP" | awk '{print $1}' | head -n1 || true)"
+    EXPECTED="$(grep -E "[[:space:]\*/]${ASSET_NAME}\$" "$SUMS_TMP" | awk '{print $1}' | head -n1 || true)"
     if [ -z "$EXPECTED" ]; then
       echo "xk-geodat: SHA256SUMS missing entry for $ASSET_NAME — continue"
       rm -f "$SUMS_TMP" 2>/dev/null || true
@@ -369,7 +378,13 @@ case "${ARCH}/${OPKG_ARCH}" in
       fi
     fi
     ;;
-  *) echo "xk-geodat: unsupported arch: $ARCH ($OPKG_ARCH) — пропуск"; exit 0 ;;
+  *)
+    # Имя файла может быть задано явно (XKEEN_GEODAT_ASSET, ниже).
+    if [ -z "${XKEEN_GEODAT_ASSET:-}" ]; then
+      echo "xk-geodat: unsupported arch: $ARCH ($OPKG_ARCH) — пропуск"
+      exit 0
+    fi
+    ;;
 esac
 
 # NOTE: we do NOT publish a big-endian MIPS binary.
@@ -385,6 +400,10 @@ fi
 #   XKEEN_GEODAT_URL            -> full URL to binary
 #   XKEEN_GEODAT_LOCAL          -> install from existing local file
 #   XKEEN_GEODAT_SHA256SUMS_URL -> override URL to SHA256SUMS
+#   XKEEN_GEODAT_ONLY_IF_CHANGED=1 -> так его зовёт обновление панели: уже
+#                                  установленный файл сверяется с релизом по
+#                                  контрольной сумме и качается, только если
+#                                  в релизе он другой
 if [ -n "${XKEEN_GEODAT_ASSET:-}" ]; then
   ASSET="$XKEEN_GEODAT_ASSET"
 fi
@@ -444,6 +463,41 @@ fi
 TMP="/tmp/$ASSET.$$"
 SUMS_TMP="/tmp/SHA256SUMS.$$"
 
+if [ -n "${XKEEN_GEODAT_SHA256SUMS_URL:-}" ]; then
+  SUMS_URL="$XKEEN_GEODAT_SHA256SUMS_URL"
+elif [ -n "$BASE" ]; then
+  SUMS_URL="${BASE}SHA256SUMS"
+else
+  SUMS_URL="${URL%/*}/SHA256SUMS"
+fi
+
+if [ "${XKEEN_GEODAT_ONLY_IF_CHANGED:-}" = "1" ]; then
+  # Сам файл весит мегабайты, список сумм — сотни байт: сначала спрашиваем
+  # релиз, тот ли у нас файл. Не удалось узнать — оставляем как есть:
+  # обновление панели от дополнения не зависит.
+  if [ ! -f "$DEST" ]; then
+    echo "xk-geodat: не установлен — пропуск"
+    exit 0
+  fi
+  if ! have_hash_tool || ! fetch_url "$SUMS_URL" "$SUMS_TMP" 2>/dev/null; then
+    echo "xk-geodat: релиз не сообщил версию — оставлен как есть"
+    rm -f "$SUMS_TMP" 2>/dev/null || true
+    exit 0
+  fi
+  EXPECTED="$(grep -E "[[:space:]\*/]${ASSET}\$" "$SUMS_TMP" | awk '{print $1}' | head -n1 || true)"
+  rm -f "$SUMS_TMP" 2>/dev/null || true
+  ACTUAL="$(file_sha256 "$DEST" 2>/dev/null || true)"
+  if [ -z "$EXPECTED" ] || [ -z "$ACTUAL" ]; then
+    echo "xk-geodat: релиз не сообщил версию — оставлен как есть"
+    exit 0
+  fi
+  if [ "$ACTUAL" = "$EXPECTED" ]; then
+    echo "xk-geodat: уже той же версии, что в релизе"
+    exit 0
+  fi
+  echo "xk-geodat: в релизе другая версия — обновляю"
+fi
+
 echo "xk-geodat: downloading $URL"
 
 set +e
@@ -470,14 +524,6 @@ if ! is_elf_file "$TMP"; then
 fi
 
 # Soft checksum verification (if SHA256SUMS is available)
-if [ -n "${XKEEN_GEODAT_SHA256SUMS_URL:-}" ]; then
-  SUMS_URL="$XKEEN_GEODAT_SHA256SUMS_URL"
-elif [ -n "$BASE" ]; then
-  SUMS_URL="${BASE}SHA256SUMS"
-else
-  SUMS_URL="${URL%/*}/SHA256SUMS"
-fi
-
 verify_sha256sums_if_available "$TMP" "$ASSET" "$SUMS_URL" "$SUMS_TMP" || {
   echo "xk-geodat: checksum failed — пропуск"
   rm -f "$TMP" 2>/dev/null || true

@@ -1218,6 +1218,59 @@ provision_sysmon_utils() {
   return 0
 }
 
+provision_addons() {
+  # Дополнения, которые владелец уже поставил: просмотрщик DAT-файлов и
+  # утилита ссылок подписок. Каждое сверяется с релизом по контрольной сумме
+  # и скачивается, только если в релизе оно другое. Не установленное сюда не
+  # попадает, а любая неудача — только строка в журнале.
+  _pd_tag=""
+  [ -n "${XKEEN_UI_TARGET_VERSION:-}" ] && _pd_tag="v$XKEEN_UI_TARGET_VERSION"
+  _pd_limit="${XKEEN_UI_ADDON_REFRESH_TIMEOUT:-180}"
+
+  # Установщики берутся из панели, а не из распакованного релиза: там лежат
+  # только изменившиеся файлы. Установщик, который сравнивать ещё не умеет,
+  # не запускается — он скачал бы дополнение заново при каждом обновлении.
+  _pd_script="$UI_DIR/scripts/install_xk_geodat.sh"
+  _pd_bin="${XKEEN_GEODAT_BIN:-$UI_DIR/bin/xk-geodat}"
+  if provision_has_module engine.xray && [ -f "$_pd_bin" ] && [ -f "$_pd_script" ] \
+      && grep -q 'XKEEN_GEODAT_ONLY_IF_CHANGED' "$_pd_script" 2>/dev/null; then
+    echo "[*] Сверяю просмотрщик DAT-файлов с релизом..."
+    provision_run_limited "$_pd_limit" env XKEEN_GEODAT_BIN="$_pd_bin" XKEEN_GEODAT_INSTALL=1 \
+      XKEEN_GEODAT_ONLY_IF_CHANGED=1 XKEEN_GEODAT_TAG="$_pd_tag" sh "$_pd_script" \
+      || echo "[*] Просмотрщик DAT-файлов сверить не удалось; обновление продолжается."
+  fi
+
+  _pd_script="$UI_DIR/scripts/install_happ_decryptor.py"
+  if provision_has_module integration.happ && [ -f "$UI_DIR/bin/happ-decrypt-universal" ] && [ -f "$_pd_script" ] \
+      && grep -q -- '--refresh' "$_pd_script" 2>/dev/null; then
+    echo "[*] Сверяю утилиту ссылок подписок с релизом..."
+    if [ -n "$_pd_tag" ]; then
+      provision_run_limited "$_pd_limit" env \
+        XKEEN_HAPP_DECRYPTOR_RELEASE_URL="https://github.com/umarcheh001/Xkeen-UI/releases/download/$_pd_tag/" \
+        "$PYTHON_BIN" "$_pd_script" --refresh \
+        || echo "[*] Утилиту ссылок подписок сверить не удалось; обновление продолжается."
+    else
+      provision_run_limited "$_pd_limit" "$PYTHON_BIN" "$_pd_script" --refresh \
+        || echo "[*] Утилиту ссылок подписок сверить не удалось; обновление продолжается."
+    fi
+  fi
+  return 0
+}
+
+provision_cmd_packages() {
+  # Пакеты Entware для модуля, который ставится из панели. Модуль встаёт и без
+  # них, поэтому команда всегда завершается успешно, а чего не хватило —
+  # остаётся в журнале.
+  case "${XKEEN_UI_OPERATION_MODULE:-}" in
+    tool.files)
+      provision_file_manager || echo "[*] lftp для файлового менеджера доставить не удалось; поставить вручную: opkg install lftp"
+      ;;
+  esac
+  provision_opkg_cleanup 2>/dev/null || true
+  PROVISION_ERROR=""
+  return 0
+}
+
 provision_cmd_prepare() {
   provision_gevent_policy
   provision_python_libs_check
@@ -1233,6 +1286,7 @@ provision_cmd_prepare() {
   fi
   provision_sysmon_utils || true
   provision_opkg_cleanup 2>/dev/null || true
+  provision_addons || true
   PROVISION_ERROR=""
   return 0
 }
@@ -1284,8 +1338,9 @@ case "${0##*/}" in
     case "${1:-}" in
       prepare) provision_cmd_prepare || exit 1 ;;
       apply) provision_cmd_apply || exit 1 ;;
+      packages) provision_cmd_packages || exit 1 ;;
       *)
-        echo "Использование: sh provision_env.sh {prepare|apply}" >&2
+        echo "Использование: sh provision_env.sh {prepare|apply|packages}" >&2
         exit 2
         ;;
     esac

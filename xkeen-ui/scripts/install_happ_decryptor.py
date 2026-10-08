@@ -75,11 +75,36 @@ def _tidy_old_emulator(out, bin_path) -> None:
         _say(out, f"убраны файлы прежнего эмулятора: {len(removed)}")
 
 
-def main(argv=None, *, env=None, stdin=None, out=None, installer=None, bin_path=None) -> int:
+def _refresh(out, refresher, bin_path) -> int:
+    """``--refresh``: what a panel update runs. Asks nothing, never fails."""
+
+    try:
+        if refresher is None:
+            from services.happ_decryptor import service
+
+            refresher = service.refresh_engine
+        result = refresher(bin_path) or {}
+        if result.get("changed"):
+            _say(out, f"движок обновлён до версии из релиза: {result.get('version') or 'версия не названа'}")
+        elif result.get("reason") == "same":
+            _say(out, "движок уже той же версии, что в релизе")
+        elif result.get("reason") == "not_installed":
+            _say(out, "движок не установлен — пропуск")
+        else:
+            _say(out, "релиз не сообщил версию движка — оставлен как есть")
+    except Exception as exc:  # noqa: BLE001 - an add-on must not stop a panel update
+        _say(out, f"не удалось сверить движок с релизом ({type(exc).__name__}) — пропуск")
+    return 0
+
+
+def main(argv=None, *, env=None, stdin=None, out=None, installer=None, bin_path=None, refresher=None) -> int:
     env = os.environ if env is None else env
     stdin = sys.stdin if stdin is None else stdin
     out = sys.stdout if out is None else out
+    argv = sys.argv[1:] if argv is None else list(argv)
     _tidy_old_emulator(out, bin_path)
+    if "--refresh" in argv:
+        return _refresh(out, refresher, bin_path)
     try:
         from services.happ_decryptor.errors import HappDecryptorError
     except Exception:  # noqa: BLE001 - a broken panel copy must not break install.sh

@@ -240,6 +240,14 @@ def run_operation(
                 extract_payload(archive_path, journal.staging / "payload", plan.files_add)
                 # Unpacked: the archive is only taking room from here on.
                 archive_path.unlink(missing_ok=True)
+                if provision is not None and plan.operation == "install":
+                    # Entware packages the module leans on (lftp for the file
+                    # manager). The module works without them, so whatever
+                    # happens here the installation goes on.
+                    try:
+                        provision("packages", provision_script(journal, staged=False))
+                    except Exception:
+                        pass
             else:
                 descriptor = snapshot.catalog.get("panel")
                 if not isinstance(descriptor, dict) or (

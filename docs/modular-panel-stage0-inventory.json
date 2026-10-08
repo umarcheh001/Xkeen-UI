@@ -36,13 +36,13 @@
         "flask"
       ],
       "removable": false,
-      "unit_count": 529,
-      "size_bytes": 7063453,
+      "unit_count": 530,
+      "size_bytes": 7082614,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
         "backend_service": 74,
-        "backend_test": 245,
+        "backend_test": 246,
         "configuration": 10,
         "frontend_bundle": 9,
         "frontend_entrypoint": 2,
@@ -326,7 +326,7 @@
       ],
       "removable": true,
       "unit_count": 22,
-      "size_bytes": 314149,
+      "size_bytes": 316003,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 6,
@@ -2252,7 +2252,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_transactions/executor.py",
-      "size_bytes": 19288,
+      "size_bytes": 19755,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -2879,6 +2879,36 @@
         "XKEEN_IP_EXCLUDE_FILE",
         "XKEEN_PORT_EXCLUDE_FILE",
         "XKEEN_PORT_PROXYING_FILE"
+      ],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_addons_refresh_on_update.py",
+      "size_bytes": 13719,
+      "depends_on": [
+        "integration.happ"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask"
+      ],
+      "environment_variables": [
+        "XKEEN_GEODAT_ASSET",
+        "XKEEN_GEODAT_BIN",
+        "XKEEN_GEODAT_INSTALL",
+        "XKEEN_GEODAT_ONLY_IF_CHANGED",
+        "XKEEN_GEODAT_SHA256SUMS_URL",
+        "XKEEN_GEODAT_TAG",
+        "XKEEN_GEODAT_URL",
+        "XKEEN_HAPP_DECRYPTOR_RELEASE_URL",
+        "XKEEN_UI_TARGET_VERSION"
       ],
       "removable": false
     },
@@ -6081,7 +6111,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_panel_update_provisions_environment.py",
-      "size_bytes": 10772,
+      "size_bytes": 13247,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -6092,7 +6122,10 @@
         "python3",
         "flask"
       ],
-      "environment_variables": [],
+      "environment_variables": [
+        "XKEEN_UI_OPERATION_MODULE",
+        "XKEEN_UI_TARGET_VERSION"
+      ],
       "removable": false
     },
     {
@@ -6285,7 +6318,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_provision_packages.py",
-      "size_bytes": 6370,
+      "size_bytes": 8870,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -6299,7 +6332,8 @@
       "environment_variables": [
         "XKEEN_OPKG_CONF",
         "XKEEN_OPKG_FALLBACK",
-        "XKEEN_OPKG_UPDATE_TIMEOUT"
+        "XKEEN_OPKG_UPDATE_TIMEOUT",
+        "XKEEN_UI_OPERATION_MODULE"
       ],
       "removable": false
     },
@@ -18872,7 +18906,7 @@
       "module_id": "integration.happ",
       "kind": "backend_service",
       "path": "xkeen-ui/services/happ_decryptor/engine.py",
-      "size_bytes": 15186,
+      "size_bytes": 16416,
       "depends_on": [
         "core",
         "engine.xray"
@@ -18936,7 +18970,7 @@
       "module_id": "integration.happ",
       "kind": "backend_service",
       "path": "xkeen-ui/services/happ_decryptor/service.py",
-      "size_bytes": 3689,
+      "size_bytes": 4313,
       "depends_on": [
         "core"
       ],
@@ -29246,10 +29280,11 @@
       {
         "from": "core",
         "to": "integration.happ",
-        "unit_count": 6,
+        "unit_count": 7,
         "examples": [
           "xkeen-ui/routes/__init__.py",
           "xkeen-ui/services/subscription_request_profile.py",
+          "tests/test_addons_refresh_on_update.py",
           "tests/test_check_keys_upstream.py",
           "tests/test_module_backend_gates.py",
           "xkeen-ui/static/js/features/index.js",
@@ -30318,10 +30353,11 @@
       {
         "from": "core",
         "to": "integration.happ",
-        "unit_count": 6,
+        "unit_count": 7,
         "examples": [
           "xkeen-ui/routes/__init__.py",
           "xkeen-ui/services/subscription_request_profile.py",
+          "tests/test_addons_refresh_on_update.py",
           "tests/test_check_keys_upstream.py",
           "tests/test_module_backend_gates.py",
           "xkeen-ui/static/js/features/index.js",
