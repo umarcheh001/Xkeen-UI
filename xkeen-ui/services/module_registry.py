@@ -741,6 +741,9 @@ class ModuleRegistry:
             definition = _DEFINITIONS_BY_ID[normalized_id]
             before = self._snapshot_from_state(state)
             current_enabled = bool(state["modules"][normalized_id]["enabled"])
+            # Taken before dependencies are switched on below: they are part
+            # of the change, not of the state to return to.
+            switch_baseline = self._module_switch_baseline(state)
 
             if not enabled and not definition.can_disable:
                 raise ModuleRegistryError(
@@ -783,7 +786,7 @@ class ModuleRegistry:
             changed = current_enabled != enabled or (enabled and dependency_changed)
             if changed:
                 if MODULE_SWITCH_BASELINE_KEY not in state:
-                    state[MODULE_SWITCH_BASELINE_KEY] = self._module_switch_baseline(state)
+                    state[MODULE_SWITCH_BASELINE_KEY] = switch_baseline
                 state["modules"][normalized_id]["enabled"] = enabled
                 state["modules"][normalized_id].pop("blocked_reason", None)
                 state["profile"] = CUSTOM_PROFILE

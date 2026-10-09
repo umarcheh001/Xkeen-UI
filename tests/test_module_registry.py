@@ -258,6 +258,22 @@ def test_reversing_a_switch_restores_an_existing_custom_profile(tmp_path):
     assert restored_registry["editor"]["variant"] == "advanced"
 
 
+def test_reversing_a_switch_keeps_the_restart_for_a_dependency_it_enabled(tmp_path):
+    registry = _registry(tmp_path)
+    registry.set_profile("custom", module_ids=["core"])
+    registry.initialize_for_startup()
+
+    first, _ = registry.set_enabled("engine.xray", True)
+    reversed_, _ = registry.set_enabled("engine.xray", False)
+
+    assert "tool.editor" in first["configured_module_ids"]
+    # The editor was switched on along the way and is still on: the set
+    # differs from the one the panel started with.
+    assert "tool.editor" in reversed_["configured_module_ids"]
+    assert reversed_["restart_required"] is True
+    assert reversed_["profile"] == "custom"
+
+
 def test_reversing_a_switch_does_not_clear_an_existing_profile_restart(tmp_path):
     registry = _registry(tmp_path)
     registry.set_profile("xray-minimal")

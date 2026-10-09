@@ -119,4 +119,4 @@ def test_stable_devtools_update_is_a_modules_link_not_a_second_runner():
 def test_idle_operation_status_does_not_refer_to_restart_state():
     source = (MANAGER / "render.js").read_text(encoding="utf-8")
 
-    assert "if (!status || status.result === 'idle') return;" in source
+    assert "if (!hasOperationStatus(status)) return;" in source

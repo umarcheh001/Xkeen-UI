@@ -147,9 +147,14 @@ export function renderPlan(dialog, plan) {
   dialog.querySelector('#modules-plan-cancel').disabled = false;
 }
 
+// The server never answers "idle": without operations the result is null.
+export function hasOperationStatus(status) {
+  return Boolean(status) && status.result != null && status.result !== 'idle';
+}
+
 export function renderOperationStatus(host, status, { onCancel, onRecovery, busy = false } = {}) {
   host.replaceChildren();
-  if (!status || status.result === 'idle') return;
+  if (!hasOperationStatus(status)) return;
   const area = node('section', 'modules-operation card');
   area.append(node('h2', '', status.result === 'idle' ? 'Перезапуск панели' : 'Операция с модулями'));
   for (const [label, value] of [

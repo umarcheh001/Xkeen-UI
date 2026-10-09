@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token }}">
   {% include '_top_level_host_head_assets.html' %}
+  {% include '_codemirror6_importmap.html' %}
   {% set modules_page_config = frontend_page_config('modules', frontend_modules=standalone_frontend_modules|default(none)) %}
   <script>
     window.XKeen = window.XKeen || {};

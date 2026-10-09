@@ -1249,13 +1249,16 @@ def test_runtime_vendor_esm_imports_are_browser_safe():
     )
 
 def test_source_mode_templates_include_codemirror6_importmap_before_entry_module():
-    templates = [
-        'xkeen-ui/templates/panel.html',
-        'xkeen-ui/templates/devtools.html',
-        'xkeen-ui/templates/xkeen.html',
-        'xkeen-ui/templates/backups.html',
-        'xkeen-ui/templates/mihomo_generator.html',
-    ]
+    # The browser takes the import map only from the first loaded top-level
+    # page, so every page with an entry module has to carry it.
+    templates = sorted(
+        path.as_posix()
+        for path in Path('xkeen-ui/templates').glob('*.html')
+        if 'frontend_page_entry_url(' in path.read_text(encoding='utf-8')
+    )
+    assert 'xkeen-ui/templates/panel.html' in templates
+    assert 'xkeen-ui/templates/modules.html' in templates
+    assert len(templates) >= 6, templates
 
     for rel in templates:
         if rel == 'xkeen-ui/templates/panel.html':

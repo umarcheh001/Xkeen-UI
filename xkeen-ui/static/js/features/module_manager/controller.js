@@ -1,4 +1,4 @@
-import { renderInstalled, renderAvailable, renderPlan, renderOperationStatus, describeLifecycleFailure } from './render.js';
+import { renderInstalled, renderAvailable, renderPlan, renderOperationStatus, hasOperationStatus, describeLifecycleFailure } from './render.js';
 import { clearModulesUpdateBadge, reconcileModulesUpdateBadge, reconcileModulesUpdateCheck, reconcileModulesUpdatePlan, reconcileModulesUpdateStatus } from './badge.js';
 
 export function createModuleManagerController({ root, api, pollMs }) {
@@ -105,7 +105,7 @@ export function createModuleManagerController({ root, api, pollMs }) {
     } else {
       host.textContent = 'Загрузка модулей…';
     }
-    if (state.status && state.status.result !== 'idle') renderOperationStatus(statusHost, state.status, {
+    if (hasOperationStatus(state.status)) renderOperationStatus(statusHost, state.status, {
       onCancel: requestCancel, onRecovery: requestRecovery,
       busy: !statusFresh || !installedFresh || busy || cancelPending,
     });

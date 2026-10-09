@@ -343,6 +343,26 @@ def _parse_sections_whitelist(raw: str | None) -> set[str] | None:
     }
 
 
+# Shown whatever the whitelist says: the item carries the update badge, and a
+# list saved before the item existed cannot name it.
+_ALWAYS_VISIBLE_PANEL_SECTIONS = frozenset({"modules"})
+
+
+def _effective_panel_sections(supported_sections: list[str]) -> list[str]:
+    requested_sections = _parse_sections_whitelist(
+        os.environ.get("XKEEN_UI_PANEL_SECTIONS_WHITELIST")
+    )
+    if requested_sections is None:
+        return supported_sections
+    if not any(section in requested_sections for section in supported_sections):
+        return supported_sections
+    return [
+        section
+        for section in supported_sections
+        if section in requested_sections or section in _ALWAYS_VISIBLE_PANEL_SECTIONS
+    ]
+
+
 def _detect_panel_core_ui(active_module_ids: set[str] | None = None) -> dict[str, object]:
     """Build panel visibility from runtime-gated modules when supplied."""
 
@@ -371,18 +391,9 @@ def _detect_panel_core_ui(active_module_ids: set[str] | None = None) -> dict[str
             supported_sections.append("files")
         if has_diagnostics:
             supported_sections.append("devtools")
-        supported_sections.append("donate")
+        supported_sections.extend(["modules", "donate"])
 
-        requested_sections = _parse_sections_whitelist(
-            os.environ.get("XKEEN_UI_PANEL_SECTIONS_WHITELIST")
-        )
-        effective_sections = (
-            supported_sections
-            if requested_sections is None
-            else [section for section in supported_sections if section in requested_sections]
-        )
-        if not effective_sections:
-            effective_sections = supported_sections
+        effective_sections = _effective_panel_sections(supported_sections)
         # The core watcher compares "detected" with /api/xkeen/core, which
         # reports installed binaries.  Active engines are a different set
         # (legacy-full keeps both), so publishing them as "detected" made a
@@ -422,19 +433,12 @@ def _detect_panel_core_ui(active_module_ids: set[str] | None = None) -> dict[str
     supported_sections.extend(["xkeen"])
     if has_xray:
         supported_sections.append("xray-logs")
-    supported_sections.extend(["commands", "files"])
+    supported_sections.extend(["commands", "files", "modules"])
     if has_mihomo:
         supported_sections.append("mihomo-generator")
     supported_sections.append("donate")
 
-    requested_sections = _parse_sections_whitelist(os.environ.get("XKEEN_UI_PANEL_SECTIONS_WHITELIST"))
-    effective_sections = (
-        supported_sections
-        if requested_sections is None
-        else [section for section in supported_sections if section in requested_sections]
-    )
-    if not effective_sections:
-        effective_sections = supported_sections
+    effective_sections = _effective_panel_sections(supported_sections)
 
     return {
         "available_cores": available_cores,

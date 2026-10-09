@@ -572,6 +572,38 @@ test.describe('Module manager recovery and guards', () => {
     expect(restartCalls).toBe(1);
   });
 
+  test('shows no operation block while the panel has never run an operation', async ({ page }) => {
+    // The server has no "idle" result: without operations it answers null.
+    await installLifecycleRoutes(page, { status: { ok: true, result: null } });
+
+    await page.goto('/modules');
+
+    await expect(page.locator('.modules-summary')).toBeVisible();
+    await expect(page.locator('#modules-operation-status .modules-operation')).toHaveCount(0);
+  });
+
+  test('main panel keeps the modules item out of the hidden sections', async ({ page }) => {
+    await page.goto('/');
+
+    const item = page.locator('[data-xk-section="modules"]');
+    await expect(item).toHaveCount(1);
+    await expect(item).not.toHaveAttribute('data-xk-force-hidden', /.*/);
+    await expect(item).not.toHaveCSS('display', 'none');
+  });
+
+  test('going back from a directly opened modules page keeps the panel import map', async ({ page }) => {
+    await installIdleLifecycleRoutes(page);
+
+    await page.goto('/modules');
+    await expect(page.locator('.modules-summary')).toBeVisible();
+    await page.getByRole('link', { name: '← Назад' }).click();
+
+    // The browser reads the import map from the first loaded page only;
+    // without it the editor bundle cannot resolve "@codemirror/state".
+    await expect(page.locator('#view-routing .cm-editor').first()).toBeVisible();
+    await expect(page.locator('#toast-container')).not.toContainText('Не удалось загрузить часть панели');
+  });
+
   test('offers a single restart action in the profile summary after a registry toggle', async ({ page }) => {
     let enabled = false;
     let restartCalls = 0;
