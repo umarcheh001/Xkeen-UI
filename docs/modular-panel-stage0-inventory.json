@@ -37,7 +37,7 @@
       ],
       "removable": false,
       "unit_count": 551,
-      "size_bytes": 7344381,
+      "size_bytes": 7360797,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -54,7 +54,7 @@
         "stylesheet": 6,
         "template": 32
       },
-      "route_count": 105,
+      "route_count": 106,
       "background_task_count": 4,
       "ui_surface_count": 36,
       "representative_paths": [
@@ -951,7 +951,7 @@
       "module_id": "core",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/modules.py",
-      "size_bytes": 16148,
+      "size_bytes": 16926,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -1015,6 +1015,11 @@
         {
           "method": "POST",
           "path": "/api/modules/operations/plan",
+          "decorator": "bp.post"
+        },
+        {
+          "method": "POST",
+          "path": "/api/modules/panel/update-check",
           "decorator": "bp.post"
         },
         {
@@ -1495,7 +1500,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/build_info.py",
-      "size_bytes": 4028,
+      "size_bytes": 4559,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -2143,7 +2148,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_lifecycle.py",
-      "size_bytes": 46749,
+      "size_bytes": 47493,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -3212,7 +3217,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_build_stamp.py",
-      "size_bytes": 8388,
+      "size_bytes": 9262,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -5300,7 +5305,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_lifecycle.py",
-      "size_bytes": 28335,
+      "size_bytes": 29108,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -5318,7 +5323,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_lifecycle_routes.py",
-      "size_bytes": 10020,
+      "size_bytes": 11079,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -9059,7 +9064,7 @@
       "module_id": "core",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/module_manager/api.js",
-      "size_bytes": 2440,
+      "size_bytes": 2595,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -9084,7 +9089,7 @@
       "module_id": "core",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/module_manager/badge.js",
-      "size_bytes": 1971,
+      "size_bytes": 2257,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -9109,7 +9114,7 @@
       "module_id": "core",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/module_manager/controller.js",
-      "size_bytes": 14255,
+      "size_bytes": 15607,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -9134,7 +9139,7 @@
       "module_id": "core",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/module_manager/render.js",
-      "size_bytes": 13319,
+      "size_bytes": 16272,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -10649,7 +10654,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/modules_manager.spec.mjs",
-      "size_bytes": 68532,
+      "size_bytes": 73762,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -11780,7 +11785,7 @@
       "module_id": "core",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/modules-manager.css",
-      "size_bytes": 10125,
+      "size_bytes": 11806,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -25556,7 +25561,7 @@
     }
   ],
   "routes": {
-    "endpoint_count": 330,
+    "endpoint_count": 331,
     "files_with_routes": 54,
     "endpoint_files": [
       {
@@ -25893,6 +25898,11 @@
           {
             "method": "POST",
             "path": "/api/modules/operations/plan",
+            "decorator": "bp.post"
+          },
+          {
+            "method": "POST",
+            "path": "/api/modules/panel/update-check",
             "decorator": "bp.post"
           },
           {
