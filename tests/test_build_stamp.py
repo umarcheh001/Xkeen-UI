@@ -220,3 +220,30 @@ def test_build_info_service_exposes_the_stamp_fields():
 
     for field in ("base_commit", "dirty", "tree_sha256"):
         assert field in info, f"read_build_info hides the {field!r} field"
+
+
+def test_build_info_reads_a_local_archive_stamp_from_its_explicit_build_path(tmp_path):
+    sys.path.insert(0, str(ROOT / "xkeen-ui"))
+    from services.build_info import read_build_info
+
+    build = tmp_path / "BUILD.json"
+    build.write_text(
+        json.dumps(
+            {
+                "version": "d523ffcf",
+                "base_commit": "d523ffcf",
+                "commit": "d523ffcf7cc474bea600e173d704d7c89d9b996b",
+                "dirty": False,
+                "tree_sha256": "a" * 64,
+                "release_date": "2026-10-09T08:35:46Z",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    info = read_build_info(build_path=str(build))
+
+    assert info["exists"] is True
+    assert info["version"] == "d523ffcf"
+    assert info["commit"] == "d523ffcf7cc474bea600e173d704d7c89d9b996b"
+    assert info["built_utc"] == "2026-10-09T08:35:46Z"

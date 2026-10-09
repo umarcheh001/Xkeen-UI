@@ -117,6 +117,29 @@ def create_modules_blueprint(
     def api_modules_available():
         return lifecycle_response(lambda: lifecycle_service.available())
 
+    @bp.post("/api/modules/panel/update-check")
+    def api_modules_panel_update_check():
+        payload, failure = lifecycle_body(
+            allowed={"force_refresh"},
+            required=set(),
+        )
+        if failure is not None:
+            return failure
+        force_refresh = payload.get("force_refresh", False)
+        if not isinstance(force_refresh, bool):
+            return error_response(
+                "force_refresh must be boolean",
+                400,
+                ok=False,
+                code="update_check_field_invalid",
+                fields=["force_refresh"],
+            )
+        return lifecycle_response(
+            lambda: lifecycle_service.panel_update_check(
+                force_refresh=force_refresh,
+            )
+        )
+
     @bp.post("/api/modules/operations/plan")
     def api_modules_operation_plan():
         payload, failure = lifecycle_body(

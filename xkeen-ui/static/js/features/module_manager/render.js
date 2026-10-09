@@ -72,6 +72,52 @@ function textList(parent, label, values) {
   parent.append(node('p', 'modules-meta', `${label}: ${values.map(String).join(', ')}`));
 }
 
+function appendPanelIdentity(summary, snapshot) {
+  const build = snapshot.build && typeof snapshot.build === 'object' ? snapshot.build : {};
+  const releaseVersion = String(snapshot.panel_version || '').trim();
+  const buildVersion = String(build.version || '').trim();
+  summary.append(node(
+    'p',
+    'modules-build-version',
+    releaseVersion ? `Xkeen UI ${releaseVersion}` : (buildVersion ? `Локальная сборка ${buildVersion}` : 'Сборка панели не определена'),
+  ));
+  if (build.repo || build.channel) {
+    summary.append(node('p', 'modules-build-meta', `Источник: ${build.repo || 'не указан'} · канал: ${build.channel || 'не указан'}`));
+  }
+  if (build.commit) summary.append(node('p', 'modules-build-meta', `Коммит: ${build.commit}`));
+  if (build.built_utc) summary.append(node('p', 'modules-build-meta', `Собрано: ${build.built_utc}`));
+}
+
+function appendUpdateCheck(summary, update, { onCheckUpdate, busy, lifecycleAvailable }) {
+  const check = node('section', 'modules-update-check');
+  const appendMessage = (className, text) => {
+    const message = node('p', className, text);
+    message.setAttribute('role', 'status');
+    message.setAttribute('aria-live', 'polite');
+    check.append(message);
+  };
+  check.append(node('h3', '', 'Обновление панели'));
+  const button = node('button', 'btn-secondary modules-update-check-button', 'Проверить обновления');
+  button.type = 'button';
+  button.disabled = busy || lifecycleAvailable !== true;
+  if (typeof onCheckUpdate === 'function') button.addEventListener('click', onCheckUpdate);
+  check.append(button);
+  if (lifecycleAvailable !== true) {
+    appendMessage('modules-build-note', 'Для локальной сборки проверка и установка подписанного обновления станут доступны после установки release-пакета.');
+  } else if (update?.loading) {
+    appendMessage('modules-build-meta', 'Проверяем подписанный каталог…');
+  } else if (update?.error) {
+    appendMessage('modules-alert', describeLifecycleFailure(update.error));
+  } else if (update?.checked) {
+    if (update.requires_installer) appendMessage('modules-alert', `Версия ${update.target_version || 'из каталога'} требует обновления через установщик.`);
+    else if (update.update_available) appendMessage('modules-update-available', `Доступна версия ${update.target_version}.`);
+    else appendMessage('modules-build-meta', 'Установлена актуальная версия.');
+  } else {
+    appendMessage('modules-build-meta', 'Проверка не скачивает архив и не изменяет панель.');
+  }
+  summary.append(check);
+}
+
 export function renderPlan(dialog, plan) {
   const title = dialog.querySelector('#modules-plan-title');
   const summary = dialog.querySelector('#modules-plan-summary');
@@ -142,11 +188,16 @@ export function renderOperationStatus(host, status, { onCancel, onRecovery, busy
   host.append(area);
 }
 
-export function renderInstalled(host, snapshot, onToggle, onPlan = () => {}, busy = false, { onRestart = null, canRestart = false } = {}) {
+export function renderInstalled(host, snapshot, onToggle, onPlan = () => {}, busy = false, {
+  onRestart = null,
+  canRestart = false,
+  onCheckUpdate = null,
+  update = null,
+} = {}) {
   host.replaceChildren();
   const summary = node('section', 'modules-summary card');
   summary.append(node('h2', '', 'Панель и профиль'));
-  summary.append(node('p', '', snapshot.panel_version ? `Xkeen UI ${snapshot.panel_version}` : 'Версия панели неизвестна'));
+  appendPanelIdentity(summary, snapshot);
   summary.append(node('p', '', `Профиль: ${snapshot.profile || 'не указан'}`));
   if (snapshot.restart_required || canRestart) summary.append(node('p', 'modules-alert', 'Требуется перезапуск'));
   const panelActions = node('div', 'modules-card-actions');
@@ -165,6 +216,11 @@ export function renderInstalled(host, snapshot, onToggle, onPlan = () => {}, bus
     panelActions.append(restart);
   }
   if (panelActions.childElementCount) summary.append(panelActions);
+  appendUpdateCheck(summary, update, {
+    onCheckUpdate,
+    busy,
+    lifecycleAvailable: snapshot.lifecycle?.available,
+  });
   host.append(summary);
   const list = node('section', 'modules-list card');
   list.append(node('h2', '', 'Установленные модули'));

@@ -3,6 +3,14 @@ import { test, expect } from './fixtures.mjs';
 const installedSnapshot = {
   ok: true,
   panel_version: '2.10.0',
+  build: {
+    exists: true,
+    version: '2.10.0',
+    commit: 'abc123456789',
+    built_utc: '2026-10-09T09:10:11Z',
+    repo: 'umarcheh001/Xkeen-UI',
+    channel: 'stable',
+  },
   profile: 'mihomo-minimal',
   transition_required: false,
   editor: { variant: 'codemirror' },
@@ -172,6 +180,84 @@ test.describe('DevTools update channel boundary', () => {
   }
 });
 
+test.describe('Modules panel update surface', () => {
+  test('shows a local archive identity instead of an unknown panel version', async ({ page }) => {
+    const localBuild = {
+      ...installedSnapshot,
+      panel_version: null,
+      build: {
+        exists: true,
+        version: 'd523ffcf',
+        base_commit: 'd523ffcf',
+        commit: 'd523ffcf7cc474bea600e173d704d7c89d9b996b',
+        dirty: false,
+        tree_sha256: 'a'.repeat(64),
+        built_utc: '2026-10-09T08:35:46Z',
+        repo: 'umarcheh001/Xkeen-UI',
+        channel: 'stable',
+      },
+      lifecycle: { available: false, code: 'panel_version_unsupported' },
+    };
+    await installLifecycleRoutes(page, { installed: localBuild });
+
+    await page.goto('/modules');
+
+    await expect(page.getByText('Локальная сборка d523ffcf')).toBeVisible();
+    await expect(page.getByText('Версия панели неизвестна')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Проверить обновления' })).toBeDisabled();
+  });
+
+  test('checks the signed catalog before offering a panel update plan', async ({ page }) => {
+    await installIdleLifecycleRoutes(page);
+    await page.route('**/api/modules/panel/update-check', (route) => route.fulfill({ json: {
+      ok: true,
+      source_version: '2.10.0',
+      target_version: '2.11.0',
+      update_available: true,
+      requires_installer: false,
+      min_updater: null,
+    } }));
+    await page.route('**/api/modules/operations/plan', (route) => route.fulfill({ json: {
+      ...installPlan,
+      operation: 'panel-update',
+      module_id: null,
+      scope: 'panel',
+      source_version: '2.10.0',
+      target_version: '2.11.0',
+    } }));
+
+    await page.goto('/modules');
+    await expect(page.getByText('Источник: umarcheh001/Xkeen-UI · канал: stable')).toBeVisible();
+    await page.getByRole('button', { name: 'Проверить обновления' }).click();
+    await expect(page.getByText('Доступна версия 2.11.0')).toBeVisible();
+    await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem('xkeen.modules.update.v1'))?.targetVersion)).toBe('2.11.0');
+    await page.getByRole('button', { name: 'Обновить панель' }).click();
+    await expect(page.getByRole('dialog', { name: 'План обновления панели' })).toContainText('2.11.0');
+  });
+
+  test('keeps update feedback focused and clears a stale badge after a failed check', async ({ page }) => {
+    await installIdleLifecycleRoutes(page);
+    await page.route('**/api/modules/panel/update-check', (route) => route.fulfill({ status: 503, json: {
+      ok: false,
+      code: 'catalog_unavailable',
+      error: 'offline',
+    } }));
+    await page.goto('/modules');
+    await page.evaluate(() => sessionStorage.setItem('xkeen.modules.update.v1', JSON.stringify({
+      schema: 1,
+      sourceVersion: '2.10.0',
+      targetVersion: '2.11.0',
+    })));
+
+    await page.getByRole('button', { name: 'Проверить обновления' }).click();
+
+    const check = page.locator('.modules-update-check');
+    await expect(check.getByRole('status')).toContainText('Каталог модулей временно недоступен.');
+    await expect(check.getByRole('button', { name: 'Проверить обновления' })).toBeFocused();
+    await expect.poll(() => page.evaluate(() => sessionStorage.getItem('xkeen.modules.update.v1'))).toBeNull();
+  });
+});
+
 test.describe('Module manager recovery and guards', () => {
   test('keeps the modules header comfortably inset with a compact theme action', async ({ page }) => {
     await page.setViewportSize({ width: 1800, height: 1300 });
@@ -200,6 +286,35 @@ test.describe('Module manager recovery and guards', () => {
     expect(geometry.themeWidth, JSON.stringify(geometry)).toBeLessThanOrEqual(34);
     expect(Math.abs(geometry.themeWidth - geometry.themeHeight), JSON.stringify(geometry)).toBeLessThanOrEqual(2);
     expect(Math.abs(geometry.themeHeight - geometry.backHeight), JSON.stringify(geometry)).toBeLessThanOrEqual(2);
+  });
+
+  test('centers the theme icon and uses the compact settings switch geometry', async ({ page }) => {
+    await installIdleLifecycleRoutes(page);
+    await page.goto('/modules');
+
+    const layout = await page.locator('header.modules-header').evaluate((header) => {
+      const theme = header.querySelector('#theme-toggle-btn');
+      const icon = theme.querySelector('.theme-toggle-icon');
+      const slider = document.querySelector('.modules-switch .dt-switch-slider');
+      const state = document.querySelector('.modules-switch-state');
+      const themeRect = theme.getBoundingClientRect();
+      const iconRect = icon.getBoundingClientRect();
+      const sliderRect = slider.getBoundingClientRect();
+      const stateRect = state.getBoundingClientRect();
+      return {
+        iconCenterOffset: (iconRect.left + iconRect.width / 2) - (themeRect.left + themeRect.width / 2),
+        sliderWidth: sliderRect.width,
+        sliderHeight: sliderRect.height,
+        stateFontSize: Number.parseFloat(getComputedStyle(state).fontSize),
+        stateBelowSlider: stateRect.bottom > sliderRect.top,
+      };
+    });
+
+    expect(Math.abs(layout.iconCenterOffset), JSON.stringify(layout)).toBeLessThanOrEqual(1);
+    expect(layout.sliderWidth, JSON.stringify(layout)).toBeLessThanOrEqual(30);
+    expect(layout.sliderHeight, JSON.stringify(layout)).toBeLessThanOrEqual(16);
+    expect(layout.stateFontSize, JSON.stringify(layout)).toBeLessThanOrEqual(10.5);
+    expect(layout.stateBelowSlider, JSON.stringify(layout)).toBe(false);
   });
 
   test('keeps module navigation inside the compact operator header', async ({ page }) => {

@@ -41,6 +41,11 @@ export function createModuleLifecycleClient(fetchImpl = fetch) {
     loadInstalled: () => request('/installed'),
     loadStatus: () => request('/operations/status'),
     loadAvailable: () => request('/available'),
+    checkPanelUpdate: (forceRefresh = false) => request(
+      '/panel/update-check',
+      'POST',
+      { force_refresh: Boolean(forceRefresh) },
+    ),
     plan: (operation, moduleId) => request('/operations/plan', 'POST', { operation, ...(moduleId ? { module_id: moduleId } : {}) }),
     apply: (operation, moduleId, planId) => request('/operations/apply', 'POST', { operation, ...(moduleId ? { module_id: moduleId } : {}), plan_id: planId }),
     cancel: (operationId) => request(`/operations/${encodeURIComponent(operationId)}/cancel`, 'POST'),

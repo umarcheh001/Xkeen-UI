@@ -564,6 +564,26 @@ class ModuleLifecycleService:
 
     def installed(self) -> dict[str, Any]:
         registry = self.module_registry.get_registry()
+        # The lifecycle itself accepts only signed SemVer releases. Build
+        # identity is still useful for a locally packed archive, so read it
+        # independently instead of replacing it with the lifecycle version.
+        from services.build_info import read_build_info
+
+        raw_build = read_build_info(build_path=str(self.panel_root / "BUILD.json"))
+        build = {
+            key: raw_build.get(key)
+            for key in (
+                "exists",
+                "version",
+                "base_commit",
+                "commit",
+                "dirty",
+                "tree_sha256",
+                "built_utc",
+                "repo",
+                "channel",
+            )
+        }
         lifecycle_error: ModuleTransactionError | None = None
         try:
             installed_ids = read_installed_modules(self.state_dir)
@@ -590,6 +610,7 @@ class ModuleLifecycleService:
         return {
             "ok": True,
             "panel_version": panel_version,
+            "build": build,
             "profile": registry.get("profile"),
             "editor": registry.get("editor"),
             "restart_required": bool(registry.get("restart_required")),

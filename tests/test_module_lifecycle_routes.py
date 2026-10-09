@@ -35,6 +35,19 @@ class LifecycleFake:
     def available(self):
         return self._result(("available",), {"ok": True, "kind": "available"})
 
+    def panel_update_check(self, *, force_refresh=False):
+        return self._result(
+            ("panel_update_check", force_refresh),
+            {
+                "ok": True,
+                "source_version": "2.10.0",
+                "target_version": "2.11.0",
+                "update_available": True,
+                "requires_installer": False,
+                "min_updater": None,
+            },
+        )
+
     def plan(self, operation, module_id=None):
         return self._result(
             ("plan", operation, module_id),
@@ -138,6 +151,27 @@ def test_lifecycle_plan_and_apply_routes_validate_and_delegate(app_with_lifecycl
     ]
     assert planned.headers["Cache-Control"] == "no-store"
     assert applied.headers["Cache-Control"] == "no-store"
+
+
+def test_panel_update_check_is_core_owned_and_does_not_create_a_plan(app_with_lifecycle):
+    client, service = app_with_lifecycle
+
+    response = client.post(
+        "/api/modules/panel/update-check",
+        json={"force_refresh": True},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == "no-store"
+    assert response.get_json() == {
+        "ok": True,
+        "source_version": "2.10.0",
+        "target_version": "2.11.0",
+        "update_available": True,
+        "requires_installer": False,
+        "min_updater": None,
+    }
+    assert service.calls == [("panel_update_check", True)]
 
 
 def test_full_scope_plan_and_apply_routes_omit_module_id(app_with_lifecycle):
