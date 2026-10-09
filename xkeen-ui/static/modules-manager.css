@@ -240,7 +240,7 @@ body.modules-page .modules-switch.dt-switch.xk-switch-bare {
   display: grid !important;
   align-content: start;
   justify-items: end;
-  row-gap: 4px;
+  row-gap: 8px;
   padding: 0;
   border: 0;
   border-radius: 0;

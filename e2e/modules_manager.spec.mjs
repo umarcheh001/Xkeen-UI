@@ -306,6 +306,7 @@ test.describe('Module manager recovery and guards', () => {
         sliderWidth: sliderRect.width,
         sliderHeight: sliderRect.height,
         stateFontSize: Number.parseFloat(getComputedStyle(state).fontSize),
+        stateSliderGap: sliderRect.top - stateRect.bottom,
         stateBelowSlider: stateRect.bottom > sliderRect.top,
       };
     });
@@ -314,6 +315,7 @@ test.describe('Module manager recovery and guards', () => {
     expect(layout.sliderWidth, JSON.stringify(layout)).toBeLessThanOrEqual(30);
     expect(layout.sliderHeight, JSON.stringify(layout)).toBeLessThanOrEqual(16);
     expect(layout.stateFontSize, JSON.stringify(layout)).toBeLessThanOrEqual(10.5);
+    expect(layout.stateSliderGap, JSON.stringify(layout)).toBeGreaterThanOrEqual(7);
     expect(layout.stateBelowSlider, JSON.stringify(layout)).toBe(false);
   });
 
