@@ -79,6 +79,23 @@ def test_installed_remains_readable_when_install_manifest_is_missing(tmp_path):
     assert catalog.requested_versions == []
 
 
+def test_installed_keeps_local_sha_build_readable_without_lifecycle_actions(tmp_path):
+    panel = make_panel(tmp_path, version="977784dd")
+    service, catalog = make_service(panel, make_release())
+
+    payload = service.installed()
+
+    assert payload["ok"] is True
+    assert payload["panel_version"] is None
+    assert payload["lifecycle"] == {
+        "available": False,
+        "code": "panel_version_unsupported",
+    }
+    assert payload["installed_module_ids"] == ["core", "engine.xray", "tool.editor"]
+    assert all(item["lifecycle_actions"] == [] for item in payload["modules"])
+    assert catalog.requested_versions == []
+
+
 def test_available_uses_installed_release_and_exposes_only_stage83_actions(tmp_path):
     panel = make_panel(tmp_path)
     service, catalog = make_service(panel, make_release())

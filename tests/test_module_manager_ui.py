@@ -81,6 +81,21 @@ def test_modules_screen_has_a_lifecycle_adapter_and_accessible_shell():
     assert "wireTopLevelNavigation(document)" in init
 
 
+def test_modules_uses_the_panel_shell_and_stable_devtools_pointer_is_compact():
+    template = (ROOT / "xkeen-ui/templates/modules.html").read_text(encoding="utf-8")
+    manager_css = (ROOT / "xkeen-ui/static/modules-manager.css").read_text(encoding="utf-8")
+    devtools_update = (ROOT / "xkeen-ui/static/js/features/devtools/update.js").read_text(encoding="utf-8")
+    devtools_css = (ROOT / "xkeen-ui/static/devtools.css").read_text(encoding="utf-8")
+
+    assert '<body class="modules-page"' in template
+    assert '<body class="modules-page panel-page"' not in template
+    assert 'class="modules-workspace"' in template
+    assert "body.modules-page .container-wide" in manager_css
+    assert "body.modules-page.panel-page" not in manager_css
+    assert "dt-update-card--modules-manager" in devtools_update
+    assert "#dt-update-card.dt-update-card--modules-manager" in devtools_css
+
+
 def test_manager_source_is_isolated_and_entry_stays_thin():
     sources = [path.read_text(encoding="utf-8") for path in MANAGER.glob("*.js")]
     assert sources
@@ -99,3 +114,9 @@ def test_stable_devtools_update_is_a_modules_link_not_a_second_runner():
     assert "openModulesManager" in source
     assert "startLegacyMainUpdater" in source
     assert "stable" in notifier and "_stopSchedule" in notifier
+
+
+def test_idle_operation_status_does_not_refer_to_restart_state():
+    source = (MANAGER / "render.js").read_text(encoding="utf-8")
+
+    assert "if (!status || status.result === 'idle') return;" in source

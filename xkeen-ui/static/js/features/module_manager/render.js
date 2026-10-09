@@ -36,6 +36,7 @@ const FAILURE_MESSAGES = {
   module_conflict: 'Обнаружен конфликт модулей.',
   module_required_by: 'Модуль требуется другим модулям.',
   panel_archive_invalid: 'Архив панели не прошёл проверку.',
+  panel_version_unsupported: 'Для локальной сборки подписанные операции доступны только после установки release-пакета.',
   profile_payload_unavailable: 'Архив для перехода профиля недоступен.',
 };
 
@@ -100,10 +101,10 @@ export function renderPlan(dialog, plan) {
   dialog.querySelector('#modules-plan-cancel').disabled = false;
 }
 
-export function renderOperationStatus(host, status, { onCancel, onRecovery, onRestart, canRestart = false, busy = false } = {}) {
+export function renderOperationStatus(host, status, { onCancel, onRecovery, busy = false } = {}) {
   host.replaceChildren();
-  if (!status || (status.result === 'idle' && !canRestart)) return;
-  const area = node('section', 'modules-operation');
+  if (!status || status.result === 'idle') return;
+  const area = node('section', 'modules-operation card');
   area.append(node('h2', '', status.result === 'idle' ? 'Перезапуск панели' : 'Операция с модулями'));
   for (const [label, value] of [
     ['Шаг', status.step], ['Результат', status.result],
@@ -138,30 +139,34 @@ export function renderOperationStatus(host, status, { onCancel, onRecovery, onRe
     recover.addEventListener('click', onRecovery);
     area.append(recover);
   }
-  if (canRestart) {
-    const restart = node('button', 'btn-secondary', 'Перезапустить панель');
-    restart.type = 'button';
-    restart.disabled = busy;
-    restart.addEventListener('click', onRestart);
-    area.append(restart);
-  }
   host.append(area);
 }
 
-export function renderInstalled(host, snapshot, onToggle, onPlan = () => {}, busy = false) {
+export function renderInstalled(host, snapshot, onToggle, onPlan = () => {}, busy = false, { onRestart = null, canRestart = false } = {}) {
   host.replaceChildren();
-  const summary = node('section', 'modules-summary');
+  const summary = node('section', 'modules-summary card');
   summary.append(node('h2', '', 'Панель и профиль'));
   summary.append(node('p', '', snapshot.panel_version ? `Xkeen UI ${snapshot.panel_version}` : 'Версия панели неизвестна'));
   summary.append(node('p', '', `Профиль: ${snapshot.profile || 'не указан'}`));
-  if (snapshot.restart_required) summary.append(node('p', 'modules-alert', 'Требуется перезапуск'));
+  if (snapshot.restart_required || canRestart) summary.append(node('p', 'modules-alert', 'Требуется перезапуск'));
   const panelActions = node('div', 'modules-card-actions');
-  panelActions.append(actionButton('panel-update', null, ACTION_LABELS['panel-update'], onPlan, busy));
-  if (snapshot.previous_version?.available) panelActions.append(actionButton('panel-rollback', null, ACTION_LABELS['panel-rollback'], onPlan, busy));
-  if (snapshot.transition_required) panelActions.append(actionButton('profile-transition', null, ACTION_LABELS['profile-transition'], onPlan, busy));
-  summary.append(panelActions);
+  if (snapshot.lifecycle?.available === false) {
+    summary.append(node('p', 'modules-alert', describeLifecycleFailure(snapshot.lifecycle)));
+  } else {
+    panelActions.append(actionButton('panel-update', null, ACTION_LABELS['panel-update'], onPlan, busy));
+    if (snapshot.previous_version?.available) panelActions.append(actionButton('panel-rollback', null, ACTION_LABELS['panel-rollback'], onPlan, busy));
+    if (snapshot.transition_required) panelActions.append(actionButton('profile-transition', null, ACTION_LABELS['profile-transition'], onPlan, busy));
+  }
+  if (canRestart && typeof onRestart === 'function') {
+    const restart = node('button', 'btn-primary modules-restart-panel', 'Перезапустить панель');
+    restart.type = 'button';
+    restart.disabled = busy;
+    restart.addEventListener('click', onRestart);
+    panelActions.append(restart);
+  }
+  if (panelActions.childElementCount) summary.append(panelActions);
   host.append(summary);
-  const list = node('section', 'modules-list');
+  const list = node('section', 'modules-list card');
   list.append(node('h2', '', 'Установленные модули'));
   const modules = Array.isArray(snapshot.modules) ? snapshot.modules : [];
   if (!modules.length) list.append(node('p', 'modules-empty', 'Установленных модулей нет.'));
@@ -171,8 +176,15 @@ export function renderInstalled(host, snapshot, onToggle, onPlan = () => {}, bus
     body.append(node('h3', '', moduleTitle(item)));
     if (item.description) body.append(node('p', '', item.description));
     row.append(body);
+    const controls = node('div', 'modules-row-actions');
     if (item.can_disable) {
-      const label = node('label', 'modules-switch');
+      const label = node('label', 'dt-switch xk-switch-bare modules-switch');
+      const stateLabel = node(
+        'span',
+        `dt-switch-label modules-switch-state ${item.enabled === true ? 'is-enabled' : 'is-disabled'}`,
+        item.enabled === true ? 'Включён' : 'Выключен',
+      );
+      const switchControl = node('span', 'modules-switch-control');
       const input = node('input');
       input.type = 'checkbox';
       input.setAttribute('role', 'switch');
@@ -180,13 +192,15 @@ export function renderInstalled(host, snapshot, onToggle, onPlan = () => {}, bus
       input.checked = item.enabled === true;
       input.disabled = busy;
       input.addEventListener('change', () => onToggle(item.id, input.checked, input));
-      label.append(input, node('span', '', 'Включён'));
-      row.append(label);
+      switchControl.append(input, node('span', 'dt-switch-slider'));
+      label.append(stateLabel, switchControl);
+      controls.append(label);
     }
     const actions = Array.isArray(item.lifecycle_actions) ? item.lifecycle_actions : [];
     for (const action of actions) {
-      if (ACTION_LABELS[action]) row.append(actionButton(action, item.id, `${ACTION_LABELS[action]} ${item.name || item.id}`, onPlan, busy));
+      if (ACTION_LABELS[action]) controls.append(actionButton(action, item.id, `${ACTION_LABELS[action]} ${item.name || item.id}`, onPlan, busy));
     }
+    if (controls.childElementCount) row.append(controls);
     list.append(row);
   });
   host.append(list);

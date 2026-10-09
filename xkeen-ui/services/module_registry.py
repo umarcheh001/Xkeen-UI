@@ -34,6 +34,10 @@ CUSTOM_PROFILE = "custom"
 # What the owner asked to have on the storage. A module switch never
 # writes it: switching a module off stops it and leaves its files alone.
 PHYSICAL_REQUEST_KEY = "physical_request"
+# The desired runtime set before the first switch change. It lets a user undo
+# a pending switch-only change before restart without inventing a `custom`
+# profile or leaving an unnecessary restart request behind.
+MODULE_SWITCH_BASELINE_KEY = "module_switch_baseline"
 PROFILE_IDS = (LEGACY_FULL_PROFILE, "full", "xray-minimal", "mihomo-minimal", CUSTOM_PROFILE)
 SAFE_MODE_ENV = "XKEEN_UI_MODULE_SAFE_MODE"
 EDITOR_VARIANTS = ("light", "full", "advanced")
@@ -456,6 +460,8 @@ class ModuleRegistry:
             if state["restart_required"]:
                 state["restart_required"] = False
                 changed = True
+            if state.pop(MODULE_SWITCH_BASELINE_KEY, None) is not None:
+                changed = True
             if changed:
                 self._write_state_locked(state)
             return self._snapshot_from_state(state)
@@ -686,6 +692,7 @@ class ModuleRegistry:
                 )
             current_variant = str(state["editor"]["variant"])
             changed = current_variant != normalized_variant
+            baseline_cleared = state.pop(MODULE_SWITCH_BASELINE_KEY, None) is not None
             state["editor"] = {"variant": normalized_variant}
             if changed:
                 state["restart_required"] = True
@@ -700,7 +707,7 @@ class ModuleRegistry:
                 if installed is not None and installed["editor_variant"] == "light":
                     state[PHYSICAL_REQUEST_KEY] = {**installed, "editor_variant": normalized_variant}
 
-            if changed or normalized or state.get(PHYSICAL_REQUEST_KEY) != request_before:
+            if changed or normalized or baseline_cleared or state.get(PHYSICAL_REQUEST_KEY) != request_before:
                 self._write_state_locked(state)
 
             snapshot = self._snapshot_from_state(state)
@@ -775,11 +782,14 @@ class ModuleRegistry:
 
             changed = current_enabled != enabled or (enabled and dependency_changed)
             if changed:
+                if MODULE_SWITCH_BASELINE_KEY not in state:
+                    state[MODULE_SWITCH_BASELINE_KEY] = self._module_switch_baseline(state)
                 state["modules"][normalized_id]["enabled"] = enabled
                 state["modules"][normalized_id].pop("blocked_reason", None)
                 state["profile"] = CUSTOM_PROFILE
                 if definition.requires_restart:
                     state["restart_required"] = True
+                self._restore_switch_baseline_when_unchanged(state)
 
             if changed or normalized:
                 self._write_state_locked(state)
@@ -857,6 +867,7 @@ class ModuleRegistry:
                 raise ModuleRegistryError("state_schema_newer", "Состояние модулей создано более новой версией панели.", status=409)
 
             before = self._snapshot_from_state(state)
+            baseline_cleared = state.pop(MODULE_SWITCH_BASELINE_KEY, None) is not None
             changed = state["profile"] != profile or state["editor"]["variant"] != variant or any(
                 bool(state["modules"][module_id]["enabled"]) != (module_id in requested)
                 for module_id in MODULE_IDS
@@ -877,7 +888,7 @@ class ModuleRegistry:
             }
             request_changed = state.get(PHYSICAL_REQUEST_KEY) != request
             state[PHYSICAL_REQUEST_KEY] = request
-            if changed or normalized or request_changed:
+            if changed or normalized or baseline_cleared or request_changed:
                 self._write_state_locked(state)
 
             after = self._snapshot_from_state(state)
@@ -901,6 +912,35 @@ class ModuleRegistry:
                 if item["enabled"] and not item["effective_enabled"]
             },
         }
+
+    @staticmethod
+    def _module_switch_baseline(state: Mapping[str, Any]) -> dict[str, Any]:
+        return {
+            "profile": str(state["profile"]),
+            "restart_required": bool(state["restart_required"]),
+            "module_ids": [
+                module_id
+                for module_id in MODULE_IDS
+                if bool(state["modules"][module_id]["enabled"])
+            ],
+        }
+
+    @staticmethod
+    def _restore_switch_baseline_when_unchanged(state: dict[str, Any]) -> bool:
+        baseline = state.get(MODULE_SWITCH_BASELINE_KEY)
+        if not isinstance(baseline, dict):
+            return False
+        current_ids = [
+            module_id
+            for module_id in MODULE_IDS
+            if bool(state["modules"][module_id]["enabled"])
+        ]
+        if current_ids != baseline.get("module_ids"):
+            return False
+        state["profile"] = str(baseline["profile"])
+        state["restart_required"] = bool(baseline["restart_required"])
+        state.pop(MODULE_SWITCH_BASELINE_KEY, None)
+        return True
 
     def _load_state_locked(self) -> tuple[dict[str, Any], bool]:
         file_exists = os.path.isfile(self._path)
@@ -1111,9 +1151,37 @@ class ModuleRegistry:
         physical_request = self._normalize_physical_request(raw.get(PHYSICAL_REQUEST_KEY))
         if physical_request is not None:
             normalized[PHYSICAL_REQUEST_KEY] = physical_request
+        switch_baseline = self._normalize_module_switch_baseline(raw.get(MODULE_SWITCH_BASELINE_KEY))
+        if switch_baseline is not None:
+            normalized[MODULE_SWITCH_BASELINE_KEY] = switch_baseline
         if raw != normalized:
             changed = True
         return normalized, changed
+
+    @staticmethod
+    def _normalize_module_switch_baseline(raw: Any) -> dict[str, Any] | None:
+        if not isinstance(raw, dict):
+            return None
+        profile = raw.get("profile")
+        restart_required = raw.get("restart_required")
+        module_ids = raw.get("module_ids")
+        if (
+            not isinstance(profile, str)
+            or not profile.strip()
+            or len(profile.strip()) > 64
+            or not isinstance(restart_required, bool)
+            or not isinstance(module_ids, list)
+            or any(not isinstance(module_id, str) for module_id in module_ids)
+            or len(module_ids) != len(set(module_ids))
+            or "core" not in module_ids
+            or set(module_ids) - set(MODULE_IDS)
+        ):
+            return None
+        return {
+            "profile": profile.strip(),
+            "restart_required": restart_required,
+            "module_ids": [module_id for module_id in MODULE_IDS if module_id in module_ids],
+        }
 
     @staticmethod
     def _default_state() -> dict[str, Any]:

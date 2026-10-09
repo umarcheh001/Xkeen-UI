@@ -52,6 +52,11 @@ details.dt-collapsible:not([open]) .dt-collapsible-icon {
   padding: 2px 0 4px;
 }
 
+body.devtools-page .dt-tools-left > #dt-update-card.dt-update-card--modules-manager,
+body.devtools-page .dt-tools-left > #dt-update-card.dt-update-card--modules-manager > .dt-update-body {
+  flex: 0 0 auto;
+}
+
 /* Theme editor: sliders in ONE column to avoid overlap */
 .dt-theme-sliders {
   display: flex !important;

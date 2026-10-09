@@ -84,6 +84,28 @@ test.describe('DevTools update channel boundary', () => {
     expect(legacyRequests).toEqual([]);
   });
 
+  test('stable DevTools uses a compact Modules pointer instead of a stretched update card', async ({ page }) => {
+    await page.route('**/api/devtools/update/info', (route) => route.fulfill({ json: updateInfo('stable') }));
+    await installIdleLifecycleRoutes(page);
+
+    await page.goto('/devtools');
+
+    const updateCard = page.locator('#dt-update-card');
+    await expect(updateCard).toHaveClass(/dt-update-card--modules-manager/);
+    await expect(page.locator('[data-dt-modules-manager-notice]')).toBeVisible();
+    const metrics = await page.evaluate(() => {
+      const update = document.getElementById('dt-update-card');
+      const env = document.getElementById('dt-env-card');
+      return {
+        updateGrow: update ? getComputedStyle(update).flexGrow : '',
+        updateHeight: update?.getBoundingClientRect().height || 0,
+        envHeight: env?.getBoundingClientRect().height || 0,
+      };
+    });
+    expect(metrics.updateGrow).toBe('0');
+    expect(metrics.updateHeight).toBeLessThan(metrics.envHeight);
+  });
+
   test('main DevTools retains the manual legacy check', async ({ page }) => {
     const checkBodies = [];
     await page.route('**/api/devtools/update/info', (route) => route.fulfill({ json: updateInfo('main') }));
@@ -151,6 +173,206 @@ test.describe('DevTools update channel boundary', () => {
 });
 
 test.describe('Module manager recovery and guards', () => {
+  test('keeps the modules header comfortably inset with a compact theme action', async ({ page }) => {
+    await page.setViewportSize({ width: 1800, height: 1300 });
+    await installIdleLifecycleRoutes(page);
+    await page.goto('/modules');
+
+    const geometry = await page.locator('header.modules-header').evaluate((header) => {
+      const headerRect = header.getBoundingClientRect();
+      const titleRect = header.querySelector('h1').getBoundingClientRect();
+      const logoutRect = header.querySelector('.xk-header-btn-logout').getBoundingClientRect();
+      const theme = header.querySelector('#theme-toggle-btn');
+      const themeRect = theme.getBoundingClientRect();
+      const backRect = header.querySelector('a[href="/"]').getBoundingClientRect();
+      return {
+        titleInset: titleRect.left - headerRect.left,
+        logoutInset: headerRect.right - logoutRect.right,
+        themeWidth: themeRect.width,
+        themeHeight: themeRect.height,
+        backHeight: backRect.height,
+      };
+    });
+
+    expect(geometry.titleInset, JSON.stringify(geometry)).toBeGreaterThanOrEqual(18);
+    expect(geometry.logoutInset, JSON.stringify(geometry)).toBeGreaterThanOrEqual(18);
+    expect(geometry.themeWidth, JSON.stringify(geometry)).toBeGreaterThanOrEqual(30);
+    expect(geometry.themeWidth, JSON.stringify(geometry)).toBeLessThanOrEqual(34);
+    expect(Math.abs(geometry.themeWidth - geometry.themeHeight), JSON.stringify(geometry)).toBeLessThanOrEqual(2);
+    expect(Math.abs(geometry.themeHeight - geometry.backHeight), JSON.stringify(geometry)).toBeLessThanOrEqual(2);
+  });
+
+  test('keeps module navigation inside the compact operator header', async ({ page }) => {
+    await page.setViewportSize({ width: 1800, height: 1300 });
+    await installIdleLifecycleRoutes(page);
+    await page.goto('/modules');
+
+    const layout = await page.locator('header.modules-header').evaluate((header) => {
+      const main = header.querySelector('.modules-header-main');
+      const tabs = header.querySelector('.modules-tabs');
+      const tabsRect = tabs?.getBoundingClientRect();
+      const activeTab = tabs?.querySelector('.top-tab-btn.active');
+      return {
+        tabsWithinHeader: Boolean(tabs),
+        tabsAfterMain: Boolean(main && tabs && main.compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING),
+        tabsTop: tabsRect?.top ?? null,
+        mainBottom: main?.getBoundingClientRect().bottom ?? null,
+        activeTabRadius: activeTab ? Number.parseFloat(getComputedStyle(activeTab).borderRadius) : null,
+      };
+    });
+
+    expect(layout.tabsWithinHeader, JSON.stringify(layout)).toBe(true);
+    expect(layout.tabsAfterMain, JSON.stringify(layout)).toBe(true);
+    expect(layout.tabsTop, JSON.stringify(layout)).toBeGreaterThanOrEqual(layout.mainBottom);
+    expect(layout.activeTabRadius, JSON.stringify(layout)).toBeLessThanOrEqual(6);
+  });
+
+  test('groups installed module controls at the trailing edge of a row', async ({ page }) => {
+    await page.setViewportSize({ width: 1800, height: 1300 });
+    await installIdleLifecycleRoutes(page);
+    await page.goto('/modules');
+
+    const row = page.locator('.modules-row').filter({ hasText: 'Mihomo' });
+    const controls = row.locator('.modules-row-actions');
+    await expect(controls).toBeVisible();
+    await expect(controls.getByRole('switch')).toBeVisible();
+    await expect(controls.getByRole('button', { name: 'Восстановить Mihomo' })).toBeVisible();
+    const geometry = await row.evaluate((element) => {
+      const body = element.querySelector('.modules-row-body').getBoundingClientRect();
+      const actions = element.querySelector('.modules-row-actions').getBoundingClientRect();
+      return { bodyRight: body.right, actionsLeft: actions.left };
+    });
+    expect(geometry.actionsLeft, JSON.stringify(geometry)).toBeGreaterThanOrEqual(geometry.bodyRight);
+  });
+
+  test('uses neutral dashboard surfaces in the dark theme', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('xkeen-theme', 'dark'));
+    await installIdleLifecycleRoutes(page);
+    await page.goto('/modules');
+
+    const colors = await page.evaluate(() => {
+      const color = (selector) => getComputedStyle(document.querySelector(selector)).backgroundColor;
+      return {
+        body: getComputedStyle(document.body).backgroundColor,
+        header: color('.modules-header'),
+        card: color('.modules-summary'),
+      };
+    });
+
+    expect(colors).toEqual({
+      body: 'rgb(13, 15, 19)',
+      header: 'rgb(20, 23, 28)',
+      card: 'rgb(20, 23, 28)',
+    });
+  });
+
+  test('uses compact operator typography and indigo actions in the modules header', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('xkeen-theme', 'dark'));
+    await installLifecycleRoutes(page, { installed: {
+      ...installedSnapshot,
+      restart_required: true,
+      lifecycle: { available: false, code: 'panel_version_unsupported' },
+      modules: installedSnapshot.modules.map((item) => (
+        item.id === 'engine.mihomo' ? { ...item, description: 'Mihomo config and telemetry.' } : item
+      )),
+    } });
+    await page.goto('/modules');
+
+    const styles = await page.evaluate(() => {
+      const read = (element) => {
+        const style = getComputedStyle(element);
+        return { background: style.backgroundColor, color: style.color, fontSize: Number.parseFloat(style.fontSize) };
+      };
+      const restartButton = Array.from(document.querySelectorAll('.modules-summary button'))
+        .find((button) => button.textContent.trim() === 'Перезапустить панель');
+      const headerButton = read(document.querySelector('header.modules-header .xk-header-btn-logout'));
+      const theme = read(document.querySelector('#theme-toggle-btn'));
+      const restart = read(restartButton);
+      const title = read(document.querySelector('header.modules-header h1'));
+      const description = read(document.querySelector('.modules-row p'));
+      return { headerButton, theme, restart, title, description };
+    });
+
+    expect(styles.title.fontSize, JSON.stringify(styles)).toBeLessThanOrEqual(19);
+    expect(styles.description.fontSize, JSON.stringify(styles)).toBeLessThanOrEqual(14);
+    expect(styles.theme.background, JSON.stringify(styles)).toBe(styles.headerButton.background);
+    expect(styles.theme.color, JSON.stringify(styles)).toBe(styles.headerButton.color);
+    expect(styles.restart.background, JSON.stringify(styles)).toBe('rgb(63, 58, 126)');
+  });
+
+  test('renders module activation with the panel switch control', async ({ page }) => {
+    await installIdleLifecycleRoutes(page);
+    await page.goto('/modules');
+
+    const control = page.getByRole('switch', { name: 'Включить Mihomo' });
+    await expect(control).toBeVisible();
+    const switchShell = control.locator('xpath=../..');
+    await expect(switchShell).toHaveClass(/dt-switch/);
+    await expect(switchShell.locator('.dt-switch-slider')).toBeVisible();
+    await expect(switchShell.locator('.dt-switch-label')).toHaveText('Выключен');
+    await expect(switchShell.locator('.dt-switch-label')).toHaveClass(/is-disabled/);
+    const placement = await switchShell.evaluate((shell) => {
+      const state = shell.querySelector('.dt-switch-label').getBoundingClientRect();
+      const slider = shell.querySelector('.dt-switch-slider').getBoundingClientRect();
+      const style = getComputedStyle(shell);
+      return { display: style.display, stateBottom: state.bottom, sliderTop: slider.top };
+    });
+    expect(placement.display, JSON.stringify(placement)).toBe('grid');
+    expect(placement.stateBottom, JSON.stringify(placement)).toBeLessThanOrEqual(placement.sliderTop);
+  });
+
+  test('keeps a local build readable while withholding signed lifecycle actions', async ({ page }) => {
+    await installLifecycleRoutes(page, {
+      installed: {
+        ...installedSnapshot,
+        panel_version: null,
+        lifecycle: { available: false, code: 'panel_version_unsupported' },
+        modules: installedSnapshot.modules.map((item) => ({ ...item, lifecycle_actions: [] })),
+      },
+    });
+
+    await page.goto('/modules');
+
+    await expect(page.locator('body')).not.toHaveClass(/\bpanel-page\b/);
+    await expect(page.locator('.modules-summary')).toContainText('локальной сборки');
+    await expect(page.getByRole('button', { name: 'Обновить панель' })).toHaveCount(0);
+    await expect(page.getByRole('tab', { name: 'Доступные' })).toBeDisabled();
+    await expect(page.getByRole('switch', { name: /Включить Mihomo/ })).toBeVisible();
+  });
+
+  test('withholds the catalog while a local build capability is still loading', async ({ page }) => {
+    let releaseInstalled;
+    const installedReady = new Promise((resolve) => { releaseInstalled = resolve; });
+    let catalogCalls = 0;
+    const localInstalled = {
+      ...installedSnapshot,
+      panel_version: null,
+      lifecycle: { available: false, code: 'panel_version_unsupported' },
+      modules: installedSnapshot.modules.map((item) => ({ ...item, lifecycle_actions: [] })),
+    };
+    await page.route('**/api/modules/installed', async (route) => {
+      await installedReady;
+      await route.fulfill({ json: localInstalled });
+    });
+    await page.route('**/api/modules/operations/status', (route) => route.fulfill({ json: idleStatus }));
+    await page.route('**/api/modules/available', (route) => {
+      catalogCalls += 1;
+      return route.fulfill({ json: availableSnapshot });
+    });
+
+    await page.goto('/modules');
+    await expect(page.getByRole('tab', { name: 'Доступные' })).toBeDisabled();
+    await page.evaluate(async () => {
+      const controller = (await import('/static/js/pages/modules.init.js')).getModulesController();
+      await controller.restoreState({ selectedTab: 'available' });
+    });
+    expect(catalogCalls).toBe(0);
+
+    releaseInstalled();
+    await expect(page.locator('.modules-summary')).toContainText('локальной сборки');
+    expect(catalogCalls).toBe(0);
+  });
+
   test('reconciles external profile and registry changes on re-entry and invalidates catalog', async ({ page }) => {
     let installed = { ...installedSnapshot, restart_required: true };
     let catalogCalls = 0;
@@ -202,7 +424,33 @@ test.describe('Module manager recovery and guards', () => {
     await expect(page.getByRole('button', { name: 'Перезапустить панель' })).toBeEnabled();
   });
 
-  test('offers explicit restart after a registry toggle while lifecycle is idle', async ({ page }) => {
+  test('offers restart for a registry change without a lifecycle operation', async ({ page }) => {
+    let restartCalls = 0;
+    await installLifecycleRoutes(page, {
+      status: { ok: true, result: null },
+      installed: {
+        ...installedSnapshot,
+        panel_version: null,
+        profile: 'custom',
+        restart_required: true,
+        lifecycle: { available: false, code: 'panel_version_unsupported' },
+      },
+    });
+    await page.route('**/api/modules/restart', (route) => {
+      restartCalls += 1;
+      return route.fulfill({ json: { ok: true, restart_requested: true } });
+    });
+
+    await page.goto('/modules');
+
+    const restart = page.locator('.modules-summary').getByRole('button', { name: 'Перезапустить панель' });
+    await expect(restart).toBeEnabled();
+    await restart.click();
+    await expect(page.locator('#modules-operation-status')).toContainText('Перезапуск запрошен');
+    expect(restartCalls).toBe(1);
+  });
+
+  test('offers a single restart action in the profile summary after a registry toggle', async ({ page }) => {
     let enabled = false;
     let restartCalls = 0;
     await installIdleLifecycleRoutes(page);
@@ -219,14 +467,47 @@ test.describe('Module manager recovery and guards', () => {
       return route.fulfill({ json: { ok: true, restart_requested: true } });
     });
     await page.goto('/modules');
-    await page.getByRole('switch', { name: 'Включить Mihomo' }).click();
+    await page.getByRole('switch', { name: 'Включить Mihomo' }).locator('..').click();
     await expect(page.locator('.modules-summary')).toContainText('Требуется перезапуск');
-    const restart = page.getByRole('button', { name: 'Перезапустить панель' });
+    const restart = page.locator('.modules-summary').getByRole('button', { name: 'Перезапустить панель' });
     await expect(restart).toBeEnabled();
+    await expect(page.locator('#modules-operation-status').getByRole('button', { name: 'Перезапустить панель' })).toHaveCount(0);
     expect(restartCalls).toBe(0);
     await restart.click();
     await expect(page.locator('#modules-operation-status')).toContainText('Перезапуск запрошен');
     expect(restartCalls).toBe(1);
+  });
+
+  test('removes the restart action after a switch is returned to its original state', async ({ page }) => {
+    let enabled = true;
+    let profile = 'full';
+    let restartRequired = false;
+    await installIdleLifecycleRoutes(page);
+    await page.route('**/api/modules/installed', (route) => route.fulfill({ json: {
+      ...installedSnapshot,
+      profile,
+      restart_required: restartRequired,
+      modules: installedSnapshot.modules.map((item) => item.id === 'engine.mihomo' ? { ...item, enabled } : item),
+    } }));
+    await page.route('**/api/modules/engine.mihomo', (route) => {
+      enabled = route.request().postDataJSON().enabled;
+      profile = enabled ? 'full' : 'custom';
+      restartRequired = !enabled;
+      return route.fulfill({ json: { ok: true, profile, restart_required: restartRequired } });
+    });
+
+    await page.goto('/modules');
+    const row = page.locator('.modules-row').filter({ hasText: 'Mihomo' });
+    const control = row.getByRole('switch', { name: 'Включить Mihomo' });
+    await expect(row.locator('.modules-switch-state')).toHaveText('Включён');
+    await expect(row.locator('.modules-switch-state')).toHaveClass(/is-enabled/);
+    await control.locator('..').click();
+    await expect(page.locator('.modules-summary')).toContainText('Профиль: custom');
+    await expect(page.getByRole('button', { name: 'Перезапустить панель' })).toBeVisible();
+    await control.locator('..').click();
+    await expect(page.locator('.modules-summary')).toContainText('Профиль: full');
+    await expect(page.locator('.modules-summary')).not.toContainText('Требуется перезапуск');
+    await expect(page.getByRole('button', { name: 'Перезапустить панель' })).toHaveCount(0);
   });
 
   for (const previousStatus of [idleStatus, { ...runningStatus, result: 'committed', step: 'done' }]) {
@@ -478,7 +759,7 @@ test.describe('Module manager loading', () => {
     expect(availableCalls).toBe(1);
 
     await page.getByRole('tab', { name: 'Установленные' }).click();
-    await page.getByRole('switch', { name: 'Включить Mihomo' }).click();
+    await page.getByRole('switch', { name: 'Включить Mihomo' }).locator('..').click();
     await expect.poll(() => enabledBodies).toEqual([{ enabled: true }]);
   });
 

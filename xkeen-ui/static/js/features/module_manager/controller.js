@@ -32,8 +32,9 @@ export function createModuleManagerController({ root, api, pollMs }) {
   function recoveryRequired() { return ['interrupted', 'rollback_failed'].includes(state.status?.result); }
   function mutationsLocked() { return !statusFresh || !installedFresh || busy || state.status?.result === 'running' || recoveryRequired(); }
   function canRestart() {
+    const statusResult = state.status?.result ?? null;
     return statusFresh && installedFresh && (state.status?.restart_required === true || state.installed?.restart_required === true)
-      && ['idle', 'committed', 'rolled_back'].includes(state.status?.result)
+      && [null, 'idle', 'committed', 'rolled_back'].includes(statusResult)
       && state.installed?.transition_required === false && !restartRequested;
   }
 
@@ -71,9 +72,11 @@ export function createModuleManagerController({ root, api, pollMs }) {
   }
 
   function render() {
+    const catalogAvailable = state.installed?.lifecycle?.available === true;
     for (const [name, tab] of Object.entries(tabs)) {
       tab.setAttribute('aria-selected', String(state.selectedTab === name));
       tab.classList.toggle('active', state.selectedTab === name);
+      tab.disabled = name === 'available' && !catalogAvailable;
     }
     host.setAttribute('aria-labelledby', tabs[state.selectedTab].id);
     const actionsDisabled = mutationsLocked();
@@ -85,13 +88,16 @@ export function createModuleManagerController({ root, api, pollMs }) {
       if (state.catalog) renderAvailable(host, state.catalog, requestPlan, actionsDisabled);
       else host.textContent = 'Загрузка каталога…';
     } else if (state.installed) {
-      renderInstalled(host, state.installed, toggleEnabled, requestPlan, actionsDisabled);
+      renderInstalled(host, state.installed, toggleEnabled, requestPlan, actionsDisabled, {
+        onRestart: requestRestart,
+        canRestart: canRestart(),
+      });
     } else {
       host.textContent = 'Загрузка модулей…';
     }
-    if (state.status && (state.status.result !== 'idle' || canRestart())) renderOperationStatus(statusHost, state.status, {
-      onCancel: requestCancel, onRecovery: requestRecovery, onRestart: requestRestart,
-      canRestart: canRestart(), busy: !statusFresh || !installedFresh || busy || cancelPending,
+    if (state.status && state.status.result !== 'idle') renderOperationStatus(statusHost, state.status, {
+      onCancel: requestCancel, onRecovery: requestRecovery,
+      busy: !statusFresh || !installedFresh || busy || cancelPending,
     });
     else statusHost.replaceChildren();
     if (restartRequested) statusHost.append(document.createTextNode('Перезапуск запрошен'));
@@ -287,6 +293,7 @@ export function createModuleManagerController({ root, api, pollMs }) {
 
   async function selectTab(name) {
     if (!tabs[name]) return;
+    if (name === 'available' && state.installed?.lifecycle?.available !== true) return;
     state.selectedTab = name;
     render();
     if (name === 'available' && !state.catalog) {

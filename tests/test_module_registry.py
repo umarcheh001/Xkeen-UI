@@ -221,6 +221,55 @@ def test_disable_rejects_enabled_dependents_and_persists_a_custom_change(tmp_pat
     assert persisted["modules"]["integration.happ"]["enabled"] is False
 
 
+def test_reversing_an_unrestarted_module_switch_restores_the_original_profile(tmp_path):
+    registry = _registry(tmp_path)
+    registry.get_registry()
+
+    first, first_changed = registry.set_enabled("integration.happ", False)
+    restored, restored_changed = registry.set_enabled("integration.happ", True)
+    reloaded = _registry(tmp_path).get_registry()
+
+    assert first_changed is True
+    assert first["profile"] == "custom"
+    assert first["restart_required"] is True
+    assert restored_changed is True
+    assert restored["profile"] == LEGACY_FULL_PROFILE
+    assert restored["restart_required"] is False
+    assert reloaded["profile"] == LEGACY_FULL_PROFILE
+    assert reloaded["restart_required"] is False
+
+
+def test_reversing_a_switch_restores_an_existing_custom_profile(tmp_path):
+    registry = _registry(tmp_path)
+    requested = [module_id for module_id in MODULE_IDS if module_id != "integration.happ"]
+    registry.set_profile("custom", module_ids=requested, editor_variant="advanced")
+    registry.initialize_for_startup()
+
+    first, first_changed = registry.set_enabled("integration.happ", True)
+    restored, restored_changed = registry.set_enabled("integration.happ", False)
+    restored_registry = registry.get_registry()
+
+    assert first_changed is True
+    assert first["profile"] == "custom"
+    assert first["restart_required"] is True
+    assert restored_changed is True
+    assert restored["profile"] == "custom"
+    assert restored["restart_required"] is False
+    assert restored_registry["editor"]["variant"] == "advanced"
+
+
+def test_reversing_a_switch_does_not_clear_an_existing_profile_restart(tmp_path):
+    registry = _registry(tmp_path)
+    registry.set_profile("xray-minimal")
+
+    registry.set_enabled("integration.happ", True)
+    restored, restored_changed = registry.set_enabled("integration.happ", False)
+
+    assert restored_changed is True
+    assert restored["profile"] == "xray-minimal"
+    assert restored["restart_required"] is True
+
+
 def test_enabling_a_module_repairs_its_declared_dependencies(tmp_path):
     (tmp_path / "modules.json").write_text(
         json.dumps(
