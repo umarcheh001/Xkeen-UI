@@ -796,6 +796,14 @@ def test_optional_module_metadata_is_neutral_and_registry_owns_runtime_boundarie
     assert "update" not in metadata["tool.advanced-diagnostics"].description.lower()
 
 
+def test_mihomo_module_description_stays_focused_on_core_capabilities():
+    metadata = {definition.id: definition for definition in MODULE_DEFINITIONS}
+
+    assert metadata["engine.mihomo"].description == (
+        "Mihomo config, Clash API, DNS, генератор, импорт, telemetry."
+    )
+
+
 def test_subscription_link_utility_install_marker_ignores_core_helpers():
     from services.module_registry import _MODULE_INSTALL_MARKERS
 

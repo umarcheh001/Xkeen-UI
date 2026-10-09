@@ -209,7 +209,7 @@ MODULE_DEFINITIONS: tuple[ModuleDefinition, ...] = (
     ModuleDefinition(
         id="engine.mihomo",
         name="Mihomo",
-        description="Mihomo config, Clash API, DNS, генератор, импорт, telemetry и Zashboard.",
+        description="Mihomo config, Clash API, DNS, генератор, импорт, telemetry.",
         version=REGISTRY_VERSION,
         dependencies=("core", "tool.editor"),
         conflicts=(),

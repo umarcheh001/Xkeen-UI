@@ -29,8 +29,21 @@ html[data-theme="dark"] body.modules-page {
   --header-tab-text: #aeb7c5;
   --header-tab-active-bg: #7470dd;
   --header-tab-active-text: #ffffff;
+  --xk-tooltip-bg: #262b34;
+  --xk-tooltip-text: #f1f2f5;
+  --xk-tooltip-border: #3b424e;
+  --xk-tooltip-shadow: rgba(0, 0, 0, 0.32);
+  --xk-tooltip-backdrop: none;
   background: #0d0f13;
   color: #e5e7eb;
+}
+
+html[data-theme="light"] body.modules-page {
+  --xk-tooltip-bg: #30333a;
+  --xk-tooltip-text: #ffffff;
+  --xk-tooltip-border: #454a54;
+  --xk-tooltip-shadow: rgba(25, 28, 35, 0.2);
+  --xk-tooltip-backdrop: none;
 }
 
 body.modules-page .modules-header,
@@ -225,8 +238,9 @@ body.modules-page .modules-card p { margin: 2px 0; font-size: calc(13px * var(--
 body.modules-page .modules-switch { white-space: nowrap; }
 body.modules-page .modules-switch.dt-switch.xk-switch-bare {
   display: grid !important;
+  align-content: start;
   justify-items: end;
-  gap: 2px;
+  row-gap: 4px;
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -297,9 +311,9 @@ body.modules-page .modules-card-actions .modules-restart-panel:hover:not(:disabl
 }
 
 body.modules-page .modules-update-check {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 10px;
   padding-top: 9px;
@@ -310,16 +324,26 @@ body.modules-page .modules-update-check h3 {
   font-size: calc(12px * var(--xk-font-scale, 1));
 }
 body.modules-page .modules-update-check p {
-  grid-column: 1 / -1;
+  flex-basis: 100%;
   margin: 0;
   font-size: calc(11px * var(--xk-font-scale, 1));
   line-height: 1.35;
 }
 body.modules-page .modules-update-check-button {
+  align-self: center;
+  flex: 0 0 auto;
   min-height: 28px;
   padding: 4px 8px;
   border-radius: 5px;
+  border: 1px solid var(--border-color, #2a2f38) !important;
+  background: var(--header-btn-bg, #181b21) !important;
+  color: var(--header-btn-text, #e5e7eb) !important;
+  box-shadow: none !important;
   font-size: calc(11px * var(--xk-font-scale, 1));
+}
+body.modules-page .modules-update-check-button:hover:not(:disabled) {
+  border-color: var(--accent-color, #7470dd) !important;
+  background: var(--header-btn-bg, #181b21) !important;
 }
 body.modules-page .modules-build-version {
   font-size: calc(13px * var(--xk-font-scale, 1)) !important;

@@ -415,6 +415,48 @@ test.describe('Module manager recovery and guards', () => {
     expect(styles.restart.background, JSON.stringify(styles)).toBe('rgb(63, 58, 126)');
   });
 
+  test('keeps update controls and tooltips on the neutral operator surface', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('xkeen-theme', 'dark'));
+    await installIdleLifecycleRoutes(page);
+    await page.goto('/modules');
+
+    const layout = await page.evaluate(() => {
+      const update = document.querySelector('.modules-update-check');
+      const updateButton = document.querySelector('.modules-update-check-button');
+      const headerButton = document.querySelector('header.modules-header .xk-header-btn');
+      const state = document.querySelector('.modules-switch-state');
+      const slider = document.querySelector('.modules-switch .dt-switch-slider');
+      const updateRect = update.getBoundingClientRect();
+      const buttonRect = updateButton.getBoundingClientRect();
+      const headerStyle = getComputedStyle(headerButton);
+      const updateStyle = getComputedStyle(updateButton);
+      const stateRect = state.getBoundingClientRect();
+      const sliderRect = slider.getBoundingClientRect();
+      return {
+        buttonWidth: buttonRect.width,
+        updateWidth: updateRect.width,
+        updateBackground: updateStyle.backgroundColor,
+        updateBorder: updateStyle.borderTopColor,
+        headerBackground: headerStyle.backgroundColor,
+        headerBorder: headerStyle.borderTopColor,
+        switchGap: sliderRect.top - stateRect.bottom,
+      };
+    });
+
+    expect(layout.buttonWidth, JSON.stringify(layout)).toBeLessThan(layout.updateWidth / 2);
+    expect(layout.updateBackground, JSON.stringify(layout)).toBe(layout.headerBackground);
+    expect(layout.updateBorder, JSON.stringify(layout)).toBe(layout.headerBorder);
+    expect(layout.switchGap, JSON.stringify(layout)).toBeGreaterThanOrEqual(3);
+
+    await page.getByRole('button', { name: 'Выйти' }).hover();
+    const tooltip = page.locator('#xk-tooltip-portal .xk-tooltip-bubble');
+    await expect(tooltip).toBeVisible();
+    await expect.poll(async () => tooltip.evaluate((element) => ({
+      background: getComputedStyle(element).backgroundColor,
+      border: getComputedStyle(element).borderTopColor,
+    }))).toEqual({ background: 'rgb(38, 43, 52)', border: 'rgb(59, 66, 78)' });
+  });
+
   test('renders module activation with the panel switch control', async ({ page }) => {
     await installIdleLifecycleRoutes(page);
     await page.goto('/modules');
