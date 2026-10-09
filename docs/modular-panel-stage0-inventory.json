@@ -37,7 +37,7 @@
       ],
       "removable": false,
       "unit_count": 552,
-      "size_bytes": 7369032,
+      "size_bytes": 7369558,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -5833,7 +5833,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_panel_init_boot_log.py",
-      "size_bytes": 4876,
+      "size_bytes": 5402,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],

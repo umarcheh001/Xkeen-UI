@@ -27,6 +27,15 @@ def _function(name: str) -> str:
     return text[start:text.index("\n}\n", start) + 3]
 
 
+def _assignment(name: str) -> str:
+    # Переменные объявлены в шапке службы, вне функций: без них функция,
+    # вырезанная из файла, молча работает с пустым значением.
+    for line in TEMPLATE.read_text(encoding="utf-8").splitlines():
+        if line.startswith(name + "="):
+            return line
+    raise AssertionError(f"{name} не объявлена в {TEMPLATE.name}")
+
+
 def _sh(script: Path) -> subprocess.CompletedProcess:
     return subprocess.run(["sh", script.as_posix()], capture_output=True, text=True, encoding="utf-8", timeout=60)
 
@@ -90,6 +99,7 @@ def test_every_line_carries_uptime(tmp_path):
         "\n".join(
             [
                 f'BOOT_LOG="{log.as_posix()}"',
+                _assignment("UPTIME_FILE"),
                 _function("boot_uptime"),
                 _function("audit_boot"),
                 'audit_boot "[start] first"',
