@@ -37,7 +37,7 @@
       ],
       "removable": false,
       "unit_count": 552,
-      "size_bytes": 7360162,
+      "size_bytes": 7365332,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -365,7 +365,7 @@
       ],
       "removable": true,
       "unit_count": 25,
-      "size_bytes": 597793,
+      "size_bytes": 597884,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 8,
@@ -1050,7 +1050,7 @@
       "module_id": "core",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/pages.py",
-      "size_bytes": 24353,
+      "size_bytes": 24458,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -2202,7 +2202,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_registry.py",
-      "size_bytes": 63732,
+      "size_bytes": 63915,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -4050,7 +4050,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_frontend_runtime_hotfixes.py",
-      "size_bytes": 146140,
+      "size_bytes": 146381,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -5341,7 +5341,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_manager_ui.py",
-      "size_bytes": 5886,
+      "size_bytes": 5878,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -5415,7 +5415,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_registry.py",
-      "size_bytes": 32315,
+      "size_bytes": 32990,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -5815,7 +5815,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_panel_core_watch_detected_cores.py",
-      "size_bytes": 1088,
+      "size_bytes": 3307,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -5826,7 +5826,9 @@
         "python3",
         "flask"
       ],
-      "environment_variables": [],
+      "environment_variables": [
+        "XKEEN_UI_PANEL_SECTIONS_WHITELIST"
+      ],
       "removable": false
     },
     {
@@ -9132,7 +9134,7 @@
       "module_id": "core",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/module_manager/controller.js",
-      "size_bytes": 15607,
+      "size_bytes": 15613,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -9157,7 +9159,7 @@
       "module_id": "core",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/module_manager/render.js",
-      "size_bytes": 16272,
+      "size_bytes": 16466,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -10672,7 +10674,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/modules_manager.spec.mjs",
-      "size_bytes": 73835,
+      "size_bytes": 75344,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -11965,7 +11967,7 @@
       "module_id": "core",
       "kind": "template",
       "path": "xkeen-ui/templates/modules.html",
-      "size_bytes": 4181,
+      "size_bytes": 4227,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -20466,7 +20468,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/devtools/env.js",
-      "size_bytes": 81314,
+      "size_bytes": 81405,
       "depends_on": [
         "core"
       ],
@@ -31770,7 +31772,7 @@
         },
         "tool.advanced-diagnostics": {
           "unit_count": 25,
-          "size_bytes": 597793
+          "size_bytes": 597884
         }
       },
       "next_stage": "Этапы 4, 5 и 6."
