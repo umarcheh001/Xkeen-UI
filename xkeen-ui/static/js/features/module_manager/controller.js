@@ -1,8 +1,15 @@
 import { renderInstalled, renderAvailable, renderPlan, renderOperationStatus, describeLifecycleFailure } from './render.js';
-import { reconcileModulesUpdateBadge, reconcileModulesUpdatePlan, reconcileModulesUpdateStatus } from './badge.js';
+import { clearModulesUpdateBadge, reconcileModulesUpdateBadge, reconcileModulesUpdateCheck, reconcileModulesUpdatePlan, reconcileModulesUpdateStatus } from './badge.js';
 
 export function createModuleManagerController({ root, api, pollMs }) {
-  const state = { installed: null, status: null, catalog: null, selectedTab: 'installed', plan: null };
+  const state = {
+    installed: null,
+    status: null,
+    catalog: null,
+    selectedTab: 'installed',
+    plan: null,
+    update: { checked: false, loading: false, error: null },
+  };
   const host = root.querySelector('#modules-card-host');
   const statusHost = root.querySelector('#modules-operation-status');
   const errorHost = root.querySelector('#modules-error');
@@ -28,12 +35,14 @@ export function createModuleManagerController({ root, api, pollMs }) {
   let installedFresh = false;
   let statusChecked = false;
   let statusRefreshPending = false;
+  let updateCheckFocusPending = false;
 
   function recoveryRequired() { return ['interrupted', 'rollback_failed'].includes(state.status?.result); }
   function mutationsLocked() { return !statusFresh || !installedFresh || busy || state.status?.result === 'running' || recoveryRequired(); }
   function canRestart() {
+    const statusResult = state.status?.result ?? null;
     return statusFresh && installedFresh && (state.status?.restart_required === true || state.installed?.restart_required === true)
-      && ['idle', 'committed', 'rolled_back'].includes(state.status?.result)
+      && [null, 'idle', 'committed', 'rolled_back'].includes(statusResult)
       && state.installed?.transition_required === false && !restartRequested;
   }
 
@@ -71,9 +80,11 @@ export function createModuleManagerController({ root, api, pollMs }) {
   }
 
   function render() {
+    const catalogAvailable = state.installed?.lifecycle?.available === true;
     for (const [name, tab] of Object.entries(tabs)) {
       tab.setAttribute('aria-selected', String(state.selectedTab === name));
       tab.classList.toggle('active', state.selectedTab === name);
+      tab.disabled = name === 'available' && !catalogAvailable;
     }
     host.setAttribute('aria-labelledby', tabs[state.selectedTab].id);
     const actionsDisabled = mutationsLocked();
@@ -85,16 +96,28 @@ export function createModuleManagerController({ root, api, pollMs }) {
       if (state.catalog) renderAvailable(host, state.catalog, requestPlan, actionsDisabled);
       else host.textContent = 'Загрузка каталога…';
     } else if (state.installed) {
-      renderInstalled(host, state.installed, toggleEnabled, requestPlan, actionsDisabled);
+      renderInstalled(host, state.installed, toggleEnabled, requestPlan, actionsDisabled, {
+        onRestart: requestRestart,
+        canRestart: canRestart(),
+        onCheckUpdate: requestUpdateCheck,
+        update: state.update,
+      });
     } else {
       host.textContent = 'Загрузка модулей…';
     }
-    if (state.status && (state.status.result !== 'idle' || canRestart())) renderOperationStatus(statusHost, state.status, {
-      onCancel: requestCancel, onRecovery: requestRecovery, onRestart: requestRestart,
-      canRestart: canRestart(), busy: !statusFresh || !installedFresh || busy || cancelPending,
+    if (state.status && state.status.result !== 'idle') renderOperationStatus(statusHost, state.status, {
+      onCancel: requestCancel, onRecovery: requestRecovery,
+      busy: !statusFresh || !installedFresh || busy || cancelPending,
     });
     else statusHost.replaceChildren();
     if (restartRequested) statusHost.append(document.createTextNode('Перезапуск запрошен'));
+    if (updateCheckFocusPending) {
+      const updateButton = host.querySelector('.modules-update-check-button:not(:disabled)');
+      if (updateButton) {
+        updateCheckFocusPending = false;
+        updateButton.focus();
+      }
+    }
   }
 
   function closePlan({ restoreFocus = true, force = false } = {}) {
@@ -151,6 +174,7 @@ export function createModuleManagerController({ root, api, pollMs }) {
     } else invalidateStatus(statusResult.reason);
     if (installedResult.status === 'fulfilled') {
       state.installed = installedResult.value;
+      state.update = { checked: false, loading: false, error: null };
       installedFresh = true;
       reconcileModulesUpdateBadge(state.installed);
     } else showError(installedResult.reason);
@@ -285,8 +309,28 @@ export function createModuleManagerController({ root, api, pollMs }) {
     finally { busy = false; if (active) render(); }
   }
 
+  async function requestUpdateCheck(event) {
+    if (!state.installed?.lifecycle?.available || busy || state.update.loading) return;
+    const trigger = event?.currentTarget;
+    state.update = { ...state.update, loading: true, error: null };
+    render();
+    try {
+      const checked = await api.checkPanelUpdate(true);
+      state.update = { ...checked, checked: true, loading: false, error: null };
+      reconcileModulesUpdateCheck(checked);
+      clearError();
+    } catch (error) {
+      clearModulesUpdateBadge();
+      state.update = { ...state.update, checked: false, loading: false, error };
+    } finally {
+      if (trigger && active) updateCheckFocusPending = true;
+      if (active) render();
+    }
+  }
+
   async function selectTab(name) {
     if (!tabs[name]) return;
+    if (name === 'available' && state.installed?.lifecycle?.available !== true) return;
     state.selectedTab = name;
     render();
     if (name === 'available' && !state.catalog) {
@@ -329,6 +373,7 @@ export function createModuleManagerController({ root, api, pollMs }) {
       } else invalidateStatus(statusResult.reason);
       if (installedResult.status === 'fulfilled') {
         state.installed = installedResult.value;
+        state.update = { checked: false, loading: false, error: null };
         installedFresh = true;
         reconcileModulesUpdateBadge(state.installed);
       } else showError(installedResult.reason);

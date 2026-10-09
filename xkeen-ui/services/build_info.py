@@ -24,8 +24,15 @@ def _safe_read_json(path: str) -> Optional[Dict[str, Any]]:
     return data if isinstance(data, dict) else None
 
 
-def _candidate_paths(ui_state_dir: Optional[str] = None) -> List[str]:
+def _candidate_paths(
+    ui_state_dir: Optional[str] = None,
+    *,
+    build_path: Optional[str] = None,
+) -> List[str]:
     paths: List[str] = []
+
+    if build_path:
+        paths.append(os.path.abspath(build_path))
 
     if ui_state_dir:
         paths.append(os.path.join(ui_state_dir, "BUILD.json"))
@@ -56,7 +63,11 @@ def _candidate_paths(ui_state_dir: Optional[str] = None) -> List[str]:
     return out
 
 
-def read_build_info(ui_state_dir: Optional[str] = None) -> Dict[str, Any]:
+def read_build_info(
+    ui_state_dir: Optional[str] = None,
+    *,
+    build_path: Optional[str] = None,
+) -> Dict[str, Any]:
     """Return build info for UI.
 
     Never raises. Always returns a dict with stable keys.
@@ -84,7 +95,7 @@ def read_build_info(ui_state_dir: Optional[str] = None) -> Dict[str, Any]:
         "artifact": None,
     }
 
-    for path in _candidate_paths(ui_state_dir):
+    for path in _candidate_paths(ui_state_dir, build_path=build_path):
         data = _safe_read_json(path)
         if not data:
             continue
@@ -106,6 +117,11 @@ def read_build_info(ui_state_dir: Optional[str] = None) -> Dict[str, Any]:
         ):
             if k in data:
                 info[k] = data.get(k)
+        # The archive builder records when it packed the tree as
+        # ``release_date``. The installer rewrites the same information as
+        # ``built_utc``. Present one stable field to every core screen.
+        if info["built_utc"] is None and "release_date" in data:
+            info["built_utc"] = data.get("release_date")
         break
 
     return info

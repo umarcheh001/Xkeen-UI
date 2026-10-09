@@ -3,6 +3,14 @@ import { test, expect } from './fixtures.mjs';
 const installedSnapshot = {
   ok: true,
   panel_version: '2.10.0',
+  build: {
+    exists: true,
+    version: '2.10.0',
+    commit: 'abc123456789',
+    built_utc: '2026-10-09T09:10:11Z',
+    repo: 'umarcheh001/Xkeen-UI',
+    channel: 'stable',
+  },
   profile: 'mihomo-minimal',
   transition_required: false,
   editor: { variant: 'codemirror' },
@@ -84,6 +92,28 @@ test.describe('DevTools update channel boundary', () => {
     expect(legacyRequests).toEqual([]);
   });
 
+  test('stable DevTools uses a compact Modules pointer instead of a stretched update card', async ({ page }) => {
+    await page.route('**/api/devtools/update/info', (route) => route.fulfill({ json: updateInfo('stable') }));
+    await installIdleLifecycleRoutes(page);
+
+    await page.goto('/devtools');
+
+    const updateCard = page.locator('#dt-update-card');
+    await expect(updateCard).toHaveClass(/dt-update-card--modules-manager/);
+    await expect(page.locator('[data-dt-modules-manager-notice]')).toBeVisible();
+    const metrics = await page.evaluate(() => {
+      const update = document.getElementById('dt-update-card');
+      const env = document.getElementById('dt-env-card');
+      return {
+        updateGrow: update ? getComputedStyle(update).flexGrow : '',
+        updateHeight: update?.getBoundingClientRect().height || 0,
+        envHeight: env?.getBoundingClientRect().height || 0,
+      };
+    });
+    expect(metrics.updateGrow).toBe('0');
+    expect(metrics.updateHeight).toBeLessThan(metrics.envHeight);
+  });
+
   test('main DevTools retains the manual legacy check', async ({ page }) => {
     const checkBodies = [];
     await page.route('**/api/devtools/update/info', (route) => route.fulfill({ json: updateInfo('main') }));
@@ -150,7 +180,356 @@ test.describe('DevTools update channel boundary', () => {
   }
 });
 
+test.describe('Modules panel update surface', () => {
+  test('shows a local archive identity instead of an unknown panel version', async ({ page }) => {
+    const localBuild = {
+      ...installedSnapshot,
+      panel_version: null,
+      build: {
+        exists: true,
+        version: 'd523ffcf',
+        base_commit: 'd523ffcf',
+        commit: 'd523ffcf7cc474bea600e173d704d7c89d9b996b',
+        dirty: false,
+        tree_sha256: 'a'.repeat(64),
+        built_utc: '2026-10-09T08:35:46Z',
+        repo: 'umarcheh001/Xkeen-UI',
+        channel: 'stable',
+      },
+      lifecycle: { available: false, code: 'panel_version_unsupported' },
+    };
+    await installLifecycleRoutes(page, { installed: localBuild });
+
+    await page.goto('/modules');
+
+    await expect(page.getByText('Локальная сборка d523ffcf')).toBeVisible();
+    await expect(page.getByText('Версия панели неизвестна')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Проверить обновления' })).toBeDisabled();
+  });
+
+  test('checks the signed catalog before offering a panel update plan', async ({ page }) => {
+    await installIdleLifecycleRoutes(page);
+    await page.route('**/api/modules/panel/update-check', (route) => route.fulfill({ json: {
+      ok: true,
+      source_version: '2.10.0',
+      target_version: '2.11.0',
+      update_available: true,
+      requires_installer: false,
+      min_updater: null,
+    } }));
+    await page.route('**/api/modules/operations/plan', (route) => route.fulfill({ json: {
+      ...installPlan,
+      operation: 'panel-update',
+      module_id: null,
+      scope: 'panel',
+      source_version: '2.10.0',
+      target_version: '2.11.0',
+    } }));
+
+    await page.goto('/modules');
+    await expect(page.getByText('Источник: umarcheh001/Xkeen-UI · канал: stable')).toBeVisible();
+    await page.getByRole('button', { name: 'Проверить обновления' }).click();
+    await expect(page.getByText('Доступна версия 2.11.0')).toBeVisible();
+    await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem('xkeen.modules.update.v1'))?.targetVersion)).toBe('2.11.0');
+    await page.getByRole('button', { name: 'Обновить панель' }).click();
+    await expect(page.getByRole('dialog', { name: 'План обновления панели' })).toContainText('2.11.0');
+  });
+
+  test('keeps update feedback focused and clears a stale badge after a failed check', async ({ page }) => {
+    await installIdleLifecycleRoutes(page);
+    await page.route('**/api/modules/panel/update-check', (route) => route.fulfill({ status: 503, json: {
+      ok: false,
+      code: 'catalog_unavailable',
+      error: 'offline',
+    } }));
+    await page.goto('/modules');
+    await page.evaluate(() => sessionStorage.setItem('xkeen.modules.update.v1', JSON.stringify({
+      schema: 1,
+      sourceVersion: '2.10.0',
+      targetVersion: '2.11.0',
+    })));
+
+    await page.getByRole('button', { name: 'Проверить обновления' }).click();
+
+    const check = page.locator('.modules-update-check');
+    await expect(check.getByRole('status')).toContainText('Каталог модулей временно недоступен.');
+    await expect(check.getByRole('button', { name: 'Проверить обновления' })).toBeFocused();
+    await expect.poll(() => page.evaluate(() => sessionStorage.getItem('xkeen.modules.update.v1'))).toBeNull();
+  });
+});
+
 test.describe('Module manager recovery and guards', () => {
+  test('keeps the modules header comfortably inset with a compact theme action', async ({ page }) => {
+    await page.setViewportSize({ width: 1800, height: 1300 });
+    await installIdleLifecycleRoutes(page);
+    await page.goto('/modules');
+
+    const geometry = await page.locator('header.modules-header').evaluate((header) => {
+      const headerRect = header.getBoundingClientRect();
+      const titleRect = header.querySelector('h1').getBoundingClientRect();
+      const logoutRect = header.querySelector('.xk-header-btn-logout').getBoundingClientRect();
+      const theme = header.querySelector('#theme-toggle-btn');
+      const themeRect = theme.getBoundingClientRect();
+      const backRect = header.querySelector('a[href="/"]').getBoundingClientRect();
+      return {
+        titleInset: titleRect.left - headerRect.left,
+        logoutInset: headerRect.right - logoutRect.right,
+        themeWidth: themeRect.width,
+        themeHeight: themeRect.height,
+        backHeight: backRect.height,
+      };
+    });
+
+    expect(geometry.titleInset, JSON.stringify(geometry)).toBeGreaterThanOrEqual(18);
+    expect(geometry.logoutInset, JSON.stringify(geometry)).toBeGreaterThanOrEqual(18);
+    expect(geometry.themeWidth, JSON.stringify(geometry)).toBeGreaterThanOrEqual(30);
+    expect(geometry.themeWidth, JSON.stringify(geometry)).toBeLessThanOrEqual(34);
+    expect(Math.abs(geometry.themeWidth - geometry.themeHeight), JSON.stringify(geometry)).toBeLessThanOrEqual(2);
+    expect(Math.abs(geometry.themeHeight - geometry.backHeight), JSON.stringify(geometry)).toBeLessThanOrEqual(2);
+  });
+
+  test('centers the theme icon and uses the compact settings switch geometry', async ({ page }) => {
+    await installIdleLifecycleRoutes(page);
+    await page.goto('/modules');
+
+    const layout = await page.locator('header.modules-header').evaluate((header) => {
+      const theme = header.querySelector('#theme-toggle-btn');
+      const icon = theme.querySelector('.theme-toggle-icon');
+      const slider = document.querySelector('.modules-switch .dt-switch-slider');
+      const state = document.querySelector('.modules-switch-state');
+      const themeRect = theme.getBoundingClientRect();
+      const iconRect = icon.getBoundingClientRect();
+      const sliderRect = slider.getBoundingClientRect();
+      const stateRect = state.getBoundingClientRect();
+      return {
+        iconCenterOffset: (iconRect.left + iconRect.width / 2) - (themeRect.left + themeRect.width / 2),
+        sliderWidth: sliderRect.width,
+        sliderHeight: sliderRect.height,
+        stateFontSize: Number.parseFloat(getComputedStyle(state).fontSize),
+        stateBelowSlider: stateRect.bottom > sliderRect.top,
+      };
+    });
+
+    expect(Math.abs(layout.iconCenterOffset), JSON.stringify(layout)).toBeLessThanOrEqual(1);
+    expect(layout.sliderWidth, JSON.stringify(layout)).toBeLessThanOrEqual(30);
+    expect(layout.sliderHeight, JSON.stringify(layout)).toBeLessThanOrEqual(16);
+    expect(layout.stateFontSize, JSON.stringify(layout)).toBeLessThanOrEqual(10.5);
+    expect(layout.stateBelowSlider, JSON.stringify(layout)).toBe(false);
+  });
+
+  test('keeps module navigation inside the compact operator header', async ({ page }) => {
+    await page.setViewportSize({ width: 1800, height: 1300 });
+    await installIdleLifecycleRoutes(page);
+    await page.goto('/modules');
+
+    const layout = await page.locator('header.modules-header').evaluate((header) => {
+      const main = header.querySelector('.modules-header-main');
+      const tabs = header.querySelector('.modules-tabs');
+      const tabsRect = tabs?.getBoundingClientRect();
+      const activeTab = tabs?.querySelector('.top-tab-btn.active');
+      return {
+        tabsWithinHeader: Boolean(tabs),
+        tabsAfterMain: Boolean(main && tabs && main.compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING),
+        tabsTop: tabsRect?.top ?? null,
+        mainBottom: main?.getBoundingClientRect().bottom ?? null,
+        activeTabRadius: activeTab ? Number.parseFloat(getComputedStyle(activeTab).borderRadius) : null,
+      };
+    });
+
+    expect(layout.tabsWithinHeader, JSON.stringify(layout)).toBe(true);
+    expect(layout.tabsAfterMain, JSON.stringify(layout)).toBe(true);
+    expect(layout.tabsTop, JSON.stringify(layout)).toBeGreaterThanOrEqual(layout.mainBottom);
+    expect(layout.activeTabRadius, JSON.stringify(layout)).toBeLessThanOrEqual(6);
+  });
+
+  test('groups installed module controls at the trailing edge of a row', async ({ page }) => {
+    await page.setViewportSize({ width: 1800, height: 1300 });
+    await installIdleLifecycleRoutes(page);
+    await page.goto('/modules');
+
+    const row = page.locator('.modules-row').filter({ hasText: 'Mihomo' });
+    const controls = row.locator('.modules-row-actions');
+    await expect(controls).toBeVisible();
+    await expect(controls.getByRole('switch')).toBeVisible();
+    await expect(controls.getByRole('button', { name: 'Восстановить Mihomo' })).toBeVisible();
+    const geometry = await row.evaluate((element) => {
+      const body = element.querySelector('.modules-row-body').getBoundingClientRect();
+      const actions = element.querySelector('.modules-row-actions').getBoundingClientRect();
+      return { bodyRight: body.right, actionsLeft: actions.left };
+    });
+    expect(geometry.actionsLeft, JSON.stringify(geometry)).toBeGreaterThanOrEqual(geometry.bodyRight);
+  });
+
+  test('uses neutral dashboard surfaces in the dark theme', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('xkeen-theme', 'dark'));
+    await installIdleLifecycleRoutes(page);
+    await page.goto('/modules');
+
+    const colors = await page.evaluate(() => {
+      const color = (selector) => getComputedStyle(document.querySelector(selector)).backgroundColor;
+      return {
+        body: getComputedStyle(document.body).backgroundColor,
+        header: color('.modules-header'),
+        card: color('.modules-summary'),
+      };
+    });
+
+    expect(colors).toEqual({
+      body: 'rgb(13, 15, 19)',
+      header: 'rgb(20, 23, 28)',
+      card: 'rgb(20, 23, 28)',
+    });
+  });
+
+  test('uses compact operator typography and indigo actions in the modules header', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('xkeen-theme', 'dark'));
+    await installLifecycleRoutes(page, { installed: {
+      ...installedSnapshot,
+      restart_required: true,
+      lifecycle: { available: false, code: 'panel_version_unsupported' },
+      modules: installedSnapshot.modules.map((item) => (
+        item.id === 'engine.mihomo' ? { ...item, description: 'Mihomo config and telemetry.' } : item
+      )),
+    } });
+    await page.goto('/modules');
+
+    const styles = await page.evaluate(() => {
+      const read = (element) => {
+        const style = getComputedStyle(element);
+        return { background: style.backgroundColor, color: style.color, fontSize: Number.parseFloat(style.fontSize) };
+      };
+      const restartButton = Array.from(document.querySelectorAll('.modules-summary button'))
+        .find((button) => button.textContent.trim() === 'Перезапустить панель');
+      const headerButton = read(document.querySelector('header.modules-header .xk-header-btn-logout'));
+      const theme = read(document.querySelector('#theme-toggle-btn'));
+      const restart = read(restartButton);
+      const title = read(document.querySelector('header.modules-header h1'));
+      const description = read(document.querySelector('.modules-row p'));
+      return { headerButton, theme, restart, title, description };
+    });
+
+    expect(styles.title.fontSize, JSON.stringify(styles)).toBeLessThanOrEqual(19);
+    expect(styles.description.fontSize, JSON.stringify(styles)).toBeLessThanOrEqual(14);
+    expect(styles.theme.background, JSON.stringify(styles)).toBe(styles.headerButton.background);
+    expect(styles.theme.color, JSON.stringify(styles)).toBe(styles.headerButton.color);
+    expect(styles.restart.background, JSON.stringify(styles)).toBe('rgb(63, 58, 126)');
+  });
+
+  test('keeps update controls and tooltips on the neutral operator surface', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('xkeen-theme', 'dark'));
+    await installIdleLifecycleRoutes(page);
+    await page.goto('/modules');
+
+    const layout = await page.evaluate(() => {
+      const update = document.querySelector('.modules-update-check');
+      const updateButton = document.querySelector('.modules-update-check-button');
+      const headerButton = document.querySelector('header.modules-header .xk-header-btn');
+      const state = document.querySelector('.modules-switch-state');
+      const slider = document.querySelector('.modules-switch .dt-switch-slider');
+      const updateRect = update.getBoundingClientRect();
+      const buttonRect = updateButton.getBoundingClientRect();
+      const headerStyle = getComputedStyle(headerButton);
+      const updateStyle = getComputedStyle(updateButton);
+      const stateRect = state.getBoundingClientRect();
+      const sliderRect = slider.getBoundingClientRect();
+      return {
+        buttonWidth: buttonRect.width,
+        updateWidth: updateRect.width,
+        updateBackground: updateStyle.backgroundColor,
+        updateBorder: updateStyle.borderTopColor,
+        headerBackground: headerStyle.backgroundColor,
+        headerBorder: headerStyle.borderTopColor,
+        switchGap: sliderRect.top - stateRect.bottom,
+      };
+    });
+
+    expect(layout.buttonWidth, JSON.stringify(layout)).toBeLessThan(layout.updateWidth / 2);
+    expect(layout.updateBackground, JSON.stringify(layout)).toBe(layout.headerBackground);
+    expect(layout.updateBorder, JSON.stringify(layout)).toBe(layout.headerBorder);
+    expect(layout.switchGap, JSON.stringify(layout)).toBeGreaterThanOrEqual(3);
+
+    await page.getByRole('button', { name: 'Выйти' }).hover();
+    const tooltip = page.locator('#xk-tooltip-portal .xk-tooltip-bubble');
+    await expect(tooltip).toBeVisible();
+    await expect.poll(async () => tooltip.evaluate((element) => ({
+      background: getComputedStyle(element).backgroundColor,
+      border: getComputedStyle(element).borderTopColor,
+    }))).toEqual({ background: 'rgb(38, 43, 52)', border: 'rgb(59, 66, 78)' });
+  });
+
+  test('renders module activation with the panel switch control', async ({ page }) => {
+    await installIdleLifecycleRoutes(page);
+    await page.goto('/modules');
+
+    const control = page.getByRole('switch', { name: 'Включить Mihomo' });
+    await expect(control).toBeVisible();
+    const switchShell = control.locator('xpath=../..');
+    await expect(switchShell).toHaveClass(/dt-switch/);
+    await expect(switchShell.locator('.dt-switch-slider')).toBeVisible();
+    await expect(switchShell.locator('.dt-switch-label')).toHaveText('Выключен');
+    await expect(switchShell.locator('.dt-switch-label')).toHaveClass(/is-disabled/);
+    const placement = await switchShell.evaluate((shell) => {
+      const state = shell.querySelector('.dt-switch-label').getBoundingClientRect();
+      const slider = shell.querySelector('.dt-switch-slider').getBoundingClientRect();
+      const style = getComputedStyle(shell);
+      return { display: style.display, stateBottom: state.bottom, sliderTop: slider.top };
+    });
+    expect(placement.display, JSON.stringify(placement)).toBe('grid');
+    expect(placement.stateBottom, JSON.stringify(placement)).toBeLessThanOrEqual(placement.sliderTop);
+  });
+
+  test('keeps a local build readable while withholding signed lifecycle actions', async ({ page }) => {
+    await installLifecycleRoutes(page, {
+      installed: {
+        ...installedSnapshot,
+        panel_version: null,
+        lifecycle: { available: false, code: 'panel_version_unsupported' },
+        modules: installedSnapshot.modules.map((item) => ({ ...item, lifecycle_actions: [] })),
+      },
+    });
+
+    await page.goto('/modules');
+
+    await expect(page.locator('body')).not.toHaveClass(/\bpanel-page\b/);
+    await expect(page.locator('.modules-summary')).toContainText('локальной сборки');
+    await expect(page.getByRole('button', { name: 'Обновить панель' })).toHaveCount(0);
+    await expect(page.getByRole('tab', { name: 'Доступные' })).toBeDisabled();
+    await expect(page.getByRole('switch', { name: /Включить Mihomo/ })).toBeVisible();
+  });
+
+  test('withholds the catalog while a local build capability is still loading', async ({ page }) => {
+    let releaseInstalled;
+    const installedReady = new Promise((resolve) => { releaseInstalled = resolve; });
+    let catalogCalls = 0;
+    const localInstalled = {
+      ...installedSnapshot,
+      panel_version: null,
+      lifecycle: { available: false, code: 'panel_version_unsupported' },
+      modules: installedSnapshot.modules.map((item) => ({ ...item, lifecycle_actions: [] })),
+    };
+    await page.route('**/api/modules/installed', async (route) => {
+      await installedReady;
+      await route.fulfill({ json: localInstalled });
+    });
+    await page.route('**/api/modules/operations/status', (route) => route.fulfill({ json: idleStatus }));
+    await page.route('**/api/modules/available', (route) => {
+      catalogCalls += 1;
+      return route.fulfill({ json: availableSnapshot });
+    });
+
+    await page.goto('/modules');
+    await expect(page.getByRole('tab', { name: 'Доступные' })).toBeDisabled();
+    await page.evaluate(async () => {
+      const controller = (await import('/static/js/pages/modules.init.js')).getModulesController();
+      await controller.restoreState({ selectedTab: 'available' });
+    });
+    expect(catalogCalls).toBe(0);
+
+    releaseInstalled();
+    await expect(page.locator('.modules-summary')).toContainText('локальной сборки');
+    expect(catalogCalls).toBe(0);
+  });
+
   test('reconciles external profile and registry changes on re-entry and invalidates catalog', async ({ page }) => {
     let installed = { ...installedSnapshot, restart_required: true };
     let catalogCalls = 0;
@@ -202,7 +581,33 @@ test.describe('Module manager recovery and guards', () => {
     await expect(page.getByRole('button', { name: 'Перезапустить панель' })).toBeEnabled();
   });
 
-  test('offers explicit restart after a registry toggle while lifecycle is idle', async ({ page }) => {
+  test('offers restart for a registry change without a lifecycle operation', async ({ page }) => {
+    let restartCalls = 0;
+    await installLifecycleRoutes(page, {
+      status: { ok: true, result: null },
+      installed: {
+        ...installedSnapshot,
+        panel_version: null,
+        profile: 'custom',
+        restart_required: true,
+        lifecycle: { available: false, code: 'panel_version_unsupported' },
+      },
+    });
+    await page.route('**/api/modules/restart', (route) => {
+      restartCalls += 1;
+      return route.fulfill({ json: { ok: true, restart_requested: true } });
+    });
+
+    await page.goto('/modules');
+
+    const restart = page.locator('.modules-summary').getByRole('button', { name: 'Перезапустить панель' });
+    await expect(restart).toBeEnabled();
+    await restart.click();
+    await expect(page.locator('#modules-operation-status')).toContainText('Перезапуск запрошен');
+    expect(restartCalls).toBe(1);
+  });
+
+  test('offers a single restart action in the profile summary after a registry toggle', async ({ page }) => {
     let enabled = false;
     let restartCalls = 0;
     await installIdleLifecycleRoutes(page);
@@ -219,14 +624,47 @@ test.describe('Module manager recovery and guards', () => {
       return route.fulfill({ json: { ok: true, restart_requested: true } });
     });
     await page.goto('/modules');
-    await page.getByRole('switch', { name: 'Включить Mihomo' }).click();
+    await page.getByRole('switch', { name: 'Включить Mihomo' }).locator('..').click();
     await expect(page.locator('.modules-summary')).toContainText('Требуется перезапуск');
-    const restart = page.getByRole('button', { name: 'Перезапустить панель' });
+    const restart = page.locator('.modules-summary').getByRole('button', { name: 'Перезапустить панель' });
     await expect(restart).toBeEnabled();
+    await expect(page.locator('#modules-operation-status').getByRole('button', { name: 'Перезапустить панель' })).toHaveCount(0);
     expect(restartCalls).toBe(0);
     await restart.click();
     await expect(page.locator('#modules-operation-status')).toContainText('Перезапуск запрошен');
     expect(restartCalls).toBe(1);
+  });
+
+  test('removes the restart action after a switch is returned to its original state', async ({ page }) => {
+    let enabled = true;
+    let profile = 'full';
+    let restartRequired = false;
+    await installIdleLifecycleRoutes(page);
+    await page.route('**/api/modules/installed', (route) => route.fulfill({ json: {
+      ...installedSnapshot,
+      profile,
+      restart_required: restartRequired,
+      modules: installedSnapshot.modules.map((item) => item.id === 'engine.mihomo' ? { ...item, enabled } : item),
+    } }));
+    await page.route('**/api/modules/engine.mihomo', (route) => {
+      enabled = route.request().postDataJSON().enabled;
+      profile = enabled ? 'full' : 'custom';
+      restartRequired = !enabled;
+      return route.fulfill({ json: { ok: true, profile, restart_required: restartRequired } });
+    });
+
+    await page.goto('/modules');
+    const row = page.locator('.modules-row').filter({ hasText: 'Mihomo' });
+    const control = row.getByRole('switch', { name: 'Включить Mihomo' });
+    await expect(row.locator('.modules-switch-state')).toHaveText('Включён');
+    await expect(row.locator('.modules-switch-state')).toHaveClass(/is-enabled/);
+    await control.locator('..').click();
+    await expect(page.locator('.modules-summary')).toContainText('Профиль: custom');
+    await expect(page.getByRole('button', { name: 'Перезапустить панель' })).toBeVisible();
+    await control.locator('..').click();
+    await expect(page.locator('.modules-summary')).toContainText('Профиль: full');
+    await expect(page.locator('.modules-summary')).not.toContainText('Требуется перезапуск');
+    await expect(page.getByRole('button', { name: 'Перезапустить панель' })).toHaveCount(0);
   });
 
   for (const previousStatus of [idleStatus, { ...runningStatus, result: 'committed', step: 'done' }]) {
@@ -478,7 +916,7 @@ test.describe('Module manager loading', () => {
     expect(availableCalls).toBe(1);
 
     await page.getByRole('tab', { name: 'Установленные' }).click();
-    await page.getByRole('switch', { name: 'Включить Mihomo' }).click();
+    await page.getByRole('switch', { name: 'Включить Mihomo' }).locator('..').click();
     await expect.poll(() => enabledBodies).toEqual([{ enabled: true }]);
   });
 

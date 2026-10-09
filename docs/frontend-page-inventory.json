@@ -1364,6 +1364,11 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/ui/tooltips_auto.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
           "path": "static/js/ui/spinner_fetch.js",
           "globals": [
             "XKeen.ui",

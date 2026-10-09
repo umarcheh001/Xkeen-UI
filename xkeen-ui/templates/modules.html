@@ -38,13 +38,13 @@
           {% include '_logout_button.html' %}
         </div>
       </div>
-    </header>
-
-    <main>
       <div class="modules-tabs top-tabs" role="tablist" aria-label="Каталог модулей">
         <button type="button" id="modules-tab-installed" class="top-tab-btn active" role="tab" aria-selected="true" aria-controls="modules-card-host">Установленные</button>
         <button type="button" id="modules-tab-available" class="top-tab-btn" role="tab" aria-selected="false" aria-controls="modules-card-host">Доступные</button>
       </div>
+    </header>
+
+    <main class="modules-workspace">
       <div id="modules-operation-status" class="modules-operation-status" role="status" aria-live="polite" aria-atomic="true"></div>
       <div id="modules-error" class="modules-error" role="alert" aria-live="assertive" aria-atomic="true"></div>
       <button type="button" id="modules-refresh-status" class="btn-secondary modules-refresh-status" hidden>Обновить состояние</button>

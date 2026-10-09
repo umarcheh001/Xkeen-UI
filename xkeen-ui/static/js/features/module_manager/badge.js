@@ -51,6 +51,14 @@ export function reconcileModulesUpdatePlan(plan) {
   }
 }
 
+export function reconcileModulesUpdateCheck(check) {
+  if (check?.update_available === true && check.requires_installer !== true) {
+    setModulesUpdateBadge({ sourceVersion: check.source_version, targetVersion: check.target_version });
+  } else {
+    clearModulesUpdateBadge();
+  }
+}
+
 export function reconcileModulesUpdateStatus(status) {
   if (status?.operation === 'panel-update' && status.result === 'committed') clearModulesUpdateBadge();
 }

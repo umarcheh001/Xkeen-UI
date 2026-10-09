@@ -79,6 +79,47 @@ def test_installed_remains_readable_when_install_manifest_is_missing(tmp_path):
     assert catalog.requested_versions == []
 
 
+def test_installed_keeps_local_sha_build_readable_without_lifecycle_actions(tmp_path):
+    panel = make_panel(tmp_path, version="977784dd")
+    panel.path("BUILD.json").write_text(
+        json.dumps(
+            {
+                "version": "977784dd",
+                "base_commit": "977784dd",
+                "commit": "977784dd0123456789012345678901234567890",
+                "dirty": False,
+                "tree_sha256": "b" * 64,
+                "release_date": "2026-10-09T09:10:11Z",
+            }
+        ),
+        encoding="utf-8",
+    )
+    service, catalog = make_service(panel, make_release())
+
+    payload = service.installed()
+
+    assert payload["ok"] is True
+    assert payload["panel_version"] is None
+    assert payload["lifecycle"] == {
+        "available": False,
+        "code": "panel_version_unsupported",
+    }
+    assert payload["installed_module_ids"] == ["core", "engine.xray", "tool.editor"]
+    assert all(item["lifecycle_actions"] == [] for item in payload["modules"])
+    assert payload["build"] == {
+        "exists": True,
+        "version": "977784dd",
+        "base_commit": "977784dd",
+        "commit": "977784dd0123456789012345678901234567890",
+        "dirty": False,
+        "tree_sha256": "b" * 64,
+        "built_utc": "2026-10-09T09:10:11Z",
+        "repo": "umarcheh001/Xkeen-UI",
+        "channel": "stable",
+    }
+    assert catalog.requested_versions == []
+
+
 def test_available_uses_installed_release_and_exposes_only_stage83_actions(tmp_path):
     panel = make_panel(tmp_path)
     service, catalog = make_service(panel, make_release())

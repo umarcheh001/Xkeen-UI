@@ -37,7 +37,7 @@
       ],
       "removable": false,
       "unit_count": 552,
-      "size_bytes": 7320183,
+      "size_bytes": 7369032,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -54,7 +54,7 @@
         "stylesheet": 6,
         "template": 32
       },
-      "route_count": 105,
+      "route_count": 106,
       "background_task_count": 4,
       "ui_surface_count": 36,
       "representative_paths": [
@@ -365,7 +365,7 @@
       ],
       "removable": true,
       "unit_count": 25,
-      "size_bytes": 603276,
+      "size_bytes": 603537,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 8,
@@ -951,7 +951,7 @@
       "module_id": "core",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/modules.py",
-      "size_bytes": 16148,
+      "size_bytes": 16926,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -1015,6 +1015,11 @@
         {
           "method": "POST",
           "path": "/api/modules/operations/plan",
+          "decorator": "bp.post"
+        },
+        {
+          "method": "POST",
+          "path": "/api/modules/panel/update-check",
           "decorator": "bp.post"
         },
         {
@@ -1495,7 +1500,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/build_info.py",
-      "size_bytes": 4028,
+      "size_bytes": 4559,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -2143,7 +2148,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_lifecycle.py",
-      "size_bytes": 46193,
+      "size_bytes": 47493,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -2197,7 +2202,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_registry.py",
-      "size_bytes": 60670,
+      "size_bytes": 63732,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -3212,7 +3217,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_build_stamp.py",
-      "size_bytes": 8388,
+      "size_bytes": 9262,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -5300,7 +5305,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_lifecycle.py",
-      "size_bytes": 27697,
+      "size_bytes": 29108,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -5318,7 +5323,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_lifecycle_routes.py",
-      "size_bytes": 10020,
+      "size_bytes": 11079,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -5336,7 +5341,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_manager_ui.py",
-      "size_bytes": 4824,
+      "size_bytes": 5921,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -5410,7 +5415,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_registry.py",
-      "size_bytes": 30025,
+      "size_bytes": 32315,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -9077,7 +9082,7 @@
       "module_id": "core",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/module_manager/api.js",
-      "size_bytes": 2440,
+      "size_bytes": 2595,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -9102,7 +9107,7 @@
       "module_id": "core",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/module_manager/badge.js",
-      "size_bytes": 1971,
+      "size_bytes": 2257,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -9127,7 +9132,7 @@
       "module_id": "core",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/module_manager/controller.js",
-      "size_bytes": 13964,
+      "size_bytes": 15607,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -9152,7 +9157,7 @@
       "module_id": "core",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/module_manager/render.js",
-      "size_bytes": 12333,
+      "size_bytes": 16272,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -9595,7 +9600,7 @@
       "module_id": "core",
       "kind": "frontend_javascript",
       "path": "xkeen-ui/static/js/pages/modules.screen.bootstrap.js",
-      "size_bytes": 1080,
+      "size_bytes": 1125,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -10667,7 +10672,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/modules_manager.spec.mjs",
-      "size_bytes": 54380,
+      "size_bytes": 75988,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -11780,7 +11785,7 @@
       "module_id": "core",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/devtools.css",
-      "size_bytes": 75345,
+      "size_bytes": 75555,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -11798,7 +11803,7 @@
       "module_id": "core",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/modules-manager.css",
-      "size_bytes": 4070,
+      "size_bytes": 12605,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -11960,7 +11965,7 @@
       "module_id": "core",
       "kind": "template",
       "path": "xkeen-ui/templates/modules.html",
-      "size_bytes": 4155,
+      "size_bytes": 4181,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -20742,7 +20747,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/devtools/update.js",
-      "size_bytes": 71496,
+      "size_bytes": 71757,
       "depends_on": [
         "core"
       ],
@@ -25574,7 +25579,7 @@
     }
   ],
   "routes": {
-    "endpoint_count": 330,
+    "endpoint_count": 331,
     "files_with_routes": 54,
     "endpoint_files": [
       {
@@ -25911,6 +25916,11 @@
           {
             "method": "POST",
             "path": "/api/modules/operations/plan",
+            "decorator": "bp.post"
+          },
+          {
+            "method": "POST",
+            "path": "/api/modules/panel/update-check",
             "decorator": "bp.post"
           },
           {
@@ -31760,7 +31770,7 @@
         },
         "tool.advanced-diagnostics": {
           "unit_count": 25,
-          "size_bytes": 603276
+          "size_bytes": 603537
         }
       },
       "next_stage": "Этапы 4, 5 и 6."

@@ -564,20 +564,53 @@ class ModuleLifecycleService:
 
     def installed(self) -> dict[str, Any]:
         registry = self.module_registry.get_registry()
+        # The lifecycle itself accepts only signed SemVer releases. Build
+        # identity is still useful for a locally packed archive, so read it
+        # independently instead of replacing it with the lifecycle version.
+        from services.build_info import read_build_info
+
+        raw_build = read_build_info(build_path=str(self.panel_root / "BUILD.json"))
+        build = {
+            key: raw_build.get(key)
+            for key in (
+                "exists",
+                "version",
+                "base_commit",
+                "commit",
+                "dirty",
+                "tree_sha256",
+                "built_utc",
+                "repo",
+                "channel",
+            )
+        }
+        lifecycle_error: ModuleTransactionError | None = None
         try:
             installed_ids = read_installed_modules(self.state_dir)
-            lifecycle = {"available": True, "code": None}
         except ModuleTransactionError as error:
             installed_ids = frozenset(
                 str(item["id"])
                 for item in registry.get("modules", [])
                 if item.get("installed") is True
             )
-            lifecycle = {"available": False, "code": error.code}
+            lifecycle_error = error
+        try:
+            panel_version = read_panel_version(self.panel_root)
+        except ModuleTransactionError as error:
+            # Locally built archives carry a revision SHA rather than a signed
+            # release version. Their installed registry is still useful, but
+            # catalog and mutation operations must remain release-bound.
+            panel_version = None
+            lifecycle_error = lifecycle_error or error
+        lifecycle = {
+            "available": lifecycle_error is None,
+            "code": None if lifecycle_error is None else lifecycle_error.code,
+        }
         ordered_ids = [module_id for module_id in MODULE_IDS if module_id in installed_ids]
         return {
             "ok": True,
-            "panel_version": read_panel_version(self.panel_root),
+            "panel_version": panel_version,
+            "build": build,
             "profile": registry.get("profile"),
             "editor": registry.get("editor"),
             "restart_required": bool(registry.get("restart_required")),

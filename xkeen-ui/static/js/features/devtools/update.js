@@ -1539,12 +1539,16 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
 
   function openModulesManager() {
     const notice = document.querySelector('[data-dt-modules-manager-notice]');
+    const card = document.getElementById('dt-update-card');
     if (notice) notice.hidden = false;
+    if (card) card.classList.add('dt-update-card--modules-manager');
   }
 
   function startLegacyMainUpdater() {
     const controls = document.querySelector('[data-dt-main-update-controls]');
+    const card = document.getElementById('dt-update-card');
     if (controls) controls.hidden = false;
+    if (card) card.classList.remove('dt-update-card--modules-manager');
 
     const btnCheck = byId('dt-update-check');
     const btnRun = byId('dt-update-run');
