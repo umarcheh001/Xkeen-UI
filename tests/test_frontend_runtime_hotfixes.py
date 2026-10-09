@@ -58,6 +58,13 @@ def test_update_notifier_postjson_sends_csrf_header():
     assert "headers['X-CSRF-Token'] = csrf" in text
 
 
+def test_update_notifier_does_not_consume_init_without_page_indicator():
+    text = Path('xkeen-ui/static/js/features/update_notifier.js').read_text(encoding='utf-8')
+    init = text[text.index('api.init = function init'):]
+    assert "if (!linkEl) return; // page doesn't have the indicator" in init
+    assert init.index("if (!linkEl) return; // page doesn't have the indicator") < init.index("_inited = true;")
+
+
 def test_happ_deep_links_reach_backend_import_paths():
     mihomo_import = Path('xkeen-ui/static/js/features/mihomo_import.js').read_text(encoding='utf-8')
     outbounds = Path('xkeen-ui/static/js/features/outbounds.js').read_text(encoding='utf-8')

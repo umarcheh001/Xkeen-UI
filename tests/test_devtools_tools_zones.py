@@ -228,22 +228,29 @@ def test_top_row_stretches_the_last_card_to_match_env():
 
 
 def test_stretched_update_card_keeps_its_slack_at_the_bottom():
-    """Пустота растянутой карточки уходит под блок лога, а не копится посреди неё."""
+    """Растянутая карточка показывает сводку, а не старые update-контролы."""
     template = TEMPLATE.read_text(encoding="utf-8")
     glass = GLASS_CSS.read_text(encoding="utf-8")
     operator = OPERATOR_CSS.read_text(encoding="utf-8")
 
-    # У блока автопроверки нет инлайновых отступов: разметка не спорит со слоем.
-    label_at = template.index('aria-label="Update auto-check settings"')
-    grid = template[template.rfind("<div", 0, label_at) : template.index(">", label_at) + 1]
-    assert "dt-update-autocheck-row" in grid
-    assert "style=" not in grid
+    card = template[template.index('id="dt-update-card"'): template.index('id="dt-env-card"')]
+    assert 'class="dt-panel-summary-grid"' in card
+    assert 'id="dt-panel-profile"' in card
+    assert 'id="dt-panel-modules"' in card
+    for stale in (
+        "dt-update-autocheck-row",
+        "dt-update-log-box",
+        "dt-update-check",
+        "dt-update-run",
+        "dt-update-rollback",
+        "dt-update-open-logs",
+    ):
+        assert stale not in card
 
-    # Слабину над собой блок автопроверки больше не собирает, верхнее поле держит padding.
-    row = glass[glass.index(".dt-update-autocheck-row {"):]
-    row = row[: row.index("}")]
-    assert "margin-top: auto;" not in row
-    assert "padding-top: 12px;" in row
+    summary = glass[glass.index(".dt-panel-summary-grid {"):]
+    summary = summary[: summary.index("}")]
+    assert "display: grid;" in summary
+    assert "gap: 8px;" in summary
 
     # Карточки верхнего ряда не растут вместе с окном: высоту задаёт содержимое,
     # низы половин держит `flex: 1 1 auto`, а не привязка к 100vh или к строке грида.
@@ -251,11 +258,6 @@ def test_stretched_update_card_keeps_its_slack_at_the_bottom():
     env_card = operator[operator.index("body.devtools-page #dt-env-card {"):]
     env_card = env_card[: env_card.index("}")]
     assert "min-height" not in env_card
-
-    # Тема оператора обнуляет margin у всех карточек — блоку лога он возвращён.
-    log_box = operator[operator.index("body.devtools-page #dt-update-log-box {"):]
-    log_box = log_box[: log_box.index("}")]
-    assert "margin-top: 12px;" in log_box
 
 
 def test_verdict_pill_is_larger_than_the_small_badges():
@@ -274,43 +276,33 @@ def test_verdict_pill_is_larger_than_the_small_badges():
     assert "font-size: calc(12px * var(--xk-font-scale, 1));" in pill
 
 
-def test_update_log_is_reduced_to_a_verdict_line():
+def test_update_card_is_reduced_to_panel_summary():
     template = TEMPLATE.read_text(encoding="utf-8")
-    glass = GLASS_CSS.read_text(encoding="utf-8")
     script = (ROOT / "xkeen-ui/static/js/features/devtools/update.js").read_text(encoding="utf-8")
 
     card = template[template.index('id="dt-update-card"'):]
     card = card[: card.index('id="dt-env-card"')]
 
-    # Вместо простыни лога — шапка, строка вердикта и кнопка в полный лог.
     assert "<pre" not in card
-    assert 'class="dt-update-log-head">Лог обновлений<' in card
-    assert 'id="dt-update-log-verdict"' in card
-    assert 'id="dt-update-log-open"' in card
+    assert 'class="dt-panel-summary-grid"' in card
+    assert 'id="dt-panel-modules"' in card
+    assert 'id="dt-panel-profile"' in card
+    for stale in (
+        "dt-update-log-box",
+        "dt-update-log-verdict",
+        "dt-update-check",
+        "dt-update-run",
+        "dt-update-rollback",
+        "dt-update-open-logs",
+    ):
+        assert stale not in card
 
-    # Кнопка ведёт во вкладку Logs тем же путём, что и «Open logs».
-    assert "btnVerdictLog.addEventListener('click', openLogsTab)" in script
-
-    # Три исхода: чисто, предупреждения, ошибки.
-    assert "Во время обновлений ошибок не обнаружено" in script
-    assert "Во время обновлений обнаружены ошибки" in script
-    assert "Во время обновлений были предупреждения" in script
-
-    # Ошибку опознаём и по состоянию операции, и по маркеру «[!]» в логе.
-    verdict_fn = script[script.index("function _classifyUpdateLog("):]
-    verdict_fn = verdict_fn[: verdict_fn.index("return 'clean';")]
-    assert "stateVal === 'failed'" in verdict_fn
-    assert "UPDATE_LOG_ALERT_RE" in verdict_fn
-
-    # Цвет строки зависит от вердикта, а не от соседних правил.
-    assert '.dt-update-log-verdict[data-verdict="failed"] > .small {' in glass
-
-    # Тема оператора красит .small приглушённым !important, поэтому находке нужно
-    # собственное правило в её слое — и только внутри body.devtools-page.
-    operator = OPERATOR_CSS.read_text(encoding="utf-8")
-    for verdict in ("warn", "failed"):
-        rule = 'body.devtools-page .dt-update-log-verdict[data-verdict="%s"] > .small {' % verdict
-        assert rule in operator, verdict
+    assert "async function loadInstalledModuleSummary()" in script
+    assert "_renderInstalledModules(data)" in script
+    assert "'/api/modules/installed'" in script or '"/api/modules/installed"' in script
+    assert "loadInstalledModuleSummary().catch(() => {});" in script
+    assert "_setStatus('—', '');" in script
+    assert "function openModulesManager()" in script
 
 
 def test_prefs_io_columns_are_built_the_same_way():

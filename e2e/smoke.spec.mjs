@@ -119,17 +119,16 @@ test('devtools page renders update and env sections', async ({ page }) => {
 
   await expect(page).toHaveTitle(/DevTools/i);
   await expect(page.locator('#dt-update-card')).toBeVisible();
-  await expect(page.locator('[data-dt-modules-manager-notice]')).toBeVisible();
-  await expect(page.locator('#dt-update-check')).toBeHidden();
-  await expect(page.locator('#dt-update-run')).toBeHidden();
+  await expect(page.locator('#dt-panel-modules')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Модули и обновления', exact: true })).toHaveCount(1);
+  await expect(page.locator('#dt-update-check')).toHaveCount(0);
+  await expect(page.locator('#dt-update-run')).toHaveCount(0);
   await expect(page.locator('#dt-env-card')).toBeVisible();
 });
 
 
-test('devtools update card completes load-info and manual check flow', async ({ page }) => {
+test('devtools information card renders the current build without manual update controls', async ({ page }) => {
   let infoHits = 0;
-  let checkHits = 0;
-  let forcedRefreshSeen = false;
 
   await page.route('**/api/devtools/update/info', async (route) => {
     infoHits += 1;
@@ -163,88 +162,18 @@ test('devtools update card completes load-info and manual check flow', async ({ 
     });
   });
 
-  await page.route('**/api/devtools/update/check', async (route) => {
-    checkHits += 1;
-    const payload = route.request().postDataJSON() || {};
-    if (payload.force_refresh === true) forcedRefreshSeen = true;
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        ok: true,
-        error: null,
-        repo: 'umarcheh001/Xkeen-UI',
-        channel: 'main',
-        branch: 'main',
-        current: {
-          version: '1.6.0',
-          repo: 'umarcheh001/Xkeen-UI',
-          channel: 'main',
-          commit: 'abc1234',
-        },
-        latest: {
-          kind: 'main',
-          tag: 'abc1234',
-          short_sha: 'abc1234',
-          published_at: '2026-04-11T00:00:00Z',
-          asset: {
-            name: 'xkeen-ui-routing.tar.gz',
-            download_url: 'https://github.com/umarcheh001/Xkeen-UI/releases/download/v1.7.4/xkeen-ui-routing.tar.gz',
-          },
-          sha256_asset: {
-            kind: 'sidecar',
-            download_url: 'https://github.com/umarcheh001/Xkeen-UI/releases/download/v1.7.4/xkeen-ui-routing.tar.gz.sha256',
-          },
-        },
-        update_available: true,
-        stale: false,
-        meta: {
-          source: 'e2e-smoke',
-        },
-        security: {
-          settings: {
-            sha_strict: '1',
-            require_sha: '1',
-          },
-          download: {
-            url: 'https://github.com/umarcheh001/Xkeen-UI/releases/download/v1.7.4/xkeen-ui-routing.tar.gz',
-            ok: true,
-            reason: 'allowed',
-          },
-          checksum: {
-            present: true,
-            kind: 'sidecar',
-            url: 'https://github.com/umarcheh001/Xkeen-UI/releases/download/v1.7.4/xkeen-ui-routing.tar.gz.sha256',
-            ok: true,
-            reason: 'allowed',
-          },
-          warnings: [],
-          will_block_run: false,
-        },
-      }),
-    });
-  });
-
   await page.goto('/devtools');
 
   await expect(page).toHaveTitle(/DevTools/i);
   await expect(page.locator('#dt-update-card')).toBeVisible();
   await expect.poll(() => infoHits).toBeGreaterThan(0);
-  await expect.poll(() => checkHits).toBeGreaterThan(0);
 
   await expect(page.locator('#dt-update-repo')).toContainText('umarcheh001/Xkeen-UI');
   await expect(page.locator('#dt-update-channel')).toContainText('main');
   await expect(page.locator('#dt-update-branch')).toContainText('main');
   await expect(page.locator('#dt-update-current-version')).toContainText('1.6.0');
-  await expect(page.locator('#dt-update-latest-kind')).toContainText('main');
-  await expect(page.locator('#dt-update-latest-version')).toContainText('abc1234');
-  await expect(page.locator('#dt-update-verdict')).toContainText('Доступно обновление');
-
-  await page.locator('#dt-update-check').click();
-
-  await expect.poll(() => checkHits).toBeGreaterThan(1);
-  await expect.poll(() => forcedRefreshSeen).toBeTruthy();
-  await expect(page.locator('#dt-update-verdict')).toContainText('Доступно обновление');
+  await expect(page.locator('#dt-update-current-built')).not.toHaveText('—');
+  await expect(page.locator('#dt-update-check')).toHaveCount(0);
 });
 
 

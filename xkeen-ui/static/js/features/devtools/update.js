@@ -11,7 +11,6 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
 
   const SH = getDevtoolsSharedApi() || {};
   let _inited = false;
-  let _mainUpdaterStarted = false;
   const toast = SH.toast || function (m, isErr) { try { console[(isErr ? 'error' : 'log')](m); } catch (e) {} };
   // Kind-aware toast helper: supports boolean (legacy) and 'info'|'success'|'error'.
   const toastKind = function (msg, kind) {
@@ -916,7 +915,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     _setText('dt-update-branch', branch || '—');
     _setText('dt-update-current-version', version);
     _setText('dt-update-current-commit', commit ? ('(' + _shortCommit(commit) + ')') : '');
-    _setText('dt-update-current-built', builtUtc ? ('Сборка: ' + _fmtIso(builtUtc)) : '');
+    _setText('dt-update-current-built', builtUtc ? _fmtIso(builtUtc) : '—');
 
 
     // Cosmetic classes
@@ -945,6 +944,38 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
       _setSubStatus('Внимание: отсутствуют зависимости: ' + miss.join(', '));
     } else if (caps && caps.tar === true && caps.tar_exclude === false) {
       _setSubStatus('Внимание: текущий tar не поддерживает --exclude. Для бэкапа обновления нужен: opkg update && opkg install tar');
+    }
+  }
+
+  function _renderInstalledModules(data) {
+    const profile = data && data.profile ? String(data.profile) : '—';
+    _setText('dt-panel-profile', profile);
+    const host = byId('dt-panel-modules');
+    if (!host) return;
+    const modules = Array.isArray(data && data.modules) ? data.modules : [];
+    host.replaceChildren();
+    if (!modules.length) {
+      host.textContent = 'Нет данных об установленных модулях.';
+      return;
+    }
+    modules.forEach((module, index) => {
+      if (index) host.appendChild(document.createTextNode(' · '));
+      const name = module && module.name ? String(module.name) : String(module && module.id ? module.id : '—');
+      const version = module && module.version ? ' ' + String(module.version) : '';
+      const state = module && module.enabled === false ? ' (выключен)' : '';
+      host.appendChild(document.createTextNode(name + version + state));
+    });
+  }
+
+  async function loadInstalledModuleSummary() {
+    try {
+      const data = await getJSON('/api/modules/installed');
+      _renderInstalledModules(data);
+      return data;
+    } catch (e) {
+      _setText('dt-panel-profile', '—');
+      _setText('dt-panel-modules', 'Не удалось загрузить состав модулей.');
+      return null;
     }
   }
 
@@ -1250,6 +1281,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
       const data = await getJSON('/api/devtools/update/info');
       state.lastInfo = data;
       _renderInfo(data);
+      _setStatus('—', '');
       return data;
     } catch (e) {
       _setStatus('Ошибка: ' + (e && e.message ? e.message : String(e)), 'bad');
@@ -1538,51 +1570,12 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   }
 
   function openModulesManager() {
-    const notice = document.querySelector('[data-dt-modules-manager-notice]');
     const card = document.getElementById('dt-update-card');
-    if (notice) notice.hidden = false;
-    if (card) card.classList.add('dt-update-card--modules-manager');
-  }
-
-  function startLegacyMainUpdater() {
-    const controls = document.querySelector('[data-dt-main-update-controls]');
-    const card = document.getElementById('dt-update-card');
-    if (controls) controls.hidden = false;
     if (card) card.classList.remove('dt-update-card--modules-manager');
-
-    const btnCheck = byId('dt-update-check');
-    const btnRun = byId('dt-update-run');
-    const btnRollback = byId('dt-update-rollback');
-    const btnRefresh = byId('dt-update-refresh');
-    const btnOpenLogs = byId('dt-update-open-logs');
-    const btnVerdictLog = byId('dt-update-log-open');
-
-    if (btnCheck) btnCheck.addEventListener('click', () => checkLatest(true, false, false));
-    if (btnRun) btnRun.addEventListener('click', () => runUpdate());
-    if (btnRollback) btnRollback.addEventListener('click', () => runRollback());
-    if (btnRefresh) btnRefresh.addEventListener('click', () => loadStatus(false));
-    if (btnOpenLogs) btnOpenLogs.addEventListener('click', openLogsTab);
-    if (btnVerdictLog) btnVerdictLog.addEventListener('click', openLogsTab);
-
-    // Auto-check settings UI (shared with global header notifier)
-    try { _initAutoCheckControls(); } catch (e) {}
-
-    // Initial paint
-    loadStatus(true).catch(() => {});
-    // UX: populate "Latest" on load (silently; no temporary "Checking…" status).
-    try { setTimeout(() => checkLatest(false, true, true).catch(() => {}), 250); } catch (e) {}
   }
 
-  function selectUpdateChannel(info) {
-    const channel = String((info && info.settings && info.settings.channel) || '').toLowerCase();
-    if (channel === 'stable') {
-      openModulesManager();
-      return;
-    }
-    if (channel === 'main' && !_mainUpdaterStarted) {
-      _mainUpdaterStarted = true;
-      startLegacyMainUpdater();
-    }
+  function selectUpdateChannel() {
+    openModulesManager();
   }
 
   function init() {
@@ -1590,18 +1583,14 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     _inited = true;
 
     loadInfo().then(selectUpdateChannel).catch(() => {});
+    loadInstalledModuleSummary().catch(() => {});
   }
 
   function activate() {
     if (!_inited) return false;
     try {
-      if (!state.lastInfo) {
-        loadInfo().then(selectUpdateChannel).catch(() => {});
-      } else if (_mainUpdaterStarted) {
-        loadStatus(true).catch(() => {});
-      } else {
-        selectUpdateChannel(state.lastInfo);
-      }
+      loadInfo().then(selectUpdateChannel).catch(() => {});
+      loadInstalledModuleSummary().catch(() => {});
     } catch (e) {}
     return true;
   }

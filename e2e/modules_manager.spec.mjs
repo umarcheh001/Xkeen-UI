@@ -67,7 +67,7 @@ test.describe('DevTools update channel boundary', () => {
     security: { sha_strict: '1', require_sha: '1' },
   });
 
-  test('stable DevTools links to Modules without legacy update requests', async ({ page }) => {
+  test('stable DevTools shows panel identity and one Modules link without legacy update requests', async ({ page }) => {
     const legacyRequests = [];
     await page.route('**/api/devtools/update/info', (route) => route.fulfill({ json: updateInfo('stable') }));
     await page.route(/\/api\/devtools\/update\/(?:check|status|run|rollback)(?:\?|$)/, (route) => {
@@ -77,105 +77,68 @@ test.describe('DevTools update channel boundary', () => {
     await installIdleLifecycleRoutes(page);
 
     await page.goto('/devtools');
-    const notice = page.locator('[data-dt-modules-manager-notice]');
-    await expect(notice).toBeVisible();
-    await expect(page.locator('[data-dt-main-update-controls]')).toBeHidden();
+    const updateCard = page.locator('#dt-update-card');
+    await expect(page.locator('[data-dt-modules-manager-notice]')).toHaveCount(0);
+    await expect(page.locator('[data-dt-main-update-controls]')).toHaveCount(0);
     await expect(page.locator('#xk-update-link')).toBeHidden();
+    await expect(updateCard).toContainText('2.10.0');
+    await expect(updateCard).toContainText('mihomo-minimal');
+    await expect(updateCard).toContainText('Xkeen UI Core');
+    await expect(updateCard).toContainText('Mihomo');
+    const modulesLinks = page.getByRole('link', { name: 'Модули и обновления', exact: true });
+    await expect(modulesLinks).toHaveCount(1);
+    await expect(modulesLinks).toHaveAttribute('href', /\/modules$/);
     await page.waitForTimeout(1000);
-    expect(legacyRequests).toEqual([]);
-
-    const link = notice.getByRole('link', { name: 'Модули и обновления' });
-    await expect(link).toHaveAttribute('data-xk-top-nav', '1');
-    await link.click();
-    await expect(page).toHaveURL(/\/modules$/);
-    await expect(page.locator('.modules-summary')).toBeVisible();
     expect(legacyRequests).toEqual([]);
   });
 
-  test('stable DevTools uses a compact Modules pointer instead of a stretched update card', async ({ page }) => {
+  test('stable DevTools stretches the panel information card to the ENV bottom edge', async ({ page }) => {
     await page.route('**/api/devtools/update/info', (route) => route.fulfill({ json: updateInfo('stable') }));
     await installIdleLifecycleRoutes(page);
 
     await page.goto('/devtools');
 
     const updateCard = page.locator('#dt-update-card');
-    await expect(updateCard).toHaveClass(/dt-update-card--modules-manager/);
-    await expect(page.locator('[data-dt-modules-manager-notice]')).toBeVisible();
     const metrics = await page.evaluate(() => {
       const update = document.getElementById('dt-update-card');
       const env = document.getElementById('dt-env-card');
       return {
         updateGrow: update ? getComputedStyle(update).flexGrow : '',
-        updateHeight: update?.getBoundingClientRect().height || 0,
-        envHeight: env?.getBoundingClientRect().height || 0,
+        bottomDelta: update && env
+          ? Math.abs(update.getBoundingClientRect().bottom - env.getBoundingClientRect().bottom)
+          : Number.POSITIVE_INFINITY,
       };
     });
-    expect(metrics.updateGrow).toBe('0');
-    expect(metrics.updateHeight).toBeLessThan(metrics.envHeight);
+    expect(metrics.updateGrow).toBe('1');
+    expect(metrics.bottomDelta, JSON.stringify(metrics)).toBeLessThanOrEqual(2);
   });
 
-  test('main DevTools retains the manual legacy check', async ({ page }) => {
-    const checkBodies = [];
+  test('main DevTools stays informational and delegates update work to Modules', async ({ page }) => {
     await page.route('**/api/devtools/update/info', (route) => route.fulfill({ json: updateInfo('main') }));
-    await page.route('**/api/devtools/update/status**', (route) => route.fulfill({ json: { ok: true, status: { state: 'idle' }, log_tail: [] } }));
-    await page.route('**/api/devtools/update/check', (route) => {
-      checkBodies.push(route.request().postDataJSON());
-      const tarballUrl = 'https://codeload.github.com/umarcheh001/Xkeen-UI/tar.gz/abc1234';
-      return route.fulfill({ json: {
-        ok: true, error: null, repo: 'umarcheh001/Xkeen-UI', channel: 'main', branch: 'main',
-        current: { version: '2.10.0', commit: 'abc1234' },
-        latest: { kind: 'main', branch: 'main', sha: 'abc1234', short_sha: 'abc1234',
-          committed_at: null, message: null, html_url: null, tarball_url: tarballUrl },
-        update_available: false, stale: false, meta: { repo: 'umarcheh001/Xkeen-UI', branch: 'main' },
-        development_only: true,
-        security: { settings: {}, download: { url: tarballUrl, ok: true, reason: null },
-          checksum: null, warnings: [], will_block_run: false },
-      } });
-    });
+    await installIdleLifecycleRoutes(page);
 
     await page.goto('/devtools');
-    await expect(page.locator('[data-dt-main-update-controls]')).toBeVisible();
-    await expect(page.locator('[data-dt-modules-manager-notice]')).toBeHidden();
-    await page.locator('#dt-update-check').click();
-    await expect.poll(() => checkBodies.some((body) => body.force_refresh === true)).toBe(true);
+    await expect(page.locator('#dt-update-current-version')).toHaveText('2.10.0');
+    await expect(page.locator('#dt-update-channel')).toHaveText('main');
+    await expect(page.locator('#dt-update-check')).toHaveCount(0);
   });
 
   for (const channel of ['main', 'stable']) {
     test(`${channel} DevTools recovers after the first info request fails`, async ({ page }) => {
       let allowInfo = false;
-      const legacyRequests = [];
       await page.route('**/api/devtools/update/info', (route) => route.fulfill(
         allowInfo ? { json: updateInfo(channel) } : { status: 503, json: { ok: false, error: 'temporary failure' } },
       ));
-      await page.route(/\/api\/devtools\/update\/(?:check|status|run|rollback)(?:\?|$)/, (route) => {
-        legacyRequests.push({ path: new URL(route.request().url()).pathname, body: route.request().postDataJSON() });
-        return route.fulfill({ json: { ok: true, channel, status: { state: 'idle' }, log_tail: [] } });
-      });
 
       await page.goto('/devtools');
-      await expect(page.locator('#dt-update-status')).toContainText('temporary failure');
-      await expect(page.locator('[data-dt-main-update-controls]')).toBeHidden();
+      await expect(page.locator('#dt-update-current-version')).toHaveText('—');
       allowInfo = true;
       await page.evaluate(async () => {
         const { getDevtoolsNamespace } = await import('/static/js/features/devtools_namespace.js');
         getDevtoolsNamespace().devtoolsUpdate.activate();
       });
 
-      if (channel === 'main') {
-        await expect(page.locator('[data-dt-main-update-controls]')).toBeVisible();
-        await page.evaluate(async () => {
-          const { getDevtoolsNamespace } = await import('/static/js/features/devtools_namespace.js');
-          getDevtoolsNamespace().devtoolsUpdate.activate();
-        });
-        await page.locator('#dt-update-check').click();
-        await expect.poll(() => legacyRequests.filter((request) => request.path.endsWith('/check') && request.body.force_refresh === true).length).toBe(1);
-        await page.waitForTimeout(250);
-        expect(legacyRequests.filter((request) => request.path.endsWith('/check') && request.body.force_refresh === true)).toHaveLength(1);
-      } else {
-        await expect(page.locator('[data-dt-modules-manager-notice]')).toBeVisible();
-        await page.waitForTimeout(1000);
-        expect(legacyRequests).toEqual([]);
-      }
+      await expect(page.locator('#dt-update-current-version')).toHaveText('2.10.0');
     });
   }
 });

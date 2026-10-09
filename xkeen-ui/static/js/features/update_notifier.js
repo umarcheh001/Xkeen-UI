@@ -766,10 +766,13 @@ let updateNotifierModuleApi = null;
 
   api.init = function init(opts) {
     if (_inited) return;
-    _inited = true;
 
     const linkEl = _getUpdateLinkEl();
     if (!linkEl) return; // page doesn't have the indicator
+
+    // DevTools intentionally has no global update indicator. Do not consume
+    // the one-shot init until a later top-level screen provides the link.
+    _inited = true;
 
     _ensureShellBinding();
     _hideLegacyLink();

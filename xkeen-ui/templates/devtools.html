@@ -71,15 +71,6 @@
           ><svg class="xk-action-icon theme-toggle-icon" aria-hidden="true" focusable="false"><use href="{{ url_for('static', filename='icons/operator.svg') }}#xk-sun"></use></svg><span class="theme-toggle-text">Светлая тема</span></button>
           <a href="{{ url_for('index') }}" class="btn-link dt-header-btn dt-header-btn-back" data-xk-top-nav="1">← Назад</a>
           <a href="{{ url_for('modules_page') }}" class="btn-link dt-header-btn" data-xk-top-nav="1">Модули и обновления<span data-xk-modules-update-badge hidden></span></a>
-          <a
-            href="#dt-update-card"
-            id="xk-update-link"
-            class="service-core-text hidden dt-header-btn dt-header-btn-update"
-            title="Обновление"
-          >
-            <span class="xk-update-dot" aria-hidden="true"></span>
-            <span data-xk-update-label>Обновление</span>
-          </a>
           {% set logout_button_class = 'btn-link dt-header-btn dt-header-btn-logout' %}
           {% include '_logout_button.html' %}
         </div>
@@ -119,92 +110,30 @@
           <section class="card" id="dt-update-card" data-xk-section="service update dt-update-card">
             <h2 class="dt-update-head" style="margin:0;">Обновление панели</h2>
             <div class="dt-update-body">
-
-              <div data-dt-modules-manager-notice hidden class="dt-modules-manager-notice">
-                <p class="small" style="margin:0 0 10px;">Стабильные обновления управляются в разделе «Модули и обновления».</p>
-                <a href="{{ url_for('modules_page') }}" class="btn-link dt-header-btn" data-xk-top-nav="1">Модули и обновления</a>
-              </div>
-
-              <div data-dt-main-update-controls hidden>
-
-              <div class="small" style="margin-bottom:10px; opacity:0.9;">
-                Проверка и установка обновлений Xkeen‑UI из GitHub (stable releases или main tarball).
-                Во время обновления панель перезапустится — вкладка может временно оборваться.
-              </div>
-
-              <div class="dt-update-meta dt-kv-grid small" style="margin-bottom:10px;">
-                <div class="dt-kv"><span class="dt-k">Репозиторий:</span> <code id="dt-update-repo" class="dt-badge dt-badge-info">—</code></div>
-                <div class="dt-kv"><span class="dt-k">Канал:</span> <code id="dt-update-channel" class="dt-badge dt-badge-muted">—</code></div>
-                <div class="dt-kv"><span class="dt-k">Ветка:</span> <code id="dt-update-branch" class="dt-badge dt-badge-muted">—</code></div>
-              </div>
-
-              <div class="dt-kv small" style="margin-bottom:6px;">
-                <span class="dt-k">Текущая версия:</span>
-                <span id="dt-update-current-version" class="dt-value dt-value-neutral">—</span>
-                <span id="dt-update-current-commit" class="dt-sub"></span>
-              </div>
-              <div class="small" id="dt-update-current-built" style="margin-bottom:10px; opacity:0.85;"></div>
-
-              <div class="dt-kv small" style="margin-bottom:6px;">
-                <span class="dt-k">Последняя (<span id="dt-update-latest-kind">—</span>):</span>
-                <span id="dt-update-latest-version" class="dt-value dt-value-neutral">—</span>
-                <span id="dt-update-latest-date" class="dt-sub"></span>
-              </div>
-
-              <div class="dt-update-verdict-row" style="margin-bottom:10px;">
-                <span id="dt-update-verdict" class="dt-pill dt-pill-muted">—</span>
-                <span class="small" id="dt-update-latest-hint" style="opacity:0.85;"></span>
-              </div>
-
-              <div id="dt-update-security" class="dt-alert" style="display:none; margin:10px 0;"></div>
-
-              <div id="dt-update-progress-wrap" style="display:none; margin:10px 0 0 0;">
-                <div class="dt-progress" id="dt-update-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-                  <div class="dt-progress-bar" id="dt-update-progress-bar"></div>
+              <p class="small dt-panel-summary-intro">Версия и состав установленной панели. Обновления и профиль управляются в разделе «Модули и обновления».</p>
+              <dl class="dt-panel-summary-grid">
+                <div class="dt-panel-summary-row">
+                  <dt>Версия</dt>
+                  <dd><span id="dt-update-current-version" class="dt-value dt-value-neutral">—</span> <span id="dt-update-current-commit" class="dt-sub"></span></dd>
                 </div>
-                <div class="small" id="dt-update-progress-text" style="margin-top:6px; opacity:0.85;"></div>
-              </div>
-
-              <div class="dt-logging-grid dt-update-autocheck-row" role="group" aria-label="Update auto-check settings">
-                <label class="dt-switch dt-logging-switch" title="Автопроверка обновлений. Работает только пока панель открыта в браузере.">
-                  <input id="dt-update-autocheck-enable" type="checkbox" aria-label="Автопроверка обновлений">
-                  <span class="dt-switch-slider" aria-hidden="true"></span>
-                  <span class="dt-switch-label">Автопроверка</span>
-                </label>
-
-                <label class="dt-logging-field" title="Интервал проверки новых версий (в фоне, пока вкладка открыта).">
-                  <span class="dt-logging-label">Интервал</span>
-                  <select id="dt-update-autocheck-interval" class="dt-pill-field" aria-label="Интервал автопроверки">
-                    <option value="1">1ч</option>
-                    <option value="6">6ч</option>
-                    <option value="24">24ч</option>
-                  </select>
-                </label>
-              </div>
-              <div class="small" id="dt-update-autocheck-hint" style="margin-bottom:10px; opacity:0.85;"></div>
-
-
-              <div class="dt-update-actions" aria-label="Update actions">
-                <button type="button" id="dt-update-check" class="btn-secondary" title="Проверить обновления (stable releases / main tarball).">Проверить</button>
-                <button type="button" id="dt-update-run" class="xkeen-ctrl-btn" title="Запустить обновление в фоне. Панель перезапустится.">Обновить панель</button>
-                <button type="button" id="dt-update-rollback" class="btn-secondary" title="Откатиться на предыдущую версию (из локального backup).">Откатить</button>
-                <button type="button" id="dt-update-refresh" class="btn-secondary" title="Обновить локальный статус и лог операции.">Обновить статус</button>
-                <button type="button" id="dt-update-open-logs" class="btn-secondary" title="Перейти во вкладку Logs.">Открыть логи</button>
-              </div>
-
-              <div id="dt-update-status" class="status" style="margin-top:10px;">—</div>
-              <div class="small" id="dt-update-substatus" style="margin-top:6px; opacity:0.85;"></div>
-
-
-              <div id="dt-update-log-box" class="dt-update-log-summary" aria-label="Лог обновлений">
-                <div class="dt-update-log-head">Лог обновлений</div>
-                <div id="dt-update-log-verdict" class="dt-update-log-verdict" data-verdict="empty">
-                  <span id="dt-update-log-verdict-text" class="small">Обновления ещё не запускались</span>
-                  <button type="button" id="dt-update-log-open" class="btn-secondary" style="display:none;" title="Открыть update.log целиком во вкладке Logs.">Открыть полный лог</button>
+                <div class="dt-panel-summary-row">
+                  <dt>Сборка</dt>
+                  <dd id="dt-update-current-built">—</dd>
                 </div>
-              </div>
-
-              </div>
+                <div class="dt-panel-summary-row">
+                  <dt>Источник</dt>
+                  <dd><code id="dt-update-repo" class="dt-badge dt-badge-info">—</code> <code id="dt-update-channel" class="dt-badge dt-badge-muted">—</code> <code id="dt-update-branch" class="dt-badge dt-badge-muted">—</code></dd>
+                </div>
+                <div class="dt-panel-summary-row">
+                  <dt>Профиль</dt>
+                  <dd id="dt-panel-profile">—</dd>
+                </div>
+              </dl>
+              <section class="dt-panel-modules-summary" aria-labelledby="dt-panel-modules-title">
+                <h3 id="dt-panel-modules-title">Установленные модули</h3>
+                <div id="dt-panel-modules" class="small" aria-live="polite">Загрузка…</div>
+              </section>
+              <div id="dt-update-status" class="status" role="status" aria-live="polite" style="margin-top:12px;">—</div>
 
             </div>
           </section>

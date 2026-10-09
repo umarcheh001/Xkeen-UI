@@ -43,18 +43,43 @@ details.dt-collapsible:not([open]) .dt-collapsible-icon {
   margin-top: 10px;
 }
 
-[data-dt-main-update-controls][hidden],
-[data-dt-modules-manager-notice][hidden] {
-  display: none !important;
+.dt-panel-summary-intro {
+  margin: 0 0 12px;
 }
 
-.dt-modules-manager-notice {
-  padding: 2px 0 4px;
+.dt-panel-summary-grid {
+  display: grid;
+  gap: 8px;
+  margin: 0;
 }
 
-body.devtools-page .dt-tools-left > #dt-update-card.dt-update-card--modules-manager,
-body.devtools-page .dt-tools-left > #dt-update-card.dt-update-card--modules-manager > .dt-update-body {
-  flex: 0 0 auto;
+.dt-panel-summary-row {
+  display: grid;
+  grid-template-columns: minmax(86px, 0.35fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+}
+
+.dt-panel-summary-row dt {
+  color: var(--op-muted, var(--muted));
+  font-weight: 600;
+}
+
+.dt-panel-summary-row dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dt-panel-modules-summary {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--op-border, var(--border));
+}
+
+.dt-panel-modules-summary h3 {
+  margin: 0 0 8px;
+  font-size: inherit;
 }
 
 /* Theme editor: sliders in ONE column to avoid overlap */

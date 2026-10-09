@@ -24,6 +24,14 @@ async function openTools(page, viewport) {
     security: { settings: {}, download: { url: 'https://example.test/main.tar.gz', ok: true, reason: null },
       checksum: null, warnings: [], will_block_run: false }, development_only: true,
   } }));
+  await page.route('**/api/modules/installed', (route) => route.fulfill({ json: {
+    ok: true,
+    profile: 'full',
+    modules: [
+      { id: 'core', name: 'Xkeen UI Core', version: '1.0.0', enabled: true },
+      { id: 'engine.xray', name: 'Xray', version: '1.0.0', enabled: true },
+    ],
+  } }));
   const envLoaded = page.waitForResponse((res) => new URL(res.url()).pathname === '/api/devtools/env');
   const updateLoaded = page.waitForResponse((res) => new URL(res.url()).pathname === '/api/devtools/update/info');
   await page.goto('/devtools');
@@ -119,51 +127,23 @@ test.describe('DevTools Tools zones', () => {
     expect(Math.abs(geometry.trayBottom - geometry.envBottom)).toBeLessThanOrEqual(2);
     expect(Math.abs(geometry.prefsBottom - geometry.ioBottom)).toBeLessThanOrEqual(2);
 
-    // Вместо простыни update.log в карточке стоит одна строка вердикта.
-    const logBox = page.locator('#dt-update-log-box');
-    await expect(logBox).toBeVisible();
-    await expect(logBox.locator('.dt-update-log-head')).toHaveText('Лог обновлений');
+    // Карточка обновления стала информационной: сведения о панели и модулях,
+    // а команды обновления живут в разделе «Модули и обновления».
+    await expect(page.locator('#dt-update-card')).toContainText('Xkeen UI Core');
+    await expect(page.locator('#dt-panel-profile')).toHaveText('full');
+    await expect(page.locator('#dt-panel-modules')).toContainText('Xray 1.0.0');
     await expect(page.locator('#dt-update-card pre:visible')).toHaveCount(0);
-
-    const verdict = await page.evaluate(() => {
-      const bottom = (id) => document.getElementById(id).getBoundingClientRect().bottom;
-      const box = document.getElementById('dt-update-log-verdict');
-      const openBtn = document.getElementById('dt-update-log-open');
-      return {
-        state: box.getAttribute('data-verdict'),
-        text: document.getElementById('dt-update-log-verdict-text').textContent.trim(),
-        openBtnVisible: !!(openBtn && openBtn.offsetParent !== null),
-        boxBottom: box.getBoundingClientRect().bottom,
-        cardBottom: bottom('dt-update-card'),
-      };
-    });
-
-    // На чистом стенде обновлений не было: строка спокойная, кнопка в Logs спрятана.
-    expect(['empty', 'clean']).toContain(verdict.state);
-    expect(verdict.openBtnVisible).toBe(false);
-    expect(verdict.boxBottom).toBeLessThanOrEqual(verdict.cardBottom + 2);
+    await expect(page.locator('#dt-update-log-box')).toHaveCount(0);
+    await expect(page.locator('#dt-update-check')).toHaveCount(0);
   });
 
-  test('update log verdict offers the full log only when something went wrong', async ({ page }) => {
+  test('only the header links to the modules manager', async ({ page }) => {
     await openTools(page, { width: 1600, height: 1000 });
 
-    // Ошибку рисует тот же путь, что и живой статус: состояние операции + хвост лога.
-    await page.evaluate(() => {
-      const box = document.getElementById('dt-update-log-verdict');
-      box.setAttribute('data-verdict', 'failed');
-      document.getElementById('dt-update-log-verdict-text').textContent =
-        'Во время обновлений обнаружены ошибки';
-      document.getElementById('dt-update-log-open').style.display = '';
-    });
-
-    // Кнопку рисует один модуль, а вкладки переключает другой, и связываются
-    // они не одновременно. Повторяем клик, пока вкладка не откроется, вместо
-    // того чтобы надеяться на один удачный.
-    await expect(async () => {
-      await page.locator('#dt-update-log-open').click();
-      await expect(page.locator('#dt-tab-logs')).toBeVisible({ timeout: 2000 });
-    }).toPass({ timeout: 20000 });
-    await expect(page.locator('#dt-tab-btn-logs')).toHaveAttribute('aria-selected', 'true');
+    const links = page.getByRole('link', { name: 'Модули и обновления', exact: true });
+    await expect(links).toHaveCount(1);
+    await expect(links).toHaveAttribute('href', /\/modules$/);
+    await expect(page.locator('[data-dt-modules-manager-notice]')).toHaveCount(0);
   });
 
   test('button rows keep the same gap as the card padding', async ({ page }) => {
@@ -311,7 +291,7 @@ test.describe('DevTools Tools zones', () => {
     expect(Math.abs(layout.bodies[0] - layout.bodies[1])).toBeLessThanOrEqual(1);
   });
 
-  test('top row halves end on the same line with the log right under the status', async ({ page }) => {
+  test('top row halves end on the same line with the panel summary at the top', async ({ page }) => {
     await openTools(page, { width: 1600, height: 1000 });
 
     const row = await page.evaluate(() => {
@@ -319,94 +299,39 @@ test.describe('DevTools Tools zones', () => {
       return {
         updateBottom: b('#dt-update-card').bottom,
         envBottom: b('#dt-env-card').bottom,
-        logTop: b('.dt-update-log-summary').top,
-        logBottom: b('.dt-update-log-summary').bottom,
-        substatusBottom: b('#dt-update-substatus').bottom,
-        verdictRowBottom: b('.dt-update-verdict-row').bottom,
-        autocheckTop: b('.dt-update-autocheck-row').top,
+        updateBodyTop: b('#dt-update-card .dt-update-body').top,
+        summaryTop: b('#dt-update-card .dt-panel-summary-grid').top,
+        modulesTop: b('#dt-panel-modules').top,
       };
     });
 
-    // Обе половины ряда кончаются вместе...
     expect(Math.abs(row.updateBottom - row.envBottom)).toBeLessThanOrEqual(2);
-    // ...а строка итога по логу стоит сразу под статусом, а не у нижнего края.
-    expect(row.logTop - row.substatusBottom).toBeLessThanOrEqual(12);
-
-    // Блок следует сразу за статусом, а снизу остаётся обычное поле тела карточки.
-    // Верхние вертикальные margin у пустого substatus и log summary схлопываются.
-    const above = row.logTop - row.substatusBottom;
-    const below = row.updateBottom - row.logBottom;
-    expect(above).toBeGreaterThanOrEqual(0);
-    expect(above).toBeLessThanOrEqual(12);
-    expect(below).toBeGreaterThanOrEqual(above);
-    expect(below).toBeLessThanOrEqual(16);
-
-    // Свободной высоты посреди карточки не копится: зазор под вердиктом
-    // остаётся обычным, не больше полей вокруг блока лога.
-    expect(row.autocheckTop - row.verdictRowBottom).toBeLessThanOrEqual(below + 2);
+    // Тело начинается после компактной 40px-шапки карточки; сводка идёт
+    // сразу под ней, без промежуточного пустого блока.
+    expect(row.summaryTop - row.updateBodyTop).toBeLessThanOrEqual(64);
+    expect(row.modulesTop).toBeGreaterThan(row.summaryTop);
   });
 
-  test('a tall window does not tear a hole inside the update card', async ({ page }) => {
-    // Сторож против регрессии «высокое окно»: остальные сценарии гоняются на 1000px —
-    // ровно под порогом, за которым карточка ENV начинала расти вместе с окном,
-    // а весь избыток собирался одной дырой над блоком автопроверки.
+  test('a taller ENV card stretches the informational card without moving its summary', async ({ page }) => {
     await openTools(page, { width: 1600, height: 1000 });
 
     const measure = () =>
       page.evaluate(() => {
         const b = (s) => document.querySelector(s).getBoundingClientRect();
         return {
-          envHeight: b('#dt-env-card').height,
           updateBottom: b('#dt-update-card').bottom,
           envBottom: b('#dt-env-card').bottom,
-          logBottom: b('.dt-update-log-summary').bottom,
-          verdictToAutocheck: b('.dt-update-autocheck-row').top - b('.dt-update-verdict-row').bottom,
+          summaryTop: b('#dt-update-card .dt-panel-summary-grid').top,
+          modulesBottom: b('#dt-panel-modules').bottom,
         };
       });
 
     const short = await measure();
-    await page.setViewportSize({ width: 1600, height: 1400 });
-    const tall = await measure();
-
-    // Высоту ряда задаёт содержимое, а не размер окна...
-    expect(Math.abs(tall.envHeight - short.envHeight)).toBeLessThanOrEqual(2);
-    // ...внутри карточки обновления зазоры остаются обычными...
-    expect(tall.verdictToAutocheck).toBeLessThanOrEqual(24);
-    // ...и низы половин ряда по-прежнему сходятся.
-    expect(Math.abs(tall.updateBottom - tall.envBottom)).toBeLessThanOrEqual(2);
-
-    // А когда соседняя карточка и правда выше (у неё длинный список переменных),
-    // слабина растянутой карточки обновления уходит вниз, под блок лога,
-    // а не копится дырой посреди карточки.
     await page.addStyleTag({ content: '#dt-env-card { min-height: 1200px !important; }' });
     const stretched = await measure();
-    expect(stretched.verdictToAutocheck).toBeLessThanOrEqual(24);
-    expect(stretched.updateBottom - stretched.logBottom).toBeGreaterThan(100);
-  });
-
-  test('the update verdict pill is roomy enough to read', async ({ page }) => {
-    await openTools(page, { width: 1600, height: 1000 });
-
-    const pill = await page.evaluate(() => {
-      const el = document.getElementById('dt-update-verdict');
-      const cs = getComputedStyle(el);
-      return {
-        padTop: parseFloat(cs.paddingTop),
-        padBottom: parseFloat(cs.paddingBottom),
-        fontSize: parseFloat(cs.fontSize),
-        height: el.getBoundingClientRect().height,
-        switchHeight: document
-          .querySelector('.dt-update-autocheck-row .dt-switch')
-          .getBoundingClientRect().height,
-      };
-    });
-
-    // Поля вокруг текста одинаковые сверху и снизу...
-    expect(pill.padTop).toBe(pill.padBottom);
-    // ...кегль не мельче остального текста карточки...
-    expect(pill.fontSize).toBeGreaterThanOrEqual(12);
-    // ...и пилюля не ниже переключателя рядом: строки идут одним ритмом.
-    expect(pill.height).toBeGreaterThanOrEqual(pill.switchHeight);
+    expect(Math.abs(stretched.updateBottom - stretched.envBottom)).toBeLessThanOrEqual(2);
+    expect(Math.abs(stretched.summaryTop - short.summaryTop)).toBeLessThanOrEqual(1);
+    expect(stretched.updateBottom - stretched.modulesBottom).toBeGreaterThan(100);
   });
 
   test('zones collapse to one column on a narrow screen', async ({ page }) => {
