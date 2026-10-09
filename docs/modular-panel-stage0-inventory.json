@@ -37,7 +37,7 @@
       ],
       "removable": false,
       "unit_count": 552,
-      "size_bytes": 7369702,
+      "size_bytes": 7360162,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -365,7 +365,7 @@
       ],
       "removable": true,
       "unit_count": 25,
-      "size_bytes": 603537,
+      "size_bytes": 597793,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 8,
@@ -3491,7 +3491,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_devtools_labels_are_russian.py",
-      "size_bytes": 3861,
+      "size_bytes": 3695,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -3545,7 +3545,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_devtools_tools_zones.py",
-      "size_bytes": 28631,
+      "size_bytes": 27048,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -4050,7 +4050,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_frontend_runtime_hotfixes.py",
-      "size_bytes": 145724,
+      "size_bytes": 146140,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -5204,7 +5204,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_modular_panel_standalone_pages.py",
-      "size_bytes": 6416,
+      "size_bytes": 6758,
       "depends_on": [
         "tool.backups"
       ],
@@ -5341,7 +5341,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_manager_ui.py",
-      "size_bytes": 5921,
+      "size_bytes": 5886,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -9287,7 +9287,7 @@
       "module_id": "core",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/update_notifier.js",
-      "size_bytes": 29300,
+      "size_bytes": 29453,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -10469,7 +10469,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/devtools_main_update.spec.mjs",
-      "size_bytes": 2663,
+      "size_bytes": 2926,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -10505,7 +10505,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/devtools_tools_zones.spec.mjs",
-      "size_bytes": 23256,
+      "size_bytes": 18671,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -10672,7 +10672,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/modules_manager.spec.mjs",
-      "size_bytes": 76132,
+      "size_bytes": 73835,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -11144,7 +11144,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/smoke.spec.mjs",
-      "size_bytes": 26762,
+      "size_bytes": 24449,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -11785,7 +11785,7 @@
       "module_id": "core",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/devtools.css",
-      "size_bytes": 75555,
+      "size_bytes": 75820,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -20747,7 +20747,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/devtools/update.js",
-      "size_bytes": 71757,
+      "size_bytes": 71149,
       "depends_on": [
         "core"
       ],
@@ -20880,7 +20880,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "template",
       "path": "xkeen-ui/templates/devtools.html",
-      "size_bytes": 58267,
+      "size_bytes": 53131,
       "depends_on": [
         "core"
       ],
@@ -31770,7 +31770,7 @@
         },
         "tool.advanced-diagnostics": {
           "unit_count": 25,
-          "size_bytes": 603537
+          "size_bytes": 597793
         }
       },
       "next_stage": "Этапы 4, 5 и 6."
