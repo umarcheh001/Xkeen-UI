@@ -16,10 +16,34 @@ STDOUT_LOG="$LOG_DIR/stdout.log"
 STDERR_LOG="$LOG_DIR/stderr.log"
 PID_FILE="/opt/var/run/xkeen-ui.pid"
 
+BOOT_LOG="/opt/var/log/xkeen-ui-boot.log"
+UPTIME_FILE="/proc/uptime"
+
+boot_uptime() {
+  # До синхронизации времени часы роутера стоят на старой дате, и записи
+  # загрузки оказываются датированы раньше предыдущих. Время от включения от
+  # часов не зависит: по нему видно, что строка написана при загрузке.
+  _bu=""
+  [ -r "$UPTIME_FILE" ] && read -r _bu _ < "$UPTIME_FILE" 2>/dev/null
+  _bu="${_bu%%.*}"
+  case "$_bu" in
+    ''|*[!0-9]*) return 0 ;;
+  esac
+  echo " up=${_bu}s"
+}
+
 audit_boot() {
   # Lightweight diagnostic log so users can debug boot-time autostart failures
   # without re-running install.sh. Survives reboot, no rotation (small file).
-  echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> /opt/var/log/xkeen-ui-boot.log 2>/dev/null || true
+  echo "$(date '+%Y-%m-%d %H:%M:%S')$(boot_uptime) $*" >> "$BOOT_LOG" 2>/dev/null || true
+}
+
+caller_name() {
+  # Кто позвал службу. Спрашивать у `ps` колонку нельзя: в BusyBox такого
+  # ключа нет, и поле в журнале молча оставалось пустым. Командная строка
+  # бывает многострочной (`sh -c` со сценарием) — в журнал идёт одна строка.
+  [ -r "/proc/$PPID/cmdline" ] || return 0
+  tr '\000\n\r' '   ' < "/proc/$PPID/cmdline" 2>/dev/null | cut -c1-120 | sed 's/ *$//'
 }
 
 panel_pid() {
@@ -84,7 +108,7 @@ start_service() {
   # file and make every subsequent stop/restart a no-op.
   mkdir -p "/opt/var/run" "/opt/var/log" 2>/dev/null || true
 
-  audit_boot "[start] begin (caller=$(ps -o comm= -p $PPID 2>/dev/null), arg=${1:-start})"
+  audit_boot "[start] begin (caller=$(caller_name), arg=${1:-start})"
 
   # USB-mounted /opt sometimes lags the init.d invocation by a few seconds
   # on Keenetic. Wait up to 30s for python3 instead of failing immediately.
