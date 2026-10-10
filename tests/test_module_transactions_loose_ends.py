@@ -249,6 +249,50 @@ def test_recover_before_the_panel_starts_asks_for_no_restart(tmp_path: Path) -> 
     assert "restart_required" not in read_status(panel.state)
 
 
+def test_restart_asked_of_a_running_panel_is_forgotten_once_it_starts(tmp_path: Path) -> None:
+    panel = make_panel(tmp_path)
+    write_status(
+        panel.state,
+        {"operation_id": "undone", "result": "rolled_back", "step": "health", "recovered": True, "restart_required": True},
+    )
+
+    assert launcher.settle_restart_on_startup(panel.state) is True
+
+    status = read_status(panel.state)
+    assert "restart_required" not in status
+    assert (status["result"], status["recovered"]) == ("rolled_back", True)
+
+
+def test_panel_start_leaves_a_status_that_asks_for_nothing_alone(tmp_path: Path) -> None:
+    panel = make_panel(tmp_path)
+
+    assert launcher.settle_restart_on_startup(panel.state) is False
+    assert not (panel.state / "module-operations" / "status.json").exists()
+
+    written = {"operation_id": "done", "result": "committed", "step": "committed"}
+    write_status(panel.state, written)
+    before = (panel.state / "module-operations" / "status.json").stat().st_mtime_ns
+
+    assert launcher.settle_restart_on_startup(panel.state) is False
+    assert read_status(panel.state) == written
+    assert (panel.state / "module-operations" / "status.json").stat().st_mtime_ns == before
+
+
+def test_started_panel_no_longer_asks_for_the_restart_it_just_had(isolated_runtime_env) -> None:
+    from tests.conftest import _platform_supports_full_app
+
+    if not _platform_supports_full_app():
+        pytest.skip("Full Flask app startup requires Unix-only modules (pty/termios).")
+    import importlib
+
+    state_dir = isolated_runtime_env["state_dir"]
+    write_status(state_dir, {"operation_id": "undone", "result": "rolled_back", "restart_required": True})
+
+    importlib.import_module("app_factory").create_app(ws_runtime=False)
+
+    assert "restart_required" not in read_status(state_dir)
+
+
 # -- the plan and the records have to be one directory -----------------------
 
 

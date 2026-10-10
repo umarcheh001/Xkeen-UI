@@ -175,6 +175,12 @@ body.modules-page .modules-operation-status {
 
 body.modules-page .modules-operation-status:empty { display: none; }
 
+body.modules-page .modules-operation-wait {
+  margin: 8px 0 0;
+  overflow-wrap: anywhere;
+  font-size: calc(12px * var(--xk-font-scale, 1));
+}
+
 body.modules-page .modules-error:not(:empty) {
   margin: 0 0 12px;
   color: var(--danger-color, #ad3030);

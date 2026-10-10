@@ -55,6 +55,21 @@ def recover_abandoned(panel_root: Path, state_dir: Path, *, panel_running: bool 
         _RECOVERY.release()
 
 
+def settle_restart_on_startup(state_dir: Path) -> bool:
+    """Forget the restart the last operation asked of the panel; it has just had it.
+
+    Called by the panel as it starts. An undo done under a running panel
+    leaves ``restart_required`` in the status, and nothing else takes it
+    away: the status is rewritten only by the next operation.
+    """
+
+    status = read_status(Path(state_dir))
+    if status.pop("restart_required", None) is None:
+        return False
+    write_status(Path(state_dir), status)
+    return True
+
+
 def ensure_idle(
     panel_root: Path,
     state_dir: Path,

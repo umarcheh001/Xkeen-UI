@@ -1,7 +1,23 @@
 import { renderInstalled, renderAvailable, renderPlan, renderOperationStatus, hasOperationStatus, describeLifecycleFailure } from './render.js';
 import { clearModulesUpdateBadge, reconcileModulesUpdateBadge, reconcileModulesUpdateCheck, reconcileModulesUpdatePlan, reconcileModulesUpdateStatus } from './badge.js';
 
-export function createModuleManagerController({ root, api, pollMs }) {
+// The panel restarts at the end of every operation and after a restart
+// request; while it is away the questions to it get rarer, not louder.
+const RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 10000];
+const RESTART_WAIT_LIMIT_MS = 90 * 1000;
+// From these steps on the runner may be restarting the panel.
+const RESTART_STEPS = ['applying', 'state', 'restarting', 'health', 'rolling_back'];
+
+function retryDelay(attempt) { return RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)]; }
+
+function terminalKey(status) { return status?.operation_id ? `${status.operation_id}:${status.result}` : null; }
+
+function panelRestartedBy(status) {
+  return ['committed', 'rolled_back'].includes(status?.result)
+    && Array.isArray(status.log) && status.log.some((record) => record?.step === 'restarting');
+}
+
+export function createModuleManagerController({ root, api, pollMs, reload = () => window.location.reload() }) {
   const state = {
     installed: null,
     status: null,
@@ -30,20 +46,25 @@ export function createModuleManagerController({ root, api, pollMs }) {
   let pollGeneration = 0;
   let returnFocus = null;
   let terminalRefreshed = null;
-  let restartRequested = false;
+  let restartWait = null;
+  let restartTimedOut = false;
+  let pollFailures = 0;
+  let panelUnreachable = false;
   let statusFresh = false;
   let installedFresh = false;
   let statusChecked = false;
   let statusRefreshPending = false;
   let updateCheckFocusPending = false;
 
-  function recoveryRequired() { return ['interrupted', 'rollback_failed'].includes(state.status?.result); }
-  function mutationsLocked() { return !statusFresh || !installedFresh || busy || state.status?.result === 'running' || recoveryRequired(); }
+  // An interrupted operation is over: its record is gone and the server
+  // has nothing to recover. Only a failed undo leaves the tree to be put back.
+  function recoveryRequired() { return state.status?.result === 'rollback_failed'; }
+  function mutationsLocked() { return !statusFresh || !installedFresh || busy || restartWait !== null || state.status?.result === 'running' || recoveryRequired(); }
   function canRestart() {
     const statusResult = state.status?.result ?? null;
     return statusFresh && installedFresh && (state.status?.restart_required === true || state.installed?.restart_required === true)
-      && [null, 'idle', 'committed', 'rolled_back'].includes(statusResult)
-      && state.installed?.transition_required === false && !restartRequested;
+      && [null, 'idle', 'committed', 'rolled_back', 'interrupted'].includes(statusResult)
+      && state.installed?.transition_required === false && !restartWait;
   }
 
   function showError(error) {
@@ -73,6 +94,25 @@ export function createModuleManagerController({ root, api, pollMs }) {
     finally { busy = false; if (active) render(); }
   }
 
+  // Silence of a panel that is expected to restart is not a failure.
+  function markPanelUnreachable() {
+    panelUnreachable = true;
+    statusFresh = false;
+    statusChecked = true;
+    closePlan({ force: true });
+    clearError();
+    if (active) render();
+  }
+
+  function waitNotice() {
+    if (restartWait) return 'Перезапуск запрошен. Ждём возвращения панели…';
+    if (restartTimedOut) return 'Панель не перезапустилась за полторы минуты. Обновите состояние и попробуйте ещё раз.';
+    if (!panelUnreachable) return '';
+    return RESTART_STEPS.includes(state.status?.step)
+      ? 'Панель перезапускается. Ждём её возвращения…'
+      : 'Нет связи с панелью. Повторяем запрос…';
+  }
+
   function stopPolling() {
     pollGeneration += 1;
     if (pollTimer !== null) clearTimeout(pollTimer);
@@ -89,7 +129,7 @@ export function createModuleManagerController({ root, api, pollMs }) {
     host.setAttribute('aria-labelledby', tabs[state.selectedTab].id);
     const actionsDisabled = mutationsLocked();
     if (refreshStatusButton) {
-      refreshStatusButton.hidden = (statusFresh && installedFresh) || !statusChecked;
+      refreshStatusButton.hidden = (statusFresh && installedFresh) || !statusChecked || panelUnreachable || restartWait !== null;
       refreshStatusButton.disabled = busy || statusRefreshPending;
     }
     if (state.selectedTab === 'available') {
@@ -110,7 +150,13 @@ export function createModuleManagerController({ root, api, pollMs }) {
       busy: !statusFresh || !installedFresh || busy || cancelPending,
     });
     else statusHost.replaceChildren();
-    if (restartRequested) statusHost.append(document.createTextNode('Перезапуск запрошен'));
+    const notice = waitNotice();
+    if (notice) {
+      const line = document.createElement('p');
+      line.className = 'modules-operation-wait';
+      line.textContent = notice;
+      statusHost.append(line);
+    }
     if (updateCheckFocusPending) {
       const updateButton = host.querySelector('.modules-update-check-button:not(:disabled)');
       if (updateButton) {
@@ -169,6 +215,8 @@ export function createModuleManagerController({ root, api, pollMs }) {
       state.status = statusResult.value;
       statusFresh = true;
       statusChecked = true;
+      pollFailures = 0;
+      panelUnreachable = false;
       reconcileModulesUpdateStatus(state.status);
       clearError();
     } else invalidateStatus(statusResult.reason);
@@ -178,22 +226,25 @@ export function createModuleManagerController({ root, api, pollMs }) {
       installedFresh = true;
       reconcileModulesUpdateBadge(state.installed);
     } else showError(installedResult.reason);
+    if (statusFresh && installedFresh) restartTimedOut = false;
     statusRefreshPending = false;
     if (statusFresh) {
       if (state.status.result === 'running') schedulePoll();
       else {
         cancelPending = false;
-        terminalRefreshed = state.status.operation_id || null;
+        terminalRefreshed = terminalKey(state.status);
       }
     }
     if (active) render();
   }
 
   function observeStatus(status, operationId) {
+    const watched = state.status?.result === 'running' ? state.status.operation_id : null;
     state.status = { ...status, operation_id: status.operation_id || operationId };
     statusFresh = true;
     statusChecked = true;
-    restartRequested = false;
+    pollFailures = 0;
+    panelUnreachable = false;
     if (state.status.result !== 'running') cancelPending = false;
     reconcileModulesUpdateStatus(state.status);
     if (active) render();
@@ -201,9 +252,15 @@ export function createModuleManagerController({ root, api, pollMs }) {
       schedulePoll();
     } else {
       stopPolling();
-      const terminalId = state.status.operation_id;
-      if (active && terminalId && terminalRefreshed !== terminalId) {
-        terminalRefreshed = terminalId;
+      if (active && watched && watched === state.status.operation_id && panelRestartedBy(state.status)) {
+        // The operation this page was watching restarted the panel: other
+        // modules are active now and, after an update, other scripts.
+        reload();
+        return;
+      }
+      const terminal = terminalKey(state.status);
+      if (active && terminal && terminalRefreshed !== terminal) {
+        terminalRefreshed = terminal;
         void refreshInstalledAfterTerminal();
       }
     }
@@ -212,6 +269,7 @@ export function createModuleManagerController({ root, api, pollMs }) {
   function schedulePoll() {
     if (!active || state.status?.result !== 'running' || pollTimer !== null) return;
     const generation = pollGeneration;
+    const interval = pollMs > 0 ? pollMs : 1000;
     pollTimer = setTimeout(async () => {
       pollTimer = null;
       if (!active || generation !== pollGeneration) return;
@@ -220,11 +278,51 @@ export function createModuleManagerController({ root, api, pollMs }) {
         if (active && generation === pollGeneration) observeStatus(status, state.status?.operation_id);
       } catch (error) {
         if (active && generation === pollGeneration) {
-          invalidateStatus(error);
+          pollFailures += 1;
+          if (error?.code === 'network_error') markPanelUnreachable();
+          else invalidateStatus(error);
           schedulePoll();
         }
       }
-    }, pollMs > 0 ? pollMs : 1000);
+    }, pollFailures ? Math.max(interval, retryDelay(pollFailures)) : interval);
+  }
+
+  // A restart was asked for: the panel goes away and comes back with other
+  // modules active, so the page is loaded anew once it answers again.
+  function awaitRestartedPanel() {
+    stopPolling();
+    restartTimedOut = false;
+    restartWait = { sawOutage: false, probes: 0, deadline: Date.now() + RESTART_WAIT_LIMIT_MS };
+    scheduleRestartProbe();
+  }
+
+  function scheduleRestartProbe() {
+    if (!active || !restartWait || pollTimer !== null) return;
+    const generation = pollGeneration;
+    const wait = restartWait;
+    pollTimer = setTimeout(async () => {
+      pollTimer = null;
+      if (!active || generation !== pollGeneration || restartWait !== wait) return;
+      wait.probes += 1;
+      const [installedResult, statusResult] = await Promise.allSettled([api.loadInstalled(), api.loadStatus()]);
+      if (!active || generation !== pollGeneration || restartWait !== wait) return;
+      if (installedResult.status === 'rejected' || statusResult.status === 'rejected') wait.sawOutage = true;
+      else if (wait.sawOutage || (installedResult.value.restart_required !== true && statusResult.value.restart_required !== true)) {
+        reload();
+        return;
+      }
+      if (Date.now() >= wait.deadline) {
+        // Nothing restarted it. The switches come back once the state is read again.
+        restartWait = null;
+        restartTimedOut = true;
+        statusFresh = false;
+        installedFresh = false;
+        statusChecked = true;
+        render();
+        return;
+      }
+      scheduleRestartProbe();
+    }, retryDelay(wait.probes));
   }
 
   async function applyReviewedPlan() {
@@ -284,13 +382,15 @@ export function createModuleManagerController({ root, api, pollMs }) {
   }
 
   async function requestRecovery() {
-    if (!statusFresh || !installedFresh || state.status?.result !== 'interrupted' || busy) return;
+    if (!statusFresh || !installedFresh || !recoveryRequired() || busy) return;
     busy = true;
     render();
     try {
-      const recovered = await api.recover();
+      await api.recover();
       clearError();
-      observeStatus(recovered, recovered.operation_id || state.status?.operation_id);
+      // The same operation has another outcome now, and the polling may
+      // have counted it as seen: what is installed is read anew.
+      await refreshInstalledAfterTerminal();
     } catch (error) { showError(error); }
     finally { busy = false; if (active) render(); }
   }
@@ -302,8 +402,8 @@ export function createModuleManagerController({ root, api, pollMs }) {
     try {
       const response = await api.restart();
       if (response.restart_requested) {
-        restartRequested = true;
         clearError();
+        awaitRestartedPanel();
       }
     } catch (error) { showError(error); }
     finally { busy = false; if (active) render(); }
@@ -391,14 +491,19 @@ export function createModuleManagerController({ root, api, pollMs }) {
     async activate() {
       const reentering = !active;
       active = true;
+      if (restartWait) {
+        render();
+        scheduleRestartProbe();
+        return init();
+      }
       if (reentering && initialLoad) {
         await initialLoad;
         await refreshInstalledAfterTerminal();
       }
       render();
       if (state.status?.result === 'running') schedulePoll();
-      else if (statusFresh && state.status?.operation_id && terminalRefreshed !== state.status.operation_id) {
-        terminalRefreshed = state.status.operation_id;
+      else if (statusFresh && terminalKey(state.status) && terminalRefreshed !== terminalKey(state.status)) {
+        terminalRefreshed = terminalKey(state.status);
         await refreshInstalledAfterTerminal();
       }
       return init();

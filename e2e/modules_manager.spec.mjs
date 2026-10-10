@@ -54,6 +54,15 @@ async function installLifecycleRoutes(page, { status = idleStatus, installed = i
   await page.route('**/api/modules/available', (route) => route.fulfill({ json: available }));
 }
 
+// The timers of the manager are chained through requests: the clock moves
+// in steps, so every answer arrives before the next timer is due.
+async function advanceClock(page, ms, step = 500) {
+  for (let passed = 0; passed < ms; passed += step) {
+    await page.clock.runFor(Math.min(step, ms - passed));
+    await new Promise((resolve) => { setTimeout(resolve, 25); });
+  }
+}
+
 const interruptedStatus = { ...runningStatus, result: 'interrupted', step: 'recover', error_code: 'operation_interrupted' };
 const rollbackFailedStatus = { ...interruptedStatus, result: 'rollback_failed', error_code: 'operation_rollback_failed' };
 const restartStatus = { ...runningStatus, result: 'committed', step: 'done', restart_required: true };
@@ -632,6 +641,169 @@ test.describe('Module manager recovery and guards', () => {
     expect(restartCalls).toBe(1);
   });
 
+  test('waits for the restarted panel, reloads the page and offers the next restart again', async ({ page }) => {
+    let enabled = false;
+    let restartRequired = false;
+    let panelDown = false;
+    let probesWhileDown = 0;
+    await installIdleLifecycleRoutes(page);
+    await page.route('**/api/modules/installed', (route) => {
+      if (panelDown) { probesWhileDown += 1; return route.abort('connectionrefused'); }
+      return route.fulfill({ json: {
+        ...installedSnapshot, restart_required: restartRequired,
+        modules: installedSnapshot.modules.map((item) => item.id === 'engine.mihomo' ? { ...item, enabled } : item),
+      } });
+    });
+    await page.route('**/api/modules/operations/status', (route) => (panelDown
+      ? route.abort('connectionrefused')
+      : route.fulfill({ json: { ok: true, result: null } })));
+    await page.route('**/api/modules/engine.mihomo', (route) => {
+      enabled = route.request().postDataJSON().enabled;
+      restartRequired = true;
+      return route.fulfill({ json: { ok: true, restart_required: true } });
+    });
+    await page.route('**/api/modules/restart', (route) => {
+      panelDown = true;
+      return route.fulfill({ json: { ok: true, restart_requested: true } });
+    });
+    await page.goto('/modules');
+    await page.evaluate(() => { window.xkBeforeRestart = true; });
+    const toggle = page.getByRole('switch', { name: 'Включить Mihomo' });
+    const restart = page.locator('.modules-summary').getByRole('button', { name: 'Перезапустить панель' });
+
+    await toggle.locator('..').click();
+    await restart.click();
+    await expect(page.locator('#modules-operation-status')).toContainText('Ждём возвращения панели');
+    // Nothing may be switched while the panel is going down.
+    await expect(toggle).toBeDisabled();
+    await expect(restart).toHaveCount(0);
+    await expect.poll(() => probesWhileDown).toBeGreaterThanOrEqual(1);
+    await expect(page.locator('#modules-error')).toBeEmpty();
+
+    // The panel is back: the registry forgot the request as it started.
+    restartRequired = false;
+    panelDown = false;
+    await expect.poll(() => page.evaluate(() => window.xkBeforeRestart === true), { timeout: 15000 }).toBe(false);
+    await expect(toggle).toBeEnabled();
+    await expect(page.locator('#modules-operation-status')).not.toContainText('Перезапуск запрошен');
+
+    await toggle.locator('..').click();
+    await expect(restart).toBeEnabled();
+  });
+
+  test('gives the controls back when the panel never restarts', async ({ page }) => {
+    await page.clock.install();
+    await installLifecycleRoutes(page, { installed: { ...installedSnapshot, restart_required: true } });
+    await page.route('**/api/modules/operations/status', (route) => route.fulfill({ json: { ok: true, result: null } }));
+    await page.route('**/api/modules/restart', (route) => route.fulfill({ json: { ok: true, restart_requested: true } }));
+    await page.goto('/modules');
+    await page.evaluate(() => { window.xkBeforeRestart = true; });
+    await page.locator('.modules-summary').getByRole('button', { name: 'Перезапустить панель' }).click();
+    await expect(page.locator('#modules-operation-status')).toContainText('Ждём возвращения панели');
+
+    await advanceClock(page, 100 * 1000, 2500);
+
+    await expect(page.locator('#modules-operation-status')).toContainText('Панель не перезапустилась');
+    expect(await page.evaluate(() => window.xkBeforeRestart)).toBe(true);
+    await page.getByRole('button', { name: 'Обновить состояние' }).click();
+    await expect(page.locator('.modules-summary').getByRole('button', { name: 'Перезапустить панель' })).toBeEnabled();
+    await expect(page.locator('#modules-operation-status')).not.toContainText('Панель не перезапустилась');
+  });
+
+  test('shows the planned restart of an operation as a wait and slows the polling down', async ({ page }) => {
+    await page.clock.install();
+    const restarting = {
+      ...runningStatus, step: 'restarting',
+      log: [{ step: 'applying', at: 1781000001.5 }, { step: 'restarting', at: 1781000002.25 }],
+    };
+    let panelDown = false;
+    let finished = false;
+    let failedPolls = 0;
+    await installLifecycleRoutes(page, { status: restarting });
+    await page.route('**/api/modules/operations/status', (route) => {
+      if (panelDown) { failedPolls += 1; return route.abort('connectionrefused'); }
+      return route.fulfill({ json: finished ? {
+        ...restarting, result: 'committed', step: 'committed', finished_at: 1781000009.5,
+        log: [...restarting.log, { step: 'health', at: 1781000003 }, { step: 'committed', at: 1781000009.5 }],
+      } : restarting });
+    });
+    await page.goto('/modules');
+    await page.evaluate(() => { window.xkBeforeRestart = true; });
+    await expect(page.locator('#modules-operation-status')).toContainText('restarting');
+
+    panelDown = true;
+    await advanceClock(page, 1100);
+    await expect(page.locator('#modules-operation-status')).toContainText('Панель перезапускается');
+    await expect(page.locator('#modules-error')).toBeEmpty();
+    await expect(page.locator('body')).not.toContainText('network_error');
+    await expect(page.getByRole('switch', { name: 'Включить Mihomo' })).toBeDisabled();
+    // One request a second would make ten here.
+    await advanceClock(page, 9000);
+    expect(failedPolls).toBeLessThanOrEqual(4);
+    expect(failedPolls).toBeGreaterThanOrEqual(2);
+
+    // The panel answers again on the files of the operation: the page takes them too.
+    finished = true;
+    panelDown = false;
+    await advanceClock(page, 10000);
+    await expect.poll(() => page.evaluate(() => window.xkBeforeRestart === true), { timeout: 15000 }).toBe(false);
+    await expect(page.locator('#modules-operation-status')).toContainText('committed');
+  });
+
+  test('names a lost connection plainly while an operation has not reached the restart', async ({ page }) => {
+    await page.clock.install();
+    let panelDown = false;
+    await installLifecycleRoutes(page, { status: runningStatus });
+    await page.route('**/api/modules/operations/status', (route) => (panelDown
+      ? route.abort('connectionrefused')
+      : route.fulfill({ json: runningStatus })));
+    await page.goto('/modules');
+    await expect(page.locator('#modules-operation-status')).toContainText('download');
+
+    panelDown = true;
+    await advanceClock(page, 1100);
+    await expect(page.locator('#modules-operation-status')).toContainText('Нет связи с панелью');
+    await expect(page.locator('#modules-operation-status')).not.toContainText('Панель перезапускается');
+
+    panelDown = false;
+    await advanceClock(page, 2100);
+    await expect(page.locator('#modules-operation-status')).not.toContainText('Нет связи с панелью');
+    await expect(page.getByRole('button', { name: 'Отменить операцию' })).toBeEnabled();
+  });
+
+  test('reads the installed modules again after a recovery the polling has already seen', async ({ page }) => {
+    let installedLoads = 0;
+    let currentStatus = runningStatus;
+    let recovered = false;
+    await page.route('**/api/modules/installed', (route) => {
+      installedLoads += 1;
+      return route.fulfill({ json: recovered ? {
+        ...installedSnapshot,
+        modules: [...installedSnapshot.modules, { id: 'tool.terminal', name: 'Терминал', version: '2.10.0', enabled: true, can_disable: true }],
+      } : installedSnapshot });
+    });
+    await page.route('**/api/modules/operations/status', (route) => route.fulfill({ json: currentStatus }));
+    await page.route('**/api/modules/available', (route) => route.fulfill({ json: availableSnapshot }));
+    await page.route('**/api/modules/recovery', (route) => {
+      recovered = true;
+      currentStatus = { ...rollbackFailedStatus, result: 'rolled_back', error_code: 'operation_interrupted', recovered: true };
+      return route.fulfill({ json: currentStatus });
+    });
+    await page.goto('/modules');
+    await expect(page.getByRole('button', { name: 'Отменить операцию' })).toBeVisible();
+    // The polling, not a page load, is what sees the failed undo.
+    currentStatus = rollbackFailedStatus;
+    const recover = page.getByRole('button', { name: 'Повторить восстановление' });
+    await expect(recover).toBeEnabled();
+    const loadsBeforeRecovery = installedLoads;
+
+    await recover.click();
+
+    await expect(page.locator('#modules-operation-status')).toContainText('rolled_back');
+    await expect(page.locator('.modules-row').filter({ hasText: 'Терминал' })).toBeVisible();
+    expect(installedLoads).toBeGreaterThan(loadsBeforeRecovery);
+  });
+
   test('removes the restart action after a switch is returned to its original state', async ({ page }) => {
     let enabled = true;
     let profile = 'full';
@@ -692,18 +864,48 @@ test.describe('Module manager recovery and guards', () => {
         const { getModulesController } = await import('/static/js/pages/modules.init.js');
         await getModulesController().activate();
       });
-      await expect(page.getByRole('button', { name: 'Восстановить операцию' })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Обновить панель' })).toBeDisabled();
+      await expect(page.locator('#modules-operation-status')).toContainText('interrupted');
+      await expect(page.getByRole('button', { name: 'Обновить панель' })).toBeEnabled();
       expect(statusCalls).toBeGreaterThan(beforeReturn);
       expect(catalogCalls).toBe(0);
     });
   }
 
-  test('recovers interrupted operation without restarting', async ({ page }) => {
+  test('leaves the manager usable after an interrupted operation', async ({ page }) => {
+    // What the server keeps after a failed download or a cancel: the
+    // record of the operation is gone and there is nothing to recover.
+    let recoveryCalls = 0;
+    await installLifecycleRoutes(page, { status: { ...interruptedStatus, step: 'downloading', error_code: 'operation_cancelled' } });
+    await page.route('**/api/modules/recovery', (route) => {
+      recoveryCalls += 1;
+      return route.fulfill({ json: { ok: true, recovery_result: null, ...interruptedStatus } });
+    });
+    await page.goto('/modules');
+
+    await expect(page.locator('#modules-operation-status')).toContainText('Операция отменена');
+    await expect(page.locator('#modules-operation-status')).toContainText('Файлы панели не изменены');
+    await expect(page.locator('#modules-operation-status').getByRole('button')).toHaveCount(0);
+    await expect(page.getByRole('switch', { name: 'Включить Mihomo' })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Обновить панель' })).toBeEnabled();
+    await page.getByRole('tab', { name: 'Доступные' }).click();
+    await expect(page.getByRole('button', { name: 'Установить Терминал' })).toBeEnabled();
+    expect(recoveryCalls).toBe(0);
+  });
+
+  test('says that the installer replaced the files of an unfinished operation', async ({ page }) => {
+    await installLifecycleRoutes(page, { status: { ...interruptedStatus, error_code: 'operation_superseded' } });
+    await page.goto('/modules');
+
+    await expect(page.locator('#modules-operation-status')).toContainText('заменены установщиком');
+    await expect(page.locator('#modules-operation-status')).not.toContainText('Файлы панели не изменены');
+    await expect(page.getByRole('button', { name: 'Обновить панель' })).toBeEnabled();
+  });
+
+  test('repeats a failed undo without restarting', async ({ page }) => {
     let recoveryCalls = 0;
     let restartCalls = 0;
-    let currentStatus = interruptedStatus;
-    await installLifecycleRoutes(page, { status: interruptedStatus });
+    let currentStatus = rollbackFailedStatus;
+    await installLifecycleRoutes(page, { status: rollbackFailedStatus });
     await page.route('**/api/modules/operations/status', (route) => route.fulfill({ json: currentStatus }));
     await page.route('**/api/modules/recovery', (route) => {
       recoveryCalls += 1;
@@ -715,19 +917,21 @@ test.describe('Module manager recovery and guards', () => {
       return route.fulfill({ json: { ok: true, restart_requested: true } });
     });
     await page.goto('/modules');
-    await page.getByRole('button', { name: 'Восстановить операцию' }).click();
+    await expect(page.getByRole('switch', { name: 'Включить Mihomo' })).toBeDisabled();
+    await page.getByRole('button', { name: 'Повторить восстановление' }).click();
     await expect(page.locator('#modules-operation-status')).toContainText('rolled_back');
+    await expect(page.getByRole('switch', { name: 'Включить Mihomo' })).toBeEnabled();
     expect(recoveryCalls).toBe(1);
     expect(restartCalls).toBe(0);
   });
 
-  test('locks mutations after rollback_failed and exposes manual recovery boundary', async ({ page }) => {
+  test('locks mutations after rollback_failed and offers to repeat the undo', async ({ page }) => {
     await installLifecycleRoutes(page, { status: rollbackFailedStatus });
     await page.goto('/modules');
     await expect(page.getByText('Восстановление файлов не завершилось')).toBeVisible();
     await page.getByRole('tab', { name: 'Доступные' }).click();
     await expect(page.getByRole('button', { name: 'Установить Терминал' })).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Восстановить операцию' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Повторить восстановление' })).toBeEnabled();
     await expect(page.getByRole('button', { name: 'Перезапустить панель' })).toHaveCount(0);
   });
 

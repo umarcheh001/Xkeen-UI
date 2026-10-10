@@ -28,6 +28,9 @@ const FAILURE_MESSAGES = {
   operation_in_progress: 'Другая операция уже выполняется.',
   profile_transition_required: 'Сначала примените переход профиля.',
   operation_rollback_failed: 'Восстановление файлов не завершилось. Требуется ручная проверка установки и состояния панели.',
+  operation_cancelled: 'Операция отменена.',
+  operation_interrupted: 'Операция прервана.',
+  operation_superseded: 'Операция не завершена: файлы панели заменены установщиком.',
   module_free_space: 'Недостаточно свободного места.',
   operation_free_space: 'Недостаточно свободного места.',
   module_engine_active: 'Модуль используется активным движком.',
@@ -165,6 +168,8 @@ export function renderOperationStatus(host, status, { onCancel, onRecovery, busy
   }
   if (status.result === 'rollback_failed') area.append(node('p', 'modules-alert', describeLifecycleFailure({ code: 'operation_rollback_failed' })));
   else if (status.error_code) area.append(node('p', 'modules-alert', describeLifecycleFailure({ code: status.error_code })));
+  // Interrupted means over: nothing was laid, or what was laid is undone.
+  if (status.result === 'interrupted' && status.error_code !== 'operation_superseded') area.append(node('p', '', 'Файлы панели не изменены.'));
   if (Array.isArray(status.log) && status.log.length) {
     const log = node('pre', 'modules-operation-log-region');
     const code = node('code', 'modules-operation-log');
@@ -183,8 +188,8 @@ export function renderOperationStatus(host, status, { onCancel, onRecovery, busy
     cancel.addEventListener('click', onCancel);
     area.append(cancel);
   }
-  if (status.result === 'interrupted') {
-    const recover = node('button', 'btn-secondary', 'Восстановить операцию');
+  if (status.result === 'rollback_failed') {
+    const recover = node('button', 'btn-secondary', 'Повторить восстановление');
     recover.type = 'button';
     recover.disabled = busy;
     recover.addEventListener('click', onRecovery);

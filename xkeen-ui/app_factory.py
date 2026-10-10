@@ -489,6 +489,15 @@ def create_app(*, ws_runtime: bool = False):
         except Exception:
             pass
 
+    try:
+        # The registry forgot its own restart request above; the status of
+        # the last module operation may hold one more.
+        from services.module_transactions.launcher import settle_restart_on_startup
+
+        settle_restart_on_startup(UI_STATE_DIR)
+    except Exception:  # noqa: BLE001 - a stale note must not keep the panel from starting
+        pass
+
     module_activation = module_registry.runtime_activation()
     module_registry.set_runtime_activation(module_activation)
     active_modules = set(module_activation.get("active_module_ids", []))
