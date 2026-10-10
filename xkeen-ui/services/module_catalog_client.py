@@ -304,6 +304,7 @@ class ModuleCatalogClient:
         transport: CatalogTransport | None = None,
         now: Callable[[], float] = time.time,
         cache_ttl_s: float = 24 * 60 * 60,
+        min_refresh_s: float = 5 * 60,
         platform_architecture: str | None = None,
         core_version: str | None = None,
         keyring: Mapping[str, bytes] = TRUSTED_CATALOG_PUBLIC_KEYS,
@@ -312,6 +313,7 @@ class ModuleCatalogClient:
         self._transport = transport or UrlLibCatalogTransport()
         self._now = now
         self._cache_ttl_s = float(cache_ttl_s)
+        self._min_refresh_s = float(min_refresh_s)
         self._platform_architecture = platform_architecture
         self._core_version = core_version
         self._keyring = keyring
@@ -457,7 +459,11 @@ class ModuleCatalogClient:
         except CatalogClientError as error:
             cache_error = error
         now = float(self._now())
-        if cached is not None and not force_refresh and 0.0 <= now - cached.fetched_at <= self._cache_ttl_s:
+        # A forced refresh is a button somebody may press again and again,
+        # and the release API allows an address sixty anonymous requests an
+        # hour: a copy a few minutes old answers it as well.
+        max_age_s = self._min_refresh_s if force_refresh else self._cache_ttl_s
+        if cached is not None and 0.0 <= now - cached.fetched_at <= max_age_s:
             return cached
         try:
             snapshot = self._fetch_remote()

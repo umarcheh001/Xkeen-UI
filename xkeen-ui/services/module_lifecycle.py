@@ -548,6 +548,11 @@ class ModuleLifecycleService:
             "update_available": newer,
             "requires_installer": requires_installer,
             "min_updater": min_updater if requires_installer else None,
+            # Without the network the client answers from the copy it kept:
+            # the owner has to see that it is not today's word.
+            "freshness": snapshot.freshness,
+            "stale_reason": snapshot.stale_reason,
+            "fetched_at": snapshot.fetched_at,
         }
 
     def _release_context(self):

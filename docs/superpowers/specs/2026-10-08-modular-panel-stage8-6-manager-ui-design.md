@@ -85,6 +85,12 @@ The clearly labelled development-only `main` path remains in DevTools with
 its existing behavior. The stable compatibility API remains available for
 older callers, but the new UI must not use it for lifecycle operations.
 
+> Amendment, 10 October 2026: the implementation (`d6213c43`) made the
+> DevTools card informational for every channel, `main` included. This was
+> accepted as intended: a `main` build has no update controls in the UI and
+> is updated with the installer; only the `development_only` API remains.
+> Statements below about a development `main` UI in DevTools are superseded.
+
 ## Screen Loading And Data Ownership
 
 The top-level shell lazy-loads the manager frontend only when `/modules` is

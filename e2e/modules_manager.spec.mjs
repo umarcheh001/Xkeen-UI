@@ -207,6 +207,24 @@ test.describe('Modules panel update surface', () => {
     await expect(page.getByRole('dialog', { name: 'План обновления панели' })).toContainText('2.11.0');
   });
 
+  test('says that the update answer comes from an old copy of the catalog', async ({ page }) => {
+    await installIdleLifecycleRoutes(page);
+    await page.route('**/api/modules/panel/update-check', (route) => route.fulfill({ json: {
+      ok: true, source_version: '2.10.0', target_version: '2.10.0', update_available: false,
+      requires_installer: false, min_updater: null,
+      freshness: 'stale', stale_reason: 'catalog_transport_unavailable', fetched_at: 1791000000.5,
+    } }));
+    await page.goto('/modules');
+
+    await page.getByRole('button', { name: 'Проверить обновления' }).click();
+
+    const check = page.locator('.modules-update-check');
+    await expect(check).toContainText('Не удалось связаться с GitHub');
+    await expect(check).toContainText(await page.evaluate(() => new Date(1791000000500).toLocaleDateString('ru-RU')));
+    await expect(check).not.toContainText('Установлена актуальная версия');
+    await expect(check).toContainText('По сохранённым данным новой версии нет');
+  });
+
   test('keeps update feedback focused and clears a stale badge after a failed check', async ({ page }) => {
     await installIdleLifecycleRoutes(page);
     await page.route('**/api/modules/panel/update-check', (route) => route.fulfill({ status: 503, json: {
@@ -1514,7 +1532,11 @@ test.describe('Module lifecycle review', () => {
     } }));
     await page.goto('/modules');
     await page.getByRole('button', { name: 'Обновить панель' }).click();
-    await expect(page.getByRole('dialog')).toContainText('Обновлений нет');
+    // A current panel is an answer, not a plan with nothing in it.
+    await expect(page.locator('.modules-update-check').getByRole('status')).toContainText('Установлена актуальная версия');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.locator('#modules-error')).toBeEmpty();
+    await expect(page.getByRole('button', { name: 'Обновить панель' })).toBeEnabled();
     expect(await page.evaluate(() => sessionStorage.getItem('xkeen.modules.update.v1'))).toBeNull();
   });
 

@@ -165,7 +165,9 @@ Boot recovery вызывается init/install path до запуска пан�
 Stable DevTools check/run/status делегируются `ModuleLifecycleService` как
 `panel-update`, а rollback — как `panel-rollback` (см. «Возврат на прежнюю
 версию»). Channel `main` сохраняет прежний branch updater с его full-panel
-backup и явно возвращает `development_only: true`.
+backup и явно возвращает `development_only: true`. С подэтапа 8.6 в DevTools
+нет кнопок, которые его вызывают: это путь API, а сборку с `main` обновляют
+установщиком.
 
 ## Возврат на прежнюю версию
 

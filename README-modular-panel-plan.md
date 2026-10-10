@@ -1727,7 +1727,9 @@ stable-версию и сохраняет profile/config/editor state; profile t
 Journal и recovery различают scope `module`, `panel` и `profile`, поэтому
 rollback одного модуля не смешивается с полным rollback панели/профиля.
 Stable DevTools update делегируется Lifecycle API, а branch channel `main`
-остаётся явным `development_only`. Контракт и recovery runbook:
+остаётся явным `development_only`. С подэтапа 8.6 это только API: карточка
+DevTools справочная, кнопок обновления в ней нет ни для одного канала, сборку
+с `main` обновляют установщиком. Контракт и recovery runbook:
 `docs/modular-panel-stage8-panel-profile.md`. Design:
 `docs/superpowers/specs/2026-10-07-modular-panel-stage8-5-panel-profile-design.md`;
 план:

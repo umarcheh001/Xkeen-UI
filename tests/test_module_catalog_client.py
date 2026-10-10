@@ -339,6 +339,52 @@ def test_client_returns_fresh_cache_without_network_request(tmp_path) -> None:
     assert transport.calls == initial_calls
 
 
+def test_forced_refresh_does_not_ask_github_again_within_minutes(tmp_path) -> None:
+    # Every press of "check for updates" is a forced refresh, and the
+    # anonymous limit of the API is sixty requests an hour for the address.
+    private_key = Ed25519PrivateKey.generate()
+    clock = [100.0]
+    transport = _CatalogTransport(_release_responses(private_key, "1.2.3"))
+    client = ModuleCatalogClient(
+        tmp_path,
+        transport=transport,
+        now=lambda: clock[0],
+        keyring={"release-2026": _public_pem(private_key)},
+    )
+    client.get_catalog(force_refresh=True)
+    initial_calls = list(transport.calls)
+
+    clock[0] += 60.0
+    again = client.get_catalog(force_refresh=True)
+
+    assert again.freshness == "fresh"
+    assert transport.calls == initial_calls
+
+    clock[0] += 5 * 60.0
+    client.get_catalog(force_refresh=True)
+
+    assert len(transport.calls) > len(initial_calls)
+
+
+def test_forced_refresh_never_trusts_a_future_dated_cache(tmp_path) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    clock = [100000.0]
+    transport = _CatalogTransport(_release_responses(private_key, "1.2.3"))
+    client = ModuleCatalogClient(
+        tmp_path,
+        transport=transport,
+        now=lambda: clock[0],
+        keyring={"release-2026": _public_pem(private_key)},
+    )
+    client.get_catalog(force_refresh=True)
+    initial_calls = list(transport.calls)
+
+    clock[0] = 50.0
+    client.get_catalog(force_refresh=True)
+
+    assert len(transport.calls) > len(initial_calls)
+
+
 def test_client_uses_expired_verified_cache_only_after_transport_failure(tmp_path) -> None:
     private_key = Ed25519PrivateKey.generate()
     clock = [100.0]
@@ -466,6 +512,8 @@ def test_client_does_not_use_stale_cache_after_redirect_policy_failure(
         keyring={"release-2026": _public_pem(private_key)},
     )
     seed_client.get_catalog()
+    # Past the pause between forced refreshes: the network is really asked.
+    clock[0] += 5 * 60 + 1
     latest_release = _release_responses(private_key, "1.2.3")[LATEST_RELEASE_URL]
     opener = _Opener(
         [_Response(200, body=latest_release)]

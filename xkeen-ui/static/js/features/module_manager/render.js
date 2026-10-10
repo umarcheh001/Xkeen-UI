@@ -91,6 +91,13 @@ function appendPanelIdentity(summary, snapshot) {
   if (build.built_utc) summary.append(node('p', 'modules-build-meta', `Собрано: ${build.built_utc}`));
 }
 
+function formatCatalogTime(seconds) {
+  const date = new Date(Number(seconds) * 1000);
+  return Number.isFinite(date.getTime()) && Number(seconds) > 0
+    ? date.toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })
+    : 'неизвестного времени';
+}
+
 function appendUpdateCheck(summary, update, { onCheckUpdate, busy, lifecycleAvailable }) {
   const check = node('section', 'modules-update-check');
   const appendMessage = (className, text) => {
@@ -112,9 +119,12 @@ function appendUpdateCheck(summary, update, { onCheckUpdate, busy, lifecycleAvai
   } else if (update?.error) {
     appendMessage('modules-alert', describeLifecycleFailure(update.error));
   } else if (update?.checked) {
+    // The server answered from the catalog it kept: not today's word.
+    const stale = update.freshness === 'stale';
+    if (stale) appendMessage('modules-alert', `Не удалось связаться с GitHub. Показаны данные каталога от ${formatCatalogTime(update.fetched_at)}.`);
     if (update.requires_installer) appendMessage('modules-alert', `Версия ${update.target_version || 'из каталога'} требует обновления через установщик.`);
     else if (update.update_available) appendMessage('modules-update-available', `Доступна версия ${update.target_version}.`);
-    else appendMessage('modules-build-meta', 'Установлена актуальная версия.');
+    else appendMessage('modules-build-meta', stale ? 'По сохранённым данным новой версии нет.' : 'Установлена актуальная версия.');
   } else {
     appendMessage('modules-build-meta', 'Проверка не скачивает архив и не изменяет панель.');
   }

@@ -124,6 +124,8 @@ def test_update_check_reads_only_the_signed_catalog_when_an_update_exists(tmp_pa
 
     result = service.panel_update_check()
 
+    fetched_at = result.pop("fetched_at")
+    assert isinstance(fetched_at, float) and fetched_at > 0
     assert result == {
         "ok": True,
         "source_version": "2.10.0",
@@ -131,6 +133,8 @@ def test_update_check_reads_only_the_signed_catalog_when_an_update_exists(tmp_pa
         "update_available": True,
         "requires_installer": False,
         "min_updater": None,
+        "freshness": "fresh",
+        "stale_reason": None,
     }
     assert _panel_downloads(release) == 0
     assert catalog.latest_requests == 1
@@ -146,6 +150,27 @@ def test_update_check_reads_only_the_signed_catalog_when_the_panel_is_current(tm
     assert result["update_available"] is False
     assert result["source_version"] == result["target_version"] == VERSION
     assert _panel_downloads(release) == 0
+
+
+def test_update_check_says_when_the_answer_comes_from_an_old_copy(tmp_path):
+    # Without the network the client hands out the catalog it kept; the
+    # owner must not read that as "the panel is current".
+    from dataclasses import replace
+
+    panel = make_panel(tmp_path)
+    release = make_release()
+    service, catalog = make_service(panel, release)
+    fresh = catalog.get_catalog
+    catalog.get_catalog = lambda **kwargs: replace(
+        fresh(**kwargs), freshness="stale", stale_reason="catalog_transport_unavailable", fetched_at=1791000000.0
+    )
+
+    result = service.panel_update_check(force_refresh=True)
+
+    assert result["update_available"] is False
+    assert (result["freshness"], result["stale_reason"], result["fetched_at"]) == (
+        "stale", "catalog_transport_unavailable", 1791000000.0,
+    )
 
 
 def test_update_check_keeps_the_pending_profile_refusal(tmp_path):
@@ -181,7 +206,9 @@ def test_update_check_maps_an_unreachable_catalog_to_the_public_code(tmp_path):
 def test_update_check_asks_for_a_fresh_catalog_only_on_request(tmp_path):
     seen: list[bool] = []
     release = make_release(version="2.11.0")
-    snapshot = SimpleNamespace(catalog=release.catalog, release_version="2.11.0")
+    snapshot = SimpleNamespace(
+        catalog=release.catalog, release_version="2.11.0", freshness="fresh", stale_reason=None, fetched_at=1.0
+    )
 
     class Catalog:
         def get_catalog(self, *, force_refresh=False):

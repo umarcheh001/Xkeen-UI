@@ -183,6 +183,18 @@ export function createModuleManagerController({ root, api, pollMs, reload = () =
     try {
       const plan = await api.plan(operation, moduleId);
       if (!active) return;
+      if (plan.operation === 'panel-update' && plan.applicable !== true
+        && plan.blockers?.some((blocker) => blocker?.code === 'panel_version_current')) {
+        // A current panel is an answer to show, not a plan with nothing in it.
+        reconcileModulesUpdatePlan(plan);
+        clearError();
+        returnFocus = null;
+        state.update = {
+          checked: true, loading: false, error: null, update_available: false, requires_installer: false,
+          source_version: plan.source_version, target_version: plan.target_version,
+        };
+        return;
+      }
       state.plan = plan;
       clearError();
       reconcileModulesUpdatePlan(plan);
