@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import routes.pages as pages
 
 
@@ -54,21 +56,23 @@ def test_every_composed_navigation_item_is_in_the_published_whitelist(monkeypatc
         composed = {item["section"] for item in context["navigation_items"]}
 
         assert composed <= published, (module_ids, sorted(composed - published))
-        assert "modules" in composed, module_ids
 
 
-def test_modules_item_stays_visible_under_a_whitelist_written_before_it_existed(monkeypatch):
-    # The item carries the update badge; a list saved by an older panel
-    # cannot name it and must not hide it.
+def test_modules_link_is_outside_the_sections_a_whitelist_can_hide(monkeypatch):
+    # The way to updates is an item of the gear menu: it is not a section,
+    # so no whitelist, however old, can take it off the screen.
     monkeypatch.setenv("XKEEN_UI_PANEL_SECTIONS_WHITELIST", "routing,xkeen")
     monkeypatch.setattr(pages, "detect_available_cores", lambda: ["xray", "mihomo"])
+    header = (Path(pages.__file__).resolve().parents[1] / "templates" / "panel" / "header.html").read_text(encoding="utf-8")
 
+    assert "url_for('modules_page')" in header
+    assert 'data-xk-section="modules"' not in header
     for module_ids in MODULE_SETS:
         ui = pages._detect_panel_core_ui(module_ids)
-        published = str(ui["panel_sections_whitelist"]).split(",")
+        published = set(str(ui["panel_sections_whitelist"]).split(","))
+        composed = {item["section"] for item in pages._build_panel_page_context(module_ids)["navigation_items"]}
 
-        assert "modules" in published, module_ids
-        assert set(published) <= {"routing", "xkeen", "modules"}, module_ids
+        assert "modules" not in published | composed, module_ids
 
 
 def test_whitelist_without_known_sections_still_shows_everything(monkeypatch):
@@ -79,4 +83,4 @@ def test_whitelist_without_known_sections_still_shows_everything(monkeypatch):
         ui = pages._detect_panel_core_ui(module_ids)
         published = set(str(ui["panel_sections_whitelist"]).split(","))
 
-        assert {"xkeen", "modules", "donate"} <= published, module_ids
+        assert {"xkeen", "donate"} <= published, module_ids

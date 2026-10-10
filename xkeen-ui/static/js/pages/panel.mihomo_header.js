@@ -1,5 +1,6 @@
 // Presentation only: move existing controls without cloning IDs or handlers.
 import { iconHtml, setIcon } from '../ui/operator_icons.js';
+import { syncModulesUpdateBadges } from '../features/module_manager/badge.js';
 let initialized = false;
 
 function releaseHeaderPaintGuard() {
@@ -81,6 +82,13 @@ export function initPanelOperatorHeader() {
   setIcon(panel.trigger, 'settings');
   panel.trigger.classList.add('xk-header-panel-trigger');
   panel.trigger.setAttribute('aria-label', 'Настройки панели');
+  // "Modules and updates" is an item of this menu; a known update shows here.
+  const updateDot = create('span', 'xk-header-update-dot');
+  updateDot.setAttribute('data-xk-modules-update-dot', '');
+  updateDot.setAttribute('aria-hidden', 'true');
+  updateDot.hidden = true;
+  panel.trigger.append(updateDot);
+  syncModulesUpdateBadges(panel.container);
   const service = disclosure('', 'xk-mihomo-service-menu', 'xk-operator-service-menu xk-mihomo-service-menu');
   service.trigger.className = 'xk-brand-service-trigger';
   service.trigger.setAttribute('aria-describedby', 'xkeen-service-text');

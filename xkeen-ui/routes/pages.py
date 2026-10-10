@@ -115,7 +115,6 @@ PANEL_NAVIGATION: tuple[PanelNavigationEntry, ...] = (
     PanelNavigationEntry(("engine.xray",), "xray-logs", "Логи Xray", "top-tab-btn xk-top-tab xk-top-tab-logs", view="xray-logs"),
     PanelNavigationEntry(("tool.terminal",), "commands", "Команды", "top-tab-btn xk-top-tab xk-top-tab-commands", view="commands"),
     PanelNavigationEntry(("tool.files",), "files", "Файлы", "top-tab-btn xk-top-tab xk-top-tab-files", view="files", element_id="top-tab-files"),
-    PanelNavigationEntry(("core",), "modules", "Модули и обновления", "top-tab-btn xk-top-tab xk-top-tab-modules", href_endpoint="modules_page", top_nav=True),
     PanelNavigationEntry(("engine.mihomo",), "mihomo-generator", "Mihomo Генератор", "top-tab-btn xk-top-tab xk-top-tab-generator", element_id="top-tab-mihomo-generator", href_endpoint="mihomo_generator_page", top_nav=True),
     PanelNavigationEntry(("core",), "donate", "Поддержать", "top-tab-btn xk-top-tab xk-top-tab-donate", element_id="top-tab-donate"),
 )
@@ -343,11 +342,6 @@ def _parse_sections_whitelist(raw: str | None) -> set[str] | None:
     }
 
 
-# Shown whatever the whitelist says: the item carries the update badge, and a
-# list saved before the item existed cannot name it.
-_ALWAYS_VISIBLE_PANEL_SECTIONS = frozenset({"modules"})
-
-
 def _effective_panel_sections(supported_sections: list[str]) -> list[str]:
     requested_sections = _parse_sections_whitelist(
         os.environ.get("XKEEN_UI_PANEL_SECTIONS_WHITELIST")
@@ -356,11 +350,7 @@ def _effective_panel_sections(supported_sections: list[str]) -> list[str]:
         return supported_sections
     if not any(section in requested_sections for section in supported_sections):
         return supported_sections
-    return [
-        section
-        for section in supported_sections
-        if section in requested_sections or section in _ALWAYS_VISIBLE_PANEL_SECTIONS
-    ]
+    return [section for section in supported_sections if section in requested_sections]
 
 
 def _detect_panel_core_ui(active_module_ids: set[str] | None = None) -> dict[str, object]:
@@ -391,7 +381,7 @@ def _detect_panel_core_ui(active_module_ids: set[str] | None = None) -> dict[str
             supported_sections.append("files")
         if has_diagnostics:
             supported_sections.append("devtools")
-        supported_sections.extend(["modules", "donate"])
+        supported_sections.append("donate")
 
         effective_sections = _effective_panel_sections(supported_sections)
         # The core watcher compares "detected" with /api/xkeen/core, which
@@ -433,7 +423,7 @@ def _detect_panel_core_ui(active_module_ids: set[str] | None = None) -> dict[str
     supported_sections.extend(["xkeen"])
     if has_xray:
         supported_sections.append("xray-logs")
-    supported_sections.extend(["commands", "files", "modules"])
+    supported_sections.extend(["commands", "files"])
     if has_mihomo:
         supported_sections.append("mihomo-generator")
     supported_sections.append("donate")

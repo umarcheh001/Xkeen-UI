@@ -55,7 +55,9 @@ def test_top_level_registry_exposes_modules_route_and_core_navigation():
     panel_routes = (ROOT / "xkeen-ui/routes/pages.py").read_text(encoding="utf-8")
 
     assert "modules: '/modules'" in registry
-    assert 'href_endpoint="modules_page", top_nav=True' in panel_routes
+    assert '@app.get("/modules")' in panel_routes
+    header = (ROOT / "xkeen-ui/templates/panel/header.html").read_text(encoding="utf-8")
+    assert "url_for('modules_page')" in header and 'data-xk-top-nav="1"' in header
     assert '"modules": "js/pages/modules.entry.js"' in (ROOT / "xkeen-ui/routes/ui_assets.py").read_text(encoding="utf-8")
     assert "modules: path.resolve(pageDir, 'modules.entry.js')" in (ROOT / "vite.config.mjs").read_text(encoding="utf-8")
 

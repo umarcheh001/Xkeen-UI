@@ -10,6 +10,5 @@
                 {% if item.href_endpoint %}data-nav-href="{{ url_for(item.href_endpoint) }}" {% endif %}
                 {% if item.top_nav %}data-xk-top-nav="1"{% endif %}>
           {{ item.label }}
-          {% if item.section == 'modules' %}<span data-xk-modules-update-badge hidden></span>{% endif %}
         </button>
         {% endfor %}

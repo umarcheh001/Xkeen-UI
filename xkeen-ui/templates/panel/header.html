@@ -87,6 +87,13 @@
               {% include header_action_partial %}
               {% endfor %}
 
+              {# Core-owned and outside the sections whitelist: the only way to updates. #}
+              <a
+                href="{{ url_for('modules_page') }}"
+                class="service-core-text xk-header-btn xk-header-btn-modules"
+                data-xk-top-nav="1"
+              >Модули и обновления<span data-xk-modules-update-badge hidden></span></a>
+
               <button
                 type="button"
                 id="panel-core-ui-refresh-btn"

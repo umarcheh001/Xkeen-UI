@@ -921,6 +921,7 @@ body.panel-page header .theme-toggle-btn.xk-header-btn-theme:hover {
 body.panel-page header :is(
   .xk-header-btn-ui,
   .xk-header-btn-devtools,
+  .xk-header-btn-modules,
   .xk-header-btn-logout,
   .theme-toggle-btn.xk-header-btn-theme
 ) {
@@ -1407,6 +1408,29 @@ body.panel-page.xk-operator-header-active .panel-header .xk-header-sections-trig
 body.panel-page.xk-operator-header-active .panel-header .xk-header-panel-trigger { padding: 0 8px; }
 body.panel-page .xk-header-sections-trigger::after,
 body.panel-page .xk-header-panel-trigger::after { display: none; }
+body.panel-page .xk-header-panel-trigger { position: relative; }
+body.panel-page .xk-header-update-dot {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-color, #5b5bd6);
+  pointer-events: none;
+}
+body.panel-page .xk-header-update-dot[hidden] { display: none; }
+body.panel-page .xk-header-btn-modules { display: flex; align-items: center; }
+body.panel-page .xk-header-btn-modules [data-xk-modules-update-badge]:not([hidden]) {
+  display: inline-block;
+  margin-left: auto;
+  padding: 1px 7px;
+  border-radius: var(--op-control-radius);
+  background: var(--accent-color, #5b5bd6);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+}
 body.panel-page.xk-operator-header-active .panel-shell-branding { position: relative; }
 body.panel-page.xk-operator-header-active .panel-shell-status {
   position: absolute;

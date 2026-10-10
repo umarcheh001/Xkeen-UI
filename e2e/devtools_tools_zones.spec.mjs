@@ -240,9 +240,10 @@ test.describe('DevTools Tools zones', () => {
       };
     });
 
-    // Девять вкладок ложатся в пять рядов по два, пять переключателей — в три.
-    expect(wide.items).toBe(9);
-    expect(wide.rows).toBe(5);
+    // Восемь вкладок ложатся в четыре ряда по два, пять переключателей — в три.
+    // «Модули и обновления» — пункт меню шестерёнки, а не вкладка.
+    expect(wide.items).toBe(8);
+    expect(wide.rows).toBe(4);
     expect(wide.switches).toBe(5);
     expect(wide.switchRows).toBe(3);
     // «Reset tabs» — компактная кнопка, а не полоса во всю карточку.
@@ -253,7 +254,7 @@ test.describe('DevTools Tools zones', () => {
       const items = [...document.querySelectorAll('#dt-layout-tab-list .dt-tab-item')];
       return new Set(items.map((el) => Math.round(el.getBoundingClientRect().top))).size;
     });
-    expect(narrowRows).toBe(9);
+    expect(narrowRows).toBe(8);
   });
 
   test('export card fills its height and layout columns start together', async ({ page }) => {

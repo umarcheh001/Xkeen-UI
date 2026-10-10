@@ -17,6 +17,8 @@ export function syncModulesUpdateBadges(scope = document) {
     node.textContent = badge ? 'Обновление' : '';
     node.setAttribute('aria-label', badge ? `Доступно обновление ${badge.targetVersion}` : '');
   });
+  // The item sits inside a closed menu: its trigger carries a dot.
+  scope.querySelectorAll('[data-xk-modules-update-dot]').forEach((node) => { node.hidden = !badge; });
 }
 
 export function setModulesUpdateBadge({ sourceVersion, targetVersion }) {

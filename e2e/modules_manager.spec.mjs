@@ -609,13 +609,52 @@ test.describe('Module manager recovery and guards', () => {
     await expect(page.locator('#modules-operation-status .modules-operation')).toHaveCount(0);
   });
 
-  test('main panel keeps the modules item out of the hidden sections', async ({ page }) => {
+  test('main panel opens the modules screen from the gear menu, after DevTools', async ({ page }) => {
+    await installIdleLifecycleRoutes(page);
     await page.goto('/');
 
-    const item = page.locator('[data-xk-section="modules"]');
-    await expect(item).toHaveCount(1);
-    await expect(item).not.toHaveAttribute('data-xk-force-hidden', /.*/);
-    await expect(item).not.toHaveCSS('display', 'none');
+    const gear = page.locator('.xk-header-panel-trigger');
+    await expect(gear.locator('[data-xk-modules-update-dot]')).toBeHidden();
+    // The item lives in the gear menu only: the sections menu is for workspaces.
+    await expect(page.locator('[data-xk-section="modules"]')).toHaveCount(0);
+    await gear.click();
+    const menu = page.locator('#xk-mihomo-panel-menu');
+    const link = menu.getByRole('link', { name: 'Модули и обновления' });
+    await expect(link).toBeVisible();
+    await expect(link.locator('[data-xk-modules-update-badge]')).toBeHidden();
+    const order = await menu.evaluate((node) => Array.from(node.querySelectorAll('a, button'))
+      .filter((item) => item.getBoundingClientRect().width > 0)
+      .map((item) => item.textContent.trim()));
+    expect(order.indexOf('Модули и обновления'), JSON.stringify(order)).toBe(order.indexOf('DevTools') + 1);
+    const box = await link.boundingBox();
+    const devtools = await menu.getByRole('link', { name: 'DevTools' }).boundingBox();
+    expect(Math.abs(box.width - devtools.width)).toBeLessThanOrEqual(1);
+    expect(Math.abs(box.height - devtools.height)).toBeLessThanOrEqual(1);
+
+    await link.click();
+    await expect(page.locator('#xk-modules-manager .modules-summary')).toBeVisible();
+  });
+
+  test('marks the gear and its menu item while an update is known', async ({ page }) => {
+    await installIdleLifecycleRoutes(page);
+    await page.addInitScript(() => sessionStorage.setItem('xkeen.modules.update.v1', JSON.stringify({
+      schema: 1, sourceVersion: '2.10.0', targetVersion: '2.11.0',
+    })));
+    await page.goto('/');
+
+    const gear = page.locator('.xk-header-panel-trigger');
+    const dot = gear.locator('[data-xk-modules-update-dot]');
+    await expect(dot).toBeVisible();
+    const dotBox = await dot.boundingBox();
+    expect(dotBox.width).toBeGreaterThanOrEqual(6);
+    expect(dotBox.width).toBeLessThanOrEqual(10);
+    await gear.click();
+    const badge = page.locator('#xk-mihomo-panel-menu').getByRole('link', { name: /Модули и обновления/ })
+      .locator('[data-xk-modules-update-badge]');
+    await expect(badge).toHaveText('Обновление');
+    // A pill, not bare text glued to the label.
+    expect(await badge.evaluate((node) => Number.parseFloat(getComputedStyle(node).borderTopLeftRadius))).toBeGreaterThan(4);
+    expect(await badge.evaluate((node) => getComputedStyle(node).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
   });
 
   test('going back from a directly opened modules page keeps the panel import map', async ({ page }) => {
