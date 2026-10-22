@@ -27,6 +27,12 @@ jobs:
           # commit, so the archive validation checkout must include history.
           fetch-depth: 0
 
+      # A tag publishes a release: stop before building if its format or
+      # number breaks the order in RELEASING.md.
+      - name: Check release tag order
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: python3 scripts/check_release_tag.py --tag "${GITHUB_REF#refs/tags/}"
+
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
