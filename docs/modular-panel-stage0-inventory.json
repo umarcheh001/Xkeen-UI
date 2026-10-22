@@ -38,8 +38,8 @@
         "gevent-websocket (optional)"
       ],
       "removable": false,
-      "unit_count": 585,
-      "size_bytes": 7947760,
+      "unit_count": 586,
+      "size_bytes": 7965909,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -52,7 +52,7 @@
         "frontend_javascript": 37,
         "frontend_runtime": 2,
         "frontend_test": 70,
-        "frontend_ui": 17,
+        "frontend_ui": 18,
         "stylesheet": 9,
         "template": 31
       },
@@ -87,15 +87,15 @@
         "xray"
       ],
       "removable": true,
-      "unit_count": 140,
-      "size_bytes": 3858287,
+      "unit_count": 144,
+      "size_bytes": 3927363,
       "kind_counts": {
         "backend_route": 13,
         "backend_service": 20,
-        "backend_test": 48,
+        "backend_test": 50,
         "configuration": 4,
         "editor_schema": 4,
-        "frontend_feature": 35,
+        "frontend_feature": 37,
         "frontend_test": 10,
         "frontend_ui": 1,
         "template": 5
@@ -132,7 +132,7 @@
       ],
       "removable": true,
       "unit_count": 134,
-      "size_bytes": 3103250,
+      "size_bytes": 3109178,
       "kind_counts": {
         "app_runtime": 4,
         "backend_route": 2,
@@ -177,7 +177,7 @@
       ],
       "removable": true,
       "unit_count": 25,
-      "size_bytes": 830990,
+      "size_bytes": 831334,
       "kind_counts": {
         "frontend_javascript": 3,
         "frontend_ui": 22
@@ -7696,7 +7696,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_schema_snippets_runtime.py",
-      "size_bytes": 14289,
+      "size_bytes": 14389,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -12422,7 +12422,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/router_panel_smoke.spec.mjs",
-      "size_bytes": 1739,
+      "size_bytes": 3608,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -12853,6 +12853,34 @@
       "registers_routes": false,
       "routes": [],
       "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "frontend_ui",
+      "path": "xkeen-ui/static/js/ui/country_flags.js",
+      "size_bytes": 16180,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [
+        "devtools-page",
+        "mihomo-generator-page",
+        "modules-page",
+        "panel-core",
+        "panel-routing",
+        "terminal-lazy",
+        "xkeen-page"
+      ],
       "system_requirements": [
         "python3",
         "flask",
@@ -14970,7 +14998,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_service",
       "path": "xkeen-ui/services/mihomo_dns.py",
-      "size_bytes": 199649,
+      "size_bytes": 200600,
       "depends_on": [
         "core",
         "tool.editor"
@@ -15758,7 +15786,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_test",
       "path": "tests/test_mihomo_dns.py",
-      "size_bytes": 84451,
+      "size_bytes": 87199,
       "depends_on": [
         "core",
         "tool.editor"
@@ -16886,7 +16914,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/mihomo_dns.js",
-      "size_bytes": 49754,
+      "size_bytes": 50104,
       "depends_on": [
         "core",
         "tool.editor"
@@ -17366,7 +17394,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_test",
       "path": "e2e/mihomo_dns_policy_detection.spec.mjs",
-      "size_bytes": 2291,
+      "size_bytes": 4170,
       "depends_on": [
         "core",
         "tool.editor"
@@ -18602,7 +18630,7 @@
       "module_id": "engine.xray",
       "kind": "backend_service",
       "path": "xkeen-ui/services/xray_outbounds.py",
-      "size_bytes": 56809,
+      "size_bytes": 58420,
       "depends_on": [
         "core",
         "tool.editor"
@@ -18665,7 +18693,7 @@
       "module_id": "engine.xray",
       "kind": "backend_service",
       "path": "xkeen-ui/services/xray_subscriptions.py",
-      "size_bytes": 332002,
+      "size_bytes": 332126,
       "depends_on": [
         "core",
         "tool.editor",
@@ -19321,8 +19349,50 @@
     {
       "module_id": "engine.xray",
       "kind": "backend_test",
+      "path": "tests/test_xray_log_parser_js.py",
+      "size_bytes": 6685,
+      "depends_on": [
+        "core",
+        "tool.editor"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "xkeen",
+        "xray"
+      ],
+      "environment_variables": [],
+      "removable": true
+    },
+    {
+      "module_id": "engine.xray",
+      "kind": "backend_test",
       "path": "tests/test_xray_log_tail_memory.py",
       "size_bytes": 2152,
+      "depends_on": [
+        "core",
+        "tool.editor"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "xkeen",
+        "xray"
+      ],
+      "environment_variables": [],
+      "removable": true
+    },
+    {
+      "module_id": "engine.xray",
+      "kind": "backend_test",
+      "path": "tests/test_xray_logs_outbound_names.py",
+      "size_bytes": 1899,
       "depends_on": [
         "core",
         "tool.editor"
@@ -19429,7 +19499,7 @@
       "module_id": "engine.xray",
       "kind": "backend_test",
       "path": "tests/test_xray_outbounds.py",
-      "size_bytes": 7826,
+      "size_bytes": 7807,
       "depends_on": [
         "core",
         "tool.editor"
@@ -19602,7 +19672,7 @@
       "module_id": "engine.xray",
       "kind": "backend_test",
       "path": "tests/test_xray_subscriptions.py",
-      "size_bytes": 255244,
+      "size_bytes": 256274,
       "depends_on": [
         "core",
         "tool.editor"
@@ -20921,6 +20991,64 @@
         "modules-page",
         "panel-core",
         "panel-mihomo",
+        "panel-routing",
+        "terminal-lazy",
+        "xkeen-page"
+      ],
+      "system_requirements": [
+        "xkeen",
+        "xray"
+      ],
+      "environment_variables": [],
+      "removable": true
+    },
+    {
+      "module_id": "engine.xray",
+      "kind": "frontend_feature",
+      "path": "xkeen-ui/static/js/features/xray_log_parser.js",
+      "size_bytes": 4585,
+      "depends_on": [
+        "core",
+        "tool.editor"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [
+        "devtools-page",
+        "mihomo-generator-page",
+        "modules-page",
+        "panel-core",
+        "panel-routing",
+        "terminal-lazy",
+        "xkeen-page"
+      ],
+      "system_requirements": [
+        "xkeen",
+        "xray"
+      ],
+      "environment_variables": [],
+      "removable": true
+    },
+    {
+      "module_id": "engine.xray",
+      "kind": "frontend_feature",
+      "path": "xkeen-ui/static/js/features/xray_log_view.js",
+      "size_bytes": 53161,
+      "depends_on": [
+        "core",
+        "tool.editor"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [
+        "devtools-page",
+        "mihomo-generator-page",
+        "modules-page",
+        "panel-core",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -23542,7 +23670,7 @@
       "module_id": "tool.editor",
       "kind": "frontend_ui",
       "path": "xkeen-ui/static/js/ui/schema_snippets.js",
-      "size_bytes": 53028,
+      "size_bytes": 53372,
       "depends_on": [
         "core"
       ],
@@ -31687,7 +31815,7 @@
       {
         "from": "engine.xray",
         "to": "core",
-        "unit_count": 140,
+        "unit_count": 144,
         "examples": [
           "xkeen-ui/routes/routing/__init__.py",
           "xkeen-ui/routes/routing/blueprint.py",
@@ -31728,7 +31856,7 @@
       {
         "from": "engine.xray",
         "to": "tool.editor",
-        "unit_count": 140,
+        "unit_count": 144,
         "examples": [
           "xkeen-ui/routes/routing/__init__.py",
           "xkeen-ui/routes/routing/blueprint.py",
@@ -32125,7 +32253,7 @@
       {
         "from": "engine.xray",
         "to": "core",
-        "unit_count": 82,
+        "unit_count": 84,
         "examples": [
           "xkeen-ui/routes/routing/__init__.py",
           "xkeen-ui/routes/routing/blueprint.py",
@@ -32166,7 +32294,7 @@
       {
         "from": "engine.xray",
         "to": "tool.editor",
-        "unit_count": 82,
+        "unit_count": 84,
         "examples": [
           "xkeen-ui/routes/routing/__init__.py",
           "xkeen-ui/routes/routing/blueprint.py",
@@ -32812,7 +32940,7 @@
       "evidence": {
         "tool.editor": {
           "unit_count": 25,
-          "size_bytes": 830990
+          "size_bytes": 831334
         },
         "tool.terminal": {
           "unit_count": 47,

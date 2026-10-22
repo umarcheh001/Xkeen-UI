@@ -1232,23 +1232,40 @@ def diagnose_dns_runtime(
         if transit is True:
             risks = True
             reasons.append("Keenetic перехватывает транзитные DNS-запросы")
-    if runtime.get("listener_configured") and dns_override is True and active_core in {"", "mihomo"} and not risks:
-        router_state = "safe" if all(
-            bypass_checks[key] == "safe"
-            for key in ("provider_dns", "ipv6_provider_dns", "transit_dns")
-        ) else "unknown"
+    inactive = dns_override is False and not runtime.get("listener_configured")
+    if inactive:
+        # No listener and no firmware override is the normal pre-activation
+        # state, not a failed check of an enabled protection.
+        router_state = "inactive"
     elif risks:
         router_state = "warning"
     else:
-        router_state = "unknown"
-        reasons.append("Не удалось подтвердить все пути DNS на этом стенде")
+        missing = []
+        if not runtime.get("listener_configured"):
+            missing.append("DNS-слушатель Mihomo на порту 53 не включён")
+        if dns_override is not True:
+            missing.append(
+                "DNS override Keenetic выключен" if dns_override is False
+                else "Не удалось прочитать DNS override Keenetic"
+            )
+        if active_core not in {"", "mihomo"}:
+            missing.append("Активное ядро — не Mihomo")
+        for key, message in (
+            ("provider_dns", "Не удалось определить настройки DNS провайдера"),
+            ("ipv6_provider_dns", "Не удалось определить настройки IPv6 DNS провайдера"),
+            ("transit_dns", "Не удалось определить настройку транзита DNS"),
+        ):
+            if bypass_checks[key] == "unknown":
+                missing.append(message)
+        router_state = "unknown" if missing else "safe"
+        reasons.extend(missing)
 
     # DHCP/client-side DoH is intentionally outside the router's observable
     # state. Keep this separate so a healthy router path is not presented as
     # a router failure merely because individual clients are opaque.
     client_state = "unknown"
     client_reason = "DNS, DoH и DoT, заданные внутри клиентов, панель не видит"
-    bypass_state = "warning" if router_state == "warning" else (
+    bypass_state = router_state if router_state in {"warning", "inactive"} else (
         "safe" if router_state == "safe" and bypass_checks["dhcp_direct_dns"] == "safe" else "unknown"
     )
 

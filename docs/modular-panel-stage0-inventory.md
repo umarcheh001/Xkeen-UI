@@ -36,10 +36,10 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 | Module ID | Единиц | Размер | Routes | Background | UI surfaces | Removable |
 |---|---:|---:|---:|---:|---:|---|
-| `core` | 585 | 7.58 МБ | 104 | 4 | 36 | нет |
-| `engine.xray` | 140 | 3.68 МБ | 62 | 3 | 14 | да |
-| `engine.mihomo` | 134 | 2.96 МБ | 89 | 4 | 6 | да |
-| `tool.editor` | 25 | 811.5 КБ | 0 | 0 | 2 | да |
+| `core` | 586 | 7.60 МБ | 104 | 4 | 36 | нет |
+| `engine.xray` | 144 | 3.75 МБ | 62 | 3 | 14 | да |
+| `engine.mihomo` | 134 | 2.97 МБ | 89 | 4 | 6 | да |
+| `tool.editor` | 25 | 811.8 КБ | 0 | 0 | 2 | да |
 | `tool.terminal` | 47 | 472.0 КБ | 2 | 2 | 2 | да |
 | `tool.files` | 85 | 984.7 КБ | 43 | 1 | 1 | да |
 | `tool.backups` | 8 | 99.7 КБ | 14 | 0 | 0 | да |
@@ -110,11 +110,11 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 | `engine.mihomo` | `tool.advanced-diagnostics` | 1 | `xkeen-ui/routes/mihomo_clash.py` |
 | `engine.mihomo` | `tool.backups` | 1 | `xkeen-ui/routes/mihomo.py` |
 | `engine.mihomo` | `tool.editor` | 134 | `xkeen-ui/bootstrap_mihomo_env.py`<br>`xkeen-ui/mihomo_config_generator.py`<br>`xkeen-ui/mihomo_server_core.py` |
-| `engine.xray` | `core` | 140 | `xkeen-ui/routes/routing/__init__.py`<br>`xkeen-ui/routes/routing/blueprint.py`<br>`xkeen-ui/routes/routing/config.py` |
+| `engine.xray` | `core` | 144 | `xkeen-ui/routes/routing/__init__.py`<br>`xkeen-ui/routes/routing/blueprint.py`<br>`xkeen-ui/routes/routing/config.py` |
 | `engine.xray` | `engine.mihomo` | 1 | `xkeen-ui/services/xray_subscriptions.py` |
 | `engine.xray` | `integration.happ` | 2 | `xkeen-ui/services/xray_subscriptions.py`<br>`xkeen-ui/static/js/features/outbounds.js` |
 | `engine.xray` | `tool.backups` | 2 | `xkeen-ui/routes/routing/config.py`<br>`xkeen-ui/routes/xray_configs.py` |
-| `engine.xray` | `tool.editor` | 140 | `xkeen-ui/routes/routing/__init__.py`<br>`xkeen-ui/routes/routing/blueprint.py`<br>`xkeen-ui/routes/routing/config.py` |
+| `engine.xray` | `tool.editor` | 144 | `xkeen-ui/routes/routing/__init__.py`<br>`xkeen-ui/routes/routing/blueprint.py`<br>`xkeen-ui/routes/routing/config.py` |
 | `engine.xray` | `tool.files` | 3 | `xkeen-ui/routes/routing/dat.py`<br>`xkeen-ui/routes/routing/dat_files.py`<br>`xkeen-ui/services/geodat/runner.py` |
 | `integration.happ` | `core` | 22 | `xkeen-ui/routes/happ_decryptor.py`<br>`xkeen-ui/services/happ_decryptor/__init__.py`<br>`xkeen-ui/services/happ_decryptor/engine.py` |
 | `integration.happ` | `engine.mihomo` | 2 | `xkeen-ui/services/mihomo_hwid_sub.py`<br>`xkeen-ui/static/js/features/mihomo_hwid_sub.js` |

@@ -48,6 +48,45 @@ def _config_outbounds_list(config: Any) -> List[Dict[str, Any]]:
     return [item for item in raw if isinstance(item, dict)]
 
 
+def normalize_vless_outbound_for_compatibility(outbound: Dict[str, Any]) -> Dict[str, Any]:
+    """Emit the portable VLESS ``settings.vnext`` shape.
+
+    Xray versions released before the compact outbound form was introduced
+    reject ``settings.address/port/id`` with ``VLESS settings: "vnext" is
+    empty``.  The explicit vnext form remains accepted by both old and new
+    Xray versions, so generated links/subscriptions use it as the wire format.
+    Hand-authored or already-normalized outbounds are returned unchanged.
+    """
+
+    if not isinstance(outbound, dict) or str(outbound.get("protocol") or "").lower() != "vless":
+        return outbound
+    settings = outbound.get("settings")
+    if not isinstance(settings, dict) or isinstance(settings.get("vnext"), list):
+        return outbound
+
+    address = settings.get("address")
+    port = settings.get("port")
+    user_id = settings.get("id")
+    if address in (None, "") or port in (None, "") or user_id in (None, ""):
+        return outbound
+
+    user = {
+        key: _clone_json_value(settings[key])
+        for key in ("id", "encryption", "flow", "level", "email", "seed", "reverse", "testpre", "testseed")
+        if key in settings and settings[key] is not None
+    }
+    user.setdefault("encryption", "none")
+    normalized = _clone_json_value(outbound)
+    normalized["settings"] = {
+        "vnext": [{
+            "address": _clone_json_value(address),
+            "port": _clone_json_value(port),
+            "users": [user],
+        }],
+    }
+    return normalized
+
+
 def _outbound_protocol(outbound: Any) -> str:
     return str(outbound.get("protocol") or "").strip().lower() if isinstance(outbound, dict) else ""
 
@@ -1195,7 +1234,10 @@ def build_outbounds_config_from_vless(url, *, proxy_tags: Optional[List[str]] = 
         "streamSettings": stream_settings,
     }
 
-    return _wrap_outbounds_with_common(outbound, proxy_tags=proxy_tags)
+    return _wrap_outbounds_with_common(
+        normalize_vless_outbound_for_compatibility(outbound),
+        proxy_tags=proxy_tags,
+    )
 
 
 

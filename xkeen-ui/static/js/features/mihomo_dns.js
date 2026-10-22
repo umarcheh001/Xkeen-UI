@@ -438,10 +438,14 @@ import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from '
         state,
         state === 'safe'
           ? 'DNS роутера: защищён'
-          : (state === 'warning' ? 'DNS роутера: требует внимания' : 'DNS роутера: не подтверждён'),
+          : (state === 'inactive'
+            ? 'DNS роутера: защита выключена'
+            : (state === 'warning' ? 'DNS роутера: требует внимания' : 'DNS роутера: не подтверждён')),
         state === 'safe'
           ? `Пути DNS на роутере проверены. ${clientNote}.`
-          : (bypass.reasons || []).join(' · ') || clientNote,
+          : (state === 'inactive'
+            ? 'Защищённый DNS Mihomo выключен. Устройства используют DNS Keenetic. После включения панель проверит защищённый DNS.'
+            : (bypass.reasons || []).join(' · ') || clientNote),
       );
     }
     if (!results) return;
