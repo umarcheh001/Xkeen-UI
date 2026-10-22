@@ -38,13 +38,13 @@
         "gevent-websocket (optional)"
       ],
       "removable": false,
-      "unit_count": 587,
-      "size_bytes": 7971026,
+      "unit_count": 588,
+      "size_bytes": 7973515,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
         "backend_service": 80,
-        "backend_test": 262,
+        "backend_test": 263,
         "configuration": 10,
         "frontend_bundle": 9,
         "frontend_entrypoint": 3,
@@ -7375,6 +7375,28 @@
     {
       "module_id": "core",
       "kind": "backend_test",
+      "path": "tests/test_refresh_inventory.py",
+      "size_bytes": 2313,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [
+        "XKEEN_SKIP_INVENTORY_CHECK"
+      ],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
       "path": "tests/test_remotefs_remove_regressions.py",
       "size_bytes": 4291,
       "depends_on": [
@@ -8944,7 +8966,7 @@
       "module_id": "core",
       "kind": "configuration",
       "path": "package.json",
-      "size_bytes": 3233,
+      "size_bytes": 3409,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
