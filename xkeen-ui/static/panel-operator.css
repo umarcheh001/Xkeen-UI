@@ -24088,3 +24088,877 @@ body.panel-page #xk-mihomo-service-menu .xk-autorestart-hint {
   font-size: calc(11.5px * var(--xk-font-scale, 1));
   font-weight: 400;
 }
+
+/* Xray logs (22.10.2026): one header row (file, run state, search, menu),
+ * a collapsible summary, filter chips and the output box. access.log is a
+ * virtual table with fixed 32px rows, error.log an append-only stream.
+ * Rows never animate and use transforms only for virtual positioning. */
+body.panel-page #view-xray-logs .xk-xlog-card {
+  --xk-xlog-mono: var(--xk-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  --xk-xlog-h: 32px;
+  --xk-xlog-proxy: var(--op-accent);
+  --xk-xlog-direct: var(--op-success);
+  --xk-xlog-block: var(--op-danger);
+  --xk-xlog-dns: var(--op-warning);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Same header rhythm as .log-header-row of the operations journal below. */
+body.panel-page #view-xray-logs .xk-xlog-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--op-border);
+}
+
+body.panel-page #view-xray-logs .xk-xlog-head > * {
+  margin: 0 !important;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--xk-xlog-h);
+  padding: 0 !important;
+  color: var(--op-text-strong) !important;
+  font-size: calc(12px * var(--xk-font-scale, 1));
+  font-weight: 660;
+  line-height: var(--xk-xlog-h) !important;
+  letter-spacing: 0;
+  text-transform: none !important;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  height: 22px;
+  min-width: 0;
+  padding: 0 8px;
+  border: 1px solid var(--op-border);
+  border-radius: 999px;
+  background: var(--op-surface-2);
+  color: var(--op-muted);
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  box-shadow: none;
+  animation: none;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-live > i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--op-border-strong);
+}
+
+body.panel-page #view-xray-logs .xk-xlog-live[data-state="on"] {
+  border-color: var(--op-success-border, var(--op-border));
+  background: var(--op-success-soft);
+  color: var(--op-success);
+}
+
+body.panel-page #view-xray-logs .xk-xlog-live[data-state="on"] > i {
+  background: var(--op-success);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--op-success) 25%, transparent);
+}
+
+body.panel-page #view-xray-logs .xk-xlog-live[data-state="armed"] {
+  border-color: var(--op-warning-border, var(--op-border));
+  background: var(--op-warning-soft);
+  color: var(--op-warning);
+}
+
+body.panel-page #view-xray-logs .xk-xlog-live[data-state="armed"] > i {
+  background: var(--op-warning);
+}
+
+body.panel-page #view-xray-logs .xk-xlog-live[data-state="error"] {
+  background: var(--op-danger-soft);
+  color: var(--op-danger);
+}
+
+body.panel-page #view-xray-logs .xk-xlog-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: var(--xk-xlog-h);
+  padding: 2px;
+  box-sizing: border-box;
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-control-radius);
+  background: var(--op-surface-2);
+}
+
+body.panel-page #view-xray-logs .xk-xlog-seg-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  min-height: 26px;
+  padding: 0 11px;
+  border: 0 !important;
+  border-radius: calc(var(--op-control-radius) - 2px) !important;
+  background: transparent !important;
+  color: var(--op-muted) !important;
+  box-shadow: none !important;
+  font-size: calc(12.5px * var(--xk-font-scale, 1));
+  font-weight: 600;
+  cursor: pointer;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-seg-btn:hover:not(:disabled) {
+  color: var(--op-text) !important;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-seg-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-seg-btn .xk-action-icon {
+  width: 15px;
+  height: 15px;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-seg-btn .n {
+  color: var(--op-faint);
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-seg-btn.is-on {
+  background: var(--op-surface) !important;
+  color: var(--op-text-strong) !important;
+  box-shadow: 0 0 0 1px var(--op-border-strong) !important;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-run .is-play.is-on {
+  background: var(--op-success-soft) !important;
+  color: var(--op-success) !important;
+  box-shadow: 0 0 0 1px var(--op-success) !important;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-run .is-pause.is-on {
+  background: var(--op-warning-soft) !important;
+  color: var(--op-warning) !important;
+  box-shadow: 0 0 0 1px var(--op-warning) !important;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-run .is-stop:hover:not(:disabled) {
+  color: var(--op-danger) !important;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-badge {
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--op-warning);
+  color: #fff;
+  font: 600 10.5px/16px var(--xk-xlog-mono);
+}
+
+body.panel-page #view-xray-logs .xk-xlog-level {
+  height: var(--xk-xlog-h);
+  min-height: var(--xk-xlog-h);
+}
+
+body.panel-page #view-xray-logs .xk-xlog-spacer {
+  flex: 1 1 auto;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-search {
+  position: relative;
+  flex: 0 1 280px;
+  min-width: 170px;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-search > .xk-action-icon {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 16px;
+  height: 16px;
+  color: var(--op-muted);
+  pointer-events: none;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-search .xray-log-filter {
+  width: 100%;
+  height: var(--xk-xlog-h);
+  min-height: var(--xk-xlog-h);
+  padding: 0 30px 0 30px;
+  background: var(--op-editor) !important;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-kbd,
+body.panel-page #view-xray-logs .xk-xlog-search-clear {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--op-border);
+  border-radius: 4px;
+  color: var(--op-faint);
+  font: 600 10.5px var(--xk-xlog-mono);
+  pointer-events: none;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-search:focus-within .xk-xlog-kbd,
+body.panel-page #view-xray-logs .xk-xlog-search-clear:not([hidden]) ~ .xk-xlog-kbd {
+  display: none;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-search-clear {
+  top: 5px;
+  right: 5px;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+  padding: 0;
+  border: 0 !important;
+  background: transparent !important;
+  color: var(--op-muted) !important;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-search-clear[hidden] {
+  display: none;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: var(--xk-xlog-h);
+  min-width: var(--xk-xlog-h);
+  height: var(--xk-xlog-h);
+  min-height: var(--xk-xlog-h);
+  padding: 0;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-icon-btn .xk-action-icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* Menu: one column of rows, switches on the right, file removal set apart. */
+body.panel-page #view-xray-logs #xray-log-more .xk-xlog-menu-panel {
+  right: 0;
+  left: auto;
+  top: calc(100% + 4px);
+  z-index: 30;
+  display: grid;
+  gap: 0;
+  width: 280px;
+  max-width: min(280px, calc(100vw - 16px));
+  padding: 6px;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-menu-title {
+  margin: 6px 8px 4px;
+  color: var(--op-faint);
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 0 !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: transparent !important;
+  color: var(--op-text) !important;
+  box-shadow: none !important;
+  font-size: calc(12.5px * var(--xk-font-scale, 1));
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-menu-item[hidden] {
+  display: none;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-menu-item:hover {
+  background: var(--op-surface-3) !important;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-menu-item > .xk-action-icon {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  color: var(--op-muted);
+}
+
+body.panel-page #view-xray-logs .xk-xlog-menu-item > span:not(.dt-switch) {
+  flex: 1 1 auto;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-menu-item > em {
+  color: var(--op-faint);
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+  font-style: normal;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-menu-item .dt-switch {
+  min-height: 0;
+  padding: 0;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-menu-item :is(.dt-log-lines-input, .xray-log-select) {
+  width: 84px;
+  min-width: 84px;
+  height: 26px;
+  min-height: 26px;
+  padding: 0 24px 0 8px;
+  line-height: 24px;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-menu-item .dt-log-lines-input {
+  padding: 0 6px;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-menu-item.is-danger,
+body.panel-page #view-xray-logs .xk-xlog-menu-item.is-danger > .xk-action-icon {
+  color: var(--op-danger) !important;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-menu-sep {
+  height: 1px;
+  margin: 5px 2px;
+  background: var(--op-border);
+}
+
+/* Summary: one line when collapsed, four tiles when open. */
+body.panel-page #view-xray-logs .xk-xlog-summary {
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-radius-sm);
+  background: var(--op-surface-2);
+}
+
+body.panel-page #view-xray-logs .xk-xlog-card[data-xlog-file="error"] .xk-xlog-summary,
+body.panel-page #view-xray-logs .xk-xlog-card.xk-xlog-no-summary .xk-xlog-summary,
+body.panel-page #view-xray-logs .xk-xlog-summary[hidden] {
+  display: none;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-summary-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 8px 0 12px;
+  border: 0 !important;
+  background: transparent !important;
+  color: var(--op-text) !important;
+  box-shadow: none !important;
+  font-size: calc(12px * var(--xk-font-scale, 1));
+  text-align: left;
+  cursor: pointer;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-summary-head .t {
+  color: var(--op-muted);
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-mini {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+body.panel-page #view-xray-logs :is(.xk-xlog-mini, .xk-xlog-legend) > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+body.panel-page #view-xray-logs :is(.xk-xlog-mini, .xk-xlog-legend) > span::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--xk-xlog-dot, var(--xk-xlog-proxy));
+}
+
+body.panel-page #view-xray-logs :is(.xk-xlog-mini, .xk-xlog-legend) em {
+  color: var(--op-faint);
+  font-style: normal;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-summary-open-only,
+body.panel-page #view-xray-logs .xk-xlog-summary.is-open .xk-xlog-mini {
+  display: none;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-summary-tog {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  color: var(--op-muted);
+}
+
+body.panel-page #view-xray-logs .xk-xlog-summary-tog .xk-action-icon {
+  width: 14px;
+  height: 14px;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-summary.is-open .xk-xlog-summary-tog .xk-action-icon {
+  transform: rotate(180deg);
+}
+
+body.panel-page #view-xray-logs .xk-xlog-summary-body {
+  display: grid;
+  grid-template-columns: 1.2fr repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 0 10px 10px;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-summary-body[hidden] {
+  display: none;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-tile {
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-radius-sm);
+  background: var(--op-surface);
+}
+
+body.panel-page #view-xray-logs .xk-xlog-tile h4 {
+  margin: 0 0 7px;
+  color: var(--op-muted);
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-bar {
+  display: flex;
+  gap: 2px;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--op-surface-3);
+}
+
+body.panel-page #view-xray-logs .xk-xlog-bar > i {
+  display: block;
+  background: var(--xk-xlog-dot, var(--xk-xlog-proxy));
+}
+
+body.panel-page #view-xray-logs .xk-xlog-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: calc(12px * var(--xk-font-scale, 1));
+}
+
+body.panel-page #view-xray-logs .xk-xlog-legend b {
+  font-weight: 650;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-top {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-top li {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: calc(12px * var(--xk-font-scale, 1));
+}
+
+body.panel-page #view-xray-logs .xk-xlog-top li::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: var(--w);
+  border-radius: 4px;
+  background: var(--op-accent-soft);
+}
+
+body.panel-page #view-xray-logs .xk-xlog-top li > * {
+  position: relative;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-top button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0 !important;
+  background: transparent !important;
+  color: var(--op-text) !important;
+  box-shadow: none !important;
+  font: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-top em {
+  color: var(--op-muted);
+  font: 11.5px var(--xk-xlog-mono);
+  font-style: normal;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-muted {
+  margin: 0;
+  color: var(--op-faint);
+  font-size: calc(12px * var(--xk-font-scale, 1));
+}
+
+/* Chips */
+body.panel-page #view-xray-logs .xk-xlog-chips {
+  display: grid;
+  gap: 6px;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-chips:empty {
+  display: none;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-chiprow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-chiprow .lbl {
+  min-width: 58px;
+  color: var(--op-muted);
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+}
+
+body.panel-page #view-xray-logs .xk-xlog-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0 9px;
+  border: 1px solid var(--op-border) !important;
+  border-radius: 999px !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-muted) !important;
+  box-shadow: none !important;
+  font-size: calc(12px * var(--xk-font-scale, 1));
+  font-weight: 550;
+  cursor: pointer;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-chip em {
+  color: var(--op-faint);
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-chip.is-on {
+  border-color: var(--op-accent-border) !important;
+  background: var(--op-accent-soft) !important;
+  color: var(--op-accent) !important;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-chip.is-cond {
+  border-color: var(--op-accent) !important;
+  background: var(--op-accent) !important;
+  color: #fff !important;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-chip.is-cond .xk-action-icon {
+  width: 14px;
+  height: 14px;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-chip .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--xk-xlog-dot, var(--xk-xlog-proxy));
+}
+
+body.panel-page #view-xray-logs .xk-xlog-vsep {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--op-border);
+}
+
+body.panel-page #view-xray-logs .xk-xlog-hint {
+  color: var(--op-faint);
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+}
+
+body.panel-page #view-xray-logs .xk-xlog-reset {
+  margin-left: auto;
+  min-height: 0;
+  padding: 0;
+  border: 0 !important;
+  background: transparent !important;
+  color: var(--op-muted) !important;
+  box-shadow: none !important;
+  font-size: calc(12px * var(--xk-font-scale, 1));
+  text-decoration: underline dotted;
+  cursor: pointer;
+}
+
+/* Route colours for dots, stripes and pills. */
+body.panel-page #view-xray-logs .dot-proxy { --xk-xlog-dot: var(--xk-xlog-proxy); }
+body.panel-page #view-xray-logs .dot-direct { --xk-xlog-dot: var(--xk-xlog-direct); }
+body.panel-page #view-xray-logs .dot-block { --xk-xlog-dot: var(--xk-xlog-block); }
+body.panel-page #view-xray-logs .dot-dns { --xk-xlog-dot: var(--xk-xlog-dns); }
+body.panel-page #view-xray-logs .dot-debug { --xk-xlog-dot: var(--op-border-strong); }
+body.panel-page #view-xray-logs .dot-info { --xk-xlog-dot: var(--op-accent); }
+body.panel-page #view-xray-logs .dot-warning { --xk-xlog-dot: var(--op-warning); }
+body.panel-page #view-xray-logs .dot-error { --xk-xlog-dot: var(--op-danger); }
+
+/* Output box */
+body.panel-page #view-xray-logs .xk-xlog-box {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-radius-sm);
+  background: var(--op-editor);
+}
+
+body.panel-page #view-xray-logs .xk-xlog-output {
+  position: relative;
+  height: 520px;
+  min-height: 160px;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  resize: vertical;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--op-text);
+  font-size: calc(12.5px * var(--xk-font-scale, 1));
+  outline: none;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-output:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--op-accent-border);
+}
+
+body.panel-page #view-xray-logs .xk-xlog-grp {
+  overflow: hidden;
+  color: var(--op-faint);
+  font: 11px var(--xk-xlog-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-flag {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 13px;
+  overflow: hidden;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--op-text) 18%, transparent);
+}
+
+body.panel-page #view-xray-logs .xk-xlog-flag svg {
+  display: block;
+  width: 18px;
+  height: 13px;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  white-space: nowrap;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-btn .xk-action-icon {
+  width: 15px;
+  height: 15px;
+}
+
+/* error.log stream: rows wrap; off-screen rows skip layout and paint. */
+body.panel-page #view-xray-logs .xk-xlog-stream {
+  padding: 4px 0;
+}
+
+/* Floating bars over the output. */
+body.panel-page #view-xray-logs .xk-xlog-selbar,
+body.panel-page #view-xray-logs .xk-xlog-float {
+  position: absolute;
+  bottom: 42px;
+  left: 50%;
+  z-index: 3;
+  transform: translateX(-50%);
+  box-shadow: var(--op-shadow-float);
+}
+
+body.panel-page #view-xray-logs .xk-xlog-selbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 24px);
+  padding: 6px 6px 6px 14px;
+  overflow-x: auto;
+  border: 1px solid var(--op-border-strong);
+  border-radius: var(--op-radius);
+  background: var(--op-surface);
+  color: var(--op-text-strong);
+  font-size: calc(12.5px * var(--xk-font-scale, 1));
+  white-space: nowrap;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-float .xk-action-icon {
+  width: 14px;
+  height: 14px;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-selbar[hidden],
+body.panel-page #view-xray-logs .xk-xlog-float[hidden] {
+  display: none;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-selbar .hint {
+  margin: 0 4px;
+  color: var(--op-faint);
+  font: 11px var(--xk-xlog-mono);
+}
+
+body.panel-page #view-xray-logs .xk-xlog-float {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 12px;
+  white-space: nowrap;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: var(--op-accent) !important;
+  color: #fff !important;
+  font-size: calc(12px * var(--xk-font-scale, 1));
+  font-weight: 600;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-foot {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 30px;
+  padding: 0 10px;
+  border-top: 1px solid var(--op-border);
+  background: var(--op-surface);
+  color: var(--op-muted);
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+}
+
+body.panel-page #view-xray-logs .xk-xlog-foot .xk-log-counter {
+  border: 0 !important;
+  background: transparent !important;
+  padding: 0;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-raw-note[hidden] {
+  display: none;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-card .xk-log-state:empty {
+  display: none;
+}
+
+/* Fullscreen: the output box takes the free height. */
+body.panel-page #view-xray-logs .xk-xlog-card.is-fullscreen .xk-xlog-box {
+  flex: 1 1 0;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-card.is-fullscreen .xk-xlog-output {
+  flex: 1 1 0;
+  height: 0 !important;
+  resize: none;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-card.is-fullscreen .xk-xlog-summary {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  body.panel-page #view-xray-logs .xk-xlog-summary-body {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body.panel-page #view-xray-logs .xk-xlog-search {
+    flex: 1 1 100%;
+    order: 10;
+  }
+
+  body.panel-page #view-xray-logs .xk-xlog-summary-head {
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    padding-block: 6px;
+  }
+
+  body.panel-page #view-xray-logs .xk-xlog-summary-head [data-xlog-summary-extra] {
+    display: none;
+  }
+
+  body.panel-page #view-xray-logs .xk-xlog-mini {
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.panel-page #view-xray-logs .xk-xlog-card * {
+    transition: none !important;
+  }
+}

@@ -5,92 +5,82 @@ const restartLines = [
   '[2026-07-29 09:12:00] source=xray-preflight result=FAIL file=04_outbounds.json phase=validation returncode=23 summary=invalid_rule\n',
 ];
 
+const accessLines = [
+  '2026/07/29 09:00:00.100000 from 192.168.1.34:53122 accepted tcp:www.youtube.com:443 [tproxy-in -> pecan--Frankfurt-2] email: phone',
+  '2026/07/29 09:00:01.200000 from 192.168.1.20:61002 accepted tcp:api.github.com:443 [redirect-in -> direct]',
+  '2026/07/29 09:00:02.300000 from 192.168.1.51:40211 accepted tcp:ads.doubleclick.net:443 [redirect-in -> block]',
+  '2026/07/29 09:00:03.400000 from 192.168.1.20:61004 accepted tcp:192.0.2.15:443 [tproxy-in -> pecan--Amsterdam-1]',
+  '2026/07/29 09:00:04.500000 something the parser does not know',
+];
 
-async function mockLogs(page) {
+const errorLines = [
+  '2026/07/29 09:00:00 [Warning] [3021571] app/dispatcher: sample warning line',
+  '2026/07/29 09:00:01 [Error] [3021588] transport/internet/reality: sample error line',
+  '2026/07/29 09:00:02 [Info] [3021602] proxy/dns: handling DNS traffic',
+];
+
+
+async function mockLogs(page, options = {}) {
   await page.route('**/api/xray-logs/status', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ loglevel: 'warning' }),
-    });
+    await route.fulfill({ json: { loglevel: options.loglevel || 'warning' } });
   });
-
   await page.route('**/api/xray-logs/devices**', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ items: [] }),
-    });
+    await route.fulfill({ json: { devices: [{ ip: '192.168.1.34', name: 'iPhone', source: 'manual' }] } });
   });
-
+  await page.route('**/api/xray-logs/outbound-names', async (route) => {
+    await route.fulfill({ json: { ok: true, names: {
+      'pecan--Frankfurt-2': { name: '🇩🇪 Frankfurt-2', subscription: 'Pecan' },
+      'pecan--Amsterdam-1': { name: '🇳🇱 Amsterdam-1', subscription: 'Pecan' },
+    } } });
+  });
   await page.route('**/api/xray-logs?**', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        mode: 'full',
-        cursor: 'stage4-logs',
-        lines: [
-          '2026/07/29 09:00:00 [Warning] sample warning line',
-          '2026/07/29 09:00:01 [Error] sample error line',
-          '2026/07/29 09:00:02 [Warning] destination 192.0.2.15:443',
-        ],
-      }),
-    });
+    const url = new URL(route.request().url());
+    const lines = url.searchParams.get('file') === 'error'
+      ? errorLines
+      : (options.accessLines || accessLines);
+    await route.fulfill({ json: { mode: 'full', cursor: 'stage4-logs', lines } });
   });
-
   await page.route('**/api/restart-log', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ lines: restartLines }),
-    });
+    await route.fulfill({ json: { lines: restartLines } });
   });
-
   await page.route('**/api/ws-token', async (route) => {
-    await route.fulfill({
-      status: 503,
-      contentType: 'application/json',
-      body: JSON.stringify({ ok: false }),
-    });
+    await route.fulfill({ status: 503, json: { ok: false } });
   });
 }
 
 
-async function openLogs(page, theme, viewport) {
+async function openLogs(page, theme, viewport, options = {}) {
   await page.setViewportSize(viewport);
   await page.addInitScript((nextTheme) => {
     localStorage.setItem('xkeen-theme', nextTheme);
     localStorage.setItem('xkeen.editor.engine', 'codemirror');
   }, theme);
-  await mockLogs(page);
+  await mockLogs(page, options);
   await page.goto('/');
   await selectPanelView(page, 'xray-logs');
   await expect(page.locator('#view-xray-logs')).toBeVisible();
-  await expect(page.locator('#xray-log-output')).toContainText('sample ERROR line');
+  await expect(page.locator('#xray-log-output .tr').first()).toBeVisible();
   await expect(page.locator('[data-xk-restart-log="1"]').last()).toContainText('Xray preflight');
 }
+
+const rows = (page) => page.locator('#xray-log-output .tr:not([hidden])');
 
 
 async function readLogsGeometry(page) {
   return page.evaluate(() => {
     const view = document.querySelector('#view-xray-logs');
-    const filter = document.querySelector('.xk-log-filter-bar');
-    const counters = document.querySelector('.xk-log-counters');
+    const head = document.querySelector('.xk-xlog-head');
+    const search = document.querySelector('.xk-xlog-search input');
     const output = document.querySelector('#xray-log-output');
     const detail = Array.from(document.querySelectorAll('.restart-log-details')).at(-1) || null;
     const detailToggle = Array.from(document.querySelectorAll('.restart-log-details-toggle')).at(-1) || null;
     const state = document.querySelector('#xray-log-status');
     return {
-      filterDisplay: filter ? getComputedStyle(filter).display : '',
-      filterRadius: filter ? getComputedStyle(filter.querySelector('input')).borderRadius : '',
-      countersDisplay: counters ? getComputedStyle(counters).display : '',
-      counterCount: counters ? counters.querySelectorAll('.xk-log-counter').length : 0,
-      outputBackground: output ? getComputedStyle(output).backgroundColor : '',
+      headDisplay: head ? getComputedStyle(head).display : '',
+      searchHeight: search ? search.getBoundingClientRect().height : 0,
       outputHeight: output ? output.getBoundingClientRect().height : 0,
       detailDisplay: detail ? getComputedStyle(detail).display : '',
       detailToggleRadius: detailToggle ? getComputedStyle(detailToggle).borderRadius : '',
-      stateTone: state?.dataset.tone || '',
       stateBorderLeft: state ? getComputedStyle(state).borderLeftWidth : '',
       viewOverflow: view ? view.scrollWidth - view.clientWidth : 999,
       pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
@@ -100,19 +90,16 @@ async function readLogsGeometry(page) {
 
 
 test.describe('Operator Console Stage 4 logs', () => {
-  test('keeps stream preferences in the more menu and couples auto-update to log enablement', async ({ page }) => {
+  test('keeps stream preferences in the more menu and couples auto-update to Пуск and Стоп', async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem('xkeen.ui.xrayLogs.liveWanted.v1', '1');
     });
     await openLogs(page, 'dark', { width: 1440, height: 900 });
 
-    await expect(page.locator('.xray-log-controls > #xray-log-live')).toHaveCount(0);
-    await expect(page.locator('.xray-log-controls > #xray-log-follow')).toHaveCount(0);
-    await expect(page.locator('.xray-log-controls > .dt-log-interval')).toHaveCount(0);
-
+    await expect(page.locator('.xk-xlog-head > * #xray-log-live:visible')).toHaveCount(0);
     await page.locator('#xray-log-more > summary').click();
-    await expect(page.locator('#xray-log-more #xray-log-live')).toBeVisible();
-    await expect(page.locator('#xray-log-more #xray-log-follow')).toBeVisible();
+    await expect(page.locator('#xray-log-more #xray-log-live')).toBeAttached();
+    await expect(page.locator('#xray-log-more #xray-log-follow')).toBeAttached();
     await expect(page.locator('#xray-log-more #xray-log-interval')).toBeVisible();
     const menuBox = await page.locator('#xray-log-more .dt-log-menu-panel').boundingBox();
     expect(menuBox.x).toBeGreaterThanOrEqual(0);
@@ -135,39 +122,210 @@ test.describe('Operator Console Stage 4 logs', () => {
     await page.locator('#xray-log-enable-btn').click();
     await expect(live).toBeChecked();
     await expect(follow).toBeChecked();
+    await expect(page.locator('#xray-log-pause')).toBeEnabled();
 
     await page.locator('#xray-log-disable-btn').click();
     await expect(live).not.toBeChecked();
   });
 
-  test('renders log mode and line count as status chips', async ({ page }) => {
-    await openLogs(page, 'dark', { width: 1440, height: 900 });
-
-    const chips = page.locator('#view-xray-logs :is(#xray-log-mode, .xk-log-counter[data-kind="lines"])');
-    await expect(chips).toHaveCount(2);
-    const appearance = await chips.evaluateAll((nodes) => nodes.map((node) => {
-      const style = getComputedStyle(node);
-      return {
-        borderTopWidth: style.borderTopWidth,
-        backgroundColor: style.backgroundColor,
-        borderRadius: style.borderTopLeftRadius,
-      };
-    }));
-
-    for (const chip of appearance) {
-      expect(chip.borderTopWidth).toBe('1px');
-      expect(chip.backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
-      expect(Number.parseFloat(chip.borderRadius)).toBeGreaterThan(0);
-    }
+  test('Пуск enables Xray logging only when it is off', async ({ page }) => {
+    let enableCalls = 0;
+    await openLogs(page, 'dark', { width: 1440, height: 900 }, { loglevel: 'none' });
+    await page.route('**/api/xray-logs/enable', async (route) => {
+      enableCalls += 1;
+      await route.fulfill({ json: { loglevel: 'warning', xray_restarted: true } });
+    });
+    await page.locator('#xray-log-enable-btn').click();
+    await expect.poll(() => enableCalls).toBe(1);
   });
 
-  test('Xray log filter clear icon is centered in its button', async ({ page }) => {
+  test('pause counts new lines on the button and offers to show them', async ({ page }) => {
+    let n = 0;
+    const next = () => {
+      n += 1;
+      return `2026/07/29 10:00:${String(n % 60).padStart(2, '0')}.000000 from 192.168.1.20:${40000 + n} accepted tcp:h${n}.example.com:443 [tproxy-in -> direct]`;
+    };
     await openLogs(page, 'dark', { width: 1440, height: 900 });
+    await page.route('**/api/xray-logs?**', async (route) => {
+      const cursor = new URL(route.request().url()).searchParams.get('cursor');
+      if (!cursor) {
+        await route.fulfill({ json: { mode: 'full', cursor: 'p0', lines: Array.from({ length: 10 }, next) } });
+        return;
+      }
+      await route.fulfill({ json: { mode: 'append', cursor: `p${n}`, lines: [next(), next()] } });
+    });
+    await page.locator('#xray-log-more > summary').click();
+    await page.locator('#xray-log-interval').selectOption('1000');
+    await page.keyboard.press('Escape');
+    await page.locator('#xray-log-enable-btn').click();
+    await expect(page.locator('#xray-log-pause')).toBeEnabled();
+
+    await page.locator('#xray-log-pause').click();
+    await expect(page.locator('#xray-log-pause')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#xray-log-pause .xk-xlog-badge')).toHaveText(/^\+\d+$/);
+    const newLines = page.locator('#xray-log-new-lines');
+    await expect(newLines).toBeVisible();
+    await expect(newLines).toContainText(/\d+ нов\S+ строк\S* — показать/);
+    await expect(page.locator('#xray-log-scroll-bottom')).toBeHidden();
+
+    // New lines must not rebuild the buttons: a click whose mousedown landed
+    // on an element replaced before mouseup was lost (seen on 45.1).
+    await page.evaluate(() => { window.__pauseLabel = document.querySelector('#xray-log-pause .xk-action-label'); });
+    await expect.poll(() => page.locator('#xray-log-pause .xk-xlog-badge').textContent()).not.toBe('+0');
+    await page.waitForTimeout(2500);
+    expect(await page.evaluate(() => window.__pauseLabel === document.querySelector('#xray-log-pause .xk-action-label'))).toBe(true);
+
+    await newLines.click();
+    await expect(page.locator('#xray-log-pause')).toHaveAttribute('aria-pressed', 'false');
+    await expect(newLines).toBeHidden();
+
+    let disabled = 0;
+    await page.route('**/api/xray-logs/disable', async (route) => {
+      disabled += 1;
+      await route.fulfill({ json: { ok: true } });
+    });
+    await page.locator('#xray-log-pause').click();
+    const stop = await page.locator('#xray-log-disable-btn').boundingBox();
+    await page.mouse.move(stop.x + stop.width / 2, stop.y + stop.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(1200);
+    await page.mouse.up();
+    await expect.poll(() => disabled).toBe(1);
+  });
+
+  test('header controls share one height', async ({ page }) => {
+    await openLogs(page, 'dark', { width: 1440, height: 900 });
+    const heights = await page.evaluate(() => [
+      '.xk-xlog-title',
+      '.xk-xlog-seg',
+      '.xk-xlog-run',
+      '.xk-xlog-search input',
+      '#xray-log-more > summary',
+      '#xray-log-fullscreen',
+    ].map((sel) => Math.round(document.querySelector(sel).getBoundingClientRect().height)));
+    expect(new Set(heights)).toEqual(new Set([32]));
+  });
+
+  test('access.log is a table with device names, node flags and hidden unparsed lines', async ({ page }) => {
+    await openLogs(page, 'dark', { width: 1440, height: 900 });
+
+    await expect(rows(page)).toHaveCount(4);
+    const first = rows(page).first();
+    await expect(first.locator('.dev')).toContainText('iPhone');
+    await expect(first.locator('.dst')).toContainText('www.youtube.com');
+    await expect(first.locator('.pill.proxy')).toContainText('Frankfurt-2');
+    await expect(first.locator('.pill.proxy .flag svg')).toHaveCount(1);
+    await expect(first.locator('.grp')).toContainText('Pecan');
+    await expect(rows(page).nth(1).locator('.pill.direct')).toContainText('direct');
+    await expect(rows(page).nth(2).locator('.pill.block')).toContainText('block');
+
+    await expect(page.locator('[data-xlog-raw-note]')).toContainText('Не разобрано и скрыто: 1');
+    await page.locator('#xray-log-more > summary').click();
+    await page.locator('label.xk-xlog-menu-item:has(#xray-log-show-raw)').click();
+    await expect(rows(page)).toHaveCount(5);
+    await expect(page.locator('#xray-log-output .tr.is-raw .raw')).toContainText('something the parser does not know');
+  });
+
+  test('rows are selected with click, Shift and Ctrl+A and copied as lines or a table', async ({ page }) => {
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    await openLogs(page, 'dark', { width: 1440, height: 900 });
+
+    await rows(page).nth(0).click();
+    await rows(page).nth(2).click({ modifiers: ['Shift'] });
+    await expect(page.locator('#xray-log-selbar')).toBeVisible();
+    await expect(page.locator('[data-xlog-selcount]')).toHaveText('3');
+
+    await page.locator('[data-xlog-act="copy-selected"]').click();
+    // Windows hands the clipboard back with CRLF line breaks.
+    const clipboard = () => page.evaluate(async () => (await navigator.clipboard.readText()).replace(/\r\n/g, '\n'));
+    await expect.poll(clipboard).toBe(accessLines.slice(0, 3).join('\n'));
+
+    await page.locator('[data-xlog-act="copy-selected-tsv"]').click();
+    await expect.poll(clipboard).toContain('Время\tУстройство');
+    const tsv = await clipboard();
+    expect(tsv.split('\n')[0]).toBe('Время\tУстройство\tIP\tНазначение\tПорт\tПротокол\tInbound\tOutbound\tУзел');
+    expect(tsv.split('\n')[1]).toContain('iPhone\t192.168.1.34\twww.youtube.com\t443\ttcp\ttproxy-in\tpecan--Frankfurt-2\tFrankfurt-2');
+
+    await page.locator('#xray-log-output').focus();
+    await page.keyboard.press('Control+a');
+    await expect(page.locator('[data-xlog-selcount]')).toHaveText('4');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#xray-log-selbar')).toBeHidden();
+  });
+
+  test('chips filter by route and conditions come from row details', async ({ page }) => {
+    await openLogs(page, 'dark', { width: 1440, height: 900 });
+
+    await page.locator('#xray-log-chips [data-xlog-act="kind"][data-value="block"]').click();
+    await expect(rows(page)).toHaveCount(3);
+    await page.locator('#xray-log-chips [data-xlog-act="reset"]').click();
+    await expect(rows(page)).toHaveCount(4);
+
+    await page.locator('#xray-log-chips [data-xlog-act="node"][data-value="pecan--Amsterdam-1"]').click();
+    await expect(rows(page)).toHaveCount(1);
+    await page.locator('#xray-log-chips [data-xlog-act="reset"]').click();
+
+    await rows(page).nth(1).locator('.chev').click();
+    const detail = page.locator('#xray-log-output .detail');
+    await expect(detail).toContainText('192.168.1.20');
+    await expect(detail.locator('.line')).toContainText(accessLines[1]);
+    await detail.locator('[data-field="ip"]').click();
+    await expect(rows(page)).toHaveCount(2);
+    await expect(page.locator('#xray-log-chips .is-cond')).toContainText('192.168.1.20');
+    await page.locator('#xray-log-chips .is-cond').click();
+    await expect(rows(page)).toHaveCount(4);
+  });
+
+  test('error.log keeps level chips and full messages in details', async ({ page }) => {
+    await openLogs(page, 'dark', { width: 1440, height: 900 });
+    await page.locator('[data-xlog-file-btn="error"]').click();
+    await expect(rows(page)).toHaveCount(3);
+    await expect(page.locator('#xray-log-level')).toBeVisible();
+    await expect(page.locator('#xray-log-summary')).toBeHidden();
+    await expect(rows(page).nth(1).locator('.lvl')).toHaveText('error');
+    await expect(rows(page).nth(1).locator('.mod')).toHaveText('transport/internet/reality');
+
+    await page.locator('#xray-log-chips [data-xlog-act="level"][data-value="info"]').click();
+    await expect(rows(page)).toHaveCount(2);
+
+    await rows(page).nth(1).locator('.chev').click();
+    await expect(page.locator('#xray-log-output .detail .full')).toHaveText('sample error line');
+  });
+
+  test('a 5000 line buffer keeps only the visible rows in the DOM', async ({ page }) => {
+    const many = Array.from({ length: 5000 }, (_, i) => (
+      `2026/07/29 09:${String(Math.floor(i / 60) % 60).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}.000000 from 192.168.1.${20 + (i % 30)}:${40000 + i} accepted tcp:host${i}.example.com:443 [tproxy-in -> direct]`
+    ));
+    await openLogs(page, 'dark', { width: 1440, height: 900 }, { accessLines: many });
+    await page.locator('#xray-log-more > summary').click();
+    await page.locator('#xray-log-lines').fill('5000');
+    await page.locator('#xray-log-lines').dispatchEvent('change');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#xray-log-stats')).toContainText('5000 из 5000');
+
+    const domRows = await page.evaluate(() => document.getElementById('xray-log-output').shadowRoot.querySelectorAll('.tr').length);
+    expect(domRows).toBeLessThan(80);
+    await expect(rows(page).last()).toContainText('host4999.example.com');
+
+    await page.locator('#xray-log-output').evaluate((el) => { el.scrollTop = 0; });
+    await expect(rows(page).first()).toContainText('host0.example.com');
+  });
+
+  test('renders log mode and counters in the footer', async ({ page }) => {
+    await openLogs(page, 'dark', { width: 1440, height: 900 });
+    await expect(page.locator('.xk-xlog-foot #xray-log-mode')).toBeVisible();
+    await expect(page.locator('.xk-xlog-foot .xk-log-counter[data-kind="lines"]')).toBeVisible();
+    await expect(page.locator('.xk-xlog-foot .xk-log-counter[data-kind="shown"]')).toContainText('4 из 5');
+  });
+
+  test('Xray log search clear icon is centered in its button', async ({ page }) => {
+    await openLogs(page, 'dark', { width: 1440, height: 900 });
+    await page.locator('#xray-log-filter').fill('youtube');
+    await expect(rows(page)).toHaveCount(1);
 
     const geometry = await page.locator('#xray-log-filter-clear').evaluate((button) => {
       const icon = button.querySelector('.xk-action-icon');
       if (!icon) return null;
-
       const buttonBox = button.getBoundingClientRect();
       const iconBox = icon.getBoundingClientRect();
       return {
@@ -177,35 +335,38 @@ test.describe('Operator Console Stage 4 logs', () => {
         iconCenterY: iconBox.top + iconBox.height / 2,
       };
     });
-
     expect(geometry).not.toBeNull();
     expect(Math.abs(geometry.iconCenterX - geometry.buttonCenterX)).toBeLessThanOrEqual(1);
     expect(Math.abs(geometry.iconCenterY - geometry.buttonCenterY)).toBeLessThanOrEqual(1);
+
+    await page.locator('#xray-log-filter-clear').click();
+    await expect(rows(page)).toHaveCount(4);
+    await expect(page.locator('#xray-log-filter-clear')).toBeHidden();
   });
 
-  test('Xray log more menu renders secondary actions as bordered menu buttons', async ({ page }) => {
+  test('"/" focuses the search', async ({ page }) => {
+    await openLogs(page, 'dark', { width: 1440, height: 900 });
+    await page.locator('.xk-xlog-title').click();
+    await page.keyboard.press('/');
+    await expect(page.locator('#xray-log-filter')).toBeFocused();
+  });
+
+  test('the more menu groups view, data and the red file removal', async ({ page }) => {
     await openLogs(page, 'dark', { width: 1440, height: 900 });
     await page.locator('#xray-log-more > summary').click();
 
-    const actions = page.locator(
-      '#xray-log-more .dt-log-menu-panel > :is(#xray-log-copy-selection, #xray-log-download, #xray-log-load-more)',
-    );
-    await expect(actions).toHaveCount(3);
-
-    const appearance = await actions.evaluateAll((buttons) => buttons.map((button) => {
-      const style = getComputedStyle(button);
-      return {
-        borderTopWidth: style.borderTopWidth,
-        backgroundColor: style.backgroundColor,
-        borderRadius: style.borderTopLeftRadius,
-      };
-    }));
-
-    for (const action of appearance) {
-      expect(action.borderTopWidth).toBe('1px');
-      expect(action.backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
-      expect(Number.parseFloat(action.borderRadius)).toBeGreaterThan(0);
+    const titles = page.locator('#xray-log-more .xk-xlog-menu-title');
+    await expect(titles).toHaveText(['Вид', 'Данные']);
+    for (const id of ['xray-log-copy-btn', 'xray-log-download', 'xray-log-load-more', 'xray-log-view-btn', 'xray-log-devices-btn', 'xray-log-clear-screen-btn']) {
+      await expect(page.locator(`#${id}`)).toBeVisible();
     }
+    const danger = page.locator('#xray-log-clear-files-btn');
+    await expect(danger).toHaveClass(/is-danger/);
+    const colors = await page.evaluate(() => ({
+      danger: getComputedStyle(document.getElementById('xray-log-clear-files-btn')).color,
+      normal: getComputedStyle(document.getElementById('xray-log-download')).color,
+    }));
+    expect(colors.danger).not.toBe(colors.normal);
   });
 
   test('keeps the more menu open while changing the log line limit', async ({ page }) => {
@@ -232,7 +393,7 @@ test.describe('Operator Console Stage 4 logs', () => {
     await expect(menu).toHaveAttribute('open', '');
     await page.locator('#xray-log-interval').selectOption('5000');
     await expect(menu).toHaveAttribute('open', '');
-    await page.locator('#xray-log-output').click();
+    await page.locator('.xk-xlog-foot').click();
     await expect(menu).not.toHaveAttribute('open', '');
 
     await summary.click();
@@ -268,7 +429,7 @@ test.describe('Operator Console Stage 4 logs', () => {
 
     await page.locator('#xray-log-more > summary').click();
     await page.locator('#xray-log-interval').selectOption('5000');
-    await page.locator('#xray-log-more .xray-log-menu-switch:has(#xray-log-follow)').click();
+    await page.locator('label.xk-xlog-menu-item:has(#xray-log-follow)').click();
     await page.locator('#xray-log-lines').fill('1200');
     await page.locator('#xray-log-lines').dispatchEvent('change');
     await expect.poll(() => stored?.logs?.view?.maxLines).toBe(1200);
@@ -281,6 +442,23 @@ test.describe('Operator Console Stage 4 logs', () => {
     await expect(page.locator('#xray-log-interval')).toHaveValue('5000');
     await expect(page.locator('#xray-log-follow')).not.toBeChecked();
     await expect(page.locator('#xray-log-lines')).toHaveValue('1200');
+  });
+
+  test('the summary collapses to one line and remembers it', async ({ page }) => {
+    await openLogs(page, 'dark', { width: 1440, height: 900 });
+    const toggle = page.locator('[data-xlog-summary-toggle]');
+    const body = page.locator('[data-xlog-summary-body]');
+    await expect(body).toBeHidden();
+    await expect(page.locator('[data-xlog-summary-mini]')).toContainText('proxy');
+
+    await toggle.click();
+    await expect(body).toBeVisible();
+    await expect(body.locator('.xk-xlog-tile')).toHaveCount(4);
+    await expect(body).toContainText('Frankfurt-2');
+
+    await page.reload();
+    await selectPanelView(page, 'xray-logs');
+    await expect(page.locator('[data-xlog-summary-body]')).toBeVisible();
   });
 
   test('Xray logs use the compact operator header in desktop and mobile layouts', async ({ page }) => {
@@ -314,7 +492,6 @@ test.describe('Operator Console Stage 4 logs', () => {
         expect(box.x + box.width).toBeLessThanOrEqual(width);
         await page.keyboard.press('Escape');
       }
-      await page.screenshot({ path: `.tmp/xray-logs-header-dark-${width}.png` });
     }
 
     await page.setViewportSize({ width: 1440, height: 900 });
@@ -332,8 +509,21 @@ test.describe('Operator Console Stage 4 logs', () => {
     await expect(page.locator('#xray-log-clear-files-btn use')).toHaveAttribute('href', /#xk-trash$/);
   });
 
+  test('the logs card and the operations journal share edges and padding', async ({ page }) => {
+    await openLogs(page, 'dark', { width: 1440, height: 900 });
+    const boxes = await page.evaluate(() => [
+      document.querySelector('.xk-xlog-card'),
+      document.querySelector('#view-xray-logs .xk-restart-log-card'),
+    ].map((el) => {
+      const box = el.getBoundingClientRect();
+      const style = getComputedStyle(el);
+      return [Math.round(box.left), Math.round(box.right), style.paddingLeft, style.paddingTop];
+    }));
+    expect(boxes[0]).toEqual(boxes[1]);
+  });
+
   for (const theme of ['dark', 'light']) {
-    test(`filters, counters and details share one contract in ${theme}`, async ({ page }) => {
+    test(`header, output and journal details share one contract in ${theme}`, async ({ page }) => {
       await openLogs(page, theme, { width: 1440, height: 900 });
 
       const toggle = page.locator('.restart-log-details-toggle').last();
@@ -343,10 +533,8 @@ test.describe('Operator Console Stage 4 logs', () => {
       await expect(page.locator('.restart-log-details').last()).toBeVisible();
 
       const geometry = await readLogsGeometry(page);
-      expect(geometry.filterDisplay).toBe('grid');
-      expect(geometry.filterRadius).toBe('6px');
-      expect(geometry.countersDisplay).toBe('flex');
-      expect(geometry.counterCount).toBeGreaterThanOrEqual(1);
+      expect(geometry.headDisplay).toBe('flex');
+      expect(Math.round(geometry.searchHeight)).toBe(32);
       expect(geometry.outputHeight).toBeGreaterThanOrEqual(300);
       expect(geometry.detailDisplay).toBe('grid');
       expect(geometry.detailToggleRadius).toBe('4px');
@@ -359,13 +547,13 @@ test.describe('Operator Console Stage 4 logs', () => {
   test('context detail focuses the selected row', async ({ page }) => {
     await openLogs(page, 'dark', { width: 1440, height: 900 });
 
-    await page.locator('#xray-log-output .log-line').nth(1).click({ button: 'right' });
+    await rows(page).nth(1).click({ button: 'right' });
     await expect(page.locator('#xray-line-menu')).toBeVisible();
     await page.locator('#xray-line-menu-context').click();
     await expect(page.locator('#xray-context-modal')).toBeVisible();
     await expect(page.locator('#xray-context-title')).toContainText('Контекст access.log');
     await expect(page.locator('#xray-context-output [data-context-focus="1"]')).toHaveCount(1);
-    await expect(page.locator('#xray-context-output [data-context-focus="1"]')).toContainText('sample error line');
+    await expect(page.locator('#xray-context-output [data-context-focus="1"]')).toContainText('api.github.com');
   });
 
   test('load failures use the same inline error row', async ({ page }) => {
@@ -377,7 +565,9 @@ test.describe('Operator Console Stage 4 logs', () => {
       await route.fulfill({ status: 500, contentType: 'application/json', body: '{}' });
     });
 
+    await page.locator('#xray-log-more > summary').click();
     await page.locator('#xray-log-clear-screen-btn').click();
+    await page.locator('#xray-log-more > summary').click();
     await page.locator('#xray-log-view-btn').click();
     await expect(page.locator('#xray-log-status')).toHaveAttribute('data-tone', 'error');
     await expect(page.locator('#xray-log-output [data-empty-state="title"]')).toContainText('Не удалось получить строки лога');
@@ -388,10 +578,10 @@ test.describe('Operator Console Stage 4 logs', () => {
     await expect(restart.locator('.restart-log-empty.is-error')).toContainText('Не удалось загрузить журнал');
   });
 
-  test('mobile keeps the terminal readable without page overflow', async ({ page }) => {
+  test('mobile keeps the table readable without page overflow', async ({ page }) => {
     await openLogs(page, 'light', { width: 390, height: 844 });
     const geometry = await readLogsGeometry(page);
-    expect(geometry.filterDisplay).toBe('grid');
+    expect(geometry.headDisplay).toBe('flex');
     expect(geometry.outputHeight).toBeGreaterThanOrEqual(300);
     expect(geometry.viewOverflow).toBeLessThanOrEqual(1);
     expect(geometry.pageOverflow).toBeLessThanOrEqual(1);

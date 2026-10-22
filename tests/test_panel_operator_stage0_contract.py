@@ -97,8 +97,8 @@ def test_stage0_inventory_covers_views_accordions_engines_and_all_modals(tmp_pat
     # The HWID subscription editor replaced its two diagnostic accordions
     # with direct, editable device-profile fields. The optional Mihomo egress
     # and DNS diagnostic cards plus the DNS guidance disclosure extend the ten
-    # remaining controls.
-    assert len(accordions) == 13
+    # remaining controls. The Xray logs summary collapses to one line.
+    assert len(accordions) == 14
     assert all(item["target_id"] and item["target_present"] for item in accordions)
     assert all(item["states"] == ["collapsed", "expanded"] for item in accordions)
     dns_guidance = next(item for item in accordions if item["control_id"] == "xk-internet-check-dns-row")
@@ -134,9 +134,10 @@ def test_stage0_inventory_classifies_all_inline_styles_and_dom_hooks(tmp_path):
     dom = payload["dom_contract"]
 
     # The official stable/pre-release Commands actions are part of the
-    # canonical panel contract again.
-    assert inline["attribute_count"] == 207
-    assert sum(inline["attribute_kind_counts"].values()) == 207
+    # canonical panel contract again. The Xray logs menu dropped its last
+    # inline opacity when it was redesigned.
+    assert inline["attribute_count"] == 206
+    assert sum(inline["attribute_kind_counts"].values()) == 206
     assert inline["attribute_kind_counts"]["state-visibility-hook"] > 0
     assert inline["attribute_kind_counts"]["presentation-geometry"] > 0
     assert inline["attribute_kind_counts"]["mixed-state-and-presentation"] > 0

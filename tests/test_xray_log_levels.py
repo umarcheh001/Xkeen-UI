@@ -130,7 +130,11 @@ def test_xray_logs_view_uses_shared_semantic_level_filter():
     # visible as-is even when the same selector has a saved value.
     assert "const levelFilter = (isErrorFile && ALLOWED_LOGLEVELS.includes(selectedLevel)) ? selectedLevel : '';" in script
     assert "lvlSel.disabled = !isError;" in script
-    assert "const cls = _isErrorFileName(_currentFile) ? getXrayLogLineClass(clean) : 'log-line';" in script
+    # Rows are coloured by the level parsed from the Xray marker on error.log
+    # and by the route on access.log, never by words in the payload.
+    view = (ROOT / "xkeen-ui/static/js/features/xray_log_view.js").read_text(encoding="utf-8")
+    assert "const p = parseXrayErrorLine(text);" in view
+    assert "const kind = record.p ? (state.mode === 'access' ? (record.kind || 'none') : record.level) : 'raw';" in view
 
     # The live Xray viewer also sits inside .log-card.  Keep restart-card
     # colors scoped to restart-log-* so an Info line containing payload ERROR

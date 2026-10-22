@@ -31,9 +31,12 @@ def test_logs_markup_keeps_runtime_hooks_and_exposes_shared_operator_regions():
         assert f'id="{runtime_id}"' in view
 
     for fragment in (
-        'class="log-filter-row xk-log-filter-bar" role="search"',
-        'class="dt-log-controls xray-log-controls xk-log-control-bar"',
-        'class="xk-log-counters"',
+        'class="xk-xlog-search" role="search"',
+        'class="xk-xlog-seg xk-xlog-run" role="group" aria-label="Запись логов"',
+        'class="xk-xlog-foot"',
+        'id="xray-log-chips"',
+        'id="xray-log-summary"',
+        'id="xray-log-selbar" role="toolbar"',
         'class="status xk-log-state" role="status" aria-live="polite"',
         'class="modal-content xray-context-modal-content"',
         'data-modal-key="xray-log-context"',
@@ -49,10 +52,14 @@ def test_logs_toolbar_distinguishes_screen_cleanup_and_file_deletion():
     css = CSS.read_text(encoding="utf-8")
     runtime = XRAY_LOGS.read_text(encoding="utf-8")
 
-    assert 'id="xray-log-clear-screen-btn" title="Очистить экран журнала"' in template
-    assert 'id="xray-log-clear-files-btn" title="Очистить логфайлы"' in template
-    assert "id=\"xray-log-clear-screen-btn\" title=\"Очистить экран журнала\" aria-label=\"Очистить отображение журнала\">{{ op_icon('broom') }}" in template
-    assert "id=\"xray-log-clear-files-btn\" title=\"Очистить логфайлы\" aria-label=\"Очистить логфайлы\">{{ op_icon('trash') }}" in template
+    # Both live in the "⋯" menu; file removal is a separate red item below a divider.
+    assert 'id="xray-log-clear-screen-btn" role="menuitem" title="Очистить экран журнала"' in template
+    assert 'id="xray-log-clear-files-btn" role="menuitem" title="Очистить логфайлы"' in template
+    assert "aria-label=\"Очистить отображение журнала\">{{ op_icon('broom') }}<span>Очистить экран</span>" in template
+    assert "class=\"xk-xlog-menu-item is-danger\" id=\"xray-log-clear-files-btn\"" in template
+    assert "aria-label=\"Очистить логфайлы\">{{ op_icon('trash') }}<span>Очистить файлы логов…</span>" in template
+    menu = template[template.index('id="xray-log-clear-screen-btn"'):template.index('id="xray-log-clear-files-btn"')]
+    assert 'class="xk-xlog-menu-sep"' in menu
 
     header = template[template.index('class="header-center panel-shell-center"'):template.index('</div>\n        </div>', template.index('class="header-center panel-shell-center"'))]
     assert "{{ op_icon('terminal') }}" in header
@@ -178,10 +185,12 @@ def test_logs_runtime_renders_structured_counters_detail_focus_and_error_states(
     restart = RESTART_LOG.read_text(encoding="utf-8")
 
     for fragment in (
-        'el.dataset.tone = String(model.tone || \'muted\');',
+        "tone: String(model.tone || 'muted'),",
+        "if (el.dataset[key] !== data[key]) el.dataset[key] = data[key];",
         'class="xk-log-counter" data-kind="lines"',
         'class="xk-log-counter-label">Строки</span>',
-        "el.innerHTML = parts.join('');",
+        "const html = parts.join('');",
+        "if (el._xlogHtml !== html) {",
         "uiStatus.phase === 'error' || uiStatus.tone === 'error'",
         'class="xray-context-line',
         'data-context-focus="1"',

@@ -32,6 +32,7 @@ from services.xray_log_api import (
     get_status,
     resolve_xray_log_path_for_ws,
 )
+from services.xray_subscriptions import list_subscriptions
 from services.xray_device_names import (
     delete_manual_device_name,
     get_xray_device_names_state,
@@ -274,6 +275,31 @@ def create_xray_logs_blueprint(
         payload = get_xray_device_names_state(ui_state_dir, refresh_router=True)
         payload["deleted"] = bool(existed)
         return jsonify(payload), 200
+
+    @bp.get("/api/xray-logs/outbound-names")
+    def api_xray_logs_outbound_names():
+        """Subscription node names by outbound tag for the access.log table.
+
+        Generated tags drop flag emoji and spaces; the stored node name keeps
+        them, so the table can show the country and the name people know.
+        """
+        names: Dict[str, Dict[str, str]] = {}
+        try:
+            subscriptions = list_subscriptions(str(ui_state_dir or "")) if ui_state_dir else []
+        except Exception:
+            subscriptions = []
+        for sub in subscriptions:
+            if not isinstance(sub, dict):
+                continue
+            sub_name = str(sub.get("name") or sub.get("tag") or "").strip()
+            for node in sub.get("last_nodes") or []:
+                if not isinstance(node, dict):
+                    continue
+                tag = str(node.get("tag") or "").strip()
+                name = str(node.get("name") or "").strip()
+                if tag and name and tag not in names:
+                    names[tag] = {"name": name, "subscription": sub_name}
+        return jsonify({"ok": True, "names": names}), 200
 
     @bp.post("/api/xray-logs/enable")
     def api_xray_logs_enable():

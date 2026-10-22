@@ -431,19 +431,24 @@ def test_xray_live_logs_card_uses_russian_visible_labels():
 
     logs_panel = panel.split('<div id="view-xray-logs"', 1)[1].split('<!-- Xray log: context modal -->', 1)[0]
 
-    assert 'Логи Xray онлайн' in logs_panel
-    assert '<span class="dt-switch-label">Автообновление</span>' in logs_panel
-    assert '<span class="dt-log-interval-label">каждые</span>' in logs_panel
-    assert '<span class="dt-switch-label">В конец</span>' in logs_panel
+    assert 'Логи Xray' in logs_panel
+    assert '<span>Автообновление</span>' in logs_panel
+    assert '<span>Опрос без WebSocket</span>' in logs_panel
+    assert '<span>Следить за концом</span>' in logs_panel
     assert "{{ op_icon('pause') }}<span class=\"xk-action-label\">Пауза</span>" in logs_panel
+    assert "{{ op_icon('play') }}<span>Пуск</span>" in logs_panel
+    assert "{{ op_icon('stop') }}<span>Стоп</span>" in logs_panel
     assert 'К последним' in logs_panel
-    assert 'Скопировать выделенное' in logs_panel
-    assert 'Загрузить ещё' in logs_panel
+    assert 'Копировать видимое' in logs_panel
+    assert 'Копировать строки лога' in logs_panel
+    assert 'Загрузить более старые' in logs_panel
     assert 'Логи Xray онлайн' in devtools
     assert "{ key: 'view:xray-logs', label: 'Логи Xray онлайн' }" in layout_prefs
     assert "label = 'Вручную / В конец';" in xray_logs
     assert "label = 'Онлайн / В конец';" in xray_logs
-    assert "btn.innerHTML = `${iconHtml('pause')}<span class=\"xk-action-label\">Пауза</span>`;" in xray_logs
+    # The pause button is built once; new lines only change the badge text.
+    assert "btn.innerHTML = `${iconHtml('pause')}<span class=\"xk-action-label\">Пауза</span><span class=\"xk-xlog-badge\" hidden></span>`;" in xray_logs
+    assert "if (badge.textContent !== badgeText) badge.textContent = badgeText;" in xray_logs
     assert 'Copy selection' not in logs_panel
     assert 'Load more' not in logs_panel
     assert '>Manual<' not in logs_panel
@@ -2085,17 +2090,17 @@ def test_xray_logs_device_names_ui_contract():
     assert "const XRAY_DEVICE_NAMES_API = '/api/xray-logs/devices';" in script
     assert 'function refreshXrayLogDeviceNames' in script
     assert 'function openXrayDeviceNamesModal' in script
-    assert 'function addXrayLogFilterTerm' in script
-    assert 'function scheduleXrayDeviceNameFilterClick' in script
+    view = Path('xkeen-ui/static/js/features/xray_log_view.js').read_text(encoding='utf-8')
     b64_decode_block = script.split('function b64Decode(b64) {', 1)[1].split('\n  function getCsrfToken()', 1)[0]
     assert "const raw = window.atob(String(b64 || ''));" in b64_decode_block
     assert 'return decodeURIComponent(escape(raw));' in b64_decode_block
     assert 'return raw;' in b64_decode_block
     assert "return window.atob(String(b64 || ''));" not in b64_decode_block
-    assert "addEventListener('dblclick'" in script
-    assert 'Клик: фильтр по IP • двойной клик: редактировать' in script
-    assert "'device_name_click'" in script
-    assert 'class="xray-log-device-name"' in script
+    # The table names devices in its rows; a row's details open the name editor.
+    assert 'data-act="rename-device"' in view
+    assert 'Имя устройства…' in view
+    assert "onRenameDevice: (ip, name) => { void openXrayDeviceNamesModal({ ip, name }); }," in script
+    assert "deviceName: (ip) => {" in script
     assert "headers.set('X-CSRF-Token', csrf);" in script
     assert '.log-block .xray-log-device-name' in css
     assert '#xray-devices-modal .xray-devices-modal-content' in css
@@ -2122,9 +2127,12 @@ def test_xray_logs_destination_domain_hints_ui_contract():
     css = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
 
     assert "from './xray_log_domain_hints.js';" in script
+    view = Path('xkeen-ui/static/js/features/xray_log_view.js').read_text(encoding='utf-8')
+
     assert 'function ingestXrayLogDestinationDomains' in script
-    assert 'function appendXrayDestinationDomainPlaceholder' in script
-    assert 'data-kind="domain"' in script
+    # The table shows the hint next to a bare destination IP.
+    assert 'const hint = getXrayDestinationDomainHint(ip);' in script
+    assert "const hint = isIp ? hooks.domainHint(p.host) : '';" in view
     assert "'domain_hints'" in script
     assert 'collectXrayLogDestinationIpPorts' in parser
     assert 'collectXrayLogDomainCandidates' in parser
