@@ -274,6 +274,23 @@ test.describe('Operator Console Stage 4 logs', () => {
     await expect(page.locator('#xray-log-chips .is-cond')).toContainText('192.168.1.20');
     await page.locator('#xray-log-chips .is-cond').click();
     await expect(rows(page)).toHaveCount(4);
+
+    // A second click on the same condition removes it.
+    await detail.locator('[data-field="ip"]').click();
+    await expect(rows(page)).toHaveCount(2);
+    await expect(detail.locator('[data-field="ip"]')).toHaveAttribute('aria-pressed', 'true');
+    await detail.locator('[data-field="ip"]').click();
+    await expect(rows(page)).toHaveCount(4);
+    await expect(page.locator('#xray-log-chips .is-cond')).toHaveCount(0);
+
+    await page.locator('[data-xlog-summary-toggle]').click();
+    const node = page.locator('[data-xlog-summary-body] button[data-field="node"][data-value="pecan--Amsterdam-1"]');
+    await node.click();
+    await expect(rows(page)).toHaveCount(1);
+    await expect(node).toHaveAttribute('aria-pressed', 'true');
+    await node.click();
+    await expect(rows(page)).toHaveCount(4);
+    await expect(node).toHaveAttribute('aria-pressed', 'false');
   });
 
   test('error.log keeps level chips and full messages in details', async ({ page }) => {

@@ -79,6 +79,7 @@ const VIEW_CSS = `
 .acts { display: flex; flex-wrap: wrap; gap: 6px; }
 .btn { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 10px; border: 1px solid var(--op-border); border-radius: var(--op-control-radius, 6px); background: var(--op-surface-2); color: var(--op-text); font: 600 12px inherit; font-family: inherit; white-space: nowrap; cursor: pointer; }
 .btn:hover { background: var(--op-surface-3); }
+.btn.on { border-color: var(--op-accent-border); background: var(--op-accent-soft); color: var(--op-accent); }
 .btn:focus-visible, .chev:focus-visible { outline: 2px solid var(--op-accent-border); outline-offset: 1px; }
 .wrap.is-error .thead, .wrap.is-error .tr { grid-template-columns: 3px 26px 92px 52px minmax(140px, .32fr) minmax(0, 1fr) 26px; }
 .ts i { font-style: normal; opacity: .55; }
@@ -516,8 +517,8 @@ export function createXrayLogView(options) {
       </dl>
       <div class="full">${message}</div>
       <div class="acts">
-        ${p.module ? `<button type="button" class="btn" data-act="cond" data-field="module" data-value="${escapeHtml(p.module)}" data-label="${escapeHtml(p.module)}">${icon('search')}Только ${escapeHtml(p.module)}</button>` : ''}
-        ${p.session ? `<button type="button" class="btn" data-act="cond" data-field="session" data-value="${escapeHtml(p.session)}" data-label="[${escapeHtml(p.session)}]">${icon('search')}Это соединение [${escapeHtml(p.session)}]</button>` : ''}
+        ${p.module ? `<button type="button" class="btn${condOn('module', p.module)}" data-act="cond" data-field="module" data-value="${escapeHtml(p.module)}" data-label="${escapeHtml(p.module)}">${icon('search')}Только ${escapeHtml(p.module)}</button>` : ''}
+        ${p.session ? `<button type="button" class="btn${condOn('session', p.session)}" data-act="cond" data-field="session" data-value="${escapeHtml(p.session)}" data-label="[${escapeHtml(p.session)}]">${icon('search')}Это соединение [${escapeHtml(p.session)}]</button>` : ''}
         <button type="button" class="btn" data-act="copy-line" data-seq="${record.seq}">${icon('duplicate')}Копировать строку</button>
       </div>`;
   }
@@ -530,7 +531,7 @@ export function createXrayLogView(options) {
     const device = hooks.deviceName(p.srcIp);
     const icon = (name) => iconInShadow(hooks.icon(name));
     const nodeBtn = info
-      ? `<button type="button" class="btn" data-act="cond" data-field="node" data-value="${escapeHtml(p.outTag)}" data-label="${escapeHtml(info.label)}">${flagHtml(info) || icon('search')}Только узел ${escapeHtml(info.label)}</button>`
+      ? `<button type="button" class="btn${condOn('node', p.outTag)}" data-act="cond" data-field="node" data-value="${escapeHtml(p.outTag)}" data-label="${escapeHtml(info.label)}">${flagHtml(info) || icon('search')}Только узел ${escapeHtml(info.label)}</button>`
       : '';
     return `
       <dl>
@@ -543,9 +544,9 @@ export function createXrayLogView(options) {
       </dl>
       <div class="line">${escapeHtml(record.line)}</div>
       <div class="acts">
-        <button type="button" class="btn" data-act="cond" data-field="ip" data-value="${escapeHtml(p.srcIp)}" data-label="${escapeHtml(device || p.srcIp)}">${icon('devices')}Только это устройство</button>
+        <button type="button" class="btn${condOn('ip', p.srcIp)}" data-act="cond" data-field="ip" data-value="${escapeHtml(p.srcIp)}" data-label="${escapeHtml(device || p.srcIp)}">${icon('devices')}Только это устройство</button>
         ${hooks.onRenameDevice && /[.:]/.test(p.srcIp) ? `<button type="button" class="btn" data-act="rename-device" data-ip="${escapeHtml(p.srcIp)}" data-name="${escapeHtml(device)}">${icon('devices')}Имя устройства…</button>` : ''}
-        ${p.host ? `<button type="button" class="btn" data-act="cond" data-field="host" data-value="${escapeHtml(p.host)}" data-label="${escapeHtml(p.host)}">${icon('search')}Только ${escapeHtml(p.host)}</button>` : ''}
+        ${p.host ? `<button type="button" class="btn${condOn('host', p.host)}" data-act="cond" data-field="host" data-value="${escapeHtml(p.host)}" data-label="${escapeHtml(p.host)}">${icon('search')}Только ${escapeHtml(p.host)}</button>` : ''}
         ${nodeBtn}
         <button type="button" class="btn" data-act="copy-line" data-seq="${record.seq}">${icon('duplicate')}Копировать строку</button>
       </div>`;
@@ -761,7 +762,8 @@ export function createXrayLogView(options) {
     const max = entries[0][1] || 1;
     return `<ul class="xk-xlog-top">${entries.map(([key, count]) => {
       const label = labelFn(key);
-      return `<li style="--w:${Math.max(6, Math.round((count * 100) / max))}%"><button type="button" data-xlog-act="cond" data-field="${field}" data-value="${escapeHtml(key)}" data-label="${escapeHtml(label.text)}">${label.html}</button><em>${count}</em></li>`;
+      const on = hasCondition(field, key);
+      return `<li class="${on ? 'is-on' : ''}" style="--w:${Math.max(6, Math.round((count * 100) / max))}%"><button type="button" data-xlog-act="cond" data-field="${field}" data-value="${escapeHtml(key)}" data-label="${escapeHtml(label.text)}" aria-pressed="${on ? 'true' : 'false'}" title="${on ? 'Снять условие' : 'Показать только это'}">${label.html}</button><em>${count}</em></li>`;
     }).join('')}</ul>`;
   }
 
@@ -946,6 +948,7 @@ export function createXrayLogView(options) {
 
   function applyFilter() {
     if (state.frozen) return;
+    if (dom.detail) dom.detail._seq = null;
     refilter();
     renderAll();
   }
@@ -954,6 +957,23 @@ export function createXrayLogView(options) {
     const groups = buildXrayLogSearchGroups(raw);
     if (JSON.stringify(groups) === JSON.stringify(state.filter.groups)) return;
     state.filter.groups = groups;
+    applyFilter();
+  }
+
+  function hasCondition(field, value) {
+    return state.filter.conditions.some((c) => c.field === field && c.value === value);
+  }
+
+  function condOn(field, value) {
+    return hasCondition(field, value) ? ' on" aria-pressed="true' : '" aria-pressed="false';
+  }
+
+  // A second click on the same node, device, domain or module removes it again.
+  function toggleCondition(field, value, label) {
+    if (!field || !value) return;
+    const at = state.filter.conditions.findIndex((c) => c.field === field && c.value === value);
+    if (at >= 0) state.filter.conditions.splice(at, 1);
+    else state.filter.conditions.push({ field, value, label: label || value });
     applyFilter();
   }
 
@@ -1079,7 +1099,7 @@ export function createXrayLogView(options) {
     const act = actEl ? actEl.dataset.act : '';
     if (act === 'cond') {
       e.preventDefault();
-      addCondition(actEl.dataset.field, actEl.dataset.value, actEl.dataset.label);
+      toggleCondition(actEl.dataset.field, actEl.dataset.value, actEl.dataset.label);
       return;
     }
     if (act === 'rename-device') {
@@ -1110,13 +1130,13 @@ export function createXrayLogView(options) {
     if (e.altKey && record.p) {
       e.preventDefault();
       const errCell = e.target.closest('.mod, .msg');
-      if (errCell && errCell.classList.contains('mod') && record.p.module) addCondition('module', record.p.module, record.p.module);
-      else if (errCell && record.p.session) addCondition('session', record.p.session, `[${record.p.session}]`);
+      if (errCell && errCell.classList.contains('mod') && record.p.module) toggleCondition('module', record.p.module, record.p.module);
+      else if (errCell && record.p.session) toggleCondition('session', record.p.session, `[${record.p.session}]`);
       if (errCell) return;
       const cell = e.target.closest('.dev, .dst, .rt');
-      if (cell && cell.classList.contains('dev')) addCondition('ip', record.p.srcIp, hooks.deviceName(record.p.srcIp) || record.p.srcIp);
-      else if (cell && cell.classList.contains('dst')) addCondition('host', record.p.host, record.p.host);
-      else if (cell && cell.classList.contains('rt') && record.kind === 'proxy') addCondition('node', record.p.outTag, nodeInfo(record.p.outTag).label);
+      if (cell && cell.classList.contains('dev')) toggleCondition('ip', record.p.srcIp, hooks.deviceName(record.p.srcIp) || record.p.srcIp);
+      else if (cell && cell.classList.contains('dst')) toggleCondition('host', record.p.host, record.p.host);
+      else if (cell && cell.classList.contains('rt') && record.kind === 'proxy') toggleCondition('node', record.p.outTag, nodeInfo(record.p.outTag).label);
       return;
     }
     selectBySeq(record.seq, act === 'toggle' ? { toggle: true, shiftKey: e.shiftKey } : e);
@@ -1163,7 +1183,7 @@ export function createXrayLogView(options) {
     else if (act === 'node') toggleIn(f.nodes, btn.dataset.value);
     else if (act === 'drop-cond') f.conditions.splice(Number(btn.dataset.index), 1);
     else if (act === 'reset') return resetFilter();
-    else if (act === 'cond') return addCondition(btn.dataset.field, btn.dataset.value, btn.dataset.label);
+    else if (act === 'cond') return toggleCondition(btn.dataset.field, btn.dataset.value, btn.dataset.label);
     else return;
     applyFilter();
   }
