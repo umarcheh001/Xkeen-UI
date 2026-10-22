@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures.mjs';
+import { test, expect, selectPanelView } from './fixtures.mjs';
 
 
 const enabled = process.env.E2E_ROUTER_SMOKE === '1';
@@ -38,5 +38,44 @@ test.describe('Router panel smoke (read-only)', () => {
 
     await modal.getByRole('button', { name: 'Закрыть выбор источника' }).click();
     await expect(modal).toBeHidden();
+  });
+
+  test('Mihomo DNS dialog matches live router diagnostics without changing DNS', async ({ page }, testInfo) => {
+    await page.goto('/');
+    await selectPanelView(page, 'mihomo');
+    await page.locator('#mihomo-clash-tab-config').click();
+    const response = page.waitForResponse((result) =>
+      new URL(result.url()).pathname === '/api/mihomo/dns'
+      && result.request().method() === 'GET');
+    await page.locator('#mihomo-dns-btn').click();
+    const result = await response;
+    expect(result.ok()).toBe(true);
+    const status = await result.json();
+    expect(status.ok).toBe(true);
+    const bypass = status.dns_diagnostics?.bypass;
+    expect(bypass).toBeTruthy();
+    const badge = page.locator('#mihomo-dns-router-bypass-state');
+    await expect(badge).toHaveAttribute('data-state', bypass.router_state);
+    await expect(badge).not.toHaveAttribute('data-tooltip', /стенд/);
+    if (status.enabled) {
+      expect(status.dns_override).toBe(true);
+      expect(status.dns_listener_configured).toBe(true);
+      expect(bypass.router_state).toBe('safe');
+      await expect(badge).toHaveText('DNS роутера: защищён');
+    } else if (status.dns_override === false && !status.dns_listener_configured) {
+      expect(bypass.router_state).toBe('inactive');
+      await expect(badge).toHaveText('DNS роутера: защита выключена');
+    }
+    await testInfo.attach('dns-diagnostics', {
+      body: JSON.stringify({
+        enabled: status.enabled, active_core: status.active_core,
+        dns_override: status.dns_override, policy: status.keenetic_dns_policy, bypass,
+      }, null, 2),
+      contentType: 'application/json',
+    });
+    await testInfo.attach('dns-dialog', {
+      body: await page.locator('#mihomo-dns-modal .modal-content').screenshot(),
+      contentType: 'image/png',
+    });
   });
 });

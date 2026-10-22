@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 585,
-      "size_bytes": 7912418,
+      "size_bytes": 7914287,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -132,7 +132,7 @@
       ],
       "removable": true,
       "unit_count": 134,
-      "size_bytes": 3118907,
+      "size_bytes": 3124835,
       "kind_counts": {
         "app_runtime": 4,
         "backend_route": 2,
@@ -12422,7 +12422,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/router_panel_smoke.spec.mjs",
-      "size_bytes": 1739,
+      "size_bytes": 3608,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -14970,7 +14970,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_service",
       "path": "xkeen-ui/services/mihomo_dns.py",
-      "size_bytes": 199649,
+      "size_bytes": 200600,
       "depends_on": [
         "core",
         "tool.editor"
@@ -15758,7 +15758,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_test",
       "path": "tests/test_mihomo_dns.py",
-      "size_bytes": 84451,
+      "size_bytes": 87199,
       "depends_on": [
         "core",
         "tool.editor"
@@ -16886,7 +16886,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/mihomo_dns.js",
-      "size_bytes": 49754,
+      "size_bytes": 50104,
       "depends_on": [
         "core",
         "tool.editor"
@@ -17366,7 +17366,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_test",
       "path": "e2e/mihomo_dns_policy_detection.spec.mjs",
-      "size_bytes": 2291,
+      "size_bytes": 4170,
       "depends_on": [
         "core",
         "tool.editor"

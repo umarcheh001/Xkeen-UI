@@ -1872,6 +1872,68 @@ def test_dns_runtime_diagnostics_warn_about_unignored_ipv6_provider_dns():
     assert any("IPv6" in reason for reason in diagnostics["bypass"]["reasons"])
 
 
+@pytest.mark.parametrize("provider_ignored", [True, False])
+def test_dns_diagnostics_disabled_protection_is_inactive(provider_ignored):
+    diagnostics = dns.diagnose_dns_runtime(
+        BASE,
+        firmware_policy={
+            "provider_ignored": provider_ignored,
+            "provider_interfaces": [{
+                "ipv4_ignored": provider_ignored, "ipv6_ignored": provider_ignored,
+            }],
+            "transit_intercept": False,
+        },
+        dns_override=False,
+        active_core="mihomo",
+    )
+
+    bypass = diagnostics["bypass"]
+    assert bypass["router_state"] == "inactive"
+    assert bypass["state"] == "inactive"
+    assert not any("стенд" in reason or "Не удалось" in reason for reason in bypass["reasons"])
+    # Still report the actual firmware switches, without pretending the
+    # inactive protection has already secured the router.
+    assert bypass["checks"]["provider_dns"] == ("safe" if provider_ignored else "risk")
+
+
+def test_dns_diagnostics_enabled_router_is_safe_despite_unknown_client_dns():
+    content, _ = dns.build_enabled_config(BASE)
+    diagnostics = dns.diagnose_dns_runtime(
+        content,
+        firmware_policy={
+            "provider_ignored": True,
+            "provider_interfaces": [{"ipv4_ignored": True, "ipv6_ignored": True}],
+            "transit_intercept": False,
+        },
+        dns_override=True,
+        active_core="mihomo",
+    )
+    assert diagnostics["bypass"]["router_state"] == "safe"
+    assert diagnostics["bypass"]["client_state"] == "unknown"
+    assert diagnostics["bypass"]["reasons"] == []
+
+
+@pytest.mark.parametrize(
+    ("policy", "override", "core", "expected_reason"),
+    [
+        (None, True, "mihomo", "Не удалось определить настройки DNS провайдера"),
+        ({"provider_ignored": True, "transit_intercept": False}, True, "mihomo",
+         "Не удалось определить настройки IPv6 DNS провайдера"),
+        (None, None, "mihomo", "Не удалось прочитать DNS override Keenetic"),
+        (None, False, "mihomo", "DNS override Keenetic выключен"),
+        (None, True, "xray", "Активное ядро — не Mihomo"),
+    ],
+)
+def test_dns_diagnostics_reports_specific_missing_router_checks(policy, override, core, expected_reason):
+    content, _ = dns.build_enabled_config(BASE)
+    diagnostics = dns.diagnose_dns_runtime(
+        content, firmware_policy=policy, dns_override=override, active_core=core,
+    )
+    assert diagnostics["bypass"]["router_state"] == "unknown"
+    assert expected_reason in diagnostics["bypass"]["reasons"]
+    assert not any("стенд" in reason for reason in diagnostics["bypass"]["reasons"])
+
+
 def test_dns_runtime_diagnostics_exposes_upstream_routes_and_provider_freshness(tmp_path: Path):
     content, _ = dns.build_enabled_config(
         BASE,
