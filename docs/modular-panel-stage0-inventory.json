@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 585,
-      "size_bytes": 7914287,
+      "size_bytes": 7914387,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -88,7 +88,7 @@
       ],
       "removable": true,
       "unit_count": 140,
-      "size_bytes": 3863856,
+      "size_bytes": 3866602,
       "kind_counts": {
         "backend_route": 13,
         "backend_service": 20,
@@ -177,7 +177,7 @@
       ],
       "removable": true,
       "unit_count": 25,
-      "size_bytes": 830990,
+      "size_bytes": 831334,
       "kind_counts": {
         "frontend_javascript": 3,
         "frontend_ui": 22
@@ -7696,7 +7696,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_schema_snippets_runtime.py",
-      "size_bytes": 14289,
+      "size_bytes": 14389,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -18597,7 +18597,7 @@
       "module_id": "engine.xray",
       "kind": "backend_service",
       "path": "xkeen-ui/services/xray_outbounds.py",
-      "size_bytes": 56809,
+      "size_bytes": 58420,
       "depends_on": [
         "core",
         "tool.editor"
@@ -18660,7 +18660,7 @@
       "module_id": "engine.xray",
       "kind": "backend_service",
       "path": "xkeen-ui/services/xray_subscriptions.py",
-      "size_bytes": 332002,
+      "size_bytes": 332126,
       "depends_on": [
         "core",
         "tool.editor",
@@ -19424,7 +19424,7 @@
       "module_id": "engine.xray",
       "kind": "backend_test",
       "path": "tests/test_xray_outbounds.py",
-      "size_bytes": 7826,
+      "size_bytes": 7807,
       "depends_on": [
         "core",
         "tool.editor"
@@ -19597,7 +19597,7 @@
       "module_id": "engine.xray",
       "kind": "backend_test",
       "path": "tests/test_xray_subscriptions.py",
-      "size_bytes": 255244,
+      "size_bytes": 256274,
       "depends_on": [
         "core",
         "tool.editor"
@@ -23537,7 +23537,7 @@
       "module_id": "tool.editor",
       "kind": "frontend_ui",
       "path": "xkeen-ui/static/js/ui/schema_snippets.js",
-      "size_bytes": 53028,
+      "size_bytes": 53372,
       "depends_on": [
         "core"
       ],
@@ -32781,7 +32781,7 @@
       "evidence": {
         "tool.editor": {
           "unit_count": 25,
-          "size_bytes": 830990
+          "size_bytes": 831334
         },
         "tool.terminal": {
           "unit_count": 47,

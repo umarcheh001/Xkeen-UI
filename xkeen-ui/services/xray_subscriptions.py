@@ -44,6 +44,7 @@ from services.xray_outbounds import (
     apply_sockopt_mark_profile,
     build_proxy_outbound_from_link,
     collect_sockopt_mark_profile,
+    normalize_vless_outbound_for_compatibility,
     set_sockopt_mark,
 )
 from services.xray_observatory import (
@@ -3128,6 +3129,7 @@ def build_subscription_json_outbounds(
         tag = _unique_tag(prefix, node, used)
         try:
             outbound = copy.deepcopy(source)
+            outbound = normalize_vless_outbound_for_compatibility(outbound)
             stream_settings = outbound.get("streamSettings") if isinstance(outbound.get("streamSettings"), dict) else None
             xhttp_settings = stream_settings.get("xhttpSettings") if isinstance(stream_settings, dict) and isinstance(stream_settings.get("xhttpSettings"), dict) else None
             if isinstance(xhttp_settings, dict):

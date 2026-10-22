@@ -281,7 +281,7 @@ console.log(JSON.stringify({
     assert '"StatsService"' in payload["insertText"]
 
 
-def test_xray_vless_snippets_prefer_compact_settings_format():
+def test_xray_vless_snippets_use_portable_vnext_settings_format():
     payload = _run_node_json(
         """
 import { getXraySnippets } from './xkeen-ui/static/js/ui/schema_snippets.js';
@@ -301,12 +301,14 @@ console.log(JSON.stringify({
 """
     )
 
+    assert '"vnext"' in payload["realityInsertText"]
+    assert '"users"' in payload["realityInsertText"]
     assert '"address": "example.com"' in payload["realityInsertText"]
     assert '"id": "00000000-0000-0000-0000-000000000000"' in payload["realityInsertText"]
-    assert '"vnext"' not in payload["realityInsertText"]
+    assert '"vnext"' in payload["xhttpInsertText"]
+    assert '"users"' in payload["xhttpInsertText"]
     assert '"address": "example.com"' in payload["xhttpInsertText"]
     assert '"id": "00000000-0000-0000-0000-000000000000"' in payload["xhttpInsertText"]
-    assert '"vnext"' not in payload["xhttpInsertText"]
 
 
 def test_mihomo_sniffer_snippet_stays_minimal_for_common_router_setup():

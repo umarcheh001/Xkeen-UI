@@ -3,7 +3,7 @@ from __future__ import annotations
 from urllib.parse import parse_qs, quote, urlparse
 
 
-def test_build_outbounds_config_from_vless_uses_compact_settings_format():
+def test_build_outbounds_config_from_vless_uses_portable_vnext_settings_format():
     from services import xray_outbounds as outbounds
 
     cfg = outbounds.build_outbounds_config_from_vless(
@@ -14,12 +14,12 @@ def test_build_outbounds_config_from_vless_uses_compact_settings_format():
 
     proxy = cfg["outbounds"][0]
     assert proxy["protocol"] == "vless"
-    assert proxy["settings"]["address"] == "example.com"
-    assert proxy["settings"]["port"] == 443
-    assert proxy["settings"]["id"] == "11111111-1111-1111-1111-111111111111"
-    assert proxy["settings"]["encryption"] == "none"
-    assert proxy["settings"]["flow"] == "xtls-rprx-vision"
-    assert "vnext" not in proxy["settings"]
+    vnext = proxy["settings"]["vnext"][0]
+    assert vnext["address"] == "example.com"
+    assert vnext["port"] == 443
+    assert vnext["users"][0]["id"] == "11111111-1111-1111-1111-111111111111"
+    assert vnext["users"][0]["encryption"] == "none"
+    assert vnext["users"][0]["flow"] == "xtls-rprx-vision"
 
 
 def test_vless_tls_share_fields_round_trip():

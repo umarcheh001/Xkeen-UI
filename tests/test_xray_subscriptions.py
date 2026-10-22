@@ -673,9 +673,9 @@ def test_refresh_subscription_writes_generated_fragment_and_observatory(tmp_path
     assert len(generated["outbounds"]) == 1
     assert generated["outbounds"][0]["tag"] == "demo--Fast_Node"
     assert generated["outbounds"][0]["protocol"] == "vless"
-    assert generated["outbounds"][0]["settings"]["address"] == "example.com"
-    assert generated["outbounds"][0]["settings"]["id"] == "user"
-    assert "vnext" not in generated["outbounds"][0]["settings"]
+    generated_vnext = generated["outbounds"][0]["settings"]["vnext"][0]
+    assert generated_vnext["address"] == "example.com"
+    assert generated_vnext["users"][0]["id"] == "user"
 
     observatory = json.loads((xray_dir / "07_observatory.json").read_text(encoding="utf-8"))
     assert observatory["observatory"]["subjectSelector"] == ["demo"]
@@ -7180,3 +7180,36 @@ def test_build_subscription_json_outbounds_converts_sing_box_vless_and_trojan_co
         else:
             server = outbound["settings"]["servers"][0]
             assert server == {"address": "trojan.example.com", "port": 443, "password": "test-password"}
+
+
+def test_build_subscription_json_outbounds_normalizes_compact_vless_for_old_xray():
+    from services import xray_subscriptions as subs
+
+    body = json.dumps({
+        "outbounds": [{
+            "tag": "compact",
+            "protocol": "vless",
+            "settings": {
+                "address": "legacy.example",
+                "port": 443,
+                "id": "11111111-1111-1111-1111-111111111111",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision",
+                "level": 0,
+            },
+            "streamSettings": {"network": "tcp", "security": "tls"},
+        }],
+    })
+
+    outbounds, errors, _stats = subs.build_subscription_json_outbounds(body, tag_prefix="sub")
+
+    assert errors == []
+    vnext = outbounds[0]["settings"]["vnext"][0]
+    assert vnext["address"] == "legacy.example"
+    assert vnext["port"] == 443
+    assert vnext["users"] == [{
+        "id": "11111111-1111-1111-1111-111111111111",
+        "encryption": "none",
+        "flow": "xtls-rprx-vision",
+        "level": 0,
+    }]
