@@ -8441,7 +8441,7 @@
       "xray-snapshot-status",
       "xray-snapshot-title"
     ],
-    "data_attribute_count": 680,
+    "data_attribute_count": 681,
     "data_attributes": [
       {
         "locator": "header.panel-header.panel-header-shell@L96",
@@ -10422,6 +10422,11 @@
         "locator": "span.n@L2470",
         "name": "data-xlog-file-count",
         "value": "error"
+      },
+      {
+        "locator": "span.xk-action-label@L2488",
+        "name": "data-xlog-play-label",
+        "value": ""
       },
       {
         "locator": "em@L2525",

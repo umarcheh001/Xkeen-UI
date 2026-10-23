@@ -436,7 +436,7 @@ def test_xray_live_logs_card_uses_russian_visible_labels():
     assert '<span>Опрос без WebSocket</span>' in logs_panel
     assert '<span>Следить за концом</span>' in logs_panel
     assert "{{ op_icon('pause') }}<span class=\"xk-action-label\">Пауза</span>" in logs_panel
-    assert "{{ op_icon('play') }}<span>Пуск</span>" in logs_panel
+    assert "{{ op_icon('play') }}<span class=\"xk-action-label\" data-xlog-play-label>Пуск</span>" in logs_panel
     assert "{{ op_icon('stop') }}<span>Стоп</span>" in logs_panel
     assert 'К последним' in logs_panel
     assert 'Копировать видимое' in logs_panel
@@ -446,8 +446,8 @@ def test_xray_live_logs_card_uses_russian_visible_labels():
     assert "{ key: 'view:xray-logs', label: 'Логи Xray онлайн' }" in layout_prefs
     assert "label = 'Вручную / В конец';" in xray_logs
     assert "label = 'Онлайн / В конец';" in xray_logs
-    # The pause button is built once; new lines only change the badge text.
-    assert "btn.innerHTML = `${iconHtml('pause')}<span class=\"xk-action-label\">Пауза</span><span class=\"xk-xlog-badge\" hidden></span>`;" in xray_logs
+    # Пуск/Пауза are never rebuilt; only the Пуск label and the badge text change.
+    assert "const labelText = paused ? 'Продолжить' : 'Пуск';" in xray_logs
     assert "if (badge.textContent !== badgeText) badge.textContent = badgeText;" in xray_logs
     assert 'Copy selection' not in logs_panel
     assert 'Load more' not in logs_panel

@@ -24210,9 +24210,13 @@ body.panel-page #view-xray-logs .xk-xlog-seg-btn {
   background: transparent !important;
   color: var(--op-muted) !important;
   box-shadow: none !important;
-  font-size: calc(12.5px * var(--xk-font-scale, 1));
-  font-weight: 600;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  font-weight: 610;
   cursor: pointer;
+}
+
+body.panel-page #view-xray-logs .xk-xlog-seg-btn[hidden] {
+  display: none;
 }
 
 body.panel-page #view-xray-logs .xk-xlog-seg-btn:hover:not(:disabled) {
@@ -24236,22 +24240,14 @@ body.panel-page #view-xray-logs .xk-xlog-seg-btn .n {
   font-variant-numeric: tabular-nums;
 }
 
+body.panel-page #view-xray-logs .xk-xlog-seg-btn .n:empty {
+  display: none;
+}
+
 body.panel-page #view-xray-logs .xk-xlog-seg-btn.is-on {
   background: var(--op-surface) !important;
   color: var(--op-text-strong) !important;
   box-shadow: 0 0 0 1px var(--op-border-strong) !important;
-}
-
-body.panel-page #view-xray-logs .xk-xlog-run .is-play.is-on {
-  background: var(--op-success-soft) !important;
-  color: var(--op-success) !important;
-  box-shadow: 0 0 0 1px var(--op-success) !important;
-}
-
-body.panel-page #view-xray-logs .xk-xlog-run .is-pause.is-on {
-  background: var(--op-warning-soft) !important;
-  color: var(--op-warning) !important;
-  box-shadow: 0 0 0 1px var(--op-warning) !important;
 }
 
 body.panel-page #view-xray-logs .xk-xlog-run .is-stop:hover:not(:disabled) {

@@ -1118,24 +1118,39 @@ let xrayLogsModuleApi = null;
 
     const paused = !!(runtime.streaming && runtime.paused);
     const pending = paused ? Math.max(0, parseInt(runtime.pendingCount || 0, 10) || 0) : 0;
+    // Пуск and Пауза share one slot: while lines stream only Пауза is shown,
+    // otherwise Пуск (labelled «Продолжить» on pause). Both buttons stay in the
+    // DOM and are only hidden, so a click is never lost to a rebuilt element.
+    const play = $('xray-log-enable-btn');
+    const showPause = !!(runtime.streaming && !paused && String(_activeLogLevel || 'none') !== 'none');
+    const focusWasOn = document.activeElement;
     if (btn.disabled !== !runtime.streaming) btn.disabled = !runtime.streaming;
     if (btn.dataset.state !== (paused ? 'on' : 'off')) btn.dataset.state = paused ? 'on' : 'off';
-    if (btn.classList.contains('is-on') !== paused) btn.classList.toggle('is-on', paused);
-    setAttrIfChanged(btn, 'aria-pressed', paused ? 'true' : 'false');
-    let badge = btn.querySelector('.xk-xlog-badge');
-    if (!badge) {
-      btn.innerHTML = `${iconHtml('pause')}<span class="xk-action-label">Пауза</span><span class="xk-xlog-badge" hidden></span>`;
-      badge = btn.querySelector('.xk-xlog-badge');
+    if (btn.hidden !== !showPause) btn.hidden = !showPause;
+
+    if (play) {
+      if (play.hidden !== showPause) play.hidden = showPause;
+      if (play.dataset.state !== (paused ? 'resume' : 'start')) play.dataset.state = paused ? 'resume' : 'start';
+      const label = play.querySelector('[data-xlog-play-label]');
+      const labelText = paused ? 'Продолжить' : 'Пуск';
+      if (label && label.textContent !== labelText) label.textContent = labelText;
+      const badge = play.querySelector('.xk-xlog-badge');
+      if (badge) {
+        const badgeText = pending ? `+${pending}` : '';
+        if (badge.textContent !== badgeText) badge.textContent = badgeText;
+        if (badge.hidden !== !pending) badge.hidden = !pending;
+      }
+      syncTooltipText(
+        play,
+        paused
+          ? 'Продолжить: показать накопленные строки и вернуться к онлайн-выводу.'
+          : 'Пуск: включить запись логов и онлайн-поток',
+        labelText,
+      );
     }
-    const badgeText = pending ? `+${pending}` : '';
-    if (badge.textContent !== badgeText) badge.textContent = badgeText;
-    if (badge.hidden !== !pending) badge.hidden = !pending;
-    const title = !runtime.streaming
-      ? 'Пауза доступна только в онлайн-режиме.'
-      : (paused
-        ? 'Продолжить: показать накопленные строки и вернуться к онлайн-выводу.'
-        : 'Пауза: заморозить вывод (строки продолжают собираться).');
-    syncTooltipText(btn, title);
+    // Keep keyboard focus on the slot when the pressed button hides itself.
+    if (focusWasOn === btn && btn.hidden && play) play.focus();
+    else if (focusWasOn === play && play && play.hidden) btn.focus();
 
     // Mockup: a floating "N новых строк — показать" over the paused output.
     const newLines = $('xray-log-new-lines');
@@ -1146,13 +1161,6 @@ let xrayLogsModuleApi = null;
       const text = show ? (pending + ' ' + pluralRu(pending, 'новая строка', 'новые строки', 'новых строк') + ' — показать') : '';
       if (label && label.textContent !== text) label.textContent = text;
       if (show && refs.scrollBottom && !refs.scrollBottom.hidden) refs.scrollBottom.hidden = true;
-    }
-
-    const play = $('xray-log-enable-btn');
-    if (play) {
-      const playing = !!(runtime.streaming && !paused && String(_activeLogLevel || 'none') !== 'none');
-      if (play.classList.contains('is-on') !== playing) play.classList.toggle('is-on', playing);
-      setAttrIfChanged(play, 'aria-pressed', playing ? 'true' : 'false');
     }
   }
 
@@ -4409,6 +4417,11 @@ function copyXrayContextModal() {
 	    enableBtn.addEventListener('click', (e) => {
 	      e.preventDefault();
 	      _logsUserActivated = true;
+	      // «Продолжить» (same button on pause): only unfreeze the running stream.
+	      if (_streaming && _paused) {
+	        xrayLogsTogglePause();
+	        return;
+	      }
 	      // Пуск: when Xray already writes logs, only the online stream starts;
 	      // otherwise logging is enabled first (this restarts the core).
 	      if (String(_activeLogLevel || 'none') !== 'none') {

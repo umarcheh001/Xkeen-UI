@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 588,
-      "size_bytes": 7973515,
+      "size_bytes": 7974096,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -88,7 +88,7 @@
       ],
       "removable": true,
       "unit_count": 144,
-      "size_bytes": 3928559,
+      "size_bytes": 3929215,
       "kind_counts": {
         "backend_route": 13,
         "backend_service": 20,
@@ -4422,7 +4422,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_frontend_runtime_hotfixes.py",
-      "size_bytes": 143360,
+      "size_bytes": 143358,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -12302,7 +12302,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/panel_operator_stage4_logs.spec.mjs",
-      "size_bytes": 30571,
+      "size_bytes": 31412,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -13499,7 +13499,7 @@
       "module_id": "core",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/panel-operator.css",
-      "size_bytes": 805547,
+      "size_bytes": 805289,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -21106,7 +21106,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/xray_logs.js",
-      "size_bytes": 185040,
+      "size_bytes": 185602,
       "depends_on": [
         "core",
         "tool.editor"
@@ -21400,7 +21400,7 @@
       "module_id": "engine.xray",
       "kind": "template",
       "path": "xkeen-ui/templates/panel/screens/xray_logs.html",
-      "size_bytes": 13905,
+      "size_bytes": 13999,
       "depends_on": [
         "core",
         "tool.editor"

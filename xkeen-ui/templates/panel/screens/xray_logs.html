@@ -23,8 +23,8 @@
             <option value="error">уровень: error</option>
           </select>
           <div class="xk-xlog-seg xk-xlog-run" role="group" aria-label="Запись логов">
-            <button type="button" class="xk-xlog-seg-btn is-play" id="xray-log-enable-btn" title="Пуск: включить запись логов и онлайн-поток" aria-label="Пуск">{{ op_icon('play') }}<span>Пуск</span></button>
-            <button type="button" class="xk-xlog-seg-btn is-pause" id="xray-log-pause" title="Пауза: заморозить вывод (строки продолжают собираться)." aria-label="Пауза">{{ op_icon('pause') }}<span class="xk-action-label">Пауза</span></button>
+            <button type="button" class="xk-xlog-seg-btn is-play" id="xray-log-enable-btn" title="Пуск: включить запись логов и онлайн-поток" aria-label="Пуск">{{ op_icon('play') }}<span class="xk-action-label" data-xlog-play-label>Пуск</span><span class="xk-xlog-badge" hidden></span></button>
+            <button type="button" class="xk-xlog-seg-btn is-pause" id="xray-log-pause" title="Пауза: заморозить вывод (строки продолжают собираться)." aria-label="Пауза" hidden>{{ op_icon('pause') }}<span class="xk-action-label">Пауза</span></button>
             <button type="button" class="xk-xlog-seg-btn is-stop" id="xray-log-disable-btn" title="Стоп: выключить запись логов Xray" aria-label="Стоп">{{ op_icon('stop') }}<span>Стоп</span></button>
           </div>
           <span class="xk-xlog-spacer"></span>

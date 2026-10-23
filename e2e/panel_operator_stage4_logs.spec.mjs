@@ -122,7 +122,9 @@ test.describe('Operator Console Stage 4 logs', () => {
     await page.locator('#xray-log-enable-btn').click();
     await expect(live).toBeChecked();
     await expect(follow).toBeChecked();
-    await expect(page.locator('#xray-log-pause')).toBeEnabled();
+    // Пуск and Пауза share one slot: a running stream offers only Пауза.
+    await expect(page.locator('#xray-log-pause')).toBeVisible();
+    await expect(page.locator('#xray-log-enable-btn')).toBeHidden();
 
     await page.locator('#xray-log-disable-btn').click();
     await expect(live).not.toBeChecked();
@@ -139,7 +141,7 @@ test.describe('Operator Console Stage 4 logs', () => {
     await expect.poll(() => enableCalls).toBe(1);
   });
 
-  test('pause counts new lines on the button and offers to show them', async ({ page }) => {
+  test('pause turns the slot into «Продолжить» that counts new lines', async ({ page }) => {
     let n = 0;
     const next = () => {
       n += 1;
@@ -157,12 +159,20 @@ test.describe('Operator Console Stage 4 logs', () => {
     await page.locator('#xray-log-more > summary').click();
     await page.locator('#xray-log-interval').selectOption('1000');
     await page.keyboard.press('Escape');
-    await page.locator('#xray-log-enable-btn').click();
-    await expect(page.locator('#xray-log-pause')).toBeEnabled();
+    const play = page.locator('#xray-log-enable-btn');
+    const pause = page.locator('#xray-log-pause');
+    await expect(play).toContainText('Пуск');
+    await expect(pause).toBeHidden();
+    await play.click();
+    await expect(pause).toBeVisible();
+    await expect(play).toBeHidden();
 
-    await page.locator('#xray-log-pause').click();
-    await expect(page.locator('#xray-log-pause')).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.locator('#xray-log-pause .xk-xlog-badge')).toHaveText(/^\+\d+$/);
+    await pause.click();
+    await expect(pause).toBeHidden();
+    await expect(play).toBeVisible();
+    await expect(play).toBeFocused();
+    await expect(play.locator('[data-xlog-play-label]')).toHaveText('Продолжить');
+    await expect(play.locator('.xk-xlog-badge')).toHaveText(/^\+\d+$/);
     const newLines = page.locator('#xray-log-new-lines');
     await expect(newLines).toBeVisible();
     await expect(newLines).toContainText(/\d+ нов\S+ строк\S* — показать/);
@@ -170,21 +180,33 @@ test.describe('Operator Console Stage 4 logs', () => {
 
     // New lines must not rebuild the buttons: a click whose mousedown landed
     // on an element replaced before mouseup was lost (seen on 45.1).
-    await page.evaluate(() => { window.__pauseLabel = document.querySelector('#xray-log-pause .xk-action-label'); });
-    await expect.poll(() => page.locator('#xray-log-pause .xk-xlog-badge').textContent()).not.toBe('+0');
+    await page.evaluate(() => { window.__playLabel = document.querySelector('#xray-log-enable-btn [data-xlog-play-label]'); });
+    await expect.poll(() => play.locator('.xk-xlog-badge').textContent()).not.toBe('+0');
     await page.waitForTimeout(2500);
-    expect(await page.evaluate(() => window.__pauseLabel === document.querySelector('#xray-log-pause .xk-action-label'))).toBe(true);
+    expect(await page.evaluate(() => window.__playLabel === document.querySelector('#xray-log-enable-btn [data-xlog-play-label]'))).toBe(true);
 
     await newLines.click();
-    await expect(page.locator('#xray-log-pause')).toHaveAttribute('aria-pressed', 'false');
+    await expect(pause).toBeVisible();
     await expect(newLines).toBeHidden();
+
+    // «Продолжить» only unfreezes the stream: no request to enable logging.
+    let enableCalls = 0;
+    await page.route('**/api/xray-logs/enable', async (route) => {
+      enableCalls += 1;
+      await route.fulfill({ json: { loglevel: 'warning', xray_restarted: true } });
+    });
+    await pause.click();
+    await play.click();
+    await expect(pause).toBeVisible();
+    await expect(play.locator('[data-xlog-play-label]')).toHaveText('Пуск');
+    expect(enableCalls).toBe(0);
 
     let disabled = 0;
     await page.route('**/api/xray-logs/disable', async (route) => {
       disabled += 1;
       await route.fulfill({ json: { ok: true } });
     });
-    await page.locator('#xray-log-pause').click();
+    await pause.click();
     const stop = await page.locator('#xray-log-disable-btn').boundingBox();
     await page.mouse.move(stop.x + stop.width / 2, stop.y + stop.height / 2);
     await page.mouse.down();
