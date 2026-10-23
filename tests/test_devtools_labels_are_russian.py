@@ -73,7 +73,10 @@ def test_key_buttons_carry_their_russian_labels():
     }
 
     for el_id, label in expected.items():
-        pattern = re.compile(r'id="' + re.escape(el_id) + r'"[^>]*>([^<]*)<')
+        # Menu items of the logs tab start with an icon and wrap the label in <span>.
+        pattern = re.compile(
+            r'id="' + re.escape(el_id) + r'"[^>]*>(?:\s*\{\{ op_icon\([^)]*\) \}\}<span>)?([^<]*)<'
+        )
         found = pattern.search(html)
         assert found, el_id
         assert found.group(1).strip() == label, (el_id, found.group(1).strip())

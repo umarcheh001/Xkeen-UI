@@ -224,14 +224,10 @@ body.devtools-page .dt-zone > details > summary h2::before {
   textarea,
   .dt-btn-like,
   .dt-switch,
-  .dt-log-item,
   .dt-log-menu-panel,
   .dt-env-group-toggle,
   .dt-env-group-icon,
   .dt-env-group-count,
-  .dt-log-topbar,
-  .dt-log-controls,
-  .dt-log-view,
   .modal-content,
   .modal-header,
   .modal-actions
@@ -247,21 +243,18 @@ body.devtools-page .dt-zone > details > summary h2::before {
   button,
   [role="button"],
   .dt-btn-like,
-  .dt-log-item,
   .dt-env-group-toggle
 ),
 :where(body.devtools-page) :where(
   button,
   [role="button"],
   .dt-btn-like,
-  .dt-log-item,
   .dt-env-group-toggle
 )::before,
 :where(body.devtools-page) :where(
   button,
   [role="button"],
   .dt-btn-like,
-  .dt-log-item,
   .dt-env-group-toggle
 )::after {
   box-shadow: none !important;
@@ -412,7 +405,6 @@ body.devtools-page :is(
   .btn-secondary,
   .btn-danger,
   .dt-btn-like,
-  .dt-chip-btn,
   .dt-log-menu > summary
 ) {
   min-height: var(--op-control-h);
@@ -435,7 +427,6 @@ body.devtools-page :is(
   .btn-secondary,
   .btn-danger,
   .dt-btn-like,
-  .dt-chip-btn,
   .dt-log-menu > summary
 ):hover {
   border-color: var(--op-border-strong) !important;
@@ -465,15 +456,13 @@ body.devtools-page :is(.btn-danger, #dt-ui-prefs-resetall, #dt-log-clear):hover 
   color: var(--op-danger) !important;
 }
 
-body.devtools-page #dt-env-help-ok-btn,
-body.devtools-page #dt-log-context-ok-btn {
+body.devtools-page #dt-env-help-ok-btn {
   border-color: var(--op-accent) !important;
   background: var(--op-accent) !important;
   color: #fff !important;
 }
 
-body.devtools-page #dt-env-help-ok-btn:hover,
-body.devtools-page #dt-log-context-ok-btn:hover {
+body.devtools-page #dt-env-help-ok-btn:hover {
   border-color: var(--op-accent-hover) !important;
   background: var(--op-accent-hover) !important;
   color: #fff !important;
@@ -521,7 +510,7 @@ body.devtools-page select optgroup {
   color: var(--op-text);
 }
 
-body.devtools-page :is(.dt-badge, .dt-pill, .dt-custom-css-badge, .dt-log-badge, .dt-log-stats) {
+body.devtools-page :is(.dt-badge, .dt-pill, .dt-custom-css-badge, .dt-log-stats) {
   min-height: 22px;
   padding: 2px 7px;
   border: 1px solid var(--op-border) !important;
@@ -660,7 +649,7 @@ body.devtools-page .dt-tools-layout {
   align-items: stretch;
 }
 
-body.devtools-page :is(.dt-tools-left, .dt-tools-right, .dt-logs-main, .dt-logs-sidebar) {
+body.devtools-page :is(.dt-tools-left, .dt-tools-right) {
   min-width: 0;
 }
 
@@ -813,8 +802,7 @@ body.devtools-page :is(
   .dt-update-actions,
   .dt-branding-row,
   .dt-logging-actions,
-  .dt-actions-grid,
-  .dt-log-topbar-actions
+  .dt-actions-grid
 ) {
   gap: var(--op-gap-actions);
 }
@@ -1093,97 +1081,7 @@ body.devtools-page .dt-logs-card {
   min-height: calc(100vh - 113px);
 }
 
-body.devtools-page .dt-logs-layout {
-  grid-template-columns: minmax(210px, 260px) minmax(0, 1fr);
-  gap: 9px;
-}
-
-body.devtools-page .dt-logs-sidebar {
-  padding: 9px;
-  border: 1px solid var(--op-border);
-  border-radius: var(--op-radius);
-  background: var(--op-bg) !important;
-  box-shadow: none !important;
-}
-
-body.devtools-page .dt-log-list {
-  gap: 3px;
-}
-
-body.devtools-page .dt-log-item {
-  min-height: 42px;
-  padding: 6px 8px;
-  border: 1px solid transparent !important;
-  border-radius: var(--op-radius-sm) !important;
-  background: transparent !important;
-}
-
-body.devtools-page .dt-log-item:hover {
-  border-color: var(--op-border) !important;
-  background: var(--op-surface-2) !important;
-}
-
-body.devtools-page .dt-log-item.active {
-  border-color: var(--op-accent-border) !important;
-  background: var(--op-accent-soft) !important;
-  box-shadow: none !important;
-}
-
-body.devtools-page .dt-log-dot {
-  width: 7px;
-  height: 7px;
-  background: var(--op-success);
-  box-shadow: none;
-}
-
-body.devtools-page :is(.dt-log-topbar, .dt-log-controls) {
-  padding: 7px 8px;
-  border: 1px solid var(--op-border);
-  border-radius: var(--op-radius);
-  background: var(--op-surface-2) !important;
-  box-shadow: none !important;
-}
-
-body.devtools-page .dt-log-interval {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-height: var(--op-control-compact-h);
-  padding: 3px 4px 3px 7px;
-  border: 1px solid var(--op-border) !important;
-  border-radius: var(--op-radius-sm) !important;
-  background: transparent !important;
-  color: var(--op-muted) !important;
-  box-shadow: none !important;
-}
-
-body.devtools-page .dt-log-interval-label {
-  color: var(--op-muted) !important;
-  opacity: 1;
-}
-
-body.devtools-page .dt-log-interval .xray-log-select {
-  min-height: 22px;
-  padding: 2px 22px 2px 6px;
-  border-color: var(--op-border) !important;
-  background-color: var(--op-bg) !important;
-  color: var(--op-text) !important;
-}
-
-body.devtools-page :is(.dt-log-view, #dt-log-context-body) {
-  border: 1px solid var(--op-border) !important;
-  border-radius: var(--op-radius) !important;
-  background: var(--op-editor) !important;
-  color: var(--op-text) !important;
-  box-shadow: none !important;
-}
-
-body.devtools-page .dt-log-view {
-  min-height: calc(100vh - 290px);
-}
-
-body.devtools-page .dt-log-menu-panel,
-body.devtools-page .dt-log-line-menu {
+body.devtools-page .dt-log-menu-panel {
   padding: 7px;
   border: 1px solid var(--op-border-strong) !important;
   border-radius: var(--op-radius) !important;
@@ -1223,8 +1121,7 @@ html[data-theme="light"] body.devtools-page {
  * 8. RESPONSIVE
  * ========================================================================== */
 @media (max-width: 1180px) {
-  body.devtools-page .dt-tools-layout,
-  body.devtools-page .dt-logs-layout {
+  body.devtools-page .dt-tools-layout {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -1239,10 +1136,6 @@ html[data-theme="light"] body.devtools-page {
 
   body.devtools-page .dt-env-scroll {
     max-height: min(68vh, 720px);
-  }
-
-  body.devtools-page .dt-log-view {
-    min-height: 420px;
   }
 }
 
@@ -1282,7 +1175,6 @@ html[data-theme="light"] body.devtools-page {
     .btn-secondary,
     .btn-danger,
     .dt-btn-like,
-    .dt-chip-btn,
     .dt-log-menu > summary
   ) {
     min-height: var(--op-touch-target);
@@ -1337,10 +1229,6 @@ html[data-theme="light"] body.devtools-page {
   body.devtools-page #dt-env-card table {
     min-width: 760px;
   }
-
-  body.devtools-page .dt-log-view {
-    min-height: 50vh;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1351,5 +1239,526 @@ html[data-theme="light"] body.devtools-page {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* ==========================================================================
+ * 9. LOGS TAB (23.10.2026)
+ * ========================================================================== */
+/* The panel's own logs in the style of the Xray logs screen: one header row
+ * (file, level, online, search, menu), source chips, a virtual table
+ * (panel_log_view.js, shadow DOM) and a footer. The header classes are the
+ * Xray screen's own (.xk-xlog-*); panel-operator.css is not loaded here, so
+ * the rules are repeated for this tab. */
+body.devtools-page #dt-tab-logs .xk-plog-card {
+  --xk-xlog-mono: var(--xk-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  --xk-xlog-h: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+body.devtools-page #dt-tab-logs .xk-action-icon {
+  display: block;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--op-border);
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-head > * {
+  margin: 0 !important;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--xk-xlog-h);
+  margin: 0 !important;
+  padding: 0 !important;
+  color: var(--op-text-strong) !important;
+  font-size: calc(12px * var(--xk-font-scale, 1));
+  font-weight: 660;
+  line-height: var(--xk-xlog-h) !important;
+  letter-spacing: 0;
+  text-transform: none !important;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--op-border);
+  border-radius: 999px;
+  background: var(--op-surface-2);
+  color: var(--op-muted);
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-live > i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--op-border-strong);
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-live[data-state="on"] {
+  border-color: var(--op-success-border, var(--op-border));
+  background: var(--op-success-soft);
+  color: var(--op-success);
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-live[data-state="on"] > i {
+  background: var(--op-success);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--op-success) 25%, transparent);
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-live[data-state="armed"] {
+  border-color: var(--op-warning-border, var(--op-border));
+  background: var(--op-warning-soft);
+  color: var(--op-warning);
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-live[data-state="armed"] > i {
+  background: var(--op-warning);
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: var(--xk-xlog-h);
+  padding: 2px;
+  box-sizing: border-box;
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-radius-sm);
+  background: var(--op-surface-2);
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-seg[hidden] {
+  display: none;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-seg-empty {
+  padding: 0 10px;
+  color: var(--op-faint);
+  font-size: calc(11px * var(--xk-font-scale, 1));
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-seg-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  min-height: 26px;
+  padding: 0 11px;
+  border: 0 !important;
+  border-radius: calc(var(--op-radius-sm) - 2px) !important;
+  background: transparent !important;
+  color: var(--op-muted) !important;
+  box-shadow: none !important;
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  font-weight: 610;
+  cursor: pointer;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-seg-btn[hidden] {
+  display: none;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-seg-btn:hover:not(:disabled) {
+  color: var(--op-text) !important;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-seg-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-seg-btn .xk-action-icon {
+  width: 15px;
+  height: 15px;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-seg-btn .n {
+  color: var(--op-faint);
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-seg-btn .n:empty {
+  display: none;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-seg-btn.is-on {
+  background: var(--op-surface) !important;
+  color: var(--op-text-strong) !important;
+  box-shadow: 0 0 0 1px var(--op-border-strong) !important;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-run .is-stop:hover:not(:disabled) {
+  color: var(--op-danger) !important;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-badge {
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--op-warning);
+  color: #fff;
+  font: 600 10.5px/16px var(--xk-xlog-mono);
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-badge[hidden] {
+  display: none;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-spacer {
+  flex: 1 1 auto;
+}
+
+/* Basis at the minimum: a wrapping row breaks lines by basis, before any
+ * shrinking, so a 280px basis pushed the last buttons onto a second line. */
+body.devtools-page #dt-tab-logs .xk-xlog-search {
+  position: relative;
+  flex: 1 1 170px;
+  min-width: 170px;
+  max-width: 280px;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-search > .xk-action-icon {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 16px;
+  height: 16px;
+  color: var(--op-muted);
+  pointer-events: none;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-search .xray-log-filter {
+  width: 100%;
+  height: var(--xk-xlog-h);
+  min-height: var(--xk-xlog-h);
+  padding: 0 30px 0 30px;
+  background: var(--op-editor) !important;
+}
+
+body.devtools-page #dt-tab-logs :is(.xk-xlog-kbd, .xk-xlog-search-clear) {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--op-border);
+  border-radius: 4px;
+  color: var(--op-faint);
+  font: 600 10.5px var(--xk-xlog-mono);
+  pointer-events: none;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-search:focus-within .xk-xlog-kbd,
+body.devtools-page #dt-tab-logs .xk-xlog-search-clear:not([hidden]) ~ .xk-xlog-kbd {
+  display: none;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-search-clear {
+  top: 5px;
+  right: 5px;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+  padding: 0;
+  border: 0 !important;
+  background: transparent !important;
+  color: var(--op-muted) !important;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-search-clear[hidden] {
+  display: none;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: var(--xk-xlog-h);
+  min-width: var(--xk-xlog-h);
+  height: var(--xk-xlog-h);
+  min-height: var(--xk-xlog-h);
+  padding: 0;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-icon-btn .xk-action-icon {
+  width: 16px;
+  height: 16px;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-menu {
+  position: relative;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-menu-panel {
+  right: 0;
+  left: auto;
+  top: calc(100% + 4px);
+  z-index: 30;
+  display: grid;
+  gap: 0;
+  width: 280px;
+  max-width: min(280px, calc(100vw - 16px));
+  padding: 6px;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-menu-title {
+  margin: 6px 8px 4px;
+  color: var(--op-faint);
+  font-size: calc(10.5px * var(--xk-font-scale, 1));
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 0 !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: transparent !important;
+  color: var(--op-text) !important;
+  box-shadow: none !important;
+  font-size: calc(12.5px * var(--xk-font-scale, 1));
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-menu-item:hover {
+  background: var(--op-surface-3) !important;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-menu-item > .xk-action-icon {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  color: var(--op-muted);
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-menu-item > span:not(.dt-switch) {
+  flex: 1 1 auto;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-menu-item > em {
+  color: var(--op-faint);
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+  font-style: normal;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-menu-item .dt-switch {
+  min-height: 0;
+  padding: 0;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-menu-item :is(.dt-log-lines-input, .xray-log-select) {
+  width: 84px;
+  min-width: 84px;
+  height: 26px;
+  min-height: 26px;
+  padding: 0 24px 0 8px;
+  line-height: 24px;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-menu-item .dt-log-lines-input {
+  padding: 0 6px;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-menu-item.is-danger,
+body.devtools-page #dt-tab-logs .xk-xlog-menu-item.is-danger > .xk-action-icon {
+  color: var(--op-danger) !important;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-menu-sep {
+  height: 1px;
+  margin: 5px 2px;
+  background: var(--op-border);
+}
+
+body.devtools-page #dt-tab-logs #dt-log-empty-block[hidden] {
+  display: none;
+}
+
+/* Source chips: all on by default, a chip turned off is crossed out. */
+body.devtools-page #dt-tab-logs .xk-xlog-chips[hidden] {
+  display: none;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-chiprow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-chiprow .lbl {
+  min-width: 58px;
+  color: var(--op-muted);
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0 9px;
+  border: 1px solid var(--op-border) !important;
+  border-radius: 999px !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-text) !important;
+  box-shadow: none !important;
+  font-size: calc(12px * var(--xk-font-scale, 1));
+  font-weight: 550;
+  cursor: pointer;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-chip em {
+  color: var(--op-faint);
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-chip.is-off {
+  color: var(--op-faint) !important;
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-chip.is-reset {
+  border-style: dashed !important;
+  color: var(--op-accent) !important;
+}
+
+/* Table box: the host scrolls, the footer stays under it. */
+body.devtools-page #dt-tab-logs .xk-plog-box {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-radius-md, var(--op-radius));
+  background: var(--op-editor, var(--op-surface));
+}
+
+body.devtools-page #dt-tab-logs .xk-plog-host {
+  position: relative;
+  height: clamp(420px, calc(100vh - 290px), 4000px);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  min-height: 30px;
+  padding: 4px 12px;
+  border-top: 1px solid var(--op-border);
+  background: var(--op-surface);
+  color: var(--op-muted);
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+}
+
+body.devtools-page #dt-tab-logs .xk-xlog-foot b {
+  color: var(--op-text);
+  font-weight: 600;
+}
+
+body.devtools-page #dt-tab-logs .xk-plog-stats {
+  display: inline-flex;
+  gap: 16px;
+}
+
+body.devtools-page #dt-tab-logs .xk-plog-path {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Fullscreen: the card covers the page, the table takes the free height. */
+body.devtools-page #dt-tab-logs .xk-plog-card.is-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  margin: 0;
+  padding: 12px max(12px, env(safe-area-inset-right, 0px)) 12px max(12px, env(safe-area-inset-left, 0px));
+  border-radius: 0;
+}
+
+body.devtools-page #dt-tab-logs .xk-plog-card.is-fullscreen .xk-plog-box {
+  flex: 1 1 0;
+}
+
+body.devtools-page #dt-tab-logs .xk-plog-card.is-fullscreen .xk-plog-host {
+  flex: 1 1 0;
+  height: 0;
+}
+
+body.devtools-page.dt-logs-fullscreen {
+  overflow: hidden;
+}
+
+@media (max-width: 900px) {
+  body.devtools-page #dt-tab-logs .xk-xlog-search {
+    flex: 1 1 100%;
+    max-width: none;
+    order: 10;
+  }
+
+  body.devtools-page #dt-tab-logs .xk-plog-host {
+    height: clamp(380px, calc(100vh - 340px), 4000px);
+  }
+}
+
+@media (max-width: 640px) {
+  body.devtools-page #dt-tab-logs .xk-xlog-run .xk-action-label,
+  body.devtools-page #dt-tab-logs .xk-xlog-run .is-stop > span {
+    display: none;
+  }
+
+  body.devtools-page #dt-tab-logs .xk-xlog-seg-btn {
+    padding: 0 9px;
+  }
+
+  body.devtools-page #dt-tab-logs .xk-xlog-seg-btn .n {
+    display: none;
   }
 }

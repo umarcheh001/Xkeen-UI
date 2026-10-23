@@ -78,15 +78,17 @@ test.describe('DevTools Operator Console theme', () => {
 
     const geometry = await page.evaluate(() => {
       const view = document.querySelector('#dt-log-view');
+      const box = document.querySelector('.xk-plog-box');
       const card = document.querySelector('.dt-logs-card');
+      const level = document.querySelector('#dt-log-level-seg');
       return {
         pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
         viewHeight: view.getBoundingClientRect().height,
-        viewBackgroundImage: getComputedStyle(view).backgroundImage,
+        viewBackgroundImage: getComputedStyle(box).backgroundImage,
         cardBackgroundImage: getComputedStyle(card).backgroundImage,
-        viewRadius: getComputedStyle(view).borderRadius,
-        intervalBackground: getComputedStyle(document.querySelector('.dt-log-interval')).backgroundColor,
-        intervalRadius: getComputedStyle(document.querySelector('.dt-log-interval')).borderRadius,
+        viewRadius: getComputedStyle(box).borderRadius,
+        segHeight: level.getBoundingClientRect().height,
+        segRadius: getComputedStyle(level).borderRadius,
       };
     });
 
@@ -95,8 +97,9 @@ test.describe('DevTools Operator Console theme', () => {
     expect(geometry.viewBackgroundImage).toBe('none');
     expect(geometry.cardBackgroundImage).toBe('none');
     expect(geometry.viewRadius).toBe('9px');
-    expect(geometry.intervalBackground).toBe('rgba(0, 0, 0, 0)');
-    expect(geometry.intervalRadius).toBe('6px');
+    // The header is the Xray logs screen's: 32 px controls, 6 px corners.
+    expect(geometry.segHeight).toBe(32);
+    expect(geometry.segRadius).toBe('6px');
   });
 
   test('ENV actions and portal tooltips stay inside operator chrome', async ({ page }) => {
@@ -124,9 +127,9 @@ test.describe('DevTools Operator Console theme', () => {
     expect(actionGeometry.cellRight - actionGeometry.lastButtonRight).toBeLessThanOrEqual(8);
     expect(actionGeometry.actionTextAlign).toBe('right');
 
-    const interval = page.locator('.dt-log-interval');
+    const online = page.locator('#dt-log-play');
     await page.locator('#dt-tab-btn-logs').click();
-    await interval.hover();
+    await online.hover();
     const tooltip = page.locator('#xk-tooltip-portal .xk-tooltip-bubble');
     await expect(tooltip).toBeVisible();
     await expect(tooltip).toHaveCSS('background-color', 'rgb(32, 37, 45)');

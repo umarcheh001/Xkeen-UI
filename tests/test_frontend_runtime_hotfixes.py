@@ -462,8 +462,10 @@ def test_devtools_host_defers_noncritical_init_and_mihomo_generator_persists_ses
     assert "_initModuleOnce('logs', 'devtoolsLogs', { deferInitialFetch: true });" in devtools_host
     assert "_wireDeferredModuleInit('update', 'devtoolsUpdate', 'dt-update-card'" in devtools_host
     assert "_wireDeferredModuleInit('env', 'devtoolsEnv', 'dt-env-card'" in devtools_host
-    assert "if (!initOptions.deferInitialFetch)" in devtools_logs
-    assert "try { loadLogList(true); } catch (e) {}" in devtools_logs
+    # The logs tab fetches nothing on init: the list and the tail come when it opens.
+    logs_init = devtools_logs.split("  function init() {", 1)[1].split("\n  }\n", 1)[0]
+    assert "loadLogList(" not in logs_init and "loadLogTail(" not in logs_init
+    assert "loadLogList(true).then(() => restartStream());" in devtools_logs
 
     assert 'const SESSION_DRAFT_KEY = "xk.mihomo_generator.session_draft.v1";' in mihomo
     assert 'window.sessionStorage.setItem(SESSION_DRAFT_KEY, JSON.stringify(payload));' in mihomo
@@ -522,11 +524,9 @@ def test_p3_devtools_screen_module_keeps_host_alive_and_stops_background_tasks_o
     assert "if (update && typeof update.deactivate === 'function') update.deactivate();" in devtools
 
     assert 'function getActiveTab() {' in logs
-    assert 'async function openLog(name, opts) {' in logs
+    assert 'async function openLog(name) {' in logs
     assert 'function activate(options) {' in logs
-    assert 'function deactivate() {' in logs
-    assert 'try { _stopLogStreamingAll(); } catch (e) {}' in logs
-    assert 'try { stopLogListPolling(); } catch (e) {}' in logs
+    assert 'function deactivate() {\n    stopStreaming();\n    stopListPolling();' in logs
     assert 'getActiveTab,' in logs
     assert 'openLog,' in logs
     assert 'activate,' in logs

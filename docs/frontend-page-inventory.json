@@ -203,6 +203,11 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/features/restart_log_sources.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
           "path": "static/js/features/feature_access.js",
           "globals": [],
           "lazy_features": []
@@ -830,6 +835,11 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/features/restart_log_sources.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
           "path": "static/js/features/feature_access.js",
           "globals": [],
           "lazy_features": []
@@ -1201,6 +1211,11 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/features/restart_log_sources.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
           "path": "static/js/features/feature_access.js",
           "globals": [],
           "lazy_features": []
@@ -1476,16 +1491,17 @@
           "path": "static/js/features/devtools/logs.js",
           "globals": [
             "XKeen.ui",
-            "XKeen.ui.confirm",
-            "XKeen.ui.modal",
-            "XKeen.ui.modal.syncBodyScrollLock",
-            "XKeen.state.devtoolsLogs",
-            "XKeen.state.devtoolsLogsUi"
+            "XKeen.ui.confirm"
           ],
           "lazy_features": []
         },
         {
-          "path": "static/js/features/xray_log_line_class.js",
+          "path": "static/js/features/panel_log_view.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/features/panel_log_parser.js",
           "globals": [],
           "lazy_features": []
         },
@@ -1652,9 +1668,7 @@
         "XKeen.ui.branding.refreshFromRouter",
         "XKeen.util.ansiToHtml",
         "XKeen.util.escapeHtml",
-        "XKeen.ui.modal.syncBodyScrollLock",
-        "XKeen.state.devtoolsLogs",
-        "XKeen.state.devtoolsLogsUi"
+        "XKeen.ui.modal.syncBodyScrollLock"
       ],
       "all_bootstrap_lazy_features": [],
       "lazy_runtime_inventory": null
@@ -1855,6 +1869,11 @@
         },
         {
           "path": "static/js/features/restart_log.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/features/restart_log_sources.js",
           "globals": [],
           "lazy_features": []
         },
@@ -2274,6 +2293,11 @@
         },
         {
           "path": "static/js/features/restart_log.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/features/restart_log_sources.js",
           "globals": [],
           "lazy_features": []
         },

@@ -5299,7 +5299,7 @@ body.panel-page #view-xray-logs .xray-log-controls {
   border-bottom: 1px solid var(--op-border);
 }
 
-body.panel-page #view-xray-logs :is(.dt-switch, .dt-log-interval) {
+body.panel-page #view-xray-logs .dt-switch {
   min-height: var(--op-control-h);
   padding: 0 8px;
   border: 1px solid var(--op-border) !important;
@@ -5337,14 +5337,6 @@ body.panel-page #view-xray-logs .dt-switch input:checked + .dt-switch-slider::af
 
 body.panel-page #view-xray-logs .dt-switch input:not(:checked) + .dt-switch-slider::after {
   transform: none !important;
-}
-
-body.panel-page #view-xray-logs .dt-log-interval .xray-log-select {
-  min-height: 24px;
-  padding-block: 0;
-  border: 0 !important;
-  background-color: transparent !important;
-  outline: 0 !important;
 }
 
 body.panel-page #view-xray-logs .dt-log-menu {
@@ -5388,7 +5380,7 @@ body.panel-page #view-xray-logs #xray-log-more .dt-log-menu-panel > .dt-log-btn:
   background: var(--op-surface-3) !important;
 }
 
-body.panel-page #view-xray-logs #xray-log-more :is(.xray-log-menu-switch, .xray-log-menu-interval, .dt-log-menu-row) {
+body.panel-page #view-xray-logs #xray-log-more :is(.xray-log-menu-switch, .xray-log-menu-interval) {
   min-height: 32px;
   padding: 6px 8px;
   border: 1px solid var(--op-border) !important;
@@ -14998,8 +14990,8 @@ body.panel-page #routing-forced-rules-modal .xk-chip:focus-visible {
 
 /* I3 top-level icon controls: all glyphs use the shared local sprite; text and
  * tooltips remain the accessible source of meaning. */
-body.panel-page :is(.fm-toolbar, .fm-footer-actions, .fm-context-item, .log-header-actions, .dt-log-controls, .xk-header-btn) > .xk-action-icon,
-body.panel-page :is(.fm-toolbar, .fm-footer-actions, .fm-context-item, .log-header-actions, .dt-log-controls, .xk-header-btn) .xk-action-icon {
+body.panel-page :is(.fm-toolbar, .fm-footer-actions, .fm-context-item, .log-header-actions, .xk-header-btn) > .xk-action-icon,
+body.panel-page :is(.fm-toolbar, .fm-footer-actions, .fm-context-item, .log-header-actions, .xk-header-btn) .xk-action-icon {
   flex: 0 0 auto;
 }
 

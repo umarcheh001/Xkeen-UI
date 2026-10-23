@@ -5148,125 +5148,6 @@ button.top-tab-btn.active {
 
 
 
-/* DevTools Logs: two-column layout with sidebar */
-.dt-logs-layout {
-  display: grid;
-  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
-  gap: 14px;
-  align-items: start;
-}
-
-.dt-logs-sidebar,
-.dt-logs-main {
-  min-width: 0;
-}
-
-.dt-logs-sidebar-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-.dt-log-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 520px;
-  overflow: auto;
-  padding-right: 4px;
-}
-
-.dt-log-item {
-  width: 100%;
-  text-align: left;
-  border-radius: 14px;
-  border: 1px solid var(--border, #1f2937);
-  background: rgba(2, 6, 23, 0.55);
-  background: var(--fm-row-header-bg, color-mix(in srgb, var(--card-bg, #020617) 55%, transparent));
-  padding: 8px 10px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.dt-log-item:hover {
-  border-color: var(--accent, #60a5fa);
-}
-
-.dt-log-item.active {
-  border-color: var(--accent, #60a5fa);
-  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.18);
-  box-shadow: 0 6px 16px color-mix(in srgb, var(--accent, #60a5fa) 18%, transparent);
-}
-
-.dt-log-item.is-missing {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.dt-log-item.is-missing:hover {
-  border-color: var(--border, #1f2937);
-}
-
-.dt-log-name {
-  font-size: calc(12px * var(--xk-font-scale));
-  font-weight: 600;
-  color: var(--text, #e5e7eb);
-}
-
-.dt-log-meta {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-  font-size: calc(11px * var(--xk-font-scale));
-  color: var(--muted, #9ca3af);
-  line-height: 1.1;
-}
-
-.dt-log-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.dt-log-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 9999px;
-  background: var(--sem-success, #22c55e);
-  opacity: 0;
-  flex: 0 0 auto;
-  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.18);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sem-success, #22c55e) 18%, transparent);
-}
-
-.dt-log-item.has-new .dt-log-dot {
-  opacity: 1;
-}
-
-.dt-log-view {
-  box-sizing: border-box;
-  white-space: pre;
-  overflow-x: auto;
-}
-
-/* DevTools Logs: highlight only the level token ([Info]/ERROR/etc.), not the whole line */
-.dt-log-view.log-block .log-line-info,
-.dt-log-view.log-block .log-line-warning,
-.dt-log-view.log-block .log-line-error,
-.dt-log-view.log-block .log-line-debug,
-#dt-log-context-body .log-line-info,
-#dt-log-context-body .log-line-warning,
-#dt-log-context-body .log-line-error,
-#dt-log-context-body .log-line-debug {
-  color: var(--fm-btn-text, var(--header-btn-text, inherit));
-}
-
 /* Log levels (tokens): used in DevTools Tools Logs + Live Xray logs */
 .log-lvl {
   font-weight: 700;
@@ -5294,61 +5175,6 @@ button.top-tab-btn.active {
   background: color-mix(in srgb, currentColor 14%, transparent);
   border-color: rgba(255, 255, 255, 0.10);
   border-color: color-mix(in srgb, currentColor 28%, transparent);
-}
-
-/* DevTools Logs: Stage 4 "human" filters */
-.dt-log-human-filters {
-  gap: 10px;
-}
-
-.dt-log-profile {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.dt-log-profile-btn.active {
-  border-color: var(--accent, #60a5fa);
-  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.18);
-}
-
-.dt-log-presets {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.dt-chip-btn {
-  border-radius: 9999px;
-  border: 1px solid var(--header-btn-border, #374151);
-  background: var(--header-btn-bg, #020617);
-  color: var(--header-btn-text, #e5e7eb);
-  padding: 6px 10px;
-  font-size: calc(12px * var(--xk-font-scale));
-  cursor: pointer;
-  transition: border-color 0.12s ease, transform 0.12s ease, box-shadow 0.12s ease;
-}
-
-.dt-chip-btn:hover {
-  background: var(--fm-btn-hover-bg, var(--header-btn-hover-bg, rgba(255,255,255,0.06)));
-  border-color: var(--header-btn-hover-border, var(--accent, #60a5fa));
-  color: var(--header-btn-hover-text, var(--text, #e5e7eb));
-  transform: translateY(-1px);
-}
-
-.dt-chip-btn.active {
-  border-color: var(--header-tab-active-bg, #2563eb);
-  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.18);
-  box-shadow: 0 6px 16px color-mix(in srgb, var(--fm-btn-active-to, var(--editor-btn-active-to, #2563eb)) 18%, transparent);
-}
-
-.dt-log-advanced {
-  border: 1px solid var(--border, #1f2937);
-  border-radius: 14px;
-  padding: 6px 10px;
-  background: rgba(2, 6, 23, 0.45);
-  background: color-mix(in srgb, var(--card-bg, #020617) 45%, transparent);
 }
 
 /* Timestamp visuals inside log lines */
@@ -5492,97 +5318,6 @@ html[data-theme="light"] .xray-log-select option{
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--sem-error, #ef4444) 25%, transparent);
 }
 
-.dt-log-search-wrap {
-  display: flex;
-  flex-direction: column;
-  min-width: 220px;
-}
-
-/* Stage 5: Include/Exclude tokens as chips */
-.dt-token-field {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  min-width: 220px;
-  padding: 6px 10px;
-  border-radius: 16px;
-  border: 1px solid var(--border, #374151);
-  background: var(--card-bg, #020617);
-}
-
-.dt-token-field-compact {
-  min-width: 180px;
-}
-
-.dt-token-field.is-invalid {
-  border-color: var(--sem-error, #ef4444);
-  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.25);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sem-error, #ef4444) 25%, transparent);
-}
-
-.dt-token-entry {
-  flex: 1;
-  min-width: 120px;
-  border: none;
-  outline: none;
-  background: transparent;
-  color: var(--text, #e5e7eb);
-  font-size: calc(12px * var(--xk-font-scale));
-  padding: 2px 0;
-}
-
-.dt-token-entry::placeholder {
-  color: var(--muted, #6b7280);
-}
-
-.dt-token-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border-radius: 9999px;
-  border: 1px solid var(--border, #1f2937);
-  background: rgba(2, 6, 23, 0.55);
-  background: color-mix(in srgb, var(--card-bg, #020617) 55%, transparent);
-  color: var(--text, #e5e7eb);
-  padding: 4px 8px;
-  font-size: calc(12px * var(--xk-font-scale));
-  line-height: 1;
-}
-
-.dt-token-chip .dt-token-x {
-  border: none;
-  background: transparent;
-  color: var(--muted, #94a3b8);
-  cursor: pointer;
-  font-size: calc(14px * var(--xk-font-scale));
-  line-height: 1;
-  padding: 0;
-}
-
-.dt-token-chip .dt-token-x:hover {
-  color: var(--sem-error, #f87171);
-}
-
-/* Stage 6: Level filter container */
-.dt-log-level-wrap {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.dt-field-error {
-  margin-top: 4px;
-  padding-left: 10px;
-  color: var(--sem-error, #f87171);
-  font-size: calc(11px * var(--xk-font-scale));
-  line-height: 1.2;
-}
-
-
-
-
 /* ANSI color rendering in Live Logs (optional; enabled via ui-settings logs.ansi) */
 .ansi { color: inherit; }
 .ansi-bold { font-weight: 700; }
@@ -5647,36 +5382,26 @@ html[data-theme="light"] .xray-log-select option{
   color: var(--fm-btn-text, var(--header-btn-text, inherit));
 }
 
-.dt-log-view .log-line-info,
-#dt-log-context-body .log-line-info,
 .log-block .log-line-info {
   box-shadow: inset 2px 0 0 var(--sem-info, #93c5fd);
   box-shadow: inset 2px 0 0 color-mix(in srgb, var(--sem-info, #93c5fd) 65%, transparent);
 }
 
-.dt-log-view .log-line-warning,
-#dt-log-context-body .log-line-warning,
 .log-block .log-line-warning {
   box-shadow: inset 2px 0 0 var(--sem-warning, #fbbf24);
   box-shadow: inset 2px 0 0 color-mix(in srgb, var(--sem-warning, #fbbf24) 65%, transparent);
 }
 
-.dt-log-view .log-line-success,
-#dt-log-context-body .log-line-success,
 .log-block .log-line-success {
   box-shadow: inset 2px 0 0 var(--sem-success, #4ade80);
   box-shadow: inset 2px 0 0 color-mix(in srgb, var(--sem-success, #4ade80) 65%, transparent);
 }
 
-.dt-log-view .log-line-error,
-#dt-log-context-body .log-line-error,
 .log-block .log-line-error {
   box-shadow: inset 2px 0 0 var(--sem-error, #f87171);
   box-shadow: inset 2px 0 0 color-mix(in srgb, var(--sem-error, #f87171) 65%, transparent);
 }
 
-.dt-log-view .log-line-debug,
-#dt-log-context-body .log-line-debug,
 .log-block .log-line-debug {
   box-shadow: inset 2px 0 0 var(--sem-debug, #a1a1aa);
   box-shadow: inset 2px 0 0 color-mix(in srgb, var(--sem-debug, #a1a1aa) 65%, transparent);
@@ -12802,64 +12527,6 @@ div.toast-icon {
   opacity: 0.85;
   font-variant-numeric: tabular-nums;
 }
-/* DevTools: toolbars shouldn't force buttons to stretch full width */
-.actions.dt-log-toolbar button {
-  flex: 0 0 auto;
-  white-space: nowrap;
-}
-
-/* DevTools Logs: line actions (Stage 8) */
-.dt-log-line-menu {
-  position: fixed;
-  z-index: 65;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px;
-  border-radius: 12px;
-  border: 1px solid var(--border, #334155);
-  background: var(--card-bg, #020617);
-  box-shadow: 0 18px 50px rgba(var(--shadow-rgb, 0,0,0), calc(var(--shadow, 0.4) + 0.4));
-}
-
-.dt-log-line-menu.hidden {
-  display: none;
-}
-
-.dt-log-line-menu button {
-  width: 100%;
-  text-align: left;
-}
-
-.dt-log-context-focus {
-  background: color-mix(in srgb, var(--accent, #60a5fa) 16%, transparent);
-  border-left: 3px solid var(--accent, #2563eb);
-  padding-left: 8px;
-}
-
-
-/* DevTools Logs: tail -f controls (Stage 3 scaffold) */
-.dt-log-badge {
-  flex: 0 0 auto;
-  white-space: nowrap;
-  padding: 6px 10px;
-  border-radius: 9999px;
-  border: 1px solid var(--accent, #2563eb);
-  background: color-mix(in srgb, var(--accent, #2563eb) 18%, transparent);
-  color: var(--text, #e5e7eb);
-  font-size: calc(12px * var(--xk-font-scale));
-  cursor: pointer;
-}
-
-.dt-log-badge:hover {
-  border-color: var(--accent, #60a5fa);
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--accent, #2563eb) 22%, transparent);
-}
-
-#dt-log-pause.is-paused {
-  border-color: var(--sem-warning, #f59e0b);
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--sem-warning, #f59e0b) 22%, transparent);
-}
 /* DevTools: ENV table should use most of the viewport */
 .dt-env-scroll {
   overflow: auto;
@@ -13688,23 +13355,6 @@ html[data-theme="light"] .xk-mihomo-mini-btn--danger {
 }
 
 
-/* DevTools Logs: compact topbar + controls (short panel) */
-.dt-log-topbar{
-  display:flex;
-  align-items:center;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin: 4px 0 8px 0;
-}
-
-.dt-log-topbar-actions{
-  display:flex;
-  align-items:center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
 /* DevTools Logs: make secondary buttons match compact pill controls */
 .dt-log-btn{
   padding: 6px 10px;
@@ -13754,13 +13404,6 @@ html[data-theme="light"] .xk-mihomo-mini-btn--danger {
   z-index: 80;
 }
 
-.dt-log-menu-row{
-  display:flex;
-  align-items:center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
 .dt-log-lines-input{
   width: 92px;
   padding: 6px 10px;
@@ -13776,37 +13419,6 @@ html[data-theme="light"] .xk-mihomo-mini-btn--danger {
   outline: none;
   border-color: #3b82f6;
   box-shadow: 0 0 0 1px #3b82f6;
-}
-
-.dt-log-controls{
-  margin: 8px 0;
-  display:flex;
-  align-items:center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.dt-log-search-group{
-  flex: 1 1 360px;
-  min-width: 240px;
-  display:flex;
-  align-items:center;
-  gap: 8px;
-}
-
-.dt-log-filter{
-  flex: 1 1 auto;
-}
-
-.dt-log-interval{
-  display:inline-flex;
-  align-items:center;
-  gap: 8px;
-}
-
-.dt-log-interval-label{
-  font-size: calc(12px * var(--xk-font-scale));
-  opacity: 0.85;
 }
 
 /* Small switch-like pill (used in DevTools Logs controls) */
@@ -15146,7 +14758,6 @@ html[data-theme="light"] .dt-log-lines-input{
 
 
 html[data-theme="light"] .dt-switch,
-html[data-theme="light"] .dt-log-interval,
 html[data-theme="light"] .dt-log-stats{
   background: color-mix(in srgb, var(--card-bg, #ffffff) 92%, transparent);
   border-color: var(--border, #d1d5db);
@@ -15169,31 +14780,6 @@ html[data-theme="light"] .dt-switch-slider::after{
 html[data-theme="light"] .dt-switch input:checked + .dt-switch-slider{
   background: var(--fm-row-selected-bg, color-mix(in srgb, var(--header-tab-active-bg, #2563eb) 18%, transparent));
   border-color: var(--header-tab-active-bg, #2563eb);
-}
-
-
-/* Stage 5: Include/Exclude token fields in light theme */
-html[data-theme="light"] .dt-token-field {
-  background: var(--card-bg, #ffffff);
-  color: var(--text, #111827);
-  border-color: var(--border, #d1d5db);
-}
-
-
-html[data-theme="light"] .dt-token-entry {
-  color: var(--text, #111827);
-}
-
-
-html[data-theme="light"] .dt-token-chip {
-  background: color-mix(in srgb, var(--card-bg, #ffffff) 90%, transparent);
-  border-color: var(--border, #e5e7eb);
-  color: var(--text, #111827);
-}
-
-
-html[data-theme="light"] .dt-token-chip .dt-token-x {
-  color: var(--muted, #6b7280);
 }
 
 
@@ -18359,10 +17945,6 @@ html[data-theme="light"] .xk-qb-statusbar.is-success{
 }
 
 /* Routing topbar: compact ⋯ menu content */
-.xk-routing-menu-panel .dt-log-menu-key{
-  font-size: 12px;
-  color: var(--muted, #94a3b8);
-}
 
 .xk-routing-menu-panel code{
   display:inline-block;

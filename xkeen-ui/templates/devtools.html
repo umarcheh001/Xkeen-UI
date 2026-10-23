@@ -38,7 +38,7 @@
   {# Flat Operator Console presentation. Keep it last: DevTools still ships the
      legacy component layer above for runtime compatibility. #}
   <link rel="stylesheet" href="{{ url_for('static', filename='operator-tokens.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='devtools-operator.css', v='20260907c') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='devtools-operator.css', v='20261023a') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='page-shell.css') }}">
   {# Global Custom CSS (DevTools) — last in order so it can override everything. #}
 </head>
@@ -622,102 +622,72 @@
 
     
 <div id="dt-tab-logs" class="view-section" data-xk-section="logs dt-tab-logs" role="tabpanel" aria-labelledby="dt-tab-btn-logs" style="display:none;">
-  <section class="card dt-logs-card dt-main-card" data-xk-section="logs dt-logs-card">
-    <h2 style="margin-top:0;">Логи панели</h2>
-
-    <div class="dt-logs-layout">
-      <!-- Left: log list -->
-      <aside class="dt-logs-sidebar" aria-label="Log list">
-        <div class="dt-logs-sidebar-top">
-          <div class="small" style="opacity:0.9;">Файлы логов</div>
-          <button type="button" id="dt-log-list-refresh" class="btn-secondary dt-log-btn" title="Обновить список логов.">Обновить</button>
-        </div>
-
-        <div id="dt-log-list" class="dt-log-list" role="listbox" aria-label="Список логов">
-          <div class="small" style="opacity:0.85;">Загрузка…</div>
-        </div>
-
-        <div class="small" id="dt-log-list-status" style="margin-top:8px; opacity:0.8;"></div>
-      </aside>
-
-      <!-- Right: current log view -->
-      <div class="dt-logs-main">
-        <div class="dt-log-topbar" aria-label="Log controls">
-          <div class="small dt-log-current" style="white-space:nowrap;">
-            Лог: <strong id="dt-log-current-name">—</strong>
-          </div>
-
-          <!-- Hidden legacy select (kept for backward compatibility with existing JS logic) -->
-          <select id="dt-log-select" style="display:none;"></select>
-
-          <div class="dt-log-topbar-actions">
-            <button type="button" id="dt-log-refresh" class="btn-secondary dt-log-btn" title="Загрузить хвост выбранного лога.">Обновить</button>
-            <button type="button" id="dt-log-copy" class="btn-secondary dt-log-btn" title="Скопировать все видимые строки (с учётом фильтров).">Копировать</button>
-
-            <details class="dt-log-menu" id="dt-log-more">
-              <summary class="btn-secondary dt-log-btn" title="Дополнительно" aria-label="Дополнительно">⋯</summary>
-              <div class="dt-log-menu-panel" role="menu" aria-label="Дополнительные действия">
-                <label class="small dt-log-menu-row">
-                  строк
-                  <input id="dt-log-lines" type="number" min="50" max="2000" value="400" class="dt-log-lines-input" title="Сколько последних строк показать (50–2000).">
-                </label>
-                <button type="button" id="dt-log-load-more" class="btn-secondary dt-log-btn" title="Подгрузить более старые строки (увеличить окно назад).">Загрузить ещё</button>
-                <button type="button" id="dt-log-download" class="btn-secondary dt-log-btn" title="Скачать выбранный лог‑файл.">Скачать</button>
-                <button type="button" id="dt-log-clear" class="btn-danger dt-log-btn" title="Очистить (обнулить) выбранный лог‑файл.">Очистить</button>
-              </div>
-            </details>
-          </div>
-        </div>
-
-        <div class="dt-log-controls" aria-label="Log filters">
-          <div class="dt-log-search-group">
-            <input
-              id="dt-log-search"
-              type="text"
-              class="xray-log-filter dt-log-filter"
-              placeholder="Фильтр по логам (пример: error vpn)"
-              autocomplete="off"
-              spellcheck="false"
-            />
-            <button
-              id="dt-log-filter-clear"
-              type="button"
-              class="btn-secondary dt-log-btn"
-              title="Очистить фильтр"
-              aria-label="Очистить фильтр"
-            >✖</button>
-          </div>
-
-          <label class="dt-switch" title="Онлайн-режим (tail -f): новые строки подтягиваются сами.">
-            <input id="dt-log-live" type="checkbox" />
-            <span class="dt-switch-slider" aria-hidden="true"></span>
-            <span class="dt-switch-label">Онлайн</span>
-          </label>
-          <!-- Legacy Auto checkbox (kept for backward compatibility with existing JS logic) -->
-          <input id="dt-log-auto" type="checkbox" style="display:none;" />
-
-          <div class="dt-log-interval" title="Интервал авто‑обновления.">
-            <span class="dt-log-interval-label">каждые</span>
-            <select id="dt-log-interval" class="xray-log-select">
+  <section class="card dt-logs-card dt-main-card xk-plog-card" id="dt-logs-card" data-xk-section="logs dt-logs-card" aria-labelledby="dt-logs-title">
+    <div class="xk-xlog-head">
+      <h2 id="dt-logs-title" class="xk-xlog-title">Логи панели <span id="dt-log-lamp" class="xk-xlog-live" data-state="off" title="Показан снимок файла; онлайн выключен"><i aria-hidden="true"></i><span data-plog-lamp-label>Снимок</span></span></h2>
+      <div class="xk-xlog-seg" id="dt-log-files" role="radiogroup" aria-label="Файл лога"></div>
+      <div class="xk-xlog-seg" id="dt-log-level-seg" role="radiogroup" aria-label="Уровень">
+        <button type="button" role="radio" class="xk-xlog-seg-btn is-on" data-level="all" aria-checked="true" title="Все записи">Все<span class="n"></span></button>
+        <button type="button" role="radio" class="xk-xlog-seg-btn" data-level="warning" aria-checked="false" title="Предупреждения и ошибки">Предупр.<span class="n"></span></button>
+        <button type="button" role="radio" class="xk-xlog-seg-btn" data-level="error" aria-checked="false" title="Только ошибки">Ошибки<span class="n"></span></button>
+      </div>
+      <div class="xk-xlog-seg xk-xlog-run" role="group" aria-label="Онлайн">
+        <button type="button" class="xk-xlog-seg-btn is-play" id="dt-log-play" title="Онлайн: новые строки подтягиваются сами" aria-label="Онлайн">{{ op_icon('play') }}<span class="xk-action-label" data-plog-play-label>Онлайн</span><span class="xk-xlog-badge" hidden></span></button>
+        <button type="button" class="xk-xlog-seg-btn is-pause" id="dt-log-pause" title="Пауза: заморозить таблицу (строки продолжают собираться)" aria-label="Пауза" hidden>{{ op_icon('pause') }}<span class="xk-action-label">Пауза</span></button>
+        <button type="button" class="xk-xlog-seg-btn is-stop" id="dt-log-stop" title="Стоп: выключить онлайн и оставить снимок" aria-label="Стоп" disabled>{{ op_icon('stop') }}<span>Стоп</span></button>
+      </div>
+      <span class="xk-xlog-spacer"></span>
+      <div class="xk-xlog-search" role="search" aria-label="Поиск по логу">
+        {{ op_icon('search') }}
+        <input id="dt-log-search" type="text" class="xray-log-filter" placeholder="Поиск: событие, путь, IP…" aria-label="Поиск по логу" autocomplete="off" spellcheck="false" />
+        <button id="dt-log-filter-clear" type="button" class="xk-xlog-search-clear" title="Очистить поиск" aria-label="Очистить поиск" hidden>{{ op_icon('close') }}</button>
+        <kbd class="xk-xlog-kbd" aria-hidden="true">/</kbd>
+      </div>
+      <details class="dt-log-menu xk-xlog-menu" id="dt-log-more">
+        <summary class="btn-secondary xk-xlog-icon-btn" title="Ещё" aria-label="Ещё">{{ op_icon('more') }}</summary>
+        <div class="dt-log-menu-panel xk-xlog-menu-panel" role="menu" aria-label="Дополнительные действия">
+          <div class="xk-xlog-menu-title">Вид</div>
+          <label class="xk-xlog-menu-item" title="Прокручивать к новым записям.">{{ op_icon('move-down') }}<span>Следить за концом</span>
+            <span class="dt-switch"><input id="dt-log-follow" type="checkbox" checked /><span class="dt-switch-slider" aria-hidden="true"></span></span></label>
+          <label class="xk-xlog-menu-item" title="Одинаковые записи подряд показываются одной строкой со счётчиком.">{{ op_icon('list-details') }}<span>Сворачивать повторы</span>
+            <span class="dt-switch"><input id="dt-log-fold" type="checkbox" checked /><span class="dt-switch-slider" aria-hidden="true"></span></span></label>
+          <div class="xk-xlog-menu-item" title="Сколько последних строк файла держать в окне (50–5000).">{{ op_icon('list-details') }}<span>Строк в окне</span>
+            <input id="dt-log-lines" class="dt-log-lines-input" type="number" min="50" max="5000" step="50" value="400" aria-label="Количество строк" /></div>
+          <div class="xk-xlog-menu-item" title="Интервал опроса, когда WebSocket недоступен.">{{ op_icon('refresh') }}<span>Опрос без WebSocket</span>
+            <select id="dt-log-interval" class="xray-log-select" aria-label="Интервал">
               <option value="1000">1 с</option>
               <option value="2000">2 с</option>
               <option value="5000" selected>5 с</option>
               <option value="10000">10 с</option>
               <option value="30000">30 с</option>
-            </select>
+            </select></div>
+          <div class="xk-xlog-menu-sep"></div>
+          <div class="xk-xlog-menu-title">Данные</div>
+          <button type="button" class="xk-xlog-menu-item" id="dt-log-copy" role="menuitem" title="Скопировать записи, видимые после фильтров.">{{ op_icon('duplicate') }}<span>Копировать видимое</span><em id="dt-log-copy-count"></em></button>
+          <button type="button" class="xk-xlog-menu-item" id="dt-log-download" role="menuitem" title="Скачать выбранный файл целиком.">{{ op_icon('download') }}<span>Скачать <span id="dt-log-download-name">лог</span></span></button>
+          <button type="button" class="xk-xlog-menu-item" id="dt-log-load-more" role="menuitem" title="Подгрузить более старые строки (увеличить окно назад).">{{ op_icon('upload') }}<span>Загрузить ещё</span></button>
+          <button type="button" class="xk-xlog-menu-item" id="dt-log-refresh" role="menuitem" title="Перечитать список файлов и снимок выбранного.">{{ op_icon('refresh') }}<span>Обновить снимок</span></button>
+          <div id="dt-log-empty-block" hidden>
+            <div class="xk-xlog-menu-sep"></div>
+            <div class="xk-xlog-menu-title">Пустые логи</div>
+            <div id="dt-log-empty-list"></div>
           </div>
-
-          <label class="dt-switch" title="Авто‑прокрутка в конец при обновлении.">
-            <input id="dt-log-follow" type="checkbox" checked />
-            <span class="dt-switch-slider" aria-hidden="true"></span>
-            <span class="dt-switch-label">В конец</span>
-          </label>
-
-          <span class="small dt-log-stats" id="dt-log-stats" aria-live="polite"></span>
+          <div class="xk-xlog-menu-sep"></div>
+          <button type="button" class="xk-xlog-menu-item is-danger" id="dt-log-clear" role="menuitem" title="Обнулить выбранный файл на роутере.">{{ op_icon('trash') }}<span>Очистить файл…</span></button>
         </div>
+      </details>
+      <button type="button" class="btn-secondary xk-xlog-icon-btn" id="dt-log-fullscreen" title="Полный экран" aria-label="Полный экран">{{ op_icon('fullscreen') }}</button>
+    </div>
 
-<div class="small" id="dt-log-path" style="margin:8px 0; opacity:0.9;"></div>
-        <pre id="dt-log-view" class="log-block xray-log-block dt-log-view" data-raw-text="" title="Просмотр лога (только чтение)." style="margin:0;"></pre>
+    <div class="xk-xlog-chips" id="dt-log-chips" aria-label="Источники" hidden></div>
+
+    <div class="xk-plog-box">
+      <div id="dt-log-view" class="xk-plog-host" role="table" aria-label="Записи лога"></div>
+      <div class="xk-xlog-foot" id="dt-log-foot">
+        <span class="xk-plog-stats" id="dt-log-stats" aria-live="polite"></span>
+        <span class="xk-plog-path" id="dt-log-path"></span>
+        <span class="xk-xlog-spacer"></span>
+        <span id="dt-log-list-status"></span>
       </div>
     </div>
   </section>
@@ -749,26 +719,6 @@
           <div class="modal-actions">
             <button type="button" id="confirm-modal-cancel-btn" title="Отменить действие и закрыть окно подтверждения.">Отменить</button>
             <button type="button" id="confirm-modal-ok-btn" class="btn-danger" title="Подтвердить действие.">Подтвердить</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Log line context modal (Stage 8) -->
-      <div id="dt-log-context-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Контекст лога">
-        <div class="modal-content" style="max-width: 980px;">
-          <div class="modal-header">
-            <div style="display:flex; flex-direction:column; gap:2px;">
-              <span class="modal-title" id="dt-log-context-title">Контекст</span>
-              <span id="dt-log-context-subtitle" class="modal-hint" style="margin:0; font-size: 0.82rem; opacity:0.75;"></span>
-            </div>
-            <button type="button" class="modal-close" id="dt-log-context-close-btn" title="Закрыть">×</button>
-          </div>
-          <div class="modal-body modal-body-logs">
-            <pre id="dt-log-context-body" class="log-block" style="margin:0; white-space:pre-wrap;"></pre>
-          </div>
-          <div class="modal-actions" style="justify-content: space-between;">
-            <button type="button" id="dt-log-context-copy-btn" class="btn-secondary" title="Скопировать весь показанный контекст.">Копировать контекст</button>
-            <button type="button" id="dt-log-context-ok-btn" title="Закрыть окно.">Закрыть</button>
           </div>
         </div>
       </div>

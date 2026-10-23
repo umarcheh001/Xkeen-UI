@@ -13,6 +13,12 @@ ROOT = Path(__file__).resolve().parents[1]
 def _read(rel_path: str) -> str:
     if rel_path == "xkeen-ui/templates/panel.html":
         return compose_panel_template(ROOT)
+    if rel_path == "xkeen-ui/static/js/features/restart_log.js":
+        # Source labels live in their own module, shared with DevTools -> Logs.
+        return "\n".join(
+            (ROOT / name).read_text(encoding="utf-8")
+            for name in (rel_path, "xkeen-ui/static/js/features/restart_log_sources.js")
+        )
     return (ROOT / rel_path).read_text(encoding="utf-8")
 
 

@@ -474,7 +474,7 @@ def test_button_rows_breathe_like_the_card_padding():
     assert "--op-gap-actions: 12px;" in tokens
     shared = operator[operator.index("body.devtools-page :is(\n  .dt-service-actions,"):]
     shared = shared[: shared.index("}")]
-    for row in (".dt-update-actions", ".dt-branding-row", ".dt-logging-actions", ".dt-actions-grid", ".dt-log-topbar-actions"):
+    for row in (".dt-update-actions", ".dt-branding-row", ".dt-logging-actions", ".dt-actions-grid"):
         assert row in shared
     assert "gap: var(--op-gap-actions);" in shared
     grid = operator[operator.index("body.devtools-page .dt-actions-grid {"):]

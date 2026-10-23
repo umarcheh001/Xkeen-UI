@@ -77,8 +77,8 @@ def test_devtools_operator_layer_covers_shell_tools_env_logs_modals_and_mobile()
         "#dt-service-card",
         "#dt-env-card",
         ".dt-env-group-toggle",
-        ".dt-logs-layout",
-        ".dt-log-view",
+        "#dt-tab-logs .xk-xlog-head",
+        "#dt-tab-logs .xk-plog-box",
         ".modal-content",
         '#dt-env-card table',
         "@media (max-width: 1180px)",
@@ -91,7 +91,7 @@ def test_devtools_operator_layer_covers_shell_tools_env_logs_modals_and_mobile()
     assert "#xk-tooltip-portal .xk-tooltip-bubble" in css
     assert "#dt-env-card thead th:nth-child(4) { width: 184px; }" in css
     assert "text-align: right;" in css
-    assert ".dt-log-interval" in css
+    assert "#dt-tab-logs .xk-plog-card.is-fullscreen" in css
     assert "max-height: calc(100vh - 210px);" in css
     assert "min-width: 760px;" in css
 
