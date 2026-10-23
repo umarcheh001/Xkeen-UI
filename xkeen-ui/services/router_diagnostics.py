@@ -34,6 +34,8 @@ _interface_lock = threading.Lock()
 _previous_interfaces: tuple[float, dict[str, tuple[int, int]]] | None = None
 _snapshot_lock = threading.Lock()
 _cached_snapshot: tuple[float, dict[str, Any]] | None = None
+_system_lock = threading.Lock()
+_cached_system: tuple[float, dict[str, Any]] | None = None
 _capability_lock = threading.Lock()
 _cached_capabilities: tuple[float, dict[str, Any]] | None = None
 _incident_log: list[dict[str, Any]] = []
@@ -137,11 +139,73 @@ def _kib(value: Any) -> int:
     return _integer(value) or 0
 
 
+def _rci_memory_pair(value: Any) -> tuple[int, int] | None:
+    """Parse Keenetic ``used/total`` memory values in KiB or bytes."""
+    match = re.search(r"(\d+)\s*/\s*(\d+)", str(value or ""))
+    if not match:
+        return None
+    used = int(match.group(1))
+    total = int(match.group(2))
+    if total <= 0 or used < 0:
+        return None
+    # KeeneticOS 5.x returns KiB (for example 463120/1048576).  Accept
+    # byte-count responses from older or alternative firmware as well.
+    if total >= 100_000_000:
+        used //= 1024
+        total //= 1024
+    return min(used, total), total
+
+
 def _first(mapping: dict[str, Any], *keys: str) -> Any:
     for key in keys:
         if key in mapping and mapping[key] not in (None, ""):
             return mapping[key]
     return None
+
+
+def normalize_router_system(payload: Any, *, sampled_at: int) -> dict[str, Any]:
+    """Normalize the system metrics used by the Keenetic web interface."""
+
+    source = payload if isinstance(payload, dict) else {}
+    cpu_load = _number(_first(source, "cpuload", "cpu-load", "cpu_load"))
+    memory_pair = _rci_memory_pair(source.get("memory"))
+    total_kib = memory_pair[1] if memory_pair else _kib(_first(source, "memtotal", "mem-total"))
+    used_kib = memory_pair[0] if memory_pair else 0
+    if total_kib and not memory_pair:
+        used_kib = max(
+            0,
+            total_kib
+            - _kib(_first(source, "memfree", "mem-free"))
+            - _kib(_first(source, "membuffers", "mem-buffers", "buffers"))
+            - _kib(_first(source, "memcache", "mem-cache", "cached")),
+        )
+
+    swap_pair = _rci_memory_pair(source.get("swap"))
+    swap_total_kib = swap_pair[1] if swap_pair else _kib(_first(source, "swaptotal", "swap-total"))
+    swap_used_kib = swap_pair[0] if swap_pair else max(
+        0,
+        swap_total_kib - min(swap_total_kib, _kib(_first(source, "swapfree", "swap-free"))),
+    )
+    total_bytes = max(0, total_kib) * 1024
+    used_bytes = max(0, min(total_kib, used_kib)) * 1024
+    result: dict[str, Any] = {
+        "available": cpu_load is not None or bool(total_bytes),
+        "sampled_at": int(sampled_at),
+        "source": "keenetic_rci",
+        "cpu": {"percent": round(min(100.0, cpu_load), 1)} if cpu_load is not None else {},
+        "memory": {
+            "total_bytes": total_bytes,
+            "used_bytes": used_bytes,
+            "available_bytes": max(0, total_bytes - used_bytes),
+            "percent": round(used_bytes * 100.0 / total_bytes, 1) if total_bytes else 0.0,
+            "swap_total_bytes": max(0, swap_total_kib) * 1024,
+            "swap_used_bytes": max(0, min(swap_total_kib, swap_used_kib)) * 1024,
+        } if total_bytes else {},
+    }
+    uptime = _integer(_first(source, "uptime", "up-time"))
+    if uptime is not None:
+        result["uptime_seconds"] = uptime
+    return result
 
 
 def _walk_dicts(payload: Any) -> Iterable[dict[str, Any]]:
@@ -1013,6 +1077,53 @@ def sample_router_diagnostics(
     return result
 
 
+def sample_router_system(
+    *,
+    rci_fetcher: Callable[[str], Any] = fetch_rci_json,
+    clock: Callable[[], float] = time.time,
+) -> dict[str, Any]:
+    """Read the lightweight RCI branch used by Keenetic's system gauges."""
+
+    sampled_at = int(clock())
+    try:
+        payload = rci_fetcher("show/system")
+    except RciUnavailable as exc:
+        return {
+            "available": False,
+            "sampled_at": sampled_at,
+            "source": "keenetic_rci",
+            "state": exc.state,
+            "cpu": {},
+            "memory": {},
+        }
+    result = normalize_router_system(payload, sampled_at=sampled_at)
+    result["state"] = "available" if result["available"] else "invalid"
+    return result
+
+
+def cached_router_system(
+    *,
+    cache_ttl: float = 4.0,
+    clock: Callable[[], float] = time.time,
+) -> dict[str, Any]:
+    """Return a short-lived RCI system snapshot for the resource endpoint."""
+
+    global _cached_system
+    now = clock()
+    with _system_lock:
+        cached = _cached_system
+        if cached is None or now - cached[0] >= max(1.0, cache_ttl):
+            snapshot = sample_router_system(clock=clock)
+            _cached_system = (now, snapshot)
+        else:
+            snapshot = cached[1]
+        result = copy.deepcopy(snapshot)
+    age = max(0, int(now - float(result.get("sampled_at") or now)))
+    result["age_seconds"] = age
+    result["stale"] = age > int(cache_ttl)
+    return result
+
+
 def cached_router_diagnostics(
     *,
     cache_ttl: float = 10.0,
@@ -1109,11 +1220,13 @@ def sample_router_processes(
 
 
 def reset_router_diagnostic_sampler() -> None:
-    global _previous_interfaces, _cached_snapshot, _cached_capabilities, _incident_log, _previous_health
+    global _previous_interfaces, _cached_snapshot, _cached_system, _cached_capabilities, _incident_log, _previous_health
     with _interface_lock:
         _previous_interfaces = None
     with _snapshot_lock:
         _cached_snapshot = None
+    with _system_lock:
+        _cached_system = None
     with _capability_lock:
         _cached_capabilities = None
     _incident_log = []

@@ -285,6 +285,7 @@ function renderDashboard(payload) {
   const storage = payload?.storage || {};
   const temperature = metricNumber(payload?.temperature_celsius);
   const network = payload?.network || {};
+  const telemetry = payload?.resource_telemetry || {};
   const swapTotal = Number(payload?.memory?.swap_total_bytes) || 0;
   const healthState = resourceHealth(payload, dnsDiagnostics);
   const health = byId("xk-resource-health");
@@ -331,6 +332,12 @@ function renderDashboard(payload) {
   set(
     "xk-resource-dashboard-memory-note",
     `${formatBytes(payload?.memory?.used_bytes)} из ${formatBytes(payload?.memory?.total_bytes)}`,
+  );
+  set(
+    "xk-resource-dashboard-resource-source",
+    telemetry.source === "keenetic_rci"
+      ? "KeeneticOS RCI · те же CPU/RAM, что в веб-интерфейсе"
+      : "Linux procfs · KeeneticOS RCI недоступен",
   );
   meter("xk-resource-dashboard-memory-meter", memory);
   set(

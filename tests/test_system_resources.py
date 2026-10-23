@@ -89,6 +89,7 @@ def test_resource_sampler_adds_optional_dashboard_telemetry(monkeypatch):
 def test_system_resources_route_is_no_store(monkeypatch):
     monkeypatch.setattr(resource_routes, "sample_system_resources", lambda: {"schema_version": 1, "cpu": {}, "memory": {}})
     monkeypatch.setattr(resource_routes, "cached_router_diagnostics", lambda: {"internet": {"available": False}})
+    monkeypatch.setattr(resource_routes, "cached_router_system", lambda: {"available": False, "state": "unavailable", "cpu": {}, "memory": {}})
     app = Flask(__name__)
     app.register_blueprint(create_system_resources_blueprint())
 
@@ -118,6 +119,7 @@ def test_system_resources_route_has_safe_unavailable_error(monkeypatch):
 def test_optional_router_diagnostics_failure_keeps_resource_endpoint_available(monkeypatch):
     monkeypatch.setattr(resource_routes, "sample_system_resources", lambda: {"schema_version": 1, "sampled_at": 7, "cpu": {}, "memory": {}})
     monkeypatch.setattr(resource_routes, "cached_router_diagnostics", lambda: (_ for _ in ()).throw(RuntimeError("secret")))
+    monkeypatch.setattr(resource_routes, "cached_router_system", lambda: {"available": False, "state": "unavailable", "cpu": {}, "memory": {}})
     app = Flask(__name__)
     app.register_blueprint(create_system_resources_blueprint())
 
@@ -126,6 +128,39 @@ def test_optional_router_diagnostics_failure_keeps_resource_endpoint_available(m
     assert response.status_code == 200
     assert response.get_json()["router"]["rci"]["state"] == "unavailable"
     assert "secret" not in response.get_data(as_text=True)
+
+
+def test_system_resources_prefers_keenetic_metrics_when_the_rci_branch_is_available(monkeypatch):
+    monkeypatch.setattr(
+        resource_routes,
+        "sample_system_resources",
+        lambda: {
+            "schema_version": 1,
+            "sampled_at": 7,
+            "cpu": {"percent": 56.0},
+            "memory": {"percent": 56.0, "used_bytes": 568_000, "total_bytes": 1_015_000},
+        },
+    )
+    monkeypatch.setattr(resource_routes, "cached_router_diagnostics", lambda: {"internet": {"available": False}})
+    monkeypatch.setattr(
+        resource_routes,
+        "cached_router_system",
+        lambda: {
+            "available": True,
+            "state": "available",
+            "cpu": {"percent": 3.0},
+            "memory": {"percent": 44.2, "used_bytes": 463_120 * 1024, "total_bytes": 1_048_576 * 1024},
+        },
+    )
+    app = Flask(__name__)
+    app.register_blueprint(create_system_resources_blueprint())
+
+    payload = app.test_client().get("/api/system/resources").get_json()
+
+    assert payload["cpu"]["percent"] == 3.0
+    assert payload["memory"]["percent"] == 44.2
+    assert payload["resource_telemetry"]["source"] == "keenetic_rci"
+    assert payload["resource_telemetry"]["comparison"]["linux_procfs"]["memory_percent"] == 56.0
 
 
 def test_process_route_is_separate_and_no_store(monkeypatch):

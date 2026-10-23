@@ -29,6 +29,7 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
         "xk-resource-chart-load",
         "xk-resource-poll",
         "xk-resource-export",
+        "xk-resource-dashboard-resource-source",
         "xk-clients-show-all",
         "xk-resource-dashboard-refresh",
         "xk-internet-health",
