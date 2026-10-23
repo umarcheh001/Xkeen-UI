@@ -14,6 +14,7 @@ from services.router_diagnostics import (
     normalize_clients,
     normalize_dns_diagnostics,
     normalize_lte,
+    normalize_router_system,
     normalize_processes,
     reset_router_diagnostic_sampler,
     sample_conntrack,
@@ -86,6 +87,27 @@ def test_light_snapshot_does_not_read_router_log():
 
     assert payload["internet"]["dns"] is True
     assert "dns_diagnostics" not in payload["internet"]
+
+
+def test_normalize_router_system_matches_keenetic_web_gauges():
+    payload = normalize_router_system(
+        {
+            "cpuload": 3,
+            "memory": "463120/1048576",
+            "swap": "0/1313788",
+            "uptime": "254212",
+        },
+        sampled_at=42,
+    )
+
+    assert payload["source"] == "keenetic_rci"
+    assert payload["cpu"] == {"percent": 3.0}
+    assert payload["memory"]["total_bytes"] == 1_048_576 * 1024
+    assert payload["memory"]["used_bytes"] == 463_120 * 1024
+    assert payload["memory"]["percent"] == 44.2
+    assert payload["memory"]["swap_total_bytes"] == 1_313_788 * 1024
+    assert payload["memory"]["swap_used_bytes"] == 0
+    assert payload["uptime_seconds"] == 254_212
 
 
 def test_normalize_internet_status_handles_keenetic_accessibility_flags():
