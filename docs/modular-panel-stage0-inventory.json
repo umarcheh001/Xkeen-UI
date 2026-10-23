@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 589,
-      "size_bytes": 7993668,
+      "size_bytes": 8001527,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -1776,7 +1776,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/dns_client_capture.py",
-      "size_bytes": 11986,
+      "size_bytes": 15284,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -1790,6 +1790,7 @@
         "gevent-websocket (optional)"
       ],
       "environment_variables": [
+        "XKEEN_DENY_SET",
         "XKEEN_UI_DNS"
       ],
       "removable": false
@@ -3923,7 +3924,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_dns_client_capture.py",
-      "size_bytes": 9501,
+      "size_bytes": 14062,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -3936,7 +3937,9 @@
         "gevent (optional)",
         "gevent-websocket (optional)"
       ],
-      "environment_variables": [],
+      "environment_variables": [
+        "XKEEN_DENY"
+      ],
       "removable": false
     },
     {

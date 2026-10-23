@@ -198,6 +198,81 @@ def _jump_index(text: str) -> int:
     return 0
 
 
+# XKeen's netfilter hook inserts this rule at the top of PREROUTING on every
+# firewall event of the firmware, and the guard used to push our jump back over
+# it each time -- a tug of war that left a line in core.log at every one of
+# XKeen's events (405 of 426 lines on 45.1 by 23.10.2026).  The rule lets out
+# only the devices in its set, so for every other device our jump right under
+# it works exactly as on top.  A chosen device that is in the set is the one
+# case that needs us above: the window promises its DNS goes to the tunnel
+# even though XKeen leaves the rest of its traffic alone.
+XKEEN_DENY_SET = "xkeen_deny_mac"
+_XKEEN_DENY_RULE = [
+    "-A", PARENT_CHAIN, "-m", "set", "--match-set", XKEEN_DENY_SET, "src", "-j", "RETURN",
+]
+IPSET_BINARIES = ("/opt/sbin/ipset", "ipset")
+
+
+def _xkeen_denied_macs() -> Any:
+    """Members of XKeen's deny set, lower-case; ``None`` when unreadable."""
+    for binary in IPSET_BINARIES:
+        try:
+            proc = subprocess.run(
+                [binary, "list", XKEEN_DENY_SET],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+        except FileNotFoundError:
+            continue
+        except Exception:  # noqa: BLE001 - unreadable means "do not rely on it"
+            return None
+        if proc.returncode != 0:
+            return None
+        members = str(proc.stdout or "").split("Members:", 1)
+        if len(members) != 2:
+            return None
+        return {line.strip().lower() for line in members[1].splitlines() if MAC_RE.match(line.strip().lower())}
+    return None
+
+
+def _is_harmless_above(line: str) -> bool:
+    """Whether a PREROUTING rule may stand above our jump without defeating it."""
+    tokens = str(line or "").split()
+    # XKeen tags its rules with a comment; the tag says nothing about the effect.
+    for index in range(len(tokens) - 3):
+        if tokens[index:index + 3] == ["-m", "comment", "--comment"]:
+            tokens = tokens[:index] + tokens[index + 4:]
+            break
+    return tokens == _XKEEN_DENY_RULE
+
+
+def _jump_rank(text: str) -> int:
+    """Like ``_jump_index``, but not counting rules that cannot defeat the jump."""
+    rank = 0
+    for line in str(text or "").splitlines():
+        if not line.startswith(f"-A {PARENT_CHAIN} "):
+            continue
+        if line.rstrip().endswith(f"-j {CHAIN}"):
+            return rank + 1
+        if not _is_harmless_above(line):
+            rank += 1
+    return 0
+
+
+def _jump_is_first(text: str, macs: List[str]) -> bool:
+    """Whether the jump is reached before anything that could take ``macs`` away."""
+    if _jump_rank(text) != 1:
+        return False
+    if _jump_index(text) == 1:
+        return True
+    # Only XKeen's deny rule stands above.  The set is read only now -- on a
+    # healthy tick right after one of XKeen's events -- and a set that cannot
+    # be read is not relied on.
+    denied = _xkeen_denied_macs()
+    return denied is not None and not (set(macs) & denied)
+
+
 def status() -> Dict[str, Any]:
     """What the firewall holds right now, without changing anything."""
     rc, chain_text, chain_err = _run(["-S", CHAIN])
@@ -212,12 +287,12 @@ def status() -> Dict[str, Any]:
             "error": "" if missing else chain_err,
         }
     rc, parent_text, parent_err = _run(["-S", PARENT_CHAIN])
-    position = _jump_index(parent_text) if rc == 0 else 0
+    macs = parse_macs(chain_text)
     return {
         "available": True,
         "present": True,
-        "first": position == 1,
-        "macs": parse_macs(chain_text),
+        "first": rc == 0 and _jump_is_first(parent_text, macs),
+        "macs": macs,
         "error": parent_err if rc != 0 else "",
     }
 
@@ -304,12 +379,16 @@ def ensure(macs: Any) -> Dict[str, Any]:
         raise CaptureError(parent_err or "не удалось прочитать PREROUTING")
     position = _jump_index(parent_text)
     above = ""
-    if position != 1:
+    if not _jump_is_first(parent_text, wanted):
+        # The rule that matters: XKeen's deny rule only when it is the one
+        # taking a chosen device away, otherwise whatever stands past it.
+        skip_harmless = _jump_rank(parent_text) != 1
         above = next(
             (
                 line.strip()
                 for line in parent_text.splitlines()
                 if line.startswith(f"-A {PARENT_CHAIN} ")
+                and not (skip_harmless and _is_harmless_above(line))
             ),
             "",
         )

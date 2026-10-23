@@ -53,6 +53,9 @@ def firewall(monkeypatch):
     fake = Firewall()
     monkeypatch.setattr(cap, "_run", fake.run)
     monkeypatch.setattr(cap, "lan_addresses", lambda: list(LAN))
+    # XKeen's deny set, empty as on 45.1; a test puts members in when it needs them.
+    fake.denied = set()
+    monkeypatch.setattr(cap, "_xkeen_denied_macs", lambda: fake.denied)
     return fake
 
 
@@ -125,6 +128,122 @@ def test_a_jump_that_slipped_below_the_firmware_is_put_back_on_top(firewall):
     # And who pushed it: the firmware's own chain and XKeen's deny rule both
     # land on top, and a user's report only helps if it names which one did.
     assert result["above"] == f"-A {cap.PARENT_CHAIN} -j _NDM_HOTSPOT_DNSREDIR"
+
+
+# XKeen's netfilter hook puts this one on top of PREROUTING on every firewall
+# event of the firmware (``proxy.sh``, ``add_prerouting``), as read on 45.1.
+XKEEN_DENY = (
+    f"-A {cap.PARENT_CHAIN} -m set --match-set xkeen_deny_mac src "
+    "-m comment --comment xkeen_rule -j RETURN"
+)
+
+
+def test_xkeens_deny_rule_above_the_jump_is_left_alone(firewall):
+    cap.ensure(["10:f6:0a:a5:e7:9a"])
+    firewall.parent.insert(0, XKEEN_DENY)
+    before = list(firewall.parent)
+    firewall.calls.clear()
+
+    result = cap.ensure(["10:f6:0a:a5:e7:9a"])
+
+    # It lets out only the devices in XKeen's set, and none of the chosen ones
+    # is there.  Moving our jump over it again would only start the tug of war
+    # anew at XKeen's next event, and leave a line in core.log every time
+    # (405 of 426 on 45.1 by 23.10.2026).
+    assert result["changed"] is False
+    assert result["repairs"] == []
+    assert firewall.parent == before
+    assert not [call for call in firewall.calls if call[0] not in {"-S"}]
+
+
+def test_a_firmware_redirect_under_xkeens_rule_still_pushes_the_jump_back(firewall):
+    cap.ensure(["10:f6:0a:a5:e7:9a"])
+    firewall.parent.insert(0, f"-A {cap.PARENT_CHAIN} -j _NDM_DNAT")
+    firewall.parent.insert(0, XKEEN_DENY)
+
+    result = cap.ensure(["10:f6:0a:a5:e7:9a"])
+
+    assert result["repairs"] == ["jump"]
+    assert result["jump_was"] == 3
+    assert firewall.parent[0].endswith(f"-j {cap.CHAIN}")
+    # The line names the rule that mattered, not the harmless one on top.
+    assert result["above"] == f"-A {cap.PARENT_CHAIN} -j _NDM_DNAT"
+
+
+def test_only_xkeens_own_deny_rule_counts_as_harmless(firewall):
+    lookalikes = [
+        # Same set, but sent somewhere that may redirect.
+        f"-A {cap.PARENT_CHAIN} -m set --match-set xkeen_deny_mac src -m comment --comment xkeen_rule -j xkeen",
+        # A RETURN that holds back devices of some other set -- ours among them, maybe.
+        f"-A {cap.PARENT_CHAIN} -m set --match-set other_mac src -j RETURN",
+        # A RETURN for everybody.
+        f"-A {cap.PARENT_CHAIN} -j RETURN",
+    ]
+    for rule in lookalikes:
+        cap.ensure(["10:f6:0a:a5:e7:9a"])
+        firewall.parent.insert(0, rule)
+
+        result = cap.ensure(["10:f6:0a:a5:e7:9a"])
+
+        assert result["repairs"] == ["jump"], rule
+        firewall.parent.remove(rule)
+
+
+def test_a_chosen_device_excluded_from_xkeen_still_gets_the_jump_on_top(firewall):
+    cap.ensure(["10:f6:0a:a5:e7:9a"])
+    firewall.parent.insert(0, XKEEN_DENY)
+    # The window promises such a device's DNS still goes to the tunnel, though
+    # XKeen leaves the rest of its traffic alone: only a jump above XKeen's
+    # RETURN keeps that promise.
+    firewall.denied = {"10:f6:0a:a5:e7:9a"}
+
+    result = cap.ensure(["10:f6:0a:a5:e7:9a"])
+
+    assert result["repairs"] == ["jump"]
+    assert result["jump_was"] == 2
+    assert firewall.parent[0].endswith(f"-j {cap.CHAIN}")
+    assert result["above"] == XKEEN_DENY
+
+
+def test_an_unreadable_deny_set_is_not_relied_on(firewall):
+    cap.ensure(["10:f6:0a:a5:e7:9a"])
+    firewall.parent.insert(0, XKEEN_DENY)
+    firewall.denied = None
+
+    assert cap.ensure(["10:f6:0a:a5:e7:9a"])["repairs"] == ["jump"]
+
+
+def test_status_counts_the_jump_first_under_xkeens_deny_rule(firewall):
+    firewall.chain = [" ".join(rule) for rule in cap._rules_for("10:f6:0a:a5:e7:9a", LAN)]
+    firewall.parent = [XKEEN_DENY, f"-A {cap.PARENT_CHAIN} -j {cap.CHAIN}", f"-A {cap.PARENT_CHAIN} -j _NDM_DNAT"]
+
+    assert cap.status()["first"] is True
+
+    firewall.denied = {"10:f6:0a:a5:e7:9a"}
+    assert cap.status()["first"] is False
+
+
+def test_the_deny_set_is_read_from_ipsets_listing(monkeypatch):
+    # As printed by `ipset list xkeen_deny_mac` on the router (members added).
+    listing = (
+        "Name: xkeen_deny_mac\nType: hash:mac\nRevision: 0\n"
+        "Header: hashsize 1024 maxelem 65536\nSize in memory: 96\nReferences: 4\n"
+        "Members:\n10:F6:0A:A5:E7:9A\nAA:BB:CC:DD:EE:01\n"
+    )
+
+    class Proc:
+        returncode = 0
+        stdout = listing
+        stderr = ""
+
+    monkeypatch.setattr(cap.subprocess, "run", lambda *a, **k: Proc())
+    assert cap._xkeen_denied_macs() == {"10:f6:0a:a5:e7:9a", "aa:bb:cc:dd:ee:01"}
+
+    Proc.stdout = listing.split("Members:")[0] + "Members:\n"
+    assert cap._xkeen_denied_macs() == set()
+
+    Proc.returncode = 1
+    assert cap._xkeen_denied_macs() is None
 
 
 def test_the_result_names_every_part_that_had_to_be_rebuilt(firewall):
