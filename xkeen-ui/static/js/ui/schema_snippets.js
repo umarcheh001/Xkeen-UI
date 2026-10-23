@@ -389,6 +389,14 @@ const MIHOMO_PROXY_GROUPS_SNIPPETS = [
     insertText: 'name: "load-balance"\ntype: load-balance\nproxies:\n  - "vless-proxy"\n  - "trojan-proxy"\nurl: "http://www.gstatic.com/generate_204"\ninterval: 300\nstrategy: round-robin',
     monacoSnippet: 'name: "${1:load-balance}"\ntype: load-balance\nproxies:\n  - "${2:vless-proxy}"\n  - "${3:trojan-proxy}"\nurl: "${4:http://www.gstatic.com/generate_204}"\ninterval: ${5:300}\nstrategy: ${6|round-robin,consistent-hashing,sticky-sessions|}$0',
   },
+  {
+    id: 'mihomo-group-smart',
+    label: 'proxy-group: smart',
+    detail: 'Mihomo fork · proxy-groups[]',
+    documentation: 'Автовыбор по истории качества узлов для доменов и ASN; LightGBM и сбор данных включаются явно.',
+    insertText: 'name: "smart"\ntype: smart\nproxies:\n  - "vless-proxy"\n  - "trojan-proxy"\npolicy-priority: "Premium:0.9;SG:1.3"\nprefer-asn: true\ntolerance: 50\nuselightgbm: true\ncollectdata: false\nsample-rate: 1',
+    monacoSnippet: 'name: "${1:smart}"\ntype: smart\nproxies:\n  - "${2:vless-proxy}"\n  - "${3:trojan-proxy}"\npolicy-priority: "${4:Premium:0.9;SG:1.3}"\nprefer-asn: ${5|true,false|}\ntolerance: ${6:50}\nuselightgbm: ${7|true,false|}\ncollectdata: ${8|false,true|}\nsample-rate: ${9:1}$0',
+  },
 ];
 
 /* ════════════════════════════════════════════════════════════
@@ -453,6 +461,14 @@ const MIHOMO_RULES_SNIPPETS = [
  * ════════════════════════════════════════════════════════════ */
 
 const MIHOMO_TOP_LEVEL_SNIPPETS = [
+  {
+    id: 'mihomo-smart-lgbm',
+    label: 'smart: LightGBM settings',
+    detail: 'Mihomo fork · top-level',
+    documentation: 'Глобальные настройки обновления ML-модели для proxy-groups типа smart.',
+    insertText: 'lgbm-auto-update: true\nlgbm-update-interval: 72\nlgbm-url: "https://github.com/vernesong/mihomo/releases/download/LightGBM-Model/Model.bin"\nsmart-collector-size: 100',
+    monacoSnippet: 'lgbm-auto-update: ${1|true,false|}\nlgbm-update-interval: ${2:72}\nlgbm-url: "${3:https://github.com/vernesong/mihomo/releases/download/LightGBM-Model/Model.bin}"\nsmart-collector-size: ${4:100}$0',
+  },
   {
     id: 'mihomo-bundle-rule-provider-ruleset',
     label: 'rule-provider + RULE-SET',

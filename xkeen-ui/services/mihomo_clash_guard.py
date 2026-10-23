@@ -33,6 +33,7 @@ MIHOMO_CLASH_ACTION_POLICIES: Mapping[str, MihomoClashActionPolicy] = MappingPro
         # manual refreshes and a reconnect bootstrap.
         "connections-snapshot": MihomoClashActionPolicy(8, 1, 40, 60.0),
         "connection-disconnect": MihomoClashActionPolicy(8, 2, 120, 60.0),
+        "connection-smart-block": MihomoClashActionPolicy(8, 2, 120, 60.0),
         "connections-disconnect-all": MihomoClashActionPolicy(1, 1, 10, 60.0),
         # The provider workspace uses a bounded two-worker queue for explicit
         # HTTP-provider batches. Keep the server cap aligned with that queue.
@@ -42,6 +43,7 @@ MIHOMO_CLASH_ACTION_POLICIES: Mapping[str, MihomoClashActionPolicy] = MappingPro
         "dns-route-check": MihomoClashActionPolicy(2, 1, 60, 60.0),
         "dns-flush": MihomoClashActionPolicy(1, 1, 6, 60.0),
         "fake-ip-flush": MihomoClashActionPolicy(1, 1, 6, 60.0),
+        "smart-flush": MihomoClashActionPolicy(1, 1, 6, 60.0),
     }
 )
 

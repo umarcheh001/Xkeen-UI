@@ -7,6 +7,8 @@ const DNS_FLUSH_ENDPOINT = '/api/mihomo/clash/dns/flush';
 const FAKE_IP_FLUSH_ENDPOINT = '/api/mihomo/clash/fake-ip/flush';
 const RUNTIME_MODE_ENDPOINT = '/api/mihomo/clash/runtime-mode';
 const GROUPS_ENDPOINT = '/api/mihomo/clash/proxy-groups';
+const SMART_WEIGHTS_ENDPOINT = '/api/mihomo/clash/smart/weights';
+const SMART_FLUSH_ENDPOINT = '/api/mihomo/clash/smart/flush';
 const EGRESS_INFO_ENDPOINT = '/api/mihomo/clash/egress-info';
 const DELAY_ENDPOINT = '/api/mihomo/clash/delay';
 const CONNECTIONS_ENDPOINT = '/api/mihomo/clash/connections';
@@ -158,6 +160,29 @@ export function fetchMihomoClashGroups(options = {}) {
   });
 }
 
+export function fetchMihomoClashSmartWeights(options = {}) {
+  return requestJSON(SMART_WEIGHTS_ENDPOINT, {
+    method: 'GET',
+    cache: 'no-store',
+    credentials: 'same-origin',
+    timeoutMs: 8000,
+    retry: 0,
+    signal: options.signal,
+  });
+}
+
+export function flushMihomoClashSmartCache(options = {}) {
+  return requestJSON(SMART_FLUSH_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+    credentials: 'same-origin',
+    timeoutMs: 12000,
+    retry: 0,
+    signal: options.signal,
+  });
+}
+
 export function fetchMihomoClashEgressInfo(options = {}) {
   const query = options.forceRefresh === true ? '?refresh=1' : '';
   return requestJSON(`${EGRESS_INFO_ENDPOINT}${query}`, {
@@ -242,6 +267,16 @@ export function fetchMihomoClashConnections(options = {}) {
   return requestJSON(CONNECTIONS_ENDPOINT, {
     method: 'GET',
     cache: 'no-store',
+    credentials: 'same-origin',
+    timeoutMs: 8000,
+    retry: 0,
+    signal: options.signal,
+  });
+}
+
+export function blockMihomoClashConnectionSmart(id, options = {}) {
+  return requestJSON(`${CONNECTIONS_ENDPOINT}/smart/${encodeURIComponent(String(id || ''))}`, {
+    method: 'DELETE',
     credentials: 'same-origin',
     timeoutMs: 8000,
     retry: 0,
@@ -375,6 +410,8 @@ export const mihomoClashClientApi = Object.freeze({
   flushFakeIpCache: flushMihomoClashFakeIpCache,
   setRuntimeMode: setMihomoClashRuntimeMode,
   fetchGroups: fetchMihomoClashGroups,
+  fetchSmartWeights: fetchMihomoClashSmartWeights,
+  flushSmartCache: flushMihomoClashSmartCache,
   selectProxy: selectMihomoClashProxy,
   unfixProxy: unfixMihomoClashProxy,
   testDelay: testMihomoClashDelay,
@@ -385,6 +422,7 @@ export const mihomoClashClientApi = Object.freeze({
   updateProvider: updateMihomoClashProvider,
   healthcheckProvider: healthcheckMihomoClashProvider,
   disconnectConnection: disconnectMihomoClashConnection,
+  blockSmartConnection: blockMihomoClashConnectionSmart,
   disconnectAllConnections: disconnectAllMihomoClashConnections,
   requestWsToken: requestMihomoClashWsToken,
   previewMigration: previewMihomoClashMigration,

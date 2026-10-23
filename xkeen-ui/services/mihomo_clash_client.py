@@ -92,6 +92,8 @@ MIHOMO_CLASH_ENDPOINTS: Mapping[str, MihomoClashEndpoint] = MappingProxyType(
         "runtime_mode": MihomoClashEndpoint("PATCH", "/configs", 5.0, 64 * 1024),
         "proxies": MihomoClashEndpoint("GET", "/proxies", 5.0),
         "groups": MihomoClashEndpoint("GET", "/group", 5.0),
+        "smart_weights": MihomoClashEndpoint("GET", "/group/weights", 5.0, 512 * 1024),
+        "smart_flush": MihomoClashEndpoint("POST", "/cache/smart/flush", 8.0, 64 * 1024),
         "providers_proxies": MihomoClashEndpoint("GET", "/providers/proxies", 8.0),
         "providers_rules": MihomoClashEndpoint("GET", "/providers/rules", 8.0),
         "rules": MihomoClashEndpoint("GET", "/rules", 8.0, 4 * 1024 * 1024),
@@ -134,6 +136,12 @@ MIHOMO_CLASH_ENDPOINTS: Mapping[str, MihomoClashEndpoint] = MappingProxyType(
         "connection_disconnect": MihomoClashEndpoint(
             "DELETE",
             "/connections/{name}",
+            5.0,
+            64 * 1024,
+        ),
+        "connection_smart_block": MihomoClashEndpoint(
+            "DELETE",
+            "/connections/smart/{name}",
             5.0,
             64 * 1024,
         ),
@@ -248,6 +256,12 @@ class MihomoClashClient:
                 status=400,
             )
         return self._request(spec, path=spec.path, expect_json=True)
+
+    def flush_smart_cache(self) -> MihomoClashJSONResponse:
+        """Reset Smart selector weights when the fork exposes that action."""
+
+        spec = self._endpoint("smart_flush", stream=False)
+        return self._request(spec, path=spec.path, expect_json=False)
 
     def set_runtime_mode(self, mode: str) -> MihomoClashJSONResponse:
         """Switch only Mihomo's in-memory routing mode.
@@ -540,6 +554,16 @@ class MihomoClashClient:
         """Close exactly one validated connection id."""
 
         spec = self._endpoint("connection_disconnect", stream=False)
+        return self._request(
+            spec,
+            path=self._named_path(spec, connection_id),
+            expect_json=False,
+        )
+
+    def block_smart_connection(self, connection_id: str) -> MihomoClashJSONResponse:
+        """Ask a Smart fork to penalize the node for this connection host."""
+
+        spec = self._endpoint("connection_smart_block", stream=False)
         return self._request(
             spec,
             path=self._named_path(spec, connection_id),

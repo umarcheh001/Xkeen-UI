@@ -4,6 +4,8 @@ import { toastXkeen } from '../xkeen_runtime.js';
 import { mihomoCountryFlag, mihomoNodeCountryCode, mihomoNodeDisplayName } from './visuals.js';
 import {
   fetchMihomoClashGroups,
+  fetchMihomoClashSmartWeights,
+  flushMihomoClashSmartCache,
   selectMihomoClashProxy,
   testMihomoClashDelay,
   unfixMihomoClashProxy,
@@ -33,6 +35,11 @@ const DEFAULT_DELAY_FRESHNESS_TTL_MS = 5 * 60 * 1000;
 const MIN_DELAY_FRESHNESS_TTL_MS = 5 * 60 * 1000;
 const MAX_DELAY_FRESHNESS_TTL_MS = 60 * 60 * 1000;
 const AUTOMATIC_TYPES = new Set(['urltest', 'fallback', 'smart', 'loadbalance', 'load-balance']);
+const SMART_RANK_LABELS = Object.freeze({
+  MostUsed: 'часто',
+  OccasionalUsed: 'иногда',
+  RarelyUsed: 'редко',
+});
 const LOCKED_SELECTION_TYPES = new Set(['loadbalance', 'load-balance']);
 const NO_DELAY_TYPES = new Set(['direct', 'reject', 'reject-drop', 'rejectdrop', 'dns', 'pass', 'relay']);
 const NO_SORT_TYPES = new Set([
@@ -52,6 +59,7 @@ const DELAY_HISTORY_SESSION_KEY = 'xkeen:mihomo-clash-delay-history.v1';
 // rendering. Do not abort a healthy request (or immediately refetch its
 // result) when the same view is activated twice in quick succession.
 const ACTIVATION_REFRESH_GUARD_MS = 1500;
+const SMART_WEIGHTS_REFRESH_MS = 30000;
 
 let root = null;
 let active = false;
@@ -77,6 +85,9 @@ let settingsUnsubscribe = null;
 let delayRun = null;
 let payloadLoadedAt = 0;
 let delayFreshnessTimer = 0;
+let smartWeights = {};
+let smartWeightsAvailable = false;
+let smartWeightsTimer = 0;
 const collapsedGroups = new Set();
 const knownDisclosureGroups = new Set();
 let pickerGroup = '';
@@ -806,7 +817,16 @@ function nodeDelayValue(group, node) {
 }
 
 function sortNodes(group, nodes) {
-  if (sortMode === 'config') return [...nodes];
+  if (sortMode === 'config') {
+    if (String(group?.type || '').toLowerCase() !== 'smart' || !smartWeights[group?.name]) {
+      return [...nodes];
+    }
+    const weights = smartWeights[group.name];
+    return [...nodes].sort((left, right) => (
+      (weights[left.name]?.order ?? Number.MAX_SAFE_INTEGER)
+      - (weights[right.name]?.order ?? Number.MAX_SAFE_INTEGER)
+    ));
+  }
   const sortable = [];
   const fixedPositions = new Map();
   nodes.forEach((node, index) => {
@@ -921,6 +941,13 @@ function renderNode(group, node) {
   const protocol = [node.type || 'unknown', node.network, node.security].filter(Boolean).join(' · ');
   const meta = [protocol, providerCopy(node), node.udp === true ? 'UDP' : ''].filter(Boolean).join(' · ');
   const endpoint = [node.server, node.port].filter((value) => value !== '' && value != null).join(':');
+  const smart = smartWeights[group.name]?.[node.name];
+  const smartRank = smart && String(smart.rank || '').trim();
+  const smartRankLabel = SMART_RANK_LABELS[smartRank] || smartRank;
+  const smartWeight = smart && Number.isFinite(Number(smart.weight)) ? Number(smart.weight) : null;
+  const smartCopy = smartRank
+    ? `<span class="xk-mihomo-node-smart" data-smart-rank="${escapeHtml(smartRank)}" data-tooltip="Smart: ${escapeHtml(smartRankLabel)} · вес ${escapeHtml(smartWeight == null ? '—' : `${smartWeight.toFixed(1)}%`)}">${escapeHtml(smartRankLabel)}${smartWeight == null ? '' : ` ${escapeHtml(smartWeight.toFixed(1))}%`}</span>`
+    : '';
   return `
     <li class="xk-mihomo-node-row${selected ? ' is-current' : ''}${fixed ? ' is-fixed' : ''}${checking ? ' is-checking' : ''}${selectionDisabled ? ' is-selection-disabled' : ''}" data-node-key="${escapeHtml(encodeURIComponent(delayKey(group.name, node.name, node.provider)))}" data-node-name="${escapeHtml(node.name)}" data-alive="${escapeHtml(alive)}">
       <button type="button" class="xk-mihomo-node-select" data-mihomo-group-select="1"
@@ -931,6 +958,7 @@ function renderNode(group, node) {
           <strong>${fixed ? iconHtml('lock') : ''}${nodeVisualIconHtml(node)}${nodeFlagHtml(countryCode)}<span>${escapeHtml(displayName)}</span></strong>
           <small>${escapeHtml(meta)}</small>
           ${endpoint ? `<small class="xk-mihomo-node-endpoint">${escapeHtml(endpoint)}</small>` : ''}
+           ${smartCopy}
         </span>
       </button>
       ${renderNodeProbe(group, node)}
@@ -945,7 +973,10 @@ function groupSummary(group) {
   const availability = isPayloadFresh()
     ? `${nodes.filter((node) => node.alive === true).length}/${nodes.length} доступны`
     : `${nodes.length} узлов · нет актуальных данных`;
-  return `${group.type || 'Unknown'} · ${mode} · ${availability}`;
+  const smartState = String(group.type || '').toLowerCase() === 'smart'
+    ? (smartWeightsAvailable ? 'веса доступны' : 'веса fork API недоступны')
+    : '';
+  return [group.type || 'Unknown', mode, availability, smartState].filter(Boolean).join(' · ');
 }
 
 function groupIconHtml(group) {
@@ -1088,6 +1119,8 @@ function renderGroup(group) {
   const automatic = AUTOMATIC_TYPES.has(String(group.type || '').toLowerCase());
   const canUnfix = automatic && !!group.fixed && capabilities.proxy_unfix === true;
   const canTestGroup = nodes.some(canProbeNode);
+  const smart = String(group.type || '').toLowerCase() === 'smart';
+  const canFlushSmart = smart && smartWeightsAvailable;
   return `
     <section class="xk-mihomo-group" data-group-name="${escapeHtml(group.name)}">
       <header class="xk-mihomo-group-head${collapsed ? ' is-collapsed' : ''}" data-group="${escapeHtml(group.name)}"
@@ -1099,6 +1132,7 @@ function renderGroup(group) {
           ${groupFixedStatusHtml(group)}
         </div>
         <div class="xk-mihomo-group-actions">
+          ${canFlushSmart ? `<button type="button" class="btn-secondary xk-mihomo-group-smart-flush" data-mihomo-smart-flush="1" data-group="${escapeHtml(group.name)}" data-tooltip="Сбросить историю и веса Smart для всех Smart-групп">${iconHtml('refresh')}<span class="xk-action-label">Сбросить Smart</span></button>` : ''}
           ${canUnfix ? `<button type="button" class="btn-secondary xk-mihomo-group-unfix" data-mihomo-group-unfix="1" data-group="${escapeHtml(group.name)}">${iconHtml('lock')}<span>Вернуть автоматический выбор</span></button>` : ''}
           ${collapsed || !canTestGroup ? '' : `<button type="button" class="btn-secondary xk-mihomo-group-test" data-mihomo-group-delay="1"
             data-group="${escapeHtml(group.name)}">${iconHtml('ping')}<span class="xk-action-label">Тест группы</span></button>`}
@@ -1250,6 +1284,51 @@ function abortLoad() {
   request = null;
 }
 
+function clearSmartWeightsTimer() {
+  if (smartWeightsTimer) window.clearTimeout(smartWeightsTimer);
+  smartWeightsTimer = 0;
+}
+
+function hasSmartGroups() {
+  return allGroups().some((group) => String(group?.type || '').toLowerCase() === 'smart');
+}
+
+function applySmartWeights(payloadValue) {
+  const source = payloadValue?.weights && typeof payloadValue.weights === 'object'
+    ? payloadValue.weights
+    : {};
+  smartWeights = Object.fromEntries(Object.entries(source).map(([group, items]) => [
+    group,
+    Object.fromEntries((Array.isArray(items) ? items : [])
+      .filter((item) => item && typeof item.name === 'string')
+      .map((item) => [item.name, item])),
+  ]));
+  smartWeightsAvailable = true;
+}
+
+function scheduleSmartWeightsRefresh() {
+  clearSmartWeightsTimer();
+  if (!active || !hasSmartGroups()) return;
+  smartWeightsTimer = window.setTimeout(() => {
+    smartWeightsTimer = 0;
+    void refreshSmartWeights();
+  }, SMART_WEIGHTS_REFRESH_MS);
+}
+
+async function refreshSmartWeights() {
+  if (!active || !hasSmartGroups()) return;
+  try {
+    const next = await fetchMihomoClashSmartWeights();
+    if (!active) return;
+    applySmartWeights(next);
+    render();
+  } catch (error) {
+    // Standard Mihomo does not expose the fork-specific endpoint.
+  } finally {
+    scheduleSmartWeightsRefresh();
+  }
+}
+
 export async function refreshMihomoClashGroups() {
   if (!active) return false;
   abortLoad();
@@ -1263,10 +1342,21 @@ export async function refreshMihomoClashGroups() {
     if (!active || sequence !== requestSequence) return false;
     payloadLoadedAt = Date.now();
     payload = next && typeof next === 'object' ? next : { groups: [] };
+    const smartGroupsPresent = hasSmartGroups();
+    smartWeights = {};
+    smartWeightsAvailable = false;
+    if (smartGroupsPresent) {
+      try {
+        applySmartWeights(await fetchMihomoClashSmartWeights({ signal: controller?.signal }));
+      } catch (error) {
+        // Standard Mihomo does not expose the fork-specific endpoint.
+      }
+    }
     loadError = '';
     seedDelayHistories(allGroups());
     seedCollapsedGroups(allGroups());
     render();
+    scheduleSmartWeightsRefresh();
     return true;
   } catch (error) {
     if (controller?.signal.aborted || sequence !== requestSequence) return false;
@@ -1364,6 +1454,31 @@ async function unfixProxy(groupName) {
   } catch (error) {
     if (errorCode(error) === 'proxy_unfix_not_available') await refreshMihomoClashGroups();
     notify(error?.message || 'Не удалось вернуть автоматический выбор.', 'error');
+  } finally {
+    selection = null;
+    render();
+  }
+}
+
+async function flushSmartWeights(groupName) {
+  if (!active || selection || delayRun || !smartWeightsAvailable) return;
+  const accepted = await confirmMihomoAction({
+    title: 'Сбросить Smart-веса?',
+    message: `Mihomo удалит накопленную историю и веса Smart-групп. Автовыбор начнёт обучение заново.${groupName ? ` Группа «${groupName}» отображается как точка входа, но сброс выполняется для всех Smart-групп ядра.` : ''}`,
+    okText: 'Сбросить Smart',
+    cancelText: 'Отменить',
+    danger: true,
+  }, 'Сбросить Smart-веса?');
+  if (!accepted || !active) return;
+  selection = { smartFlush: true };
+  render();
+  try {
+    await flushMihomoClashSmartCache();
+    smartWeights = {};
+    notify('Smart-веса сброшены. История качества будет собираться заново.', 'success');
+    await refreshMihomoClashGroups();
+  } catch (error) {
+    notify(error?.message || 'Не удалось сбросить Smart-веса.', 'error');
   } finally {
     selection = null;
     render();
@@ -1762,7 +1877,7 @@ function bind() {
     render();
   });
   bindControls('click', (event) => {
-    const target = event.target?.closest?.('[data-mihomo-groups-retry], [data-mihomo-groups-collapse], .xk-mihomo-group-head, [data-mihomo-picker-toggle], [data-mihomo-group-select], [data-mihomo-group-unfix], [data-mihomo-node-delay], [data-mihomo-group-delay], [data-mihomo-delay-visible], #mihomo-clash-show-timeout-hidden');
+    const target = event.target?.closest?.('[data-mihomo-groups-retry], [data-mihomo-groups-collapse], .xk-mihomo-group-head, [data-mihomo-picker-toggle], [data-mihomo-group-select], [data-mihomo-group-unfix], [data-mihomo-smart-flush], [data-mihomo-node-delay], [data-mihomo-group-delay], [data-mihomo-delay-visible], #mihomo-clash-show-timeout-hidden');
     if (!target) {
       if (pickerGroup && !event.target?.closest?.('[data-mihomo-group-picker]')) {
         pickerGroup = '';
@@ -1803,6 +1918,7 @@ function bind() {
     }
     if (target.hasAttribute('data-mihomo-group-select')) void selectProxy(target.dataset.group, target.dataset.node);
     if (target.hasAttribute('data-mihomo-group-unfix')) void unfixProxy(target.dataset.group);
+    if (target.hasAttribute('data-mihomo-smart-flush')) void flushSmartWeights(target.dataset.group);
     if (target.id === 'mihomo-clash-show-timeout-hidden') { showTimeoutHidden = !showTimeoutHidden; render(); }
     if (target.hasAttribute('data-mihomo-node-delay')) {
       const provider = String(target.dataset.provider || '');
@@ -1895,6 +2011,7 @@ export function deactivateMihomoClashGroups() {
   cancelDelayQueue();
   delayRun = null;
   clearDelayFreshnessTimer();
+  clearSmartWeightsTimer();
   hideDelayHistory();
   pickerGroup = '';
   selection = null;

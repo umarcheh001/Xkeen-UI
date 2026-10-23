@@ -26,6 +26,8 @@ MAX_DELAY_HISTORY = 10
 MAX_RULES = 4096
 MAX_RULE_EXTRA_FIELDS = 16
 MAX_PROVIDERS = 512
+MAX_SMART_GROUPS = 256
+MAX_SMART_NODES = 1024
 MAX_LOG_FIELDS = 32
 MAX_LOG_DEVICES = 8
 MIHOMO_CLASH_CAPABILITY_KEYS = (
@@ -234,6 +236,54 @@ def _string_list(value: Any, *, limit: int = 256, item_limit: int = 256) -> list
         if text:
             result.append(text)
     return result
+
+
+def build_mihomo_clash_smart_weights_dto(payload: Any) -> dict[str, Any]:
+    """Normalize optional fork-specific Smart weights for the browser."""
+
+    source = _mapping(payload).get("weights")
+    if not isinstance(source, Mapping):
+        return {"schema_version": MIHOMO_CLASH_SCHEMA_VERSION, "weights": {}, "truncated": False}
+    weights: dict[str, list[dict[str, Any]]] = {}
+    truncated = False
+    for raw_group, raw_items in list(source.items())[: MAX_SMART_GROUPS + 1]:
+        group = _text(raw_group, 256)
+        if not group:
+            continue
+        if len(weights) >= MAX_SMART_GROUPS:
+            truncated = True
+            break
+        if not isinstance(raw_items, Sequence) or isinstance(raw_items, (str, bytes, bytearray)):
+            continue
+        rows: list[dict[str, Any]] = []
+        for raw_item in list(raw_items)[: MAX_SMART_NODES + 1]:
+            item = _mapping(raw_item)
+            name = _text(item.get("Name") or item.get("name"), 256)
+            if not name:
+                continue
+            if len(rows) >= MAX_SMART_NODES:
+                truncated = True
+                break
+            weight = item.get("Weight", item.get("weight"))
+            try:
+                numeric_weight = float(weight)
+            except (TypeError, ValueError, OverflowError):
+                numeric_weight = 0.0
+            if numeric_weight != numeric_weight or numeric_weight in (float("inf"), float("-inf")):
+                numeric_weight = 0.0
+            rows.append({
+                "name": name,
+                "rank": _text(item.get("Rank") or item.get("rank"), 64),
+                "weight": round(max(0.0, numeric_weight), 3),
+                "order": len(rows),
+            })
+        if rows:
+            weights[group] = rows
+    return {
+        "schema_version": MIHOMO_CLASH_SCHEMA_VERSION,
+        "weights": weights,
+        "truncated": truncated,
+    }
 
 
 def _delay_history(proxy: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -1108,6 +1158,7 @@ def _connection_dto(raw_connection: Any, device_map: Mapping[str, Any]) -> dict[
             "process": _text(metadata.get("process"), 256),
             "process_path": _text(metadata.get("processPath"), 1024),
             "uid": _optional_nonnegative_int(metadata.get("uid")),
+            "smart_block": _text(metadata.get("smartBlock"), 24).lower(),
         },
         "upload": _nonnegative_int(connection.get("upload")),
         "download": _nonnegative_int(connection.get("download")),
@@ -1175,6 +1226,7 @@ __all__ = [
     "build_mihomo_clash_delay_dto",
     "build_mihomo_clash_routing_explanation",
     "build_mihomo_clash_proxy_groups_dto",
+    "build_mihomo_clash_smart_weights_dto",
     "build_mihomo_clash_snapshot_envelope",
     "build_mihomo_clash_status_dto",
     "build_mihomo_clash_telemetry_envelope",

@@ -1,6 +1,7 @@
 import { iconHtml } from '../../ui/operator_icons.js';
 import { confirmMihomoAction } from '../mihomo_runtime.js';
 import {
+  blockMihomoClashConnectionSmart,
   disconnectAllMihomoClashConnections,
   disconnectMihomoClashConnection,
   fetchMihomoClashConnections,
@@ -39,6 +40,7 @@ let generation = 0;
 let reconnectAttempt = 0;
 let selectedId = '';
 let pendingId = '';
+let pendingSmartBlockId = '';
 let pendingAll = false;
 let routeVisuals = new Map();
 let routeVisualsAttempted = false;
@@ -326,13 +328,14 @@ function rowMarkup(row) {
   const rule = [row?.rule, row?.rule_payload].filter(Boolean).join(' · ') || 'Правило —';
   const sourceFilter = origin.name || metadata.source_ip;
   const closed = connectionView === 'closed';
+  const smartBlock = String(metadata.smart_block || '').toLowerCase() === 'normal';
   return `<tr data-connection-id="${escapeHtml(row.id)}" data-connection-state="${closed ? 'closed' : 'active'}" tabindex="0" aria-label="Открыть детали соединения ${escapeHtml(destination(row))}">
     <td data-label="Источник"><strong>${filterButton(sourceFilter, 'источнику', `${escapeHtml(origin.address)}${deviceNameMarkup(origin.name, metadata.source_ip)}`)}</strong><small>${filterButton(metadata.network, 'протоколу', escapeHtml(network))}</small></td>
     <td data-label="Назначение"><strong>${filterButton(destinationHost(row), 'назначению', escapeHtml(destination(row)))}</strong><small>${escapeHtml(metadata.destination_ip || '')}</small></td>
     <td data-label="Маршрут"><strong>${filterButton((row?.chains || [])[0] || route, 'маршруту', routeMarkup(row), 'xk-mihomo-connection-route-filter')}</strong><small>${filterButton(row?.rule_payload || row?.rule, 'правилу', escapeHtml(rule))}</small></td>
     <td data-label="Трафик"><strong>${escapeHtml(traffic)}</strong></td>
     <td data-label="Возраст"><strong>${escapeHtml(formatAge(row))}</strong></td>
-    <td data-label="Действие">${closed ? '<span class="xk-mihomo-closed-mark">Закрыто</span>' : `<button type="button" class="btn-secondary btn-icon xk-mihomo-connection-close" data-mihomo-connection-close="${escapeHtml(row.id)}" aria-label="Завершить соединение" title="Завершить соединение" ${pendingId ? 'disabled' : ''}>${pendingId === row.id ? iconHtml('loading') : iconHtml('close')}</button>`}</td>
+    <td data-label="Действие">${closed ? '<span class="xk-mihomo-closed-mark">Закрыто</span>' : `<span class="xk-mihomo-connection-actions">${smartBlock ? `<button type="button" class="btn-secondary btn-icon xk-mihomo-connection-smart-block" data-mihomo-connection-smart-block="${escapeHtml(row.id)}" aria-label="Заблокировать узел Smart для этого хоста" title="Smart: заблокировать узел для этого хоста" ${pendingSmartBlockId ? 'disabled' : ''}>${pendingSmartBlockId === row.id ? iconHtml('loading') : iconHtml('alert')}</button>` : ''}<button type="button" class="btn-secondary btn-icon xk-mihomo-connection-close" data-mihomo-connection-close="${escapeHtml(row.id)}" aria-label="Завершить соединение" title="Завершить соединение" ${pendingId ? 'disabled' : ''}>${pendingId === row.id ? iconHtml('loading') : iconHtml('close')}</button></span>`}</td>
   </tr>`;
 }
 
@@ -377,6 +380,7 @@ function renderInspector() {
   const title = byId('mihomo-clash-connection-inspector-title');
   const sourceCopy = byId('mihomo-clash-connection-inspector-source');
   const disconnect = byId('mihomo-clash-connection-inspector-disconnect');
+  const smartBlock = byId('mihomo-clash-connection-inspector-smart-block');
   const row = selectedRow();
   inspector.hidden = !row;
   if (ruleLink) ruleLink.hidden = !row?.rule;
@@ -386,6 +390,7 @@ function renderInspector() {
     if (title) title.textContent = '—';
     if (sourceCopy) sourceCopy.textContent = '';
     if (disconnect) disconnect.hidden = true;
+    if (smartBlock) smartBlock.hidden = true;
     summary.innerHTML = '';
     details.innerHTML = '';
     return;
@@ -401,6 +406,12 @@ function renderInspector() {
     disconnect.disabled = Boolean(pendingId);
     disconnect.dataset.mihomoConnectionClose = row.id;
     disconnect.innerHTML = `${pendingId === row.id ? iconHtml('loading') : iconHtml('close')}<span>${pendingId === row.id ? 'Завершение…' : 'Завершить соединение'}</span>`;
+  }
+  if (smartBlock) {
+    smartBlock.hidden = closed || metadata.smart_block !== 'normal';
+    smartBlock.disabled = Boolean(pendingSmartBlockId);
+    smartBlock.dataset.mihomoConnectionSmartBlock = row.id;
+    smartBlock.innerHTML = `${pendingSmartBlockId === row.id ? iconHtml('loading') : iconHtml('alert')}<span>${pendingSmartBlockId === row.id ? 'Применение…' : 'Smart: заблокировать узел для хоста'}</span>`;
   }
   const rule = [row.rule, row.rule_payload].filter(Boolean).join(' · ') || '—';
   const traffic = `↓ ${formatBytes(row.download || 0)} · ↑ ${formatBytes(row.upload || 0)}`;
@@ -660,6 +671,36 @@ async function disconnectOne(id) {
   } finally { pendingId = ''; renderRows(); renderInspector(); }
 }
 
+async function blockSmartOne(id) {
+  if (!active || pendingSmartBlockId || !id) return;
+  const row = selectedRow() || snapshot?.connections?.find?.((item) => item.id === id);
+  const host = row ? destinationHost(row) : 'этого хоста';
+  const ok = await confirmMihomoAction({
+    title: 'Заблокировать узел Smart?',
+    message: `Mihomo исключит текущий узел из выбора Smart для ${host}.`,
+    okText: 'Заблокировать',
+    cancelText: 'Оставить',
+    danger: true,
+  }, 'Заблокировать узел Smart?');
+  if (!ok || !active) return;
+  pendingSmartBlockId = id;
+  renderRows();
+  renderInspector();
+  try {
+    await blockMihomoClashConnectionSmart(id);
+    setNotice('Smart-блокировка применена. Список обновится после следующего snapshot.', 'positive');
+    if (!ws) void pollSnapshot(generation, true);
+  } catch (error) {
+    setNotice(error?.data?.code === 'smart_block_not_available'
+      ? 'Smart-блокировка для этого соединения недоступна.'
+      : 'Не удалось применить Smart-блокировку.', 'danger');
+  } finally {
+    pendingSmartBlockId = '';
+    renderRows();
+    renderInspector();
+  }
+}
+
 async function disconnectAll() {
   const count = Number(snapshot?.total_connections) || 0;
   if (!active || pendingAll || !count) return;
@@ -773,6 +814,12 @@ function bind() {
     }
     const close = event.target.closest?.('[data-mihomo-connection-close]');
     if (close) { event.stopPropagation(); void disconnectOne(close.dataset.mihomoConnectionClose); return; }
+    const smartBlock = event.target.closest?.('[data-mihomo-connection-smart-block], [data-mihomo-connection-inspector-smart-block]');
+    if (smartBlock) {
+      event.stopPropagation();
+      void blockSmartOne(smartBlock.dataset.mihomoConnectionSmartBlock);
+      return;
+    }
     if (event.target.closest?.('[data-mihomo-connection-inspector-close]')) { selectedId = ''; renderInspector(); return; }
     if (event.target.closest?.('[data-mihomo-connection-rule-link]')) {
       const selected = selectedRow();

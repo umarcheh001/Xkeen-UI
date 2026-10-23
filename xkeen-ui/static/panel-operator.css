@@ -20550,6 +20550,28 @@ body.panel-page .xk-mihomo-connection-close:focus-visible:not(:disabled) {
   color: var(--op-danger) !important;
 }
 body.panel-page .xk-mihomo-connection-close:disabled .xk-action-icon { animation: xk-sub-pingall-spin .9s linear infinite; }
+body.panel-page .xk-mihomo-connection-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+body.panel-page .xk-mihomo-connection-smart-block .xk-action-icon,
+body.panel-page #mihomo-clash-connection-inspector-smart-block .xk-action-icon {
+  width: 14px;
+  height: 14px;
+}
+body.panel-page .xk-mihomo-connection-smart-block:hover:not(:disabled),
+body.panel-page .xk-mihomo-connection-smart-block:focus-visible:not(:disabled),
+body.panel-page #mihomo-clash-connection-inspector-smart-block:hover:not(:disabled),
+body.panel-page #mihomo-clash-connection-inspector-smart-block:focus-visible:not(:disabled) {
+  border-color: color-mix(in srgb, var(--op-warning) 58%, var(--op-border)) !important;
+  background: var(--op-warning-soft) !important;
+  color: var(--op-warning) !important;
+}
+body.panel-page .xk-mihomo-connection-smart-block:disabled .xk-action-icon,
+body.panel-page #mihomo-clash-connection-inspector-smart-block:disabled .xk-action-icon {
+  animation: xk-sub-pingall-spin .9s linear infinite;
+}
 
 body.panel-page .xk-mihomo-connections-empty {
   padding: 28px 12px;
@@ -21858,6 +21880,34 @@ body.panel-page .xk-mihomo-node-main .xk-mihomo-node-endpoint {
   font-size: calc(9.5px * var(--xk-font-scale, 1));
   font-family: "SFMono-Regular", Consolas, monospace;
   font-variant-numeric: tabular-nums;
+}
+
+body.panel-page .xk-mihomo-node-smart {
+  justify-self: start;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 1px 5px;
+  border: 1px solid color-mix(in srgb, var(--op-success) 36%, transparent);
+  border-radius: 999px;
+  background: var(--op-success-soft);
+  color: var(--op-success);
+  font-size: calc(8.5px * var(--xk-font-scale, 1));
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.panel-page .xk-mihomo-node-smart[data-smart-rank="OccasionalUsed"] {
+  border-color: color-mix(in srgb, var(--op-warning) 42%, transparent);
+  background: var(--op-warning-soft);
+  color: var(--op-warning);
+}
+
+body.panel-page .xk-mihomo-node-smart[data-smart-rank="RarelyUsed"] {
+  border-color: var(--op-border-strong);
+  background: var(--op-surface-muted);
+  color: var(--op-data-muted);
 }
 
 body.panel-page .xk-mihomo-node-probe {

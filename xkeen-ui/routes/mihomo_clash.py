@@ -24,6 +24,7 @@ from services.mihomo_clash_dto import (
     build_mihomo_clash_delay_dto,
     build_mihomo_clash_providers_dto,
     build_mihomo_clash_proxy_groups_dto,
+    build_mihomo_clash_smart_weights_dto,
     build_mihomo_clash_rules_dto,
     build_mihomo_clash_status_dto,
     build_mihomo_clash_snapshot_envelope,
@@ -1902,6 +1903,65 @@ def create_mihomo_clash_blueprint(
             )
         ), 200
 
+    @bp.get("/api/mihomo/clash/smart/weights")
+    def api_mihomo_clash_smart_weights():
+        client, unavailable = _client_or_response()
+        if unavailable:
+            return unavailable
+        try:
+            response = client.request_json("smart_weights")
+            payload = build_mihomo_clash_smart_weights_dto(response.payload)
+        except MihomoClashClientError as exc:
+            return _safe_client_error(exc)
+        except Exception:
+            return error_response(
+                "Не удалось получить Smart-веса Mihomo.",
+                502,
+                ok=False,
+                code="mihomo_clash_smart_weights_failed",
+                retryable=True,
+            )
+        payload["ok"] = True
+        payload["telemetry"] = {
+            "elapsed_ms": response.elapsed_ms,
+            "size_bytes": response.size_bytes,
+        }
+        return jsonify(payload), 200
+
+    @bp.post("/api/mihomo/clash/smart/flush")
+    def api_mihomo_clash_smart_flush():
+        lease, rejected_response = _acquire_action("smart-flush")
+        if rejected_response:
+            return rejected_response
+        client, unavailable = _client_or_response()
+        if unavailable:
+            lease.release()
+            return unavailable
+        try:
+            response = client.flush_smart_cache()
+        except MihomoClashClientError as exc:
+            _audit_action("smart-flush", False, error_code=exc.code)
+            return _safe_client_error(exc)
+        except Exception:
+            _audit_action("smart-flush", False, error_code="internal_error")
+            return error_response(
+                "Не удалось сбросить Smart-веса Mihomo.",
+                502,
+                ok=False,
+                code="mihomo_clash_smart_flush_failed",
+                retryable=True,
+            )
+        finally:
+            lease.release()
+        _invalidate_snapshots("groups")
+        _audit_action("smart-flush", True)
+        return jsonify({
+            "ok": True,
+            "schema_version": 1,
+            "flushed": True,
+            "elapsed_ms": response.elapsed_ms,
+        }), 200
+
     @bp.get("/api/mihomo/clash/rules")
     def api_mihomo_clash_rules():
         client, unavailable = _client_or_response()
@@ -2722,6 +2782,62 @@ def create_mihomo_clash_blueprint(
 
         _audit_action("connection-disconnect", True)
         return jsonify({"ok": True, "schema_version": 1, "disconnected": True}), 200
+
+    @bp.delete("/api/mihomo/clash/connections/smart/<path:connection_id>")
+    def api_mihomo_clash_smart_block_connection(connection_id: str):
+        connection = str(connection_id or "").strip()
+        if not connection or len(connection) > MAX_ACTION_NAME_CHARS:
+            return error_response(
+                "Некорректный идентификатор соединения Mihomo.",
+                400,
+                ok=False,
+                code="invalid_connection_id",
+            )
+        lease, rejected_response = _acquire_action("connection-smart-block")
+        if rejected_response:
+            return rejected_response
+        client, unavailable = _client_or_response()
+        if unavailable:
+            lease.release()
+            return unavailable
+        try:
+            snapshot = client.request_json("connections_snapshot")
+            current = build_mihomo_clash_connections_dto(snapshot.payload)
+            row = next(
+                (item for item in current.get("connections", []) if item.get("id") == connection),
+                None,
+            )
+            if not row:
+                return error_response(
+                    "Соединение уже завершено или больше недоступно.",
+                    409,
+                    ok=False,
+                    code="connection_not_found",
+                )
+            if row.get("metadata", {}).get("smart_block") != "normal":
+                return error_response(
+                    "Smart-блокировка для этого соединения недоступна.",
+                    409,
+                    ok=False,
+                    code="smart_block_not_available",
+                )
+            client.block_smart_connection(connection)
+        except MihomoClashClientError as exc:
+            _audit_action("connection-smart-block", False, error_code=exc.code)
+            return _safe_client_error(exc)
+        except Exception:
+            _audit_action("connection-smart-block", False, error_code="internal_error")
+            return error_response(
+                "Не удалось применить Smart-блокировку.",
+                502,
+                ok=False,
+                code="mihomo_clash_smart_block_failed",
+                retryable=True,
+            )
+        finally:
+            lease.release()
+        _audit_action("connection-smart-block", True)
+        return jsonify({"ok": True, "schema_version": 1, "blocked": True}), 200
 
     @bp.delete("/api/mihomo/clash/connections")
     def api_mihomo_clash_disconnect_all():

@@ -32,6 +32,8 @@ class StubClient:
         self.provider_updates: list[tuple[str, str]] = []
         self.provider_healthchecks: list[str] = []
         self.runtime_modes: list[str] = []
+        self.smart_flushes = 0
+        self.smart_blocked: list[str] = []
 
     def request_json(self, operation: str):
         self.operations.append(operation)
@@ -117,6 +119,18 @@ class StubClient:
         current = self.responses.get("configs")
         if current and isinstance(current.payload, dict):
             current.payload["mode"] = mode
+        return MihomoClashJSONResponse(None, 204, 1, 0)
+
+    def flush_smart_cache(self):
+        self.smart_flushes += 1
+        if self.error:
+            raise self.error
+        return MihomoClashJSONResponse(None, 204, 1, 0)
+
+    def block_smart_connection(self, connection_id: str):
+        self.smart_blocked.append(connection_id)
+        if self.error:
+            raise self.error
         return MihomoClashJSONResponse(None, 204, 1, 0)
 
 
@@ -741,6 +755,80 @@ def test_proxy_groups_route_returns_versioned_normalized_payload():
     assert body["capabilities"]["proxy_select"] is True
     assert body["telemetry"]["providers"]["size_bytes"] == 100
     assert sorted(client.operations) == ["providers_proxies", "proxies"]
+
+
+def test_smart_weights_route_normalizes_optional_fork_payload():
+    client = StubClient(
+        responses={
+            "smart_weights": MihomoClashJSONResponse(
+                {
+                    "weights": {
+                        "Smart": [
+                            {"Name": "node-a", "Rank": "MostUsed", "Weight": 82.3456},
+                            {"Name": "node-b", "Rank": "RarelyUsed", "Weight": "bad"},
+                        ],
+                    },
+                },
+                200,
+                2,
+                120,
+            ),
+        }
+    )
+
+    response = make_app(ready_discovery(), client).test_client().get(
+        "/api/mihomo/clash/smart/weights"
+    )
+    body = response.get_json()
+
+    assert response.status_code == 200
+    assert body["weights"]["Smart"][0] == {
+        "name": "node-a",
+        "rank": "MostUsed",
+        "weight": 82.346,
+        "order": 0,
+    }
+    assert body["weights"]["Smart"][1]["weight"] == 0.0
+    assert client.operations == ["smart_weights"]
+
+
+def test_smart_flush_route_is_guarded_and_audited():
+    client = StubClient()
+    response = make_app(ready_discovery(), client).test_client().post(
+        "/api/mihomo/clash/smart/flush",
+        json={},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["flushed"] is True
+    assert client.smart_flushes == 1
+
+
+def test_smart_block_route_requires_smart_capability_and_forwards_connection_id():
+    client = StubClient(
+        responses={
+            "connections_snapshot": MihomoClashJSONResponse(
+                {
+                    "connections": [
+                        {
+                            "id": "conn-smart",
+                            "metadata": {"smartBlock": "normal"},
+                        },
+                    ],
+                },
+                200,
+                1,
+                80,
+            ),
+        }
+    )
+    response = make_app(ready_discovery(), client).test_client().delete(
+        "/api/mihomo/clash/connections/smart/conn-smart"
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["blocked"] is True
+    assert client.smart_blocked == ["conn-smart"]
 
 
 def test_proxy_groups_reads_independent_upstreams_concurrently():
@@ -1767,6 +1855,8 @@ def test_routes_registry_registers_mihomo_clash_facade(monkeypatch):
     assert "GET" in rules["/api/mihomo/clash/egress-info"]
     assert "PUT" in rules["/api/mihomo/clash/runtime-mode"]
     assert "GET" in rules["/api/mihomo/clash/proxy-groups"]
+    assert "GET" in rules["/api/mihomo/clash/smart/weights"]
+    assert "POST" in rules["/api/mihomo/clash/smart/flush"]
     assert "GET" in rules["/api/mihomo/clash/rules"]
     assert "GET" in rules["/api/mihomo/clash/providers"]
     assert "POST" in rules[
@@ -1780,3 +1870,4 @@ def test_routes_registry_registers_mihomo_clash_facade(monkeypatch):
     assert "GET" in rules["/api/mihomo/clash/connections"]
     assert "DELETE" in rules["/api/mihomo/clash/connections"]
     assert "DELETE" in rules["/api/mihomo/clash/connections/<path:connection_id>"]
+    assert "DELETE" in rules["/api/mihomo/clash/connections/smart/<path:connection_id>"]
