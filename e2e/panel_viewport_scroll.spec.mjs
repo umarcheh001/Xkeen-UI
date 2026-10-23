@@ -49,6 +49,25 @@ async function openScrollSettings(page) {
 }
 
 
+// A workspace keeps drawing after showView(): the Xray logs screen, for one,
+// adds its route chips, status row and journal lines ~250 ms later. With the
+// view scrolled to the bottom the browser shifts scrollTop along with that
+// growth, so measuring earlier compares two different layouts.
+async function waitForViewSettled(page, viewId) {
+  await page.waitForFunction((id) => {
+    const view = document.getElementById(id);
+    const height = view ? view.scrollHeight : -1;
+    const now = performance.now();
+    const state = window.__xkViewSettle;
+    if (!state || state.id !== id || state.height !== height) {
+      window.__xkViewSettle = { id, height, since: now };
+      return false;
+    }
+    return now - state.since >= 400;
+  }, viewId, { polling: 50, timeout: 10_000 });
+}
+
+
 async function readScrollContract(page, viewId) {
   return page.evaluate((id) => {
     const view = document.getElementById(id);
@@ -107,6 +126,7 @@ test('panel workspaces keep a usable scroll region across desktop and short view
       const viewId = `view-${tab}`;
       const view = page.locator(`#${viewId}`);
       await expect(view).toBeVisible();
+      await waitForViewSettled(page, viewId);
 
       await page.evaluate((id) => {
         const spacer = document.createElement('div');
