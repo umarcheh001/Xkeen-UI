@@ -618,18 +618,7 @@
 
         <!-- Restart log (Routing) -->
         <section class="card log-card xk-restart-log-card xk-routing-log-card">
-          <div class="log-header-row">
-            <h2>Журнал операций Xkeen</h2>
-            <div class="log-header-actions">
-              <button type="button" class="btn-secondary log-btn btn-icon restart-log-filter-btn" data-xk-restart-log-filter="all" aria-pressed="true" title="Показать все записи" aria-label="Показать все записи">{{ op_icon('list-details') }}</button>
-              <button type="button" class="btn-secondary log-btn btn-icon restart-log-filter-btn" data-xk-restart-log-filter="errors" aria-pressed="false" title="Показать только ошибки" aria-label="Показать только ошибки">{{ op_icon('alert') }}</button>
-              <button type="button" class="btn-secondary log-btn btn-icon" data-xk-restart-log-action="refresh" title="Обновить журнал" aria-label="Обновить журнал">{{ op_icon('refresh') }}</button>
-              <button type="button" class="btn-secondary log-btn btn-icon" data-xk-restart-log-action="clear" title="Очистить журнал" aria-label="Очистить журнал">{{ op_icon('clear') }}</button>
-              <button type="button" class="btn-secondary log-btn btn-icon" data-xk-restart-log-action="copy" title="Скопировать журнал" aria-label="Скопировать журнал">{{ op_icon('duplicate') }}</button>
-            </div>
-          </div>
-          <div class="restart-log-summary" data-xk-restart-log-summary="1" hidden></div>
-          <pre class="log-block" data-xk-restart-log="1"></pre>
+          {% include "panel/journal_card.html" %}
         </section>
 
       </div>

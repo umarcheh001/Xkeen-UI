@@ -139,10 +139,11 @@ def test_stage1_flat_effect_and_geometry_contract_is_static():
     # badge, device alias, the engine state badge of the core dialog and the
     # chips of the core source cards (architecture, risk, "installed"), and on
     # the Xray logs screen the stream state, the paused-lines count and the
-    # route share bar (approved with the redesign mockups, 22.10.2026). Keep
-    # this as an explicit allow-list so a new rounded component cannot
+    # route share bar (approved with the redesign mockups, 22.10.2026), and
+    # the output counter of the operations journal (mockups of 23.10.2026).
+    # Keep this as an explicit allow-list so a new rounded component cannot
     # silently reintroduce legacy visual language.
-    assert len(pill_blocks) == 9
+    assert len(pill_blocks) == 10
     assert ".fm-toggle-slider" in pill_blocks[0]
     assert ".xk-mihomo-connections-view-tab span" in pill_blocks[1]
     assert ".xk-mihomo-device-name" in pill_blocks[2]
@@ -152,6 +153,7 @@ def test_stage1_flat_effect_and_geometry_contract_is_static():
     assert "#view-xray-logs .xk-xlog-live" in pill_blocks[6]
     assert "#view-xray-logs .xk-xlog-badge" in pill_blocks[7]
     assert "#view-xray-logs .xk-xlog-bar" in pill_blocks[8]
+    assert ".xk-jr-row > .outn" in pill_blocks[9]
 
     assert ")::before," in css
     assert ")::after {" in css

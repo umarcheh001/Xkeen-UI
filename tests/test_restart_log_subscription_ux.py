@@ -18,16 +18,16 @@ def _read(rel_path: str) -> str:
 
 def test_restart_log_formats_subscription_refresh_entries_and_polls_for_updates():
     restart_log_src = _read("xkeen-ui/static/js/features/restart_log.js")
-    styles_src = _read("xkeen-ui/static/styles.css")
+    journal_src = _read("xkeen-ui/templates/panel/journal_card.html")
+    operator_css = _read("xkeen-ui/static/panel-operator.css")
 
     assert "const RESTART_LOG_POLL_MS = 15000;" in restart_log_src
     assert "'xray-subscription-refresh': {" in restart_log_src
     assert "'core-switch': {" in restart_log_src
     assert "'xray-preflight': {" in restart_log_src
+    assert "'xray-logs-enable': {" in restart_log_src
+    assert "label: 'Логи Xray'" in restart_log_src
     assert "parseRestartMeta" in restart_log_src
-    assert "цель: ${core}" in restart_log_src
-    assert "const RESTART_LOG_TITLE = 'Журнал операций Xkeen';" in restart_log_src
-    assert "LEGACY_RESTART_LOG_TITLE_RE" in restart_log_src
     assert "normalizeRestartLogChrome" in restart_log_src
     assert "fetchPreflightPayload" in restart_log_src
     assert "/api/operation-diagnostics/" in restart_log_src
@@ -35,10 +35,11 @@ def test_restart_log_formats_subscription_refresh_entries_and_polls_for_updates(
     assert "data-xk-restart-log-search" in restart_log_src
     assert "data-xk-restart-log-token" in restart_log_src
     assert "data-xk-restart-log-bottom" in restart_log_src
-    assert "data-xk-restart-log-action=\"fullscreen\"" in restart_log_src
-    assert "data-xk-restart-log-detail-toggle" in restart_log_src
+    assert "data-xk-restart-log-action=\"fullscreen\"" in journal_src
+    assert "data-xk-restart-log-group-toggle" in restart_log_src
     render_all_src = restart_log_src.split("function renderAll()", 1)[1].split("function ensurePolling()", 1)[0]
     assert "bindLogInteractions();" in render_all_src
+    assert "syncFilterCounts(groupJournalEntries(allEntries));" in render_all_src
     assert "data-xk-restart-log-preflight-ref" in restart_log_src
     assert "rememberXrayPreflightPayload" in restart_log_src
     assert "runtime_status" in restart_log_src
@@ -47,48 +48,29 @@ def test_restart_log_formats_subscription_refresh_entries_and_polls_for_updates(
     assert "toastNewSubscription" in restart_log_src
     assert "XRAY_BRACKET_LINE_RE" in restart_log_src
     assert "match[5] || match[6]" in restart_log_src
-    assert "buildRuntimeLogLineHtml" in restart_log_src
-    assert "restart-log-runtime-line" in restart_log_src
-    assert "restart-log-service-line" in restart_log_src
-    assert "restart-log-pill-subscription" in styles_src
-    assert "restart-log-pill-core" in styles_src
-    assert "restart-log-details-toggle" in styles_src
-    assert "restart-log-pill-preflight" in styles_src
-    assert "restart-log-preflight-open" in styles_src
-    assert "restart-log-filter-btn" in styles_src
-    assert "restart-log-search-input" in styles_src
-    assert "restart-log-bottom-btn" in styles_src
-    assert ".log-card.xk-restart-log-card .log-header-actions {" in styles_src
-    restart_toolbar_block = styles_src.split(".log-card.xk-restart-log-card .log-header-actions {", 1)[1].split("\n}", 1)[0]
-    assert "justify-content: flex-end;" in restart_toolbar_block
-    assert "flex-wrap: nowrap;" in restart_toolbar_block
-    assert ".log-card.xk-restart-log-card .log-header-actions > .restart-log-fullscreen-btn {" in styles_src
-    assert ".log-card.xk-restart-log-card .log-header-actions > .restart-log-search {" in styles_src
-    assert "restart-log-level-info" in styles_src
-    assert "restart-log-runtime-source" in styles_src
-    assert "grid-template-columns: max-content max-content minmax(0, max-content);" in styles_src
-    assert "box-sizing: border-box;" in styles_src
-    assert "scrollbar-color" in styles_src
-    assert ".log-card .restart-log-line.log-line-success" in styles_src
+    assert "function journalOutLineHtml(entry)" in restart_log_src
+    for selector in (".xk-jr-head", ".xk-jr-seg-btn.is-on", ".xk-jr-row", ".xk-jr-out", ".xk-jr-more", ".xk-jr-menu-item.is-danger"):
+        assert f"body.panel-page {selector}" in operator_css
+    assert "body.panel-page .xk-restart-log-card.is-fullscreen .xk-jr-box {" in operator_css
 
-
-def test_restart_log_details_toggle_resolves_panel_inside_clicked_log_container():
+def test_restart_log_folds_command_output_under_its_operation():
     restart_log_src = _read("xkeen-ui/static/js/features/restart_log.js")
 
-    assert "function getRestartLogScopeId(el)" in restart_log_src
-    assert "safeDomIdPart(scopeId)" in restart_log_src
-    assert "buildStructuredLineHtml(summary, entry, scopeId)" in restart_log_src
-
-    assert "function findRestartLogDetailsForToggle(button, root)" in restart_log_src
-    helper_src = restart_log_src.split("function findRestartLogDetailsForToggle(button, root)", 1)[1].split("function normalizeLineForTerminal", 1)[0]
-    assert "button.nextElementSibling" in helper_src
-    assert "root.querySelectorAll('.restart-log-details')" in helper_src
-    assert "root.contains(globalMatch)" in helper_src
+    # The panel writes the output of a command right before its result line:
+    # that output belongs to the next structured entry, and output with no
+    # result after it stays open as a group of its own.
+    group_src = restart_log_src.split("function groupJournalEntries(entries)", 1)[1].split("function groupHasError", 1)[0]
+    assert "groups.push({ key: entry.key, entry, summary: entry.summary, out: pending, live: false });" in group_src
+    assert "pending = [];" in group_src
+    assert "live: true" in group_src
+    assert "return group.live ? !RL._shutGroups.has(group.key) : RL._openGroups.has(group.key);" in restart_log_src
 
     bind_src = restart_log_src.split("function bindLogInteractions()", 1)[1].split("RL.reveal = function reveal", 1)[0]
-    assert "findRestartLogDetailsForToggle(button, el)" in bind_src
-    assert "document.getElementById(id)" not in bind_src
-
+    assert "closest('[data-xk-restart-log-group]')" in bind_src
+    assert "toggleRow(el, row);" in bind_src
+    assert "event.key !== 'Enter'" in bind_src
+    assert "copyJournalGroup(" in bind_src
+    assert "node && el.contains(node)" in bind_src
 
 def test_append_restart_log_broadcasts_appended_event(monkeypatch, tmp_path):
     from services import restart_log
@@ -167,19 +149,17 @@ def test_restart_log_visible_limit_is_applied_after_clash_filter(tmp_path):
 def test_restart_log_renders_summary_above_block():
     panel_src = _read("xkeen-ui/templates/panel.html")
     restart_log_src = _read("xkeen-ui/static/js/features/restart_log.js")
-    styles_src = _read("xkeen-ui/static/styles.css")
+    operator_css = _read("xkeen-ui/static/panel-operator.css")
 
     assert panel_src.count('data-xk-restart-log-summary="1"') == 5
     assert "buildRestartLogSummary" in restart_log_src
     assert "renderAllSummary" in restart_log_src
     assert "Последний перезапуск" in restart_log_src
-    assert "Активное ядро" in restart_log_src
-    assert "Всего ошибок" in restart_log_src
+    assert "label: 'Ядро'" in restart_log_src
+    assert "label: 'Ошибок'" in restart_log_src
     assert "formatSummaryTimestamp" in restart_log_src
-    assert ".restart-log-summary" in styles_src
-    assert ".restart-log-summary-part-success" in styles_src
-    assert ".restart-log-summary-part-error" in styles_src
-
+    assert "body.panel-page .xk-jr-sum .k-success b" in operator_css
+    assert "body.panel-page .xk-jr-sum .k-error b" in operator_css
 
 def test_restart_log_has_viewer_ux_without_xray_log_source_duplication():
     restart_log_src = _read("xkeen-ui/static/js/features/restart_log.js")
@@ -191,12 +171,12 @@ def test_restart_log_has_viewer_ux_without_xray_log_source_duplication():
     assert "shouldAutoScrollRestartLog" in restart_log_src
     assert "toggleRestartLogFullscreen" in restart_log_src
     assert "xk-restart-log-card" in panel_src
-    assert ".log-card.xk-restart-log-card.is-fullscreen .log-block" in styles_src
+    assert panel_src.count('{% include "panel/journal_card.html" %}') == 0
+    assert panel_src.count('class="xk-jr-box" data-xk-restart-log="1"') == 5
     assert ".log-card.xk-restart-log-card.is-fullscreen {" in styles_src
     assert "z-index: 10100;" in styles_src
     assert "isolation: isolate;" in styles_src
-    assert "error.log" not in restart_log_src.split("const RESTART_LOG_TITLE", 1)[1].split("const XRAY_TS_LINE_RE", 1)[0]
-
+    assert "error.log" not in restart_log_src.split("const RESTART_SOURCE_META", 1)[1].split("const XRAY_TS_LINE_RE", 1)[0]
 
 def test_restart_log_subscribes_to_events_ws_for_instant_refresh():
     restart_log_src = _read("xkeen-ui/static/js/features/restart_log.js")

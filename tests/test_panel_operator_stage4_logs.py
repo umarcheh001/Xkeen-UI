@@ -79,32 +79,26 @@ def test_logs_toolbar_distinguishes_screen_cleanup_and_file_deletion():
     assert "badge.innerHTML = iconHtml('terminal');" in runtime
 
 
-def test_restart_log_actions_are_icon_only_and_keep_descriptive_tooltips():
+def test_restart_log_header_matches_the_xray_logs_header():
     text = TEMPLATE
-    restart = RESTART_LOG.read_text(encoding="utf-8")
     journal_markup = "\n".join(
         part.split('</section>', 1)[0]
         for part in text.split('<section class="card log-card xk-restart-log-card')[1:]
     )
 
+    # One shared card on five screens: the "All / Errors" switch with counts,
+    # search, the "..." menu with the red cleanup apart, and fullscreen.
     assert journal_markup.count('data-xk-restart-log-filter="all"') == 5
     assert journal_markup.count('data-xk-restart-log-filter="errors"') == 5
-    assert journal_markup.count('data-xk-restart-log-action="refresh"') == 5
-    assert journal_markup.count('data-xk-restart-log-action="clear"') == 5
-    assert journal_markup.count('data-xk-restart-log-action="copy"') == 5
-    assert journal_markup.count('class="btn-secondary log-btn btn-icon restart-log-filter-btn"') == 10
-    assert journal_markup.count('class="btn-secondary log-btn btn-icon"') == 15
-    assert 'title="Показать все записи" aria-label="Показать все записи"' in journal_markup
-    assert 'title="Показать только ошибки" aria-label="Показать только ошибки"' in journal_markup
-    assert 'title="Обновить журнал" aria-label="Обновить журнал"' in journal_markup
-    assert 'title="Очистить журнал" aria-label="Очистить журнал"' in journal_markup
-    assert 'title="Скопировать журнал" aria-label="Скопировать журнал"' in journal_markup
-    assert '<span class="xk-action-label">Обновить</span>' not in journal_markup
-    assert '<span class="xk-action-label">Очистить</span>' not in journal_markup
-    assert '<span class="xk-action-label">Копировать</span>' not in journal_markup
-    assert "btn.className = 'btn-secondary log-btn btn-icon restart-log-filter-btn';" in restart
-    assert "btn.className = 'btn-secondary log-btn btn-icon';" in restart
-
+    assert journal_markup.count('role="radio" class="xk-jr-seg-btn') == 10
+    assert journal_markup.count('data-xk-restart-log-count=') == 10
+    assert journal_markup.count('data-xk-restart-log-search="1"') == 5
+    assert journal_markup.count('<details class="dt-log-menu xk-jr-menu">') == 5
+    assert journal_markup.count('class="xk-jr-menu-item" role="menuitem" data-xk-restart-log-action="refresh"') == 5
+    assert journal_markup.count('class="xk-jr-menu-item" role="menuitem" data-xk-restart-log-action="copy"') == 5
+    assert journal_markup.count('class="xk-jr-menu-item is-danger" role="menuitem" data-xk-restart-log-action="clear"') == 5
+    assert journal_markup.count('data-xk-restart-log-action="fullscreen" title="Полный экран" aria-label="Полный экран"') == 5
+    assert '<span>Очистить журнал</span>' in journal_markup
 
 def test_logs_operator_layer_unifies_filters_counters_details_and_states():
     css = CSS.read_text(encoding="utf-8")
@@ -199,11 +193,11 @@ def test_logs_runtime_renders_structured_counters_detail_focus_and_error_states(
         assert fragment in xray
 
     for fragment in (
-        "el.dataset.state = loadError ? 'error' : (html ? 'ready' : 'empty');",
-        'class="log-line restart-log-empty${loadError ? \' is-error\' : \'\'}"',
-        'class="restart-log-empty-title"',
-        'class="restart-log-empty-detail"',
-        "button.setAttribute('aria-expanded', expanded ? 'false' : 'true');",
+        "el.dataset.state = loadError ? 'error' : (shown.length ? 'ready' : 'empty');",
+        '<div class="xk-jr-empty is-error" role="alert"><b>Не удалось загрузить журнал</b>',
+        '<div class="xk-jr-empty" role="status">',
+        "aria-expanded=\"${open ? 'true' : 'false'}\"",
+        "if (el._jrHtml !== html) {",
     ):
         assert fragment in restart
 

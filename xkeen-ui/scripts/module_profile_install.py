@@ -154,6 +154,10 @@ def owner(path: str) -> str:
     if p.startswith("static/js/patches/"):
         # Loaded by a plain script tag of every page, whatever its name says.
         return "core"
+    if p == "static/js/features/xray_log_line_class.js":
+        # Shared by the Xray logs and the diagnostics in spite of the name,
+        # as in _PACKAGE_OWNER_OVERRIDES of the release builder.
+        return "core"
     if p.startswith("static/js/"):
         if any(token in p for token in ("monaco", "prettier", "diff_modal", "schema_quickfix", "schema_semantic")):
             return "editor-full"

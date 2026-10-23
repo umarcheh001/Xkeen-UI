@@ -10,6 +10,10 @@ const SNAPSHOT_MASKS = {
   commands: ['#cores-checked-at'],
   files: ['.fm-list', '.fm-path-input', '#fm-footer-status', '#fm-disabled-note'],
 };
+// The operations journal on five screens reads the shared restart.log of the
+// test server, which other specs write to: its counts, summary and rows differ
+// from run to run, the frame around them does not.
+const JOURNAL_MASKS = ['.xk-jr-seg', '.xk-jr-sum', '.xk-jr-box'];
 
 // Маска рисуется по фактическому боксу элемента, поэтому строка «проверено: HH:MM»
 // (она же «проверяем...», «проверка не выполнена» или пустая) меняла ширину маски
@@ -23,6 +27,18 @@ const STABLE_MASK_GEOMETRY = `
     min-height: 16px !important;
     overflow: hidden !important;
     white-space: nowrap !important;
+  }
+  .xk-jr-seg {
+    width: 150px !important;
+  }
+  .xk-jr-sum {
+    display: flex !important;
+    height: 18px !important;
+    overflow: hidden !important;
+  }
+  .xk-jr-box {
+    height: 200px !important;
+    max-height: none !important;
   }
 `;
 
@@ -191,7 +207,7 @@ test.describe('Operator Console I5 accessibility and responsive contract', () =>
         animations: 'disabled',
         caret: 'hide',
         maxDiffPixels: 300,
-        mask: (SNAPSHOT_MASKS[view] || []).map((selector) => page.locator(`#view-${view} ${selector}`)),
+        mask: [...(SNAPSHOT_MASKS[view] || []), ...JOURNAL_MASKS].map((selector) => page.locator(`#view-${view} ${selector}`)),
       });
     }
 

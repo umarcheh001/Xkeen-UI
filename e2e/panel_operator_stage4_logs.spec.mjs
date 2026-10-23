@@ -41,7 +41,7 @@ async function mockLogs(page, options = {}) {
     await route.fulfill({ json: { mode: 'full', cursor: 'stage4-logs', lines } });
   });
   await page.route('**/api/restart-log', async (route) => {
-    await route.fulfill({ json: { lines: restartLines } });
+    await route.fulfill({ json: { lines: options.restartLines || restartLines } });
   });
   await page.route('**/api/ws-token', async (route) => {
     await route.fulfill({ status: 503, json: { ok: false } });
@@ -72,8 +72,8 @@ async function readLogsGeometry(page) {
     const head = document.querySelector('.xk-xlog-head');
     const search = document.querySelector('.xk-xlog-search input');
     const output = document.querySelector('#xray-log-output');
-    const detail = Array.from(document.querySelectorAll('.restart-log-details')).at(-1) || null;
-    const detailToggle = Array.from(document.querySelectorAll('.restart-log-details-toggle')).at(-1) || null;
+    const detail = Array.from(document.querySelectorAll('.xk-jr-more')).at(-1) || null;
+    const detailToggle = Array.from(document.querySelectorAll('.xk-jr-row > .chev')).at(-1) || null;
     const state = document.querySelector('#xray-log-status');
     return {
       headDisplay: head ? getComputedStyle(head).display : '',
@@ -594,6 +594,57 @@ test.describe('Operator Console Stage 4 logs', () => {
     await expect(page.locator('#xray-log-clear-files-btn use')).toHaveAttribute('href', /#xk-trash$/);
   });
 
+  test('the journal folds command output under its operation and filters by errors and source', async ({ page }) => {
+    const journal = [
+      '[2026-07-29 09:12:04] source=xray-preflight result=FAIL file=04_outbounds.json phase=validation returncode=23\n',
+      'Прокси-клиент остановлен\n',
+      'time="2026-07-29T06:02:58.29Z" level=info msg="Initial configuration complete, total time: 10ms"\n',
+      '[2026-07-29 09:13:00] source=core-switch result=OK core=mihomo previous=xray duration_ms=5021\n',
+      '[2026-07-29 09:14:00] source=xray-logs-enable result=OK loglevel=info xray_restarted=True\n',
+      '$ xkeen -status\n',
+      'Прокси-клиент запущен\n',
+    ];
+    await openLogs(page, 'dark', { width: 1440, height: 900 }, { restartLines: journal });
+
+    const card = page.locator('#view-xray-logs .xk-restart-log-card');
+    const rowsOf = card.locator('.xk-jr-row');
+    // Three operations and the output of a command with no result yet.
+    await expect(rowsOf).toHaveCount(4);
+    await expect(card.locator('[data-xk-restart-log-count="all"]')).toHaveText('4');
+    await expect(card.locator('[data-xk-restart-log-count="errors"]')).toHaveText('1');
+    const core = rowsOf.filter({ hasText: 'Ядро Xkeen' });
+    await expect(core.locator('.msg')).toContainText('переключено на Mihomo, xkeen перезапущен');
+    await expect(core.locator('.outn')).toHaveText('вывод · 2');
+    await expect(core.locator('.dur')).toHaveText('5.0с');
+    await expect(rowsOf.filter({ hasText: 'Логи Xray' }).locator('.msg')).toContainText('запись включена, Xray перезапущен');
+    // The output with no result line stays open at the end.
+    await expect(rowsOf.last()).toHaveClass(/is-open/);
+    await expect(card.locator('.xk-jr-out').last()).toContainText('Прокси-клиент запущен');
+
+    await core.click();
+    await expect(core).toHaveClass(/is-open/);
+    const out = card.locator('.xk-jr-row.is-open + .xk-jr-out').first();
+    await expect(out.locator('.xk-jr-oline')).toHaveCount(2);
+    await expect(out.locator('.xk-jr-oline').first()).toHaveClass(/k-error/);
+    await expect(card.locator('.xk-jr-more dl').first()).toContainText('Предыдущее ядро');
+
+    await card.locator('[data-xk-restart-log-filter="errors"]').click();
+    await expect(card.locator('[data-xk-restart-log-filter="errors"]')).toHaveAttribute('aria-checked', 'true');
+    await expect(rowsOf).toHaveCount(1);
+    await expect(rowsOf.first()).toHaveClass(/k-err/);
+    await card.locator('[data-xk-restart-log-filter="all"]').click();
+
+    await rowsOf.filter({ hasText: 'Логи Xray' }).locator('.xk-jr-src').click();
+    await expect(card.locator('[data-xk-restart-log-search]')).toHaveValue('xray-logs-enable');
+    await expect(rowsOf).toHaveCount(1);
+
+    // The row is one control: Enter opens it and the focus stays on it.
+    await rowsOf.first().focus();
+    await page.keyboard.press('Enter');
+    await expect(rowsOf.first()).toHaveClass(/is-open/);
+    await expect(rowsOf.first()).toBeFocused();
+  });
+
   test('the logs card and the operations journal share edges and padding', async ({ page }) => {
     await openLogs(page, 'dark', { width: 1440, height: 900 });
     const boxes = await page.evaluate(() => [
@@ -611,18 +662,18 @@ test.describe('Operator Console Stage 4 logs', () => {
     test(`header, output and journal details share one contract in ${theme}`, async ({ page }) => {
       await openLogs(page, theme, { width: 1440, height: 900 });
 
-      const toggle = page.locator('.restart-log-details-toggle').last();
+      const toggle = page.locator('#view-xray-logs .xk-jr-row').last();
       await expect(toggle).toHaveAttribute('aria-expanded', 'false');
       await toggle.click();
       await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-      await expect(page.locator('.restart-log-details').last()).toBeVisible();
+      await expect(page.locator('#view-xray-logs .xk-jr-more').last()).toBeVisible();
 
       const geometry = await readLogsGeometry(page);
       expect(geometry.headDisplay).toBe('flex');
       expect(Math.round(geometry.searchHeight)).toBe(32);
       expect(geometry.outputHeight).toBeGreaterThanOrEqual(300);
       expect(geometry.detailDisplay).toBe('grid');
-      expect(geometry.detailToggleRadius).toBe('4px');
+      expect(geometry.detailToggleRadius).toBe('5px');
       expect(geometry.stateBorderLeft).toBe('2px');
       expect(geometry.viewOverflow).toBeLessThanOrEqual(1);
       expect(geometry.pageOverflow).toBeLessThanOrEqual(1);
@@ -657,10 +708,12 @@ test.describe('Operator Console Stage 4 logs', () => {
     await expect(page.locator('#xray-log-status')).toHaveAttribute('data-tone', 'error');
     await expect(page.locator('#xray-log-output [data-empty-state="title"]')).toContainText('Не удалось получить строки лога');
 
+    await page.locator('.xk-xray-logs-log-card .xk-jr-menu > summary').click();
     await page.locator('.xk-xray-logs-log-card [data-xk-restart-log-action="refresh"]').click();
+    await expect(page.locator('.xk-xray-logs-log-card .xk-jr-menu')).not.toHaveAttribute('open', '');
     const restart = page.locator('.xk-xray-logs-log-card [data-xk-restart-log="1"]');
     await expect(restart).toHaveAttribute('data-state', 'error');
-    await expect(restart.locator('.restart-log-empty.is-error')).toContainText('Не удалось загрузить журнал');
+    await expect(restart.locator('.xk-jr-empty.is-error')).toContainText('Не удалось загрузить журнал');
   });
 
   test('mobile keeps the table readable without page overflow', async ({ page }) => {

@@ -1,0 +1,26 @@
+{% from "panel/macros.html" import op_icon %}
+<div class="xk-jr-head">
+  <h2 class="xk-jr-title">Журнал операций Xkeen</h2>
+  <div class="xk-jr-seg" role="radiogroup" aria-label="Какие записи показывать">
+    <button type="button" role="radio" class="xk-jr-seg-btn is-on" data-xk-restart-log-filter="all" aria-checked="true" title="Показать все записи">Все<span class="n" data-xk-restart-log-count="all"></span></button>
+    <button type="button" role="radio" class="xk-jr-seg-btn" data-xk-restart-log-filter="errors" aria-checked="false" title="Показать только ошибки">Ошибки<span class="n" data-xk-restart-log-count="errors"></span></button>
+  </div>
+  <span class="xk-jr-spacer"></span>
+  <label class="xk-jr-search">
+    {{ op_icon('search') }}
+    <input type="search" data-xk-restart-log-search="1" placeholder="Поиск: источник, файл, текст…" aria-label="Поиск по журналу операций">
+    <button type="button" class="xk-jr-search-clear" data-xk-restart-log-search-clear="1" title="Очистить поиск" aria-label="Очистить поиск" hidden>{{ op_icon('close') }}</button>
+  </label>
+  <details class="dt-log-menu xk-jr-menu">
+    <summary class="btn-secondary xk-jr-icon-btn" title="Ещё" aria-label="Ещё">{{ op_icon('more') }}</summary>
+    <div class="dt-log-menu-panel xk-jr-menu-panel" role="menu" aria-label="Действия с журналом">
+      <button type="button" class="xk-jr-menu-item" role="menuitem" data-xk-restart-log-action="refresh" title="Перечитать журнал с роутера">{{ op_icon('refresh') }}<span>Обновить</span></button>
+      <button type="button" class="xk-jr-menu-item" role="menuitem" data-xk-restart-log-action="copy" title="Скопировать весь журнал текстом">{{ op_icon('duplicate') }}<span>Копировать журнал</span></button>
+      <div class="xk-jr-menu-sep" role="separator"></div>
+      <button type="button" class="xk-jr-menu-item is-danger" role="menuitem" data-xk-restart-log-action="clear" title="Удалить все записи журнала на роутере">{{ op_icon('clear') }}<span>Очистить журнал</span></button>
+    </div>
+  </details>
+  <button type="button" class="btn-secondary xk-jr-icon-btn" data-xk-restart-log-action="fullscreen" title="Полный экран" aria-label="Полный экран">{{ op_icon('fullscreen') }}</button>
+</div>
+<div class="xk-jr-sum" data-xk-restart-log-summary="1" hidden></div>
+<div class="xk-jr-box" data-xk-restart-log="1" tabindex="0" role="log" aria-label="Записи журнала операций"></div>

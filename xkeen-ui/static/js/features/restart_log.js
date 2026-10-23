@@ -1,4 +1,3 @@
-import { getXrayLogLineClass } from './xray_log_line_class.js';
 import { ansiToXkeenHtml, escapeXkeenHtml, getXkeenCommandJobApi, getXkeenUiApi, syncXkeenBodyScrollLock, toastXkeen } from './xkeen_runtime.js';
 import { iconHtml } from '../ui/operator_icons.js';
 
@@ -19,11 +18,12 @@ let restartLogModuleApi = null;
   RL._preflightPayloads = RL._preflightPayloads instanceof Map ? RL._preflightPayloads : new Map();
   RL._autoScrollByScope = RL._autoScrollByScope instanceof Map ? RL._autoScrollByScope : new Map();
   RL._fullscreenCard = RL._fullscreenCard && RL._fullscreenCard.nodeType === 1 ? RL._fullscreenCard : null;
+  // Rows the owner opened; output with no result line is open until closed.
+  RL._openGroups = RL._openGroups instanceof Set ? RL._openGroups : new Set();
+  RL._shutGroups = RL._shutGroups instanceof Set ? RL._shutGroups : new Set();
   let restartLogScopeSeq = 0;
 
   const RESTART_LOG_POLL_MS = 15000;
-  const RESTART_LOG_TITLE = 'Журнал операций Xkeen';
-  const LEGACY_RESTART_LOG_TITLE_RE = /^журнал\s+перезапуска$/i;
   const PREFLIGHT_PAYLOAD_STORAGE_PREFIX = 'xkeen.restartLog.preflight.';
   const PREFLIGHT_PAYLOAD_INDEX_KEY = 'xkeen.restartLog.preflight.index';
   const PREFLIGHT_PAYLOAD_LIMIT = 8;
@@ -41,6 +41,9 @@ let restartLogModuleApi = null;
     timed_out: 'Таймаут сработал',
     preflight_ref: 'Диагностика',
     summary: 'Причина',
+    loglevel: 'Уровень',
+    xray_restarted: 'Xray перезапущен',
+    detail: 'Итог',
   });
   const RESTART_DETAIL_ORDER = Object.freeze([
     'file',
@@ -239,6 +242,18 @@ let restartLogModuleApi = null;
       failureText: 'конфиг отклонён, xkeen не перезапускался',
       bucket: 'preflight',
     },
+    'xray-logs-enable': {
+      label: 'Логи Xray',
+      successText: 'запись включена, Xray перезапущен',
+      failureText: 'запись не включена',
+      bucket: 'service',
+    },
+    'xray-logs-disable': {
+      label: 'Логи Xray',
+      successText: 'запись выключена, Xray перезапущен',
+      failureText: 'запись не выключена',
+      bucket: 'service',
+    },
   });
 
   const XRAY_TS_LINE_RE = /^(\d{4})\/(\d{2})\/(\d{2})\s+(\d{2}:\d{2}:\d{2}(?:\.\d+)?)\s*(?:(?:\[([^\]]+)\])|((?:INFO|WARN|WARNING|ERROR|ERRO|FATA|DEBUG)))?\s*(.*)$/i;
@@ -353,7 +368,7 @@ let restartLogModuleApi = null;
     if (!rawValue) return '';
     if (rawKey === 'duration_ms') return formatDurationMs(rawValue);
     if (rawKey === 'timeout_s') return `${rawValue}с`;
-    if (rawKey === 'timed_out') return formatBooleanValue(rawValue);
+    if (rawKey === 'timed_out' || rawKey === 'xray_restarted') return formatBooleanValue(rawValue);
     if (rawKey === 'core' || rawKey === 'previous' || rawKey === 'runtime_core') {
       return humanCoreName(rawValue);
     }
@@ -387,6 +402,10 @@ let restartLogModuleApi = null;
 
   function buildRestartSummaryMessage(source, ok, baseMessage, details) {
     const message = String(baseMessage || '');
+    if ((source === 'xray-logs-enable' || source === 'xray-logs-disable') && ok
+      && formatBooleanValue(details && details.xray_restarted) === 'нет') {
+      return message.replace(/, Xray перезапущен$/, '');
+    }
     if (source === 'xray-preflight') {
       return ok ? message : 'конфиг отклонён preflight-проверкой';
     }
@@ -686,19 +705,6 @@ let restartLogModuleApi = null;
     return false;
   }
 
-  function stableHash(text) {
-    const raw = String(text || '');
-    let hash = 0;
-    for (let i = 0; i < raw.length; i += 1) {
-      hash = ((hash << 5) - hash + raw.charCodeAt(i)) | 0;
-    }
-    return Math.abs(hash);
-  }
-
-  function safeDomIdPart(value) {
-    return String(value || 'root').replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'root';
-  }
-
   function getRestartLogScopeId(el) {
     if (!el) return 'root';
     try {
@@ -771,120 +777,184 @@ let restartLogModuleApi = null;
     getLogEls().forEach((el) => updateRestartLogScrollButton(el));
   }
 
-  function buildRestartDetailRows(summary) {
-    if (!summary) return [];
-    const details = summary.details && typeof summary.details === 'object' ? summary.details : {};
-    const keys = [];
-    RESTART_DETAIL_ORDER.forEach((key) => {
-      if (Object.prototype.hasOwnProperty.call(details, key)) keys.push(key);
+  // ---------- Journal rows ----------
+  // The panel writes the output of a command (xkeen, the core) right before
+  // the result line of the same operation, so that output folds under it.
+  // Output with no result line after it is a command still running or one
+  // that reports nothing: it stays open at the end of the journal.
+
+  const MONTHS_GENITIVE = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+
+  function stripAnsi(text) {
+    return String(text || '').replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
+  }
+
+  function groupJournalEntries(entries) {
+    const groups = [];
+    let pending = [];
+    (Array.isArray(entries) ? entries : []).forEach((entry) => {
+      if (!entry) return;
+      if (entry.summary) {
+        groups.push({ key: entry.key, entry, summary: entry.summary, out: pending, live: false });
+        pending = [];
+      } else if (String(entry.raw || '').trim()) {
+        pending.push(entry);
+      }
     });
+    if (pending.length) {
+      groups.push({ key: `out@@${pending[0].key}`, entry: null, summary: null, out: pending, live: true });
+    }
+    return groups;
+  }
+
+  function groupHasError(group) {
+    if (!group) return false;
+    if (group.summary) return !group.summary.ok;
+    return group.out.some((entry) => rawLineLooksLikeError(entry.raw));
+  }
+
+  function groupMatchesFilter(group) {
+    if (RL._filter === 'errors' && !groupHasError(group)) return false;
+    if (!normalizeRestartLogSearchQuery(RL._query)) return true;
+    if (group.entry && entryMatchesSearch(group.entry)) return true;
+    return group.out.some((entry) => entryMatchesSearch(entry));
+  }
+
+  function isGroupOpen(group) {
+    return group.live ? !RL._shutGroups.has(group.key) : RL._openGroups.has(group.key);
+  }
+
+  function toggleGroup(key, live) {
+    if (!key) return;
+    const set = live ? RL._shutGroups : RL._openGroups;
+    if (set.has(key)) set.delete(key);
+    else set.add(key);
+  }
+
+  // "10:40:12" from the panel's, Xray's and Mihomo's stamps; Mihomo writes
+  // UTC, shown here in the router's local time like the rest.
+  function clockOf(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    const utc = raw.match(/^(\d{4})[/-](\d{2})[/-](\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?Z$/);
+    if (utc) {
+      const date = new Date(Date.UTC(+utc[1], +utc[2] - 1, +utc[3], +utc[4], +utc[5], +utc[6]));
+      return [date.getHours(), date.getMinutes(), date.getSeconds()].map((n) => String(n).padStart(2, '0')).join(':');
+    }
+    const match = raw.match(/(\d{2}:\d{2}:\d{2})/);
+    return match ? match[1] : '';
+  }
+
+  function journalDayLabel(day) {
+    const match = String(day || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return String(day || '');
+    const date = new Date(+match[1], +match[2] - 1, +match[3]);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const name = `${+match[3]} ${MONTHS_GENITIVE[date.getMonth()]}${date.getFullYear() !== today.getFullYear() ? ` ${date.getFullYear()}` : ''}`;
+    const daysAgo = Math.round((today.getTime() - date.getTime()) / 86400000);
+    if (daysAgo === 0) return `Сегодня, ${name}`;
+    if (daysAgo === 1) return `Вчера, ${name}`;
+    return name;
+  }
+
+  // The one detail worth reading in the row itself; the rest is in details.
+  function journalRowMeta(summary) {
+    const details = summary.details && typeof summary.details === 'object' ? summary.details : {};
+    const parts = [];
+    if (details.file) parts.push(details.file);
+    if (summary.source === 'core-switch') {
+      const core = humanCoreName(details.core);
+      const previous = humanCoreName(details.previous);
+      if (previous && previous !== core) parts.push(`было: ${previous}`);
+    }
+    if (details.loglevel) parts.push(`уровень: ${details.loglevel}`);
+    if (!summary.ok && details.phase) parts.push(`этап: ${details.phase}`);
+    if (!summary.ok && details.returncode) parts.push(`код: ${details.returncode}`);
+    if (!parts.length && !RESTART_SOURCE_META[summary.source]) parts.push(summary.source);
+    return parts.join(' · ');
+  }
+
+  function journalDetailRows(summary) {
+    const details = summary.details && typeof summary.details === 'object' ? summary.details : {};
+    const keys = RESTART_DETAIL_ORDER.filter((key) => Object.prototype.hasOwnProperty.call(details, key));
     Object.keys(details).sort().forEach((key) => {
       if (keys.indexOf(key) === -1) keys.push(key);
     });
-
-    const rows = [
-      ['Время', summary.ts],
-      ['Источник', summary.source],
-      ['Результат', summary.ok ? 'OK' : 'FAIL'],
-    ];
-
+    const rows = [];
     keys.forEach((key) => {
+      if (key === 'preflight_ref') return;
       const value = formatRestartDetailValue(key, details[key]);
-      if (!value) return;
-      rows.push([formatRestartDetailLabel(key), value]);
+      if (value) rows.push([formatRestartDetailLabel(key), value]);
     });
-
+    rows.push(['Операция', summary.source]);
+    if (summary.ts) rows.push(['Время', summary.ts]);
     return rows;
   }
 
-  function buildStructuredDetailsHtml(summary, entry, scopeId) {
-    const rows = buildRestartDetailRows(summary);
-    const detailsCount = summary && summary.details && typeof summary.details === 'object'
-      ? Object.keys(summary.details).length
-      : 0;
-    if (!detailsCount && summary && RESTART_SOURCE_META[summary.source]) return '';
-
-    const scope = safeDomIdPart(scopeId);
-    const id = `restart-log-detail-${scope}-${entry && typeof entry.index === 'number' ? entry.index : 0}-${stableHash(entry && entry.key)}`;
-    const rowsHtml = rows.map(([label, value]) => [
-      '<span class="restart-log-detail-row">',
-      `<span class="restart-log-detail-label">${safeEscapeHtml(label)}</span>`,
-      `<span class="restart-log-detail-value">${safeEscapeHtml(value)}</span>`,
-      '</span>',
-    ].join('')).join('');
-    const preflightRef = summary && summary.source === 'xray-preflight'
-      ? normalizePreflightRef(summary.details && summary.details.preflight_ref)
-      : '';
-    const preflightActionHtml = preflightRef
-      ? `<button type="button" class="restart-log-preflight-open" data-xk-restart-log-preflight-ref="${safeEscapeHtml(preflightRef)}">Открыть разбор ошибки</button>`
-      : '';
-
-    return [
-      `<button type="button" class="restart-log-details-toggle" data-xk-restart-log-detail-toggle="1" aria-expanded="false" aria-controls="${id}">Детали</button>`,
-      `<span class="restart-log-details" id="${id}" hidden>${rowsHtml}${preflightActionHtml}</span>`,
-    ].join('');
+  function journalOutLineHtml(entry) {
+    const raw = String(entry && entry.raw ? entry.raw : '');
+    const parsed = parseRuntimeLogLine(raw) || parseRuntimeLogLine(normalizeLineForTerminal(raw));
+    if (parsed) {
+      const parts = splitRuntimeMessage(parsed.message);
+      const text = `${parts.source ? `<b>${safeEscapeHtml(parts.source)}:</b> ` : ''}${safeEscapeHtml(parts.body)}`;
+      return `<div class="xk-jr-oline k-${parsed.kind}"><i>${safeEscapeHtml(clockOf(parsed.ts))}</i><span>${text}</span><em>${safeEscapeHtml(parsed.level)}</em></div>`;
+    }
+    const kind = serviceStatusKind(raw) || (rawLineLooksLikeError(raw) ? 'error' : 'plain');
+    return `<div class="xk-jr-oline k-${kind}"><i></i><span>${ansiToHtml(raw.trim())}</span><em></em></div>`;
   }
 
-  function buildStructuredLineHtml(summary, entry, scopeId) {
-    if (!summary) return '';
-
-    const bucket = String(summary.bucket || 'generic').trim().toLowerCase() || 'generic';
-    const tsHtml = safeEscapeHtml(`[${summary.ts}]`);
-    const labelHtml = safeEscapeHtml(summary.label || 'Событие');
-    const messageHtml = safeEscapeHtml(summary.message || '');
-    const rawSourceHtml = summary.rawSourceText ? safeEscapeHtml(summary.rawSourceText) : '';
-    const detailsHtml = buildStructuredDetailsHtml(summary, entry || null, scopeId);
-
-    return [
-      '<span class="restart-log-entry-wrap">',
-      '<span class="restart-log-entry">',
-      `<span class="log-ts restart-log-ts">${tsHtml}</span>`,
-      `<button type="button" class="restart-log-pill restart-log-pill-${bucket} restart-log-token" data-xk-restart-log-token="${safeEscapeHtml(summary.source || summary.label || bucket)}" title="Фильтр: ${labelHtml}">${labelHtml}</button>`,
-      `<span class="restart-log-message">${messageHtml}</span>`,
-      rawSourceHtml ? `<span class="restart-log-meta">${rawSourceHtml}</span>` : '',
-      '</span>',
-      detailsHtml,
-      '</span>',
-    ].join('');
+  function journalGroupText(group) {
+    const lines = group.out.map((entry) => normalizeLineForTerminal(stripAnsi(entry.raw)));
+    if (group.summary) lines.push(group.summary.copyText);
+    return lines.join('\n');
   }
 
-  function findRestartLogDetailsForToggle(button, root) {
-    if (!button) return null;
-    const isPanel = (node) => !!(node && node.classList && node.classList.contains('restart-log-details'));
+  function journalGroupHtml(group, open) {
+    const esc = safeEscapeHtml;
+    const summary = group.summary;
+    const kind = summary ? (summary.ok ? 'ok' : 'err') : (groupHasError(group) ? 'err' : 'run');
+    const first = group.out[0] || null;
+    const firstParsed = first ? parseRuntimeLogLine(first.raw) : null;
+    const time = summary ? clockOf(summary.ts) : clockOf(firstParsed && firstParsed.ts);
+    const label = summary ? summary.label : 'Вывод';
+    const token = summary ? (summary.source || summary.label) : '';
+    const message = summary ? summary.message : stripAnsi(first ? first.raw : '').trim();
+    const meta = summary
+      ? journalRowMeta(summary)
+      : (group.out.length > 1 ? `строк: ${group.out.length}` : '');
+    const duration = summary ? formatDurationMs(summary.details && summary.details.duration_ms) : '';
+    const count = group.out.length;
+    // The row is the one control: the source filters on a click with the
+    // mouse, and "Только «…»" in the details does the same from the keyboard.
+    const source = token
+      ? `<span class="xk-jr-src" data-xk-restart-log-token="${esc(token)}" title="Показать только «${esc(label)}»">${esc(label)}</span>`
+      : `<span class="xk-jr-src">${esc(label)}</span>`;
+    let html = `<div class="xk-jr-row k-${kind}${open ? ' is-open' : ''}" role="button" tabindex="0" aria-expanded="${open ? 'true' : 'false'}" data-xk-restart-log-group="${esc(group.key)}"${group.live ? ' data-live="1"' : ''}>`
+      + `<span class="lv"></span><span class="ts">${esc(time)}</span>${source}`
+      + `<span class="msg">${esc(message)}${meta ? `<small>${esc(meta)}</small>` : ''}</span>`
+      + `<span class="outn">${count && summary ? `вывод · ${count}` : ''}</span>`
+      + `<span class="dur">${esc(duration)}</span>`
+      + `<span class="chev" data-xk-restart-log-group-toggle="1" aria-hidden="true">${iconHtml('chevron-down')}</span>`
+      + '</div>';
+    if (!open) return html;
 
-    try {
-      const next = button.nextElementSibling;
-      if (isPanel(next)) return next;
-    } catch (error) {}
-
-    const id = String(button.getAttribute('aria-controls') || '').trim();
-
-    try {
-      const wrap = button.closest('.restart-log-entry-wrap');
-      if (wrap && typeof wrap.querySelectorAll === 'function') {
-        const panels = Array.from(wrap.querySelectorAll('.restart-log-details'));
-        const match = id ? panels.find((node) => node && node.id === id) : panels[0];
-        if (isPanel(match)) return match;
-      }
-    } catch (error) {}
-
-    try {
-      if (id && root && typeof root.querySelectorAll === 'function') {
-        const panels = Array.from(root.querySelectorAll('.restart-log-details'));
-        const match = panels.find((node) => node && node.id === id);
-        if (isPanel(match)) return match;
-      }
-    } catch (error) {}
-
-    try {
-      if (id) {
-        const doc = button.ownerDocument || document;
-        const globalMatch = doc.getElementById(id);
-        if (isPanel(globalMatch) && (!root || root.contains(globalMatch))) return globalMatch;
-      }
-    } catch (error) {}
-
-    return null;
+    if (count) html += `<div class="xk-jr-out">${group.out.map(journalOutLineHtml).join('')}</div>`;
+    const acts = [];
+    let rows = '';
+    if (summary) {
+      rows = journalDetailRows(summary).map(([name, value]) => `<div><dt>${esc(name)}</dt><dd>${esc(value)}</dd></div>`).join('');
+      const ref = summary.source === 'xray-preflight'
+        ? normalizePreflightRef(summary.details && summary.details.preflight_ref)
+        : '';
+      if (ref) acts.push(`<button type="button" class="xk-jr-btn is-danger" data-xk-restart-log-preflight-ref="${esc(ref)}">Открыть разбор ошибки</button>`);
+      acts.push(`<button type="button" class="xk-jr-btn" data-xk-restart-log-copy-group="${esc(group.key)}">Копировать запись</button>`);
+      acts.push(`<button type="button" class="xk-jr-btn" data-xk-restart-log-token="${esc(token)}">Только «${esc(label)}»</button>`);
+    } else {
+      acts.push(`<button type="button" class="xk-jr-btn" data-xk-restart-log-copy-group="${esc(group.key)}">Копировать вывод</button>`);
+    }
+    html += `<div class="xk-jr-more">${rows ? `<dl>${rows}</dl>` : ''}<div class="xk-jr-acts">${acts.join('')}</div></div>`;
+    return html;
   }
 
   function normalizeLineForTerminal(line) {
@@ -983,27 +1053,6 @@ let restartLogModuleApi = null;
     };
   }
 
-  function buildRuntimeLogLineHtml(line) {
-    const parsed = parseRuntimeLogLine(line);
-    if (!parsed) return '';
-    const parts = splitRuntimeMessage(parsed.message);
-    const sourceHtml = parts.source
-      ? `<span class="restart-log-runtime-source">${safeEscapeHtml(parts.source)}:</span>`
-      : '';
-    const bodyHtml = parts.body ? safeEscapeHtml(parts.body) : '';
-    return [
-      `<span class="restart-log-runtime-line restart-log-runtime-${parsed.kind}">`,
-      `<span class="restart-log-runtime-ts">${safeEscapeHtml(parsed.ts)}</span>`,
-      `<button type="button" class="restart-log-level restart-log-level-${parsed.kind} restart-log-token" data-xk-restart-log-token="${safeEscapeHtml(parsed.level)}" title="Фильтр: ${safeEscapeHtml(parsed.level)}">${safeEscapeHtml(parsed.level)}</button>`,
-      '<span class="restart-log-runtime-message">',
-      sourceHtml,
-      sourceHtml && bodyHtml ? ' ' : '',
-      bodyHtml,
-      '</span>',
-      '</span>',
-    ].join('');
-  }
-
   function serviceStatusKind(line) {
     const lower = String(line || '').toLowerCase();
     if (!lower.trim()) return '';
@@ -1033,29 +1082,6 @@ let restartLogModuleApi = null;
     return '';
   }
 
-  function buildServiceStatusLineHtml(line) {
-    const raw = String(line || '').trim();
-    const kind = serviceStatusKind(raw);
-    if (!raw || !kind) return '';
-    return [
-      `<span class="restart-log-service-line restart-log-service-${kind}">`,
-      '<span class="restart-log-service-spacer" aria-hidden="true"></span>',
-      `<span class="restart-log-service-message">${ansiToHtml(raw)}</span>`,
-      '</span>',
-    ].join('');
-  }
-
-  function buildPlainLogLineHtml(rawLine, normalizedLine) {
-    const raw = String(rawLine || '');
-    const normalized = String(normalizedLine || raw);
-    return (
-      buildRuntimeLogLineHtml(raw) ||
-      buildRuntimeLogLineHtml(normalized) ||
-      buildServiceStatusLineHtml(raw) ||
-      `<span class="restart-log-raw-line">${ansiToHtml(normalized)}</span>`
-    );
-  }
-
   function normalizeTextForTerminal(text) {
     const raw = String(text || '');
     if (!raw) return raw;
@@ -1078,27 +1104,26 @@ let restartLogModuleApi = null;
     );
   }
 
-  function entryMatchesCurrentFilter(entry) {
-    if (!entry) return false;
-    if (!entryMatchesSearch(entry)) return false;
-    if (RL._filter !== 'errors') return true;
-    if (entry.summary) return !entry.summary.ok;
-    return rawLineLooksLikeError(entry.raw);
-  }
-
-  function filterRenderedEntries(entries) {
-    const list = Array.isArray(entries) ? entries : [];
-    return list.filter(entryMatchesCurrentFilter);
-  }
-
   function syncFilterButtons() {
     const active = RL._filter === 'errors' ? 'errors' : 'all';
     try {
       document.querySelectorAll('[data-xk-restart-log-filter]').forEach((btn) => {
         const value = String(btn.getAttribute('data-xk-restart-log-filter') || '').trim();
-        const pressed = value === active;
-        btn.classList.toggle('is-active', pressed);
-        btn.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+        const on = value === active;
+        btn.classList.toggle('is-on', on);
+        btn.setAttribute('aria-checked', on ? 'true' : 'false');
+      });
+    } catch (error) {}
+  }
+
+  function syncFilterCounts(groups) {
+    const list = Array.isArray(groups) ? groups : [];
+    const counts = { all: list.length, errors: list.filter(groupHasError).length };
+    try {
+      document.querySelectorAll('[data-xk-restart-log-count]').forEach((node) => {
+        const value = counts[String(node.getAttribute('data-xk-restart-log-count') || '')];
+        const text = value ? String(value) : '';
+        if (node.textContent !== text) node.textContent = text;
       });
     } catch (error) {}
   }
@@ -1196,10 +1221,10 @@ let restartLogModuleApi = null;
       });
     }
     if (lastCore) {
-      parts.push({ label: 'Активное ядро', value: lastCore, kind: 'info' });
+      parts.push({ label: 'Ядро', value: lastCore, kind: 'info' });
     }
     parts.push({
-      label: 'Всего ошибок',
+      label: 'Ошибок',
       value: String(errorCount),
       kind: errorCount ? 'error' : 'muted',
     });
@@ -1216,19 +1241,12 @@ let restartLogModuleApi = null;
     }
     const html = summary.parts
       .map((part) => {
-        const kind = String(part && part.kind ? part.kind : '').trim();
-        const cls = `restart-log-summary-part${kind ? ' restart-log-summary-part-' + kind : ''}`;
-        return [
-          `<span class="${cls}">`,
-          `<span class="restart-log-summary-label">${safeEscapeHtml(part.label)}:</span>`,
-          ' ',
-          `<span class="restart-log-summary-value">${safeEscapeHtml(part.value)}</span>`,
-          '</span>',
-        ].join('');
+        const kind = String(part && part.kind ? part.kind : 'muted').trim();
+        return `<span class="k-${kind}">${safeEscapeHtml(part.label)}: <b>${safeEscapeHtml(part.value)}</b></span>`;
       })
-      .join('<span class="restart-log-summary-sep" aria-hidden="true">·</span>');
+      .join('');
     el.hidden = false;
-    el.innerHTML = html;
+    if (el.innerHTML !== html) el.innerHTML = html;
   }
 
   function renderAllSummary(allEntries) {
@@ -1312,54 +1330,36 @@ let restartLogModuleApi = null;
   function renderInto(el, rawText) {
     if (!el) return;
     const stickToBottom = shouldAutoScrollRestartLog(el);
-    const allEntries = parseRenderedEntries(rawText || '');
-    const entries = filterRenderedEntries(allEntries);
-    const scopeId = getRestartLogScopeId(el);
-    const html = entries
-      .map((entry) => {
-        const summary = entry && entry.summary ? entry.summary : null;
-        if (summary) {
-          const cls = `log-line restart-log-line log-line-${summary.kind} restart-log-line-${summary.bucket}`;
-          return `<span class="${cls}">${buildStructuredLineHtml(summary, entry, scopeId)}</span>`;
-        }
-
-        const normalized = normalizeLineForTerminal(entry && entry.raw ? entry.raw : '');
-        let cls = 'log-line';
-        if (typeof getXrayLogLineClass === 'function') {
-          cls = getXrayLogLineClass(normalized);
-        } else {
-          const lower = normalized.toLowerCase();
-          if (
-            lower.includes('error') ||
-            lower.includes('fail') ||
-            lower.includes('failed') ||
-            lower.includes('fatal')
-          ) {
-            cls = 'log-line log-line-error';
-          } else if (lower.includes('warning') || lower.includes('warn')) {
-            cls = 'log-line log-line-warning';
-          } else if (lower.includes('info')) {
-            cls = 'log-line log-line-info';
-          } else if (lower.includes('debug')) {
-            cls = 'log-line log-line-debug';
-          }
-        }
-        return `<span class="${cls} restart-log-terminal-entry">${buildPlainLogLineHtml(entry && entry.raw ? entry.raw : '', normalized)}</span>`;
-      })
-      .join('');
-
-    const emptyText = normalizeRestartLogSearchQuery(RL._query)
-      ? 'Совпадений нет.'
-      : (RL._filter === 'errors' ? 'Ошибок нет.' : 'Журнал пуст.');
     const rawState = String(rawText || '').trim();
     const loadError = /^(?:Не удалось загрузить журнал|Ошибка загрузки журнала)\.?$/i.test(rawState);
-    el.dataset.state = loadError ? 'error' : (html ? 'ready' : 'empty');
-    el.innerHTML = loadError ? [
-      `<span class="log-line restart-log-empty${loadError ? ' is-error' : ''}" role="${loadError ? 'alert' : 'status'}">`,
-      `<span class="restart-log-empty-title">${safeEscapeHtml(loadError ? 'Не удалось загрузить журнал' : emptyText)}</span>`,
-      loadError ? '<span class="restart-log-empty-detail">Проверьте связь с панелью и нажмите «Обновить».</span>' : '',
-      '</span>',
-    ].join('') : (html || `<span class="log-line restart-log-empty" role="status"><span class="restart-log-empty-title">${safeEscapeHtml(emptyText)}</span></span>`);
+    const empty = loadError || /^Журнал пуст\.?$/i.test(rawState);
+    const groups = empty ? [] : groupJournalEntries(parseRenderedEntries(rawText || ''));
+    const shown = groups.filter(groupMatchesFilter);
+    let html = '';
+    if (loadError) {
+      html = '<div class="xk-jr-empty is-error" role="alert"><b>Не удалось загрузить журнал</b>'
+        + '<span>Проверьте связь с панелью и выберите «Обновить» в меню «⋯».</span></div>';
+    } else if (!shown.length) {
+      const emptyText = normalizeRestartLogSearchQuery(RL._query)
+        ? 'Совпадений нет.'
+        : (RL._filter === 'errors' ? 'Ошибок нет.' : 'Журнал пуст.');
+      html = `<div class="xk-jr-empty" role="status"><b>${safeEscapeHtml(emptyText)}</b></div>`;
+    } else {
+      let day = '';
+      shown.forEach((group) => {
+        const groupDay = group.summary ? String(group.summary.ts || '').slice(0, 10) : '';
+        if (groupDay && groupDay !== day) {
+          day = groupDay;
+          html += `<div class="xk-jr-day">${safeEscapeHtml(journalDayLabel(day))}</div>`;
+        }
+        html += journalGroupHtml(group, isGroupOpen(group));
+      });
+    }
+    el.dataset.state = loadError ? 'error' : (shown.length ? 'ready' : 'empty');
+    if (el._jrHtml !== html) {
+      el._jrHtml = html;
+      el.innerHTML = html;
+    }
     if (stickToBottom) scrollRestartLogToBottom(el);
     else updateRestartLogScrollButton(el);
   }
@@ -1373,9 +1373,11 @@ let restartLogModuleApi = null;
         renderInto(el, raw);
       });
     }
+    const allEntries = parseRenderedEntries(raw);
     syncFilterButtons();
+    syncFilterCounts(groupJournalEntries(allEntries));
     syncSearchControls();
-    renderAllSummary(parseRenderedEntries(raw));
+    renderAllSummary(allEntries);
     bindLogInteractions();
     updateAllRestartLogScrollButtons();
   }
@@ -1606,6 +1608,44 @@ let restartLogModuleApi = null;
     return rememberPreflightPayload(payload);
   };
 
+  // An opened row shows its output and details inside the journal box, its
+  // own line kept in view when everything does not fit.
+  function revealGroup(el, key) {
+    const row = findGroupRow(el, key);
+    if (!row) return;
+    let last = row;
+    while (last.nextElementSibling && !last.nextElementSibling.matches('.xk-jr-row, .xk-jr-day')) {
+      last = last.nextElementSibling;
+    }
+    const box = el.getBoundingClientRect();
+    const bottom = last.getBoundingClientRect().bottom;
+    if (bottom > box.bottom) el.scrollTop += bottom - box.bottom;
+    const rowTop = row.getBoundingClientRect().top;
+    if (rowTop < box.top) el.scrollTop -= box.top - rowTop;
+  }
+
+  function findGroupRow(el, key) {
+    return Array.from(el.querySelectorAll('[data-xk-restart-log-group]'))
+      .find((node) => node.getAttribute('data-xk-restart-log-group') === key) || null;
+  }
+
+  function toggleRow(el, row) {
+    const key = row.getAttribute('data-xk-restart-log-group') || '';
+    const hadFocus = document.activeElement === row;
+    const top = el.scrollTop;
+    // The row stays where it was clicked instead of following the end.
+    RL._autoScrollByScope.set(getRestartLogScopeId(el), false);
+    toggleGroup(key, row.getAttribute('data-live') === '1');
+    renderAll();
+    el.scrollTop = top;
+    revealGroup(el, key);
+    updateRestartLogAutoScroll(el);
+    if (hadFocus) {
+      const next = findGroupRow(el, key);
+      if (next) next.focus({ preventScroll: true });
+    }
+  }
+
   function bindLogInteractions() {
     getLogEls().forEach((el) => {
       if (!el) return;
@@ -1617,39 +1657,49 @@ let restartLogModuleApi = null;
         }, { passive: true });
         el.addEventListener('click', (event) => {
           const target = event && event.target;
-          const tokenButton = target && typeof target.closest === 'function'
-            ? target.closest('[data-xk-restart-log-token]')
-            : null;
-          if (tokenButton && el.contains(tokenButton)) {
+          const closest = (selector) => {
+            const node = target && typeof target.closest === 'function' ? target.closest(selector) : null;
+            return node && el.contains(node) ? node : null;
+          };
+
+          const tokenButton = closest('[data-xk-restart-log-token]');
+          if (tokenButton) {
             event.preventDefault();
-            const token = tokenButton.getAttribute('data-xk-restart-log-token') || tokenButton.textContent || '';
-            RL.applyTokenFilter(token);
+            RL.applyTokenFilter(tokenButton.getAttribute('data-xk-restart-log-token') || tokenButton.textContent || '');
             return;
           }
 
-          const preflightButton = target && typeof target.closest === 'function'
-            ? target.closest('[data-xk-restart-log-preflight-ref]')
-            : null;
-          if (preflightButton && el.contains(preflightButton)) {
+          const preflightButton = closest('[data-xk-restart-log-preflight-ref]');
+          if (preflightButton) {
             event.preventDefault();
-            const ref = preflightButton.getAttribute('data-xk-restart-log-preflight-ref') || '';
-            void openPreflightPayload(ref);
+            void openPreflightPayload(preflightButton.getAttribute('data-xk-restart-log-preflight-ref') || '');
             return;
           }
 
-          const button = target && typeof target.closest === 'function'
-            ? target.closest('[data-xk-restart-log-detail-toggle]')
-            : null;
-          if (!button || !el.contains(button)) return;
+          const copyButton = closest('[data-xk-restart-log-copy-group]');
+          if (copyButton) {
+            event.preventDefault();
+            copyJournalGroup(copyButton.getAttribute('data-xk-restart-log-copy-group') || '');
+            return;
+          }
+
+          const row = closest('[data-xk-restart-log-group]');
+          if (!row) return;
+          // A drag that selected text in the row is not a click on it.
+          if (!closest('[data-xk-restart-log-group-toggle]')) {
+            try {
+              if (String(window.getSelection ? window.getSelection() : '').trim()) return;
+            } catch (error) {}
+          }
           event.preventDefault();
-
-          const details = findRestartLogDetailsForToggle(button, el);
-          if (!details) return;
-
-          const expanded = button.getAttribute('aria-expanded') === 'true';
-          button.setAttribute('aria-expanded', expanded ? 'false' : 'true');
-          button.textContent = expanded ? 'Детали' : 'Скрыть';
-          details.hidden = expanded;
+          toggleRow(el, row);
+        });
+        el.addEventListener('keydown', (event) => {
+          if (event.key !== 'Enter' && event.key !== ' ') return;
+          const row = event.target;
+          if (!row || !row.matches || !row.matches('[data-xk-restart-log-group]')) return;
+          event.preventDefault();
+          toggleRow(el, row);
         });
         if (el.dataset) el.dataset.xkeenRestartLogInteractions = '1';
       } catch (error) {}
@@ -1734,7 +1784,7 @@ let restartLogModuleApi = null;
     });
   };
 
-  function fallbackCopyText(text) {
+  function fallbackCopyText(text, message) {
     const ta = document.createElement('textarea');
     ta.value = text;
     ta.style.position = 'fixed';
@@ -1744,26 +1794,34 @@ let restartLogModuleApi = null;
     ta.select();
     try {
       document.execCommand('copy');
-      toastXkeen('Журнал скопирован в буфер обмена', false);
+      toastXkeen(message, false);
     } catch (error) {
       console.error(error);
-      toastXkeen('Не удалось скопировать журнал', true);
+      toastXkeen('Не удалось скопировать', true);
     }
     try { ta.remove(); } catch (error) {}
   }
 
-  RL.copy = function copy() {
-    const text = normalizeTextForTerminal(RL._rawText || '');
+  function copyText(text, message) {
     if (!text) return;
-
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(
-        () => { toastXkeen('Журнал скопирован в буфер обмена', false); },
-        () => fallbackCopyText(text)
+        () => { toastXkeen(message, false); },
+        () => fallbackCopyText(text, message)
       );
     } else {
-      fallbackCopyText(text);
+      fallbackCopyText(text, message);
     }
+  }
+
+  function copyJournalGroup(key) {
+    const group = groupJournalEntries(parseRenderedEntries(RL._rawText || '')).find((item) => item.key === key);
+    if (!group) return;
+    copyText(journalGroupText(group), group.summary ? 'Запись скопирована' : 'Вывод скопирован');
+  }
+
+  RL.copy = function copy() {
+    copyText(normalizeTextForTerminal(RL._rawText || ''), 'Журнал скопирован в буфер обмена');
   };
 
   function bindOnce(el, handler) {
@@ -1772,96 +1830,6 @@ let restartLogModuleApi = null;
       if (el.dataset && el.dataset.xkeenBound === '1') return;
       el.addEventListener('click', handler);
       if (el.dataset) el.dataset.xkeenBound = '1';
-    } catch (error) {}
-  }
-
-  function normalizeRestartLogTitleText(value) {
-    return String(value || '').replace(/\s+/g, ' ').trim();
-  }
-
-  function isRestartLogTitleText(value) {
-    const text = normalizeRestartLogTitleText(value);
-    return text === RESTART_LOG_TITLE || LEGACY_RESTART_LOG_TITLE_RE.test(text);
-  }
-
-  function insertRestartLogButton(actions, btn, before) {
-    if (!actions || !btn) return;
-    try {
-      if (before && before.parentElement === actions) actions.insertBefore(btn, before);
-      else actions.appendChild(btn);
-    } catch (error) {}
-  }
-
-  function ensureRestartLogFilterButton(actions, value, text) {
-    if (!actions || !value) return;
-    try {
-      if (actions.querySelector(`[data-xk-restart-log-filter="${value}"]`)) return;
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      const icon = value === 'errors' ? 'alert' : 'list-details';
-      const label = value === 'errors' ? 'Показать только ошибки' : 'Показать все записи';
-      btn.className = 'btn-secondary log-btn btn-icon restart-log-filter-btn';
-      btn.setAttribute('data-xk-restart-log-filter', value);
-      btn.setAttribute('aria-pressed', value === RL._filter ? 'true' : 'false');
-      btn.setAttribute('title', label);
-      btn.setAttribute('aria-label', label);
-      btn.innerHTML = iconHtml(icon);
-      const anchor = actions.querySelector('[data-xk-restart-log-action]');
-      insertRestartLogButton(actions, btn, anchor);
-    } catch (error) {}
-  }
-
-  function ensureRestartLogActionButton(actions, action, text) {
-    if (!actions || !action) return;
-    try {
-      if (actions.querySelector(`[data-xk-restart-log-action="${action}"]`)) return;
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      const iconByAction = { refresh: 'refresh', clear: 'clear', copy: 'duplicate' };
-      const labelByAction = { refresh: 'Обновить журнал', clear: 'Очистить журнал', copy: 'Скопировать журнал' };
-      const icon = iconByAction[action] || 'list-details';
-      const label = labelByAction[action] || text;
-      btn.className = 'btn-secondary log-btn btn-icon';
-      btn.setAttribute('data-xk-restart-log-action', action);
-      btn.setAttribute('title', label);
-      btn.setAttribute('aria-label', label);
-      btn.innerHTML = iconHtml(icon);
-      const anchor = action === 'refresh'
-        ? actions.querySelector('[data-xk-restart-log-action="clear"]')
-        : null;
-      insertRestartLogButton(actions, btn, anchor);
-    } catch (error) {}
-  }
-
-  function ensureRestartLogSearch(actions) {
-    if (!actions) return;
-    try {
-      if (actions.querySelector('[data-xk-restart-log-search]')) return;
-      const wrap = document.createElement('label');
-      wrap.className = 'restart-log-search';
-      wrap.setAttribute('aria-label', 'Поиск по журналу операций');
-      wrap.innerHTML = [
-        `<span class="restart-log-search-icon" aria-hidden="true">${iconHtml('search')}</span>`,
-        '<input type="search" class="restart-log-search-input" data-xk-restart-log-search="1" placeholder="Поиск">',
-        `<button type="button" class="restart-log-search-clear" data-xk-restart-log-search-clear="1" aria-label="Очистить поиск" hidden>${iconHtml('close')}</button>`,
-      ].join('');
-      const anchor = actions.querySelector('[data-xk-restart-log-filter]');
-      insertRestartLogButton(actions, wrap, anchor);
-    } catch (error) {}
-  }
-
-  function ensureRestartLogFullscreenButton(actions) {
-    if (!actions) return;
-    try {
-      if (actions.querySelector('[data-xk-restart-log-action="fullscreen"]')) return;
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'btn-secondary log-btn icon-only restart-log-fullscreen-btn';
-      btn.setAttribute('data-xk-restart-log-action', 'fullscreen');
-      btn.setAttribute('title', 'Полный экран');
-      btn.setAttribute('aria-label', 'Полный экран');
-      btn.innerHTML = iconHtml('fullscreen');
-      insertRestartLogButton(actions, btn, null);
     } catch (error) {}
   }
 
@@ -1916,32 +1884,11 @@ let restartLogModuleApi = null;
 
   function normalizeRestartLogChrome() {
     try {
-      const cards = new Set();
       getLogEls().forEach((el) => {
-        const card = el && typeof el.closest === 'function' ? el.closest('.log-card') : null;
-        if (card) cards.add(card);
-      });
-      document.querySelectorAll('.log-card').forEach((card) => {
-        try {
-          if (card.querySelector('[data-xk-restart-log="1"], #restart-log')) cards.add(card);
-        } catch (error) {}
-      });
-      cards.forEach((card) => {
-        try {
-          card.classList.add('xk-restart-log-card');
-          const title = Array.from(card.querySelectorAll('h1,h2,h3')).find((node) => isRestartLogTitleText(node.textContent));
-          if (title && normalizeRestartLogTitleText(title.textContent) !== RESTART_LOG_TITLE) {
-            title.textContent = RESTART_LOG_TITLE;
-          }
-          const actions = card.querySelector('.log-header-actions');
-          if (!actions) return;
-          ensureRestartLogSearch(actions);
-          ensureRestartLogFilterButton(actions, 'all', 'Все');
-          ensureRestartLogFilterButton(actions, 'errors', 'Ошибки');
-          ensureRestartLogActionButton(actions, 'refresh', 'Обновить');
-          ensureRestartLogFullscreenButton(actions);
-          ensureRestartLogBottomButton(card);
-        } catch (error) {}
+        const card = getRestartLogCard(el);
+        if (!card) return;
+        card.classList.add('xk-restart-log-card');
+        ensureRestartLogBottomButton(card);
       });
       syncSearchControls();
       syncRestartLogFullscreenButtons();
@@ -1956,12 +1903,19 @@ let restartLogModuleApi = null;
       buttons.forEach((btn) => {
         const action = btn.getAttribute('data-xk-restart-log-action');
         if (!action) return;
+        // Menu items close their menu: the answer shows in the journal itself.
+        const closeMenu = () => {
+          try {
+            const menu = btn.closest('details');
+            if (menu) menu.open = false;
+          } catch (error) {}
+        };
         if (action === 'clear') {
-          bindOnce(btn, (event) => { event.preventDefault(); RL.clear(); });
+          bindOnce(btn, (event) => { event.preventDefault(); closeMenu(); RL.clear(); });
         } else if (action === 'copy') {
-          bindOnce(btn, (event) => { event.preventDefault(); RL.copy(); });
+          bindOnce(btn, (event) => { event.preventDefault(); closeMenu(); RL.copy(); });
         } else if (action === 'refresh') {
-          bindOnce(btn, (event) => { event.preventDefault(); RL.load({ toastNewSubscription: false }); });
+          bindOnce(btn, (event) => { event.preventDefault(); closeMenu(); RL.load({ toastNewSubscription: false }); });
         } else if (action === 'fullscreen') {
           bindOnce(btn, (event) => {
             event.preventDefault();
@@ -2006,15 +1960,6 @@ let restartLogModuleApi = null;
           RL.setFilter(value);
         });
       });
-    } catch (error) {}
-
-    try {
-      const refreshBtn = document.getElementById('restart-log-refresh-btn');
-      const clearBtn = document.getElementById('restart-log-clear-btn');
-      const copyBtn = document.getElementById('restart-log-copy-btn');
-      bindOnce(refreshBtn, (event) => { event.preventDefault(); RL.load({ toastNewSubscription: false }); });
-      bindOnce(clearBtn, (event) => { event.preventDefault(); RL.clear(); });
-      bindOnce(copyBtn, (event) => { event.preventDefault(); RL.copy(); });
     } catch (error) {}
 
     try {

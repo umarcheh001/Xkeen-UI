@@ -203,11 +203,6 @@
           "lazy_features": []
         },
         {
-          "path": "static/js/features/xray_log_line_class.js",
-          "globals": [],
-          "lazy_features": []
-        },
-        {
           "path": "static/js/features/feature_access.js",
           "globals": [],
           "lazy_features": []
@@ -835,11 +830,6 @@
           "lazy_features": []
         },
         {
-          "path": "static/js/features/xray_log_line_class.js",
-          "globals": [],
-          "lazy_features": []
-        },
-        {
           "path": "static/js/features/feature_access.js",
           "globals": [],
           "lazy_features": []
@@ -1211,11 +1201,6 @@
           "lazy_features": []
         },
         {
-          "path": "static/js/features/xray_log_line_class.js",
-          "globals": [],
-          "lazy_features": []
-        },
-        {
           "path": "static/js/features/feature_access.js",
           "globals": [],
           "lazy_features": []
@@ -1497,6 +1482,11 @@
             "XKeen.state.devtoolsLogs",
             "XKeen.state.devtoolsLogsUi"
           ],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/features/xray_log_line_class.js",
+          "globals": [],
           "lazy_features": []
         },
         {
@@ -1865,11 +1855,6 @@
         },
         {
           "path": "static/js/features/restart_log.js",
-          "globals": [],
-          "lazy_features": []
-        },
-        {
-          "path": "static/js/features/xray_log_line_class.js",
           "globals": [],
           "lazy_features": []
         },
@@ -2289,11 +2274,6 @@
         },
         {
           "path": "static/js/features/restart_log.js",
-          "globals": [],
-          "lazy_features": []
-        },
-        {
-          "path": "static/js/features/xray_log_line_class.js",
           "globals": [],
           "lazy_features": []
         },
