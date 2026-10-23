@@ -24,6 +24,16 @@ const KINDS = ['proxy', 'direct', 'block', 'dns'];
 const LEVELS = ['debug', 'info', 'warning', 'error'];
 const LEVEL_LABEL = { debug: 'debug', info: 'info', warning: 'warn', error: 'error' };
 const KIND_LABEL = { proxy: 'proxy', direct: 'direct', block: 'block', dns: 'dns' };
+// DNS lookups are mostly noise next to real connections: hidden until the dns chip is on.
+const DEFAULT_KINDS = ['proxy', 'direct', 'block'];
+
+function isIpAddress(host) {
+  return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host) || String(host).includes(':');
+}
+
+function isLoopback(host) {
+  return /^127\./.test(host) || host === '::1' || host === 'localhost';
+}
 
 const VIEW_CSS = `
 :host { --mono: var(--xk-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace); --c-proxy: var(--op-accent); --c-direct: var(--op-success); --c-block: var(--op-danger); --c-dns: var(--op-warning); }
@@ -199,7 +209,7 @@ export function createXrayLogView(options) {
     decoVersion: 1,
     filter: {
       groups: [],
-      kinds: new Set(KINDS),
+      kinds: new Set(DEFAULT_KINDS),
       levels: new Set(LEVELS),
       nodes: new Set(),
       conditions: [],
@@ -265,6 +275,14 @@ export function createXrayLogView(options) {
     return info;
   }
 
+  // Domain for the summary and its conditions: an IP becomes the domain the
+  // DNS hints know for it, otherwise it stays the IP.
+  function domainOf(key) {
+    if (!key || !isIpAddress(key)) return key;
+    const hint = hooks.domainHint(key);
+    return hint ? xrayRegistrableDomain(hint) : key;
+  }
+
   function makeRecord(line) {
     const text = String(line ?? '').replace(/\r?\n$/, '');
     const record = { seq: ++state.seq, ord: 0, line: text, lower: '', p: null, kind: '', level: '', domain: '', html: null, v: 0 };
@@ -273,6 +291,7 @@ export function createXrayLogView(options) {
       if (p) {
         record.p = p;
         record.kind = p.kind || '';
+        // An IP keeps itself here and gets its domain from the DNS hints when shown.
         record.domain = p.host ? xrayRegistrableDomain(p.host) : '';
       }
     } else {
@@ -293,9 +312,12 @@ export function createXrayLogView(options) {
     }
     if (state.mode === 'access') {
       bump(c.kinds, record.kind, delta);
+      // DNS lookups (clients to the local listener, Xray's own resolver) are
+      // service traffic: the tiles describe what devices actually reach.
+      if (record.kind === 'dns') return;
       if (record.kind === 'proxy') bump(c.nodes, record.p.outTag, delta);
       bump(c.devices, record.p.srcIp, delta);
-      bump(c.domains, record.domain, delta);
+      if (record.domain && !isLoopback(record.domain)) bump(c.domains, record.domain, delta);
     } else {
       bump(c.levels, record.level, delta);
     }
@@ -323,7 +345,7 @@ export function createXrayLogView(options) {
       for (const cond of f.conditions) {
         if (cond.field === 'ip' && record.p.srcIp !== cond.value) return false;
         if (cond.field === 'host' && record.p.host !== cond.value) return false;
-        if (cond.field === 'domain' && record.domain !== cond.value) return false;
+        if (cond.field === 'domain' && domainOf(record.domain) !== cond.value) return false;
         if (cond.field === 'node' && record.p.outTag !== cond.value) return false;
       }
     } else {
@@ -397,8 +419,7 @@ export function createXrayLogView(options) {
   }
 
   function destinationHtml(p) {
-    const isIp = /^\d{1,3}(?:\.\d{1,3}){3}$/.test(p.host) || p.host.includes(':');
-    const hint = isIp ? hooks.domainHint(p.host) : '';
+    const hint = isIpAddress(p.host) ? hooks.domainHint(p.host) : '';
     return `${escapeHtml(p.host || '—')}${hint ? ` <small>· ${escapeHtml(hint)}</small>` : ''}`;
   }
 
@@ -436,7 +457,7 @@ export function createXrayLogView(options) {
       record.html = `<span class="lv"></span>${cb}<span class="ts">${escapeHtml(p.time)}</span>`
         + `<span class="dev" title="${escapeHtml(hooks.deviceName(p.srcIp) ? `${hooks.deviceName(p.srcIp)} · ${p.srcIp}` : p.srcIp)}">${deviceHtml(p.srcIp)}</span>`
         + `<span class="dst" title="${escapeHtml(p.host ? `${p.host}:${p.port}` : '')}">${destinationHtml(p)}</span>`
-        + `<span class="rt">${routeHtml(p, record.kind)}</span>`
+        + `<span class="rt">${routeHtml(p, p.outKind)}</span>`
         + `<span class="pp">${p.port ? `${escapeHtml(p.port)}/${escapeHtml(p.proto || 'tcp')}` : ''}</span>${chev}`;
     }
     record.v = state.decoVersion;
@@ -527,7 +548,7 @@ export function createXrayLogView(options) {
     const p = record.p;
     if (!p) return '';
     if (state.mode !== 'access') return errorDetailHtml(record);
-    const info = record.kind === 'proxy' ? nodeInfo(p.outTag) : null;
+    const info = p.outKind === 'proxy' ? nodeInfo(p.outTag) : null;
     const device = hooks.deviceName(p.srcIp);
     const icon = (name) => iconInShadow(hooks.icon(name));
     const nodeBtn = info
@@ -726,7 +747,7 @@ export function createXrayLogView(options) {
         + `${cond.field === 'ip' ? hooks.icon('devices') : ''}${escapeHtml(cond.label || cond.value)}<span class="x" aria-hidden="true">✕</span></button>`
       )).join('');
       const hint = f.conditions.length ? '' : '<span class="xk-xlog-hint">Alt+клик по ячейке — добавить условие</span>';
-      const dirty = f.conditions.length || f.nodes.size || f.kinds.size !== KINDS.length;
+      const dirty = f.conditions.length || f.nodes.size || f.kinds.size !== DEFAULT_KINDS.length || !DEFAULT_KINDS.every((kind) => f.kinds.has(kind));
       rows.push(`<div class="xk-xlog-chiprow"><span class="lbl">Маршрут</span>${kinds}<span class="xk-xlog-vsep"></span>${conds}${hint}`
         + `${dirty ? '<button type="button" class="xk-xlog-reset" data-xlog-act="reset">Сбросить</button>' : ''}</div>`);
       const nodes = topEntries(c.nodes, NODE_CHIPS_MAX);
@@ -778,11 +799,17 @@ export function createXrayLogView(options) {
     const box = dom.summary;
     if (!box || state.mode !== 'access') return;
     const c = state.counts;
-    const total = KINDS.reduce((sum, kind) => sum + (c.kinds.get(kind) || 0), 0);
-    const shares = KINDS.map((kind) => ({ kind, n: c.kinds.get(kind) || 0 })).filter((s) => s.n);
+    // The traffic bar follows the dns chip; the tiles never count DNS lookups.
+    const withDns = state.filter.kinds.has('dns');
+    const dnsCount = c.kinds.get('dns') || 0;
+    const barKinds = withDns ? KINDS : KINDS.filter((kind) => kind !== 'dns');
+    const total = barKinds.reduce((sum, kind) => sum + (c.kinds.get(kind) || 0), 0);
+    const shares = barKinds.map((kind) => ({ kind, n: c.kinds.get(kind) || 0 })).filter((s) => s.n);
+    const domainCounts = new Map();
+    c.domains.forEach((count, key) => bump(domainCounts, domainOf(key), count));
     setHtml(box.querySelector('[data-xlog-summary-mini]'), shares.map((s) => `<span class="dot-${s.kind}">${KIND_LABEL[s.kind]} <em>${percent(s.n, total)}%</em></span>`).join(''));
     const extra = box.querySelector('[data-xlog-summary-extra]');
-    const extraText = `· ${total} соединений · устройств ${c.devices.size} · узлов ${c.nodes.size} · доменов ${c.domains.size}`;
+    const extraText = `· ${total} соединений${withDns && dnsCount ? `, из них DNS ${dnsCount}` : ''} · устройств ${c.devices.size} · узлов ${c.nodes.size} · доменов ${domainCounts.size}`;
     if (extra && extra.textContent !== extraText) extra.textContent = extraText;
     const body = box.querySelector('[data-xlog-summary-body]');
     if (!body || body.hidden) return;
@@ -796,7 +823,7 @@ export function createXrayLogView(options) {
       const name = hooks.deviceName(ip) || ip;
       return { text: name, html: escapeHtml(name) };
     }, 'ip');
-    const domains = topListHtml(topEntries(c.domains, TOP_N), (d) => ({ text: d, html: escapeHtml(d) }), 'domain');
+    const domains = topListHtml(topEntries(domainCounts, TOP_N), (d) => ({ text: d, html: escapeHtml(d) }), 'domain');
     setHtml(body, `
       <div class="xk-xlog-tile"><h4>Куда уходит трафик</h4><div class="xk-xlog-bar">${bar}</div><div class="xk-xlog-legend">${legend || '<span class="xk-xlog-muted">Пока пусто</span>'}</div></div>
       <div class="xk-xlog-tile"><h4>Узлы</h4>${nodes}</div>
@@ -984,9 +1011,15 @@ export function createXrayLogView(options) {
     applyFilter();
   }
 
+  function notifyDns() {
+    if (typeof opts.onDnsToggle === 'function') opts.onDnsToggle(state.filter.kinds.has('dns'));
+  }
+
   function resetFilter() {
     const f = state.filter;
-    f.kinds = new Set(KINDS);
+    const hadDns = f.kinds.has('dns');
+    f.kinds = new Set(DEFAULT_KINDS);
+    if (hadDns) notifyDns();
     f.levels = new Set(LEVELS);
     f.nodes.clear();
     f.conditions = [];
@@ -1052,7 +1085,7 @@ export function createXrayLogView(options) {
     const rows = records.map((record) => {
       const p = record.p;
       if (!p) return [record.line];
-      const info = record.kind === 'proxy' ? nodeInfo(p.outTag) : null;
+      const info = p.outKind === 'proxy' ? nodeInfo(p.outTag) : null;
       return [
         `${p.date} ${p.time}${p.frac}`,
         hooks.deviceName(p.srcIp) || '',
@@ -1136,7 +1169,7 @@ export function createXrayLogView(options) {
       const cell = e.target.closest('.dev, .dst, .rt');
       if (cell && cell.classList.contains('dev')) toggleCondition('ip', record.p.srcIp, hooks.deviceName(record.p.srcIp) || record.p.srcIp);
       else if (cell && cell.classList.contains('dst')) toggleCondition('host', record.p.host, record.p.host);
-      else if (cell && cell.classList.contains('rt') && record.kind === 'proxy') toggleCondition('node', record.p.outTag, nodeInfo(record.p.outTag).label);
+      else if (cell && cell.classList.contains('rt') && record.p.outKind === 'proxy') toggleCondition('node', record.p.outTag, nodeInfo(record.p.outTag).label);
       return;
     }
     selectBySeq(record.seq, act === 'toggle' ? { toggle: true, shiftKey: e.shiftKey } : e);
@@ -1178,8 +1211,10 @@ export function createXrayLogView(options) {
     if (!btn) return;
     const act = btn.dataset.xlogAct;
     const f = state.filter;
-    if (act === 'kind') toggleIn(f.kinds, btn.dataset.value);
-    else if (act === 'level') toggleIn(f.levels, btn.dataset.value);
+    if (act === 'kind') {
+      toggleIn(f.kinds, btn.dataset.value);
+      if (btn.dataset.value === 'dns') notifyDns();
+    } else if (act === 'level') toggleIn(f.levels, btn.dataset.value);
     else if (act === 'node') toggleIn(f.nodes, btn.dataset.value);
     else if (act === 'drop-cond') f.conditions.splice(Number(btn.dataset.index), 1);
     else if (act === 'reset') return resetFilter();
@@ -1259,6 +1294,11 @@ export function createXrayLogView(options) {
       const value = Math.max(50, parseInt(n, 10) || 800);
       state.maxLines = value;
       if (trim()) renderAll();
+    },
+    setShowDns(on) {
+      if (state.filter.kinds.has('dns') === !!on) return;
+      toggleIn(state.filter.kinds, 'dns');
+      applyFilter();
     },
     setShowRaw(on) {
       if (state.filter.showRaw === !!on) return;

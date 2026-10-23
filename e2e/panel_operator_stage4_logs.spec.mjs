@@ -315,6 +315,52 @@ test.describe('Operator Console Stage 4 logs', () => {
     await expect(node).toHaveAttribute('aria-pressed', 'false');
   });
 
+  test('dns lookups are hidden by default and never count in the summary tiles', async ({ page }) => {
+    const dnsLines = [
+      '2026/10/23 14:29:51.100000 from 192.168.1.34:51001 accepted udp:127.0.0.1:53 [xk-dns-listener -> dns-out]',
+      '2026/10/23 14:29:51.200000 from DNS accepted udp:8.8.8.8:53 [dns-in -> pecan--Amsterdam-1]',
+      '2026/10/23 14:29:51.300000 from DNS accepted udp:77.88.8.8:53 [dns-in -> direct]',
+      '2026/10/23 14:29:52.100000 from 192.168.1.34:52110 accepted tcp:www.youtube.com:443 [redirect -> pecan--Frankfurt-2]',
+      '2026/10/23 14:29:52.200000 from 192.168.1.20:52111 accepted tcp:api.github.com:443 [redirect -> direct]',
+    ];
+    await openLogs(page, 'dark', { width: 1440, height: 900 }, { accessLines: dnsLines });
+
+    const dnsChip = page.locator('#xray-log-chips [data-xlog-act="kind"][data-value="dns"]');
+    await expect(rows(page)).toHaveCount(2);
+    await expect(dnsChip).toHaveAttribute('aria-pressed', 'false');
+    await expect(dnsChip).toContainText('3');
+    await expect(page.locator('#xray-log-chips [data-xlog-act="kind"][data-value="proxy"]')).toContainText('1');
+    await expect(page.locator('#xray-log-chips [data-xlog-act="kind"][data-value="direct"]')).toContainText('1');
+    await expect(page.locator('#xray-log-chips [data-xlog-act="reset"]')).toHaveCount(0);
+    await expect(page.locator('#xray-log-chips [data-xlog-act="node"]')).toHaveCount(1);
+
+    await page.locator('[data-xlog-summary-toggle]').click();
+    const body = page.locator('[data-xlog-summary-body]');
+    await expect(page.locator('[data-xlog-summary-extra]')).toHaveText('· 2 соединений · устройств 2 · узлов 1 · доменов 2');
+    await expect(body.locator('button[data-field="domain"]')).toHaveText(['youtube.com', 'github.com']);
+    await expect(body.locator('button[data-field="ip"]')).toHaveCount(2);
+    await expect(body.locator('.xk-xlog-legend .dot-dns')).toHaveCount(0);
+
+    await dnsChip.click();
+    await expect(rows(page)).toHaveCount(5);
+    await expect(page.locator('[data-xlog-summary-extra]')).toHaveText('· 5 соединений, из них DNS 3 · устройств 2 · узлов 1 · доменов 2');
+    await expect(body.locator('.xk-xlog-legend .dot-dns')).toHaveCount(1);
+    await expect(body.locator('button[data-field="domain"]')).toHaveCount(2);
+    // Xray's own lookup is DNS, yet its route still shows the node it went through.
+    const coreLookup = rows(page).filter({ hasText: '8.8.8.8' });
+    await expect(coreLookup).toHaveClass(/k-dns/);
+    await expect(coreLookup.locator('.pill.proxy')).toContainText('Amsterdam-1');
+
+    // The choice survives a reload; "Сбросить" hides DNS again.
+    await page.reload();
+    await selectPanelView(page, 'xray-logs');
+    await expect(rows(page)).toHaveCount(5);
+    await expect(dnsChip).toHaveAttribute('aria-pressed', 'true');
+    await page.locator('#xray-log-chips [data-xlog-act="reset"]').click();
+    await expect(rows(page)).toHaveCount(2);
+    await expect(dnsChip).toHaveAttribute('aria-pressed', 'false');
+  });
+
   test('error.log keeps level chips and full messages in details', async ({ page }) => {
     await openLogs(page, 'dark', { width: 1440, height: 900 });
     await page.locator('[data-xlog-file-btn="error"]').click();

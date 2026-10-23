@@ -70,6 +70,7 @@ export function parseXrayAccessLine(line) {
     outTag: '',
     mark: '',
     kind: '',
+    outKind: '',
     reason: '',
     email: '',
   };
@@ -97,7 +98,10 @@ export function parseXrayAccessLine(line) {
     rest = detour[2] || '';
   }
   record.reason = rest.trim();
-  record.kind = status === 'rejected' ? 'block' : xrayOutboundKind(record.outTag);
+  // outKind colours the outbound; kind is the route class of the whole line.
+  // Xray's own DNS client goes out through a node or direct, yet it is DNS.
+  record.outKind = status === 'rejected' ? 'block' : xrayOutboundKind(record.outTag);
+  record.kind = srcName === 'DNS' && status === 'accepted' ? 'dns' : record.outKind;
   return record;
 }
 

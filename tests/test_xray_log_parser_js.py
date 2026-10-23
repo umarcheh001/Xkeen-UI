@@ -60,7 +60,8 @@ def test_access_route_marks_and_service_outbounds():
     assert (out["default"]["mark"], out["default"]["kind"]) == (">>", "direct")
     assert (out["balancer"]["mark"], out["balancer"]["outTag"]) == ("==>", "sub--Helsinki")
     assert out["block"]["kind"] == "block"
-    assert out["dns"]["kind"] == "dns"
+    assert (out["dns"]["kind"], out["dns"]["outKind"]) == ("dns", "dns")
+    assert (out["default"]["outKind"], out["block"]["outKind"]) == ("direct", "block")
     assert (out["bare"]["inTag"], out["bare"]["outTag"], out["bare"]["kind"]) == ("", "my_proxy", "proxy")
     assert (out["none"]["outTag"], out["none"]["kind"]) == ("", "")
 
@@ -83,7 +84,8 @@ def test_lines_seen_on_a_router():
         "subscription": "2026/10/22 19:15:40.100200 from 192.168.46.52:52211 accepted tcp:www.google.com:443 [redirect -> VPS_LV_SUB--LV_reality-Node-16k3]",
     })
     assert (out["dns_client"]["srcIp"], out["dns_client"]["srcPort"]) == ("DNS", "")
-    assert (out["dns_client"]["host"], out["dns_client"]["kind"]) == ("8.8.8.8", "proxy")
+    # Свой DNS-клиент ядра — это DNS, хотя уходит через узел: маршрут красится по outKind.
+    assert (out["dns_client"]["host"], out["dns_client"]["kind"], out["dns_client"]["outKind"]) == ("8.8.8.8", "dns", "proxy")
     assert (out["dns_listener"]["inTag"], out["dns_listener"]["kind"]) == ("xk-dns-listener", "dns")
     assert out["subscription"]["outTag"] == "VPS_LV_SUB--LV_reality-Node-16k3"
 

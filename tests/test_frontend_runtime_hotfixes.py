@@ -2132,7 +2132,7 @@ def test_xray_logs_destination_domain_hints_ui_contract():
     assert 'function ingestXrayLogDestinationDomains' in script
     # The table shows the hint next to a bare destination IP.
     assert 'const hint = getXrayDestinationDomainHint(ip);' in script
-    assert "const hint = isIp ? hooks.domainHint(p.host) : '';" in view
+    assert "const hint = isIpAddress(p.host) ? hooks.domainHint(p.host) : '';" in view
     assert "'domain_hints'" in script
     assert 'collectXrayLogDestinationIpPorts' in parser
     assert 'collectXrayLogDomainCandidates' in parser

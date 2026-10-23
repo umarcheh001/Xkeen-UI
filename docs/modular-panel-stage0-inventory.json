@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 588,
-      "size_bytes": 7974936,
+      "size_bytes": 7978058,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -88,7 +88,7 @@
       ],
       "removable": true,
       "unit_count": 144,
-      "size_bytes": 3929215,
+      "size_bytes": 3931746,
       "kind_counts": {
         "backend_route": 13,
         "backend_service": 20,
@@ -4422,7 +4422,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_frontend_runtime_hotfixes.py",
-      "size_bytes": 143358,
+      "size_bytes": 143373,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -12302,7 +12302,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/panel_operator_stage4_logs.spec.mjs",
-      "size_bytes": 31412,
+      "size_bytes": 34519,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -19392,7 +19392,7 @@
       "module_id": "engine.xray",
       "kind": "backend_test",
       "path": "tests/test_xray_log_parser_js.py",
-      "size_bytes": 6685,
+      "size_bytes": 6989,
       "depends_on": [
         "core",
         "tool.editor"
@@ -21048,7 +21048,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/xray_log_parser.js",
-      "size_bytes": 4585,
+      "size_bytes": 4845,
       "depends_on": [
         "core",
         "tool.editor"
@@ -21077,7 +21077,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/xray_log_view.js",
-      "size_bytes": 54357,
+      "size_bytes": 56217,
       "depends_on": [
         "core",
         "tool.editor"
@@ -21106,7 +21106,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/xray_logs.js",
-      "size_bytes": 185602,
+      "size_bytes": 185709,
       "depends_on": [
         "core",
         "tool.editor"

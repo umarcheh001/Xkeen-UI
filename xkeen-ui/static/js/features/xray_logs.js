@@ -1460,11 +1460,13 @@ let xrayLogsModuleApi = null;
         try { updateXrayLogStats(); } catch (e) {}
       },
       onSummaryToggle: (open) => writeXrayViewExtras({ summaryOpen: !!open }),
+      onDnsToggle: (on) => writeXrayViewExtras({ showDns: !!on }),
       onRenameDevice: (ip, name) => { void openXrayDeviceNamesModal({ ip, name }); },
     });
     _view.setMaxLines(_maxLines);
     _view.setFollow(_follow);
     _view.setShowRaw(!!extras.showRaw);
+    _view.setShowDns(!!extras.showDns);
     _view.setSummaryOpen(!!extras.summaryOpen);
     _view.setMode(xrayLogViewMode());
     syncXrayLogViewExtrasUi(extras);
