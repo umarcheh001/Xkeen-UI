@@ -222,9 +222,9 @@ test.describe('Operator Console Stage 5 editor workbench contract', () => {
 
     const frames = await page.evaluate(() => {
       const expectedCounts = {
-        'confirm-compact-form': 28,
+        'confirm-compact-form': 29,
         'editor-workbench': 7,
-        'master-detail': 19,
+        'master-detail': 18,
         'drawer-help': 3,
       };
       const modals = Array.from(document.querySelectorAll('.modal[data-operator-modal-family]'));
