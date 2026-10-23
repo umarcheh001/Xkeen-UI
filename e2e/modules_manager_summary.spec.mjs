@@ -110,6 +110,39 @@ test.describe('Modules panel update surface', () => {
     await expect(page.getByRole('dialog', { name: 'Обновить панель до 2.11.0' })).toContainText('2.10.0 → 2.11.0');
   });
 
+  test('a kept catalog older than an hour is checked again on GitHub when the screen opens', async ({ page }) => {
+    await installIdleLifecycleRoutes(page);
+    const forced = [];
+    const keptAt = Date.now() / 1000 - 3 * 60 * 60;
+    await page.route('**/api/modules/panel/update-check', (route) => {
+      const force = Boolean(route.request().postDataJSON()?.force_refresh);
+      forced.push(force);
+      return route.fulfill({ json: force
+        ? { ...server.update_check, fetched_at: Date.now() / 1000 }
+        : { ...server.update_check_current, fetched_at: keptAt } });
+    });
+    await page.goto('/modules');
+
+    // The kept copy said "no update"; the fresh one from GitHub finds 2.11.0.
+    const stat = page.locator('.modules-summary .xk-summary-stat[data-stat="update"]');
+    await expect(stat.locator('b')).toHaveText('2.11.0');
+    expect(forced).toEqual([false, true]);
+  });
+
+  test('a kept catalog of the last hour is not checked again', async ({ page }) => {
+    await installIdleLifecycleRoutes(page);
+    const forced = [];
+    await page.route('**/api/modules/panel/update-check', (route) => {
+      forced.push(Boolean(route.request().postDataJSON()?.force_refresh));
+      return route.fulfill({ json: { ...server.update_check, fetched_at: Date.now() / 1000 - 10 * 60 } });
+    });
+    await page.goto('/modules');
+
+    await expect(page.locator('.modules-summary .xk-summary-stat[data-stat="update"] b')).toHaveText('2.11.0');
+    await page.waitForTimeout(500);
+    expect(forced).toEqual([false]);
+  });
+
   test('says that the update answer comes from an old copy of the catalog', async ({ page }) => {
     await installIdleLifecycleRoutes(page);
     await page.route('**/api/modules/panel/update-check', (route) => route.fulfill({ json: {

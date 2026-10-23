@@ -8,6 +8,9 @@ const RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 10000];
 const RESTART_WAIT_LIMIT_MS = 90 * 1000;
 // From these steps on the runner may be restarting the panel.
 const RESTART_STEPS = ['applying', 'state', 'restarting', 'health', 'rolling_back'];
+// The server keeps the catalog for a day. A screen opened on an older copy
+// asks GitHub once more: a beta of this morning is seen without a button.
+const KEPT_CHECK_MAX_AGE_S = 60 * 60;
 
 // The operation the window was showing when the panel restarted: after the
 // reload the window opens again and tells how it ended.
@@ -677,16 +680,30 @@ export function createModuleManagerController({ root, api, pollMs, reload = () =
   }
 
   // The counter of the summary is filled from the catalog the server keeps for
-  // a day: opening the screen does not go to GitHub. Silence on failure — the
-  // owner checks by the button.
+  // a day. Opening the screen goes to GitHub only when that copy is older than
+  // an hour. Silence on failure — the owner checks by the button.
   async function loadKeptUpdateCheck() {
     if (!state.installed?.lifecycle?.available || state.update.loading || state.update.checked) return;
     const installed = state.installed;
+    let checked;
     try {
-      const checked = await api.checkPanelUpdate(false);
+      checked = await api.checkPanelUpdate(false);
       if (state.installed !== installed || state.update.loading || state.update.checked) return;
       state.update = { ...checked, checked: true, loading: false, error: null };
       reconcileModulesUpdateCheck({ ...checked, channel: state.installed?.update_channel });
+    } catch (error) {
+      return;
+    }
+    if (active) render();
+    const fetchedAt = Number(checked?.fetched_at);
+    if (Number.isFinite(fetchedAt) && Date.now() / 1000 - fetchedAt <= KEPT_CHECK_MAX_AGE_S) return;
+    const kept = state.update;
+    try {
+      const fresh = await api.checkPanelUpdate(true);
+      // A press of the button or another screen state wins over this answer.
+      if (state.installed !== installed || state.update !== kept) return;
+      state.update = { ...fresh, checked: true, loading: false, error: null };
+      reconcileModulesUpdateCheck({ ...fresh, channel: state.installed?.update_channel });
     } catch (error) {
       return;
     }
