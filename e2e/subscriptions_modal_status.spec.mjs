@@ -23,7 +23,10 @@ async function routeSubscriptions(page, subscriptions) {
   });
 }
 
-function readState(page, subId) {
+async function readState(page, subId) {
+  // The list is drawn after the window opens, once /api/xray/subscriptions
+  // answers: wait for the row instead of racing it.
+  await page.locator(`tr[data-sub-id="${subId}"] .xk-sub-state`).waitFor();
   return page.evaluate((id) => {
     const row = document.querySelector(`tr[data-sub-id="${id}"]`);
     const state = row?.querySelector('.xk-sub-state');
@@ -157,6 +160,7 @@ test('the listed url keeps the host and the tail that tells subscriptions apart'
     url: 'https://example-provider.com/api/v1/subscribe/a8f3',
   })]);
   await openSubscriptionsModal(page);
+  await page.locator('tr[data-sub-id="url-sub"] td:first-child .xk-sub-muted').first().waitFor();
 
   const meta = await page.evaluate(() => {
     const row = document.querySelector('tr[data-sub-id="url-sub"]');
