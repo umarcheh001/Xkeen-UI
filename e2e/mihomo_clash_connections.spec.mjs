@@ -58,6 +58,7 @@ function connectionsPayload(ids = ['connection-one', 'connection-two']) {
         process: index ? 'browser' : '',
         process_path: index ? '/usr/bin/browser' : '',
         uid: index ? 1000 : 0,
+        smart_block: index ? 'normal' : '',
       },
       upload: 100 + index,
       download: 200 + index,
@@ -181,7 +182,11 @@ test('Mihomo connections use HTTP fallback, local filters, inspector and confirm
   await expect(page.locator('#mihomo-clash-connection-inspector-source')).toHaveText('Laptop · 192.0.2.1:5000');
   await expect(page.locator('#mihomo-clash-connection-inspector-summary > div')).toHaveCount(4);
   await expect(page.locator('#mihomo-clash-connection-inspector-summary')).toContainText('↓ 200 Б · ↑ 100 Б');
+  // A hidden Smart action must not take the disconnect footer down with it.
   await expect(page.locator('#mihomo-clash-connection-inspector-disconnect')).toBeVisible();
+  await expect(page.locator('#mihomo-clash-connection-inspector-smart-block')).toBeHidden();
+  await expect(page.locator('[data-connection-id="connection-one"] .xk-mihomo-connection-smart-block')).toHaveCount(0);
+  await expect(page.locator('[data-connection-id="connection-two"] .xk-mihomo-connection-smart-block')).toHaveCount(1);
   await expect(page.locator('#mihomo-clash-connection-inspector-summary')).toContainText('DomainSuffix');
   await expect(page.locator('#mihomo-clash-connection-inspector-summary')).toContainText('Подтверждён');
   await expect(page.locator('#mihomo-clash-connection-inspector-details')).toContainText('normal-redir');
@@ -218,6 +223,8 @@ test('Mihomo connections use HTTP fallback, local filters, inspector and confirm
   await page.locator('[data-connection-id="connection-two"]').click();
   await expect(page.locator('#mihomo-clash-connection-inspector-details dt').filter({ hasText: /^UID$/ })).toHaveCount(1);
   await expect(page.locator('#mihomo-clash-connection-inspector-details')).toContainText('1000');
+  await expect(page.locator('#mihomo-clash-connection-inspector-smart-block')).toBeVisible();
+  await expect(page.locator('#mihomo-clash-connection-inspector-disconnect')).toBeVisible();
   await page.locator('[data-connection-id="connection-one"]').click();
 
   await page.locator('#mihomo-clash-connection-inspector-disconnect').click();

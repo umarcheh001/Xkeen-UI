@@ -85,9 +85,11 @@ let settingsUnsubscribe = null;
 let delayRun = null;
 let payloadLoadedAt = 0;
 let delayFreshnessTimer = 0;
-let smartWeights = {};
+let smartWeights = Object.create(null);
 let smartWeightsAvailable = false;
 let smartWeightsTimer = 0;
+let smartWeightsRequest = null;
+let smartWeightsSignature = '';
 const collapsedGroups = new Set();
 const knownDisclosureGroups = new Set();
 let pickerGroup = '';
@@ -974,7 +976,7 @@ function groupSummary(group) {
     ? `${nodes.filter((node) => node.alive === true).length}/${nodes.length} доступны`
     : `${nodes.length} узлов · нет актуальных данных`;
   const smartState = String(group.type || '').toLowerCase() === 'smart'
-    ? (smartWeightsAvailable ? 'веса доступны' : 'веса fork API недоступны')
+    ? (smartWeightsAvailable ? 'Smart-веса доступны' : 'Smart-веса недоступны')
     : '';
   return [group.type || 'Unknown', mode, availability, smartState].filter(Boolean).join(' · ');
 }
@@ -1293,17 +1295,42 @@ function hasSmartGroups() {
   return allGroups().some((group) => String(group?.type || '').toLowerCase() === 'smart');
 }
 
+// Group and node names come from the user's config, so lookup tables must not
+// inherit Object.prototype keys such as "constructor".
+function nameTable(entries) {
+  return Object.assign(Object.create(null), Object.fromEntries(entries));
+}
+
+// Returns whether the visible state changed, so the periodic refresh does not
+// re-render (and close the delay history popover) on identical data.
 function applySmartWeights(payloadValue) {
   const source = payloadValue?.weights && typeof payloadValue.weights === 'object'
     ? payloadValue.weights
     : {};
-  smartWeights = Object.fromEntries(Object.entries(source).map(([group, items]) => [
+  const signature = JSON.stringify(source);
+  const changed = !smartWeightsAvailable || signature !== smartWeightsSignature;
+  smartWeights = nameTable(Object.entries(source).map(([group, items]) => [
     group,
-    Object.fromEntries((Array.isArray(items) ? items : [])
+    nameTable((Array.isArray(items) ? items : [])
       .filter((item) => item && typeof item.name === 'string')
       .map((item) => [item.name, item])),
   ]));
+  smartWeightsSignature = signature;
   smartWeightsAvailable = true;
+  return changed;
+}
+
+function resetSmartWeights() {
+  const changed = smartWeightsAvailable || smartWeightsSignature !== '';
+  smartWeights = Object.create(null);
+  smartWeightsAvailable = false;
+  smartWeightsSignature = '';
+  return changed;
+}
+
+function abortSmartWeights() {
+  if (smartWeightsRequest) smartWeightsRequest.abort();
+  smartWeightsRequest = null;
 }
 
 function scheduleSmartWeightsRefresh() {
@@ -1316,17 +1343,27 @@ function scheduleSmartWeightsRefresh() {
 }
 
 async function refreshSmartWeights() {
-  if (!active || !hasSmartGroups()) return;
-  try {
-    const next = await fetchMihomoClashSmartWeights();
-    if (!active) return;
-    applySmartWeights(next);
-    render();
-  } catch (error) {
-    // Standard Mihomo does not expose the fork-specific endpoint.
-  } finally {
-    scheduleSmartWeightsRefresh();
+  clearSmartWeightsTimer();
+  abortSmartWeights();
+  if (!active || !hasSmartGroups()) {
+    if (resetSmartWeights() && active) render();
+    return;
   }
+  const controller = typeof AbortController === 'function' ? new AbortController() : null;
+  smartWeightsRequest = controller;
+  let changed = false;
+  try {
+    const next = await fetchMihomoClashSmartWeights({ signal: controller?.signal });
+    if (!active || smartWeightsRequest !== controller) return;
+    changed = applySmartWeights(next);
+  } catch (error) {
+    if (!active || smartWeightsRequest !== controller) return;
+    // Standard Mihomo, or a fork without the Smart store, has no weights.
+    changed = resetSmartWeights();
+  }
+  smartWeightsRequest = null;
+  if (changed) render();
+  scheduleSmartWeightsRefresh();
 }
 
 export async function refreshMihomoClashGroups() {
@@ -1342,21 +1379,12 @@ export async function refreshMihomoClashGroups() {
     if (!active || sequence !== requestSequence) return false;
     payloadLoadedAt = Date.now();
     payload = next && typeof next === 'object' ? next : { groups: [] };
-    const smartGroupsPresent = hasSmartGroups();
-    smartWeights = {};
-    smartWeightsAvailable = false;
-    if (smartGroupsPresent) {
-      try {
-        applySmartWeights(await fetchMihomoClashSmartWeights({ signal: controller?.signal }));
-      } catch (error) {
-        // Standard Mihomo does not expose the fork-specific endpoint.
-      }
-    }
     loadError = '';
     seedDelayHistories(allGroups());
     seedCollapsedGroups(allGroups());
     render();
-    scheduleSmartWeightsRefresh();
+    // Weights are fork-only extras: never delay the group list on them.
+    void refreshSmartWeights();
     return true;
   } catch (error) {
     if (controller?.signal.aborted || sequence !== requestSequence) return false;
@@ -1474,7 +1502,7 @@ async function flushSmartWeights(groupName) {
   render();
   try {
     await flushMihomoClashSmartCache();
-    smartWeights = {};
+    resetSmartWeights();
     notify('Smart-веса сброшены. История качества будет собираться заново.', 'success');
     await refreshMihomoClashGroups();
   } catch (error) {
@@ -2012,6 +2040,7 @@ export function deactivateMihomoClashGroups() {
   delayRun = null;
   clearDelayFreshnessTimer();
   clearSmartWeightsTimer();
+  abortSmartWeights();
   hideDelayHistory();
   pickerGroup = '';
   selection = null;

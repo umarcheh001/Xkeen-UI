@@ -673,11 +673,11 @@ async function disconnectOne(id) {
 
 async function blockSmartOne(id) {
   if (!active || pendingSmartBlockId || !id) return;
-  const row = selectedRow() || snapshot?.connections?.find?.((item) => item.id === id);
-  const host = row ? destinationHost(row) : 'этого хоста';
+  const row = (snapshot?.connections || []).find((item) => item.id === id);
+  const host = (row && destinationHost(row)) || 'этого хоста';
   const ok = await confirmMihomoAction({
     title: 'Заблокировать узел Smart?',
-    message: `Mihomo исключит текущий узел из выбора Smart для ${host}.`,
+    message: `Mihomo исключит текущий узел из выбора Smart для ${host} и закроет это соединение.`,
     okText: 'Заблокировать',
     cancelText: 'Оставить',
     danger: true,
@@ -814,7 +814,7 @@ function bind() {
     }
     const close = event.target.closest?.('[data-mihomo-connection-close]');
     if (close) { event.stopPropagation(); void disconnectOne(close.dataset.mihomoConnectionClose); return; }
-    const smartBlock = event.target.closest?.('[data-mihomo-connection-smart-block], [data-mihomo-connection-inspector-smart-block]');
+    const smartBlock = event.target.closest?.('[data-mihomo-connection-smart-block]');
     if (smartBlock) {
       event.stopPropagation();
       void blockSmartOne(smartBlock.dataset.mihomoConnectionSmartBlock);

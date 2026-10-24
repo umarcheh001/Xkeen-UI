@@ -831,6 +831,46 @@ def test_smart_block_route_requires_smart_capability_and_forwards_connection_id(
     assert client.smart_blocked == ["conn-smart"]
 
 
+def test_smart_block_route_rejects_connection_without_smart_mark():
+    audit_events = []
+    client = StubClient(
+        responses={
+            "connections_snapshot": MihomoClashJSONResponse(
+                {
+                    "connections": [
+                        {"id": "conn-plain", "metadata": {}},
+                        {"id": "conn-blocked", "metadata": {"smartBlock": "blocked"}},
+                    ],
+                },
+                200,
+                1,
+                80,
+            ),
+        }
+    )
+    app_client = make_app(
+        ready_discovery(),
+        client,
+        audit_logger=lambda ok, **metadata: audit_events.append((ok, metadata)),
+    ).test_client()
+
+    for connection_id in ("conn-plain", "conn-blocked"):
+        response = app_client.delete(f"/api/mihomo/clash/connections/smart/{connection_id}")
+        assert response.status_code == 409
+        assert response.get_json()["code"] == "smart_block_not_available"
+    missing = app_client.delete("/api/mihomo/clash/connections/smart/conn-gone")
+
+    assert missing.status_code == 409
+    assert missing.get_json()["code"] == "connection_not_found"
+    assert client.smart_blocked == []
+    assert [event[1].get("error_code") for event in audit_events] == [
+        "smart_block_not_available",
+        "smart_block_not_available",
+        "connection_not_found",
+    ]
+    assert all(event[0] is False for event in audit_events)
+
+
 def test_proxy_groups_reads_independent_upstreams_concurrently():
     import threading
     import time

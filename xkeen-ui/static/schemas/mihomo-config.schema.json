@@ -238,6 +238,22 @@
         "asn": { "type": "string", "format": "uri" }
       }
     },
+    "lgbm-auto-update": {
+      "type": "boolean",
+      "default": false,
+      "description": "Только форк Mihomo со Smart-группами: автоматически обновлять ML-модель LightGBM (`Model.bin`). Обычный Mihomo поле игнорирует."
+    },
+    "lgbm-update-interval": {
+      "type": "integer",
+      "default": 72,
+      "description": "Только форк Mihomo со Smart-группами: интервал обновления модели LightGBM (часы)."
+    },
+    "lgbm-url": {
+      "type": "string",
+      "format": "uri",
+      "description": "Только форк Mihomo со Smart-группами: откуда скачивать модель LightGBM.",
+      "examples": ["https://github.com/vernesong/mihomo/releases/download/LightGBM-Model/Model.bin"]
+    },
 
     "profile": {
       "type": "object",
@@ -245,7 +261,8 @@
       "properties": {
         "store-selected": { "type": "boolean", "default": true, "description": "Сохранять выбранные прокси между перезапусками" },
         "store-fake-ip": { "type": "boolean", "default": true, "description": "Сохранять FakeIP-маппинги" },
-        "tracing": { "type": "boolean", "default": false }
+        "tracing": { "type": "boolean", "default": false },
+        "smart-collector-size": { "type": "number", "default": 100, "description": "Только форк Mihomo со Smart-группами: размер хранилища собранных данных для обучения (`collectdata`), МБ." }
       }
     },
 
@@ -2848,8 +2865,8 @@
         },
         "type": {
           "type": "string",
-          "enum": ["select", "url-test", "fallback", "load-balance"],
-          "description": "Тип группы. `select` — ручной выбор через API/UI; `url-test` — автовыбор по минимальной задержке; `fallback` — первый рабочий из списка (по порядку); `load-balance` — распределение по стратегии. Тип `relay` из ядра убран — на запуске Mihomo отвечает «The group with relay type was removed»; вместо цепочки задают `dialer-proxy` у прокси."
+          "enum": ["select", "url-test", "fallback", "load-balance", "smart"],
+          "description": "Тип группы. `select` — ручной выбор через API/UI; `url-test` — автовыбор по минимальной задержке; `fallback` — первый рабочий из списка (по порядку); `load-balance` — распределение по стратегии; `smart` — автовыбор по истории качества узлов, есть только в форке Mihomo со Smart-группами (обычный Mihomo с таким типом не запустится). Тип `relay` из ядра убран — на запуске Mihomo отвечает «The group with relay type was removed»; вместо цепочки задают `dialer-proxy` у прокси."
         },
         "proxies": {
           "type": "array",
@@ -2970,7 +2987,33 @@
         },
         "tolerance": {
           "type": "integer",
-          "description": "Допустимое отклонение задержки в мс (для `url-test`). Если текущий прокси быстрее ±tolerance — не переключаться."
+          "description": "Допустимое отклонение задержки в мс (для `url-test`). Если текущий прокси быстрее ±tolerance — не переключаться. У `smart` — порог, в пределах которого узлы считаются равноценными."
+        },
+        "policy-priority": {
+          "type": "string",
+          "description": "Только `smart` (форк Mihomo): множители приоритета узлов по шаблону имени, через `;`. Больше 1 — узел предпочтительнее, меньше 1 — реже.",
+          "examples": ["Premium:0.9;SG:1.3"]
+        },
+        "prefer-asn": {
+          "type": "boolean",
+          "default": false,
+          "description": "Только `smart` (форк Mihomo): учитывать ASN назначения при выборе узла, а не только домен."
+        },
+        "uselightgbm": {
+          "type": "boolean",
+          "default": false,
+          "description": "Только `smart` (форк Mihomo): считать веса узлов моделью LightGBM вместо встроенной формулы."
+        },
+        "collectdata": {
+          "type": "boolean",
+          "default": false,
+          "description": "Только `smart` (форк Mihomo): собирать данные о соединениях для обучения модели. Размер хранилища — `profile.smart-collector-size`."
+        },
+        "sample-rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Только `smart` (форк Mihomo): доля соединений, попадающих в сбор данных (0–1)."
         },
         "max-failed-times": {
           "type": "integer",

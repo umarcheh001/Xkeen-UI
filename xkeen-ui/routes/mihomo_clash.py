@@ -2808,6 +2808,11 @@ def create_mihomo_clash_blueprint(
                 None,
             )
             if not row:
+                _audit_action(
+                    "connection-smart-block",
+                    False,
+                    error_code="connection_not_found",
+                )
                 return error_response(
                     "Соединение уже завершено или больше недоступно.",
                     409,
@@ -2815,6 +2820,11 @@ def create_mihomo_clash_blueprint(
                     code="connection_not_found",
                 )
             if row.get("metadata", {}).get("smart_block") != "normal":
+                _audit_action(
+                    "connection-smart-block",
+                    False,
+                    error_code="smart_block_not_available",
+                )
                 return error_response(
                     "Smart-блокировка для этого соединения недоступна.",
                     409,

@@ -465,9 +465,9 @@ const MIHOMO_TOP_LEVEL_SNIPPETS = [
     id: 'mihomo-smart-lgbm',
     label: 'smart: LightGBM settings',
     detail: 'Mihomo fork · top-level',
-    documentation: 'Глобальные настройки обновления ML-модели для proxy-groups типа smart.',
-    insertText: 'lgbm-auto-update: true\nlgbm-update-interval: 72\nlgbm-url: "https://github.com/vernesong/mihomo/releases/download/LightGBM-Model/Model.bin"\nsmart-collector-size: 100',
-    monacoSnippet: 'lgbm-auto-update: ${1|true,false|}\nlgbm-update-interval: ${2:72}\nlgbm-url: "${3:https://github.com/vernesong/mihomo/releases/download/LightGBM-Model/Model.bin}"\nsmart-collector-size: ${4:100}$0',
+    documentation: 'Глобальные настройки обновления ML-модели для proxy-groups типа smart. Размер сборщика данных задаётся отдельно: `profile.smart-collector-size`.',
+    insertText: 'lgbm-auto-update: true\nlgbm-update-interval: 72\nlgbm-url: "https://github.com/vernesong/mihomo/releases/download/LightGBM-Model/Model.bin"',
+    monacoSnippet: 'lgbm-auto-update: ${1|true,false|}\nlgbm-update-interval: ${2:72}\nlgbm-url: "${3:https://github.com/vernesong/mihomo/releases/download/LightGBM-Model/Model.bin}"$0',
   },
   {
     id: 'mihomo-bundle-rule-provider-ruleset',
