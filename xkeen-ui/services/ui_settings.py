@@ -42,6 +42,9 @@ _MAX_VIEW_VALUE_CHARS = 8 * 1024
 _MAX_VIEW_NESTED_KEYS = 50
 _MAX_MIHOMO_COLLAPSED_GROUPS = 256
 _MAX_MIHOMO_GROUP_NAME_LEN = 256
+# "smart" orders Smart-group nodes by the fork's weights; other groups keep
+# the config order in that mode.
+_MIHOMO_PROXY_SORT_ORDERS = frozenset({"config", "name", "delay", "availability", "smart"})
 
 
 DEFAULTS: Dict[str, Any] = {
@@ -710,7 +713,7 @@ def _sanitize_full(raw: Any) -> Tuple[Dict[str, Any], SettingsReport]:
         proxy_sort_order = mihomo_raw.get("proxySortOrder")
         if proxy_sort_order is not None:
             normalized_sort_order = _as_lower_str(proxy_sort_order)
-            if normalized_sort_order in {"config", "name", "delay", "availability"}:
+            if normalized_sort_order in _MIHOMO_PROXY_SORT_ORDERS:
                 out["mihomo"]["proxySortOrder"] = normalized_sort_order
             else:
                 rep.warnings.append({"path": "mihomo.proxySortOrder", "warning": "invalid value; ignored"})
@@ -1079,7 +1082,7 @@ def _sanitize_patch(patch: Any) -> Tuple[Dict[str, Any], SettingsReport]:
 
             if "proxySortOrder" in mihomo_patch:
                 v = _as_lower_str(mihomo_patch.get("proxySortOrder"))
-                if v in {"config", "name", "delay", "availability"}:
+                if v in _MIHOMO_PROXY_SORT_ORDERS:
                     p["proxySortOrder"] = v
                 else:
                     rep.errors.append({"path": "mihomo.proxySortOrder", "error": "unsupported sort order"})

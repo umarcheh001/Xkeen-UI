@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 594,
-      "size_bytes": 8066476,
+      "size_bytes": 8066641,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -132,7 +132,7 @@
       ],
       "removable": true,
       "unit_count": 134,
-      "size_bytes": 3134845,
+      "size_bytes": 3136120,
       "kind_counts": {
         "app_runtime": 4,
         "backend_route": 2,
@@ -2945,7 +2945,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/ui_settings.py",
-      "size_bytes": 52869,
+      "size_bytes": 53034,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -15736,7 +15736,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_test",
       "path": "tests/test_mihomo_clash_frontend_contract.py",
-      "size_bytes": 33341,
+      "size_bytes": 33632,
       "depends_on": [
         "core",
         "tool.editor"
@@ -16549,7 +16549,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_test",
       "path": "tests/test_ui_settings_mihomo_hide_unavailable.py",
-      "size_bytes": 6514,
+      "size_bytes": 7234,
       "depends_on": [
         "core",
         "tool.editor"
@@ -16926,7 +16926,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/mihomo_clash/groups.js",
-      "size_bytes": 89497,
+      "size_bytes": 89696,
       "depends_on": [
         "core",
         "tool.editor"
@@ -17805,7 +17805,7 @@
       "module_id": "engine.mihomo",
       "kind": "template",
       "path": "xkeen-ui/templates/panel/screens/mihomo.html",
-      "size_bytes": 56815,
+      "size_bytes": 56880,
       "depends_on": [
         "core",
         "tool.editor"

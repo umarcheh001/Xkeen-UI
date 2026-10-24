@@ -251,6 +251,11 @@ def test_groups_ui_has_compact_filter_select_and_complete_delay_queue_contract()
         "smartWeightsAvailable",
         "SMART_WEIGHTS_REFRESH_MS = 30000",
         "weights[left.name]?.order",
+        # Weight order is its own mode; "config" keeps the YAML order.
+        "if (sortMode === 'config') return [...nodes];",
+        "if (sortMode === 'smart') {",
+        "'config', 'name', 'delay', 'availability', 'smart'",
+        '<option value="smart">По весу Smart</option>',
         "xk-mihomo-node-smart",
         "disconnect_affected",
         "provider-proxy",

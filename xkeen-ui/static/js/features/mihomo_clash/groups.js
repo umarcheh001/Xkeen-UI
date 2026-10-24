@@ -282,7 +282,7 @@ function applyMihomoUiSettings(settings) {
     : {};
   hideUnavailable = mihomo.hideUnavailable === true;
   consecutiveTimeouts = clampConsecutiveTimeouts(mihomo.consecutiveTimeouts);
-  sortMode = ['config', 'name', 'delay', 'availability'].includes(String(mihomo.proxySortOrder || ''))
+  sortMode = ['config', 'name', 'delay', 'availability', 'smart'].includes(String(mihomo.proxySortOrder || ''))
     ? String(mihomo.proxySortOrder)
     : 'config';
   latencyPreset = ['auto', 'google', 'cloudflare', 'yandex', 'all'].includes(String(mihomo.latencyPreset || ''))
@@ -819,7 +819,10 @@ function nodeDelayValue(group, node) {
 }
 
 function sortNodes(group, nodes) {
-  if (sortMode === 'config') {
+  if (sortMode === 'config') return [...nodes];
+  // Weight order is opt-in: weights refresh every 30 s, so nodes move under
+  // the pointer, and "config" must keep the order from the YAML.
+  if (sortMode === 'smart') {
     if (String(group?.type || '').toLowerCase() !== 'smart' || !smartWeights[group?.name]) {
       return [...nodes];
     }

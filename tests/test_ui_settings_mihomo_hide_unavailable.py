@@ -179,3 +179,21 @@ def test_ui_settings_rejects_arbitrary_latency_url_and_invalid_workspace_state(t
             assert exc.errors[0]["path"] == path
         else:
             raise AssertionError("invalid Mihomo workspace setting should be rejected")
+
+
+def test_ui_settings_accepts_smart_weight_sort_order(tmp_path):
+    patched, report = ui_settings.patch_settings(
+        {"mihomo": {"proxySortOrder": "smart"}},
+        ui_state_dir=str(tmp_path),
+    )
+
+    assert report["errors"] == []
+    assert patched["mihomo"]["proxySortOrder"] == "smart"
+    assert ui_settings.load_settings(ui_state_dir=str(tmp_path))["mihomo"]["proxySortOrder"] == "smart"
+
+    try:
+        ui_settings.patch_settings({"mihomo": {"proxySortOrder": "weight"}}, ui_state_dir=str(tmp_path))
+    except ui_settings.UISettingsValidationError as exc:
+        assert exc.errors[0]["path"] == "mihomo.proxySortOrder"
+    else:
+        raise AssertionError("unknown sort order should be rejected")
