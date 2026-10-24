@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 594,
-      "size_bytes": 8064724,
+      "size_bytes": 8066476,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -359,7 +359,7 @@
       ],
       "removable": true,
       "unit_count": 26,
-      "size_bytes": 448252,
+      "size_bytes": 448609,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 7,
@@ -814,7 +814,7 @@
       "module_id": "core",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/devtools.py",
-      "size_bytes": 10296,
+      "size_bytes": 10589,
       "depends_on": [
         "tool.advanced-diagnostics"
       ],
@@ -5769,7 +5769,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_backend_gates.py",
-      "size_bytes": 14677,
+      "size_bytes": 16136,
       "depends_on": [
         "tool.terminal",
         "integration.happ",
@@ -22153,7 +22153,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/system_resources.py",
-      "size_bytes": 9350,
+      "size_bytes": 7756,
       "depends_on": [
         "core"
       ],
@@ -22444,7 +22444,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_service",
       "path": "xkeen-ui/services/router_diagnostics.py",
-      "size_bytes": 53537,
+      "size_bytes": 55488,
       "depends_on": [
         "core"
       ],
@@ -33181,7 +33181,7 @@
         },
         "tool.advanced-diagnostics": {
           "unit_count": 26,
-          "size_bytes": 448252
+          "size_bytes": 448609
         }
       },
       "next_stage": "Этапы 4, 5 и 6."

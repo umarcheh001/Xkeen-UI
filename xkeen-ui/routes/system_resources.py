@@ -5,6 +5,7 @@ from flask import Blueprint, jsonify, request
 from routes.common.errors import error_response
 from services.router_diagnostics import (
     RciUnavailable,
+    apply_router_resource_telemetry,
     cached_router_capabilities,
     cached_router_diagnostics,
     cached_router_system,
@@ -87,40 +88,7 @@ def create_system_resources_blueprint(*, include_summary: bool = True) -> Bluepr
                     "conntrack": {"available": False},
                     "interfaces": {"available": False, "count": 0, "items": [], "truncated": False},
                 }
-            try:
-                keenetic = cached_router_system()
-            except Exception:  # noqa: BLE001 - vendor-compatible metrics are optional
-                keenetic = {
-                    "available": False,
-                    "source": "keenetic_rci",
-                    "state": "unavailable",
-                    "cpu": {},
-                    "memory": {},
-                }
-            procfs_cpu = payload.get("cpu", {}).get("percent")
-            procfs_memory = payload.get("memory", {}).get("percent")
-            if keenetic.get("available"):
-                if keenetic.get("cpu", {}).get("percent") is not None:
-                    payload["cpu"]["percent"] = keenetic["cpu"]["percent"]
-                if keenetic.get("memory"):
-                    payload["memory"] = dict(keenetic["memory"])
-                if keenetic.get("uptime_seconds") is not None:
-                    payload["uptime_seconds"] = keenetic["uptime_seconds"]
-            payload["resource_telemetry"] = {
-                "source": "keenetic_rci" if keenetic.get("available") else "linux_procfs",
-                "source_label": "KeeneticOS RCI" if keenetic.get("available") else "Linux procfs",
-                "state": keenetic.get("state", "unavailable"),
-                "comparison": {
-                    "keenetic_rci": {
-                        "cpu_percent": keenetic.get("cpu", {}).get("percent"),
-                        "memory_percent": keenetic.get("memory", {}).get("percent"),
-                    },
-                    "linux_procfs": {
-                        "cpu_percent": procfs_cpu,
-                        "memory_percent": procfs_memory,
-                    },
-                },
-            }
+            apply_router_resource_telemetry(payload, system_reader=cached_router_system)
             try:
                 payload["ui_process"] = get_memory_guard_status()
             except Exception:  # noqa: BLE001 - optional process telemetry

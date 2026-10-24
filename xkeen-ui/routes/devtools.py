@@ -67,7 +67,11 @@ def _redact_env_updates(updates: dict) -> dict:
 from services import devtools as dt
 from services import branding as br
 from services.memory_guard import get_memory_guard_status
-from services.router_diagnostics import cached_router_diagnostics
+from services.router_diagnostics import (
+    apply_router_resource_telemetry,
+    cached_router_diagnostics,
+    cached_router_system,
+)
 from services.system_resources import sample_system_resources
 
 try:
@@ -108,6 +112,9 @@ def create_devtools_blueprint(
                     "conntrack": {"available": False},
                     "interfaces": {"available": False, "count": 0, "items": [], "truncated": False},
                 }
+            # This handler is the live one: the diagnostics module registers
+            # its blueprint without the summary route.
+            apply_router_resource_telemetry(payload, system_reader=cached_router_system)
             try:
                 payload["ui_process"] = get_memory_guard_status()
             except Exception:  # noqa: BLE001 - optional process telemetry

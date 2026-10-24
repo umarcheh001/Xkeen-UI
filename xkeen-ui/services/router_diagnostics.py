@@ -1124,6 +1124,55 @@ def cached_router_system(
     return result
 
 
+def apply_router_resource_telemetry(
+    payload: dict[str, Any],
+    *,
+    system_reader: Callable[[], dict[str, Any]] | None = None,
+) -> None:
+    """Prefer Keenetic's own CPU/RAM figures over procfs, in place.
+
+    Both ``/api/system/resources`` handlers (the core DevTools one and the
+    optional diagnostics module one) call this, so the dashboard shows the
+    same numbers as the router web interface whichever handler is active.
+    """
+
+    reader = system_reader or cached_router_system
+    try:
+        keenetic = reader()
+    except Exception:  # noqa: BLE001 - vendor-compatible metrics are optional
+        keenetic = {
+            "available": False,
+            "source": "keenetic_rci",
+            "state": "unavailable",
+            "cpu": {},
+            "memory": {},
+        }
+    procfs_cpu = payload.get("cpu", {}).get("percent")
+    procfs_memory = payload.get("memory", {}).get("percent")
+    if keenetic.get("available"):
+        if keenetic.get("cpu", {}).get("percent") is not None:
+            payload.setdefault("cpu", {})["percent"] = keenetic["cpu"]["percent"]
+        if keenetic.get("memory"):
+            payload["memory"] = dict(keenetic["memory"])
+        if keenetic.get("uptime_seconds") is not None:
+            payload["uptime_seconds"] = keenetic["uptime_seconds"]
+    payload["resource_telemetry"] = {
+        "source": "keenetic_rci" if keenetic.get("available") else "linux_procfs",
+        "source_label": "KeeneticOS RCI" if keenetic.get("available") else "Linux procfs",
+        "state": keenetic.get("state", "unavailable"),
+        "comparison": {
+            "keenetic_rci": {
+                "cpu_percent": keenetic.get("cpu", {}).get("percent"),
+                "memory_percent": keenetic.get("memory", {}).get("percent"),
+            },
+            "linux_procfs": {
+                "cpu_percent": procfs_cpu,
+                "memory_percent": procfs_memory,
+            },
+        },
+    }
+
+
 def cached_router_diagnostics(
     *,
     cache_ttl: float = 10.0,

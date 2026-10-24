@@ -246,6 +246,41 @@ def test_advanced_diagnostics_routes_are_not_exposed_when_optional_module_is_off
     assert client.get("/api/system/processes").status_code == 404
 
 
+def test_live_resource_summary_reports_keenetic_metrics_with_diagnostics_module(tmp_path, monkeypatch):
+    # The diagnostics module registers its blueprint without the summary
+    # route, so the DevTools handler is the one the dashboard talks to.
+    import routes.devtools
+
+    monkeypatch.setattr(
+        routes.devtools,
+        "sample_system_resources",
+        lambda: {
+            "sampled_at": 10,
+            "cpu": {"percent": 56.0},
+            "memory": {"percent": 48.0, "used_bytes": 476 * 1024 * 1024, "total_bytes": 991 * 1024 * 1024},
+        },
+    )
+    monkeypatch.setattr(routes.devtools, "cached_router_diagnostics", lambda: {"internet": {"available": False}})
+    monkeypatch.setattr(
+        routes.devtools,
+        "cached_router_system",
+        lambda: {
+            "available": True,
+            "state": "available",
+            "cpu": {"percent": 3.0},
+            "memory": {"percent": 44.2, "used_bytes": 463_120 * 1024, "total_bytes": 1_048_576 * 1024},
+        },
+    )
+    app = _register(tmp_path, ["core", "tool.editor", "engine.xray", "tool.advanced-diagnostics"])
+
+    payload = app.test_client().get("/api/system/resources").get_json()
+
+    assert payload["cpu"]["percent"] == 3.0
+    assert payload["memory"]["total_bytes"] == 1_048_576 * 1024
+    assert payload["resource_telemetry"]["source"] == "keenetic_rci"
+    assert payload["resource_telemetry"]["comparison"]["linux_procfs"]["memory_percent"] == 48.0
+
+
 def test_optional_module_factory_failures_do_not_stop_core(tmp_path, monkeypatch):
     monkeypatch.setattr(
         routes.mihomo,
