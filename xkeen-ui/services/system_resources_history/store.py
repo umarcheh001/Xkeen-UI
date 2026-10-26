@@ -91,11 +91,11 @@ class _Tier:
         p = int(ts // self.step)
         if self.cur is None:
             self.cur = p
-        elif p > self.cur:
+        elif p > self.cur or (p < self.cur and not allow_back):
+            # forward: normal rollover; backward (clock corrected): close the
+            # running point and restart at p, keeping the older history.
             self._close()
             self.cur = p
-        elif p < self.cur and not allow_back:
-            return
         for i, v in enumerate(samples):
             if v is None:
                 continue
@@ -117,7 +117,8 @@ class _Tier:
     def valid_points(self, i: int) -> list[float]:
         out: list[float] = []
         for slot in range(self.size):
-            if self.starts[slot] >= 0 and self.cur != self.starts[slot] // self.step:
+            point = self.starts[slot] // self.step
+            if self.starts[slot] >= 0 and self.cur != point and (self.cur is None or point <= self.cur):
                 v = self.avg[i][slot]
                 if not math.isnan(v):
                     out.append(v)

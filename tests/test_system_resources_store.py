@@ -102,6 +102,40 @@ def test_clock_jump_back_resets_only_fresh():
     assert day[-1] == 30 or day[-2] == 30
 
 
+def test_backward_jump_day_and_week_keep_recording():
+    s = HistoryStore(("cpu",))
+    feed(s, T0 + 4 * 3600, 600, 30)
+    back = T0 + 600
+    feed(s, back, 600, 70)
+    now = back + 595
+    for rng in ("6h", "24h", "7d"):
+        avg = s.columns(rng, now)["metrics"]["cpu"]["avg"]
+        assert avg[-1] == 70, rng
+        # nothing dated after `now` leaks in, older data stays
+        assert 30 not in avg, rng
+    s2 = HistoryStore(("cpu",))
+    feed(s2, T0, 600, 30)
+    feed(s2, T0 - 3 * 3600, 600, 70)
+    old = s2.columns("6h", T0 + 595)["metrics"]["cpu"]["avg"]
+    assert old[-1] == 30
+    assert s2.median("cpu") is not None
+
+
+def test_restored_ahead_store_records_immediately():
+    import json
+
+    s = HistoryStore(("cpu",))
+    feed(s, T0 + 2 * 3600, 600, 30)
+    data = json.loads(json.dumps(s.to_dict()))
+    r = HistoryStore.from_dict(data, ("cpu",))
+    now = T0 + 120
+    r.add(now, {"cpu": 55})
+    for rng in ("15m", "6h", "7d"):
+        avg = r.columns(rng, now)["metrics"]["cpu"]["avg"]
+        assert avg[-1] == 55, rng
+        assert 30 not in avg, rng
+
+
 def test_small_backward_step_does_not_reset():
     s = HistoryStore(("cpu",))
     feed(s, T0, 300, 30)
