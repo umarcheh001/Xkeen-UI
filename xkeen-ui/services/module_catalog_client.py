@@ -689,8 +689,14 @@ class ModuleCatalogClient:
         self,
         snapshot: CatalogSnapshot,
         destination_dir: str | os.PathLike[str],
+        *,
+        progress: Callable[[int], None] | None = None,
     ) -> Path:
-        """Stream the whole-panel asset named by an already verified catalog."""
+        """Stream the whole-panel asset named by an already verified catalog.
+
+        ``progress`` hears the bytes written so far after every piece; an
+        exception it raises stops the download and leaves no partial file.
+        """
 
         descriptor = snapshot.catalog.get("panel")
         if not isinstance(descriptor, Mapping):
@@ -711,6 +717,7 @@ class ModuleCatalogClient:
             expected_size=normalized["size"],
             expected_digest=normalized["sha256"],
             destination_dir=destination_dir,
+            progress=progress,
         )
 
     def _download_verified_asset(
@@ -721,6 +728,7 @@ class ModuleCatalogClient:
         expected_size: int,
         expected_digest: str,
         destination_dir: str | os.PathLike[str],
+        progress: Callable[[int], None] | None = None,
     ) -> Path:
         archive_url = official_release_asset_url(snapshot.release_version, archive_name)
         destination = Path(destination_dir)
@@ -740,7 +748,10 @@ class ModuleCatalogClient:
                 chunk = bytes(data)
                 digest.update(chunk)
                 written += len(chunk)
-                return self._handle.write(chunk)
+                count = self._handle.write(chunk)
+                if progress is not None:
+                    progress(written)
+                return count
 
         try:
             with os.fdopen(descriptor, "wb") as handle:

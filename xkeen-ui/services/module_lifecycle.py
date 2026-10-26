@@ -437,7 +437,9 @@ class ModuleLifecycleService:
                     except OSError:
                         pass
 
-    def _panel_archive(self, client: Any, snapshot: Any) -> tuple[Path, bool]:
+    def _panel_archive(
+        self, client: Any, snapshot: Any, progress: Callable[[int], None] | None = None
+    ) -> tuple[Path, bool]:
         """The panel archive of a verified catalog and whether it was just downloaded."""
 
         descriptor = snapshot.catalog.get("panel")
@@ -454,7 +456,11 @@ class ModuleLifecycleService:
         self._clear_archive_cache()
         incoming = cache / f"incoming-{os.getpid()}-{uuid.uuid4().hex[:8]}"
         try:
-            downloaded = client.download_verified_panel_archive(snapshot, incoming)
+            downloaded = (
+                client.download_verified_panel_archive(snapshot, incoming)
+                if progress is None
+                else client.download_verified_panel_archive(snapshot, incoming, progress=progress)
+            )
             if target is None:
                 target = cache / "panel.tar.gz"
             os.replace(downloaded, target)
@@ -462,7 +468,13 @@ class ModuleLifecycleService:
             shutil.rmtree(incoming, ignore_errors=True)
         return target, True
 
-    def _checked_panel_archive(self, client: Any, snapshot: Any, architecture: str) -> dict[str, Any]:
+    def _checked_panel_archive(
+        self,
+        client: Any,
+        snapshot: Any,
+        architecture: str,
+        progress: Callable[[int], None] | None = None,
+    ) -> dict[str, Any]:
         """The verified listing of the panel archive; nothing is unpacked."""
 
         from services.panel_package_contract import validate_panel_archive
@@ -471,16 +483,24 @@ class ModuleLifecycleService:
             self._archive_users += 1
         try:
             with self._archive_download:
-                return self._read_panel_archive(client, snapshot, architecture, validate_panel_archive)
+                return self._read_panel_archive(client, snapshot, architecture, validate_panel_archive, progress)
         finally:
             with self._archive_guard:
                 self._archive_users -= 1
 
-    def _read_panel_archive(self, client: Any, snapshot: Any, architecture: str, validate_panel_archive: Any) -> dict[str, Any]:
+    def _read_panel_archive(
+        self,
+        client: Any,
+        snapshot: Any,
+        architecture: str,
+        validate_panel_archive: Any,
+        progress: Callable[[int], None] | None = None,
+    ) -> dict[str, Any]:
+        from services.blocking import run_blocking
         from services.module_package_contract import ModulePackageContractError
 
         while True:
-            archive, fresh = self._panel_archive(client, snapshot)
+            archive, fresh = self._panel_archive(client, snapshot, progress)
             try:
                 # Reading the archive means unpacking all of it for the sums of
                 # its files. The plan is built again for the re-check and for
@@ -498,7 +518,9 @@ class ModuleLifecycleService:
                 )
                 if self._archive_listing is not None and self._archive_listing[0] == key:
                     return self._archive_listing[1]
-                listing = validate_panel_archive(
+                # A second of unpacking off the loop: the rest of the panel answers.
+                listing = run_blocking(
+                    validate_panel_archive,
                     archive,
                     descriptor,
                     platform_architecture=architecture,

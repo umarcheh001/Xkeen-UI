@@ -81,7 +81,9 @@ class _CatalogTransport:
         response = self.stream_responses[url]
         if isinstance(response, Exception):
             raise response
-        output.write(response)
+        # Kept small so a download is seen arriving in several pieces.
+        for start in range(0, len(response), 4):
+            output.write(response[start:start + 4])
         return len(response)
 
 
@@ -807,6 +809,50 @@ def test_client_removes_partial_panel_archive_when_bytes_do_not_match_catalog(
     assert raised.value.code == code
     assert list(downloads.glob("*.part")) == []
     assert not (downloads / "xkeen-ui-panel-1.2.3.tar.gz").exists()
+
+
+def _panel_download_client(tmp_path: Path, panel_bytes: bytes = b"trusted-panel"):
+    private_key = Ed25519PrivateKey.generate()
+    archive_url = official_release_asset_url("1.2.3", "xkeen-ui-panel-1.2.3.tar.gz")
+    transport = _CatalogTransport(
+        _release_responses(private_key, "1.2.3", panel_bytes=panel_bytes),
+        stream_responses={archive_url: panel_bytes},
+    )
+    client = ModuleCatalogClient(
+        tmp_path / "state",
+        transport=transport,
+        now=lambda: 100.0,
+        keyring={"release-2026": _public_pem(private_key)},
+        platform_architecture="aarch64",
+    )
+    return client, client.get_catalog()
+
+
+def test_panel_archive_download_reports_cumulative_bytes(tmp_path: Path) -> None:
+    client, snapshot = _panel_download_client(tmp_path)
+    seen: list[int] = []
+
+    path = client.download_verified_panel_archive(snapshot, tmp_path / "in", progress=seen.append)
+
+    assert len(seen) > 1
+    assert seen == sorted(seen)
+    assert seen[-1] == path.stat().st_size
+
+
+def test_panel_archive_download_stops_when_progress_raises(tmp_path: Path) -> None:
+    client, snapshot = _panel_download_client(tmp_path)
+
+    class Stop(Exception):
+        pass
+
+    def stop(written: int) -> None:
+        if written > 0:
+            raise Stop()
+
+    with pytest.raises(Stop):
+        client.download_verified_panel_archive(snapshot, tmp_path / "in", progress=stop)
+
+    assert list((tmp_path / "in").iterdir()) == []
 
 
 def test_client_revalidates_panel_descriptor_before_starting_download(tmp_path) -> None:
