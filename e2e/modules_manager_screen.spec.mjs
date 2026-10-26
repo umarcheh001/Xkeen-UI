@@ -2,6 +2,7 @@ import { test, expect } from './fixtures.mjs';
 import {
   server, installedSnapshot, idleStatus, availableSnapshot, panelUpdatePlan, runningStatus, terminalEntry,
   TERMINAL, withMihomo, installIdleLifecycleRoutes, installLifecycleRoutes, advanceClock, restartStatus,
+  routePlans,
 } from './modules_manager_support.mjs';
 
 // The Modules window: how the screen looks, a local build, coming back to the
@@ -571,7 +572,7 @@ test.describe('A screen that is not drawn anew without a reason', () => {
       enabled = route.request().postDataJSON().enabled;
       return route.fulfill({ json: { ok: true, restart_required: true } });
     });
-    await page.route('**/api/modules/operations/plan', (route) => { planCalls += 1; return route.fulfill({ json: panelUpdatePlan }); });
+    await routePlans(page, () => { planCalls += 1; return { json: panelUpdatePlan }; });
     await page.goto('/modules');
     const toggle = page.getByRole('switch', { name: 'Включить Mihomo' });
     await page.getByLabel('Действия: Mihomo').click();
@@ -600,7 +601,7 @@ test.describe('A screen that is not drawn anew without a reason', () => {
     let catalogCalls = 0;
     await installLifecycleRoutes(page, { status: restartStatus });
     await page.route('**/api/modules/available', (route) => { catalogCalls += 1; return route.fulfill({ json: availableSnapshot }); });
-    await page.route('**/api/modules/operations/plan', (route) => route.fulfill({ json: {
+    await routePlans(page, () => ({ json: {
       ...panelUpdatePlan, operation: 'profile-transition', affected_module_ids: ['core', 'tool.terminal', 'tool.files'],
     } }));
     await page.goto('/modules');

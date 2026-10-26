@@ -795,7 +795,9 @@ function planFacts(plan, names, blockers, editorChange = null) {
   return facts;
 }
 
-export function renderPlan(dialog, plan, names = null, { editorChange = null } = {}) {
+// prepared is { seconds, cached } for a panel update prepared in the
+// background: the bar of the preparation stays under the plan on «3 из 7».
+export function renderPlan(dialog, plan, names = null, { editorChange = null, prepared = null } = {}) {
   const summary = dialog.querySelector('#modules-plan-summary');
   const progress = dialog.querySelector('#modules-plan-progress');
   const blockers = Array.isArray(plan.blockers) ? plan.blockers : [];
@@ -808,8 +810,13 @@ export function renderPlan(dialog, plan, names = null, { editorChange = null } =
     summary.append(alertLine('modules-warning', 'Панель перезапустится.', 'Страница переподключится сама, это займёт около минуты.'));
   }
   for (const blocker of blockers) summary.append(describeBlocker(blocker, names));
-  progress.hidden = true;
-  progress.replaceChildren();
+  if (prepared && applicable && plan.operation === 'panel-update') {
+    progress.hidden = false;
+    progress.replaceChildren(preparedBox(prepared));
+  } else {
+    progress.hidden = true;
+    progress.replaceChildren();
+  }
   setDialogButtons(dialog, {
     abort: null,
     cancel: { label: applicable ? 'Отмена' : 'Закрыть' },
@@ -832,29 +839,15 @@ function lastLoggedStep(status) {
   return stepIndex(status.step);
 }
 
-function progressBox(status, notice) {
-  const tone = RESULT_TONES[status.result] || 'run';
+// One bar for the whole way of an operation: the head, the bar and the steps.
+// stateOf(index) gives a step 'done', 'active', 'failed' or nothing.
+function stepsBox({ phase, note, count, share, stateOf, tone }) {
   const box = node('div', `modules-plan-progress-box is-${tone}`);
   const total = PROGRESS_STEPS.length;
-  let reached;
-  let phase;
-  let note;
-  if (status.result === 'running') {
-    reached = Math.max(stepIndex(status.step), 0);
-    phase = STEP_LABELS[status.step] || 'Подготовка';
-    note = notice || 'Окно можно закрыть, операция продолжится на роутере.';
-  } else {
-    reached = status.result === 'committed' ? total : Math.max(lastLoggedStep(status), 0);
-    phase = RESULT_LABELS[status.result] || String(status.result);
-    const started = formatClock(status.started_at);
-    const duration = formatDuration(status.started_at, status.finished_at);
-    note = [started && `Начато ${started}`, duration && `длилось ${duration}`].filter(Boolean).join(' · ');
-  }
   const head = node('div', 'modules-plan-progress-head');
   const words = node('div');
   words.append(node('strong', '', phase));
   if (note) words.append(node('small', '', note));
-  const count = Math.min(status.result === 'running' ? reached + 1 : reached, total);
   head.append(words, node('output', '', `${count} из ${total}`));
   const bar = node('div', 'modules-plan-progress-bar');
   bar.setAttribute('role', 'progressbar');
@@ -863,19 +856,136 @@ function progressBox(status, notice) {
   bar.setAttribute('aria-valuenow', String(count));
   bar.setAttribute('aria-label', 'Ход операции');
   const fill = node('i');
-  const share = status.result === 'committed' ? 1 : (status.result === 'running' ? (reached + 0.5) / total : reached / total);
-  fill.style.width = `${Math.round(Math.min(share, 1) * 100)}%`;
+  fill.style.width = `${Math.round(Math.min(Math.max(share, 0), 1) * 100)}%`;
   bar.append(fill);
   const steps = node('ol', 'modules-plan-steps');
   steps.setAttribute('aria-label', 'Этапы операции');
   PROGRESS_STEPS.forEach(([, label], index) => {
     const item = node('li', '', label);
-    if (status.result === 'committed' || index < reached) item.dataset.state = 'done';
-    else if (index === reached) item.dataset.state = status.result === 'running' ? 'active' : 'failed';
+    const stepState = stateOf(index);
+    if (stepState) item.dataset.state = stepState;
     steps.append(item);
   });
   box.append(head, bar, steps);
   return box;
+}
+
+// A panel update is prepared before its plan: these three steps are done by
+// the time the owner confirms, and the runner goes on from the fourth.
+const PREPARED_STEPS = 3;
+
+function progressBox(status, notice) {
+  const tone = RESULT_TONES[status.result] || 'run';
+  const total = PROGRESS_STEPS.length;
+  const running = status.result === 'running';
+  let reached;
+  let phase;
+  let note;
+  if (running) {
+    reached = Math.max(stepIndex(status.step), 0);
+    phase = STEP_LABELS[status.step] || 'Подготовка';
+    // The runner checks its copy of the archive again; on the screen the
+    // bar does not go back over what the preparation has already shown.
+    if (status.operation === 'panel-update' && reached < PREPARED_STEPS && status.step !== 'rolling_back') {
+      reached = PREPARED_STEPS;
+      phase = STEP_LABELS[PROGRESS_STEPS[reached][0]];
+    }
+    note = notice || 'Окно можно закрыть, операция продолжится на роутере.';
+  } else {
+    reached = status.result === 'committed' ? total : Math.max(lastLoggedStep(status), 0);
+    phase = RESULT_LABELS[status.result] || String(status.result);
+    const started = formatClock(status.started_at);
+    const duration = formatDuration(status.started_at, status.finished_at);
+    note = [started && `Начато ${started}`, duration && `длилось ${duration}`].filter(Boolean).join(' · ');
+  }
+  return stepsBox({
+    phase,
+    note,
+    tone,
+    count: Math.min(running ? reached + 1 : reached, total),
+    share: status.result === 'committed' ? 1 : (running ? (reached + 0.5) / total : reached / total),
+    stateOf: (index) => {
+      if (status.result === 'committed' || index < reached) return 'done';
+      if (index === reached) return running ? 'active' : 'failed';
+      return null;
+    },
+  });
+}
+
+const PREPARE_HINT = 'Роутер скачивает выпуск с GitHub и проверяет его. Окно можно закрыть, подготовка продолжится.';
+const PREPARE_PHASE_STEPS = { catalog: 0, downloading: 1, verifying: 2 };
+
+function megabytes(bytes) {
+  return (Math.max(Number(bytes) || 0, 0) / (1024 * 1024)).toFixed(1).replace('.', ',');
+}
+
+function downloadNote(done, total, speed) {
+  const parts = [`${megabytes(done)} из ${megabytes(total)} МБ`];
+  if (speed > 0) {
+    parts.push(`${megabytes(speed)} МБ/с`);
+    if (total > done) parts.push(`осталось около ${Math.max(1, Math.round((total - done) / speed))} с`);
+  }
+  return parts.join(' · ');
+}
+
+function preparedBox(prepared) {
+  return stepsBox({
+    phase: 'Готово к обновлению',
+    note: prepared.cached
+      ? 'Выпуск уже был скачан и проверен. Файлы панели пока не тронуты.'
+      : `Выпуск скачан и проверен за ${Math.max(Math.round(Number(prepared.seconds) || 0), 1)} с. Файлы панели пока не тронуты.`,
+    tone: 'run',
+    count: PREPARED_STEPS,
+    share: PREPARED_STEPS / PROGRESS_STEPS.length,
+    stateOf: (index) => (index < PREPARED_STEPS ? 'done' : null),
+  });
+}
+
+// The window while the router downloads and checks the release: the first
+// three steps of the operation, before there is a plan to confirm.
+// snapshot is the answer of /api/modules/panel/prepare; speed is in bytes a second.
+export function renderPrepareDialog(dialog, snapshot, { version = '', speed = null, error = null } = {}) {
+  const summary = dialog.querySelector('#modules-plan-summary');
+  const progress = dialog.querySelector('#modules-plan-progress');
+  dialog.dataset.mode = 'prepare';
+  setDialogHead(dialog, dialogTitle({ operation: 'panel-update', target_version: version }), PREPARE_HINT);
+  summary.replaceChildren();
+  const failure = error || (snapshot.state === 'failed' ? snapshot.error || {} : null);
+  let index = PREPARE_PHASE_STEPS[snapshot.phase] ?? 0;
+  // An archive already on the router is not downloaded again.
+  if (snapshot.cached && index === 1) index = 2;
+  const total = Number(snapshot.total_bytes) || 0;
+  const done = Number(snapshot.downloaded_bytes) || 0;
+  let note = '';
+  if (!failure) {
+    if (index === 0) note = 'Проверка выпуска на GitHub';
+    else if (index === 1) note = downloadNote(done, total, speed);
+    else note = snapshot.cached ? 'Архив уже скачан' : 'Осталось несколько секунд.';
+  }
+  progress.hidden = false;
+  progress.replaceChildren(stepsBox({
+    phase: failure ? 'Не удалось подготовить обновление' : PROGRESS_STEPS[index][1],
+    note,
+    tone: failure ? 'bad' : 'run',
+    count: index + 1,
+    share: index === 1 && total > 0 && !failure ? (1 + Math.min(done / total, 1)) / PROGRESS_STEPS.length : (index + 0.5) / PROGRESS_STEPS.length,
+    stateOf: (step) => {
+      if (step < index) return 'done';
+      if (step === index) return failure ? 'failed' : 'active';
+      return null;
+    },
+  }));
+  if (failure) {
+    const line = alertLine('modules-alert modules-plan-error', 'Обновление не подготовлено.', describeLifecycleFailure(failure));
+    line.setAttribute('role', 'alert');
+    progress.append(line);
+  }
+  setDialogButtons(dialog, {
+    abort: null,
+    cancel: { label: failure ? 'Закрыть' : 'Отмена' },
+    recheck: failure ? {} : null,
+    apply: failure ? null : { label: 'Подготовка…', disabled: true },
+  });
 }
 
 // The operation goes on in the window it was planned in, and the window

@@ -1,4 +1,4 @@
-import { editorChangeOf, renderInstalled, renderAvailable, renderCatalogError, renderPlan, renderPlanError, renderOperationDialog, renderOperationStatus, hasOperationStatus, describeLifecycleFailure, renderPageAlert, TILE_REFUSAL_CODES } from './render.js';
+import { editorChangeOf, renderInstalled, renderAvailable, renderCatalogError, renderPlan, renderPlanError, renderPrepareDialog, renderOperationDialog, renderOperationStatus, hasOperationStatus, describeLifecycleFailure, renderPageAlert, TILE_REFUSAL_CODES } from './render.js';
 import { lifecycleAvailable } from '../panel_summary.js';
 import { clearModulesUpdateBadge, reconcileModulesUpdateBadge, reconcileModulesUpdateCheck, reconcileModulesUpdatePlan, reconcileModulesUpdateStatus } from './badge.js';
 
@@ -92,8 +92,12 @@ export function createModuleManagerController({ root, api, pollMs, reload = () =
   let pollTimer = null;
   let pollGeneration = 0;
   let returnFocus = null;
-  // The window shows a plan, or the operation started from it.
+  // The window shows a plan, or the operation started from it; a panel
+  // update first shows its preparation ('prepare').
   let dialogMode = null;
+  // The preparation the window watches. A closed window stops watching; the
+  // router goes on, and the next click finds the same preparation.
+  const prepare = { id: null, running: false, generation: 0, timer: null, failures: 0, sample: null };
   let dialogOperationId = null;
   // Closed in this page even when the browser keeps no storage.
   let dismissedId = null;
@@ -327,6 +331,7 @@ export function createModuleManagerController({ root, api, pollMs, reload = () =
   function closePlan({ restoreFocus = true, force = false, operation = false } = {}) {
     if (busy && !force) return;
     if (dialogMode === 'operation' && !operation) return;
+    stopPreparePolling();
     state.plan = null;
     dialogMode = null;
     dialogOperationId = null;
@@ -350,7 +355,140 @@ export function createModuleManagerController({ root, api, pollMs, reload = () =
     dialog.querySelector('#modules-plan-title')?.focus();
   }
 
+  function stopPreparePolling() {
+    prepare.generation += 1;
+    if (prepare.timer !== null) clearTimeout(prepare.timer);
+    prepare.timer = null;
+  }
+
+  // The plan of a panel update is prepared on the router while the window
+  // shows its steps; the plan itself is drawn by showPlan below.
+  async function requestPanelUpdate(trigger) {
+    if (mutationsLocked() || !dialog) return;
+    stopPreparePolling();
+    const generation = prepare.generation;
+    if (trigger) returnFocus = trigger;
+    state.plan = null;
+    dialogMode = 'prepare';
+    dialogEditorChange = null;
+    prepare.failures = 0;
+    prepare.sample = null;
+    prepare.running = true;
+    drawPrepare({ state: 'running', phase: 'catalog' });
+    if (!dialog.open) dialog.showModal();
+    dialog.querySelector('#modules-plan-title').focus();
+    try {
+      const snapshot = await api.startPanelPrepare();
+      if (generation === prepare.generation && dialogMode === 'prepare') observePrepare(snapshot, generation);
+    } catch (error) {
+      if (generation === prepare.generation && dialogMode === 'prepare') failPrepare(error);
+    }
+  }
+
+  function drawPrepare(snapshot, options = {}) {
+    renderPrepareDialog(dialog, snapshot, { version: state.update?.target_version || '', ...options });
+  }
+
+  function failPrepare(error) {
+    prepare.running = false;
+    // Another operation took the router: the screen shows that one instead.
+    if (error?.code === 'operation_in_progress') {
+      closePlan({ force: true });
+      void refreshInstalledAfterTerminal();
+      return;
+    }
+    drawPrepare({ state: 'failed', phase: 'catalog' }, { error });
+  }
+
+  // Bytes a second between two answers about the same download.
+  function downloadSpeed(snapshot) {
+    if (snapshot.phase !== 'downloading' || snapshot.cached) { prepare.sample = null; return null; }
+    const now = Date.now();
+    const bytes = Number(snapshot.downloaded_bytes) || 0;
+    const previous = prepare.sample;
+    prepare.sample = { at: now, bytes, speed: previous?.speed ?? null };
+    if (previous && now > previous.at && bytes > previous.bytes) {
+      prepare.sample.speed = (bytes - previous.bytes) / ((now - previous.at) / 1000);
+    }
+    return prepare.sample.speed;
+  }
+
+  function observePrepare(snapshot, generation) {
+    prepare.id = snapshot.prepare_id || prepare.id;
+    prepare.running = snapshot.state === 'running';
+    if (snapshot.state === 'running') {
+      drawPrepare(snapshot, { speed: downloadSpeed(snapshot) });
+      schedulePreparePoll(generation);
+    } else if (snapshot.state === 'ready' && snapshot.plan) {
+      const seconds = Number(snapshot.finished_at) - Number(snapshot.started_at);
+      showPlan(snapshot.plan, { seconds: Number.isFinite(seconds) ? seconds : 0, cached: snapshot.cached === true });
+    } else if (snapshot.state === 'failed') {
+      if (snapshot.error?.code === 'operation_in_progress') failPrepare(snapshot.error);
+      else drawPrepare(snapshot);
+    } else {
+      // Cancelled from another window: there is nothing left to show.
+      closePlan({ force: true });
+    }
+  }
+
+  function schedulePreparePoll(generation) {
+    if (!active || generation !== prepare.generation || prepare.timer !== null) return;
+    prepare.timer = setTimeout(async () => {
+      prepare.timer = null;
+      if (!active || generation !== prepare.generation || dialogMode !== 'prepare' || !prepare.id) return;
+      try {
+        const snapshot = await api.loadPanelPrepare(prepare.id);
+        prepare.failures = 0;
+        if (generation === prepare.generation && dialogMode === 'prepare') observePrepare(snapshot, generation);
+      } catch (error) {
+        if (generation !== prepare.generation || dialogMode !== 'prepare') return;
+        prepare.failures += 1;
+        // One lost answer is a hiccup of the network; three are a failure.
+        if (prepare.failures >= 3) failPrepare(error);
+        else schedulePreparePoll(generation);
+      }
+    }, pollMs > 0 ? pollMs : 1000);
+  }
+
+  // «Отмена» of a preparation stops the download on the router; the cross
+  // only closes the window.
+  function cancelFromDialog() {
+    if (dialogMode === 'prepare' && prepare.running && prepare.id) {
+      void api.cancelPanelPrepare(prepare.id).catch(() => {});
+    }
+    closeDialog();
+  }
+
+  function showPlan(plan, prepared = null) {
+    if (plan.operation === 'panel-update' && plan.applicable !== true
+      && plan.blockers?.some((blocker) => blocker?.code === 'panel_version_current')) {
+      // A current panel is an answer to show, not a plan with nothing in it.
+      reconcileModulesUpdatePlan(plan, state.installed?.update_channel);
+      clearError();
+      returnFocus = null;
+      state.update = {
+        checked: true, loading: false, error: null, update_available: false, requires_installer: false,
+        source_version: plan.source_version, target_version: plan.target_version,
+        stable_unreleased: plan.blockers.some((blocker) => blocker?.stable_unreleased === true),
+      };
+      if (dialogMode === 'prepare') closePlan({ force: true, restoreFocus: false });
+      if (active) render();
+      return false;
+    }
+    stopPreparePolling();
+    state.plan = plan;
+    dialogMode = 'plan';
+    clearError();
+    reconcileModulesUpdatePlan(plan, state.installed?.update_channel);
+    dialogEditorChange = editorChangeOf(plan, state.installed);
+    renderPlan(dialog, plan, moduleNames(), { editorChange: dialogEditorChange, prepared });
+    if (!dialog.open) dialog.showModal();
+    dialog.querySelector('#modules-plan-title').focus();
+    return true;
+  }
+
   async function requestPlan(operation, moduleId, trigger) {
+    if (operation === 'panel-update') return requestPanelUpdate(trigger);
     if (mutationsLocked() || !dialog) return;
     busy = true;
     state.plan = null;
@@ -359,27 +497,7 @@ export function createModuleManagerController({ root, api, pollMs, reload = () =
     try {
       const plan = await api.plan(operation, moduleId);
       if (!active) return;
-      if (plan.operation === 'panel-update' && plan.applicable !== true
-        && plan.blockers?.some((blocker) => blocker?.code === 'panel_version_current')) {
-        // A current panel is an answer to show, not a plan with nothing in it.
-        reconcileModulesUpdatePlan(plan, state.installed?.update_channel);
-        clearError();
-        returnFocus = null;
-        state.update = {
-          checked: true, loading: false, error: null, update_available: false, requires_installer: false,
-          source_version: plan.source_version, target_version: plan.target_version,
-          stable_unreleased: plan.blockers.some((blocker) => blocker?.stable_unreleased === true),
-        };
-        return;
-      }
-      state.plan = plan;
-      dialogMode = 'plan';
-      clearError();
-      reconcileModulesUpdatePlan(plan, state.installed?.update_channel);
-      dialogEditorChange = editorChangeOf(plan, state.installed);
-      renderPlan(dialog, plan, moduleNames(), { editorChange: dialogEditorChange });
-      if (!dialog.open) dialog.showModal();
-      dialog.querySelector('#modules-plan-title').focus();
+      showPlan(plan);
     } catch (error) {
       if (error?.code === 'operation_in_progress') await refreshInstalledAfterTerminal();
       else showError(error);
@@ -394,6 +512,7 @@ export function createModuleManagerController({ root, api, pollMs, reload = () =
 
   // A plan that cannot be applied is asked for again from its own window.
   function recheckPlan() {
+    if (dialogMode === 'prepare') { void requestPanelUpdate(null); return; }
     const plan = state.plan;
     if (!plan || dialogMode !== 'plan') return;
     void requestPlan(plan.operation, plan.module_id || null, null);
@@ -773,7 +892,7 @@ export function createModuleManagerController({ root, api, pollMs, reload = () =
     if (!tabsWired) {
       tabs.installed.addEventListener('click', () => { void selectTab('installed'); });
       tabs.available.addEventListener('click', () => { void selectTab('available'); });
-      dialog?.querySelector('#modules-plan-cancel').addEventListener('click', closeDialog);
+      dialog?.querySelector('#modules-plan-cancel').addEventListener('click', cancelFromDialog);
       dialog?.querySelector('#modules-plan-close')?.addEventListener('click', closeDialog);
       dialog?.querySelector('#modules-plan-recheck')?.addEventListener('click', recheckPlan);
       dialog?.querySelector('#modules-plan-abort')?.addEventListener('click', () => { void requestCancel(); });

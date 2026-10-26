@@ -3,6 +3,7 @@ import {
   server, installedSnapshot, idleStatus, availableSnapshot, installPlan, panelUpdatePlan, runningStatus,
   committedStatus, TERMINAL, withMihomo, installIdleLifecycleRoutes, installLifecycleRoutes, advanceClock,
   interruptedStatus, rollbackFailedStatus, restartStatus,
+  routePlans,
 } from './modules_manager_support.mjs';
 
 // The Modules window: restarts of the panel, recovery after a failed operation
@@ -542,7 +543,7 @@ test.describe('Module manager recovery and guards', () => {
   test('keeps expanded operation and plan readable on mobile', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await installLifecycleRoutes(page, { status: { ...restartStatus, log: [{ step: 'a'.repeat(200), at: 1781000001 }] } });
-    await page.route('**/api/modules/operations/plan', (route) => route.fulfill({ json: {
+    await routePlans(page, () => ({ json: {
       ...installPlan, affected_module_ids: ['a'.repeat(120)],
     } }));
     await page.goto('/modules');

@@ -49,6 +49,10 @@ export function createModuleLifecycleClient(fetchImpl = fetch) {
       { force_refresh: Boolean(forceRefresh) },
     ),
     plan: (operation, moduleId) => request('/operations/plan', 'POST', { operation, ...(moduleId ? { module_id: moduleId } : {}) }),
+    // A panel update is prepared in the background; its plan comes with the end.
+    startPanelPrepare: () => request('/panel/prepare', 'POST', {}),
+    loadPanelPrepare: (prepareId) => request(`/panel/prepare/${encodeURIComponent(prepareId)}`),
+    cancelPanelPrepare: (prepareId) => request(`/panel/prepare/${encodeURIComponent(prepareId)}/cancel`, 'POST', {}),
     apply: (operation, moduleId, planId) => request('/operations/apply', 'POST', { operation, ...(moduleId ? { module_id: moduleId } : {}), plan_id: planId }),
     cancel: (operationId) => request(`/operations/${encodeURIComponent(operationId)}/cancel`, 'POST'),
     recover: () => request('/recovery', 'POST'),

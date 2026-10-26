@@ -2,6 +2,7 @@ import { test, expect } from './fixtures.mjs';
 import {
   server, installedSnapshot, availableSnapshot, panelUpdatePlan, runningStatus, TERMINAL, withMihomo,
   installIdleLifecycleRoutes, installLifecycleRoutes, advanceClock,
+  routePlans,
 } from './modules_manager_support.mjs';
 
 // The Modules window: the panel summary and its update, the build time, the
@@ -95,7 +96,7 @@ test.describe('Modules panel update surface', () => {
   test('checks the signed catalog before offering a panel update plan', async ({ page }) => {
     await installIdleLifecycleRoutes(page);
     await page.route('**/api/modules/panel/update-check', (route) => route.fulfill({ json: server.update_check }));
-    await page.route('**/api/modules/operations/plan', (route) => route.fulfill({ json: panelUpdatePlan }));
+    await routePlans(page, () => ({ json: panelUpdatePlan }));
 
     await page.goto('/modules');
     const summary = page.locator('.modules-summary');
@@ -465,7 +466,7 @@ test.describe('Editor variant choice', () => {
     await page.route('**/api/modules/installed', (route) => route.fulfill({ json: status.result === 'committed' ? after : lightToAdvanced() }));
     await page.route('**/api/modules/operations/status', (route) => route.fulfill({ json: status }));
     await page.route('**/api/modules/available', (route) => route.fulfill({ json: server.available }));
-    await page.route('**/api/modules/operations/plan', (route) => route.fulfill({ json: plan }));
+    await routePlans(page, () => ({ json: plan }));
     await page.route('**/api/modules/operations/apply', (route) => {
       status = step('prepared');
       return route.fulfill({ status: 202, json: { ok: true, operation_id: status.operation_id, status } });
@@ -627,7 +628,7 @@ test.describe('What the window says about operations and refusals', () => {
 
   test('a refusal to apply is said inside the plan, in the words of the server', async ({ page }) => {
     await installLifecycleRoutes(page, { installed: named, available: realCatalog });
-    await page.route('**/api/modules/operations/plan', (route) => route.fulfill({ json: realPlan }));
+    await routePlans(page, () => ({ json: realPlan }));
     let refusal = { ok: false, code: 'dns_guard_refused', message: 'Сначала безопасно снимите активную DNS-защиту' };
     await page.route('**/api/modules/operations/apply', (route) => route.fulfill({ status: 409, json: refusal }));
     await page.goto('/modules');

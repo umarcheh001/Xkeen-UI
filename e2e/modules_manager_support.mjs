@@ -40,6 +40,63 @@ export async function installLifecycleRoutes(page, { status = idleStatus, instal
   await page.route('**/api/modules/available', (route) => route.fulfill({ json: available }));
 }
 
+// One answer about preparing a panel update (POST/GET /api/modules/panel/prepare).
+export const PANEL_ARCHIVE_BYTES = 12621292;
+export function prepareStep(overrides = {}) {
+  return {
+    ok: true,
+    prepare_id: 'p1',
+    state: 'running',
+    phase: 'catalog',
+    downloaded_bytes: 0,
+    total_bytes: 0,
+    cached: false,
+    started_at: 1000,
+    finished_at: null,
+    plan: null,
+    error: null,
+    ...overrides,
+  };
+}
+export const prepareReady = (plan = panelUpdatePlan, overrides = {}) => prepareStep({
+  state: 'ready', phase: 'verifying', downloaded_bytes: PANEL_ARCHIVE_BYTES, total_bytes: PANEL_ARCHIVE_BYTES,
+  finished_at: 1027, plan, ...overrides,
+});
+
+// The start answers with the first step, every poll with the next one; the
+// last step repeats. `calls` counts what the window asked.
+export async function installPanelPrepareRoutes(page, { steps = [prepareReady()], startStep = null } = {}) {
+  const calls = { starts: 0, polls: 0, cancels: 0 };
+  let next = 1;
+  await page.route('**/api/modules/panel/prepare', (route) => {
+    calls.starts += 1;
+    return route.fulfill({ json: startStep || steps[0] });
+  });
+  await page.route(/\/api\/modules\/panel\/prepare\/[^/]+$/, (route) => {
+    calls.polls += 1;
+    const step = steps[Math.min(next, steps.length - 1)];
+    next += 1;
+    return typeof step === 'function' ? step(route) : route.fulfill({ json: step });
+  });
+  await page.route(/\/api\/modules\/panel\/prepare\/[^/]+\/cancel$/, (route) => {
+    calls.cancels += 1;
+    return route.fulfill({ json: prepareStep({ state: 'cancelled', finished_at: 1010 }) });
+  });
+  return calls;
+}
+
+// Plans from one place: a panel update comes through its preparation, the
+// rest through /operations/plan. respond({ operation, module_id }) returns
+// what to fulfill with — { json } or { status, json }.
+export async function routePlans(page, respond) {
+  await page.route('**/api/modules/operations/plan', async (route) => route.fulfill(await respond(route.request().postDataJSON())));
+  await page.route('**/api/modules/panel/prepare', async (route) => {
+    const answer = await respond({ operation: 'panel-update' });
+    if ((answer.status || 200) >= 400) return route.fulfill(answer);
+    return route.fulfill({ json: prepareReady(answer.json) });
+  });
+}
+
 // The timers of the manager are chained through requests: the clock moves
 // in steps, so every answer arrives before the next timer is due.
 export async function advanceClock(page, ms, step = 500) {

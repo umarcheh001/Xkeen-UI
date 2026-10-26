@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures.mjs';
 import {
   server, installedSnapshot, idleStatus, availableSnapshot, installPlan, panelUpdatePlan, runningStatus,
-  committedStatus, TERMINAL, installIdleLifecycleRoutes,
+  committedStatus, TERMINAL, installIdleLifecycleRoutes, routePlans, installPanelPrepareRoutes, prepareStep,
 } from './modules_manager_support.mjs';
 
 // The Modules window: a plan is reviewed, applied and followed in its window.
@@ -19,11 +19,11 @@ test.describe('Module lifecycle review', () => {
             ? { status: 503, json: { ok: false, code: 'module_status_unavailable' } }
             : { json: conflicted ? { ...runningStatus, operation_id: 'op-external' } : idleStatus });
         });
-        await page.route('**/api/modules/operations/plan', (route) => {
+        await routePlans(page, () => {
           if (conflictAt === 'plan') conflicted = true;
-          return route.fulfill(conflicted
+          return conflicted
             ? { status: 409, json: { ok: false, code: 'operation_in_progress' } }
-            : { json: panelUpdatePlan });
+            : { json: panelUpdatePlan };
         });
         await page.route('**/api/modules/operations/apply', (route) => {
           conflicted = true;
@@ -87,7 +87,7 @@ test.describe('Module lifecycle review', () => {
       catalogCalls += 1;
       return route.fulfill({ json: status.result === 'committed' ? server.available_after_install : availableSnapshot });
     });
-    await page.route('**/api/modules/operations/plan', (route) => route.fulfill({ json: installPlan }));
+    await routePlans(page, () => ({ json: installPlan }));
     await page.route('**/api/modules/operations/apply', (route) => {
       status = server.install_steps.prepared;
       return route.fulfill({ status: 202, json: { ok: true, operation_id: status.operation_id, status } });
@@ -132,7 +132,7 @@ test.describe('Module lifecycle review', () => {
     let cancelCalls = 0;
     await installIdleLifecycleRoutes(page);
     await page.route('**/api/modules/operations/status', (route) => route.fulfill({ json: status }));
-    await page.route('**/api/modules/operations/plan', (route) => route.fulfill({ json: panelUpdatePlan }));
+    await routePlans(page, () => ({ json: panelUpdatePlan }));
     await page.route('**/api/modules/operations/apply', (route) => {
       applyCalls += 1;
       status = { ...server.install_steps.prepared, operation_id: `op-${applyCalls}` };
@@ -209,7 +209,7 @@ test.describe('Module lifecycle review', () => {
       statusLoads += 1;
       return route.fulfill({ json: statusLoads === 1 ? idleStatus : runningStatus });
     });
-    await page.route('**/api/modules/operations/plan', (route) => route.fulfill({ json: installPlan }));
+    await routePlans(page, () => ({ json: installPlan }));
     await page.route('**/api/modules/operations/apply', async (route) => {
       await new Promise((resolve) => { releaseApply = resolve; });
       await route.fulfill({ status: 202, json: { ok: true, operation_id: runningStatus.operation_id, status: server.install_steps.prepared } });
@@ -240,7 +240,7 @@ test.describe('Module lifecycle review', () => {
     let releaseApply;
     let applyCalls = 0;
     await installIdleLifecycleRoutes(page);
-    await page.route('**/api/modules/operations/plan', (route) => route.fulfill({ json: installPlan }));
+    await routePlans(page, () => ({ json: installPlan }));
     await page.route('**/api/modules/operations/apply', async (route) => {
       applyCalls += 1;
       await new Promise((resolve) => { releaseApply = resolve; });
@@ -323,7 +323,7 @@ test.describe('Module lifecycle review', () => {
 
   test('buttons of the catalog and of the window have the size of the summary buttons', async ({ page }) => {
     await installIdleLifecycleRoutes(page);
-    await page.route('**/api/modules/operations/plan', (route) => route.fulfill({ json: installPlan }));
+    await routePlans(page, () => ({ json: installPlan }));
     await page.goto('/modules');
     const summarySize = await page.locator('.xk-summary-actions button').first()
       .evaluate((element) => getComputedStyle(element).fontSize);
@@ -339,10 +339,11 @@ test.describe('Module lifecycle review', () => {
   test('installer-only stable panel update cannot reach apply', async ({ page }) => {
     let applyCalls = 0;
     await installIdleLifecycleRoutes(page);
-    await page.route('**/api/modules/operations/plan', (route) => route.fulfill({
-      status: 409, json: { ok: false, code: 'panel_update_requires_installer',
-        details: { min_updater: '2.10.5', current_version: '2.10.0' } },
-    }));
+    // The refusal comes at the end of the preparation and is said in its window.
+    await installPanelPrepareRoutes(page, { steps: [prepareStep({
+      state: 'failed', phase: 'catalog', finished_at: 1004,
+      error: { code: 'panel_update_requires_installer', message: 'panel update requires the installer' },
+    })] });
     await page.route('**/api/modules/operations/apply', (route) => {
       applyCalls += 1;
       return route.fulfill({ json: { ok: true } });
@@ -350,8 +351,10 @@ test.describe('Module lifecycle review', () => {
     await page.goto('/modules');
     await page.getByRole('button', { name: 'Обновить панель' }).click();
 
-    await expect(page.locator('#modules-error .modules-page-alert')).toHaveAttribute('data-code', 'panel_update_requires_installer');
-    await expect(page.getByRole('dialog')).toHaveCount(0);
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.locator('.modules-plan-error')).toContainText('Обновление не подготовлено.');
+    await expect(dialog.locator('.modules-plan-progress-box')).toHaveClass(/is-bad/);
+    await expect(dialog.locator('#modules-plan-apply')).toBeHidden();
     expect(applyCalls).toBe(0);
   });
 
@@ -363,7 +366,7 @@ test.describe('Module lifecycle review', () => {
         : installPlan;
       const bodies = [];
       await installIdleLifecycleRoutes(page);
-      await page.route('**/api/modules/operations/plan', (route) => route.fulfill({ json: plan }));
+      await routePlans(page, () => ({ json: plan }));
       await page.route('**/api/modules/operations/apply', (route) => {
         bodies.push(route.request().postDataJSON());
         return route.fulfill({ status: 409, json: { ok: false, code, message: 'План устарел' } });
@@ -383,7 +386,7 @@ test.describe('Module lifecycle review', () => {
     await page.addInitScript(() => sessionStorage.setItem('xkeen.modules.update.v2', JSON.stringify({
       schema: 2, sourceVersion: '2.10.0', targetVersion: '2.11.0', channel: 'stable',
     })));
-    await page.route('**/api/modules/operations/plan', (route) => route.fulfill({ json: server.panel_update_current }));
+    await routePlans(page, () => ({ json: server.panel_update_current }));
     await page.goto('/modules');
     await page.getByRole('button', { name: 'Обновить панель' }).click();
     // A current panel is an answer, not a plan with nothing in it: the counter
@@ -398,7 +401,7 @@ test.describe('Module lifecycle review', () => {
 
   test('sets update badge only after an applicable newer panel plan', async ({ page }) => {
     await installIdleLifecycleRoutes(page);
-    await page.route('**/api/modules/operations/plan', (route) => route.fulfill({ json: panelUpdatePlan }));
+    await routePlans(page, () => ({ json: panelUpdatePlan }));
     await page.goto('/modules');
     expect(await page.evaluate(() => sessionStorage.getItem('xkeen.modules.update.v2'))).toBeNull();
     await page.getByRole('button', { name: 'Обновить панель' }).click();
@@ -425,7 +428,7 @@ test.describe('Module lifecycle review', () => {
       cancelCalls += 1;
       return route.fulfill({ status: 202, json: { ok: true, operation_id: runningStatus.operation_id, cancel_requested: true } });
     });
-    await page.route('**/api/modules/operations/plan', (route) => route.fulfill({ json: panelUpdatePlan }));
+    await routePlans(page, () => ({ json: panelUpdatePlan }));
     await page.route('**/api/modules/operations/apply', (route) => route.fulfill({ status: 202, json: {
       ok: true, operation_id: 'op-456', status: {
         ...runningStatus, operation_id: 'op-456', operation: 'panel-update', module_id: null,
