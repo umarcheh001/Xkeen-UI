@@ -358,15 +358,16 @@
         "ndmc (router diagnostics optional)"
       ],
       "removable": true,
-      "unit_count": 41,
-      "size_bytes": 615903,
+      "unit_count": 43,
+      "size_bytes": 636617,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 15,
         "backend_test": 11,
         "frontend_entrypoint": 1,
-        "frontend_feature": 9,
+        "frontend_feature": 10,
         "frontend_javascript": 2,
+        "frontend_test": 1,
         "template": 2
       },
       "route_count": 12,
@@ -23454,6 +23455,25 @@
     {
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
+      "path": "xkeen-ui/static/js/features/resource_monitor/canvas_charts.js",
+      "size_bytes": 13048,
+      "depends_on": [
+        "core"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "ndmc (router diagnostics optional)"
+      ],
+      "environment_variables": [],
+      "removable": true
+    },
+    {
+      "module_id": "tool.advanced-diagnostics",
+      "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor_model.js",
       "size_bytes": 5367,
       "depends_on": [
@@ -23523,6 +23543,25 @@
         "panel-core",
         "xkeen-page"
       ],
+      "system_requirements": [
+        "ndmc (router diagnostics optional)"
+      ],
+      "environment_variables": [],
+      "removable": true
+    },
+    {
+      "module_id": "tool.advanced-diagnostics",
+      "kind": "frontend_test",
+      "path": "e2e/resource_monitor_charts.spec.mjs",
+      "size_bytes": 7666,
+      "depends_on": [
+        "core"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
       "system_requirements": [
         "ndmc (router diagnostics optional)"
       ],
@@ -32724,7 +32763,7 @@
       {
         "from": "tool.advanced-diagnostics",
         "to": "core",
-        "unit_count": 41,
+        "unit_count": 43,
         "examples": [
           "xkeen-ui/routes/system_resources.py",
           "xkeen-ui/services/devtools/__init__.py",
@@ -33160,7 +33199,7 @@
       {
         "from": "tool.advanced-diagnostics",
         "to": "core",
-        "unit_count": 30,
+        "unit_count": 31,
         "examples": [
           "xkeen-ui/routes/system_resources.py",
           "xkeen-ui/services/devtools/__init__.py",
@@ -33750,8 +33789,8 @@
           "size_bytes": 1008333
         },
         "tool.advanced-diagnostics": {
-          "unit_count": 41,
-          "size_bytes": 615903
+          "unit_count": 43,
+          "size_bytes": 636617
         }
       },
       "next_stage": "Этапы 4, 5 и 6."
