@@ -130,7 +130,6 @@ class Collector:
         self._internet: dict = {}
         self._conntrack: dict = {"available": False}
         self._online_value: float | None = None
-        self._pruned = False
         # persistence
         now = self._clock()
         self._last_save = {"tmp": now, "flash": now}
@@ -177,18 +176,30 @@ class Collector:
             self._tariffs = get_diagnostics_tariffs(self.ui_state_dir)
 
     # -- the 5 s step -------------------------------------------------------
+    def _guarded(self, what: str, fn: Callable, *args: Any) -> Any:
+        """Run one step; a failure is logged and the step is skipped, never the whole tick."""
+        try:
+            return fn(*args)
+        except Exception:  # noqa: BLE001
+            log.warning("resource history: %s failed", what, exc_info=True)
+            return None
+
     def tick(self) -> None:
+        # Only this thread calls tick().  Slow RCI and file reads happen outside
+        # the lock, so a timing-out firmware never blocks snapshot()/history().
+        now = self._clock()
+        n = self._n
+        self._n += 1
+        slow = self._guarded("60 s fetch", self._fetch_slow) if n % SLOW_EVERY == 0 else None
+        mid = self._guarded("30 s fetch", self._fetch_mid) if n % MID_EVERY == 0 else None
         with self._lock:
-            now = self._clock()
-            n = self._n
-            self._n += 1
-            if n % SLOW_EVERY == 0:
-                self._refresh_slow(now)
-            if n % MID_EVERY == 0:
-                self._refresh_mid(now)
+            if slow is not None:
+                self._guarded("60 s apply", self._apply_slow, now, slow)
+            if mid is not None:
+                self._guarded("30 s apply", self._apply_mid, now, mid)
             values = self._sample_fast(now)
             self._store_and_judge(now, values)
-            self._save_if_due(now)
+        self._save_if_due(now)
 
     def _sample_fast(self, now: float) -> dict[str, float | None]:
         values: dict[str, float | None] = {"online": self._online_value}
@@ -279,8 +290,6 @@ class Collector:
     def _store_and_judge(self, now: float, values: dict[str, float | None]) -> None:
         for name in values:
             self._store.add_metric(name)
-        if not self._pruned and self._conn_signature is not None:
-            self._prune_vanished(values)
         self._store.add(now, values)
         self._values = values
         kinds = {f"temp:{g.id}": g.kind for g in self._groups}
@@ -292,19 +301,17 @@ class Collector:
                 zones[f"link_{direction}"] = self._zones.get(f"link_{direction}:{self._primary}")
         self._tracker.update(now, zones, details)
 
-    def _prune_vanished(self, values: dict[str, float | None]) -> None:
-        """At the first look at the router drop series of connections and sensors that no longer exist."""
-        self._pruned = True
-        wanted = set(BASE_METRICS) | set(values)
-        if set(self._store.metrics) - wanted:
-            keep = [m for m in self._store.metrics if m in wanted]
-            keep += [m for m in values if m not in keep]
-            self._store = self._store.with_metrics(keep)
-
     # -- the 30 s step ------------------------------------------------------
-    def _refresh_mid(self, now: float) -> None:
-        payload = self._rci("show/internet/status")
-        self._conntrack = sample_conntrack(reader=self._reader)
+    def _fetch_mid(self) -> dict:
+        """RCI and /proc reads of the 30 s step; no lock, no state changes."""
+        out: dict = {"payload": self._rci("show/internet/status")}
+        out["conntrack"] = self._guarded("conntrack", lambda: sample_conntrack(reader=self._reader))
+        return out
+
+    def _apply_mid(self, now: float, got: dict) -> None:
+        if got.get("conntrack") is not None:
+            self._conntrack = got["conntrack"]
+        payload = got.get("payload")
         if not isinstance(payload, dict):
             self._online_value = None
             return
@@ -324,24 +331,49 @@ class Collector:
             self._tracker.close("dns_failed", now)
 
     # -- the 60 s step ------------------------------------------------------
-    def _refresh_slow(self, now: float) -> None:
-        self._tariffs = get_diagnostics_tariffs(self.ui_state_dir)
+    def _fetch_slow(self) -> dict:
+        """RCI, parsing and file reads of the 60 s step; no lock, no state changes.
+
+        Every part is isolated: one that fails is simply missing from the result.
+        """
+        out: dict = {}
+        out["tariffs"] = self._guarded("tariffs", lambda: get_diagnostics_tariffs(self.ui_state_dir))
         show = self._rci("show/interface")
         if isinstance(show, dict):
-            self._show_interface = show
-            self._apply_connections(hw.internet_connections(show))
-            self._wifi = hw.wifi_temperatures(show)
-            self._ports = hw.parse_ports(show)
-            slow = {p.id: p for p in hw.slow_ports(self._ports)}
-            for port_id, port in slow.items():
-                self._tracker.emit("port_slow", now, f"{port.label}: {port.speed_mbps} Мбит/с", key=port_id)
-            for event in [e for e in self._tracker.active() if e["type"] == "port_slow"]:
-                if event["key"] not in slow:
-                    self._tracker.close("port_slow", now, event["key"])
+            connections = self._guarded("connections", lambda: hw.internet_connections(show))
+            if connections is not None:
+                out["connections"] = connections
+                signature = tuple((c["id"], c["interface_name"], c["connected"], c["priority"]) for c in connections)
+                out["signature"] = signature
+                if signature != self._conn_signature:  # system names are cached until the list changes
+                    out["sysnames"] = {
+                        c["id"]: hw.parse_system_name(self._rci(f"show/interface/system-name?name={c['interface_name']}"))
+                        for c in connections
+                    }
+            out["wifi"] = self._guarded("wifi", lambda: hw.wifi_temperatures(show))
+            out["ports"] = self._guarded("ports", lambda: hw.parse_ports(show))
         if self._identity["model"] is None:
-            self._identity = hw.router_identity(self._rci("show/version") or {})
-        self._zram = sensors.zram_state(self._read("/proc/swaps") or "", self._reader)
-        freq = sensors.cpu_frequency(self._reader)
+            version = self._rci("show/version")
+            out["identity"] = self._guarded("identity", lambda: hw.router_identity(version or {}))
+        swaps = self._read("/proc/swaps") or ""
+        out["zram"] = self._guarded("zram", lambda: sensors.zram_state(swaps, self._reader))
+        out["freq"] = self._guarded("frequency", lambda: sensors.cpu_frequency(self._reader))
+        return out
+
+    def _apply_slow(self, now: float, got: dict) -> None:
+        if got.get("tariffs") is not None:
+            self._tariffs = got["tariffs"]
+        if "connections" in got:
+            self._guarded("apply connections", self._apply_connections, got)
+        if got.get("wifi") is not None:
+            self._wifi = got["wifi"]
+        if got.get("ports") is not None:
+            self._ports = got["ports"]
+            self._guarded("port events", self._judge_ports, now)
+        if got.get("identity") is not None:
+            self._identity = got["identity"]
+        self._zram = got.get("zram")
+        freq = got.get("freq")
         if freq is not None:
             self._freq = freq
             if freq["throttled"]:
@@ -349,14 +381,19 @@ class Collector:
             else:
                 self._tracker.close("cpu_throttled", now)
 
-    def _apply_connections(self, connections: list[dict]) -> None:
-        signature = tuple((c["id"], c["interface_name"], c["connected"], c["priority"]) for c in connections)
-        if signature != self._conn_signature:  # system names are cached until the list changes
-            self._sysnames = {}
-            for conn in connections:
-                name = self._rci(f"show/interface/system-name?name={conn['interface_name']}")
-                self._sysnames[conn["id"]] = hw.parse_system_name(name)
-            self._conn_signature = signature
+    def _judge_ports(self, now: float) -> None:
+        slow = {p.id: p for p in hw.slow_ports(self._ports)}
+        for port_id, port in slow.items():
+            self._tracker.emit("port_slow", now, f"{port.label}: {port.speed_mbps} Мбит/с", key=port_id)
+        for event in [e for e in self._tracker.active() if e["type"] == "port_slow"]:
+            if event["key"] not in slow:
+                self._tracker.close("port_slow", now, event["key"])
+
+    def _apply_connections(self, got: dict) -> None:
+        connections = got["connections"]
+        if "sysnames" in got:
+            self._sysnames = got["sysnames"]
+            self._conn_signature = got["signature"]
         self._connections = connections
         self._original = connections[0]["id"] if connections else None
         if self._original is not None and self._primary not in {c["id"] for c in connections}:
@@ -364,9 +401,13 @@ class Collector:
 
     # -- persistence --------------------------------------------------------
     def save(self, kind: Literal["tmp", "flash"]) -> None:
+        # copy the state under the lock, write the file outside it
         with self._lock:
+            store = self._store.with_metrics(self._store.metrics)
+            events = [dict(e) for e in self._tracker.events(0)]
             meta = {"uptime_s": self._uptime_s} if self._uptime_s is not None else None
-            save_history(self._paths[kind], self._store, self._tracker.events(0), now=self._clock(), meta=meta)
+            now = self._clock()
+        save_history(self._paths[kind], store, events, now=now, meta=meta)
 
     def _save_if_due(self, now: float) -> None:
         for kind, every in (("tmp", TMP_SAVE_EVERY_S), ("flash", FLASH_SAVE_EVERY_S)):

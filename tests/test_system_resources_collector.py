@@ -497,18 +497,102 @@ def test_saved_copy_from_the_future_gives_no_negative_gap(tmp_path):
     assert c2.snapshot()["values"]["memory"] is not None
 
 
-def test_vanished_connection_is_dropped_on_restart_only(tmp_path):
+def test_metric_absent_on_first_tick_after_restore_keeps_its_history(tmp_path):
     r = FakeRouter(with_usb=True)
+    r.rate["wwan0"] = (10, 2)
+    c = make(tmp_path, r)
+    r.step(c, 6)
+    c.save("tmp")
+    r2 = FakeRouter()  # the modem is not in the list on the first look (flapping, not up yet)
+    r2.now = r.now + 15
+    c2 = make(tmp_path, r2)
+    r2.step(c2, 3)
+    metrics = c2.history("15m")["metrics"]
+    assert any(v is not None for v in metrics[f"rate_down:{USB}"]["avg"])  # restored data survives
+    assert metrics[f"rate_down:{USB}"]["avg"][-1] is None  # and is fed "no data" meanwhile
+    assert f"rate_down:{ISP}" in metrics
+    # the modem comes back: the same series goes on
+    r3 = r2
+    r3.add_usb()
+    r3.rate["wwan0"] = (10, 2)
+    r3.step(c2, 13)
+    assert c2.snapshot()["values"][f"rate_down:{USB}"] == pytest.approx(10.0)
+
+
+def test_snapshot_does_not_wait_for_a_slow_rci(tmp_path):
+    r = FakeRouter()
+    c = make(tmp_path, r)
+    r.step(c, 2)
+    gate, entered = threading.Event(), threading.Event()
+    real = r.rci
+
+    def slow_rci(path):
+        if path == "show/internet/status":
+            entered.set()
+            gate.wait(5)
+        return real(path)
+
+    c._rci_fetch = slow_rci
+    r.now += 5
+    c._n = 6  # the next tick is a 30 s one
+    ticker = threading.Thread(target=c.tick)
+    ticker.start()
+    try:
+        assert entered.wait(2)
+        result: list = []
+        reader = threading.Thread(target=lambda: result.append((c.snapshot(), c.history("15m"), c.events(0))))
+        reader.start()
+        reader.join(2)
+        assert not reader.is_alive() and result, "snapshot() was blocked by the RCI call"
+    finally:
+        gate.set()
+        ticker.join(5)
+
+
+def test_save_writes_outside_the_lock(tmp_path, monkeypatch):
+    r = FakeRouter()
+    c = make(tmp_path, r)
+    r.step(c, 3)
+    other = []
+    t = threading.Thread(target=lambda: other.append(c._lock.acquire(blocking=False)))
+
+    def spy2(path, store, events, **kwargs):
+        t.start()
+        t.join(2)
+
+    monkeypatch.setattr(collector_mod, "save_history", spy2)
+    c.save("tmp")
+    assert other == [True]  # another thread could take the lock while the file was written
+
+
+@pytest.mark.parametrize("target", ["internet_connections", "parse_ports", "wifi_temperatures", "router_identity"])
+def test_a_raising_parser_does_not_cost_the_tick(tmp_path, monkeypatch, target):
+    def boom(*a, **k):
+        raise ValueError("parser broke")
+
+    monkeypatch.setattr(collector_mod.hw, target, boom)
+    r = FakeRouter()
     c = make(tmp_path, r)
     r.step(c, 4)
-    c.save("tmp")
-    r2 = FakeRouter()  # the modem is gone
-    r2.now = r.now + 30
-    c2 = make(tmp_path, r2)
-    assert f"rate_down:{USB}" in c2.history("15m")["metrics"]  # kept until a look at the router
-    r2.step(c2, 2)
-    assert f"rate_down:{USB}" not in c2.history("15m")["metrics"]
-    assert f"rate_down:{ISP}" in c2.history("15m")["metrics"]
+    values = c.snapshot()["values"]
+    assert values["cpu"] is not None and values["memory"] is not None
+
+
+@pytest.mark.parametrize(
+    "owner,name",
+    [(collector_mod, "sample_conntrack"), (collector_mod, "normalize_internet_status"),
+     (collector_mod.sensors, "zram_state"), (collector_mod.sensors, "cpu_frequency")],
+)
+def test_a_raising_refresh_step_does_not_cost_the_tick(tmp_path, monkeypatch, owner, name):
+    def boom(*a, **k):
+        raise ValueError("broke")
+
+    monkeypatch.setattr(owner, name, boom)
+    r = FakeRouter()
+    c = make(tmp_path, r)
+    r.step(c, 4)
+    values = c.snapshot()["values"]
+    assert values["cpu"] is not None and values["memory"] is not None
 
 
 def test_garbage_saved_file_does_not_break_start(tmp_path):
