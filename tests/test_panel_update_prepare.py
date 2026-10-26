@@ -93,6 +93,80 @@ def test_cancel_during_download_drops_partial_archive(tmp_path):
     assert not cache.exists() or list(cache.iterdir()) == []
 
 
+def _cancel_on(preparer, service, wanted):
+    """Cancels the preparation when the service reports the phase ``wanted``."""
+
+    original = service.plan
+
+    def plan(operation, module_id=None, *, progress=None):
+        def heard(phase, done, total):
+            progress(phase, done, total)
+            if phase == wanted:
+                preparer.cancel(preparer.current_id())
+
+        return original(operation, module_id, progress=heard)
+
+    service.plan = plan
+
+
+def _cached_archives(service):
+    cache = service.archive_cache_dir
+    return [] if not cache.exists() else [path for path in cache.iterdir() if path.suffix == ".gz"]
+
+
+def test_cancel_during_the_check_ends_cancelled_and_keeps_the_archive(tmp_path):
+    service, _ = _updatable(tmp_path)
+    preparer = PanelUpdatePreparer(service, spawn=_run_now)
+    _cancel_on(preparer, service, "verifying")
+
+    snapshot = preparer.start()
+
+    assert snapshot["state"] == "cancelled"
+    assert snapshot["plan"] is None
+    assert len(_cached_archives(service)) == 1
+
+
+def test_cancel_of_a_cached_archive_keeps_it(tmp_path):
+    service, _ = _updatable(tmp_path)
+    preparer = PanelUpdatePreparer(service, spawn=_run_now)
+    preparer.start()
+    _cancel_on(preparer, service, "cached")
+
+    snapshot = preparer.start()
+
+    assert snapshot["state"] == "cancelled"
+    assert len(_cached_archives(service)) == 1
+
+
+def test_a_rotten_cached_archive_is_downloaded_again_and_not_called_cached(tmp_path):
+    service, _ = _updatable(tmp_path)
+    preparer = PanelUpdatePreparer(service, spawn=_run_now)
+    preparer.start()
+    [archive] = _cached_archives(service)
+    archive.write_bytes(b"rotten")
+    log = PhaseLog(service)
+
+    snapshot = preparer.start()
+
+    assert snapshot["state"] == "ready"
+    assert "cached" in log.phases and "downloading" in log.phases
+    assert snapshot["cached"] is False
+
+
+def test_failure_keeps_the_details_of_the_error(tmp_path):
+    service, _ = _updatable(tmp_path)
+
+    def refused(*_args, **_kwargs):
+        raise ModuleLifecycleError("operation_free_space", "not enough space", status=409, required=12, free=3)
+
+    service.plan = refused
+    preparer = PanelUpdatePreparer(service, spawn=_run_now)
+
+    snapshot = preparer.start()
+
+    assert snapshot["error"] == {"code": "operation_free_space", "message": "not enough space", "required": 12, "free": 3}
+
+
 def test_start_joins_running_job(tmp_path):
     service, _ = _updatable(tmp_path)
     spawned = []

@@ -70,6 +70,24 @@ test('Отмена зовёт отмену и закрывает окно', asyn
   await expect.poll(() => calls.cancels).toBe(1);
 });
 
+test('Отмена до ответа на запуск всё равно отменяет подготовку', async ({ page }) => {
+  let answerStart;
+  const holdStart = new Promise((resolve) => { answerStart = resolve; });
+  const calls = await installPanelPrepareRoutes(page, { steps: [downloading(1048576)], holdStart });
+  await openModules(page);
+  await updateButton(page).click();
+  await expect(updateDialog(page)).toBeVisible();
+  await expect.poll(() => calls.starts).toBe(1);
+
+  await page.locator('#modules-plan-cancel').click();
+  await expect(updateDialog(page)).toBeHidden();
+  answerStart();
+
+  await expect.poll(() => calls.cancels).toBe(1);
+  await page.waitForTimeout(1500);
+  expect(calls.polls).toBe(0);
+});
+
 test('повторное нажатие подхватывает подготовку', async ({ page }) => {
   const calls = await installPanelPrepareRoutes(page, { steps: [downloading(1048576), downloading(3145728)] });
   await openModules(page);
@@ -178,4 +196,32 @@ test('операция не откатывается ниже 4 из 7', async (
 
   await expect(progressBox(page).locator('output')).toHaveText('4 из 7');
   await expect(progressBox(page).locator('li[data-state="done"]')).toHaveCount(3);
+  // The runner checks its copy of the archive: the words say so, not «Замена файлов».
+  await expect(progressBox(page).locator('strong')).toHaveText('Сверка копии архива');
+});
+
+test('сорванное на сверке обновление не откатывает полосу назад', async ({ page }) => {
+  await installPanelPrepareRoutes(page, { steps: [prepareReady()] });
+  const panel = { operation: 'panel-update', scope: 'panel', module_id: null, version: '2.11.0' };
+  let current = { ...runningStatus, ...panel, step: 'verifying' };
+  await openModules(page);
+  await page.route('**/api/modules/operations/apply', (route) => route.fulfill({
+    status: 202, json: { ok: true, operation_id: current.operation_id, status: current },
+  }));
+  await page.unroute('**/api/modules/operations/status');
+  await page.route('**/api/modules/operations/status', (route) => route.fulfill({ json: current }));
+  await updateButton(page).click();
+  await expect(progressBox(page)).toContainText('Готово к обновлению');
+  await page.locator('#modules-plan-apply').click();
+  await expect(progressBox(page).locator('output')).toHaveText('4 из 7');
+
+  current = {
+    ...server.interrupted, ...panel, operation_id: current.operation_id, step: 'verifying',
+    log: [{ step: 'prepared', at: 1791463146.9 }, { step: 'downloading', at: 1791463147.1 }, { step: 'verifying', at: 1791463147.3 }],
+  };
+
+  await expect(progressBox(page)).toHaveClass(/is-bad/);
+  await expect(progressBox(page).locator('li[data-state="done"]')).toHaveCount(3);
+  await expect(progressBox(page).locator('li').nth(3)).toHaveAttribute('data-state', 'failed');
+  await expect(progressBox(page).locator('output')).toHaveText('3 из 7');
 });

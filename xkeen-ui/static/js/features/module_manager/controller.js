@@ -97,7 +97,7 @@ export function createModuleManagerController({ root, api, pollMs, reload = () =
   let dialogMode = null;
   // The preparation the window watches. A closed window stops watching; the
   // router goes on, and the next click finds the same preparation.
-  const prepare = { id: null, running: false, generation: 0, timer: null, failures: 0, sample: null, last: null };
+  const prepare = { id: null, running: false, cancelPending: false, generation: 0, timer: null, failures: 0, sample: null, last: null };
   let dialogOperationId = null;
   // Closed in this page even when the browser keeps no storage.
   let dismissedId = null;
@@ -371,6 +371,8 @@ export function createModuleManagerController({ root, api, pollMs, reload = () =
     state.plan = null;
     dialogMode = 'prepare';
     dialogEditorChange = null;
+    prepare.id = null;
+    prepare.cancelPending = false;
     prepare.failures = 0;
     prepare.sample = null;
     prepare.last = null;
@@ -380,6 +382,12 @@ export function createModuleManagerController({ root, api, pollMs, reload = () =
     dialog.querySelector('#modules-plan-title').focus();
     try {
       const snapshot = await api.startPanelPrepare();
+      // «Отмена» pressed before the router named its preparation.
+      if (prepare.cancelPending && snapshot?.prepare_id) {
+        prepare.cancelPending = false;
+        void api.cancelPanelPrepare(snapshot.prepare_id).catch(() => {});
+        return;
+      }
       if (generation === prepare.generation && dialogMode === 'prepare') observePrepare(snapshot, generation);
     } catch (error) {
       if (generation === prepare.generation && dialogMode === 'prepare') failPrepare(error);
@@ -456,8 +464,9 @@ export function createModuleManagerController({ root, api, pollMs, reload = () =
   // «Отмена» of a preparation stops the download on the router; the cross
   // only closes the window.
   function cancelFromDialog() {
-    if (dialogMode === 'prepare' && prepare.running && prepare.id) {
-      void api.cancelPanelPrepare(prepare.id).catch(() => {});
+    if (dialogMode === 'prepare' && prepare.running) {
+      if (prepare.id) void api.cancelPanelPrepare(prepare.id).catch(() => {});
+      else prepare.cancelPending = true;
     }
     closeDialog();
   }

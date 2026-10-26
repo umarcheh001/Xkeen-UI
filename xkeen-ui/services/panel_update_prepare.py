@@ -112,6 +112,9 @@ class PanelUpdatePreparer:
             job["phase"] = "downloading" if phase == "cached" else phase
             if phase == "cached":
                 job["cached"] = True
+            elif phase == "downloading":
+                # A kept copy that failed its check is downloaded again.
+                job["cached"] = False
             if total:
                 job["total_bytes"] = int(total)
                 job["downloaded_bytes"] = int(done)
@@ -138,12 +141,17 @@ class PanelUpdatePreparer:
         try:
             plan = self._service.plan("panel-update", None, progress=heard)
         except PanelPrepareCancelled:
-            # What was half downloaded is gone with the incoming folder;
-            # the cache holds no archive of this release either.
-            self._service._drop_archive_cache()
+            with self._guard:
+                job = self._job or {}
+                downloading = job.get("phase") == "downloading" and not job.get("cached")
+            # What was half downloaded is gone with the incoming folder, and the
+            # cache holds nothing of this release then. A whole archive, kept or
+            # just downloaded, stays for the next time.
+            if downloading:
+                self._service._drop_archive_cache()
             self._finish(prepare_id, state="cancelled")
         except ModuleLifecycleError as error:
-            self._finish(prepare_id, state="failed", error={"code": error.code, "message": str(error)})
+            self._finish(prepare_id, state="failed", error={**error.details, "code": error.code, "message": str(error)})
         except Exception:  # noqa: BLE001 - the window must hear an end in any case
             try:
                 from services.logging_setup import core_logger
@@ -153,4 +161,11 @@ class PanelUpdatePreparer:
                 pass
             self._finish(prepare_id, state="failed", error=_FAILED)
         else:
-            self._finish(prepare_id, state="ready", plan=plan)
+            with self._guard:
+                cancelled = self._cancel_requested
+            # Cancelled while the archive was checked: the check is not stopped
+            # halfway, but its plan is not offered either.
+            if cancelled:
+                self._finish(prepare_id, state="cancelled")
+            else:
+                self._finish(prepare_id, state="ready", plan=plan)

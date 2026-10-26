@@ -65,11 +65,13 @@ export const prepareReady = (plan = panelUpdatePlan, overrides = {}) => prepareS
 
 // The start answers with the first step, every poll with the next one; the
 // last step repeats. `calls` counts what the window asked.
-export async function installPanelPrepareRoutes(page, { steps = [prepareReady()], startStep = null } = {}) {
+// holdStart, a promise, keeps the answer to the start until it resolves.
+export async function installPanelPrepareRoutes(page, { steps = [prepareReady()], startStep = null, holdStart = null } = {}) {
   const calls = { starts: 0, polls: 0, cancels: 0 };
   let next = 1;
-  await page.route('**/api/modules/panel/prepare', (route) => {
+  await page.route('**/api/modules/panel/prepare', async (route) => {
     calls.starts += 1;
+    if (holdStart) await holdStart;
     return route.fulfill({ json: startStep || steps[0] });
   });
   await page.route(/\/api\/modules\/panel\/prepare\/[^/]+$/, (route) => {

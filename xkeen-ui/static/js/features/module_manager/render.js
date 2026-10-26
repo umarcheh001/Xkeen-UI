@@ -888,11 +888,13 @@ function progressBox(status, notice) {
     // bar does not go back over what the preparation has already shown.
     if (status.operation === 'panel-update' && reached < PREPARED_STEPS && status.step !== 'rolling_back') {
       reached = PREPARED_STEPS;
-      phase = STEP_LABELS[PROGRESS_STEPS[reached][0]];
+      phase = 'Сверка копии архива';
     }
     note = notice || 'Окно можно закрыть, операция продолжится на роутере.';
   } else {
     reached = status.result === 'committed' ? total : Math.max(lastLoggedStep(status), 0);
+    // Stopped on that check: the step after the prepared ones failed.
+    if (status.operation === 'panel-update' && reached < PREPARED_STEPS) reached = PREPARED_STEPS;
     phase = RESULT_LABELS[status.result] || String(status.result);
     const started = formatClock(status.started_at);
     const duration = formatDuration(status.started_at, status.finished_at);
