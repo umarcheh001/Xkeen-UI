@@ -91,7 +91,9 @@ def test_mihomo_menu_feature_flows_keep_editor_patch_integrations_and_single_sav
 
     expectations = {
         "xkeen-ui/static/js/features/mihomo_import.js": [
-            "txt = await applyInsertProxy(txt, o, groups);",
+                "const inserted = await applyInsertProxy(txt, o, groups);",
+                "txt = inserted.content;",
+                "await attachProvidersToGroups(txt, providerOutputs, groups);",
             "setEditorText(txt);",
             "refreshEditor();",
             "const api = getMihomoPanelApi();",
@@ -102,7 +104,8 @@ def test_mihomo_menu_feature_flows_keep_editor_patch_integrations_and_single_sav
             "providerMode === 'static_happ'",
             "providerMode === 'static_happ' ? 'xray-json' : 'mihomo-provider'",
             "provider_proxies",
-            "staticProviderProxies: true",
+                "destinationVariantsForOutputs",
+                "setImportDestination",
             "refresh_parser: group.refreshParser",
             "mihomo-provider",
             "Распознана HWID-подписка:",

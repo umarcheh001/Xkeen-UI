@@ -15,11 +15,12 @@
 
 ## Активные инициативы
 
-- `../README-mihomo-node-import-redesign-plan.md` — редизайн модала «Узел» Mihomo; Этапы 0–4 закрыты 26 октября 2026 года. Baseline, matrix, contracts и ограничения: `mihomo-node-import-baseline.md`; raw measurements и screenshots: `mihomo-node-import-baseline/`.
+- `../README-mihomo-node-import-redesign-plan.md` — редизайн модала «Узел» Mihomo; Этапы 0–5 закрыты 26 октября 2026 года. Baseline, matrix, contracts и ограничения: `mihomo-node-import-baseline.md`; raw measurements и screenshots: `mihomo-node-import-baseline/`.
 - `mihomo-node-import-ux-contract.md` — закрытый Этап 1 редизайна модала Mihomo: UX states, v1/P2 boundaries, partial-success/save-apply rules, Operator component contract и Pencil-прототипы. Интерактивный безопасный preview: `mihomo-node-import-ux-prototype.html`.
 - `mihomo-node-import-stage2.md` — закрытый Этап 2: state/revision guards и HTTP adapters importer-а без изменения DOM/CSS.
 - `mihomo-node-import-stage3.md` — закрытый Этап 3: компактный источник, lazy YAML, общий modal lifecycle и новые desktop/mobile screenshots.
-- `mihomo-node-import-stage4.md` — закрытый Этап 4: безопасные карточки результата для узлов/подписок/Amnezia, redaction diagnostics и визуальная проверка; назначение и save/apply остаются следующими этапами.
+- `mihomo-node-import-stage4.md` — закрытый Этап 4: безопасные карточки результата для узлов/подписок/Amnezia и redaction diagnostics.
+- `mihomo-node-import-stage5.md` — закрытый Этап 5: явное назначение provider/static, подключение групп через `use`/`proxies`, unknown-group diagnostics и интервалы автообновления.
 
 - `panel-operator-redesign-completion-plan.md` — план завершения переезда панели на Operator Console; Этап 4 закрыт; в Этапе 5 закрыты editor/workbench, comments/schema status labels, responsive editor help, mobile fullscreen сложных модалов и применение четырёх modal families ко всем 50 static modals; Этапы 5–7 в целом открыты; сквозной icon-поток I0–I6 закрыт.
 - `mihomo-capability-matrix.json` и `panel-operator-stage0-mihomo-contract.md` — capability/contract baseline нового Mihomo roadmap (Этап 0).

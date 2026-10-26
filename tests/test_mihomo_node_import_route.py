@@ -50,6 +50,66 @@ proxy-groups:
     assert config_path.read_text(encoding="utf-8") == "proxies: []\n"
 
 
+def test_attach_provider_route_uses_use_and_reports_unknown_groups(client):
+    http, _config_path = client
+    content = """\
+proxy-providers:
+  source:
+    type: http
+    url: http://127.0.0.1/provider.yaml
+proxy-groups:
+  - name: Main
+    type: select
+    use: [old] # keep
+    filter: "^(old|source)$"
+  - name: Static
+    type: select
+    proxies: [DIRECT]
+"""
+    response = http.post(
+        "/api/mihomo/patch/attach_providers",
+        json={
+            "content": content,
+            "providers": ["source"],
+            "groups": ["Main", "Missing"],
+        },
+    )
+
+    assert response.status_code == 200
+    result = response.get_json()
+    assert result["attached_groups"] == ["Main"]
+    assert result["missing_groups"] == ["Missing"]
+    assert "use: [old, source] # keep" in result["content"]
+    assert 'filter: "^(old|source)$"' in result["content"]
+    assert "proxies: [DIRECT]" in result["content"]
+
+
+def test_apply_insert_reports_unknown_groups_without_registering_proxy(client):
+    http, _config_path = client
+    content = """\
+proxies: []
+proxy-groups:
+  - name: Main
+    type: select
+    proxies: [DIRECT]
+"""
+    response = http.post(
+        "/api/mihomo/patch/apply_insert",
+        json={
+            "content": content,
+            "proxy_yaml": "- name: Fresh\n  type: direct\n",
+            "proxy_name": "Fresh",
+            "groups": ["Main", "Missing"],
+        },
+    )
+
+    assert response.status_code == 200
+    result = response.get_json()
+    assert result["attached_groups"] == ["Main"]
+    assert result["missing_groups"] == ["Missing"]
+    assert "proxies: [DIRECT, Fresh]" in result["content"]
+
+
 def test_parse_amnezia_premium_key_returns_mihomo_proxy(client):
     http, _config_path = client
     wireguard_config = """\

@@ -69,6 +69,7 @@ from services.amnezia_premium import (
 )
 from services.mihomo_proxy_config import (
     apply_proxy_insert,
+    insert_provider_into_groups,
     rename_proxy_in_config,
     replace_proxy_in_config,
 )
@@ -2491,6 +2492,25 @@ def create_mihomo_blueprint(
             return out
         return []
 
+    def _proxy_group_names(content: str):
+        names = []
+        in_groups = False
+        for line in _norm_text(content).splitlines():
+            stripped = line.lstrip()
+            indent = len(line) - len(stripped)
+            if indent == 0 and stripped.startswith("proxy-groups:"):
+                in_groups = True
+                continue
+            if in_groups and indent == 0 and stripped and not stripped.startswith("#"):
+                in_groups = False
+            if in_groups and stripped.startswith("- name:"):
+                raw = stripped.split(":", 1)[1].strip()
+                if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in ("'", '"'):
+                    raw = raw[1:-1]
+                if raw and raw not in names:
+                    names.append(raw)
+        return names
+
     def _infer_proxy_name_from_yaml(proxy_yaml: str) -> str:
         # best-effort: read first "- name:" line
         m = re.search(r"^\s*-\s*name:\s*(.+?)\s*$", proxy_yaml, flags=re.M)
@@ -2530,13 +2550,62 @@ def create_mihomo_blueprint(
             return _api_error("proxy_name is required", 400, ok=False)
 
         try:
-            patched = apply_proxy_insert(content, proxy_yaml, proxy_name, groups)
-            return jsonify({"ok": True, "content": patched}), 200
+            known_groups = _norm_groups(_proxy_group_names(content))
+            missing_groups = [group for group in groups if group not in known_groups]
+            selected_groups = [group for group in groups if group in known_groups]
+            patched = apply_proxy_insert(content, proxy_yaml, proxy_name, selected_groups)
+            return jsonify(
+                {
+                    "ok": True,
+                    "content": patched,
+                    "attached_groups": selected_groups,
+                    "missing_groups": missing_groups,
+                }
+            ), 200
         except Exception as e:
             return _mihomo_exception(
                 "Не удалось вставить прокси в конфиг Mihomo.",
                 code="apply_insert_failed",
                 hint="Проверьте YAML прокси и список целевых групп.",
+                exc=e,
+                status=400,
+            )
+
+    @bp.post("/api/mihomo/patch/attach_providers")
+    def api_mihomo_patch_attach_providers():
+        """Attach proxy-provider names to selected proxy-groups via `use:`."""
+        guard = _patch_guard()
+        if guard is not None:
+            return guard
+
+        data = request.get_json(silent=True) or {}
+        content = _norm_text(data.get("content") or "")
+        providers = _norm_groups(data.get("providers") or data.get("provider_names"))
+        groups = _norm_groups(data.get("groups") or data.get("target_groups"))
+        known_groups = _norm_groups(_proxy_group_names(content))
+        missing_groups = [group for group in groups if group not in known_groups]
+        selected_groups = [group for group in groups if group in known_groups]
+
+        if not providers:
+            return _api_error("providers are required", 400, ok=False)
+
+        try:
+            patched = content
+            for provider_name in providers:
+                patched = insert_provider_into_groups(patched, provider_name, selected_groups)
+            return jsonify(
+                {
+                    "ok": True,
+                    "content": patched,
+                    "attached_groups": selected_groups,
+                    "missing_groups": missing_groups,
+                }
+            ), 200
+        except Exception as e:
+            return _mihomo_exception(
+                "Не удалось подключить provider к группам Mihomo.",
+                code="attach_provider_failed",
+                hint="Проверьте список групп и секцию proxy-groups.",
                 exc=e,
                 status=400,
             )

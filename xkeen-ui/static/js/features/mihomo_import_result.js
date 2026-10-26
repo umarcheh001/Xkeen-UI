@@ -136,7 +136,11 @@ function countText(count, single, few, many) {
 
 function sourceKind(output, mode) {
   if (output?.xrayBulk) return 'xray-subscription';
-  if (output?.providerStaticBulk) return 'hwid-subscription';
+  if (output?.providerStaticBulk) {
+    return String(output?.provider_mode || '').toLowerCase() === 'static_happ'
+      ? 'hwid-subscription'
+      : 'provider-static-subscription';
+  }
   if (output?.type === 'proxy-provider') return 'provider-subscription';
   if (output?.amnezia || String(output?.uri || '').toLowerCase() === 'amnezia premium' || mode === 'amnezia-premium') return 'amnezia';
   return 'proxy';
@@ -195,7 +199,9 @@ function subscriptionCard(kind, items, mode, errors) {
   const received = items.length;
   const type = kind === 'xray-subscription'
     ? 'Xray-JSON → статические узлы'
-    : (kind === 'hwid-subscription' ? 'Happ / HWID → статические узлы' : 'Mihomo provider');
+    : (kind === 'hwid-subscription'
+      ? 'Happ / HWID → статические узлы'
+      : (kind === 'provider-static-subscription' ? 'Подписка → статические узлы' : 'Mihomo provider'));
   const destination = kind === 'provider-subscription' ? 'proxy-providers' : 'proxies';
   const notices = [];
   if (!domain && kind !== 'provider-subscription') notices.push({ tone: 'warning', text: 'Источник не раскрыл безопасный домен; адрес не показан.' });

@@ -7,41 +7,59 @@ from typing import Iterable, List, Optional, Tuple
 
 
 def insert_proxy_into_groups(content: str, proxy_name: str, target_groups: Iterable[str]) -> str:
-    """Insert proxy_name into proxies: list of selected proxy-groups."""
+    """Insert proxy_name into the proxies list of selected proxy-groups."""
+    return _insert_named_into_groups(content, proxy_name, target_groups, "proxies")
+
+
+def insert_provider_into_groups(content: str, provider_name: str, target_groups: Iterable[str]) -> str:
+    """Insert provider_name into the use list of selected proxy-groups."""
+    return _insert_named_into_groups(content, provider_name, target_groups, "use")
+
+
+def _insert_named_into_groups(
+    content: str,
+    item_name: str,
+    target_groups: Iterable[str],
+    field_name: str,
+) -> str:
+    """Insert a proxy/provider name into a selected group field."""
     groups_set = {group.strip() for group in target_groups if group.strip()}
     if not groups_set:
         return content
 
-    include_all_groups = _proxy_groups_with_include_all(content)
-    groups_set = {group for group in groups_set if group not in include_all_groups}
-    if not groups_set:
-        return content
+    if field_name == "proxies":
+        include_all_groups = _proxy_groups_with_include_all(content)
+        groups_set = {group for group in groups_set if group not in include_all_groups}
+        if not groups_set:
+            return content
 
     def _inject_into_inline_proxies(line: str) -> str:
         stripped = line.lstrip()
         indent = line[: len(line) - len(stripped)]
-        prefix = "proxies:"
+        prefix = f"{field_name}:"
         rest = stripped[len(prefix):].lstrip()
-        if not (rest.startswith("[") and rest.endswith("]")):
+        inline_match = re.match(r"^\[(.*)\](\s*(?:#.*)?)$", rest)
+        if not inline_match:
             return line
-        inner = rest[1:-1].strip()
+        inner = inline_match.group(1).strip()
+        comment = inline_match.group(2) or ""
         items = [item.strip() for item in inner.split(",")] if inner else []
 
         def _norm(value: str) -> str:
             return value.strip().strip('"').strip("'")
 
         existing = {_norm(item) for item in items if item}
-        if _norm(proxy_name) in existing:
+        if _norm(item_name) in existing:
             return line
 
-        new_item = proxy_name
+        new_item = item_name
         if not (new_item.startswith('"') or new_item.startswith("'")):
             if re.search(r"[\s,]", new_item):
                 new_item = f'"{new_item}"'
 
         items.append(new_item)
         new_inner = ", ".join(items)
-        return f"{indent}proxies: [{new_inner}]"
+        return f"{indent}{field_name}: [{new_inner}]{comment}"
 
     lines = content.splitlines()
     out: List[str] = []
@@ -64,7 +82,7 @@ def insert_proxy_into_groups(content: str, proxy_name: str, target_groups: Itera
             out.append(line)
             continue
 
-        if in_groups and stripped.startswith("proxies:"):
+        if in_groups and stripped.startswith(f"{field_name}:"):
             if "[" in stripped and "]" in stripped and current_group in groups_set:
                 out.append(_inject_into_inline_proxies(line))
                 continue
@@ -75,7 +93,7 @@ def insert_proxy_into_groups(content: str, proxy_name: str, target_groups: Itera
         if in_groups and in_proxies_list:
             if stripped.startswith("- name:") or (stripped and not line.startswith(" " * 4)):
                 if current_group in groups_set:
-                    _inject_proxy_before_leave(out, proxy_name)
+                    _inject_proxy_before_leave(out, item_name)
                 in_proxies_list = False
 
         out.append(line)
@@ -83,11 +101,11 @@ def insert_proxy_into_groups(content: str, proxy_name: str, target_groups: Itera
         if in_groups and in_proxies_list:
             if idx + 1 == len(lines) or lines[idx + 1].lstrip().startswith("- name:"):
                 if current_group in groups_set:
-                    _inject_proxy_before_leave(out, proxy_name)
+                    _inject_proxy_before_leave(out, item_name)
                 in_proxies_list = False
 
     if in_groups and in_proxies_list and current_group in groups_set:
-        _inject_proxy_before_leave(out, proxy_name)
+        _inject_proxy_before_leave(out, item_name)
         in_proxies_list = False
 
     content_after_first = "\n".join(out) + "\n"
@@ -108,11 +126,11 @@ def insert_proxy_into_groups(content: str, proxy_name: str, target_groups: Itera
             return
         if group_has_proxies:
             return
-        if not group_has_include_all:
+        if field_name == "proxies" and not group_has_include_all:
             return
         indent = group_include_indent or "    "
-        out2.append(f"{indent}proxies:")
-        out2.append(f"{indent}  - {_quote_proxy_list_item(proxy_name)}")
+        out2.append(f"{indent}{field_name}:")
+        out2.append(f"{indent}  - {_quote_proxy_list_item(item_name)}")
 
     for line in lines2:
         stripped = line.lstrip()
@@ -143,7 +161,7 @@ def insert_proxy_into_groups(content: str, proxy_name: str, target_groups: Itera
             out2.append(line)
             continue
 
-        if in_groups and stripped.startswith("proxies:"):
+        if in_groups and stripped.startswith(f"{field_name}:"):
             group_has_proxies = True
             out2.append(line)
             continue
@@ -593,6 +611,7 @@ apply_insert = apply_proxy_insert
 
 __all__ = [
     "insert_proxy_into_groups",
+    "insert_provider_into_groups",
     "replace_proxy_block",
     "replace_proxy_in_config",
     "rename_proxy_in_config",

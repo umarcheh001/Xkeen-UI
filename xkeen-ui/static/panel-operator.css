@@ -25829,3 +25829,22 @@ body.panel-page #mihomo-import-modal .xk-mi-result-diagnostics {
 body.panel-page #mihomo-import-modal .xk-mi-result-diagnostics-title {
   color: var(--op-warning) !important;
 }
+
+body.panel-page #mihomo-import-modal .xk-mi-destination-option {
+  border-color: var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-editor) !important;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-destination-option:has(input:checked) {
+  border-color: var(--op-accent) !important;
+  background: var(--op-accent-soft) !important;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-destination-option strong {
+  color: var(--op-text) !important;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-destination-option small {
+  color: var(--op-muted) !important;
+}

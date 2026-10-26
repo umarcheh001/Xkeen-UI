@@ -221,11 +221,41 @@ https://..."></textarea>
               <p id="mihomo-import-target-hint" class="modal-hint xk-mi-target hidden"></p>
               <button type="button" id="mihomo-import-preview-toggle" class="btn-secondary btn-compact hidden" aria-expanded="false" aria-controls="mihomo-import-preview-panel">Показать YAML</button>
 
+              <section id="mihomo-import-destination-block" class="xk-mi-groups-card xk-mi-destination hidden" aria-labelledby="mihomo-import-destination-title">
+                <div class="xk-mi-section-head">
+                  <div>
+                    <div id="mihomo-import-destination-title" class="xk-mi-section-title">Назначение подписки</div>
+                    <div id="mihomo-import-destination-subtitle" class="xk-mi-section-subtitle">Выберите поддерживаемый способ добавления.</div>
+                  </div>
+                </div>
+                <div id="mihomo-import-destination-options" class="xk-mi-destination-options" role="radiogroup" aria-label="Способ добавления подписки">
+                  <label id="mihomo-import-destination-static-option" class="xk-mi-destination-option">
+                    <input type="radio" name="mihomo-import-destination" value="static">
+                    <span><strong>Статические узлы</strong><small>Добавить в <code>proxies</code>.</small></span>
+                  </label>
+                  <label id="mihomo-import-destination-provider-option" class="xk-mi-destination-option">
+                    <input type="radio" name="mihomo-import-destination" value="provider">
+                    <span><strong>Provider</strong><small>Добавить в <code>proxy-providers</code> и подключить через <code>use</code>.</small></span>
+                  </label>
+                </div>
+                <div id="mihomo-import-provider-settings" class="xk-mi-provider-settings hidden">
+                  <label class="xk-mi-field">
+                    <span class="hint-label">Имя provider</span>
+                    <input id="mihomo-import-provider-name" class="xray-log-filter xk-mi-control" type="text" maxlength="64" autocomplete="off">
+                  </label>
+                  <label class="xk-mi-field xk-mi-provider-interval">
+                    <span class="hint-label">Интервал обновления, часов</span>
+                    <input id="mihomo-import-provider-interval" class="xray-log-select xk-mi-control" type="number" min="1" max="168" step="1" value="12" inputmode="numeric">
+                  </label>
+                  <p id="mihomo-import-provider-note" class="modal-hint xk-mi-refresh-note">Mihomo хранит интервал provider в секундах; здесь он задаётся в часах.</p>
+                </div>
+              </section>
+
               <div id="mihomo-import-groups-block" class="xk-mi-groups-card hidden">
                 <div class="xk-mi-section-head">
                   <div>
-                    <div class="xk-mi-section-title">Добавить в группы</div>
-                    <div class="xk-mi-section-subtitle">Выбор из текущего <code>config.yaml</code> для статических <code>proxies</code>.</div>
+                    <div id="mihomo-import-groups-title" class="xk-mi-section-title">Добавить в группы</div>
+                    <div id="mihomo-import-groups-subtitle" class="xk-mi-section-subtitle">Выбор из текущего <code>config.yaml</code> для статических <code>proxies</code>.</div>
                   </div>
                   <div class="xk-mi-inline-actions">
                     <button type="button" id="mihomo-import-groups-all-btn" class="btn-compact" data-tooltip="Выбрать все группы">Все</button>
@@ -235,6 +265,7 @@ https://..."></textarea>
                 <div id="mihomo-import-groups" class="xk-mi-groups-shell">
                   <div class="xk-card-desc" style="opacity:0.75;">Группы будут подхвачены из текущего <code>config.yaml</code>.</div>
                 </div>
+                <p id="mihomo-import-groups-count" class="modal-hint xk-mi-refresh-note"></p>
                 <label class="global-autorestart-toggle xk-mi-remember">
                   <input type="checkbox" id="mihomo-import-groups-remember">
                   <span>Запомнить выбор</span>
@@ -284,7 +315,7 @@ https://..."></textarea>
         <div class="modal-actions xk-mi-footer">
           <div class="xk-mi-footer-actions">
             <button type="button" id="mihomo-import-parse-btn" class="btn-primary btn-compact xk-mi-primary-action" data-tooltip="Распознать источник без сохранения и перезапуска.">{{ op_icon('format') }}<span class="xk-action-label">Распознать</span></button>
-            <button type="button" id="mihomo-import-parse-static-btn" class="btn-secondary btn-compact xk-mi-primary-action" data-tooltip="Скачать подписку через доступные заголовки и вставить найденные узлы как статические proxies.">{{ op_icon('download') }}<span class="xk-action-label">В proxies</span></button>
+            <button type="button" id="mihomo-import-parse-static-btn" class="btn-secondary btn-compact xk-mi-primary-action" data-tooltip="Использовать поддерживаемый static flow для подписки.">{{ op_icon('download') }}<span class="xk-action-label">Статические узлы</span></button>
             <button type="button" id="mihomo-import-insert-btn" class="btn-primary btn-compact xk-mi-primary-action" data-tooltip="Вставить YAML в config.yaml (proxies / proxy-providers) и закрыть окно." disabled>{{ op_icon('add-node') }}<span class="xk-action-label">Вставить в конфиг</span></button>
           </div>
           <button type="button" id="mihomo-import-cancel-btn" class="btn-secondary btn-compact">Отмена</button>

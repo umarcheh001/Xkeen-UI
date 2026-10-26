@@ -38,7 +38,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 |---|---:|---:|---:|---:|---:|---|
 | `core` | 603 | 7.77 МБ | 107 | 4 | 36 | нет |
 | `engine.xray` | 144 | 3.75 МБ | 62 | 3 | 14 | да |
-| `engine.mihomo` | 142 | 3.06 МБ | 92 | 4 | 6 | да |
+| `engine.mihomo` | 143 | 3.08 МБ | 93 | 4 | 6 | да |
 | `tool.editor` | 25 | 813.3 КБ | 0 | 0 | 2 | да |
 | `tool.terminal` | 47 | 472.0 КБ | 2 | 2 | 2 | да |
 | `tool.files` | 85 | 984.7 КБ | 43 | 1 | 1 | да |
@@ -48,7 +48,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 ## Backend routes и регистрация
 
-- Endpoint declarations: **333**.
+- Endpoint declarations: **334**.
 - Файлов с route decorators/WS dispatch: **51**.
 - Точек регистрации: **30**.
 
@@ -104,12 +104,12 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 | `core` | `tool.editor` | 11 | `xkeen-ui/static/js/pages/panel.editor.bundle.js`<br>`xkeen-ui/static/js/pages/panel.editor.codemirror.bundle.js`<br>`xkeen-ui/static/js/pages/panel.editor.diff.bundle.js` |
 | `core` | `tool.files` | 10 | `xkeen-ui/routes/__init__.py`<br>`xkeen-ui/services/panel_service_data.py`<br>`tests/test_filemanager_trash_policy.py` |
 | `core` | `tool.terminal` | 8 | `xkeen-ui/run_server.py`<br>`xkeen-ui/routes/__init__.py`<br>`tests/test_module_backend_gates.py` |
-| `engine.mihomo` | `core` | 142 | `xkeen-ui/bootstrap_mihomo_env.py`<br>`xkeen-ui/mihomo_config_generator.py`<br>`xkeen-ui/mihomo_server_core.py` |
+| `engine.mihomo` | `core` | 143 | `xkeen-ui/bootstrap_mihomo_env.py`<br>`xkeen-ui/mihomo_config_generator.py`<br>`xkeen-ui/mihomo_server_core.py` |
 | `engine.mihomo` | `engine.xray` | 6 | `xkeen-ui/routes/mihomo.py`<br>`xkeen-ui/services/mihomo_clash_devices.py`<br>`xkeen-ui/services/mihomo_clash_dto.py` |
 | `engine.mihomo` | `integration.happ` | 3 | `xkeen-ui/routes/mihomo.py`<br>`xkeen-ui/services/mihomo_subscriptions.py`<br>`xkeen-ui/static/js/features/mihomo_import.js` |
 | `engine.mihomo` | `tool.advanced-diagnostics` | 1 | `xkeen-ui/routes/mihomo_clash.py` |
 | `engine.mihomo` | `tool.backups` | 1 | `xkeen-ui/routes/mihomo.py` |
-| `engine.mihomo` | `tool.editor` | 142 | `xkeen-ui/bootstrap_mihomo_env.py`<br>`xkeen-ui/mihomo_config_generator.py`<br>`xkeen-ui/mihomo_server_core.py` |
+| `engine.mihomo` | `tool.editor` | 143 | `xkeen-ui/bootstrap_mihomo_env.py`<br>`xkeen-ui/mihomo_config_generator.py`<br>`xkeen-ui/mihomo_server_core.py` |
 | `engine.xray` | `core` | 144 | `xkeen-ui/routes/routing/__init__.py`<br>`xkeen-ui/routes/routing/blueprint.py`<br>`xkeen-ui/routes/routing/config.py` |
 | `engine.xray` | `engine.mihomo` | 1 | `xkeen-ui/services/xray_subscriptions.py` |
 | `engine.xray` | `integration.happ` | 2 | `xkeen-ui/services/xray_subscriptions.py`<br>`xkeen-ui/static/js/features/outbounds.js` |

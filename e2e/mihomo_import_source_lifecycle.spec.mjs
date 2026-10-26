@@ -338,6 +338,63 @@ test('Amnezia discovery is a compact source step with local flags and no YAML ru
   await visibleInViewport(page.locator('#mihomo-import-parse-btn'));
 });
 
+test('subscription destination switches provider use links and supported static refresh without refetching', async ({ page }) => {
+  await prepare(page);
+  let probes = 0;
+  await page.route('**/api/mihomo/parse/xray-json', (route) => route.fulfill({
+    json: { ok: false, code: 'not_xray_json' },
+  }));
+  await page.route('**/api/mihomo/provider/probe', (route) => {
+    probes += 1;
+    return route.fulfill({ json: {
+      ok: true,
+      profile: { suggested_name: 'provider-main' },
+      provider_url: 'https://provider.example/fixture.yaml',
+      provider_proxies: [
+        { proxy_name: 'Static one', proxy_yaml: '- name: Static one\n  type: vless\n  server: static.example\n  port: 443\n  uuid: private-one\n' },
+      ],
+    } });
+  });
+
+  await open(page);
+  await page.locator('#mihomo-import-input').fill('https://provider.example/subscription');
+  await page.locator('#mihomo-import-parse-btn').click();
+  await expect(page.locator('#mihomo-import-destination-block')).toBeVisible();
+  await expect(page.locator('#mihomo-import-destination-provider-option input')).toBeChecked();
+  await expect(page.locator('#mihomo-import-groups-title')).toHaveText('Подключить provider к группам');
+  await expect(page.locator('#mihomo-import-provider-settings')).toBeVisible();
+  await page.locator('#mihomo-import-provider-name').fill('chosen-provider');
+  await page.locator('#mihomo-import-provider-interval').fill('24');
+  await page.locator('#mihomo-import-provider-interval').press('Enter');
+  await page.locator('#mihomo-import-groups input[data-group="Main"]').check();
+  await expect(page.locator('#mihomo-import-groups-count')).toContainText('Выбрано групп: 1');
+
+  const attachBodies = [];
+  await page.route('**/api/mihomo/patch/attach_providers', (route) => {
+    attachBodies.push(route.request().postDataJSON());
+    return route.fulfill({ json: {
+      ok: true,
+      content: `${CONFIG}\nproxy-providers:\n  chosen-provider:\n    type: http\n    interval: 86400\nproxy-groups:\n  - name: Main\n    type: select\n    use: [chosen-provider]\n`,
+      attached_groups: ['Main'],
+      missing_groups: [],
+    } });
+  });
+  await page.locator('#mihomo-import-insert-btn').click();
+  await expect.poll(() => attachBodies.length).toBe(1);
+  expect(attachBodies[0].providers).toEqual(['chosen-provider']);
+  expect(attachBodies[0].groups).toEqual(['Main']);
+  expect(attachBodies[0].content).toContain('interval: 86400');
+
+  await open(page);
+  await page.locator('#mihomo-import-input').fill('https://provider.example/subscription');
+  await page.locator('#mihomo-import-parse-btn').click();
+  await page.locator('#mihomo-import-destination-static-option input').check();
+  await expect(page.locator('#mihomo-import-groups-title')).toHaveText('Добавить в группы');
+  await expect(page.locator('#mihomo-import-provider-settings')).toBeHidden();
+  await expect(page.locator('#mihomo-import-xray-refresh-block')).toBeVisible();
+  expect(probes).toBe(2);
+});
+
 test('ordinary provider fallback handles fulfilled not_xray_json without eager preview', async ({ page }) => {
   await prepare(page);
   let probes = 0;
@@ -356,7 +413,8 @@ test('ordinary provider fallback handles fulfilled not_xray_json without eager p
   await page.locator('#mihomo-import-parse-btn').click();
   await expect(page.locator('#mihomo-import-insert-btn')).toBeEnabled();
   expect(probes).toBe(1);
-  await expect(page.locator('#mihomo-import-groups-block')).toBeHidden();
+  await expect(page.locator('#mihomo-import-groups-block')).toBeVisible();
+  await expect(page.locator('#mihomo-import-groups-title')).toHaveText('Подключить provider к группам');
   await expect(page.locator(`${MODAL} .cm-editor, ${MODAL} .monaco-editor`)).toHaveCount(0);
   await page.locator('#mihomo-import-preview-toggle').click();
   await expect(page.locator(`${MODAL} .cm-content`)).toContainText('Stage3-provider');
