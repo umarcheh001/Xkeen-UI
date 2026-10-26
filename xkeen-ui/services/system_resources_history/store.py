@@ -246,6 +246,27 @@ class HistoryStore:
             "tiers": tiers,
         }
 
+    def with_metrics(self, metrics: Iterable[str]) -> "HistoryStore":
+        """Copy for another metric set: common metrics keep their history,
+        new ones are empty, the ones not listed are dropped."""
+        out = HistoryStore(tuple(metrics))
+        out._last_ts = self._last_ts
+        out._since = self._since
+        for name, tier in self._tiers.items():
+            new = out._tiers[name]
+            new.starts = array("q", tier.starts)
+            new.cur = tier.cur
+            for m, j in out._index.items():
+                i = self._index.get(m)
+                if i is None:
+                    continue
+                new.avg[j] = array("f", tier.avg[i])
+                new.peak[j] = array("f", tier.peak[i])
+                new.sum[j] = tier.sum[i]
+                new.cnt[j] = tier.cnt[i]
+                new.mx[j] = tier.mx[i]
+        return out
+
     @classmethod
     def from_dict(cls, data: dict, metrics: Iterable[str]) -> "HistoryStore":
         """Restore a store; raises ValueError/KeyError/TypeError on bad data."""

@@ -358,12 +358,12 @@
         "ndmc (router diagnostics optional)"
       ],
       "removable": true,
-      "unit_count": 33,
-      "size_bytes": 497927,
+      "unit_count": 35,
+      "size_bytes": 508327,
       "kind_counts": {
         "backend_route": 1,
-        "backend_service": 11,
-        "backend_test": 7,
+        "backend_service": 12,
+        "backend_test": 8,
         "frontend_entrypoint": 1,
         "frontend_feature": 9,
         "frontend_javascript": 2,
@@ -383,8 +383,8 @@
         "xkeen-ui/services/system_resources.py",
         "xkeen-ui/services/system_resources_history/__init__.py",
         "xkeen-ui/services/system_resources_history/hardware.py",
-        "xkeen-ui/services/system_resources_history/sensors.py",
-        "xkeen-ui/services/system_resources_history/store.py"
+        "xkeen-ui/services/system_resources_history/persist.py",
+        "xkeen-ui/services/system_resources_history/sensors.py"
       ]
     }
   ],
@@ -22722,6 +22722,25 @@
     {
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_service",
+      "path": "xkeen-ui/services/system_resources_history/persist.py",
+      "size_bytes": 3427,
+      "depends_on": [
+        "core"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "ndmc (router diagnostics optional)"
+      ],
+      "environment_variables": [],
+      "removable": true
+    },
+    {
+      "module_id": "tool.advanced-diagnostics",
+      "kind": "backend_service",
       "path": "xkeen-ui/services/system_resources_history/sensors.py",
       "size_bytes": 8992,
       "depends_on": [
@@ -22742,7 +22761,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_service",
       "path": "xkeen-ui/services/system_resources_history/store.py",
-      "size_bytes": 10083,
+      "size_bytes": 10958,
       "depends_on": [
         "core"
       ],
@@ -22838,6 +22857,25 @@
       "kind": "backend_test",
       "path": "tests/test_system_resources_hardware.py",
       "size_bytes": 4823,
+      "depends_on": [
+        "core"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "ndmc (router diagnostics optional)"
+      ],
+      "environment_variables": [],
+      "removable": true
+    },
+    {
+      "module_id": "tool.advanced-diagnostics",
+      "kind": "backend_test",
+      "path": "tests/test_system_resources_persist.py",
+      "size_bytes": 6098,
       "depends_on": [
         "core"
       ],
@@ -32505,7 +32543,7 @@
       {
         "from": "tool.advanced-diagnostics",
         "to": "core",
-        "unit_count": 33,
+        "unit_count": 35,
         "examples": [
           "xkeen-ui/routes/system_resources.py",
           "xkeen-ui/services/devtools/__init__.py",
@@ -32941,7 +32979,7 @@
       {
         "from": "tool.advanced-diagnostics",
         "to": "core",
-        "unit_count": 26,
+        "unit_count": 27,
         "examples": [
           "xkeen-ui/routes/system_resources.py",
           "xkeen-ui/services/devtools/__init__.py",
@@ -33531,8 +33569,8 @@
           "size_bytes": 1008333
         },
         "tool.advanced-diagnostics": {
-          "unit_count": 33,
-          "size_bytes": 497927
+          "unit_count": 35,
+          "size_bytes": 508327
         }
       },
       "next_stage": "Этапы 4, 5 и 6."
