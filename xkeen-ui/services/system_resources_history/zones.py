@@ -13,7 +13,10 @@ _FIXED: dict[str, tuple[float, float]] = {
     "memory": (75.0, 90.0),
     "link_up": (70.0, 90.0),
     "link_down": (70.0, 90.0),
+    "storage": (75.0, 90.0),
+    "conntrack": (75.0, 90.0),
 }
+ZRAM_PRESSURE_SHARE = 0.25  # compressed swap above this share of its ceiling: the router lacks memory
 _TEMP: dict[str, tuple[float, float]] = {
     "chip": (80.0, 95.0),
     "wifi": (85.0, 100.0),
@@ -48,6 +51,13 @@ def zone(metric: str, value: float | None, *, cores: int = 1, kind: str | None =
 def red_from(metric: str) -> float | None:
     """Percent from which a fixed-threshold metric (``cpu``, ``memory``, ``link_*``) is red."""
     return _FIXED[metric][1] if metric in _FIXED else None
+
+
+def zram_pressure(size_bytes: float | None, used_bytes: float | None) -> bool | None:
+    """True when zram holds more than a quarter of its ceiling; ``None`` without sizes."""
+    if not size_bytes or used_bytes is None:
+        return None
+    return used_bytes > size_bytes * ZRAM_PRESSURE_SHARE
 
 
 def temp_bands(kind: str | None) -> dict[str, float] | None:

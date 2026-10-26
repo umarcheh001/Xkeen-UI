@@ -147,11 +147,44 @@ def test_hardware_payload_from_fixtures(tmp_path, monkeypatch):
     assert body["throttle"] == {"current_mhz": 1200, "max_mhz": 2000, "throttled": True}
     assert body["memory"]["total_bytes"] == 1_000_000 * 1024
     assert body["memory"]["programs_bytes"] + body["memory"]["cache_bytes"] + body["memory"]["free_bytes"] == body["memory"]["total_bytes"]
-    assert body["zram"] == {"size_bytes": 1073741824, "used_bytes": 2048 * 1024}
+    assert body["zram"] == {"size_bytes": 1073741824, "used_bytes": 2048 * 1024, "pressure": False}
     assert body["storage"]["percent"] == 25.0
     assert "available" in body["conntrack"]
     assert [p["id"] for p in body["ports"]]
     assert body["slow_ports"] == []
+
+
+@pytest.mark.parametrize(
+    ("metric", "value", "expected"),
+    [("storage", 74.9, 0), ("storage", 75, 1), ("storage", 90, 2), ("conntrack", 74.9, 0), ("conntrack", 75, 1), ("conntrack", 95, 2), ("conntrack", None, None)],
+)
+def test_storage_and_conntrack_zones(metric, value, expected):
+    from services.system_resources_history.zones import zone
+
+    assert zone(metric, value) == expected
+
+
+def test_zram_pressure_starts_above_a_quarter():
+    from services.system_resources_history.zones import zram_pressure
+
+    assert zram_pressure(1000, 250) is False
+    assert zram_pressure(1000, 251) is True
+    assert zram_pressure(0, 0) is None and zram_pressure(1000, None) is None
+
+
+def test_hardware_carries_zones_for_storage_conntrack_and_zram(tmp_path, monkeypatch):
+    router, collector = _running(tmp_path)
+    router.files["/proc/swaps"] = "Filename Type Size Used Priority\n/dev/zram0 partition 1048576 600000 -2\n"
+    router.files["/sys/block/zram0/disksize"] = "1073741824"
+    router.step(collector, 12)
+    monkeypatch.setattr(resource_routes, "sample_storage", lambda: {"total_bytes": 100, "used_bytes": 92, "percent": 92.0})
+    body = _app_with(collector, monkeypatch).test_client().get("/api/system/hardware").get_json()
+
+    assert body["storage"]["zone"] == 2
+    from services.system_resources_history.zones import zone
+
+    assert body["conntrack"]["zone"] == zone("conntrack", body["conntrack"].get("percent"))
+    assert body["zram"]["pressure"] is True
 
 
 def test_hardware_throttle_is_null_without_frequency_data(tmp_path, monkeypatch):

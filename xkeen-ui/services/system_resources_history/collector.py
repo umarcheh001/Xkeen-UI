@@ -34,7 +34,7 @@ from . import sensors
 from .persist import load_history, save_history
 from .problems import ProblemTracker
 from .store import HistoryStore
-from .zones import hotter_than_usual, red_from, temp_bands, zone
+from .zones import hotter_than_usual, red_from, temp_bands, zone, zram_pressure
 
 log = logging.getLogger(__name__)
 
@@ -498,10 +498,10 @@ class Collector:
                 "temperatures": temps,
                 "ports": [vars(p).copy() for p in self._ports],
                 "slow_ports": [vars(p).copy() for p in hw.slow_ports(self._ports)],
-                "zram": self._zram,
+                "zram": dict(self._zram, pressure=zram_pressure(self._zram.get("size_bytes"), self._zram.get("used_bytes"))) if self._zram else None,
                 "frequency": self._freq,
                 "throttle": dict(self._freq) if self._freq else None,
-                "conntrack": dict(self._conntrack),
+                "conntrack": dict(self._conntrack, zone=zone("conntrack", self._conntrack.get("percent"))),
                 "links": self._links(),
             }
 

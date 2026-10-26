@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 604,
-      "size_bytes": 8149107,
+      "size_bytes": 8149880,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -359,7 +359,7 @@
       ],
       "removable": true,
       "unit_count": 45,
-      "size_bytes": 678382,
+      "size_bytes": 680739,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 15,
@@ -12835,7 +12835,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/router_resource_dashboard.spec.mjs",
-      "size_bytes": 22795,
+      "size_bytes": 23568,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -22380,7 +22380,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/system_resources.py",
-      "size_bytes": 12280,
+      "size_bytes": 12491,
       "depends_on": [
         "core"
       ],
@@ -22747,7 +22747,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_service",
       "path": "xkeen-ui/services/system_resources_history/collector.py",
-      "size_bytes": 34843,
+      "size_bytes": 35028,
       "depends_on": [
         "core"
       ],
@@ -22864,7 +22864,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_service",
       "path": "xkeen-ui/services/system_resources_history/zones.py",
-      "size_bytes": 2222,
+      "size_bytes": 2686,
       "depends_on": [
         "core"
       ],
@@ -22959,7 +22959,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_system_resources_api.py",
-      "size_bytes": 16788,
+      "size_bytes": 18289,
       "depends_on": [
         "core"
       ],
@@ -23482,7 +23482,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor/view.js",
-      "size_bytes": 25837,
+      "size_bytes": 25833,
       "depends_on": [
         "core"
       ],
@@ -33867,7 +33867,7 @@
         },
         "tool.advanced-diagnostics": {
           "unit_count": 45,
-          "size_bytes": 678382
+          "size_bytes": 680739
         }
       },
       "next_stage": "Этапы 4, 5 и 6."

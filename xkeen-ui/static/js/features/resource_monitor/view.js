@@ -31,6 +31,7 @@ const ZONE_WORDS = {
 };
 const TEMP_WORDS = ["норма", "горячо", "перегрев"];
 const TEMP_FLOOR_C = 20;
+const METER_CLASS = ["", "o", "r"]; // server zone index -> meter colour
 
 let viewSheet = null;
 
@@ -337,16 +338,16 @@ function memorySection(hw, two) {
   if (!zram) zramHtml = '<div class="hw-kv"><span>Сжатая подкачка в памяти (zram)</span><b>выключена</b></div>';
   else {
     const used = zram.used_bytes || 0;
-    const heavy = zram.size_bytes > 0 && used > zram.size_bytes * 0.25;
+    const heavy = zram.pressure === true;
     zramHtml = `<div class="hw-kv"><span>Сжатая подкачка в памяти (zram)</span><b>до ${bigBytes(zram.size_bytes)} <small>· ${used > 0 ? `используется ${megabytes(used)}` : "включена, не используется"}</small></b>${heavy ? '<em class="o">роутеру не хватает памяти</em>' : ""}</div>`;
   }
   const st = hw.storage;
   const flash = st
-    ? `<div class="hw-kv"><span>Флешка Entware</span><b>${bigBytes(st.used_bytes)} <small>из ${bigBytes(st.total_bytes)}</small></b><div class="hw-meter ${st.percent >= 90 ? "r" : st.percent >= 75 ? "o" : ""}"><i style="width:${Math.max(0, Math.min(100, st.percent || 0))}%"></i></div></div>`
+    ? `<div class="hw-kv"><span>Флешка Entware</span><b>${bigBytes(st.used_bytes)} <small>из ${bigBytes(st.total_bytes)}</small></b><div class="hw-meter ${METER_CLASS[st.zone] || ""}"><i style="width:${Math.max(0, Math.min(100, st.percent || 0))}%"></i></div></div>`
     : '<div class="hw-kv"><span>Флешка Entware</span><b>нет данных</b></div>';
   const ct = hw.conntrack;
   const conn = ct?.available
-    ? `<div class="hw-kv"><span>Открытые соединения</span><b>${num(ct.count)} <small>из ${num(ct.max)}</small></b><div class="hw-meter ${ct.percent >= 90 ? "r" : ct.percent >= 75 ? "o" : ""}"><i style="width:${Math.max(0, Math.min(100, ct.percent || 0))}%"></i></div></div>`
+    ? `<div class="hw-kv"><span>Открытые соединения</span><b>${num(ct.count)} <small>из ${num(ct.max)}</small></b><div class="hw-meter ${METER_CLASS[ct.zone] || ""}"><i style="width:${Math.max(0, Math.min(100, ct.percent || 0))}%"></i></div></div>`
     : '<div class="hw-kv"><span>Открытые соединения</span><b>нет данных</b></div>';
   return `<div class="hw-sec" data-section="memory"><div class="hw-sh"><b>Память и хранилище</b></div><div class="hw-res${two ? " two" : ""}">${ram}${zramHtml}${flash}${conn}</div></div>`;
 }
@@ -360,7 +361,7 @@ function portsSection(hw) {
     const desc = port.description ? `<small class="d">${esc(port.description)}</small>` : "";
     return `<div class="hw-port ${state}${wan}"><span class="jack"></span><b>${esc(port.is_wan ? "WAN" : port.label)}</b><small>${esc(speedText(port))}</small>${desc}</div>`;
   });
-  const notes = (hw.slow_ports || []).map((p) => `<div class="hw-note">Порт ${esc(p.label)} работает на ${p.speed_mbps}${NBSP}Мбит/с вместо 1${NBSP}Гбит/с. Обычно виноват кабель (нужен с 8 жилами, категории 5e или выше) или устройство с медленным портом.</div>`);
+  const notes = (hw.slow_ports || []).map((p) => `<div class="hw-note">Порт ${esc(p.label)} работает на ${num(p.speed_mbps)}${NBSP}Мбит/с вместо 1${NBSP}Гбит/с. Обычно виноват кабель (нужен с 8 жилами, категории 5e или выше) или устройство с медленным портом.</div>`);
   return `<div class="hw-sec" data-section="ports"><div class="hw-sh"><b>Порты</b><span>как на задней панели</span></div><div class="hw-ports" style="--np:${Math.max(1, list.length)}">${sockets.join("")}</div>${notes.join("")}</div>`;
 }
 

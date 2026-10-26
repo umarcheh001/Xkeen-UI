@@ -84,9 +84,9 @@ function hardware(kind = 'nc1812', over = {}) {
     temperatures,
     throttle: nc ? null : { current_mhz: 1350, max_mhz: 1350, throttled: false },
     memory: { total_bytes: 991 * MB, programs_bytes: 456 * MB, cache_bytes: 245 * MB, free_bytes: 290 * MB, percent: 46 },
-    zram: { size_bytes: 1024 * MB, used_bytes: 0 },
-    storage: { total_bytes: 8 * 1024 * MB, used_bytes: 1536 * MB, free_bytes: 6656 * MB, percent: 18.8, path: '/opt' },
-    conntrack: { available: true, count: 1048, max: 32768, percent: 3.2, available_entries: 31720 },
+    zram: { size_bytes: 1024 * MB, used_bytes: 0, pressure: false },
+    storage: { total_bytes: 8 * 1024 * MB, used_bytes: 1536 * MB, free_bytes: 6656 * MB, percent: 18.8, path: '/opt', zone: 0 },
+    conntrack: { available: true, count: 1048, max: 32768, percent: 3.2, available_entries: 31720, zone: 0 },
     ports: nc ? ports(4) : ports(5),
     slow_ports: [],
     ...over,
@@ -383,4 +383,16 @@ test('both themes render the cards with panel colours', async ({ page }) => {
   await expect.poll(() => view.locator('.xkm-card').first().evaluate(el => getComputedStyle(el).backgroundColor)).not.toBe(light);
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
   await expect.poll(() => view.locator('.xkm-card').first().evaluate(el => getComputedStyle(el).backgroundColor)).toBe(light);
+});
+
+test('memory block colours meters and the zram warning from server zones only', async ({ page }) => {
+  const hw = hardware('nc1812', {
+    zram: { size_bytes: 1024 * MB, used_bytes: 100 * MB, pressure: true },
+    storage: { total_bytes: 8 * 1024 * MB, used_bytes: 1536 * MB, free_bytes: 6656 * MB, percent: 18.8, path: '/opt', zone: 2 },
+    conntrack: { available: true, count: 1048, max: 32768, percent: 3.2, available_entries: 31720, zone: 1 },
+  });
+  const view = await openDashboard(page, { hw });
+  await expect(view.locator('.hw-kv em.o')).toHaveText('роутеру не хватает памяти');
+  await expect(view.locator('.hw-meter.r')).toHaveCount(1);
+  await expect(view.locator('.hw-meter.o')).toHaveCount(1);
 });

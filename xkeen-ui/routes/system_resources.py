@@ -20,6 +20,7 @@ from services.router_diagnostics import (
 from services.system_resources import sample_storage, sample_system_resources
 from services.system_resources_history.collector import get_collector
 from services.system_resources_history.store import RANGES
+from services.system_resources_history.zones import zone as zone_of
 from services.memory_guard import get_memory_guard_status
 from services.router_modem_control import ModemControlError, ModemControlService, validate_modem_id
 
@@ -180,6 +181,9 @@ def create_system_resources_blueprint(*, include_summary: bool = True) -> Bluepr
         if collector is None:
             return _history_unavailable()
         hardware = collector.hardware()
+        storage = sample_storage()
+        if storage is not None:
+            storage = dict(storage, zone=zone_of("storage", storage.get("percent")))
         temperatures = []
         for group in hardware["temperatures"]:
             group = dict(group)
@@ -194,7 +198,7 @@ def create_system_resources_blueprint(*, include_summary: bool = True) -> Bluepr
                 "throttle": hardware["throttle"],
                 "memory": hardware["memory"],
                 "zram": hardware["zram"],
-                "storage": sample_storage(),
+                "storage": storage,
                 "conntrack": hardware["conntrack"],
                 "ports": hardware["ports"],
                 "slow_ports": hardware["slow_ports"],
