@@ -118,6 +118,9 @@ _CATALOG_COMPATIBILITY_ERRORS = frozenset(
     }
 )
 PANEL_ARCHIVE_CACHE_DIRNAME = "panel-archive"
+# Hears the stages of preparing a panel update: (phase, done bytes, total bytes)
+# with phase "catalog", "downloading", "cached" or "verifying".
+PrepareSink = Callable[[str, int, int], None]
 # How long a verified archive waits for the owner to press "apply" after the
 # plan was shown. Every page of the panel checks for updates on its own, so a
 # check must not be what takes the archive away.
@@ -456,11 +459,12 @@ class ModuleLifecycleService:
         self._clear_archive_cache()
         incoming = cache / f"incoming-{os.getpid()}-{uuid.uuid4().hex[:8]}"
         try:
-            downloaded = (
-                client.download_verified_panel_archive(snapshot, incoming)
-                if progress is None
-                else client.download_verified_panel_archive(snapshot, incoming, progress=progress)
-            )
+            if progress is None:
+                downloaded = client.download_verified_panel_archive(snapshot, incoming)
+            else:
+                # A download that fails before its first byte failed downloading.
+                progress(0)
+                downloaded = client.download_verified_panel_archive(snapshot, incoming, progress=progress)
             if target is None:
                 target = cache / "panel.tar.gz"
             os.replace(downloaded, target)
@@ -473,7 +477,7 @@ class ModuleLifecycleService:
         client: Any,
         snapshot: Any,
         architecture: str,
-        progress: Callable[[int], None] | None = None,
+        progress: PrepareSink | None = None,
     ) -> dict[str, Any]:
         """The verified listing of the panel archive; nothing is unpacked."""
 
@@ -494,13 +498,18 @@ class ModuleLifecycleService:
         snapshot: Any,
         architecture: str,
         validate_panel_archive: Any,
-        progress: Callable[[int], None] | None = None,
+        progress: PrepareSink | None = None,
     ) -> dict[str, Any]:
         from services.blocking import run_blocking
         from services.module_package_contract import ModulePackageContractError
 
+        descriptor = snapshot.catalog.get("panel")
+        total = int(descriptor.get("size") or 0) if isinstance(descriptor, Mapping) else 0
+        downloaded = None if progress is None else (lambda written: progress("downloading", written, total))
         while True:
-            archive, fresh = self._panel_archive(client, snapshot, progress)
+            archive, fresh = self._panel_archive(client, snapshot, downloaded)
+            if progress is not None and not fresh:
+                progress("cached", total, total)
             try:
                 # Reading the archive means unpacking all of it for the sums of
                 # its files. The plan is built again for the re-check and for
@@ -518,6 +527,8 @@ class ModuleLifecycleService:
                 )
                 if self._archive_listing is not None and self._archive_listing[0] == key:
                     return self._archive_listing[1]
+                if progress is not None:
+                    progress("verifying", total, total)
                 # A second of unpacking off the loop: the rest of the panel answers.
                 listing = run_blocking(
                     validate_panel_archive,
@@ -1046,7 +1057,9 @@ class ModuleLifecycleService:
             "plan_id": _plan_digest(plan, {}),
         }
 
-    def _full_scope_plan_and_payload(self, operation: str) -> tuple[Plan | None, dict[str, Any]]:
+    def _full_scope_plan_and_payload(
+        self, operation: str, progress: PrepareSink | None = None
+    ) -> tuple[Plan | None, dict[str, Any]]:
         if operation == ROLLBACK_OPERATION:
             return self._rollback_plan_and_payload()
         try:
@@ -1055,6 +1068,8 @@ class ModuleLifecycleService:
                 ensure_release_build(source_version)
             architecture = self._architecture_provider()
             client = self._catalog_factory(source_version, architecture)
+            if progress is not None:
+                progress("catalog", 0, 0)
             try:
                 snapshot = (
                     client.get_catalog(force_refresh=True)
@@ -1105,7 +1120,7 @@ class ModuleLifecycleService:
                     panel_root=self.panel_root,
                     state_dir=self.state_dir,
                     catalog=snapshot.catalog,
-                    target_archive=self._checked_panel_archive(client, snapshot, architecture),
+                    target_archive=self._checked_panel_archive(client, snapshot, architecture, progress),
                     architecture=architecture,
                 )
         except ModuleTransactionError as error:
@@ -1203,10 +1218,11 @@ class ModuleLifecycleService:
         self,
         operation: str,
         module_id: str | None,
+        progress: PrepareSink | None = None,
     ) -> tuple[Plan | None, dict[str, Any]]:
         operation, module_id = self._validate_operation(operation, module_id)
         if operation in _FULL_SCOPE_OPERATIONS:
-            return self._full_scope_plan_and_payload(operation)
+            return self._full_scope_plan_and_payload(operation, progress)
         assert module_id is not None
         version, architecture, _client, snapshot = self._release_context()
         try:
@@ -1266,12 +1282,16 @@ class ModuleLifecycleService:
         }
         return plan, payload
 
-    def plan(self, operation: str, module_id: str | None = None) -> dict[str, Any]:
+    def plan(
+        self, operation: str, module_id: str | None = None, *, progress: PrepareSink | None = None
+    ) -> dict[str, Any]:
+        """The plan of one operation; ``progress`` hears the stages of a panel update."""
+
         normalized_operation, _normalized_module = self._validate_operation(operation, module_id)
         if self.local_demo:
             return self._local_demo_plan(normalized_operation, _normalized_module)
         self._ensure_profile_settled(normalized_operation)
-        _plan, payload = self._plan_and_payload(operation, module_id)
+        _plan, payload = self._plan_and_payload(operation, module_id, progress)
         return payload
 
     def _local_demo_plan(self, operation: str, module_id: str | None) -> dict[str, Any]:

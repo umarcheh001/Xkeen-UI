@@ -38,13 +38,13 @@
         "gevent-websocket (optional)"
       ],
       "removable": false,
-      "unit_count": 596,
-      "size_bytes": 8070969,
+      "unit_count": 598,
+      "size_bytes": 8082842,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
-        "backend_service": 81,
-        "backend_test": 265,
+        "backend_service": 82,
+        "backend_test": 266,
         "configuration": 10,
         "frontend_bundle": 9,
         "frontend_entrypoint": 3,
@@ -2322,7 +2322,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_lifecycle.py",
-      "size_bytes": 63584,
+      "size_bytes": 64660,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -2772,6 +2772,29 @@
       ],
       "starts_background_task": false,
       "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_service",
+      "path": "xkeen-ui/services/panel_update_prepare.py",
+      "size_bytes": 5190,
+      "depends_on": [],
+      "starts_background_task": true,
+      "background_markers": [
+        "daemon_thread",
+        "threading.Thread"
+      ],
       "registers_routes": false,
       "routes": [],
       "frontend_bundle": [],
@@ -7034,6 +7057,26 @@
       "environment_variables": [
         "XKEEN_UI_UPDATE_DIR"
       ],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_panel_update_prepare.py",
+      "size_bytes": 5607,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
       "removable": false
     },
     {

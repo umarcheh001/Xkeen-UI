@@ -24,8 +24,8 @@ class CatalogRecorder:
         self.latest_requests += 1
         return self.client.get_release_catalog(self.client._core_version)
 
-    def download_verified_panel_archive(self, snapshot, destination):
-        return self.client.download_verified_panel_archive(snapshot, destination)
+    def download_verified_panel_archive(self, snapshot, destination, **kwargs):
+        return self.client.download_verified_panel_archive(snapshot, destination, **kwargs)
 
 
 class StaticCatalogRecorder:
