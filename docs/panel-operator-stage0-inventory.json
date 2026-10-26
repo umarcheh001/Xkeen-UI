@@ -2347,7 +2347,7 @@
         "initial_visibility": "hidden",
         "aria_modal": "true",
         "aria_label": null,
-        "data_modal_key": null,
+        "data_modal_key": "mihomo-import-source-v3",
         "operator_family": "editor-workbench",
         "states": [
           "closed",
@@ -2406,7 +2406,7 @@
               "accessible_name": false
             },
             {
-              "control": "control@5584",
+              "control": "control@5611",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
@@ -11547,13 +11547,8 @@
       },
       {
         "locator": "#mihomo-import-modal",
-        "name": "data-modal-nodrag",
-        "value": "1"
-      },
-      {
-        "locator": "#mihomo-import-modal",
-        "name": "data-modal-nopos",
-        "value": "1"
+        "name": "data-modal-key",
+        "value": "mihomo-import-source-v3"
       },
       {
         "locator": "#mihomo-import-modal",
@@ -11562,8 +11557,13 @@
       },
       {
         "locator": "#mihomo-import-modal",
+        "name": "data-modal-position-only",
+        "value": "1"
+      },
+      {
+        "locator": "#mihomo-import-modal",
         "name": "data-modal-remember",
-        "value": "0"
+        "value": "1"
       },
       {
         "locator": "#mihomo-import-modal",

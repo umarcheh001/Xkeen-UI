@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 603,
-      "size_bytes": 8134444,
+      "size_bytes": 8139277,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -131,20 +131,20 @@
         "mihomo"
       ],
       "removable": true,
-      "unit_count": 134,
-      "size_bytes": 3136120,
+      "unit_count": 140,
+      "size_bytes": 3180100,
       "kind_counts": {
         "app_runtime": 4,
         "backend_route": 2,
         "backend_service": 31,
-        "backend_test": 44,
+        "backend_test": 47,
         "configuration": 3,
         "editor_schema": 1,
         "frontend_bundle": 1,
         "frontend_entrypoint": 1,
-        "frontend_feature": 22,
+        "frontend_feature": 24,
         "frontend_javascript": 5,
-        "frontend_test": 14,
+        "frontend_test": 15,
         "template": 6
       },
       "route_count": 92,
@@ -6750,7 +6750,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_panel_operator_stage0_contract.py",
-      "size_bytes": 10262,
+      "size_bytes": 10413,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -13312,7 +13312,7 @@
       "module_id": "core",
       "kind": "frontend_ui",
       "path": "xkeen-ui/static/js/ui/modal.js",
-      "size_bytes": 40730,
+      "size_bytes": 41627,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -13827,7 +13827,7 @@
       "module_id": "core",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/panel-operator.css",
-      "size_bytes": 821078,
+      "size_bytes": 824690,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -13847,7 +13847,7 @@
       "module_id": "core",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/styles.css",
-      "size_bytes": 884017,
+      "size_bytes": 884190,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -16279,7 +16279,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_test",
       "path": "tests/test_mihomo_feature_api_consistency.py",
-      "size_bytes": 12408,
+      "size_bytes": 12442,
       "depends_on": [
         "core",
         "tool.editor"
@@ -16301,6 +16301,69 @@
       "kind": "backend_test",
       "path": "tests/test_mihomo_generator_multi_proxy_yaml.py",
       "size_bytes": 11171,
+      "depends_on": [
+        "core",
+        "tool.editor"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "xkeen",
+        "mihomo"
+      ],
+      "environment_variables": [],
+      "removable": true
+    },
+    {
+      "module_id": "engine.mihomo",
+      "kind": "backend_test",
+      "path": "tests/test_mihomo_import_baseline_inventory.py",
+      "size_bytes": 1712,
+      "depends_on": [
+        "core",
+        "tool.editor"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "xkeen",
+        "mihomo"
+      ],
+      "environment_variables": [],
+      "removable": true
+    },
+    {
+      "module_id": "engine.mihomo",
+      "kind": "backend_test",
+      "path": "tests/test_mihomo_import_stage2_contract.py",
+      "size_bytes": 2026,
+      "depends_on": [
+        "core",
+        "tool.editor"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "xkeen",
+        "mihomo"
+      ],
+      "environment_variables": [],
+      "removable": true
+    },
+    {
+      "module_id": "engine.mihomo",
+      "kind": "backend_test",
+      "path": "tests/test_mihomo_import_stage3_contract.py",
+      "size_bytes": 2875,
       "depends_on": [
         "core",
         "tool.editor"
@@ -17375,11 +17438,65 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/mihomo_import.js",
-      "size_bytes": 123209,
+      "size_bytes": 130444,
       "depends_on": [
         "core",
         "tool.editor",
         "integration.happ"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [
+        "devtools-page",
+        "mihomo-generator-page",
+        "modules-page",
+        "panel-core",
+        "xkeen-page"
+      ],
+      "system_requirements": [
+        "xkeen",
+        "mihomo"
+      ],
+      "environment_variables": [],
+      "removable": true
+    },
+    {
+      "module_id": "engine.mihomo",
+      "kind": "frontend_feature",
+      "path": "xkeen-ui/static/js/features/mihomo_import_api.js",
+      "size_bytes": 2253,
+      "depends_on": [
+        "core",
+        "tool.editor"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [
+        "devtools-page",
+        "mihomo-generator-page",
+        "modules-page",
+        "panel-core",
+        "xkeen-page"
+      ],
+      "system_requirements": [
+        "xkeen",
+        "mihomo"
+      ],
+      "environment_variables": [],
+      "removable": true
+    },
+    {
+      "module_id": "engine.mihomo",
+      "kind": "frontend_feature",
+      "path": "xkeen-ui/static/js/features/mihomo_import_state.js",
+      "size_bytes": 3557,
+      "depends_on": [
+        "core",
+        "tool.editor"
       ],
       "starts_background_task": false,
       "background_markers": [],
@@ -17862,7 +17979,28 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_test",
       "path": "e2e/mihomo_import_modal_layout.spec.mjs",
-      "size_bytes": 10159,
+      "size_bytes": 16033,
+      "depends_on": [
+        "core",
+        "tool.editor"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "xkeen",
+        "mihomo"
+      ],
+      "environment_variables": [],
+      "removable": true
+    },
+    {
+      "module_id": "engine.mihomo",
+      "kind": "frontend_test",
+      "path": "e2e/mihomo_import_source_lifecycle.spec.mjs",
+      "size_bytes": 16961,
       "depends_on": [
         "core",
         "tool.editor"
@@ -17988,7 +18126,7 @@
       "module_id": "engine.mihomo",
       "kind": "template",
       "path": "xkeen-ui/templates/panel/modals/mihomo.html",
-      "size_bytes": 37560,
+      "size_bytes": 38983,
       "depends_on": [
         "core",
         "tool.editor"
@@ -18009,7 +18147,7 @@
       "module_id": "engine.mihomo",
       "kind": "template",
       "path": "xkeen-ui/templates/panel/screens/mihomo.html",
-      "size_bytes": 56880,
+      "size_bytes": 56910,
       "depends_on": [
         "core",
         "tool.editor"
@@ -29834,7 +29972,7 @@
     {
       "id": "panel-core",
       "root": "xkeen-ui/static/js/pages/panel.entry.js",
-      "file_count": 289,
+      "file_count": 291,
       "module_ids": [
         "core",
         "engine.mihomo",
@@ -29933,6 +30071,8 @@
         "xkeen-ui/static/js/features/mihomo_generator.js",
         "xkeen-ui/static/js/features/mihomo_hwid_sub.js",
         "xkeen-ui/static/js/features/mihomo_import.js",
+        "xkeen-ui/static/js/features/mihomo_import_api.js",
+        "xkeen-ui/static/js/features/mihomo_import_state.js",
         "xkeen-ui/static/js/features/mihomo_panel.js",
         "xkeen-ui/static/js/features/mihomo_proxy_tools.js",
         "xkeen-ui/static/js/features/mihomo_runtime.js",
@@ -30507,7 +30647,7 @@
     {
       "id": "devtools-page",
       "root": "xkeen-ui/static/js/pages/devtools.entry.js",
-      "file_count": 289,
+      "file_count": 291,
       "module_ids": [
         "core",
         "engine.mihomo",
@@ -30606,6 +30746,8 @@
         "xkeen-ui/static/js/features/mihomo_generator.js",
         "xkeen-ui/static/js/features/mihomo_hwid_sub.js",
         "xkeen-ui/static/js/features/mihomo_import.js",
+        "xkeen-ui/static/js/features/mihomo_import_api.js",
+        "xkeen-ui/static/js/features/mihomo_import_state.js",
         "xkeen-ui/static/js/features/mihomo_panel.js",
         "xkeen-ui/static/js/features/mihomo_proxy_tools.js",
         "xkeen-ui/static/js/features/mihomo_runtime.js",
@@ -30814,7 +30956,7 @@
     {
       "id": "xkeen-page",
       "root": "xkeen-ui/static/js/pages/xkeen.entry.js",
-      "file_count": 289,
+      "file_count": 291,
       "module_ids": [
         "core",
         "engine.mihomo",
@@ -30913,6 +31055,8 @@
         "xkeen-ui/static/js/features/mihomo_generator.js",
         "xkeen-ui/static/js/features/mihomo_hwid_sub.js",
         "xkeen-ui/static/js/features/mihomo_import.js",
+        "xkeen-ui/static/js/features/mihomo_import_api.js",
+        "xkeen-ui/static/js/features/mihomo_import_state.js",
         "xkeen-ui/static/js/features/mihomo_panel.js",
         "xkeen-ui/static/js/features/mihomo_proxy_tools.js",
         "xkeen-ui/static/js/features/mihomo_runtime.js",
@@ -31121,7 +31265,7 @@
     {
       "id": "mihomo-generator-page",
       "root": "xkeen-ui/static/js/pages/mihomo_generator.entry.js",
-      "file_count": 289,
+      "file_count": 291,
       "module_ids": [
         "core",
         "engine.mihomo",
@@ -31220,6 +31364,8 @@
         "xkeen-ui/static/js/features/mihomo_generator.js",
         "xkeen-ui/static/js/features/mihomo_hwid_sub.js",
         "xkeen-ui/static/js/features/mihomo_import.js",
+        "xkeen-ui/static/js/features/mihomo_import_api.js",
+        "xkeen-ui/static/js/features/mihomo_import_state.js",
         "xkeen-ui/static/js/features/mihomo_panel.js",
         "xkeen-ui/static/js/features/mihomo_proxy_tools.js",
         "xkeen-ui/static/js/features/mihomo_runtime.js",
@@ -31428,7 +31574,7 @@
     {
       "id": "modules-page",
       "root": "xkeen-ui/static/js/pages/modules.entry.js",
-      "file_count": 289,
+      "file_count": 291,
       "module_ids": [
         "core",
         "engine.mihomo",
@@ -31527,6 +31673,8 @@
         "xkeen-ui/static/js/features/mihomo_generator.js",
         "xkeen-ui/static/js/features/mihomo_hwid_sub.js",
         "xkeen-ui/static/js/features/mihomo_import.js",
+        "xkeen-ui/static/js/features/mihomo_import_api.js",
+        "xkeen-ui/static/js/features/mihomo_import_state.js",
         "xkeen-ui/static/js/features/mihomo_panel.js",
         "xkeen-ui/static/js/features/mihomo_proxy_tools.js",
         "xkeen-ui/static/js/features/mihomo_runtime.js",
@@ -32195,7 +32343,7 @@
       {
         "from": "engine.mihomo",
         "to": "core",
-        "unit_count": 134,
+        "unit_count": 140,
         "examples": [
           "xkeen-ui/bootstrap_mihomo_env.py",
           "xkeen-ui/mihomo_config_generator.py",
@@ -32249,7 +32397,7 @@
       {
         "from": "engine.mihomo",
         "to": "tool.editor",
-        "unit_count": 134,
+        "unit_count": 140,
         "examples": [
           "xkeen-ui/bootstrap_mihomo_env.py",
           "xkeen-ui/mihomo_config_generator.py",
@@ -32633,7 +32781,7 @@
       {
         "from": "engine.mihomo",
         "to": "core",
-        "unit_count": 76,
+        "unit_count": 78,
         "examples": [
           "xkeen-ui/bootstrap_mihomo_env.py",
           "xkeen-ui/mihomo_config_generator.py",
@@ -32686,7 +32834,7 @@
       {
         "from": "engine.mihomo",
         "to": "tool.editor",
-        "unit_count": 76,
+        "unit_count": 78,
         "examples": [
           "xkeen-ui/bootstrap_mihomo_env.py",
           "xkeen-ui/mihomo_config_generator.py",
