@@ -358,12 +358,12 @@
         "ndmc (router diagnostics optional)"
       ],
       "removable": true,
-      "unit_count": 31,
-      "size_bytes": 481260,
+      "unit_count": 33,
+      "size_bytes": 496652,
       "kind_counts": {
         "backend_route": 1,
-        "backend_service": 10,
-        "backend_test": 6,
+        "backend_service": 11,
+        "backend_test": 7,
         "frontend_entrypoint": 1,
         "frontend_feature": 9,
         "frontend_javascript": 2,
@@ -384,7 +384,7 @@
         "xkeen-ui/services/system_resources_history/__init__.py",
         "xkeen-ui/services/system_resources_history/hardware.py",
         "xkeen-ui/services/system_resources_history/sensors.py",
-        "tests/test_resource_monitor_frontend.py"
+        "xkeen-ui/services/system_resources_history/store.py"
       ]
     }
   ],
@@ -22740,6 +22740,25 @@
     },
     {
       "module_id": "tool.advanced-diagnostics",
+      "kind": "backend_service",
+      "path": "xkeen-ui/services/system_resources_history/store.py",
+      "size_bytes": 9890,
+      "depends_on": [
+        "core"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "ndmc (router diagnostics optional)"
+      ],
+      "environment_variables": [],
+      "removable": true
+    },
+    {
+      "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_resource_monitor_frontend.py",
       "size_bytes": 7958,
@@ -22838,6 +22857,25 @@
       "kind": "backend_test",
       "path": "tests/test_system_resources_sensors.py",
       "size_bytes": 9397,
+      "depends_on": [
+        "core"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "ndmc (router diagnostics optional)"
+      ],
+      "environment_variables": [],
+      "removable": true
+    },
+    {
+      "module_id": "tool.advanced-diagnostics",
+      "kind": "backend_test",
+      "path": "tests/test_system_resources_store.py",
+      "size_bytes": 5502,
       "depends_on": [
         "core"
       ],
@@ -32467,7 +32505,7 @@
       {
         "from": "tool.advanced-diagnostics",
         "to": "core",
-        "unit_count": 31,
+        "unit_count": 33,
         "examples": [
           "xkeen-ui/routes/system_resources.py",
           "xkeen-ui/services/devtools/__init__.py",
@@ -32903,7 +32941,7 @@
       {
         "from": "tool.advanced-diagnostics",
         "to": "core",
-        "unit_count": 25,
+        "unit_count": 26,
         "examples": [
           "xkeen-ui/routes/system_resources.py",
           "xkeen-ui/services/devtools/__init__.py",
@@ -33493,8 +33531,8 @@
           "size_bytes": 1008333
         },
         "tool.advanced-diagnostics": {
-          "unit_count": 31,
-          "size_bytes": 481260
+          "unit_count": 33,
+          "size_bytes": 496652
         }
       },
       "next_stage": "Этапы 4, 5 и 6."
