@@ -93,6 +93,49 @@ test('source/result have no preview runtime; disclosure loads CM and close reset
   expect((await page.locator(`${MODAL} .modal-content`).boundingBox()).width).toBeLessThanOrEqual(720);
 });
 
+test('result cards summarize nodes and subscriptions without rendering source credentials', async ({ page }) => {
+  await prepare(page);
+  await page.evaluate(async (content) => {
+    const { getMihomoPanelApi } = await import('/static/js/features/mihomo_panel.js');
+    getMihomoPanelApi().setEditorText(content);
+  }, `${CONFIG}\nproxies:\n  - name: Stage3\n    type: vless\n    server: example.com\n    port: 443\n    uuid: 11111111-1111-1111-1111-111111111111\n`);
+  await open(page);
+  await page.locator('#mihomo-import-input').fill(LINK);
+  await page.locator('#mihomo-import-parse-btn').click();
+  await expect(page.locator('#mihomo-import-result-cards')).toBeVisible();
+  await expect(page.locator('#mihomo-import-result-cards')).toContainText('Результат распознавания');
+  await expect(page.locator('#mihomo-import-result-cards')).toContainText('Адрес: example.com:443');
+  await expect(page.locator('#mihomo-import-result-cards')).toContainText('Имя «Stage3» уже занято');
+  await expect(page.locator('#mihomo-import-result-cards')).toContainText('Похожее подключение уже есть');
+  await expect(page.locator('#mihomo-import-result-cards')).not.toContainText('11111111-1111-1111-1111-111111111111');
+
+  await page.route('**/api/mihomo/parse/xray-json', (route) => route.fulfill({
+    json: {
+      ok: true,
+      proxies: [
+        { proxy_name: 'Sub one', proxy_yaml: '- name: Sub one\n  type: vless\n  server: sub-node.example\n  port: 443\n  uuid: private-one\n' },
+        { proxy_name: 'Sub two', proxy_yaml: '- name: Sub two\n  type: trojan\n  server: sub-node.example\n  port: 443\n  password: private-two\n' },
+      ],
+    },
+  }));
+  const subscription = 'https://alice:secret@sub.example.org/list?token=hidden-token';
+  await page.locator('#mihomo-import-input').fill(subscription);
+  await page.locator('#mihomo-import-parse-btn').click();
+  await expect(page.locator('#mihomo-import-result-cards')).toContainText('Xray-JSON → статические узлы');
+  await expect(page.locator('#mihomo-import-result-cards')).toContainText('Источник: sub.example.org');
+  await expect(page.locator('#mihomo-import-result-cards')).toContainText('Получено: 2 узла');
+  await expect(page.locator('#mihomo-import-result-cards')).not.toContainText('alice:secret');
+  await expect(page.locator('#mihomo-import-result-cards')).not.toContainText('hidden-token');
+
+  await page.unroute('**/api/mihomo/parse/xray-json');
+  const rejected = `${LINK}\nunknown://private-source`;
+  await page.locator('#mihomo-import-input').fill(rejected);
+  await page.locator('#mihomo-import-parse-btn').click();
+  await expect(page.locator('#mihomo-import-result-cards')).toContainText('Не обработано');
+  await expect(page.locator('#mihomo-import-result-cards')).toContainText('Строка 2: Неизвестная ссылка');
+  await expect(page.locator('#mihomo-import-result-cards')).not.toContainText('unknown://private-source');
+});
+
 test('old and new workbench geometry never inflate source; expanded geometry is restored', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 960 });
   await prepare(page);

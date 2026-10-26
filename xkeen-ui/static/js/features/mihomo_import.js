@@ -23,6 +23,7 @@ import {
   updateMihomoImportContext,
 } from './mihomo_import_state.js';
 import { createMihomoImportApi } from './mihomo_import_api.js';
+import { createMihomoImportPresentation } from './mihomo_import_result.js';
 
 let mihomoImportModuleApi = null;
 
@@ -61,6 +62,7 @@ let mihomoImportModuleApi = null;
     monacoHost: 'mihomo-import-preview-monaco',
     status: 'mihomo-import-status',
     hint: 'mihomo-import-target-hint',
+    resultCards: 'mihomo-import-result-cards',
 
     groupsBox: 'mihomo-import-groups',
     groupsBlock: 'mihomo-import-groups-block',
@@ -107,6 +109,7 @@ let mihomoImportModuleApi = null;
     setStatus('', false);
     setHint('');
     setPreview('');
+    clearMihomoImportResultCards();
     updateXrayRefreshUi([]);
     setSourceLayout(false);
     const insert = $(IDS.btnInsert);
@@ -349,6 +352,89 @@ let mihomoImportModuleApi = null;
     el.textContent = value;
     appendHappDecryptorCardLink(el, value);
     el.classList.toggle('hidden', !value.trim());
+  }
+
+  function clearMihomoImportResultCards() {
+    const host = $(IDS.resultCards);
+    if (!host) return;
+    host.replaceChildren();
+    host.classList.add('hidden');
+  }
+
+  function appendResultCardText(parent, className, text) {
+    const value = String(text || '').trim();
+    if (!value) return;
+    const node = document.createElement('div');
+    node.className = className;
+    node.textContent = value;
+    parent.appendChild(node);
+  }
+
+  function renderMihomoImportResultCards(presentation) {
+    const host = $(IDS.resultCards);
+    if (!host) return;
+    host.replaceChildren();
+    const model = presentation && typeof presentation === 'object' ? presentation : null;
+    if (!model || (!Array.isArray(model.cards) && !Array.isArray(model.diagnostics))) {
+      host.classList.add('hidden');
+      return;
+    }
+
+    const head = document.createElement('div');
+    head.className = 'xk-mi-section-head';
+    const copy = document.createElement('div');
+    const title = document.createElement('div');
+    title.className = 'xk-mi-section-title';
+    title.textContent = 'Результат распознавания';
+    const subtitle = document.createElement('div');
+    subtitle.className = 'xk-mi-section-subtitle';
+    subtitle.textContent = String(model.summary || 'Результат ещё не получен.');
+    copy.append(title, subtitle);
+    head.appendChild(copy);
+    host.appendChild(head);
+
+    const list = document.createElement('div');
+    list.className = 'xk-mi-result-list';
+    (model.cards || []).forEach((card) => {
+      const item = document.createElement('article');
+      item.className = 'xk-mi-result-card';
+      const cardHead = document.createElement('div');
+      cardHead.className = 'xk-mi-result-card-head';
+      const cardTitle = document.createElement('div');
+      cardTitle.className = 'xk-mi-result-card-title';
+      cardTitle.textContent = String(card.title || 'Результат');
+      cardHead.appendChild(cardTitle);
+      if (card.badge) {
+        const badge = document.createElement('span');
+        badge.className = 'xk-mi-result-badge';
+        badge.textContent = String(card.badge);
+        cardHead.appendChild(badge);
+      }
+      item.appendChild(cardHead);
+      appendResultCardText(item, 'xk-mi-result-source', `${String(card.sourceLabel || 'Источник')}: ${String(card.source || 'не указан')}`);
+      (card.details || []).forEach((detail) => appendResultCardText(item, 'xk-mi-result-detail', detail));
+      (card.notices || []).forEach((notice) => {
+        const note = document.createElement('div');
+        note.className = `xk-mi-result-notice ${notice && notice.tone ? `is-${notice.tone}` : ''}`;
+        note.textContent = String(notice && notice.text || '');
+        item.appendChild(note);
+      });
+      list.appendChild(item);
+    });
+    if (list.childElementCount) host.appendChild(list);
+
+    if (Array.isArray(model.diagnostics) && model.diagnostics.length) {
+      const diagnostics = document.createElement('div');
+      diagnostics.className = 'xk-mi-result-diagnostics';
+      const heading = document.createElement('div');
+      heading.className = 'xk-mi-result-diagnostics-title';
+      heading.textContent = 'Не обработано';
+      diagnostics.appendChild(heading);
+      model.diagnostics.forEach((message) => appendResultCardText(diagnostics, 'xk-mi-result-diagnostic', message));
+      host.appendChild(diagnostics);
+    }
+
+    host.classList.remove('hidden');
   }
 
   function isTruthyHeader(value) {
@@ -1553,6 +1639,7 @@ let mihomoImportModuleApi = null;
       try { disposeCodeMirrorEditor(_previewCm); } catch (e) {}
       _previewCm = null;
       _previewCmFacade = null;
+      clearMihomoImportResultCards();
       setSourceLayout(false);
       syncImportActions();
       const disclosure = $('mihomo-import-managed-disclosure');
@@ -1580,6 +1667,7 @@ let mihomoImportModuleApi = null;
       setStatus('', false);
       setHint('');
       setPreview('');
+      clearMihomoImportResultCards();
       try {
         const intervalInput = $(IDS.xrayInterval);
         if (intervalInput) intervalInput.value = String(loadXrayIntervalPref());
@@ -2333,22 +2421,32 @@ let mihomoImportModuleApi = null;
     // Keep xhttp synchronous in the shared parser API used by import and proxy tools.
     if (uri.includes('type=xhttp')) {
       const config = parseProxyUri(uri);
-      if (config.tag === 'PROXY' || configHasProxyName(existingConfig, config.tag)) {
+      const requestedName = String(config.tag || '').trim();
+      const nameConflict = requestedName && requestedName !== 'PROXY' && configHasProxyName(existingConfig, requestedName)
+        ? { requested: requestedName }
+        : null;
+      if (config.tag === 'PROXY' || nameConflict) {
         config.tag = generateName(config.protocol, configHasProxyName);
       }
       const indented = convertToMihomoYaml(config);
       const raw = proxyYamlRawFromIndented(indented);
-      return { type: 'proxy', proxy_name: config.tag, content: raw + '\n' };
+      if (nameConflict) nameConflict.suggested = config.tag;
+      return { type: 'proxy', proxy_name: config.tag, content: raw + '\n', name_conflict: nameConflict };
     }
 
     const config = parseProxyUri(uri);
-    if (config.tag === 'PROXY' || configHasProxyName(existingConfig, config.tag)) {
+    const requestedName = String(config.tag || '').trim();
+    const nameConflict = requestedName && requestedName !== 'PROXY' && configHasProxyName(existingConfig, requestedName)
+      ? { requested: requestedName }
+      : null;
+    if (config.tag === 'PROXY' || nameConflict) {
       config.tag = generateName(config.protocol, configHasProxyName);
     }
 
     const indented = convertToMihomoYaml(config);
     const raw = proxyYamlRawFromIndented(indented);
-    return { type: 'proxy', proxy_name: config.tag, content: raw + '\n' };
+    if (nameConflict) nameConflict.suggested = config.tag;
+    return { type: 'proxy', proxy_name: config.tag, content: raw + '\n', name_conflict: nameConflict };
   }
 
   // Expose a minimal helper API for other modules (Proxy Tools, etc.)
@@ -2552,6 +2650,14 @@ let mihomoImportModuleApi = null;
     count.textContent = total
       ? `Выбрано: ${selected} из ${total}. Конфиг будет выпущен только для выбранных локаций.`
       : 'Локации ещё не загружены.';
+    if (total && getImportMode() === 'amnezia-premium' && !_lastResult) {
+      renderMihomoImportResultCards(createMihomoImportPresentation({
+        mode: 'amnezia-premium',
+        amneziaLocations: _amneziaLocations,
+        selectedAmneziaLocations: readSelectedAmneziaLocations(),
+        phase: 'locations',
+      }));
+    }
   }
 
   async function loadAmneziaLocations(connectionKey) {
@@ -2576,6 +2682,12 @@ let mihomoImportModuleApi = null;
     setParseButtonLabel('Получить выбранные');
     setPreview('');
     setHint('Выберите нужные локации, затем нажмите «Получить выбранные».');
+    renderMihomoImportResultCards(createMihomoImportPresentation({
+      mode: 'amnezia-premium',
+      amneziaLocations: _amneziaLocations,
+      selectedAmneziaLocations: readSelectedAmneziaLocations(),
+      phase: 'locations',
+    }));
     updateXrayRefreshUi([]);
     const insert = $(IDS.btnInsert);
     if (insert) insert.disabled = true;
@@ -2599,7 +2711,14 @@ let mihomoImportModuleApi = null;
       const proxyName = String(proxy && (proxy.proxy_name || proxy.name) || '').trim();
       const content = String(proxy && (proxy.proxy_yaml || proxy.yaml) || '').trimEnd();
       if (!proxyName || !content) return null;
-      return { type: 'proxy', proxy_name: proxyName, content: content + '\n', uri: 'Amnezia Premium' };
+      return {
+        type: 'proxy',
+        proxy_name: proxyName,
+        content: content + '\n',
+        uri: 'Amnezia Premium',
+        amnezia: true,
+        location_code: String(proxy && (proxy.country_code || proxy.code) || '').trim().toUpperCase(),
+      };
     }).filter(Boolean);
     if (!outputs.length) {
       throw new Error('Amnezia Premium не вернул конфигурации для выбранных локаций.');
@@ -2626,6 +2745,19 @@ let mihomoImportModuleApi = null;
     if (!proxy_name || !proxy_yaml) throw new Error(safeKind + ': пустой результат парсинга');
 
     return { type: 'proxy', proxy_name, content: proxy_yaml };
+  }
+
+  async function parseConfigWithUniqueName(kind, confText, existingConfig) {
+    let output = await parseConfigViaApi(kind, confText, null);
+    const requestedName = String(output.proxy_name || '').trim();
+    if (!configHasProxyName(existingConfig, requestedName)) return output;
+
+    const suggestedName = makeUniqueName(requestedName, existingConfig);
+    output = await parseConfigViaApi(kind, confText, suggestedName);
+    return {
+      ...output,
+      name_conflict: { requested: requestedName, suggested: String(output.proxy_name || suggestedName) },
+    };
   }
 
   function collectProxyNamesFromText(text) {
@@ -2744,7 +2876,13 @@ let mihomoImportModuleApi = null;
           await loadAmneziaLocations(key);
         } catch (e) {
           if (!isCurrentImportRequest(requestToken)) return;
-          setStatus(e && e.message ? e.message : String(e || 'ошибка'), true);
+          const presentation = createMihomoImportPresentation({
+            mode: 'amnezia-premium',
+            errors: [e && e.message ? e.message : String(e || 'ошибка')],
+            phase: 'error',
+          });
+          renderMihomoImportResultCards(presentation);
+          setStatus(presentation.diagnostics.join('\n'), true);
           setHint('');
         }
         if (!isCurrentImportRequest(requestToken)) return;
@@ -2769,14 +2907,8 @@ let mihomoImportModuleApi = null;
       const label = mode === 'wireguard' ? 'WireGuard / AmneziaWG 3.x' : (mode === 'openvpn' ? 'OpenVPN' : 'Tailscale');
       setStatus('Разбираю ' + label + '…', false, null, { busy: true });
       try {
-        let out = await parseConfigViaApi(mode, rawText, null);
+        const out = await parseConfigWithUniqueName(mode, rawText, existing);
         if (!isCurrentImportRequest(requestToken)) return;
-        // Ensure unique name against current config.yaml
-        if (configHasProxyName(existing, out.proxy_name)) {
-          const unique = makeUniqueName(out.proxy_name, existing);
-          out = await parseConfigViaApi(mode, rawText, unique);
-          if (!isCurrentImportRequest(requestToken)) return;
-        }
         outputs.push({ ...out, uri: mode + '.conf' });
       } catch (e) {
         const msg = e && e.message ? e.message : String(e || 'ошибка');
@@ -2804,7 +2936,7 @@ let mihomoImportModuleApi = null;
         return;
       }
 
-      for (const line of lines) {
+      for (const [lineIndex, line] of lines.entries()) {
         try {
           if (mode === 'subscription' && !isBackendSubscriptionLink(line)) {
             throw new Error('Ожидается HTTPS‑подписка или Happ deep-link (happ://crypt...)');
@@ -2813,13 +2945,8 @@ let mihomoImportModuleApi = null;
             throw new Error('Это похоже на подписку. Выбери «HTTPS subscription» или «Auto».');
           }
           if (mode !== 'subscription' && /^tailscale:\/\//i.test(line)) {
-            let out = await parseConfigViaApi('tailscale', line, null);
+            const out = await parseConfigWithUniqueName('tailscale', line, tmp);
             if (!isCurrentImportRequest(requestToken)) return;
-            if (configHasProxyName(tmp, out.proxy_name)) {
-              const unique = makeUniqueName(out.proxy_name, tmp);
-              out = await parseConfigViaApi('tailscale', line, unique);
-              if (!isCurrentImportRequest(requestToken)) return;
-            }
             outputs.push({ ...out, uri: line });
             tmp += '\n' + out.content;
             continue;
@@ -2868,7 +2995,7 @@ let mihomoImportModuleApi = null;
           outputs.push({ ...out, uri: line });
           tmp += '\n' + out.content;
         } catch (e) {
-          errors.push(`${line}: ${e && e.message ? e.message : 'ошибка'}`);
+          errors.push({ line: lineIndex + 1, message: e && e.message ? e.message : 'ошибка' });
         }
       }
     }
@@ -2876,7 +3003,17 @@ let mihomoImportModuleApi = null;
     if (!isCurrentImportRequest(requestToken)) return;
     if (!outputs.length) {
       _lastResult = null;
-      setStatus(errors.join('\n') || 'Не удалось распознать данные.', true);
+      const presentation = createMihomoImportPresentation({
+        outputs,
+        errors,
+        mode,
+        existingConfig: existing,
+        amneziaLocations: _amneziaLocations,
+        selectedAmneziaLocations: readSelectedAmneziaLocations(),
+        phase: mode === 'amnezia-premium' ? 'locations' : 'error',
+      });
+      renderMihomoImportResultCards(presentation);
+      setStatus(presentation.diagnostics.join('\n') || 'Не удалось распознать данные.', true);
       setHint('');
       setPreview('');
       updateXrayRefreshUi([]);
@@ -2889,13 +3026,23 @@ let mihomoImportModuleApi = null;
     if (!isCurrentImportRequest(requestToken)) return;
     const result = { outputs };
     if (!commitMihomoImportResult(_importState, requestToken, result)) return;
+    _lastResult = result;
+    setSourceLayout(true);
+    const presentation = createMihomoImportPresentation({
+      outputs,
+      errors,
+      mode,
+      existingConfig: existing,
+      amneziaLocations: _amneziaLocations,
+      selectedAmneziaLocations: readSelectedAmneziaLocations(),
+      phase: mode === 'amnezia-premium' ? 'issued' : 'result',
+    });
     updateMihomoImportContext(_importState, {
-      warnings: errors.slice(),
+      warnings: presentation.diagnostics.slice(),
       baseConfigRevision: hashStableText(existing),
       candidate: null,
     });
-    _lastResult = result;
-    setSourceLayout(true);
+    renderMihomoImportResultCards(presentation);
     try { scheduleEngineSync(); } catch (e4) {}
 
     // Build preview. Group consecutive xrayBulk proxies sharing the same
@@ -2955,8 +3102,8 @@ let mihomoImportModuleApi = null;
     const providerWarnings = uniqueStrings(providerWarningsRaw);
     updateXrayRefreshUi(outputs);
     if (errors.length) {
-      setStatus('Часть данных распознана, часть — нет. Проверь строки ниже в preview.', true);
-      setPreview(preview + '\n\n# Ошибки\n' + errors.map((x) => '# ' + x).join('\n') + '\n');
+      setStatus(`Часть данных распознана, часть — нет. ${presentation.summary}`, true);
+      setPreview(preview + '\n\n# Ошибки\n' + presentation.diagnostics.map((x) => '# ' + x).join('\n') + '\n');
     } else if (providerWarnings.length) {
       setStatus(
         'Готово, но провайдер вернул предупреждение:\n' + providerWarnings.map((msg) => '• ' + msg).join('\n'),

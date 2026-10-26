@@ -33002,3 +33002,107 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-collapsedLines:f
   color: #fff;
   font-size: 0.7em;
 }
+
+/* Mihomo import result cards: safe parser summary, never raw YAML/source. */
+.xk-mi-result-cards {
+  display: grid;
+  gap: 9px;
+  padding: 11px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(96, 165, 250, 0.18);
+  background: rgba(14, 165, 233, 0.055);
+}
+
+.xk-mi-result-cards.hidden {
+  display: none;
+}
+
+.xk-mi-result-list {
+  display: grid;
+  gap: 7px;
+}
+
+.xk-mi-result-card {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 9px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(2, 6, 23, 0.28);
+}
+
+.xk-mi-result-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.xk-mi-result-card-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fg, #f8fafc);
+  font-size: calc(12px * var(--xk-font-scale));
+  font-weight: 700;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xk-mi-result-badge {
+  flex: 0 1 auto;
+  max-width: 54%;
+  overflow: hidden;
+  padding: 3px 7px;
+  border: 1px solid rgba(96, 165, 250, 0.20);
+  border-radius: 999px;
+  color: #bae6fd;
+  font-size: calc(10px * var(--xk-font-scale));
+  font-weight: 650;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xk-mi-result-source,
+.xk-mi-result-detail,
+.xk-mi-result-notice,
+.xk-mi-result-diagnostic {
+  overflow-wrap: anywhere;
+  color: #a9b8d3;
+  font-size: calc(10.5px * var(--xk-font-scale));
+  line-height: 1.4;
+}
+
+.xk-mi-result-source {
+  color: #cbd5e1;
+}
+
+.xk-mi-result-notice {
+  padding-left: 7px;
+  border-left: 2px solid rgba(96, 165, 250, 0.60);
+}
+
+.xk-mi-result-notice.is-warning,
+.xk-mi-result-diagnostics {
+  border-color: rgba(251, 191, 36, 0.75);
+  color: #fde68a;
+}
+
+.xk-mi-result-diagnostics {
+  display: grid;
+  gap: 4px;
+  padding: 8px 9px;
+  border-radius: 10px;
+  border: 1px solid rgba(251, 191, 36, 0.22);
+  border-left: 2px solid rgba(251, 191, 36, 0.75);
+  background: rgba(120, 53, 15, 0.10);
+}
+
+.xk-mi-result-diagnostics-title {
+  color: #fde68a;
+  font-size: calc(11px * var(--xk-font-scale));
+  font-weight: 700;
+}

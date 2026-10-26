@@ -25777,3 +25777,55 @@ body.panel-page .xk-restart-log-card.is-fullscreen .xk-jr-box {
     max-height: none !important;
   }
 }
+
+/* Mihomo import result cards remain a compact Operator data summary. */
+body.panel-page #mihomo-import-modal .xk-mi-result-cards {
+  border-color: var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-surface-2) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-result-card {
+  border-color: var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-editor) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-result-card-title {
+  color: var(--op-text) !important;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-result-badge {
+  border-color: var(--op-border-strong) !important;
+  background: var(--op-surface-2) !important;
+  color: var(--op-muted) !important;
+}
+
+body.panel-page #mihomo-import-modal :is(
+  .xk-mi-result-source,
+  .xk-mi-result-detail,
+  .xk-mi-result-notice,
+  .xk-mi-result-diagnostic
+) {
+  color: var(--op-muted) !important;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-result-notice {
+  border-left-color: var(--op-accent) !important;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-result-notice.is-warning,
+body.panel-page #mihomo-import-modal .xk-mi-result-diagnostics {
+  border-color: var(--op-warning) !important;
+  color: var(--op-warning) !important;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-result-diagnostics {
+  background: var(--op-warning-soft) !important;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-result-diagnostics-title {
+  color: var(--op-warning) !important;
+}
