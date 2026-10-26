@@ -342,7 +342,7 @@
 
 ## 5. Этапы работ
 
-Этапы 0 и 1 закрыты 26 октября 2026 года. Baseline и матрица совместимости: `docs/mihomo-node-import-baseline.md`. Этапы 1–9 ниже ещё не выполнены. В каждом есть результат и проверяемое условие завершения. Следующий этап начинается после прохождения предыдущих зависимостей, а не после косметического завершения макета.
+Этапы 0–2 закрыты 26 октября 2026 года. Baseline и матрица совместимости: `docs/mihomo-node-import-baseline.md`. Этапы 1–9 ниже ещё не выполнены. В каждом есть результат и проверяемое условие завершения. Следующий этап начинается после прохождения предыдущих зависимостей, а не после косметического завершения макета.
 
 ### Этап 0. Baseline и инвентаризация — закрыт
 
@@ -419,20 +419,23 @@ UX-контракт и границы v1 вынесены в `docs/mihomo-node-i
 **Результат:** UX-контракт принят, implementation boundaries закрыты. Production UI
 и state/API extraction ещё не реализованы.
 
-### Этап 2. Выделить состояние и API без визуальной переделки
+### Этап 2. Выделить состояние и API без визуальной переделки — закрыт
 
-**Зависимости:** 0–1. **Приоритет:** P0.
+**Зависимости:** 0–1. **Приоритет:** P0. **Закрыт:** 26 октября 2026 года.
 
-- [ ] Начать с небольшого store/reducer и API adapters, сохранив текущий facade и DOM.
-- [ ] Держать в состоянии source, mode, parse revision, outputs, selected nodes/groups, destination, warnings, base config revision и candidate draft.
-- [ ] Любая правка источника/режима инвалидирует результат; правка имени, групп или интервала инвалидирует candidate preview.
-- [ ] Добавить request generation/session token: поздний ответ старого parse или закрытого модала не меняет актуальный state.
-- [ ] Добавить AbortController там, где transport его поддерживает; server-side выпуск Amnezia не считать отменённым только из-за abort браузера.
-- [ ] Защититься от повторного клика и hotkeys во время parse/commit, без слепых повторов операций с побочным эффектом.
-- [ ] Сохранить текущие предпочтения групп/режима; выбранные группы сверять с актуальным черновиком, не переносить молча между профилями.
+Подробный отчёт: `docs/mihomo-node-import-stage2.md`.
 
-**Результат:** тестируемая модель переходов при прежнем интерфейсе.  
-**Готово, когда:** unit-тесты ловят stale result, двойное подтверждение, изменение источника и закрытие во время запроса; baseline не ухудшился.
+- [x] Выделены state/revision helpers в `mihomo_import_state.js`.
+- [x] Выделены HTTP adapters в `mihomo_import_api.js`.
+- [x] State хранит source, mode, request/session identity, outputs, groups, destination, warnings, base revision и candidate.
+- [x] Любая правка source/mode инвалидирует result и отключает Insert.
+- [x] Late response старого request/session не может закоммитить результат.
+- [x] Public facade, compat, DOM ids и текущий CSS сохранены.
+- [x] Unit, E2E, targeted Python/API и static frontend проверки прошли.
+
+**Результат:** importer получил тестируемую state/API boundary без визуальной
+переделки. AbortController и save/apply остаются отдельными задачами следующих
+этапов, потому что текущий core transport не гарантирует signal contract.
 
 ### Этап 3. Компактный источник и общий modal lifecycle
 

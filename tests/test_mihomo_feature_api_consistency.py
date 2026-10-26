@@ -95,7 +95,7 @@ def test_mihomo_menu_feature_flows_keep_editor_patch_integrations_and_single_sav
             "setEditorText(txt);",
             "refreshEditor();",
             "const api = getMihomoPanelApi();",
-            "await post('/api/mihomo/provider/probe', {",
+                "return _importApi.postJSON('/api/mihomo/provider/probe', {",
             "return `http://127.0.0.1:${port}/mihomo/provider.yaml?${params.toString()}`;",
             "const out = await buildSubscriptionProviderConfig(line, tmp, {",
             "providerStaticBulk: true,",

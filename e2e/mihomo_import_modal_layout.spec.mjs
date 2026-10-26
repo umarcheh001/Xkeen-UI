@@ -238,3 +238,62 @@ test('busy spinner in the import status is centred on the first line of text', a
 
   releaseParse();
 });
+
+
+test('editing source or mode invalidates the previous import result', async ({ page }) => {
+  await page.goto('/');
+  await selectPanelView(page, 'mihomo');
+  await page.locator('#mihomo-clash-tab-config').click();
+  await page.locator('.xk-mihomo-menu summary').click();
+  await page.locator('#mihomo-import-node-btn').click();
+  await expect(page.locator('#mihomo-import-modal')).toBeVisible();
+
+  const input = page.locator('#mihomo-import-input');
+  await input.fill('vless://11111111-1111-1111-1111-111111111111@example.com:443?encryption=none&type=tcp#first');
+  await page.locator('#mihomo-import-parse-btn').click();
+  await expect(page.locator('#mihomo-import-insert-btn')).toBeEnabled();
+
+  await input.fill('vless://22222222-2222-2222-2222-222222222222@example.com:443?encryption=none&type=tcp#second');
+  await expect(page.locator('#mihomo-import-insert-btn')).toBeDisabled();
+
+  await page.locator('#mihomo-import-mode').selectOption('wireguard');
+  await expect(page.locator('#mihomo-import-insert-btn')).toBeDisabled();
+});
+
+
+test('closing the modal invalidates a late parse response', async ({ page }) => {
+  let releaseParse;
+  const parseStarted = new Promise((resolve) => {
+    page.route('**/api/mihomo/parse/xray-json', async (route) => {
+      resolve();
+      await new Promise((resume) => { releaseParse = resume; });
+      await route.fulfill({
+        json: {
+          ok: true,
+          proxies: [{ proxy_name: 'Late node', proxy_yaml: '- name: Late node\n  type: direct\n' }],
+        },
+      });
+    });
+  });
+
+  await page.goto('/');
+  await selectPanelView(page, 'mihomo');
+  await page.locator('#mihomo-clash-tab-config').click();
+  await page.locator('.xk-mihomo-menu summary').click();
+  await page.locator('#mihomo-import-node-btn').click();
+  await expect(page.locator('#mihomo-import-modal')).toBeVisible();
+
+  await page.locator('#mihomo-import-mode').selectOption('subscription');
+  await page.locator('#mihomo-import-input').fill('https://late.example/subscription');
+  await page.locator('#mihomo-import-parse-btn').click();
+  await parseStarted;
+
+  await page.locator('#mihomo-import-close-btn').click();
+  releaseParse();
+  await expect(page.locator('#mihomo-import-modal')).toBeHidden();
+
+  // Reopen must be a clean session; the late response cannot enable Insert.
+  await page.locator('.xk-mihomo-menu summary').click();
+  await page.locator('#mihomo-import-node-btn').click();
+  await expect(page.locator('#mihomo-import-insert-btn')).toBeDisabled();
+});
