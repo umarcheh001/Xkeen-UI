@@ -106,6 +106,55 @@ def test_start_joins_running_job(tmp_path):
     assert len(spawned) == 1
 
 
+def test_start_after_cancel_takes_the_cancel_back(tmp_path):
+    service, _ = _updatable(tmp_path)
+    spawned = []
+    preparer = PanelUpdatePreparer(service, spawn=spawned.append)
+    first = preparer.start()
+    preparer.cancel(first["prepare_id"])
+
+    again = preparer.start()
+    spawned[0]()
+
+    assert again["prepare_id"] == first["prepare_id"]
+    assert preparer.status(first["prepare_id"])["state"] == "ready"
+
+
+def test_a_job_whose_runner_dies_does_not_stay_running(tmp_path):
+    service, _ = _updatable(tmp_path)
+
+    class Killed(BaseException):
+        pass
+
+    def killed(*_args, **_kwargs):
+        raise Killed()
+
+    service.plan = killed
+    spawned = []
+    preparer = PanelUpdatePreparer(service, spawn=spawned.append)
+    first = preparer.start()
+
+    with pytest.raises(Killed):
+        spawned[0]()
+
+    assert preparer.status(first["prepare_id"])["state"] == "failed"
+    assert preparer.start()["prepare_id"] != first["prepare_id"]
+
+
+def test_a_runner_that_does_not_start_leaves_no_running_job(tmp_path):
+    service, _ = _updatable(tmp_path)
+
+    def refused(_target):
+        raise RuntimeError("no thread")
+
+    preparer = PanelUpdatePreparer(service, spawn=refused)
+
+    with pytest.raises(RuntimeError):
+        preparer.start()
+
+    assert preparer.status(preparer.current_id())["state"] == "failed"
+
+
 def test_finished_job_is_followed_by_a_new_one(tmp_path):
     service, _ = _updatable(tmp_path)
     preparer = PanelUpdatePreparer(service, spawn=_run_now)

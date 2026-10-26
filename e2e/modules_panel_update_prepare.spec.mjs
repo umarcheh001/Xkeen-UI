@@ -140,6 +140,28 @@ test('сбой опроса', async ({ page }) => {
   await expect(progressBox(page)).toContainText('Готово к обновлению');
 });
 
+test('три сбоя опроса подряд краснят шаг, на котором шла работа', async ({ page }) => {
+  const broken = (route) => route.fulfill({ status: 500, json: { ok: false, code: 'module_lifecycle_failed' } });
+  await installPanelPrepareRoutes(page, { steps: [downloading(1048576), broken, broken, broken] });
+  await openModules(page);
+  await updateButton(page).click();
+
+  await expect(progressBox(page)).toHaveClass(/is-bad/, { timeout: 15000 });
+  await expect(progressBox(page).locator('li').nth(1)).toHaveAttribute('data-state', 'failed');
+  await expect(progressBox(page).locator('li').nth(0)).toHaveAttribute('data-state', 'done');
+  await expect(page.locator('#modules-plan-recheck')).toBeVisible();
+});
+
+test('подготовка, отменённая в другой вкладке, закрывает окно', async ({ page }) => {
+  await installPanelPrepareRoutes(page, { steps: [downloading(1048576), prepareStep({ state: 'cancelled', finished_at: 1010 })] });
+  await openModules(page);
+  await updateButton(page).click();
+  await expect(updateDialog(page)).toBeVisible();
+
+  await expect(updateDialog(page)).toBeHidden();
+  await expect(page.locator('#modules-error')).toBeEmpty();
+});
+
 test('операция не откатывается ниже 4 из 7', async ({ page }) => {
   await installPanelPrepareRoutes(page, { steps: [prepareReady()] });
   const running = { ...runningStatus, operation: 'panel-update', module_id: null, version: '2.11.0', step: 'downloading' };

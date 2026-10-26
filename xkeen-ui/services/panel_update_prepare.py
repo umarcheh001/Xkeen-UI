@@ -18,6 +18,9 @@ from typing import Any, Callable
 from services.module_lifecycle import ModuleLifecycleError
 
 
+_FAILED = {"code": "panel_prepare_failed", "message": "panel update could not be prepared"}
+
+
 class PanelPrepareCancelled(Exception):
     """Raised from the progress of a preparation the owner cancelled."""
 
@@ -48,6 +51,8 @@ class PanelUpdatePreparer:
     def start(self) -> dict[str, Any]:
         with self._guard:
             if self._job is not None and self._job["state"] == "running":
+                # Asked for again after «Отмена»: the owner wants it after all.
+                self._cancel_requested = False
                 return dict(self._job)
             job = {
                 "prepare_id": secrets.token_urlsafe(12),
@@ -64,8 +69,18 @@ class PanelUpdatePreparer:
             self._job = job
             self._cancel_requested = False
             prepare_id = job["prepare_id"]
-        self._spawn(lambda: self._run(prepare_id))
-        return self.status(prepare_id)
+            started = dict(job)
+        try:
+            self._spawn(lambda: self._run(prepare_id))
+        except BaseException:
+            # A job nobody runs must not be joined by every next start.
+            self._finish(prepare_id, state="failed", error=_FAILED)
+            raise
+        with self._guard:
+            # A quick runner may be done already; a newer job is not this answer.
+            if self._job is not None and self._job["prepare_id"] == prepare_id:
+                return dict(self._job)
+        return started
 
     def status(self, prepare_id: str) -> dict[str, Any]:
         with self._guard:
@@ -104,11 +119,19 @@ class PanelUpdatePreparer:
     def _finish(self, prepare_id: str, **fields: Any) -> None:
         with self._guard:
             job = self._job
-            if job is None or job["prepare_id"] != prepare_id:
+            if job is None or job["prepare_id"] != prepare_id or job["state"] != "running":
                 return
             job.update(fields, finished_at=self._clock())
 
     def _run(self, prepare_id: str) -> None:
+        try:
+            self._prepare(prepare_id)
+        finally:
+            # A runner killed on the way (GreenletExit and the like) still
+            # ends its job: a job left running would be joined forever.
+            self._finish(prepare_id, state="failed", error=_FAILED)
+
+    def _prepare(self, prepare_id: str) -> None:
         def heard(phase: str, done: int, total: int) -> None:
             self._heard(prepare_id, phase, done, total)
 
@@ -128,10 +151,6 @@ class PanelUpdatePreparer:
                 core_logger().exception("panel update preparation failed")
             except Exception:  # noqa: BLE001 - logging must not hide the result
                 pass
-            self._finish(
-                prepare_id,
-                state="failed",
-                error={"code": "panel_prepare_failed", "message": "panel update could not be prepared"},
-            )
+            self._finish(prepare_id, state="failed", error=_FAILED)
         else:
             self._finish(prepare_id, state="ready", plan=plan)

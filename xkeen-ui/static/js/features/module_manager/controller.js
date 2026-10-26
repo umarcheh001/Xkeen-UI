@@ -97,7 +97,7 @@ export function createModuleManagerController({ root, api, pollMs, reload = () =
   let dialogMode = null;
   // The preparation the window watches. A closed window stops watching; the
   // router goes on, and the next click finds the same preparation.
-  const prepare = { id: null, running: false, generation: 0, timer: null, failures: 0, sample: null };
+  const prepare = { id: null, running: false, generation: 0, timer: null, failures: 0, sample: null, last: null };
   let dialogOperationId = null;
   // Closed in this page even when the browser keeps no storage.
   let dismissedId = null;
@@ -373,6 +373,7 @@ export function createModuleManagerController({ root, api, pollMs, reload = () =
     dialogEditorChange = null;
     prepare.failures = 0;
     prepare.sample = null;
+    prepare.last = null;
     prepare.running = true;
     drawPrepare({ state: 'running', phase: 'catalog' });
     if (!dialog.open) dialog.showModal();
@@ -397,7 +398,8 @@ export function createModuleManagerController({ root, api, pollMs, reload = () =
       void refreshInstalledAfterTerminal();
       return;
     }
-    drawPrepare({ state: 'failed', phase: 'catalog' }, { error });
+    // The step the router was at when the answers stopped is the one that failed.
+    drawPrepare({ ...(prepare.last || { phase: 'catalog' }), state: 'failed' }, { error });
   }
 
   // Bytes a second between two answers about the same download.
@@ -415,6 +417,7 @@ export function createModuleManagerController({ root, api, pollMs, reload = () =
 
   function observePrepare(snapshot, generation) {
     prepare.id = snapshot.prepare_id || prepare.id;
+    prepare.last = snapshot;
     prepare.running = snapshot.state === 'running';
     if (snapshot.state === 'running') {
       drawPrepare(snapshot, { speed: downloadSpeed(snapshot) });
