@@ -1674,6 +1674,8 @@ fi
 if ! profile_has_module engine.mihomo; then
   provision_drop_idle_mihomo_traffic "${XKEEN_UI_STATE_DIR:-$UI_DIR}"
 fi
+# Журнал и статус снятого самообновлятора: их никто не пишет и не читает.
+provision_drop_retired_updater_files "${XKEEN_UI_UPDATE_DIR:-/opt/var/lib/xkeen-ui/update}"
 
 # --- Шаблоны Xray (Routing / Observatory) ---
 

@@ -38,13 +38,13 @@
         "gevent-websocket (optional)"
       ],
       "removable": false,
-      "unit_count": 602,
-      "size_bytes": 8140636,
+      "unit_count": 603,
+      "size_bytes": 8134444,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
         "backend_service": 83,
-        "backend_test": 268,
+        "backend_test": 269,
         "configuration": 10,
         "frontend_bundle": 9,
         "frontend_entrypoint": 3,
@@ -2938,7 +2938,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/self_update/state.py",
-      "size_bytes": 17891,
+      "size_bytes": 12100,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -2952,7 +2952,6 @@
         "gevent-websocket (optional)"
       ],
       "environment_variables": [
-        "XKEEN_UI_BACKUP_DIR",
         "XKEEN_UI_UPDATE_DIR"
       ],
       "removable": false
@@ -3385,7 +3384,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_atomic_write_single_source.py",
-      "size_bytes": 5309,
+      "size_bytes": 5187,
       "depends_on": [],
       "starts_background_task": true,
       "background_markers": [
@@ -7321,7 +7320,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_provision_env.py",
-      "size_bytes": 17089,
+      "size_bytes": 18610,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -7335,7 +7334,8 @@
         "gevent-websocket (optional)"
       ],
       "environment_variables": [
-        "XKEEN_UI_BIN_DIR"
+        "XKEEN_UI_BIN_DIR",
+        "XKEEN_UI_UPDATE_DIR"
       ],
       "removable": false
     },
@@ -8003,8 +8003,28 @@
     {
       "module_id": "core",
       "kind": "backend_test",
+      "path": "tests/test_self_update_state_is_only_the_lock.py",
+      "size_bytes": 850,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
       "path": "tests/test_self_update_status_recovery.py",
-      "size_bytes": 8025,
+      "size_bytes": 5151,
       "depends_on": [],
       "starts_background_task": true,
       "background_markers": [
@@ -9254,7 +9274,7 @@
       "module_id": "core",
       "kind": "configuration",
       "path": "xkeen-ui/install.sh",
-      "size_bytes": 74534,
+      "size_bytes": 74758,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -9281,6 +9301,7 @@
         "XKEEN_UI_PTY_SESSION",
         "XKEEN_UI_PYTHONPYCACHEPREFIX",
         "XKEEN_UI_STATE_DIR",
+        "XKEEN_UI_UPDATE_DIR",
         "XKEEN_XRAY_JSONC_DIR"
       ],
       "removable": false

@@ -217,6 +217,15 @@ provision_drop_idle_mihomo_traffic() {
     "$_pt_dir/mihomo-traffic.sqlite3-shm" "$_pt_dir/mihomo-traffic.sqlite3-journal" 2>/dev/null || true
 }
 
+provision_drop_retired_updater_files() {
+  # update.log и status.json писал самообновлятор панели, снятый 11.10.2026:
+  # их больше никто не пишет и не читает. Замок и кэш архива в той же папке —
+  # живые, ими пользуется обновление из окна модулей. $1 — папка обновлений.
+  _pr_dir="${1%/}"
+  [ -n "$_pr_dir" ] && [ -d "$_pr_dir" ] || return 0
+  rm -f "$_pr_dir/update.log" "$_pr_dir"/update.log.[0-9]* "$_pr_dir/status.json" 2>/dev/null || true
+}
+
 provision_mihomo_templates() {
   # $1 — откуда брать шаблоны (архив или каталог панели), $2 — куда класть.
   _pm_src="$1"
@@ -1778,6 +1787,7 @@ provision_cmd_apply() {
   if ! provision_has_module engine.mihomo; then
     provision_drop_idle_mihomo_traffic "${XKEEN_UI_STATE_DIR:-$UI_DIR}"
   fi
+  provision_drop_retired_updater_files "${XKEEN_UI_UPDATE_DIR:-/opt/var/lib/xkeen-ui/update}"
   if provision_has_module engine.xray; then
     sync_bundled_template_dir "$UI_DIR/opt/etc/xray/templates/routing" "$UI_DIR/templates/routing" "роутинга Xray"
     sync_bundled_template_dir "$UI_DIR/opt/etc/xray/templates/observatory" "$UI_DIR/templates/observatory" "observatory Xray"

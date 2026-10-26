@@ -375,6 +375,35 @@ def test_mihomo_traffic_database_is_dropped_only_without_the_module():
     )
 
 
+# --- следы снятого самообновлятора ------------------------------------------------------
+
+
+def test_files_of_the_retired_updater_are_removed_and_the_live_ones_stay(tmp_path):
+    # update.log и status.json писал самообновлятор, снятый 11.10.2026; замок
+    # и кэш архива в той же папке — живые, ими пользуется обновление из окна модулей.
+    update = tmp_path / "update"
+    (update / "panel-archive").mkdir(parents=True)
+    for name in ("update.log", "update.log.1", "status.json", "lock", "lock.guard"):
+        (update / name).write_text("x\n", encoding="utf-8")
+    (update / "panel-archive" / "a.tar.gz").write_bytes(b"gz")
+
+    proc = _run(tmp_path, f'provision_drop_retired_updater_files "{update.as_posix()}"')
+
+    assert proc.returncode == 0, proc.stderr
+    assert sorted(p.name for p in update.iterdir()) == ["lock", "lock.guard", "panel-archive"]
+    assert (update / "panel-archive" / "a.tar.gz").is_file()
+
+
+def test_retired_updater_files_are_dropped_on_install_and_on_update():
+    installer = INSTALLER.read_text(encoding="utf-8")
+    library = LIB.read_text(encoding="utf-8")
+    apply_body = library.split("provision_cmd_apply() {", 1)[1].split("\n}\n", 1)[0]
+    wanted = r'provision_drop_retired_updater_files "\$\{XKEEN_UI_UPDATE_DIR:-/opt/var/lib/xkeen-ui/update\}"'
+
+    assert re.search(wanted, apply_body)
+    assert re.search(r"^" + wanted, installer, re.MULTILINE)
+
+
 # --- совместимость --------------------------------------------------------------------
 
 

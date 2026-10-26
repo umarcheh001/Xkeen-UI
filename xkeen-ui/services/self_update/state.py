@@ -1,12 +1,9 @@
-"""Local storage helpers for UI self-update (status/lock/log).
+"""The update folder and the lock that keeps changes of the panel tree apart.
 
-This module is intentionally small and defensive.
-
-PR/Commit 2 (self-update):
-  - stable paths for update state
-  - lock helpers to avoid concurrent update runs
-  - status.json read/write
-  - tail update.log for UI diagnostics
+What is left of the panel's self-updater, retired on 11.10.2026: the folder
+(the lock and the archive cache of the Modules window live there) and the lock
+itself. Its status.json and update.log are removed by the installer and by
+updates (provision_drop_retired_updater_files).
 
 No network calls are performed here.
 """
@@ -17,8 +14,7 @@ import json
 import os
 import threading
 import time
-import glob
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from services.io import read_json
 from services.io.atomic import _atomic_write_json
@@ -129,29 +125,7 @@ def get_update_paths(ui_state_dir: str) -> Dict[str, str]:
     update_dir = get_update_dir(ui_state_dir)
     return {
         "update_dir": update_dir,
-        "status_file": os.path.join(update_dir, "status.json"),
         "lock_file": os.path.join(update_dir, "lock"),
-        "log_file": os.path.join(update_dir, "update.log"),
-    }
-
-
-def ensure_update_dir(ui_state_dir: str) -> str:
-    update_dir = get_update_dir(ui_state_dir)
-    os.makedirs(update_dir, exist_ok=True)
-    return update_dir
-
-
-def _default_status() -> Dict[str, Any]:
-    # Keep schema stable for UI.
-    return {
-        "state": "idle",  # idle|running|done|failed
-        "step": None,  # free-form string (backup/download/install/...)
-        "progress": None,  # free-form dict
-        "created_ts": None,
-        "started_ts": None,
-        "finished_ts": None,
-        "error": None,
-        "pid": None,
     }
 
 
@@ -210,28 +184,6 @@ def _pid_is_running(pid: Any) -> bool:
         return True
     except Exception:
         return False
-
-
-def read_status(status_file: str) -> Dict[str, Any]:
-    """Read status.json. Returns defaults if missing/invalid."""
-    base = _default_status()
-    data = read_json(status_file, default=None)
-    if isinstance(data, dict):
-        base.update({k: data.get(k) for k in base.keys()})
-        # Keep any extra keys (forward compatibility)
-        for k, v in data.items():
-            if k not in base:
-                base[k] = v
-    return base
-
-
-def write_status(status_file: str, status: Dict[str, Any]) -> None:
-    """Write status.json atomically (best-effort)."""
-    try:
-        _atomic_write_json(status_file, status)
-    except Exception:
-        # Status is diagnostic; failures must not crash API.
-        pass
 
 
 def _current_boot_id() -> Optional[str]:
@@ -402,41 +354,6 @@ def transfer_lock(lock_file: str, previous_pid: int) -> bool:
         thread_guard.release()
 
 
-def reconcile_runtime_status(status_file: str, lock_file: str) -> Tuple[Dict[str, Any], Dict[str, Any], bool]:
-    """Finalize stale `running` status when the runner is no longer alive.
-
-    This recovers the UI after abrupt runner exits: status.json may still say
-    `running`, while the lock file is gone (cleanup on shell EXIT) or stale.
-    """
-
-    status = read_status(status_file)
-    lock_info = read_lock(lock_file)
-    if status.get("state") != "running":
-        return status, lock_info, False
-
-    if lock_info.get("alive"):
-        return status, lock_info, False
-
-    if _pid_is_running(status.get("pid")):
-        return status, lock_info, False
-
-    now = time.time()
-    op = str(status.get("op") or "update").strip().lower()
-    failed = dict(status)
-    failed["state"] = "failed"
-    failed["finished_ts"] = failed.get("finished_ts") or now
-    failed["updated_ts"] = now
-    failed["error"] = "runner_stale"
-    failed["message"] = (
-        "Предыдущий rollback-runner завершился аварийно. Проверьте update.log."
-        if op == "rollback"
-        else "Предыдущее обновление завершилось аварийно. Проверьте update.log."
-    )
-    failed["stale"] = True
-    write_status(status_file, failed)
-    return failed, lock_info, True
-
-
 def release_lock(lock_file: str, *, owner_pid: int | None = None) -> None:
     if owner_pid is not None:
         try:
@@ -452,109 +369,4 @@ def release_lock(lock_file: str, *, owner_pid: int | None = None) -> None:
         pass
 
 
-def tail_lines_fast(path: str, max_lines: int = 200, max_bytes: int = 256 * 1024) -> List[str]:
-    """Return last *max_lines* lines efficiently.
-
-    Returns decoded UTF-8 lines (keeping original line breaks when present).
-    """
-    try:
-        os.stat(path)
-    except (FileNotFoundError, OSError):
-        return []
-
-    max_lines = max(1, int(max_lines or 200))
-    max_bytes = max(16 * 1024, int(max_bytes or 256 * 1024))
-
-    block = 4096
-    buf = b""
-    try:
-        with open(path, "rb") as f:
-            f.seek(0, os.SEEK_END)
-            pos = f.tell()
-            while pos > 0 and buf.count(b"\n") <= max_lines and len(buf) < max_bytes:
-                step = block if pos >= block else pos
-                pos -= step
-                f.seek(pos, os.SEEK_SET)
-                buf = f.read(step) + buf
-
-        parts = buf.splitlines(True)  # keepends=True
-        if len(parts) > max_lines:
-            parts = parts[-max_lines:]
-        return [p.decode("utf-8", "replace") for p in parts]
-    except (FileNotFoundError, OSError):
-        return []
-
-
-def read_update_log_tail(log_file: str, *, lines: int = 200) -> List[str]:
-    return tail_lines_fast(log_file, max_lines=lines, max_bytes=256 * 1024)
-
-
 # --- Backups (for rollback) ---
-
-def get_backup_dir(ui_state_dir: str) -> str:
-    """Return directory where update backups are stored."""
-
-    env_dir = os.environ.get("XKEEN_UI_BACKUP_DIR")
-    if env_dir:
-        return env_dir
-
-    base_var: str
-    try:
-        from core.paths import BASE_VAR_DIR  # type: ignore
-
-        base_var = str(BASE_VAR_DIR)
-    except Exception:
-        base_var = "/opt/var"
-
-    # If base_var is not writable (e.g. dev env), fall back under UI_STATE_DIR.
-    if not _is_dir_writable(base_var):
-        base_var = os.path.join(ui_state_dir, "var")
-        os.makedirs(base_var, exist_ok=True)
-
-    return os.path.join(base_var, "backups", "xkeen-ui")
-
-
-def list_backups(backup_dir: str, *, limit: int = 5) -> List[Dict[str, Any]]:
-    """List latest backups (newest first)."""
-
-    try:
-        limit = max(0, int(limit or 5))
-    except Exception:
-        limit = 5
-    limit = min(limit, 50)
-
-    if not backup_dir:
-        return []
-
-    try:
-        os.makedirs(backup_dir, exist_ok=True)
-    except Exception:
-        # If we cannot create the dir, still try to list (might exist)
-        pass
-
-    try:
-        paths = glob.glob(os.path.join(backup_dir, "xkeen-ui-*.tgz"))
-    except Exception:
-        return []
-
-    items: List[Dict[str, Any]] = []
-    for fp in paths:
-        try:
-            st = os.stat(fp)
-            mtime = float(st.st_mtime)
-            items.append(
-                {
-                    "name": os.path.basename(fp),
-                    "path": fp,
-                    "size": int(st.st_size),
-                    "mtime": mtime,
-                    "mtime_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(mtime)),
-                }
-            )
-        except Exception:
-            continue
-
-    items.sort(key=lambda x: float(x.get("mtime") or 0.0), reverse=True)
-    if limit:
-        items = items[:limit]
-    return items

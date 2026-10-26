@@ -49,16 +49,15 @@ def test_no_module_builds_its_own_fixed_temp_name():
 
 
 def test_write_status_survives_concurrent_writers(tmp_path):
-    """Обновление пишет свой статус, пока панель его же перечитывает.
+    """Исполнитель операции пишет свой статус, пока панель его же перечитывает.
 
-    Проверка свойства, а не ловушка на прежний код: write_status глотает любые
-    ошибки, поэтому на старой записи гонка чаще всего проходила незамеченной.
-    От возврата общего имени tmp сторожит
+    Проверка свойства, а не ловушка на прежний код. До 26.10.2026 здесь
+    проверялся статус снятого самообновлятора; теперь — статус операций окна
+    модулей. От возврата общего имени tmp сторожит
     test_no_module_builds_its_own_fixed_temp_name.
     """
-    from services.self_update.state import read_status, write_status
+    from services.module_transactions.state import read_status, status_path, write_status
 
-    status_file = str(tmp_path / "status.json")
     failures: list[str] = []
 
     # Статус пишется целиком, и чем он длиннее, тем шире окно, в котором
@@ -69,7 +68,7 @@ def test_write_status_survives_concurrent_writers(tmp_path):
         for step in range(40):
             try:
                 write_status(
-                    status_file,
+                    tmp_path,
                     {"phase": f"worker-{index}", "step": step, "log": filler},
                 )
             except Exception as exc:  # noqa: BLE001
@@ -84,10 +83,10 @@ def test_write_status_survives_concurrent_writers(tmp_path):
     assert not failures, failures[:3]
     # Статус переживает гонку целым: пустой или обрезанный файл панель
     # показала бы как «обновление не запускалось».
-    assert read_status(status_file).get("phase", "").startswith("worker-")
-    # Сама write_status ошибки глотает (статус диагностический, ронять API им
-    # нельзя), поэтому о сорванной подмене говорит только оставшийся мусор.
-    leftovers = sorted(p.name for p in tmp_path.iterdir() if p.name != "status.json")
+    assert read_status(tmp_path).get("phase", "").startswith("worker-")
+    # О сорванной подмене говорит и оставшийся рядом мусор.
+    folder = status_path(tmp_path).parent
+    leftovers = sorted(p.name for p in folder.iterdir() if p.name != "status.json")
     assert leftovers == [], f"остался мусор: {leftovers}"
 
 
