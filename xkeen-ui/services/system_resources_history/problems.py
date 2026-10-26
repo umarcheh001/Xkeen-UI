@@ -50,17 +50,24 @@ def _zone_type(key: str) -> str | None:
 class ProblemTracker:
     def __init__(self, clock: Callable[[], float], events: list[dict] | None = None):
         self._clock = clock
-        self._events: list[dict] = [dict(e) for e in (events or []) if isinstance(e, dict)]
-        self._keys: dict[str, str] = {}  # event id -> "type|key"
+        self._events: list[dict] = []
         self._open: dict[str, dict] = {}  # "type|key" -> open event
         self._red_since: dict[str, float] = {}
         self._clear_since: dict[str, float] = {}
         self._seq = 0
+        for e in events or []:
+            if not isinstance(e, dict) or e.get("type") not in _TYPES or not isinstance(e.get("at"), (int, float)):
+                continue
+            ev = dict(e)
+            ev.setdefault("until", None)
+            self._events.append(ev)
+            if ev["until"] is None:
+                self._open[f"{ev['type']}|{ev.get('key') or ''}"] = ev
 
     # -- events -----------------------------------------------------------
     def _prune(self, now: float) -> None:
         limit = now - RETENTION_S
-        kept = [e for e in self._events if (e["until"] if e.get("until") is not None else e["at"]) >= limit]
+        kept = [e for e in self._events if e.get("until") is None or e["until"] >= limit]
         if len(kept) != len(self._events):
             alive = {e["id"] for e in kept}
             self._open = {k: e for k, e in self._open.items() if e["id"] in alive}
@@ -84,6 +91,7 @@ class ProblemTracker:
             "severity": severity,
             "title": title,
             "detail": detail,
+            "key": key or "",
         }
         self._events.append(ev)
         if etype not in _POINT:
@@ -105,11 +113,13 @@ class ProblemTracker:
     def update(self, ts: float, zones: dict[str, int | None], details: dict[str, str]) -> list[dict]:
         """Feed the current zones; returns events opened or closed by this call."""
         changed: list[dict] = []
+        seen: set[str] = set()
         for key, z in zones.items():
             etype = _zone_type(key)
             if etype is None or z is None:
                 continue
             slot = f"{etype}|{key}"
+            seen.add(slot)
             if z == 2:
                 self._clear_since.pop(slot, None)
                 since = self._red_since.setdefault(slot, ts)
@@ -122,6 +132,10 @@ class ProblemTracker:
                     if ts - since >= CLEAR_HOLD_S:
                         del self._clear_since[slot]
                         changed.append(self.close(etype, since, key))
+        # no data (None or vanished key) is a gap: restart both timers
+        for timers in (self._red_since, self._clear_since):
+            for slot in [k for k in timers if k not in seen]:
+                del timers[slot]
         self._prune(ts)
         return changed
 

@@ -107,6 +107,59 @@ def test_none_zone_is_gap():
     assert len(tr.active()) == 1
 
 
+def test_clear_after_gap_needs_full_120s():
+    tr = _tr()
+    _run(tr, 200, {"cpu": 2})
+    _run(tr, 100, {"cpu": 0}, start=T0 + 205)  # clear timer running (100 s)
+    _run(tr, 300, {"cpu": None}, start=T0 + 310)
+    tr.update(T0 + 620, {"cpu": 0}, {})
+    assert len(tr.active()) == 1
+    tr.update(T0 + 735, {"cpu": 0}, {})
+    assert len(tr.active()) == 1
+    tr.update(T0 + 740, {"cpu": 0}, {})
+    assert tr.active() == []
+
+
+def test_red_gap_red_restarts_run():
+    tr = _tr()
+    _run(tr, 100, {"cpu": 2})
+    _run(tr, 300, {"cpu": None}, start=T0 + 105)
+    out = _run(tr, 175, {"cpu": 2}, start=T0 + 410)
+    assert out == []
+    out = tr.update(T0 + 590, {"cpu": 2}, {})
+    assert len(out) == 1 and out[0]["at"] == T0 + 410
+
+
+def test_vanished_key_is_gap():
+    tr = _tr()
+    _run(tr, 200, {"temp:chip": 2})
+    tr.update(T0 + 205, {"temp:chip": 0}, {})
+    tr.update(T0 + 210, {}, {})
+    tr.update(T0 + 400, {"temp:chip": 0}, {})
+    assert len(tr.active()) == 1
+
+
+def test_restored_open_event_is_tracked():
+    tr = _tr()
+    _run(tr, 200, {"cpu": 2})
+    saved = json.loads(json.dumps(tr.events(0)))
+    tr2 = ProblemTracker(lambda: T0, saved + [{"junk": 1}, "x", {"type": "cpu_overload"}])
+    assert len(tr2.active()) == 1
+    out = _run(tr2, 300, {"cpu": 2}, start=T0 + 300)
+    assert out == [] and len(tr2.events(0)) == 1
+    _run(tr2, 130, {"cpu": 0}, start=T0 + 610)
+    assert tr2.active() == []
+
+
+def test_open_event_survives_pruning():
+    now = [T0]
+    tr = ProblemTracker(lambda: now[0])
+    old = tr.emit("internet_lost", T0)
+    tr.emit("dns_failed", T0 + RETENTION_S + 100)
+    assert old["id"] in [e["id"] for e in tr.active()]
+    assert tr.close("internet_lost", T0 + RETENTION_S + 200) is old
+
+
 def test_queue_makes_no_event():
     tr = _tr()
     _run(tr, 400, {"queue": 2})

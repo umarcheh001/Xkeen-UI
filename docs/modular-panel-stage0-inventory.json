@@ -359,7 +359,7 @@
       ],
       "removable": true,
       "unit_count": 38,
-      "size_bytes": 522668,
+      "size_bytes": 524956,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 14,
@@ -22742,7 +22742,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_service",
       "path": "xkeen-ui/services/system_resources_history/problems.py",
-      "size_bytes": 6029,
+      "size_bytes": 6585,
       "depends_on": [
         "core"
       ],
@@ -22932,7 +22932,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_system_resources_problems.py",
-      "size_bytes": 6577,
+      "size_bytes": 8309,
       "depends_on": [
         "core"
       ],
@@ -33627,7 +33627,7 @@
         },
         "tool.advanced-diagnostics": {
           "unit_count": 38,
-          "size_bytes": 522668
+          "size_bytes": 524956
         }
       },
       "next_stage": "Этапы 4, 5 и 6."
