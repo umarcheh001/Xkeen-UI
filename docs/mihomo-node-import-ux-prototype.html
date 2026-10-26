@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mihomo · Add nodes · UX contract prototype</title>
+<style>
+  :root { color-scheme: dark; font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  body.panel-page { --op-bg:#0d0f13; --op-surface:#14171c; --op-surface-2:#1a1e25; --op-surface-3:#20252d; --op-editor:#0d0f13; --op-border:#2a2f38; --op-border-strong:#3a414d; --op-text:#e8eaf0; --op-text-strong:#f7f7f9; --op-muted:#969da9; --op-faint:#6e7581; --op-data-muted:#b1b7c2; --op-accent:#7477e8; --op-accent-hover:#8588f2; --op-accent-soft:rgba(116,119,232,.14); --op-success:#4db68b; --op-success-strong:#6fd3a8; --op-warning:#d7a650; --op-warning-strong:#e2b463; --op-danger:#df727b; --op-radius-sm:6px; --op-radius:9px; --op-radius-lg:12px; --op-control-h:32px; --op-touch-target:40px; margin:0; min-height:100vh; background:var(--op-bg); color:var(--op-text); }
+  body.panel-page.light, html[data-theme="light"] body.panel-page { --op-bg:#f4f6f8; --op-surface:#fff; --op-surface-2:#f8fafc; --op-surface-3:#eef1f5; --op-editor:#fff; --op-border:#d8dee7; --op-border-strong:#b9c3d0; --op-text:#1d2733; --op-text-strong:#111827; --op-muted:#64748b; --op-faint:#8290a1; --op-data-muted:#52637a; --op-accent:#5c60ca; --op-accent-hover:#4f53b9; --op-accent-soft:rgba(92,96,202,.12); --op-success:#19734f; --op-success-strong:#176b50; --op-warning:#9a6714; --op-warning-strong:#9a6714; --op-danger:#b84a56; }
+  * { box-sizing:border-box; }
+  button, select, textarea, input { font:inherit; }
+  .prototype-shell { min-height:100vh; padding:24px; display:grid; place-items:center; }
+  .prototype-toolbar { position:fixed; z-index:5; top:16px; right:20px; display:flex; gap:8px; align-items:center; }
+  .prototype-toolbar button, .prototype-toolbar select { min-height:32px; border:1px solid var(--op-border); border-radius:var(--op-radius-sm); background:var(--op-surface); color:var(--op-text); padding:0 10px; }
+  .prototype-toolbar button:hover, .prototype-toolbar select:hover { border-color:var(--op-border-strong); }
+  .modal { width:min(1120px,calc(100vw - 32px)); height:min(760px,calc(100vh - 48px)); display:grid; grid-template-rows:56px minmax(0,1fr) 58px; border:1px solid var(--op-border-strong); border-radius:var(--op-radius-lg); background:var(--op-surface); box-shadow:0 18px 56px rgba(0,0,0,.42); overflow:hidden; }
+  .modal-header { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:0 20px; border-bottom:1px solid var(--op-border); }
+  .modal-title { color:var(--op-text-strong); font-size:15px; font-weight:600; }
+  .modal-close { width:32px; height:32px; border:1px solid var(--op-border); border-radius:var(--op-radius-sm); color:var(--op-muted); background:var(--op-surface-2); cursor:pointer; }
+  .modal-close:hover { color:var(--op-text); border-color:var(--op-border-strong); }
+  .modal-body { min-height:0; overflow:auto; padding:18px 20px; }
+  .stepper { display:flex; gap:7px; align-items:center; margin-bottom:16px; color:var(--op-muted); font-size:12px; }
+  .step { display:inline-flex; align-items:center; gap:6px; padding:5px 8px; border-radius:999px; border:1px solid transparent; }
+  .step.is-active { color:var(--op-text-strong); border-color:var(--op-accent-border,rgba(133,136,242,.42)); background:var(--op-accent-soft); }
+  .step-sep { color:var(--op-faint); }
+  .screen { display:none; min-height:100%; }
+  .screen.is-active { display:block; }
+  .lead { margin-bottom:16px; color:var(--op-muted); font-size:13px; line-height:1.45; }
+  .surface { border:1px solid var(--op-border); border-radius:var(--op-radius); background:var(--op-surface-2); padding:16px; }
+  .surface-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px; }
+  .field { display:grid; gap:7px; }
+  .field > span { color:var(--op-data-muted); font-size:12px; }
+  .control, select, textarea { width:100%; border:1px solid var(--op-border-strong); border-radius:var(--op-control-radius,6px); background:var(--op-editor); color:var(--op-text); }
+  select, .control { min-height:var(--op-control-h); padding:0 10px; }
+  textarea { min-height:150px; resize:vertical; padding:10px; line-height:1.45; }
+  textarea:focus, select:focus, button:focus-visible { outline:2px solid var(--op-accent); outline-offset:2px; }
+  .hint { color:var(--op-muted); font-size:12px; line-height:1.4; }
+  .status { padding:10px 12px; border-left:2px solid var(--op-success); background:var(--op-success-soft,rgba(77,182,139,.12)); color:var(--op-success-strong); border-radius:var(--op-radius-sm); font-size:12px; }
+  .status.warning { border-left-color:var(--op-warning); background:var(--op-warning-soft,rgba(215,166,80,.12)); color:var(--op-warning-strong); }
+  .status.error { border-left-color:var(--op-danger); background:rgba(223,114,123,.12); color:var(--op-danger); }
+  .card-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px; margin-top:16px; }
+  .card { border:1px solid var(--op-border); border-radius:var(--op-radius); background:var(--op-editor); padding:16px; min-height:190px; }
+  .card h2 { margin:0 0 14px; color:var(--op-text-strong); font-size:14px; }
+  .node-name { color:var(--op-text-strong); font-weight:600; font-size:15px; margin-bottom:14px; }
+  .node-details { white-space:pre-line; color:var(--op-data-muted); font-size:13px; line-height:1.45; }
+  .choice { display:flex; gap:9px; align-items:center; min-height:34px; color:var(--op-text); font-size:13px; }
+  .choice input { accent-color:var(--op-accent); }
+  .flag-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px 20px; max-height:238px; overflow:auto; border:1px solid var(--op-border); border-radius:var(--op-radius-sm); padding:8px; background:var(--op-editor); }
+  .location { display:grid; grid-template-columns:auto 20px minmax(0,1fr) auto; gap:8px; align-items:center; min-height:28px; font-size:12px; }
+  .location svg { width:20px; height:14px; display:block; border-radius:2px; }
+  .location code { color:var(--op-muted); font-size:11px; }
+  .flags-helper { display:flex; justify-content:space-between; gap:12px; align-items:center; margin:10px 0; color:var(--op-muted); font-size:12px; }
+  .actions { display:flex; justify-content:flex-end; gap:8px; align-items:center; padding:0 20px; border-top:1px solid var(--op-border); background:var(--op-surface); }
+  .actions .spacer { margin-right:auto; }
+  .btn-primary, .btn-secondary { min-height:34px; border-radius:var(--op-control-radius,6px); padding:0 12px; border:1px solid var(--op-border); cursor:pointer; color:var(--op-text); background:var(--op-surface-2); }
+  .btn-primary { color:#fff; border-color:var(--op-accent); background:var(--op-accent); font-weight:600; }
+  .btn-primary:hover { background:var(--op-accent-hover); }
+  .btn-secondary:hover { border-color:var(--op-border-strong); }
+  .btn-primary:disabled, .btn-secondary:disabled { opacity:.5; cursor:not-allowed; }
+  .diff { border:1px solid var(--op-border); border-radius:var(--op-radius); background:var(--op-editor); padding:14px; white-space:pre-wrap; color:var(--op-data-muted); min-height:210px; font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace; }
+  .progress { display:grid; gap:12px; max-width:760px; margin:28px auto; }
+  .progress-row { display:flex; justify-content:space-between; gap:12px; align-items:center; padding:12px; border:1px solid var(--op-border); border-radius:var(--op-radius-sm); background:var(--op-surface-2); font-size:13px; }
+  .ok { color:var(--op-success-strong); } .warn { color:var(--op-warning-strong); }
+  .chip { display:inline-flex; padding:4px 7px; border-radius:999px; color:var(--op-data-muted); border:1px solid var(--op-border); font-size:11px; }
+  .hidden { display:none !important; }
+  @media (max-width:700px) {
+    .prototype-shell { padding:8px; align-items:start; }
+    .modal { width:100%; height:calc(100vh - 16px); grid-template-rows:50px minmax(0,1fr) auto; }
+    .modal-header { padding:0 12px; }
+    .modal-body { padding:12px; }
+    .surface-grid, .card-grid { grid-template-columns:1fr; }
+    .flag-list { grid-template-columns:1fr; max-height:220px; }
+    .actions { flex-wrap:wrap; justify-content:stretch; padding:8px 12px; }
+    .actions .spacer { display:none; }
+    .actions button { flex:1 1 100%; min-height:40px; }
+    .stepper { overflow:auto; white-space:nowrap; }
+    .prototype-toolbar { top:8px; right:8px; }
+  }
+</style>
+</head>
+<body class="panel-page">
+<div class="prototype-toolbar" aria-label="Prototype controls">
+  <button type="button" id="theme-toggle">Light</button>
+  <label><span class="hidden">Scenario</span><select id="scenario-select"><option value="source">Source</option><option value="result">Result</option><option value="amnezia">Amnezia</option><option value="review">Review</option><option value="apply">Apply result</option></select></label>
+</div>
+<div class="prototype-shell">
+  <main class="modal" role="dialog" aria-modal="true" aria-labelledby="prototype-title">
+    <header class="modal-header"><span class="modal-title" id="prototype-title">Добавить узлы в Mihomo</span><button class="modal-close" type="button" aria-label="Закрыть">×</button></header>
+    <section class="modal-body">
+      <nav class="stepper" aria-label="Шаги"><span class="step is-active" data-step="source">1 Источник</span><span class="step-sep">→</span><span class="step" data-step="result">2 Результат</span><span class="step-sep">→</span><span class="step" data-step="review">3 Проверка</span></nav>
+      <section class="screen is-active" data-screen="source">
+        <p class="lead">Вставьте ссылку, подписку, ключ Amnezia или VPN-конфигурацию. Ничего не сохраняется на этом шаге.</p>
+        <div class="surface">
+          <div class="field"><span>Источник</span><select id="source-mode"><option>Авто — определить автоматически</option><option>Proxy link</option><option>HTTPS subscription</option><option>Amnezia Premium key (vpn://)</option><option>WireGuard / AmneziaWG</option><option>OpenVPN</option><option>Tailscale</option></select></div>
+          <div class="field" style="margin-top:16px"><span>Ссылка, ключ или конфигурация</span><textarea placeholder="vless://…&#10;или&#10;https://…"></textarea></div>
+          <p class="hint">На этом шаге config.yaml не сохраняется и Mihomo не перезапускается.</p>
+        </div>
+        <div class="status hidden" id="source-status" style="margin-top:12px"></div>
+      </section>
+      <section class="screen" data-screen="result">
+        <p class="lead">Локально распознано 1 узел. Доступность сервера не проверялась.</p>
+        <div class="card-grid">
+          <article class="card"><h2>Результат</h2><div class="node-name">Germany-01</div><div class="node-details">example.com:443
+TLS · Reality · TCP
+Конфликт имени не обнаружен</div><button class="btn-secondary" style="margin-top:18px" type="button">Изменить имя</button><button class="btn-secondary" style="margin-top:18px" type="button">Показать YAML</button></article>
+          <article class="card"><h2>Куда добавить</h2><label class="choice"><input type="radio" name="destination" checked> Статический узел → proxies</label><label class="choice"><input type="radio" name="destination"> Сохранить как provider</label><h2 style="margin-top:16px">Группы</h2><label class="choice"><input type="checkbox" checked> Auto-Fallback</label><label class="choice"><input type="checkbox" checked> Ru-Traffic</label></article>
+        </div>
+        <div class="status" style="margin-top:16px">На финальном шаге доступны: в черновик, сохранить или сохранить и применить.</div>
+      </section>
+      <section class="screen" data-screen="amnezia">
+        <p class="lead">Выпуск конфигураций происходит только после выбора локаций и явного подтверждения.</p>
+        <div class="surface"><div style="display:flex;justify-content:space-between;gap:12px;align-items:center"><strong>Локации Amnezia Premium</strong><span class="chip">Выбрано 2 из 6</span></div><div class="flags-helper"><span>Доступные серверы</span><span><button class="btn-secondary" type="button">Все</button> <button class="btn-secondary" type="button">Снять</button></span></div><div class="flag-list" id="flag-list"></div><p class="hint">Флаг — локальный SVG. Название и ISO-код остаются текстом для доступности.</p></div>
+        <div class="status" style="margin-top:12px">Список локаций получен. Конфигурации ещё не выпускались.</div>
+      </section>
+      <section class="screen" data-screen="review">
+        <p class="lead">До подтверждения config.yaml на роутере не изменяется.</p>
+        <div class="status warning">Сохранение запишет весь итоговый config.yaml, включая другие несохранённые правки.</div>
+        <div class="card-grid"><article class="card"><h2>Итог операции</h2><div class="node-details">Новый узел: Germany-01
+Группы: Auto-Fallback, Ru-Traffic
+Auto-update: не требуется
+Backup: перед записью</div></article><article class="card"><h2>Изменения YAML · раскрыто</h2><div class="diff">+ proxies: Germany-01
++ Auto-Fallback.proxies: Germany-01
++ Ru-Traffic.proxies: Germany-01
+
+Импорт — часть полного сохраняемого candidate</div></article></div>
+      </section>
+      <section class="screen" data-screen="apply">
+        <p class="lead">Сохранение завершено, но применение требует проверки фактического restart job.</p><div class="progress"><div class="progress-row"><span class="ok">✓ Проверка YAML и mihomo -t</span><span class="chip">passed</span></div><div class="progress-row"><span class="ok">✓ Backup и config.yaml</span><span class="chip">saved</span></div><div class="progress-row"><span class="warn">! Restart job</span><span class="chip">unknown outcome</span></div><div class="status warning">Файл сохранён, но успешный запуск ядра не подтверждён. Не повторяйте импорт. Проверьте job или восстановите backup.</div></div>
+      </section>
+    </section>
+    <footer class="actions"><span class="spacer"></span><button class="btn-secondary" type="button" data-footer="cancel">Отмена</button><button class="btn-primary" type="button" data-footer="parse">Распознать</button><button class="btn-secondary hidden" type="button" data-footer="back">Назад</button><button class="btn-primary hidden" type="button" data-footer="review">Проверить изменение</button><button class="btn-primary hidden" type="button" data-footer="issue">Получить выбранные</button><button class="btn-secondary hidden" type="button" data-action="draft">В черновик</button><button class="btn-secondary hidden" type="button" data-action="save">Сохранить</button><button class="btn-primary hidden" type="button" data-action="apply">Сохранить и применить</button></footer>
+  </main>
+</div>
+<script>
+(() => {
+  const root = document.documentElement;
+  const select = document.querySelector('#scenario-select');
+  const screens = [...document.querySelectorAll('[data-screen]')];
+  const steps = [...document.querySelectorAll('[data-step]')];
+  const footer = document.querySelector('.actions');
+  const footerItems = [...footer.querySelectorAll('[data-footer], [data-action]')];
+  const flags = [['DE','Германия'],['NL','Нидерланды'],['PL','Польша'],['FR','Франция'],['GB','Великобритания'],['US','США']];
+  const colors = { DE:['#000','#dd0000','#ffce00'], NL:['#ae1c28','#fff','#21468b'], PL:['#fff','#dc143c'], FR:['#21468b','#fff','#ed2939'], GB:['#012169','#fff','#c8102e'], US:['#b22234','#fff','#3c3b6e'] };
+  const flagList = document.querySelector('#flag-list');
+  flags.forEach(([code,name]) => { const row=document.createElement('label'); row.className='location'; const input=document.createElement('input'); input.type='checkbox'; input.checked=code==='DE'||code==='NL'; const svg=document.createElementNS('http://www.w3.org/2000/svg','svg'); svg.setAttribute('viewBox','0 0 20 14'); colors[code].forEach((color,i)=>{const r=document.createElementNS('http://www.w3.org/2000/svg','rect');r.setAttribute('x','0');r.setAttribute('y',String(i*14/colors[code].length));r.setAttribute('width','20');r.setAttribute('height',String(14/colors[code].length));r.setAttribute('fill',color);svg.appendChild(r)}); const text=document.createElement('span');text.textContent=name;const iso=document.createElement('code');iso.textContent=code;row.append(input,svg,text,iso);flagList.append(row); });
+  function setScenario(value) { const normalized=value==='amnezia'?'amnezia':value; screens.forEach(x=>x.classList.toggle('is-active',x.dataset.screen===normalized)); steps.forEach(x=>x.classList.toggle('is-active',x.dataset.step===(normalized==='apply'?'review':normalized==='amnezia'?'result':normalized))); footerItems.forEach(x=>x.classList.add('hidden')); const show = (sel) => footer.querySelectorAll(sel).forEach(x=>x.classList.remove('hidden')); if (normalized==='source') show('[data-footer=cancel],[data-footer=parse]'); if (normalized==='result') show('[data-footer=back],[data-footer=review]'); if (normalized==='amnezia') show('[data-footer=back],[data-footer=issue]'); if (normalized==='review') show('[data-action]'); if (normalized==='apply') show('[data-footer=cancel]'); select.value=normalized; }
+  select.addEventListener('change',()=>setScenario(select.value));
+  document.querySelector('#theme-toggle').addEventListener('click',(e)=>{const light=root.dataset.theme!=='light';root.dataset.theme=light?'light':'dark';document.body.classList.toggle('light',light);e.currentTarget.textContent=light?'Dark':'Light';});
+  document.querySelectorAll('[data-action]').forEach(btn=>btn.addEventListener('click',()=>setScenario(btn.dataset.action==='apply'?'apply':'review')));
+  footer.querySelector('[data-footer=review]').addEventListener('click',()=>setScenario('review'));
+  footer.querySelector('[data-footer=issue]').addEventListener('click',()=>setScenario('review'));
+  footer.querySelector('[data-footer=parse]').addEventListener('click',()=>setScenario('result'));
+  footer.querySelector('[data-footer=back]').addEventListener('click',()=>setScenario('result')); 
+  setScenario('source');
+})();
+</script>
+</body>
+</html>
