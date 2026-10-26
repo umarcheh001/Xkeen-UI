@@ -1,0 +1,37 @@
+{
+  "visiblePreviewChars": 1,
+  "viewport": {
+    "width": 1280,
+    "height": 600
+  },
+  "theme": "dark",
+  "modal": {
+    "x": 25.59375,
+    "y": 40,
+    "width": 1228.796875,
+    "height": 520
+  },
+  "preview": {
+    "x": 640.96875,
+    "y": 162.84375,
+    "width": 587.421875,
+    "height": 321.15625
+  },
+  "status": "",
+  "inputMode": "auto",
+  "engine": "codemirror",
+  "hasCm": true,
+  "hasMonaco": false,
+  "plainVisible": false,
+  "textareaBackingChars": 0,
+  "insertEnabled": false,
+  "groupNames": [
+    "Main",
+    "Auto"
+  ],
+  "selectedGroups": [],
+  "flags": {
+    "count": 0,
+    "columns": "repeat(2, minmax(0px, 1fr))"
+  }
+}

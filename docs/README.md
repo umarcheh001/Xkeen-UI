@@ -15,6 +15,8 @@
 
 ## Активные инициативы
 
+- `../README-mihomo-node-import-redesign-plan.md` — редизайн модала «Узел» Mihomo; Этап 0 закрыт 26 октября 2026 года. Baseline, matrix, contracts и ограничения: `mihomo-node-import-baseline.md`; raw measurements и screenshots: `mihomo-node-import-baseline/`.
+
 - `panel-operator-redesign-completion-plan.md` — план завершения переезда панели на Operator Console; Этап 4 закрыт; в Этапе 5 закрыты editor/workbench, comments/schema status labels, responsive editor help, mobile fullscreen сложных модалов и применение четырёх modal families ко всем 50 static modals; Этапы 5–7 в целом открыты; сквозной icon-поток I0–I6 закрыт.
 - `mihomo-capability-matrix.json` и `panel-operator-stage0-mihomo-contract.md` — capability/contract baseline нового Mihomo roadmap (Этап 0).
 - `panel-operator-stage3-explainability-logs.md` — закрытый Этап 3 Mihomo: доказательная routing chain, rule counters и allow-listed upstream log level.

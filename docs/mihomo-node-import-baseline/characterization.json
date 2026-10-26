@@ -1,0 +1,663 @@
+{
+  "date": "2026-10-26",
+  "fixture": "e2e/fixtures/mihomo-import/stage0.json",
+  "method": "local isolated E2E server; actual web parsing for direct/WG/OpenVPN/Tailscale; mocked subscription/Amnezia remote responses; no persistent config writes",
+  "openMs": 419,
+  "singleMs": 423,
+  "calls": {
+    "discovery": 1,
+    "issuance": 1,
+    "registrations": 0
+  },
+  "forbidden": [],
+  "dom": {
+    "role": "dialog",
+    "ariaModal": "true",
+    "ariaLabel": "Импорт узла Mihomo",
+    "family": "editor-workbench",
+    "ids": [
+      "mihomo-import-modal",
+      "mihomo-import-close-btn",
+      "mihomo-import-mode",
+      "mihomo-import-input",
+      "mihomo-import-amnezia-premium-hint",
+      "mihomo-import-amnezia-locations-block",
+      "mihomo-import-amnezia-locations-all-btn",
+      "mihomo-import-amnezia-locations-none-btn",
+      "mihomo-import-amnezia-locations",
+      "mihomo-import-amnezia-locations-count",
+      "mihomo-import-status",
+      "mihomo-import-target-hint",
+      "mihomo-import-groups-block",
+      "mihomo-import-groups-all-btn",
+      "mihomo-import-groups-none-btn",
+      "mihomo-import-groups",
+      "mihomo-import-groups-remember",
+      "mihomo-import-xray-refresh-block",
+      "mihomo-import-xray-interval",
+      "mihomo-import-xray-managed",
+      "mihomo-import-xray-refresh-note",
+      "mihomo-import-preview-engine",
+      "mihomo-import-engine-select",
+      "mihomo-import-preview-monaco",
+      "mihomo-import-preview",
+      "mihomo-import-parse-btn",
+      "mihomo-import-parse-static-btn",
+      "mihomo-import-insert-btn",
+      "mihomo-import-cancel-btn"
+    ]
+  },
+  "states": {
+    "empty": {
+      "visiblePreviewChars": 1,
+      "viewport": {
+        "width": 1600,
+        "height": 960
+      },
+      "theme": "dark",
+      "modal": {
+        "x": 80,
+        "y": 86.40625,
+        "width": 1440,
+        "height": 787.1875
+      },
+      "preview": {
+        "x": 798.875,
+        "y": 209.25,
+        "width": 695.125,
+        "height": 588.34375
+      },
+      "status": "",
+      "inputMode": "auto",
+      "engine": "codemirror",
+      "hasCm": true,
+      "hasMonaco": false,
+      "plainVisible": false,
+      "textareaBackingChars": 0,
+      "insertEnabled": false,
+      "groupNames": [
+        "Main",
+        "Auto"
+      ],
+      "selectedGroups": [],
+      "flags": {
+        "count": 0,
+        "columns": "repeat(2, minmax(0px, 1fr))"
+      }
+    },
+    "single": {
+      "visiblePreviewChars": 266,
+      "viewport": {
+        "width": 1600,
+        "height": 960
+      },
+      "theme": "dark",
+      "modal": {
+        "x": 80,
+        "y": 86.40625,
+        "width": 1440,
+        "height": 787.1875
+      },
+      "preview": {
+        "x": 798.875,
+        "y": 209.25,
+        "width": 695.125,
+        "height": 588.34375
+      },
+      "status": "Готово. Нажми «Вставить в конфиг».",
+      "inputMode": "auto",
+      "engine": "codemirror",
+      "hasCm": true,
+      "hasMonaco": false,
+      "plainVisible": false,
+      "textareaBackingChars": 265,
+      "insertEnabled": true,
+      "groupNames": [
+        "Main",
+        "Auto"
+      ],
+      "selectedGroups": [
+        "Main"
+      ],
+      "flags": {
+        "count": 0,
+        "columns": "repeat(2, minmax(0px, 1fr))"
+      }
+    },
+    "inputEditedAfterParse": {
+      "insertStillEnabled": true
+    },
+    "error": {
+      "visiblePreviewChars": 1,
+      "viewport": {
+        "width": 1600,
+        "height": 960
+      },
+      "theme": "dark",
+      "modal": {
+        "x": 80,
+        "y": 86.40625,
+        "width": 1440,
+        "height": 787.1875
+      },
+      "preview": {
+        "x": 798.875,
+        "y": 209.25,
+        "width": 695.125,
+        "height": 588.34375
+      },
+      "status": "unsupported://changed-after-parse: Неизвестная ссылка",
+      "inputMode": "auto",
+      "engine": "codemirror",
+      "hasCm": true,
+      "hasMonaco": false,
+      "plainVisible": false,
+      "textareaBackingChars": 0,
+      "insertEnabled": false,
+      "groupNames": [
+        "Main",
+        "Auto"
+      ],
+      "selectedGroups": [
+        "Main"
+      ],
+      "flags": {
+        "count": 0,
+        "columns": "repeat(2, minmax(0px, 1fr))"
+      }
+    },
+    "mixedBatch": {
+      "visiblePreviewChars": 586,
+      "viewport": {
+        "width": 1600,
+        "height": 960
+      },
+      "theme": "dark",
+      "modal": {
+        "x": 80,
+        "y": 86.40625,
+        "width": 1440,
+        "height": 787.1875
+      },
+      "preview": {
+        "x": 798.875,
+        "y": 209.25,
+        "width": 695.125,
+        "height": 588.34375
+      },
+      "status": "Часть данных распознана, часть — нет. Проверь строки ниже в preview.",
+      "inputMode": "proxy",
+      "engine": "codemirror",
+      "hasCm": true,
+      "hasMonaco": false,
+      "plainVisible": false,
+      "textareaBackingChars": 583,
+      "insertEnabled": true,
+      "groupNames": [
+        "Main",
+        "Auto"
+      ],
+      "selectedGroups": [
+        "Main"
+      ],
+      "flags": {
+        "count": 0,
+        "columns": "repeat(2, minmax(0px, 1fr))"
+      }
+    },
+    "provider": {
+      "visiblePreviewChars": 356,
+      "viewport": {
+        "width": 1600,
+        "height": 960
+      },
+      "theme": "dark",
+      "modal": {
+        "x": 80,
+        "y": 86.40625,
+        "width": 1440,
+        "height": 787.1875
+      },
+      "preview": {
+        "x": 798.875,
+        "y": 209.25,
+        "width": 695.125,
+        "height": 588.34375
+      },
+      "status": "Готово. Нажми «Вставить в конфиг».",
+      "inputMode": "subscription",
+      "engine": "codemirror",
+      "hasCm": true,
+      "hasMonaco": false,
+      "plainVisible": false,
+      "textareaBackingChars": 355,
+      "insertEnabled": true,
+      "groupNames": [
+        "Main",
+        "Auto"
+      ],
+      "selectedGroups": [
+        "Main"
+      ],
+      "flags": {
+        "count": 0,
+        "columns": "repeat(2, minmax(0px, 1fr))"
+      }
+    },
+    "providerStatic": {
+      "visiblePreviewChars": 159,
+      "viewport": {
+        "width": 1600,
+        "height": 960
+      },
+      "theme": "dark",
+      "modal": {
+        "x": 80,
+        "y": 86.40625,
+        "width": 1440,
+        "height": 787.1875
+      },
+      "preview": {
+        "x": 798.875,
+        "y": 209.25,
+        "width": 695.125,
+        "height": 588.34375
+      },
+      "status": "Распознана HWID-подписка: 1 узлов будут вставлены как блок proxies. Автообновление: каждые 24 ч после вставки.",
+      "inputMode": "subscription",
+      "engine": "codemirror",
+      "hasCm": true,
+      "hasMonaco": false,
+      "plainVisible": false,
+      "textareaBackingChars": 158,
+      "insertEnabled": true,
+      "groupNames": [
+        "Main",
+        "Auto"
+      ],
+      "selectedGroups": [
+        "Main"
+      ],
+      "flags": {
+        "count": 0,
+        "columns": "repeat(2, minmax(0px, 1fr))"
+      }
+    },
+    "wireguard": {
+      "visiblePreviewChars": 952,
+      "viewport": {
+        "width": 1600,
+        "height": 960
+      },
+      "theme": "dark",
+      "modal": {
+        "x": 80,
+        "y": 86.40625,
+        "width": 1440,
+        "height": 787.1875
+      },
+      "preview": {
+        "x": 798.875,
+        "y": 209.25,
+        "width": 695.125,
+        "height": 588.34375
+      },
+      "status": "Готово. Нажми «Вставить в конфиг».",
+      "inputMode": "wireguard",
+      "engine": "codemirror",
+      "hasCm": true,
+      "hasMonaco": false,
+      "plainVisible": false,
+      "textareaBackingChars": 951,
+      "insertEnabled": true,
+      "groupNames": [
+        "Main",
+        "Auto"
+      ],
+      "selectedGroups": [
+        "Main"
+      ],
+      "flags": {
+        "count": 0,
+        "columns": "repeat(2, minmax(0px, 1fr))"
+      }
+    },
+    "openvpn": {
+      "visiblePreviewChars": 528,
+      "viewport": {
+        "width": 1600,
+        "height": 960
+      },
+      "theme": "dark",
+      "modal": {
+        "x": 80,
+        "y": 86.40625,
+        "width": 1440,
+        "height": 787.1875
+      },
+      "preview": {
+        "x": 798.875,
+        "y": 209.25,
+        "width": 695.125,
+        "height": 588.34375
+      },
+      "status": "Готово. Нажми «Вставить в конфиг».",
+      "inputMode": "openvpn",
+      "engine": "codemirror",
+      "hasCm": true,
+      "hasMonaco": false,
+      "plainVisible": false,
+      "textareaBackingChars": 527,
+      "insertEnabled": true,
+      "groupNames": [
+        "Main",
+        "Auto"
+      ],
+      "selectedGroups": [
+        "Main"
+      ],
+      "flags": {
+        "count": 0,
+        "columns": "repeat(2, minmax(0px, 1fr))"
+      }
+    },
+    "tailscale": {
+      "visiblePreviewChars": 228,
+      "viewport": {
+        "width": 1600,
+        "height": 960
+      },
+      "theme": "dark",
+      "modal": {
+        "x": 80,
+        "y": 86.40625,
+        "width": 1440,
+        "height": 787.1875
+      },
+      "preview": {
+        "x": 798.875,
+        "y": 209.25,
+        "width": 695.125,
+        "height": 588.34375
+      },
+      "status": "Готово. Нажми «Вставить в конфиг».",
+      "inputMode": "tailscale",
+      "engine": "codemirror",
+      "hasCm": true,
+      "hasMonaco": false,
+      "plainVisible": false,
+      "textareaBackingChars": 227,
+      "insertEnabled": true,
+      "groupNames": [
+        "Main",
+        "Auto"
+      ],
+      "selectedGroups": [
+        "Main"
+      ],
+      "flags": {
+        "count": 0,
+        "columns": "repeat(2, minmax(0px, 1fr))"
+      }
+    },
+    "amnezia": {
+      "visiblePreviewChars": 1,
+      "viewport": {
+        "width": 1600,
+        "height": 960
+      },
+      "theme": "dark",
+      "modal": {
+        "x": 80,
+        "y": 86.40625,
+        "width": 1440,
+        "height": 787.1875
+      },
+      "preview": {
+        "x": 798.875,
+        "y": 209.25,
+        "width": 695.125,
+        "height": 588.34375
+      },
+      "status": "Доступно локаций: 40. Выберите нужные серверы.",
+      "inputMode": "amnezia-premium",
+      "engine": "codemirror",
+      "hasCm": true,
+      "hasMonaco": false,
+      "plainVisible": false,
+      "textareaBackingChars": 0,
+      "insertEnabled": false,
+      "groupNames": [
+        "Main",
+        "Auto"
+      ],
+      "selectedGroups": [
+        "Main"
+      ],
+      "flags": {
+        "count": 28,
+        "columns": "314.938px 314.938px"
+      }
+    },
+    "amneziaIssued": {
+      "visiblePreviewChars": 88,
+      "viewport": {
+        "width": 1600,
+        "height": 960
+      },
+      "theme": "dark",
+      "modal": {
+        "x": 80,
+        "y": 86.40625,
+        "width": 1440,
+        "height": 787.1875
+      },
+      "preview": {
+        "x": 798.875,
+        "y": 209.25,
+        "width": 695.125,
+        "height": 588.34375
+      },
+      "status": "Конфигурации для этого набора локаций уже готовы. Нажмите «Вставить в конфиг».",
+      "inputMode": "amnezia-premium",
+      "engine": "codemirror",
+      "hasCm": true,
+      "hasMonaco": false,
+      "plainVisible": false,
+      "textareaBackingChars": 87,
+      "insertEnabled": true,
+      "groupNames": [
+        "Main",
+        "Auto"
+      ],
+      "selectedGroups": [
+        "Main"
+      ],
+      "flags": {
+        "count": 28,
+        "columns": "314.938px 314.938px"
+      }
+    },
+    "mobileAmnezia": {
+      "visiblePreviewChars": 88,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "theme": "dark",
+      "modal": {
+        "x": 8,
+        "y": 76,
+        "width": 374,
+        "height": 692
+      },
+      "preview": {
+        "x": 33,
+        "y": 531.34375,
+        "width": 324,
+        "height": 161.65625
+      },
+      "status": "Конфигурации для этого набора локаций уже готовы. Нажмите «Вставить в конфиг».",
+      "inputMode": "amnezia-premium",
+      "engine": "codemirror",
+      "hasCm": true,
+      "hasMonaco": false,
+      "plainVisible": false,
+      "textareaBackingChars": 87,
+      "insertEnabled": true,
+      "groupNames": [
+        "Main",
+        "Auto"
+      ],
+      "selectedGroups": [
+        "Main"
+      ],
+      "flags": {
+        "count": 28,
+        "columns": "302px"
+      }
+    },
+    "savedGeometry": {
+      "visiblePreviewChars": 1,
+      "viewport": {
+        "width": 1600,
+        "height": 960
+      },
+      "theme": "dark",
+      "modal": {
+        "x": 80,
+        "y": 86,
+        "width": 1177,
+        "height": 724
+      },
+      "preview": {
+        "x": 670,
+        "y": 208.84375,
+        "width": 561,
+        "height": 525.15625
+      },
+      "status": "",
+      "inputMode": "amnezia-premium",
+      "engine": "codemirror",
+      "hasCm": true,
+      "hasMonaco": false,
+      "plainVisible": false,
+      "textareaBackingChars": 0,
+      "insertEnabled": false,
+      "groupNames": [
+        "Main",
+        "Auto"
+      ],
+      "selectedGroups": [],
+      "flags": {
+        "count": 28,
+        "columns": "250.5px 250.5px"
+      },
+      "storage": {
+        "xk.modal.state.v1.mihomo-import-modal": "{\"v\":1,\"x\":80,\"y\":86,\"w\":1177,\"h\":724}"
+      }
+    }
+  },
+  "openingRequests": [
+    {
+      "method": "GET",
+      "path": "/static/js/features/mihomo_import.js"
+    },
+    {
+      "method": "GET",
+      "path": "/static/js/ui/happ_decryptor_link.js"
+    },
+    {
+      "method": "GET",
+      "path": "/static/js/features/compat/mihomo_import.js"
+    },
+    {
+      "method": "GET",
+      "path": "/api/mihomo/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/api/system/resources"
+    },
+    {
+      "method": "GET",
+      "path": "/api/xkeen/core"
+    },
+    {
+      "method": "POST",
+      "path": "/api/mihomo/parse/xray-json"
+    },
+    {
+      "method": "POST",
+      "path": "/api/mihomo/provider/probe"
+    },
+    {
+      "method": "GET",
+      "path": "/api/xray-logs/status"
+    },
+    {
+      "method": "POST",
+      "path": "/api/mihomo/parse/xray-json"
+    },
+    {
+      "method": "POST",
+      "path": "/api/mihomo/provider/probe"
+    },
+    {
+      "method": "GET",
+      "path": "/api/system/resources"
+    },
+    {
+      "method": "POST",
+      "path": "/api/mihomo/parse/wireguard"
+    },
+    {
+      "method": "POST",
+      "path": "/api/mihomo/parse/openvpn"
+    },
+    {
+      "method": "GET",
+      "path": "/api/xkeen/status"
+    },
+    {
+      "method": "POST",
+      "path": "/api/mihomo/parse/tailscale"
+    },
+    {
+      "method": "GET",
+      "path": "/api/restart-log"
+    },
+    {
+      "method": "POST",
+      "path": "/api/mihomo/amnezia-premium/locations"
+    },
+    {
+      "method": "GET",
+      "path": "/api/system/resources"
+    },
+    {
+      "method": "POST",
+      "path": "/api/mihomo/parse/amnezia-premium"
+    },
+    {
+      "method": "GET",
+      "path": "/api/xray-logs/status"
+    },
+    {
+      "method": "GET",
+      "path": "/api/mihomo/subscriptions"
+    },
+    {
+      "method": "GET",
+      "path": "/api/system/resources"
+    },
+    {
+      "method": "GET",
+      "path": "/api/xkeen/core"
+    },
+    {
+      "method": "GET",
+      "path": "/api/mihomo/subscriptions"
+    }
+  ]
+}

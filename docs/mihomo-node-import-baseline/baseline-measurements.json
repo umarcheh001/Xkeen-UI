@@ -1,0 +1,477 @@
+{
+  "capturedAt": "2026-10-26",
+  "commit": "0eece0ce",
+  "desktop": {
+    "viewport": {
+      "width": 1600,
+      "height": 960
+    },
+    "modal": {
+      "left": 80,
+      "top": 86.40625,
+      "width": 1440,
+      "height": 787.1875
+    },
+    "gridTemplateRows": "50px 685.188px 50px",
+    "controls": {
+      "width": 691.875,
+      "height": 659.1875
+    },
+    "previewPanel": {
+      "width": 720.125,
+      "height": 659.1875
+    },
+    "preview": {
+      "width": 695.125,
+      "height": 588.34375
+    },
+    "resizer": true
+  },
+  "narrow": {
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "modal": {
+      "left": 8,
+      "top": 76,
+      "width": 374,
+      "height": 692
+    },
+    "gridTemplateRows": "50px 592px 50px",
+    "controls": {
+      "width": 348,
+      "height": 389.15625
+    },
+    "previewPanel": {
+      "width": 348,
+      "height": 176.84375
+    },
+    "preview": {
+      "width": 324,
+      "height": 55
+    },
+    "resizer": true
+  },
+  "parsed": {
+    "status": "Готово. Нажми «Вставить в конфиг».",
+    "hint": "Будет добавлено в секцию: proxies",
+    "preview": "# proxies\n  - name: Baseline\n    type: vless\n    server: example.com\n    port: 443\n    udp: true\n    uuid: 11111111-1111-1111-1111-111111111111\n    packet-encoding: xudp\n    encryption: \"\"\n    network: tcp\n    tls: true\n    tfo: true\n    client-fingerprint: chrome\n",
+    "insertEnabled": true
+  },
+  "amnezia": {
+    "count": 40,
+    "columns": 2,
+    "clientHeight": 246,
+    "scrollHeight": 614,
+    "flagWidth": 20,
+    "flagHeight": 14,
+    "svgWidth": 18,
+    "svgHeight": 12,
+    "names": [
+      "Location FI\nFI",
+      "Location DE\nDE",
+      "Location FR\nFR",
+      "Location GB\nGB"
+    ]
+  },
+  "previewRuntime": {
+    "engine": "codemirror",
+    "textareaVisible": false,
+    "codemirrorCount": 2,
+    "monacoVisible": false,
+    "previewTextLength": 0
+  },
+  "openNetwork": {
+    "editorAssetRequests": [
+      {
+        "t_ms": 92,
+        "method": "GET",
+        "path": "/static/js/patches/monaco_runtime_fix.js",
+        "query": "?v=20260401f"
+      },
+      {
+        "t_ms": 1045,
+        "method": "GET",
+        "path": "/static/js/features/mihomo_yaml_patch.js",
+        "query": ""
+      },
+      {
+        "t_ms": 1119,
+        "method": "GET",
+        "path": "/static/js/vendor/codemirror_json_schema.js",
+        "query": ""
+      },
+      {
+        "t_ms": 1119,
+        "method": "GET",
+        "path": "/static/js/ui/editor_schema.js",
+        "query": ""
+      },
+      {
+        "t_ms": 1342,
+        "method": "GET",
+        "path": "/static/vendor/npm/@codemirror/state/dist/index.js",
+        "query": ""
+      },
+      {
+        "t_ms": 1342,
+        "method": "GET",
+        "path": "/static/vendor/npm/@codemirror/view/dist/index.js",
+        "query": ""
+      },
+      {
+        "t_ms": 1342,
+        "method": "GET",
+        "path": "/static/vendor/npm/@codemirror/language/dist/index.js",
+        "query": ""
+      },
+      {
+        "t_ms": 1691,
+        "method": "GET",
+        "path": "/static/js/pages/panel.editor.bundle.js",
+        "query": ""
+      },
+      {
+        "t_ms": 1742,
+        "method": "GET",
+        "path": "/static/js/pages/editor.shared.js",
+        "query": ""
+      },
+      {
+        "t_ms": 1819,
+        "method": "GET",
+        "path": "/static/js/ui/editor_engine.js",
+        "query": "?v=20260325-devtools"
+      },
+      {
+        "t_ms": 1819,
+        "method": "GET",
+        "path": "/static/js/ui/editor_actions.js",
+        "query": "?v=20260325-stage3"
+      },
+      {
+        "t_ms": 1819,
+        "method": "GET",
+        "path": "/static/js/ui/editor_toolbar.js",
+        "query": "?v=20260325-wave3"
+      },
+      {
+        "t_ms": 1819,
+        "method": "GET",
+        "path": "/static/js/ui/editor_links.js",
+        "query": "?v=20260325-wave3"
+      },
+      {
+        "t_ms": 1938,
+        "method": "GET",
+        "path": "/static/js/pages/panel.editor.codemirror.bundle.js",
+        "query": ""
+      },
+      {
+        "t_ms": 2003,
+        "method": "GET",
+        "path": "/static/js/pages/codemirror6.shared.js",
+        "query": ""
+      },
+      {
+        "t_ms": 2105,
+        "method": "GET",
+        "path": "/static/js/ui/codemirror6_boot.js",
+        "query": "?v=20260401cm6fine2"
+      },
+      {
+        "t_ms": 2123,
+        "method": "GET",
+        "path": "/static/vendor/npm/codemirror/dist/index.js",
+        "query": ""
+      },
+      {
+        "t_ms": 2123,
+        "method": "GET",
+        "path": "/static/vendor/npm/@codemirror/lang-json/dist/index.js",
+        "query": ""
+      },
+      {
+        "t_ms": 2123,
+        "method": "GET",
+        "path": "/static/vendor/npm/@codemirror/lang-yaml/dist/index.js",
+        "query": ""
+      },
+      {
+        "t_ms": 2123,
+        "method": "GET",
+        "path": "/static/vendor/npm/@codemirror/lint/dist/index.js",
+        "query": ""
+      },
+      {
+        "t_ms": 2130,
+        "method": "GET",
+        "path": "/static/vendor/npm/@codemirror/search/dist/index.js",
+        "query": ""
+      },
+      {
+        "t_ms": 2130,
+        "method": "GET",
+        "path": "/static/vendor/npm/@codemirror/commands/dist/index.js",
+        "query": ""
+      },
+      {
+        "t_ms": 2130,
+        "method": "GET",
+        "path": "/static/vendor/npm/@codemirror/autocomplete/dist/index.js",
+        "query": ""
+      },
+      {
+        "t_ms": 2130,
+        "method": "GET",
+        "path": "/static/vendor/npm/@replit/codemirror-indentation-markers/dist/index.js",
+        "query": ""
+      },
+      {
+        "t_ms": 2130,
+        "method": "GET",
+        "path": "/static/js/ui/yaml_schema.js",
+        "query": ""
+      },
+      {
+        "t_ms": 2144,
+        "method": "GET",
+        "path": "/static/vendor/npm/@lezer/yaml/dist/index.js",
+        "query": ""
+      },
+      {
+        "t_ms": 2154,
+        "method": "GET",
+        "path": "/static/vendor/npm/js-yaml/dist/js-yaml.mjs",
+        "query": ""
+      }
+    ],
+    "requestCounts": {
+      "/": 1,
+      "/static/js/ui/build_refresh.js": 1,
+      "/static/notification-center.css": 1,
+      "/static/js/ui/typography.js": 1,
+      "/static/js/ui/layout.js": 1,
+      "/static/js/ui/xk_brand.js": 2,
+      "/static/js/ui/sections.js": 2,
+      "/static/styles.css": 1,
+      "/static/panel-operator.css": 1,
+      "/static/js/patches/monaco_runtime_fix.js": 1,
+      "/static/frontend-build/assets/panel-bridge.js": 1,
+      "/ui/branding.json": 2,
+      "/static/icons/operator.svg": 9,
+      "/static/js/pages/panel.entry.js": 1,
+      "/static/js/pages/top_level_shell.shared.js": 1,
+      "/static/js/pages/top_level_panel_mihomo.shared.js": 1,
+      "/static/js/pages/panel.screen.bootstrap.js": 1,
+      "/static/js/pages/top_level_router.js": 1,
+      "/static/js/pages/top_level_screen_registry.js": 1,
+      "/static/js/pages/shell.shared.js": 1,
+      "/static/js/pages/panel_shell.shared.js": 1,
+      "/static/js/pages/panel.shared_compat.bundle.js": 1,
+      "/static/js/pages/panel.view_runtime.js": 1,
+      "/static/js/pages/panel.module_loader.js": 1,
+      "/static/js/pages/panel.bootstrap_tail.bundle.js": 1,
+      "/static/js/pages/panel.mihomo_header.js": 1,
+      "/static/js/pages/top_level_panel_screen.js": 1,
+      "/static/js/pages/top_level_modules_screen.js": 1,
+      "/static/js/pages/top_level_mihomo_generator_screen.js": 1,
+      "/static/js/pages/top_level_devtools_screen.js": 1,
+      "/static/js/pages/top_level_xkeen_screen.js": 1,
+      "/static/js/features/xkeen_runtime.js": 1,
+      "/static/js/core/xk_dom.js": 1,
+      "/static/js/core/xk_http.js": 1,
+      "/static/js/core/xk_storage.js": 1,
+      "/static/js/ui/shared_primitives.js": 1,
+      "/static/js/ui/operator_icons.js": 1,
+      "/static/js/ui/modal.js": 1,
+      "/static/js/ui/confirm_modal.js": 1,
+      "/static/js/ui/theme.js": 1,
+      "/static/js/ui/tooltips_auto.js": 1,
+      "/static/js/util/helpers.js": 1,
+      "/static/js/runtime/lazy_runtime.js": 1,
+      "/static/js/util/tab_id.js": 1,
+      "/static/js/util/ansi.js": 1,
+      "/static/js/util/command_job.js": 1,
+      "/static/js/ui/spinner_fetch.js": 1,
+      "/static/js/features/resource_summary.js": 1,
+      "/static/js/ui/last_activity.js": 1,
+      "/static/js/pages/panel.lazy_bindings.runtime.js": 1,
+      "/static/js/features/terminal_debug.js": 1,
+      "/static/js/pages/panel.core_ui_watch.runtime.js": 1,
+      "/static/js/features/service_status.js": 1,
+      "/static/js/pages/top_level_nav.shared.js": 1,
+      "/static/js/00_state.js": 1,
+      "/static/js/01_bootstrap.js": 1,
+      "/static/js/core/xk_store.js": 1,
+      "/static/js/ui/toast.js": 1,
+      "/static/js/features/notification_center.js": 1,
+      "/static/js/ui/settings.js": 1,
+      "/static/js/features/feature_access.js": 1,
+      "/static/js/features/module_manager/badge.js": 1,
+      "/static/js/pages/top_level_screen_host.shared.js": 1,
+      "/static/js/pages/panel.init.js": 1,
+      "/static/js/ui/operator_icons_manifest.js": 1,
+      "/static/js/features/restart_log.js": 1,
+      "/static/js/features/devtools_namespace.js": 1,
+      "/static/js/features/core_source.js": 1,
+      "/static/js/features/restart_log_sources.js": 1,
+      "/api/notifications": 1,
+      "/api/ui-settings": 1,
+      "/api/xkeen/status": 1,
+      "/api/xray-logs/status": 1,
+      "/api/capabilities": 1,
+      "/static/js/pages/panel.routing.bundle.js": 1,
+      "/static/js/pages/panel.mihomo.bundle.js": 1,
+      "/static/js/features/routing.js": 1,
+      "/static/js/features/compat/routing.js": 1,
+      "/static/js/features/compat/routing_shell.js": 1,
+      "/static/js/features/routing_jsonc_preserve.js": 1,
+      "/static/js/features/routing_cards/ns.js": 1,
+      "/static/js/features/routing_cards/ids.js": 1,
+      "/static/js/features/routing_cards/common.js": 1,
+      "/static/js/features/routing_cards/collapse.js": 1,
+      "/static/js/features/routing_cards/dat/prefs.js": 1,
+      "/static/js/features/routing_cards/dat/combo.js": 1,
+      "/static/js/features/routing_cards/dat/api.js": 1,
+      "/static/js/features/routing_cards/dat/card.js": 1,
+      "/static/js/features/routing_cards/rules/state.js": 1,
+      "/static/js/features/routing_cards/rules/model.js": 1,
+      "/static/js/features/routing_cards/rules/detect.js": 1,
+      "/static/js/features/routing_cards/rules/json_modal.js": 1,
+      "/static/js/features/routing_cards/rules/apply.js": 1,
+      "/static/js/features/routing_cards/help_docs.js": 1,
+      "/static/js/features/routing_cards/rules/fields.js": 1,
+      "/static/js/features/routing_cards/rules/dnd_pointer.js": 1,
+      "/static/js/features/routing_cards/rules/render.js": 1,
+      "/static/js/features/routing_cards/rules/controls.js": 1,
+      "/static/js/features/routing_cards/rules/dns_over_vless.js": 1,
+      "/static/js/features/routing_cards/rules/dat_bridge.js": 1,
+      "/static/js/features/routing_cards.js": 1,
+      "/static/js/features/compat/routing_cards.js": 1,
+      "/static/js/features/local_io.js": 1,
+      "/static/js/features/compat/local_io.js": 1,
+      "/static/js/pages/config_shell.shared.js": 1,
+      "/static/js/pages/logs_shell.shared.js": 1,
+      "/static/js/features/routing_shell.js": 1,
+      "/static/js/features/routing_cards_namespace.js": 1,
+      "/static/js/features/mihomo_panel.js": 1,
+      "/static/js/features/compat/mihomo_panel.js": 1,
+      "/static/js/features/mihomo_yaml_patch.js": 1,
+      "/static/js/features/mihomo_dns.js": 1,
+      "/static/js/features/backup_actions_loader.js": 1,
+      "/static/js/vendor/codemirror_json_schema.js": 1,
+      "/static/js/util/strip_json_comments.js": 1,
+      "/static/js/ui/routing_scenarios.js": 1,
+      "/static/js/ui/editor_schema.js": 1,
+      "/static/js/ui/schema_semantic_validation.js": 1,
+      "/static/js/features/dns_guard_text.js": 1,
+      "/static/js/features/dns_operation_recovery.js": 1,
+      "/static/js/ui/config_dirty_state.js": 1,
+      "/static/js/ui/config_shell.js": 1,
+      "/static/js/features/mihomo_runtime.js": 1,
+      "/static/vendor/npm/@codemirror/state/dist/index.js": 1,
+      "/static/vendor/npm/@codemirror/view/dist/index.js": 1,
+      "/static/vendor/npm/@codemirror/language/dist/index.js": 1,
+      "/static/vendor/npm/jsonc-parser/lib/esm/main.js": 1,
+      "/static/js/ui/schema_snippets.js": 1,
+      "/static/vendor/npm/@marijn/find-cluster-break/src/index.js": 1,
+      "/static/vendor/npm/jsonc-parser/lib/esm/impl/format.js": 1,
+      "/static/vendor/npm/jsonc-parser/lib/esm/impl/edit.js": 1,
+      "/static/vendor/npm/jsonc-parser/lib/esm/impl/scanner.js": 1,
+      "/static/vendor/npm/jsonc-parser/lib/esm/impl/parser.js": 1,
+      "/static/vendor/npm/@lezer/common/dist/index.js": 1,
+      "/static/vendor/npm/@lezer/highlight/dist/index.js": 1,
+      "/static/vendor/npm/style-mod/src/style-mod.js": 1,
+      "/static/vendor/npm/w3c-keyname/index.js": 1,
+      "/static/vendor/npm/crelt/index.js": 1,
+      "/api/mihomo/dns": 1,
+      "/api/mihomo/core-profiles": 1,
+      "/static/vendor/npm/jsonc-parser/lib/esm/impl/string-intern.js": 1,
+      "/api/routing/dns-over-vless": 1,
+      "/api/xray/core-profiles": 1,
+      "/static/js/pages/panel.editor.bundle.js": 1,
+      "/static/js/pages/panel.diagnostics.bundle.js": 1,
+      "/static/js/pages/editor.shared.js": 1,
+      "/api/restart-log": 1,
+      "/api/ws-token": 1,
+      "/static/js/features/resource_monitor.js": 1,
+      "/static/js/ui/editor_engine.js": 1,
+      "/static/js/ui/editor_actions.js": 1,
+      "/static/js/ui/editor_toolbar.js": 1,
+      "/static/js/ui/editor_links.js": 1,
+      "/static/js/features/resource_monitor_model.js": 1,
+      "/static/js/pages/panel.editor.codemirror.bundle.js": 1,
+      "/api/system/resources": 1,
+      "/static/js/pages/codemirror6.shared.js": 1,
+      "/static/js/ui/codemirror6_boot.js": 1,
+      "/api/routing/dat/files": 2,
+      "/static/vendor/npm/codemirror/dist/index.js": 1,
+      "/static/vendor/npm/@codemirror/lang-json/dist/index.js": 1,
+      "/static/vendor/npm/@codemirror/lang-yaml/dist/index.js": 1,
+      "/static/vendor/npm/@codemirror/lint/dist/index.js": 1,
+      "/static/vendor/npm/@codemirror/search/dist/index.js": 1,
+      "/static/vendor/npm/@codemirror/commands/dist/index.js": 1,
+      "/static/vendor/npm/@codemirror/autocomplete/dist/index.js": 1,
+      "/static/vendor/npm/@replit/codemirror-indentation-markers/dist/index.js": 1,
+      "/static/js/ui/yaml_schema.js": 1,
+      "/static/vendor/npm/@lezer/yaml/dist/index.js": 1,
+      "/static/vendor/npm/@lezer/lr/dist/index.js": 1,
+      "/static/vendor/npm/@lezer/json/dist/index.js": 1,
+      "/static/vendor/npm/js-yaml/dist/js-yaml.mjs": 1,
+      "/api/routing/dat/stat": 1,
+      "/api/xray/outbound-tags": 2,
+      "/api/xray/inbound-tags": 2,
+      "/api/xray/observatory/config": 2,
+      "/static/schemas/xray-routing.schema.json": 1,
+      "/api/routing/fragments": 1,
+      "/api/routing/geodat/status": 1,
+      "/api/routing": 1,
+      "/static/js/features/mihomo_clash/index.js": 1,
+      "/static/schemas/mihomo-config.schema.json": 1,
+      "/api/mihomo-templates": 1,
+      "/static/js/features/mihomo_clash/client.js": 1,
+      "/static/js/features/mihomo_clash/groups.js": 1,
+      "/static/js/features/mihomo_clash/egress.js": 1,
+      "/static/js/features/mihomo_clash/dns.js": 1,
+      "/static/js/features/mihomo_clash/connections.js": 1,
+      "/static/js/features/mihomo_clash/rules.js": 1,
+      "/static/js/features/mihomo_clash/logs.js": 1,
+      "/static/js/features/mihomo_clash/diagnostics.js": 1,
+      "/static/js/features/mihomo_clash/telemetry.js": 1,
+      "/static/js/features/mihomo_clash/state.js": 1,
+      "/static/js/features/mihomo_clash/visuals.js": 1,
+      "/static/js/ui/country_flags.js": 1,
+      "/api/mihomo/clash/status": 1,
+      "/static/js/features/mihomo_import.js": 1,
+      "/static/js/ui/happ_decryptor_link.js": 1,
+      "/static/js/features/compat/mihomo_import.js": 1,
+      "/api/mihomo/subscriptions": 1
+    }
+  },
+  "bulkInsertion": [
+    {
+      "count": 3,
+      "parse_ms": 757,
+      "insert_ms": 597,
+      "total_ms": 1353,
+      "requests": {
+        "/api/mihomo/parse/xray-json": 1,
+        "/api/mihomo/patch/apply_insert": 3,
+        "/api/mihomo/subscriptions/imported-xray": 1
+      }
+    },
+    {
+      "count": 30,
+      "parse_ms": 866,
+      "insert_ms": 798,
+      "total_ms": 1664,
+      "requests": {
+        "/api/mihomo/parse/xray-json": 1,
+        "/api/mihomo/patch/apply_insert": 30,
+        "/api/mihomo/subscriptions/imported-xray": 1
+      }
+    }
+  ]
+}

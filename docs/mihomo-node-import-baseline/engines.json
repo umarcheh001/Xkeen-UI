@@ -1,0 +1,114 @@
+{
+  "light": {
+    "visiblePreviewChars": 1,
+    "viewport": {
+      "width": 1600,
+      "height": 960
+    },
+    "theme": "light",
+    "modal": {
+      "x": 80,
+      "y": 86.40625,
+      "width": 1440,
+      "height": 787.1875
+    },
+    "preview": {
+      "x": 798.875,
+      "y": 209.25,
+      "width": 695.125,
+      "height": 588.34375
+    },
+    "status": "",
+    "inputMode": "auto",
+    "engine": "codemirror",
+    "hasCm": true,
+    "hasMonaco": false,
+    "plainVisible": false,
+    "textareaBackingChars": 0,
+    "insertEnabled": false,
+    "groupNames": [
+      "Main",
+      "Auto"
+    ],
+    "selectedGroups": [],
+    "flags": {
+      "count": 0,
+      "columns": "repeat(2, minmax(0px, 1fr))"
+    }
+  },
+  "monaco": {
+    "visiblePreviewChars": 264,
+    "viewport": {
+      "width": 1600,
+      "height": 960
+    },
+    "theme": "light",
+    "modal": {
+      "x": 80,
+      "y": 86.40625,
+      "width": 1440,
+      "height": 787.1875
+    },
+    "preview": {
+      "x": 798.875,
+      "y": 209.25,
+      "width": 695.125,
+      "height": 588.34375
+    },
+    "status": "Готово. Нажми «Вставить в конфиг».",
+    "inputMode": "proxy",
+    "engine": "monaco",
+    "hasCm": true,
+    "hasMonaco": true,
+    "plainVisible": false,
+    "textareaBackingChars": 0,
+    "insertEnabled": true,
+    "groupNames": [
+      "Main",
+      "Auto"
+    ],
+    "selectedGroups": [],
+    "flags": {
+      "count": 0,
+      "columns": "repeat(2, minmax(0px, 1fr))"
+    }
+  },
+  "fallback": {
+    "visiblePreviewChars": 265,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "theme": "light",
+    "modal": {
+      "x": 8,
+      "y": 76,
+      "width": 374,
+      "height": 692
+    },
+    "preview": {
+      "x": 33,
+      "y": 636.34375,
+      "width": 324,
+      "height": 56.65625
+    },
+    "status": "Готово. Нажми «Вставить в конфиг».",
+    "inputMode": "proxy",
+    "engine": "codemirror",
+    "hasCm": false,
+    "hasMonaco": false,
+    "plainVisible": true,
+    "textareaBackingChars": 265,
+    "insertEnabled": true,
+    "groupNames": [
+      "Main",
+      "Auto"
+    ],
+    "selectedGroups": [],
+    "flags": {
+      "count": 0,
+      "columns": "minmax(0px, 1fr)"
+    }
+  },
+  "forbidden": []
+}
