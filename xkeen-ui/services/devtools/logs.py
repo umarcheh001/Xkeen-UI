@@ -30,17 +30,14 @@ def _restart_log_path() -> str:
     return (os.environ.get("XKEEN_RESTART_LOG_FILE") or os.path.join(_ui_state_dir(), "restart.log")).strip()
 
 
-def _update_log_path() -> str:
-    update_dir = (os.environ.get("XKEEN_UI_UPDATE_DIR") or "").strip()
-    if update_dir:
-        return os.path.join(update_dir, "update.log")
-    try:
-        from core.paths import BASE_VAR_DIR  # type: ignore
+def _history_path() -> str:
+    # The operations of the Modules window (services/module_transactions/history.py).
+    return os.path.join(_ui_state_dir(), "module-operations", "history.jsonl")
 
-        base_var = str(BASE_VAR_DIR)
-    except Exception:
-        base_var = "/opt/var"
-    return os.path.join(base_var, "lib", "xkeen-ui", "update", "update.log")
+
+def _install_log_path(log_dir: str) -> str:
+    # The installer writes its full log next to the panel's log folder.
+    return os.path.join(os.path.dirname(log_dir.rstrip("/")) or "/opt/var/log", "xkeen-ui-install.log")
 
 
 def _log_dir() -> str:
@@ -66,10 +63,10 @@ def _log_targets() -> Mapping[str, str]:
             "ws": ws,
             "stdout": os.path.join(d, "stdout.log"),
             "stderr": os.path.join(d, "stderr.log"),
-            "update": _update_log_path(),
+            "updates": _history_path(),
             "restart": _restart_log_path(),
-            # Legacy single-file log (old init script)
-            "xkeen-ui": "/opt/var/log/xkeen-ui.log",
+            "install": _install_log_path(d),
+            "install-previous": _install_log_path(d) + ".previous",
         }
     except Exception:
         d = _log_dir()
@@ -80,10 +77,10 @@ def _log_targets() -> Mapping[str, str]:
             "ws": os.path.join(d, "ws.log"),
             "stdout": os.path.join(d, "stdout.log"),
             "stderr": os.path.join(d, "stderr.log"),
-            "update": _update_log_path(),
+            "updates": _history_path(),
             "restart": _restart_log_path(),
-            # Legacy single-file log (old init script)
-            "xkeen-ui": "/opt/var/log/xkeen-ui.log",
+            "install": _install_log_path(d),
+            "install-previous": _install_log_path(d) + ".previous",
         }
 
 
@@ -174,7 +171,7 @@ def list_logs() -> List[Dict[str, Any]]:
       - Rotated files are returned only when present.
     """
     targets = dict(_log_targets())
-    order = ["core", "access", "ws", "stdout", "stderr", "update", "restart", "xkeen-ui"]
+    order = ["core", "access", "ws", "stdout", "stderr", "updates", "restart", "install", "install-previous"]
     out: List[Dict[str, Any]] = []
 
     def _add(name: str, path: str, exists: bool) -> None:

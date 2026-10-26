@@ -287,15 +287,18 @@ export function createPanelLogView(options) {
     }
     if (rec.extra.length) {
       const text = esc(rec.extra.join('\n'));
-      if (state.kind === 'update') {
-        parts.push(`<details><summary>Вывод установщика · ${rec.extra.length} строк</summary><pre class="block">${text}</pre></details>`);
+      if (state.kind === 'update' || state.kind === 'operations') {
+        const label = state.kind === 'operations' ? 'Вывод подготовки окружения' : 'Вывод установщика';
+        parts.push(`<details><summary>${label} · ${rec.extra.length} строк</summary><pre class="block">${text}</pre></details>`);
       } else if (state.kind === 'restart') {
         parts.push(`<pre class="block">${text}</pre>`);
       } else {
         parts.push(`<pre class="block${rec.level === 'error' ? ' err' : ''}">${text}</pre>`);
       }
     }
-    if (rec.raw.length && state.kind !== 'update') parts.push(`<pre class="block">${esc(rec.raw.join('\n'))}</pre>`);
+    // A run or an operation is told by its pairs and steps; its source lines are
+    // what «Копировать запись» takes.
+    if (rec.raw.length && state.kind !== 'update' && state.kind !== 'operations') parts.push(`<pre class="block">${esc(rec.raw.join('\n'))}</pre>`);
     const src = rec.source ? esc(rec.source) : '';
     parts.push(`<div class="acts">
       <button type="button" class="btn" data-act="copy" data-id="${esc(rec.id)}">${icon('duplicate')}Копировать запись</button>

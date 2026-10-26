@@ -667,6 +667,11 @@
           <button type="button" class="xk-xlog-menu-item" id="dt-log-download" role="menuitem" title="Скачать выбранный файл целиком.">{{ op_icon('download') }}<span>Скачать <span id="dt-log-download-name">лог</span></span></button>
           <button type="button" class="xk-xlog-menu-item" id="dt-log-load-more" role="menuitem" title="Подгрузить более старые строки (увеличить окно назад).">{{ op_icon('upload') }}<span>Загрузить ещё</span></button>
           <button type="button" class="xk-xlog-menu-item" id="dt-log-refresh" role="menuitem" title="Перечитать список файлов и снимок выбранного.">{{ op_icon('refresh') }}<span>Обновить снимок</span></button>
+          <div id="dt-log-older-block" hidden>
+            <div class="xk-xlog-menu-sep"></div>
+            <div class="xk-xlog-menu-title">Более ранние записи</div>
+            <div id="dt-log-older-list"></div>
+          </div>
           <div id="dt-log-empty-block" hidden>
             <div class="xk-xlog-menu-sep"></div>
             <div class="xk-xlog-menu-title">Пустые логи</div>

@@ -94,6 +94,12 @@ def record_history(state_dir: Path, status: Mapping[str, Any]) -> None:
     name = _module_name(status.get("module_id"))
     if name:
         entry["module_name"] = name
+    try:
+        from services.module_update_channel import read_channel
+
+        entry["channel"] = read_channel(state_dir)
+    except Exception:  # noqa: BLE001 - the channel is a nicety, the record is not
+        pass
     environment = _environment_tail(state_dir)
     if environment:
         entry["environment"] = environment

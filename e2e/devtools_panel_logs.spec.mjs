@@ -12,20 +12,29 @@ const CORE = [
   '2026-10-23 14:40:00,000 [WARNING] memory guard reclaimed runtime memory | mode=auto, rss_before=59117568, rss_after=48656384\n',
   '2026-10-23 15:00:00,000 [INFO] xray subscriptions auto-refresh | total=7, ok=7, restarted=True\n',
 ];
-const UPDATE = [
-  '[2026-10-02T11:44:40Z] === Xkeen-UI updater start ===\n',
-  '[2026-10-02T11:44:40Z] repo=umarcheh001/Xkeen-UI channel=stable action=update\n',
-  '[2026-10-02T11:44:47Z] [*] Latest tag: v2.9.1b\n',
-  '  01/05  Проверка окружения\n',
-  '[2026-10-02T11:45:15Z] === Xkeen-UI updater done ===\n',
-];
+// module-operations/history.jsonl (пример): an update and a module that did not install.
+const STEPS = ['prepared', 'downloading', 'verifying', 'applying', 'state', 'restarting', 'health', 'committed'];
+const UPDATES = [
+  {
+    operation_id: '20261025T150210Z-4b81c2', scope: 'module', operation: 'install', module_id: 'tool.terminal',
+    module_name: 'Терминал и команды', version: '3.0.3-beta.6', result: 'rolled_back',
+    error: 'архив модуля не прошёл проверку', started_at: 1792940530, finished_at: 1792940536,
+    log: [{ step: 'prepared', at: 1792940530 }, { step: 'downloading', at: 1792940531 }], channel: 'prerelease',
+  },
+  {
+    operation_id: '20261026T122903Z-e1d4a5', scope: 'panel', operation: 'panel-update', version: '3.0.3-beta.6',
+    source_version: '3.0.3-beta.5', result: 'committed', started_at: 1793017743, finished_at: 1793017762,
+    log: STEPS.map((step, index) => ({ step, at: 1793017744 + index })), channel: 'prerelease',
+    environment: ['=== prepare ===', '[ok] opkg update', '[ok] curl уже стоит'],
+  },
+].map((entry) => `${JSON.stringify(entry)}\n`);
 
-async function openLogs(page, { files, live = false } = {}) {
+async function openLogs(page, { files, live = false, extra = [] } = {}) {
   const now = Date.now() / 1000;
-  const data = Object.assign({ core: CORE, update: UPDATE, stdout: [], stderr: [] }, files || {});
+  const data = Object.assign({ core: CORE, updates: UPDATES, stdout: [], stderr: [] }, files || {});
   const list = Object.keys(data).map((name) => ({
     name, exists: true, size: data[name].join('').length, mtime: now - 60, path: `/opt/var/log/xkeen-ui/${name}.log`,
-  }));
+  })).concat(extra);
   const state = { data, appended: [], requests: [] };
   await page.addInitScript((on) => {
     localStorage.setItem('xkeen-theme', 'dark');
@@ -61,7 +70,7 @@ const rows = (page) => page.locator('#dt-log-view .tr:not([hidden])');
 test.describe('DevTools logs', () => {
   test('files with content are a segment, empty ones wait in the menu', async ({ page }) => {
     await openLogs(page);
-    await expect(page.locator('#dt-log-files [data-log-name]')).toHaveText([/^core/, /^update/]);
+    await expect(page.locator('#dt-log-files [data-log-name]')).toHaveText([/^Панель/, /^Обновления/]);
     await expect(page.locator('#dt-log-files [data-log-name="core"]')).toHaveAttribute('aria-checked', 'true');
     await page.locator('#dt-log-more > summary').click();
     await expect(page.locator('#dt-log-empty-list [data-log-name]')).toHaveCount(2);
@@ -107,18 +116,44 @@ test.describe('DevTools logs', () => {
     await expect(page.locator('#dt-log-stats')).toContainText('Показано: 1');
   });
 
-  test('update.log is one row per run, with the installer output folded', async ({ page }) => {
+  test('обновления: одна строка на операцию, вывод подготовки свёрнут', async ({ page }) => {
     await openLogs(page);
-    await page.locator('#dt-log-files [data-log-name="update"]').click();
-    await expect(rows(page)).toHaveCount(1);
+    await page.locator('#dt-log-files [data-log-name="updates"]').click();
+    await expect(rows(page)).toHaveCount(2);
     await expect(page.locator('#dt-log-level-seg')).toBeHidden();
-    const run = rows(page).first();
-    await expect(run.locator('.msg')).toContainText('Панель обновлена до v2.9.1b');
-    await expect(run.locator('.rep')).toHaveText('35 с');
+    const failed = rows(page).first();
+    await expect(failed).toHaveClass(/k-error/);
+    await expect(failed.locator('.src')).toHaveText('Установка модуля');
+    await expect(failed.locator('.msg')).toContainText('Не выполнено: архив модуля не прошёл проверку');
+    const run = rows(page).nth(1);
+    await expect(run.locator('.src')).toHaveText('Обновление панели');
+    await expect(run.locator('.msg')).toContainText('Панель обновлена до 3.0.3-beta.6');
+    await expect(run.locator('.rep')).toHaveText('19 с');
     await run.click();
     const detail = page.locator('#dt-log-view .detail');
-    await expect(detail.locator('summary')).toHaveText('Вывод установщика · 1 строк');
+    await expect(detail).toContainText('3.0.3-beta.5 → 3.0.3-beta.6');
+    await expect(detail).toContainText('предрелизный');
+    await expect(detail).toContainText('Проверка панели после перезапуска');
+    await expect(detail.locator('summary')).toHaveText('Вывод подготовки окружения · 3 строк');
     await expect(detail.locator('pre')).toBeHidden();
+  });
+
+  test('кнопки файлов подписаны по-русски, ранние части — в меню', async ({ page }) => {
+    const old = Date.UTC(2026, 9, 20, 9, 0, 0) / 1000;
+    await openLogs(page, {
+      files: { restart: ['2026-10-26 15:29:20 | src=panel-update | OK | ver=3.0.3-beta.6\n'], install: ['[*] Установка\n'] },
+      extra: [
+        { name: 'core.1', exists: true, size: 2097152, mtime: old, path: '/opt/var/log/xkeen-ui/core.log.1' },
+        { name: 'install-previous', exists: true, size: 3518, mtime: old, path: '/opt/var/log/xkeen-ui-install.log.previous' },
+      ],
+    });
+    await expect(page.locator('#dt-log-files [data-log-name]')).toHaveText([/^Панель/, /^Обновления/, /^Xkeen/, /^Установка/]);
+    await expect(page.locator('#dt-log-files [data-log-name="core.1"]')).toHaveCount(0);
+    await page.locator('#dt-log-more > summary').click();
+    await expect(page.locator('#dt-log-older-list [data-log-name="core.1"]')).toContainText('Панель, до 20 окт.');
+    await expect(page.locator('#dt-log-older-list [data-log-name="install-previous"]')).toContainText('Предыдущая установка, 20 окт.');
+    await page.locator('#dt-log-older-list [data-log-name="core.1"]').click();
+    await expect(page.locator('#dt-log-download-name')).toHaveText('core.log.1');
   });
 
   test('online appends new lines; pause holds them until resumed', async ({ page }) => {

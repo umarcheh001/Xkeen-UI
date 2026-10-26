@@ -1685,7 +1685,7 @@
       "tabler_asset": "maximize",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/devtools/logs.js:L570",
+          "location": "xkeen-ui/static/js/features/devtools/logs.js:L621",
           "control_type": "runtime-action",
           "accessible_label": "Полный экран"
         },
@@ -1771,7 +1771,7 @@
       "tabler_asset": "minimize",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/devtools/logs.js:L570",
+          "location": "xkeen-ui/static/js/features/devtools/logs.js:L621",
           "control_type": "runtime-action",
           "accessible_label": "Восстановить"
         },
@@ -2048,7 +2048,7 @@
           "accessible_label": "Список"
         },
         {
-          "location": "xkeen-ui/static/js/features/devtools/logs.js:L149",
+          "location": "xkeen-ui/static/js/features/devtools/logs.js:L187",
           "control_type": "runtime-action",
           "accessible_label": "Список"
         },
@@ -2432,7 +2432,7 @@
       "tabler_asset": "folder-open",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/devtools/logs.js:L578",
+          "location": "xkeen-ui/static/js/features/devtools/logs.js:L629",
           "control_type": "runtime-action",
           "accessible_label": "Открыть"
         },

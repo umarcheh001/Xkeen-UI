@@ -47,8 +47,9 @@ const CORE_SOURCES = [
 export function panelLogKind(name) {
   const base = String(name || '').replace(/\.\d+$/, '');
   if (base === 'update') return 'update';
+  if (base === 'updates') return 'operations';
   if (base === 'restart') return 'restart';
-  if (base === 'stdout' || base === 'stderr' || base === 'xkeen-ui') return 'text';
+  if (base === 'stdout' || base === 'stderr' || base === 'xkeen-ui' || base === 'install' || base === 'install-previous') return 'text';
   return 'core';
 }
 
@@ -323,6 +324,104 @@ function buildUpdate(lines) {
   return out;
 }
 
+// ---------- updates: the operations of the Modules window ----------
+//
+// module-operations/history.jsonl: one JSON object a line, written by the
+// runner when an operation ends (services/module_transactions/history.py).
+
+const OPERATION_SOURCES = {
+  'panel-update': 'Обновление панели',
+  'panel-rollback': 'Откат панели',
+  install: 'Установка модуля',
+  remove: 'Удаление модуля',
+  repair: 'Восстановление модуля',
+  'profile-transition': 'Смена набора модулей',
+};
+
+const MODULE_DONE = { install: 'установлен', remove: 'удалён', repair: 'восстановлен' };
+const OPERATION_CHANNELS = { stable: 'стабильный', prerelease: 'предрелизный' };
+
+// The words of the Modules window for the steps of its runner.
+const OPERATION_STEPS = {
+  prepared: 'Подготовка', downloading: 'Загрузка архива', verifying: 'Проверка подписи и состава',
+  applying: 'Замена файлов', state: 'Запись состояния', restarting: 'Перезапуск панели',
+  health: 'Проверка панели после перезапуска', committed: 'Готово', rolling_back: 'Возврат прежних файлов',
+};
+
+const OPERATION_RESULTS = {
+  rolled_back: 'отменено, прежние файлы возвращены',
+  interrupted: 'операция прервана',
+  rollback_failed: 'прежние файлы вернуть не удалось',
+};
+
+function pad2(n) { return String(n).padStart(2, '0'); }
+
+function localStamp(seconds) {
+  const t = Number(seconds);
+  if (!Number.isFinite(t) || t <= 0) return { date: '', time: '' };
+  const d = new Date(t * 1000);
+  return {
+    date: `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`,
+    time: `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`,
+  };
+}
+
+function durationText(seconds) {
+  if (!Number.isFinite(seconds) || seconds < 0) return '';
+  const s = Math.round(seconds);
+  return s >= 60 ? `${Math.floor(s / 60)} мин ${s % 60} с` : `${s} с`;
+}
+
+function operationMessage(entry) {
+  const version = String(entry.version || '');
+  if (entry.result !== 'committed') {
+    return `Не выполнено: ${entry.error || OPERATION_RESULTS[entry.result] || String(entry.result || 'без итога')}`;
+  }
+  if (entry.operation === 'panel-update') return version ? `Панель обновлена до ${version}` : 'Панель обновлена';
+  if (entry.operation === 'panel-rollback') return version ? `Панель откачена до ${version}` : 'Панель откачена';
+  if (entry.operation === 'profile-transition') return 'Набор модулей применён';
+  const verb = MODULE_DONE[entry.operation];
+  const name = entry.module_name || entry.module_id || '';
+  return verb && name ? `Модуль «${name}» ${verb}` : 'Операция завершена';
+}
+
+function buildOperations(lines) {
+  const out = [];
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    let entry;
+    try {
+      entry = JSON.parse(line);
+    } catch (e) {
+      continue; // a line cut short by a crash
+    }
+    if (!entry || typeof entry !== 'object' || !entry.operation_id) continue;
+    const kv = [];
+    const version = String(entry.version || '');
+    const from = String(entry.source_version || '');
+    if (version) kv.push(['Выпуск', from && from !== version ? `${from} → ${version}` : version]);
+    if (entry.channel) kv.push(['Канал', OPERATION_CHANNELS[entry.channel] || String(entry.channel)]);
+    kv.push(['Операция', String(entry.operation_id)]);
+    const steps = (Array.isArray(entry.log) ? entry.log : [])
+      .filter((step) => step && step.step)
+      .map((step) => [localStamp(step.at).time, OPERATION_STEPS[step.step] || String(step.step)]);
+    const started = Number(entry.started_at);
+    const finished = Number(entry.finished_at);
+    out.push(record({
+      ...localStamp(entry.started_at),
+      level: entry.result === 'committed' ? 'ok' : 'error',
+      source: OPERATION_SOURCES[entry.operation] || 'Операция с модулями',
+      msg: operationMessage(entry),
+      kv,
+      steps,
+      extra: (Array.isArray(entry.environment) ? entry.environment : []).map(String),
+      dur: Number.isFinite(started) && Number.isFinite(finished) ? durationText(finished - started) : '',
+      raw: [line.replace(/\r?\n$/, '')],
+    }));
+  }
+  return out;
+}
+
 // ---------- restart.log ----------
 
 function decodeValue(value) {
@@ -375,6 +474,7 @@ export function buildPanelLogRecords(kind, lines, options) {
   const fold = !options || options.fold !== false;
   const src = (Array.isArray(lines) ? lines : []).map((l) => String(l == null ? '' : l).replace(/[\r\n]+$/, ''));
   if (kind === 'update') return finish(buildUpdate(src), false);
+  if (kind === 'operations') return finish(buildOperations(src), false);
   if (kind === 'restart') return finish(buildRestart(src), false);
   if (kind === 'text') return finish(buildText(src), fold);
   return finish(buildCore(src), fold);

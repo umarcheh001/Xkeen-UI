@@ -264,3 +264,67 @@ def test_day_label_names_today_and_yesterday():
         None,
     )
     assert out == ["Сегодня, 23 октября", "Вчера, 22 октября", "2 октября", "31 декабря 2025", ""]
+
+
+# ---------- updates: history.jsonl of the Modules window (пример) ----------
+
+STEPS = ["prepared", "downloading", "verifying", "applying", "state", "restarting", "health", "committed"]
+
+
+def operation(**overrides) -> str:
+    entry = {
+        "operation_id": "20261026T122903Z-e1d4a5",
+        "scope": "panel",
+        "operation": "panel-update",
+        "module_id": None,
+        "version": "3.0.3-beta.6",
+        "source_version": "3.0.3-beta.5",
+        "result": "committed",
+        "error_code": None,
+        "error": None,
+        "started_at": 1793017743.4,
+        "finished_at": 1793017762.1,
+        "log": [{"step": step, "at": 1793017743.9 + index} for index, step in enumerate(STEPS)],
+        "environment": ["=== apply ===", "[ok] opkg update", "[ok] curl уже стоит"],
+    }
+    entry.update(overrides)
+    return json.dumps(entry, ensure_ascii=False) + "\n"
+
+
+def test_updates_file_is_read_as_operations():
+    out = run_js("return ['updates', 'updates.1', 'install', 'install-previous'].map((n) => parser.panelLogKind(n));", None)
+    assert out == ["operations", "operations", "text", "text"]
+
+
+def test_a_panel_update_is_one_record_with_its_steps_and_environment():
+    [rec] = build("operations", [operation()])
+    assert (rec["level"], rec["source"], rec["msg"], rec["dur"]) == (
+        "ok", "Обновление панели", "Панель обновлена до 3.0.3-beta.6", "19 с",
+    )
+    assert ["Выпуск", "3.0.3-beta.5 → 3.0.3-beta.6"] in rec["kv"]
+    assert ["Операция", "20261026T122903Z-e1d4a5"] in rec["kv"]
+    assert ["Канал", "предрелизный"] in build("operations", [operation(channel="prerelease")])[0]["kv"]
+    assert [label for _time, label in rec["steps"]] == [
+        "Подготовка", "Загрузка архива", "Проверка подписи и состава", "Замена файлов",
+        "Запись состояния", "Перезапуск панели", "Проверка панели после перезапуска", "Готово",
+    ]
+    assert rec["extra"] == ["=== apply ===", "[ok] opkg update", "[ok] curl уже стоит"]
+    assert rec["date"] and rec["time"]
+
+
+def test_a_failed_operation_says_why():
+    [rec] = build("operations", [operation(result="rolled_back", error="панель не ответила после перезапуска")])
+    assert rec["level"] == "error"
+    assert rec["msg"] == "Не выполнено: панель не ответила после перезапуска"
+
+
+def test_a_module_is_named_by_its_name():
+    [rec] = build("operations", [operation(scope="module", operation="install", module_id="tool.terminal",
+                                           module_name="Терминал и команды", source_version=None)])
+    assert (rec["source"], rec["msg"]) == ("Установка модуля", "Модуль «Терминал и команды» установлен")
+    assert ["Выпуск", "3.0.3-beta.6"] in rec["kv"]
+
+
+def test_a_broken_line_of_the_history_is_skipped():
+    recs = build("operations", [operation(operation_id="a"), '{"oper\n', operation(operation_id="b")])
+    assert [dict(rec["kv"])["Операция"] for rec in recs] == ["a", "b"]

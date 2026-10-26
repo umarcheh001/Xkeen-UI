@@ -122,8 +122,46 @@ import { panelLogKind } from '../panel_log_parser.js';
 
   // ---------- Header ----------
 
-  function liveFiles() { return S.list.filter((it) => it.exists && Number(it.size || 0) > 0); }
-  function emptyFiles() { return S.list.filter((it) => !(it.exists && Number(it.size || 0) > 0)); }
+  // The names of the files on the buttons; the file itself is in the tooltip.
+  const FILE_LABELS = {
+    core: 'Панель', updates: 'Обновления', restart: 'Xkeen', install: 'Установка',
+    access: 'Запросы', ws: 'WebSocket', stdout: 'Вывод', stderr: 'Ошибки процесса',
+  };
+
+  // Parts that rotation moved aside, and the install before the last one:
+  // earlier records, kept in the menu.
+  function isOlder(name) { return /\.\d+$/.test(name) || name === 'install-previous'; }
+
+  function shortDay(mtime) {
+    const t = Number(mtime);
+    if (!Number.isFinite(t) || t <= 0) return '';
+    return new Date(t * 1000).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+  }
+
+  function fileLabel(f) {
+    const name = String(f.name || '');
+    if (name === 'install-previous') {
+      const day = shortDay(f.mtime);
+      return day ? `Предыдущая установка, ${day}` : 'Предыдущая установка';
+    }
+    const part = /^(.*)\.\d+$/.exec(name);
+    if (part) {
+      const base = FILE_LABELS[part[1]] || part[1];
+      const day = shortDay(f.mtime);
+      return day ? `${base}, до ${day}` : `${base}, раньше`;
+    }
+    return FILE_LABELS[name] || name;
+  }
+
+  function fileName(f) {
+    const path = String(f.path || '');
+    return path ? path.split('/').pop() : `${f.name}.log`;
+  }
+
+  function hasContent(it) { return it.exists && Number(it.size || 0) > 0; }
+  function liveFiles() { return S.list.filter((it) => hasContent(it) && !isOlder(it.name)); }
+  function olderFiles() { return S.list.filter((it) => hasContent(it) && isOlder(it.name)); }
+  function emptyFiles() { return S.list.filter((it) => !hasContent(it) && !isOlder(it.name)); }
 
   function renderFiles() {
     const seg = byId('dt-log-files');
@@ -135,8 +173,8 @@ import { panelLogKind } from '../panel_log_parser.js';
       }
       const html = files.map((f) => {
         const on = f.name === S.file;
-        const title = `${f.name}.log · ${formatBytes(f.size)} · обновлён ${formatAge(f.mtime)}`;
-        return `<button type="button" role="radio" class="xk-xlog-seg-btn${on ? ' is-on' : ''}" aria-checked="${on}" data-log-name="${escapeHtml(f.name)}" title="${escapeHtml(title)}">${escapeHtml(f.name)}<span class="n">${escapeHtml(formatBytes(f.size))}</span></button>`;
+        const title = `${fileName(f)} · ${formatBytes(f.size)} · обновлён ${formatAge(f.mtime)}`;
+        return `<button type="button" role="radio" class="xk-xlog-seg-btn${on ? ' is-on' : ''}" aria-checked="${on}" data-log-name="${escapeHtml(f.name)}" title="${escapeHtml(title)}">${escapeHtml(fileLabel(f))}<span class="n">${escapeHtml(formatBytes(f.size))}</span></button>`;
       }).join('');
       if (seg._html !== html) {
         seg._html = html;
@@ -146,7 +184,7 @@ import { panelLogKind } from '../panel_log_parser.js';
     const emptyBox = byId('dt-log-empty-list');
     if (emptyBox) {
       const empties = emptyFiles().filter((f) => f.name !== S.file);
-      const html = empties.map((f) => `<button type="button" class="xk-xlog-menu-item" role="menuitem" data-log-name="${escapeHtml(f.name)}">${icon('list-details')}<span>${escapeHtml(f.name)}</span><em>${f.exists ? '0 Б' : 'нет файла'}</em></button>`).join('');
+      const html = empties.map((f) => `<button type="button" class="xk-xlog-menu-item" role="menuitem" data-log-name="${escapeHtml(f.name)}" title="${escapeHtml(fileName(f))}">${icon('list-details')}<span>${escapeHtml(fileLabel(f))}</span><em>${f.exists ? '0 Б' : 'нет файла'}</em></button>`).join('');
       if (emptyBox._html !== html) {
         emptyBox._html = html;
         emptyBox.innerHTML = html;
@@ -154,8 +192,20 @@ import { panelLogKind } from '../panel_log_parser.js';
       const block = byId('dt-log-empty-block');
       if (block) block.hidden = !empties.length;
     }
+    const olderBox = byId('dt-log-older-list');
+    if (olderBox) {
+      const older = olderFiles().filter((f) => f.name !== S.file);
+      const html = older.map((f) => `<button type="button" class="xk-xlog-menu-item" role="menuitem" data-log-name="${escapeHtml(f.name)}" title="${escapeHtml(fileName(f))}">${icon('list-details')}<span>${escapeHtml(fileLabel(f))}</span><em>${escapeHtml(formatBytes(f.size))}</em></button>`).join('');
+      if (olderBox._html !== html) {
+        olderBox._html = html;
+        olderBox.innerHTML = html;
+      }
+      const block = byId('dt-log-older-block');
+      if (block) block.hidden = !older.length;
+    }
     const dlName = byId('dt-log-download-name');
-    if (dlName) dlName.textContent = S.file ? `${S.file}.log` : 'лог';
+    const current = S.meta[S.file];
+    if (dlName) dlName.textContent = S.file ? fileName(current || { name: S.file, path: S.path }) : 'лог';
   }
 
   function renderLevel(stats) {
@@ -344,9 +394,10 @@ import { panelLogKind } from '../panel_log_parser.js';
     const card = byId('dt-logs-card');
     if (card) card.dataset.plogKind = S.kind;
     const levelSeg = byId('dt-log-level-seg');
-    // update.log has runs, not levels.
-    if (levelSeg) levelSeg.hidden = S.kind === 'update';
-    if (S.kind === 'update' && S.level !== 'all') setLevel('all');
+    // Runs and operations have a result, not levels.
+    const levelless = S.kind === 'update' || S.kind === 'operations';
+    if (levelSeg) levelSeg.hidden = levelless;
+    if (levelless && S.level !== 'all') setLevel('all');
     renderFiles();
     if (changed && (!opts || opts.load !== false)) restartStream();
   }
@@ -527,7 +578,7 @@ import { panelLogKind } from '../panel_log_parser.js';
     if (!S.file) return;
     const a = document.createElement('a');
     a.href = `/api/devtools/logs/${encodeURIComponent(S.file)}/download`;
-    a.download = `${S.file}.log`;
+    a.download = fileName(S.meta[S.file] || { name: S.file, path: S.path });
     a.style.display = 'none';
     document.body.appendChild(a);
     a.click();
@@ -600,9 +651,10 @@ import { panelLogKind } from '../panel_log_parser.js';
         if (btn) selectFile(btn.dataset.logName);
       });
     }
-    const empties = byId('dt-log-empty-list');
-    if (empties) {
-      empties.addEventListener('click', (ev) => {
+    for (const id of ['dt-log-empty-list', 'dt-log-older-list']) {
+      const list = byId(id);
+      if (!list) continue;
+      list.addEventListener('click', (ev) => {
         const btn = ev.target.closest('[data-log-name]');
         if (!btn) return;
         closeMenu();

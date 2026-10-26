@@ -47,7 +47,17 @@ def test_terminal_status_is_recorded(tmp_path):
     assert entry["result"] == "committed"
     assert entry["source_version"] == "3.0.3-beta.5"
     assert [record["step"] for record in entry["log"]] == ["prepared", "committed"]
+    assert entry["channel"] == "stable"
     assert history_path(tmp_path).name == "history.jsonl"
+
+
+def test_the_update_channel_of_the_panel_is_kept(tmp_path):
+    from services.module_update_channel import write_channel
+
+    write_channel(tmp_path, "prerelease")
+    write_status(tmp_path, _status())
+
+    assert read_history(tmp_path)[0]["channel"] == "prerelease"
 
 
 def test_running_status_is_not_history(tmp_path):
