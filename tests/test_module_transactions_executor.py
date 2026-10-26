@@ -71,7 +71,7 @@ def test_install_commits_and_changes_only_manifest_files_and_state(tmp_path: Pat
     assert result == "committed"
     assert not journal.dir.exists()
     after = snapshot(panel.root)
-    assert changed_paths(before, after) <= set(OWNERSHIP["tool.terminal"]) | STATE_PATHS | {"module-catalog/catalog-2.10.0.json", "module-operations/status.json"}
+    assert changed_paths(before, after) <= set(OWNERSHIP["tool.terminal"]) | STATE_PATHS | {"module-catalog/catalog-2.10.0.json", "module-operations/status.json", "module-operations/history.jsonl"}
     for relative in OWNERSHIP["tool.terminal"]:
         assert after[relative] == file_bytes(relative)
     assert panel.read_json("module-installed.json")["modules"]["tool.terminal"] is True
@@ -119,7 +119,7 @@ def test_remove_commits_and_leaves_other_modules_untouched(tmp_path: Path) -> No
     assert result == "committed"
     after = snapshot(panel.root)
     assert not set(OWNERSHIP["tool.terminal"]) & set(after)
-    assert changed_paths(before, after) <= set(OWNERSHIP["tool.terminal"]) | STATE_PATHS | {"module-operations/status.json"}
+    assert changed_paths(before, after) <= set(OWNERSHIP["tool.terminal"]) | STATE_PATHS | {"module-operations/status.json", "module-operations/history.jsonl"}
     assert panel.read_json("modules.json")["modules"]["tool.terminal"]["enabled"] is False
     assert release.transport.calls == []
     assert [item["step"] for item in read_status(panel.state)["log"]] == [
@@ -138,7 +138,7 @@ def test_repair_brings_back_a_damaged_file(tmp_path: Path) -> None:
 
     assert result == "committed"
     after = snapshot(panel.root)
-    assert changed_paths(before, after) <= {"module-catalog/catalog-2.10.0.json", "module-operations/status.json"}
+    assert changed_paths(before, after) <= {"module-catalog/catalog-2.10.0.json", "module-operations/status.json", "module-operations/history.jsonl"}
 
 
 def test_health_failure_rolls_back_byte_for_byte(tmp_path: Path) -> None:
@@ -150,7 +150,7 @@ def test_health_failure_rolls_back_byte_for_byte(tmp_path: Path) -> None:
     assert result == "rolled_back"
     assert not journal.dir.exists()
     after = snapshot(panel.root)
-    assert changed_paths(before, after) <= {"module-catalog/catalog-2.10.0.json", "module-operations/status.json"}
+    assert changed_paths(before, after) <= {"module-catalog/catalog-2.10.0.json", "module-operations/status.json", "module-operations/history.jsonl"}
     assert (recorder.restarts, recorder.probes) == (2, ["operation", "rollback"])
     status = read_status(panel.state)
     assert (status["result"], status["error_code"]) == ("rolled_back", "operation_health_failed")
@@ -165,7 +165,7 @@ def test_health_failure_twice_reports_panel_unresponsive(tmp_path: Path) -> None
 
     assert result == "rolled_back"
     assert not journal.dir.exists()
-    assert changed_paths(before, snapshot(panel.root)) <= {"module-catalog/catalog-2.10.0.json", "module-operations/status.json"}
+    assert changed_paths(before, snapshot(panel.root)) <= {"module-catalog/catalog-2.10.0.json", "module-operations/status.json", "module-operations/history.jsonl"}
     assert read_status(panel.state)["panel_unresponsive"] is True
 
 
@@ -189,7 +189,7 @@ def test_failed_restart_command_rolls_back(tmp_path: Path) -> None:
 
     assert result == "rolled_back"
     assert calls["count"] == 2
-    assert changed_paths(before, snapshot(panel.root)) <= {"module-catalog/catalog-2.10.0.json", "module-operations/status.json"}
+    assert changed_paths(before, snapshot(panel.root)) <= {"module-catalog/catalog-2.10.0.json", "module-operations/status.json", "module-operations/history.jsonl"}
 
 
 def test_failure_before_any_restart_rolls_back_without_restarting(tmp_path: Path) -> None:
@@ -205,7 +205,7 @@ def test_failure_before_any_restart_rolls_back_without_restarting(tmp_path: Path
     panel.path("services").rmdir() if not any(panel.path("services").iterdir()) else None
     assert read_status(panel.state)["error_code"] == "operation_target_unsafe"
     assert not journal.dir.exists()
-    assert set(changed_paths(before, snapshot(panel.root))) <= {"module-catalog/catalog-2.10.0.json", "module-operations/status.json"}
+    assert set(changed_paths(before, snapshot(panel.root))) <= {"module-catalog/catalog-2.10.0.json", "module-operations/status.json", "module-operations/history.jsonl"}
 
 
 def test_rollback_failure_keeps_the_operation_directory(tmp_path: Path, monkeypatch) -> None:
@@ -251,7 +251,7 @@ def test_checksum_mismatch_leaves_root_untouched(tmp_path: Path) -> None:
 
     assert result == "interrupted"
     assert not journal.dir.exists()
-    assert changed_paths(before, snapshot(panel.root)) <= {"module-catalog/catalog-2.10.0.json", "module-operations/status.json"}
+    assert changed_paths(before, snapshot(panel.root)) <= {"module-catalog/catalog-2.10.0.json", "module-operations/status.json", "module-operations/history.jsonl"}
     assert read_status(panel.state)["error_code"] == "catalog_archive_checksum_mismatch"
     assert recorder.restarts == 0
 
@@ -266,7 +266,7 @@ def test_transport_drop_mid_download_leaves_root_untouched(tmp_path: Path) -> No
 
     assert result == "interrupted"
     assert not journal.dir.exists()
-    assert changed_paths(before, snapshot(panel.root)) <= {"module-catalog/catalog-2.10.0.json", "module-operations/status.json"}
+    assert changed_paths(before, snapshot(panel.root)) <= {"module-catalog/catalog-2.10.0.json", "module-operations/status.json", "module-operations/history.jsonl"}
     assert read_status(panel.state)["error_code"]
     assert recorder.restarts == 0
 
@@ -281,7 +281,7 @@ def test_offline_catalog_leaves_root_untouched(tmp_path: Path) -> None:
     result, journal, _ = _run(panel, release, "install", "tool.terminal")
 
     assert result == "interrupted"
-    assert changed_paths(before, snapshot(panel.root)) <= {"module-operations/status.json"}
+    assert changed_paths(before, snapshot(panel.root)) <= {"module-operations/status.json", "module-operations/history.jsonl"}
     assert read_status(panel.state)["error_code"] == "catalog_unavailable"
 
 
@@ -332,7 +332,7 @@ def test_cancel_before_applying_leaves_root_untouched(tmp_path: Path, step: str)
 
     assert result == "interrupted"
     assert not journal.dir.exists()
-    assert changed_paths(before, snapshot(panel.root)) <= {"module-catalog/catalog-2.10.0.json", "module-operations/status.json"}
+    assert changed_paths(before, snapshot(panel.root)) <= {"module-catalog/catalog-2.10.0.json", "module-operations/status.json", "module-operations/history.jsonl"}
     assert read_status(panel.state)["error_code"] == "operation_cancelled"
     assert recorder.restarts == 0
 
@@ -350,7 +350,7 @@ def test_cancel_after_applying_rolls_back(tmp_path: Path, step: str) -> None:
 
     assert result == "rolled_back"
     assert not journal.dir.exists()
-    assert changed_paths(before, snapshot(panel.root)) <= {"module-catalog/catalog-2.10.0.json", "module-operations/status.json"}
+    assert changed_paths(before, snapshot(panel.root)) <= {"module-catalog/catalog-2.10.0.json", "module-operations/status.json", "module-operations/history.jsonl"}
     assert read_status(panel.state)["error_code"] == "operation_cancelled"
 
 

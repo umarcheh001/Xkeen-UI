@@ -127,6 +127,7 @@ def test_state_only_profile_transition_commits_metadata_without_replacing_payloa
         "install-profile.json",
         "module-catalog/catalog-2.10.0.json",
         "module-operations/status.json",
+        "module-operations/history.jsonl",
         "modules.json",
     }
 
@@ -176,6 +177,7 @@ def test_corrupt_panel_archive_is_refused_before_mutation(tmp_path: Path) -> Non
     assert changed_paths(before, snapshot(panel.root)) <= {
         "module-catalog/catalog-2.10.0.json",
         "module-operations/status.json",
+        "module-operations/history.jsonl",
     }
     assert read_status(panel.state)["error_code"] == "catalog_archive_checksum_mismatch"
 
@@ -202,6 +204,7 @@ def test_full_scope_health_failure_rolls_back_every_changed_file(tmp_path: Path)
     assert changed_paths(before, snapshot(panel.root)) <= {
         "module-catalog/catalog-2.10.0.json",
         "module-operations/status.json",
+        "module-operations/history.jsonl",
     }
 
 
@@ -254,6 +257,7 @@ def test_full_scope_crash_recovery_restores_the_old_tree(
     assert changed_paths(before, snapshot(panel.root)) <= {
         "module-catalog/catalog-2.10.0.json",
         "module-operations/status.json",
+        "module-operations/history.jsonl",
     }
 
 
@@ -292,4 +296,5 @@ def test_full_scope_recovery_retries_after_crash_while_rolling_back(tmp_path: Pa
     assert changed_paths(before, snapshot(panel.root)) <= {
         "module-catalog/catalog-2.10.0.json",
         "module-operations/status.json",
+        "module-operations/history.jsonl",
     }

@@ -182,6 +182,7 @@ def run_operation(
         "operation": plan.operation,
         "module_id": plan.module_id,
         "version": plan.version,
+        "source_version": plan.source_version,
         "step": "prepared",
         "result": "running",
         "error_code": None,

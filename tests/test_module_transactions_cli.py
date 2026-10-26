@@ -39,7 +39,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SHIPPED = ROOT / "xkeen-ui" / "scripts" / "module_transaction.py"
 RUNNER = ROOT / "tests" / "support" / "module_transaction_runner.py"
 EARLY = {"prepared", "downloading", "verifying"}
-BOOKKEEPING = {"module-catalog/catalog-2.10.0.json", "module-operations/status.json"}
+BOOKKEEPING = {"module-catalog/catalog-2.10.0.json", "module-operations/status.json", "module-operations/history.jsonl"}
 
 
 class _Health(http.server.BaseHTTPRequestHandler):

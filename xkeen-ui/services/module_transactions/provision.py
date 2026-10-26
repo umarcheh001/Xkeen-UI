@@ -18,14 +18,21 @@ from .state import ModuleTransactionError
 PROVISION_TIMEOUTS_S = {"prepare": 1500.0, "apply": 300.0, "packages": 600.0}
 
 
-def build_provision(panel_root: Path, *, target_version: str | None = None, module_id: str | None = None):
+def build_provision(
+    panel_root: Path,
+    *,
+    target_version: str | None = None,
+    module_id: str | None = None,
+    log_path: Path | None = None,
+):
     """How the runner asks the panel's shared script to bring the router in line.
 
     The script is the one the installer uses; here it is run as a command.
     A panel installed before the script existed has none: nothing is called.
     The script is told which release the panel is updated to and which module
     the operation is about: add-ons are compared with that release, packages
-    are brought for that module.
+    are brought for that module. What it prints goes to ``log_path`` for the
+    history of operations.
     """
 
     def provision(phase: str, script: Path) -> list[dict[str, str]]:
@@ -59,6 +66,13 @@ def build_provision(panel_root: Path, *, target_version: str | None = None, modu
                 "operation_environment_failed", "the router could not be prepared for the release", phase=phase
             ) from error
         output = process.stdout.decode("utf-8", "replace") if process.stdout else ""
+        if log_path is not None:
+            try:
+                from .history import append_environment_output
+
+                append_environment_output(log_path, phase, output)
+            except OSError:
+                pass  # a full storage does not stop the operation
         if process.returncode == 0:
             # What the script could not bring but did not stop for: lines of
             # the form "[note] <code> <subject>".

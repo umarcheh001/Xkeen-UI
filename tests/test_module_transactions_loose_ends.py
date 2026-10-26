@@ -237,6 +237,7 @@ def test_observed_status_finishes_an_operation_whose_runner_is_gone(tmp_path: Pa
     assert status["restart_required"] is True
     after = snapshot(panel.root)
     after.pop("module-operations/status.json", None)
+    after.pop("module-operations/history.jsonl", None)
     assert after == before
 
 

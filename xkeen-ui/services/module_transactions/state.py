@@ -63,9 +63,21 @@ def read_status(state_dir: Path) -> dict[str, Any]:
 
 
 def write_status(state_dir: Path, status: Mapping[str, Any]) -> None:
+    from .history import record_history, start_environment_log
+
     path = status_path(state_dir)
+    previous = read_status(state_dir).get("operation_id") if status.get("result") == "running" else None
     path.parent.mkdir(parents=True, exist_ok=True)
     _atomic_write_json(str(path), dict(status))
+    # The history is a note for DevTools: it never stops the operation.
+    try:
+        if status.get("result") == "running":
+            if previous != status.get("operation_id"):
+                start_environment_log(state_dir)
+        elif status.get("result") not in (None, "idle"):
+            record_history(state_dir, status)
+    except (OSError, ValueError):
+        pass
 
 
 def new_operation_id(now: float | None = None) -> str:

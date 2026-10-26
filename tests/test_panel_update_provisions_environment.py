@@ -55,6 +55,20 @@ def _run(panel, plan, release, provision, *, restart=lambda: None, healthy=lambd
     )
 
 
+def test_an_update_tells_where_it_came_from_and_is_kept_in_the_history(tmp_path):
+    from services.module_transactions.history import read_history
+
+    panel = make_panel(tmp_path, version=OLD)
+    release = make_release(version=NEW)
+
+    result = _run(panel, _update_plan(tmp_path, panel, release), release, lambda *_args: None)
+
+    assert result == "committed"
+    assert read_status(panel.state)["source_version"] == OLD
+    [entry] = read_history(panel.state)
+    assert (entry["source_version"], entry["version"], entry["result"]) == (OLD, NEW, "committed")
+
+
 def test_update_prepares_before_any_file_changes_and_applies_before_the_restart(tmp_path):
     panel = make_panel(tmp_path, version=OLD)
     release = make_release(version=NEW)

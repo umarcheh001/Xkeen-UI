@@ -32,7 +32,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PANEL = ROOT / "xkeen-ui"
 VERSION = "2.10.0"
 ARCHITECTURE = "mipsel"
-BOOKKEEPING = {f"module-catalog/catalog-{VERSION}.json", "module-operations/status.json"}
+BOOKKEEPING = {f"module-catalog/catalog-{VERSION}.json", "module-operations/status.json", "module-operations/history.jsonl"}
 _TEMPLATE_LINK = re.compile(r"""{%-?\s*(?:include|extends|import|from)\s+['"]([^'"]+)['"]""")
 
 pytestmark = pytest.mark.skipif(

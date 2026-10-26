@@ -24,6 +24,7 @@ from services.self_update.state import (
 
 from .cancel_channel import send_cancel
 from .executor import recover
+from .history import environment_log_path
 from .journal import Journal
 from .plan import Plan
 from .provision import build_provision
@@ -49,7 +50,10 @@ def recover_abandoned(panel_root: Path, state_dir: Path, *, panel_running: bool 
         return None
     try:
         return recover(
-            Path(panel_root), Path(state_dir), panel_running=panel_running, provision=build_provision(Path(panel_root))
+            Path(panel_root),
+            Path(state_dir),
+            panel_running=panel_running,
+            provision=build_provision(Path(panel_root), log_path=environment_log_path(Path(state_dir))),
         )
     finally:
         _RECOVERY.release()

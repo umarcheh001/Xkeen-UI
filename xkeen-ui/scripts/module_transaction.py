@@ -41,6 +41,7 @@ if str(PANEL_DIR) not in sys.path:
 
 from services.module_transactions.cancel_channel import CancelListener  # noqa: E402
 from services.module_transactions.executor import OperationCancelled, recover, run_operation, wait_for_panel  # noqa: E402
+from services.module_transactions.history import environment_log_path  # noqa: E402
 from services.module_transactions.journal import Journal  # noqa: E402
 from services.module_transactions.previous_version import drop_previous_version  # noqa: E402
 from services.module_transactions.provision import PROVISION_TIMEOUTS_S, build_provision  # noqa: E402,F401
@@ -198,6 +199,7 @@ def _run(args, *, client_factory, architecture, on_step) -> int:
                 panel_root,
                 target_version=plan.target_version if plan.scope == "panel" else None,
                 module_id=plan.module_id,
+                log_path=environment_log_path(state_dir),
             ),
         )
     finally:
@@ -211,7 +213,10 @@ def _recover(args) -> int:
     panel_root = Path(args.panel_root)
     # The previous files are back; the service, the templates and the commands
     # outside the folder have to follow them.
-    result = recover(panel_root, Path(args.state_dir), provision=build_provision(panel_root))
+    state_dir = Path(args.state_dir)
+    result = recover(
+        panel_root, state_dir, provision=build_provision(panel_root, log_path=environment_log_path(state_dir))
+    )
     return 1 if result == "rollback_failed" else 0
 
 
