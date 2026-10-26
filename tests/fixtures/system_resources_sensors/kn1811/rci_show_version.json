@@ -1,0 +1,32 @@
+{
+ "release": "5.01.C.8.0-2",
+ "sandbox": "stable",
+ "title": "5.1.8",
+ "arch": "aarch64",
+ "ndm": {
+  "exact": "0-d43bd79",
+  "cdate": "8 Oct 2026"
+ },
+ "bsp": {
+  "exact": "0-dc9137a8bb",
+  "cdate": "9 Oct 2026"
+ },
+ "ndw": {
+  "features": "dual_image,wifi_button,usb_3_conf,usb_3_first,led_control,wifi5ghz,vht2ghz,bf2ghz,mimo5ghz,atf2ghz,atf5ghz,wifi6_5ghz,wifi_ft,wpa3,wsa5ghz,hwnat,hwnat_mib,link_agg,cable_diag",
+  "components": "base,cloudcontrol,corewireless,dhcpd,dns-https,dns-tls,ext,ext-utils,igmp,ip6,lang-en,lang-ru,nathelper-ftp,nathelper-h323,nathelper-pptp,nathelper-rtsp,nathelper-sip,ndmp,ndns,opkg,opkg-kmod-fs,opkg-kmod-netfilter,pingcheck,ppe,sstp-server,storage,trafficcontrol,usb,wireguard"
+ },
+ "ndw4": {
+  "version": "5.1.C.8.0"
+ },
+ "manufacturer": "Keenetic Ltd.",
+ "vendor": "Keenetic",
+ "series": "KN",
+ "model": "Ultra (KN-1811)",
+ "hw_version": "11188000",
+ "hw_type": "router",
+ "hw_id": "KN-1811",
+ "device": "Ultra",
+ "consent": "EA",
+ "region": "EA",
+ "description": "Keenetic Ultra (KN-1811)"
+}
