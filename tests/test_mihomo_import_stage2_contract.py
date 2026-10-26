@@ -22,7 +22,7 @@ def test_import_feature_invalidates_input_and_mode_changes():
     assert 'function invalidateImportUiResult()' in IMPORT
     assert "inp.addEventListener('input'" in IMPORT
     assert 'invalidateImportUiResult();' in IMPORT
-    assert 'const requestToken = beginMihomoImportRequest(_importState, \'parse\');' in IMPORT
+    assert 'const token = beginMihomoImportRequest(_importState, \'parse\');' in IMPORT
     assert 'if (!isCurrentImportRequest(requestToken)) return;' in IMPORT
     assert 'commitMihomoImportResult(_importState, requestToken, result)' in IMPORT
     assert 'isCurrentMihomoImportResult(_importState, _lastResult)' in IMPORT

@@ -1106,6 +1106,19 @@
   // Public helpers (optional)
   Modal.ensureInViewport = function (modalEl) { try { ensureContentInViewport(modalEl); } catch (e) {} };
   Modal.resetPosition = function (modalEl) { try { resetContentPosition(getContent(modalEl)); } catch (e) {} };
+  // A compact form can expand into a workbench without opening a second
+  // dialog. Keep geometry restoration/clamping owned by the modal manager.
+  Modal.refreshGeometry = function (modalElOrId) {
+    const modalEl = resolveModal(modalElOrId);
+    const content = getContent(modalEl);
+    if (!modalEl || !content) return;
+    resetContentPosition(content);
+    const state = loadState(modalEl);
+    if (state) applyState(modalEl, content, state);
+    ensureResizer(modalEl);
+    if (isVisibleModal(modalEl)) ensureContentInViewport(modalEl);
+    refreshEmbeds(content);
+  };
   Modal.bindState = function (modalElOrId) {
     try { return ensureStoreBinding(modalElOrId); } catch (e) {}
     return noop;

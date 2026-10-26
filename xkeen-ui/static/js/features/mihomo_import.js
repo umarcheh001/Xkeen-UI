@@ -4,6 +4,7 @@ import {
   confirmMihomoAction,
   getMihomoCoreHttpApi,
   getMihomoEditorEngineApi,
+  getMihomoModalApi,
   refreshSharedMihomoEditor,
   syncMihomoModalBodyScrollLock,
 } from './mihomo_runtime.js';
@@ -47,6 +48,7 @@ let mihomoImportModuleApi = null;
     input: 'mihomo-import-input',
     modeSelect: 'mihomo-import-mode',
     preview: 'mihomo-import-preview',
+    previewToggle: 'mihomo-import-preview-toggle',
     amneziaPremiumHint: 'mihomo-import-amnezia-premium-hint',
     amneziaLocationsBlock: 'mihomo-import-amnezia-locations-block',
     amneziaLocations: 'mihomo-import-amnezia-locations',
@@ -61,6 +63,7 @@ let mihomoImportModuleApi = null;
     hint: 'mihomo-import-target-hint',
 
     groupsBox: 'mihomo-import-groups',
+    groupsBlock: 'mihomo-import-groups-block',
     groupsAllBtn: 'mihomo-import-groups-all-btn',
     groupsNoneBtn: 'mihomo-import-groups-none-btn',
     groupsRemember: 'mihomo-import-groups-remember',
@@ -91,6 +94,9 @@ let mihomoImportModuleApi = null;
   let _amneziaLocations = [];
   let _amneziaLocationKey = '';
   let _amneziaIssuedSelectionKey = '';
+  let _previewOpen = false;
+  let _previewGeneration = 0;
+  let _parseOperation = null;
   const _importState = createMihomoImportState();
   const _importApi = createMihomoImportApi({ getCoreHttp: getMihomoCoreHttpApi });
 
@@ -98,12 +104,17 @@ let mihomoImportModuleApi = null;
     invalidateMihomoImportResult(_importState);
     _lastResult = null;
     _amneziaIssuedSelectionKey = '';
+    setStatus('', false);
+    setHint('');
+    setPreview('');
+    updateXrayRefreshUi([]);
+    setSourceLayout(false);
     const insert = $(IDS.btnInsert);
     if (insert) insert.disabled = true;
   }
 
   function isCurrentImportRequest(token) {
-    return isCurrentMihomoImportRequest(_importState, token);
+    return modalOpen() && isCurrentMihomoImportRequest(_importState, token);
   }
 
   // Groups selection (proxy-groups)
@@ -168,6 +179,66 @@ let mihomoImportModuleApi = null;
       inp.placeholder = 'vless://...\nили\ntrojan://...';
     } else {
       inp.placeholder = 'vless://...\nили\nhttps://...';
+    }
+    syncImportActions();
+  }
+
+  function setSourceLayout(hasResult) {
+    const modal = $(IDS.modal);
+    if (!modal) return;
+    const content = modal.querySelector('.modal-content');
+    const controls = modal.querySelector('.xk-mi-panel--controls');
+    const preview = modal.querySelector('.xk-mi-panel--preview');
+    const groups = $(IDS.groupsBlock);
+    if (!hasResult) {
+      _previewOpen = false;
+      _previewGeneration += 1;
+    }
+    const expanded = hasResult && _previewOpen;
+    const layout = expanded ? 'preview' : (hasResult ? 'result' : 'source');
+    const changed = modal.dataset.miLayout !== layout;
+    modal.dataset.miLayout = layout;
+    modal.dataset.modalRemember = expanded ? '1' : '0';
+    modal.dataset.modalNoresize = expanded ? '0' : '1';
+    modal.dataset.modalNodrag = expanded ? '0' : '1';
+    modal.dataset.modalNopos = expanded ? '0' : '1';
+    modal.dataset.modalKey = 'mihomo-import-preview-v2';
+    if (content) content.classList.toggle('xk-mi-modal--source', !hasResult);
+    if (controls) controls.classList.toggle('xk-mi-panel--source', !hasResult);
+    if (preview) preview.classList.toggle('hidden', !expanded);
+    if (groups) groups.classList.toggle('hidden', !hasResult || !_lastResult?.outputs.some((o) => o.type === 'proxy'));
+    const toggle = $(IDS.previewToggle);
+    if (toggle) {
+      toggle.classList.toggle('hidden', !hasResult);
+      toggle.setAttribute('aria-expanded', String(expanded));
+      toggle.textContent = expanded ? 'Скрыть YAML' : 'Показать YAML';
+    }
+    if (changed) getMihomoModalApi()?.refreshGeometry?.(modal);
+    if (expanded) scheduleEngineSync();
+    syncImportActions();
+  }
+
+  function syncImportActions() {
+    const busy = !!(_parseOperation && isCurrentImportRequest(_parseOperation));
+    const hasResult = !!_lastResult;
+    const parse = $(IDS.btnParse);
+    const insert = $(IDS.btnInsert);
+    const staticBtn = $(IDS.btnParseStatic);
+    if (parse) {
+      parse.disabled = busy;
+      parse.classList.toggle('loading', busy);
+      parse.classList.toggle('btn-primary', !hasResult);
+      parse.classList.toggle('btn-secondary', hasResult);
+    }
+    if (insert) {
+      insert.hidden = !hasResult;
+      insert.disabled = busy || !hasResult;
+    }
+    if (staticBtn) {
+      // A URL can be downloaded as static proxies even on the source step.
+      const source = String($(IDS.input)?.value || '').trim();
+      staticBtn.hidden = getImportMode() === 'amnezia-premium' || !isBackendSubscriptionLink(source);
+      staticBtn.disabled = busy;
     }
   }
 
@@ -264,6 +335,7 @@ let mihomoImportModuleApi = null;
     if (hasMsg && opts && opts.busy) el.setAttribute('aria-busy', 'true');
     else el.removeAttribute('aria-busy');
     el.classList.toggle('hidden', !hasMsg);
+    $(IDS.modal)?.setAttribute('aria-busy', String(hasMsg && !!opts?.busy));
   }
 
   function setHint(msg) {
@@ -749,6 +821,11 @@ let mihomoImportModuleApi = null;
     const hasManagedImport = groups.length > 0;
     const managed = managedConfigXraySubscriptions();
     block.classList.toggle('hidden', !hasManagedImport && !managed.length);
+    const disclosure = $('mihomo-import-managed-disclosure');
+    if (disclosure) {
+      disclosure.classList.toggle('hidden', !hasManagedImport && !managed.length);
+      if (hasManagedImport) disclosure.open = true;
+    }
     try {
       const field = input && input.closest ? input.closest('.xk-mi-refresh-field') : null;
       if (field) field.style.display = hasManagedImport ? '' : 'none';
@@ -777,12 +854,15 @@ let mihomoImportModuleApi = null;
   }
 
   async function loadManagedXraySubscriptions(silent) {
+    const sessionId = _importState.sessionId;
     try {
       const data = await requestSubscriptionJson('/api/mihomo/subscriptions');
+      if (!modalOpen() || sessionId !== _importState.sessionId) return [];
       _managedXraySubscriptions = Array.isArray(data.subscriptions) ? data.subscriptions : [];
       updateXrayRefreshUi((_lastResult && _lastResult.outputs) || []);
       return _managedXraySubscriptions;
     } catch (e) {
+      if (!modalOpen() || sessionId !== _importState.sessionId) return [];
       _managedXraySubscriptions = [];
       updateXrayRefreshUi((_lastResult && _lastResult.outputs) || []);
       if (!silent) {
@@ -1187,13 +1267,16 @@ let mihomoImportModuleApi = null;
     _previewMonacoFacade = null;
   }
 
-  async function activatePreviewEngine(engine) {
+  async function activatePreviewEngine(engine, generation = _previewGeneration) {
+    const current = () => modalOpen() && _previewOpen && generation === _previewGeneration;
+    if (!current()) return;
     const next = normalizeEngine(engine);
     const host = $(IDS.monacoHost);
     const ta = $(IDS.preview);
 
     if (next === 'monaco') {
       const runtime = await ensureEditorRuntime('monaco');
+      if (!current()) return;
       if (!runtime || !host || typeof runtime.create !== 'function') {
         try { if (window.toast) window.toast('Monaco недоступен — используется CodeMirror', 'warning'); } catch (e0) {}
         const ee = getEngineHelper();
@@ -1218,6 +1301,10 @@ let mihomoImportModuleApi = null;
           insertSpaces: true,
           wordWrap: 'on',
         });
+        if (!current()) {
+          try { ed?.dispose?.(); } catch (e) {}
+          return;
+        }
         if (!ed) {
           try { if (window.toast) window.toast('Не удалось загрузить Monaco — переключаю на CodeMirror', 'warning'); } catch (e2) {}
           const ee = getEngineHelper();
@@ -1249,10 +1336,12 @@ let mihomoImportModuleApi = null;
 
     try {
       const runtime = await ensureEditorRuntime('codemirror', { mode: 'yaml' });
+      if (!current()) return;
       if (runtime && typeof runtime.ensureAssets === 'function') {
         await runtime.ensureAssets({ mode: 'yaml' });
       }
     } catch (e) {}
+    if (!current()) return;
 
     const cm = ensurePreviewCm();
     const value = previewTextFallback();
@@ -1283,22 +1372,26 @@ let mihomoImportModuleApi = null;
   }
 
   async function syncEngineNow() {
-    if (_engineSyncing) return;
+    if (_engineSyncing || !modalOpen() || !_previewOpen) return;
     _engineSyncing = true;
+    const generation = _previewGeneration;
     try {
       const engine = await resolvePreferredEngine();
       setEngineSelectValue(engine);
-      if (modalOpen()) await activatePreviewEngine(engine);
+      if (modalOpen() && _previewOpen && generation === _previewGeneration) await activatePreviewEngine(engine, generation);
     } finally {
       _engineSyncing = false;
+      if (modalOpen() && _previewOpen && generation !== _previewGeneration) scheduleEngineSync();
     }
   }
 
   function scheduleEngineSync() {
+    if (!modalOpen() || !_previewOpen) return;
     try { setTimeout(() => { try { syncEngineNow(); } catch (e) {} }, 0); } catch (e) {}
   }
 
   function layoutPreviewEditor() {
+    if (!modalOpen() || !_previewOpen) return;
     try {
       if (_previewLayoutRaf) return;
       _previewLayoutRaf = requestAnimationFrame(() => {
@@ -1445,12 +1538,30 @@ let mihomoImportModuleApi = null;
   function showModal(show) {
     const modal = $(IDS.modal);
     if (!modal) return;
+    const manager = getMihomoModalApi();
     if (!show) {
       resetMihomoImportState(_importState);
       _lastResult = null;
+      _parseOperation = null;
+      _previewOpen = false;
+      _previewGeneration += 1;
+      try { disposePreviewMonaco(); } catch (e) {}
+      try { disposeCodeMirrorEditor(_previewCm); } catch (e) {}
+      _previewCm = null;
+      _previewCmFacade = null;
+      setSourceLayout(false);
+      syncImportActions();
+      const disclosure = $('mihomo-import-managed-disclosure');
+      if (disclosure) disclosure.open = false;
     }
     try {
-      if (show) modal.classList.remove('hidden');
+      if (show) {
+        // Set source geometry before the manager restores/clamps the frame.
+        _lastResult = null;
+        setSourceLayout(false);
+        if (manager?.open) manager.open(modal, { focus: false });
+        else modal.classList.remove('hidden');
+      } else if (manager?.close) manager.close(modal);
       else modal.classList.add('hidden');
     } catch (e) {}
     try {
@@ -1461,6 +1572,7 @@ let mihomoImportModuleApi = null;
       // reset
       resetMihomoImportState(_importState);
       _lastResult = null;
+      _parseOperation = null;
       setStatus('', false);
       setHint('');
       setPreview('');
@@ -1472,6 +1584,8 @@ let mihomoImportModuleApi = null;
       } catch (e4d) {}
       const ins = $(IDS.btnInsert);
       if (ins) ins.disabled = true;
+      setSourceLayout(false);
+      syncImportActions();
 
       // Load proxy-groups list from current config.yaml
       try { refreshGroupsUiFromConfig(); } catch (e4a) {}
@@ -1480,14 +1594,15 @@ let mihomoImportModuleApi = null;
       try { setImportMode(loadImportModePref()); } catch (e4b) {}
       try { updateModeUi(); } catch (e4c) {}
 
-      // Activate preferred editor engine (CodeMirror / Monaco)
-      try { scheduleEngineSync(); } catch (e4) {}
-
       try {
         const inp = $(IDS.input);
         if (inp) inp.focus();
       } catch (e3) {}
-      try { layoutPreviewEditor(); } catch (e5) {}
+    } else {
+      const trigger = $(IDS.btnOpen);
+      const fallback = document.querySelector('.xk-mihomo-menu summary');
+      const focusTarget = trigger?.getClientRects().length ? trigger : fallback;
+      try { focusTarget?.focus({ preventScroll: true }); } catch (e) {}
     }
   }
 
@@ -2358,7 +2473,7 @@ let mihomoImportModuleApi = null;
   function setParseButtonLabel(label) {
     const button = $(IDS.btnParse);
     const target = button && button.querySelector ? button.querySelector('.xk-action-label') : null;
-    if (target) target.textContent = String(label || 'Преобразовать');
+    if (target) target.textContent = String(label || 'Распознать');
   }
 
   function resetAmneziaLocations() {
@@ -2371,7 +2486,7 @@ let mihomoImportModuleApi = null;
     if (block) block.classList.add('hidden');
     if (box) box.innerHTML = '';
     if (count) count.textContent = 'Локации ещё не загружены.';
-    setParseButtonLabel('Преобразовать');
+    setParseButtonLabel('Распознать');
   }
 
   function renderAmneziaLocations(locations, selectedCodes = new Set()) {
@@ -2436,10 +2551,12 @@ let mihomoImportModuleApi = null;
   }
 
   async function loadAmneziaLocations(connectionKey) {
+    const token = _parseOperation;
     setStatus('Проверяю доступные локации Amnezia Premium…', false, null, { busy: true });
     const data = await _importApi.postJSON('/api/mihomo/amnezia-premium/locations', {
       text: String(connectionKey || ''),
     });
+    if (!isCurrentImportRequest(token)) return;
     const locations = Array.isArray(data.locations) ? data.locations : [];
     _amneziaLocations = locations
       .map((location) => ({
@@ -2568,25 +2685,42 @@ let mihomoImportModuleApi = null;
   // ---------------------------------------------------------------------------
 
   async function parseInput(options = {}) {
+    if (_parseOperation && isCurrentImportRequest(_parseOperation)) return;
+    const token = beginMihomoImportRequest(_importState, 'parse');
+    _parseOperation = token;
+    syncImportActions();
+    try {
+      return await parseInputNow(options, token);
+    } finally {
+      if (_parseOperation === token) {
+        _parseOperation = null;
+        $(IDS.modal)?.setAttribute('aria-busy', 'false');
+        syncImportActions();
+      }
+    }
+  }
+
+  async function parseInputNow(options, requestToken) {
     const inp = $(IDS.input);
     const rawText = inp ? String(inp.value || '') : '';
     const mode = getImportMode();
     const staticProviderProxies = boolOpt(options && options.staticProviderProxies);
     updateMihomoImportContext(_importState, { source: rawText, mode });
-    const requestToken = beginMihomoImportRequest(_importState, 'parse');
 
     if (!rawText.trim()) {
+      _lastResult = null;
       let msg = 'Вставь ссылку узла или https-подписку.';
-      if (mode === 'amnezia-premium') msg = 'Вставь ключ Amnezia Premium (vpn://...) и нажми «Преобразовать».';
-      else if (mode === 'wireguard') msg = 'Вставь WireGuard / AmneziaWG 3.x (.conf) и нажми «Преобразовать».';
-      else if (mode === 'openvpn') msg = 'Вставь OpenVPN (.ovpn) и нажми «Преобразовать».';
-      else if (mode === 'tailscale') msg = 'Вставь Tailscale-параметры и нажми «Преобразовать».';
+      if (mode === 'amnezia-premium') msg = 'Вставь ключ Amnezia Premium (vpn://...) и нажми «Распознать».';
+      else if (mode === 'wireguard') msg = 'Вставь WireGuard / AmneziaWG 3.x (.conf) и нажми «Распознать».';
+      else if (mode === 'openvpn') msg = 'Вставь OpenVPN (.ovpn) и нажми «Распознать».';
+      else if (mode === 'tailscale') msg = 'Вставь Tailscale-параметры и нажми «Распознать».';
       setStatus(msg, true);
       setHint('');
       setPreview('');
       updateXrayRefreshUi([]);
       const ins = $(IDS.btnInsert);
       if (ins) ins.disabled = true;
+      setSourceLayout(false);
       return;
     }
 
@@ -2657,7 +2791,7 @@ let mihomoImportModuleApi = null;
         .filter(Boolean);
 
       if (!lines.length) {
-        setStatus('Вставь данные и нажми «Преобразовать».', true);
+        setStatus('Вставь данные и нажми «Распознать».', true);
         setHint('');
         setPreview('');
         updateXrayRefreshUi([]);
@@ -2735,13 +2869,16 @@ let mihomoImportModuleApi = null;
       }
     }
 
+    if (!isCurrentImportRequest(requestToken)) return;
     if (!outputs.length) {
+      _lastResult = null;
       setStatus(errors.join('\n') || 'Не удалось распознать данные.', true);
       setHint('');
       setPreview('');
       updateXrayRefreshUi([]);
       const ins = $(IDS.btnInsert);
       if (ins) ins.disabled = true;
+      setSourceLayout(false);
       return;
     }
 
@@ -2754,6 +2891,8 @@ let mihomoImportModuleApi = null;
       candidate: null,
     });
     _lastResult = result;
+    setSourceLayout(true);
+    try { scheduleEngineSync(); } catch (e4) {}
 
     // Build preview. Group consecutive xrayBulk proxies sharing the same
     // source URI into a single section so that a 27-node subscription doesn't
@@ -2853,7 +2992,7 @@ let mihomoImportModuleApi = null;
       || !_lastResult.outputs.length
       || !isCurrentMihomoImportResult(_importState, _lastResult)
     ) {
-      setStatus('Сначала нажми «Преобразовать».', true);
+      setStatus('Сначала нажми «Распознать».', true);
       return;
     }
 
@@ -2974,6 +3113,12 @@ let mihomoImportModuleApi = null;
     wireButton(IDS.btnOpen, () => showModal(true));
     wireButton(IDS.btnClose, () => showModal(false));
     wireButton(IDS.btnCancel, () => showModal(false));
+    wireButton(IDS.previewToggle, () => {
+      if (!_lastResult) return;
+      _previewOpen = !_previewOpen;
+      _previewGeneration += 1;
+      setSourceLayout(true);
+    });
 
     // Groups (proxy-groups) selection helpers
     wireButton(IDS.groupsAllBtn, () => { setAllGroupsChecked(true); maybePersistGroupsSelection(); });
@@ -3084,6 +3229,24 @@ let mihomoImportModuleApi = null;
         } catch (err) {}
       });
       if (inp.dataset) inp.dataset.xkKeys = '1';
+    }
+    if (!modal.dataset.mihomoImportFocusBound) {
+      modal.addEventListener('keydown', (event) => {
+        if (event.key !== 'Tab') return;
+        const focusable = Array.from(modal.querySelectorAll(
+          'button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), summary, [tabindex="0"]',
+        )).filter((el) => el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden');
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
+      });
+      modal.dataset.mihomoImportFocusBound = '1';
     }
   };
 

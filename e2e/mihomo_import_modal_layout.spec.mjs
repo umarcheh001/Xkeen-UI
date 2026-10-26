@@ -64,7 +64,7 @@ test('Amnezia Premium locations use compact flags and a two-column scroller', as
 });
 
 
-test('Mihomo import uses the resizable Operator workbench and stretches its YAML preview', async ({ page }) => {
+test('Mihomo import opens as a compact source form and expands into the Operator workbench', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 960 });
   await page.addInitScript(() => {
     localStorage.removeItem('xk.modal.state.v1.mihomo-import');
@@ -79,7 +79,7 @@ test('Mihomo import uses the resizable Operator workbench and stretches its YAML
 
   await page.locator('#mihomo-import-node-btn').click();
   await expect(page.locator('#mihomo-import-modal')).toBeVisible();
-  await expect(page.locator('#mihomo-import-modal .modal-resizer')).toBeVisible();
+  await expect(page.locator('#mihomo-import-modal .modal-resizer')).toBeHidden();
 
   const before = await page.locator('#mihomo-import-modal .xk-mi-preview-wrap').evaluate((node) => {
     const content = document.querySelector('#mihomo-import-modal .modal-content');
@@ -94,9 +94,38 @@ test('Mihomo import uses the resizable Operator workbench and stretches its YAML
     };
   });
 
-  expect(before.gridRows).not.toBe('none');
-  expect(before.previewFlexGrow).toBe('1');
-  expect(before.contentWidth).toBeGreaterThan(1400);
+  expect(before.contentWidth).toBeLessThanOrEqual(760);
+  expect(before.previewHeight).toBe(0);
+  await expect(page.locator('#mihomo-import-groups-block')).toBeHidden();
+
+  await page.locator('#mihomo-import-input').fill(
+    'vless://11111111-1111-1111-1111-111111111111@example.com:443?encryption=none&type=tcp#compact',
+  );
+  await page.locator('#mihomo-import-parse-btn').click();
+  await expect(page.locator('#mihomo-import-insert-btn')).toBeEnabled();
+  await expect(page.locator('#mihomo-import-modal .modal-resizer')).toBeHidden();
+  await expect(page.locator('#mihomo-import-groups-block')).toBeVisible();
+  await expect(page.locator('#mihomo-import-modal .xk-mi-panel--preview')).toBeHidden();
+  await page.locator('#mihomo-import-preview-toggle').click();
+  await expect(page.locator('#mihomo-import-modal .modal-resizer')).toBeVisible();
+  await expect(page.locator('#mihomo-import-modal .xk-mi-panel--preview')).toBeVisible();
+
+  const expanded = await page.locator('#mihomo-import-modal .xk-mi-preview-wrap').evaluate((node) => {
+    const content = document.querySelector('#mihomo-import-modal .modal-content');
+    const style = getComputedStyle(node);
+    const contentStyle = content ? getComputedStyle(content) : null;
+    return {
+      previewHeight: node.getBoundingClientRect().height,
+      contentHeight: content ? content.getBoundingClientRect().height : 0,
+      contentWidth: content ? content.getBoundingClientRect().width : 0,
+      gridRows: contentStyle ? contentStyle.gridTemplateRows : '',
+      previewFlexGrow: style.flexGrow,
+    };
+  });
+
+  expect(expanded.gridRows).not.toBe('none');
+  expect(expanded.previewFlexGrow).toBe('1');
+  expect(expanded.contentWidth).toBeGreaterThan(1000);
 
   const handle = page.locator('#mihomo-import-modal .modal-resizer');
   const box = await handle.boundingBox();
@@ -106,7 +135,7 @@ test('Mihomo import uses the resizable Operator workbench and stretches its YAML
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + 140, { steps: 8 });
   await page.mouse.up();
 
-  await expect.poll(() => page.locator('#mihomo-import-modal .xk-mi-preview-wrap').evaluate((node) => node.getBoundingClientRect().height)).toBeGreaterThan(before.previewHeight + 40);
+  await expect.poll(() => page.locator('#mihomo-import-modal .xk-mi-preview-wrap').evaluate((node) => node.getBoundingClientRect().height)).toBeGreaterThan(expanded.previewHeight + 40);
 
   const after = await page.locator('#mihomo-import-modal .xk-mi-preview-wrap').evaluate((node) => {
     const content = document.querySelector('#mihomo-import-modal .modal-content');
@@ -118,8 +147,8 @@ test('Mihomo import uses the resizable Operator workbench and stretches its YAML
     };
   });
 
-  expect(after.contentHeight).toBeGreaterThan(before.contentHeight + 40);
-  expect(after.previewHeight).toBeGreaterThan(before.previewHeight + 40);
+  expect(after.contentHeight).toBeGreaterThan(expanded.contentHeight + 40);
+  expect(after.previewHeight).toBeGreaterThan(expanded.previewHeight + 40);
   expect(after.editorHeight).toBeGreaterThanOrEqual(after.previewHeight - 2);
 });
 

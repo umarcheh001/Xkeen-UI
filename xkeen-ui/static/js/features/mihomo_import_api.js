@@ -24,7 +24,11 @@ export function createMihomoImportApi({ getCoreHttp, fetchImpl } = {}) {
     const http = typeof getCoreHttp === 'function' ? getCoreHttp() : null;
     if (!http || typeof http.postJSON !== 'function') throw new Error('core http.postJSON недоступен');
     const data = await http.postJSON(path, body || {}, options || {});
-    if (!data || data.ok === false) throw new Error(normalizeError(data, `${path} failed`));
+    if (!data || data.ok === false) {
+      const error = new Error(normalizeError(data, `${path} failed`));
+      error.data = data;
+      throw error;
+    }
     return data;
   }
 

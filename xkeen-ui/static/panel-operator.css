@@ -8922,13 +8922,20 @@ body.panel-page #xray-devices-modal .xray-devices-actions {
   display: none !important;
 }
 
-/* Mihomo import is an editor workbench.  Its frame must retain a real
- * resizeable canvas: the previous auto-height override won over the inline
- * geometry applied by the shared modal resizer, leaving the bottom handle
- * unable to grow the dialog.  Keep dimensions non-important so user-resized
- * width/height can take precedence, and let the preview own the free row. */
+/* Mihomo import: content-sized source/result first, expandable workbench only
+ * for technical YAML. Geometry stays compatible with the shared modal manager. */
 body.panel-page #mihomo-import-modal .modal-content {
-  grid-template-rows: 50px minmax(0, 1fr) 50px;
+  display: grid;
+  grid-template-rows: 50px minmax(0, 1fr) auto;
+  width: min(720px, calc(100vw - 32px));
+  max-width: min(720px, calc(100vw - 32px));
+  min-height: 0;
+  height: auto;
+  max-height: calc(100dvh - 32px);
+}
+
+body.panel-page #mihomo-import-modal[data-mi-layout="preview"] .modal-content {
+  grid-template-rows: 50px minmax(0, 1fr) auto;
   width: min(96vw, 1440px);
   max-width: 1440px;
   min-height: min(520px, calc(100dvh - 36px));
@@ -8937,16 +8944,28 @@ body.panel-page #mihomo-import-modal .modal-content {
 }
 
 body.panel-page #mihomo-import-modal .modal-body {
-  display: flex;
-  flex: 1 1 auto;
+  display: block;
   min-height: 0;
   max-height: none;
-  overflow: hidden;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 body.panel-page #mihomo-import-modal .xk-mi-grid {
-  flex: 1 1 auto;
+  display: block;
   min-height: 0;
+  height: auto;
+}
+
+body.panel-page #mihomo-import-modal[data-mi-layout="preview"] .modal-body {
+  display: flex;
+  overflow: hidden;
+}
+
+body.panel-page #mihomo-import-modal[data-mi-layout="preview"] .xk-mi-grid {
+  display: grid;
+  grid-template-columns: minmax(0, .98fr) minmax(0, 1.02fr);
+  flex: 1 1 auto;
   height: 100%;
 }
 
@@ -8956,8 +8975,54 @@ body.panel-page #mihomo-import-modal .xk-mi-panel {
 }
 
 body.panel-page #mihomo-import-modal .xk-mi-panel--controls {
+  overflow: visible;
+}
+
+body.panel-page #mihomo-import-modal[data-mi-layout="preview"] .xk-mi-panel--controls {
   overflow: auto;
   overscroll-behavior: contain;
+}
+
+/* Fixed-size form rows must not collapse when locations/status appear. Only
+ * the body (and bounded data lists) scroll; the footer always stays visible. */
+body.panel-page #mihomo-import-modal .xk-mi-panel--controls > *,
+body.panel-page #mihomo-import-modal .xk-mi-field-grid,
+body.panel-page #mihomo-import-modal .xk-mi-field {
+  flex: 0 0 auto;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-input {
+  flex: none;
+  min-height: 132px;
+  height: 132px;
+  max-height: 300px;
+  resize: vertical;
+}
+
+body.panel-page #mihomo-import-modal :is(.xk-mi-source-lead, #mihomo-import-input-hint) {
+  margin: 0;
+  color: var(--op-muted);
+  line-height: 1.45;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-managed-disclosure {
+  border-top: 1px solid var(--op-border);
+  padding-top: 9px;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-managed-disclosure > summary {
+  cursor: pointer;
+  color: var(--op-text);
+  min-height: var(--op-control-h);
+}
+
+body.panel-page #mihomo-import-modal #mihomo-import-preview-toggle {
+  align-self: flex-start;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-header {
+  flex-direction: row;
+  align-items: center;
 }
 
 body.panel-page #mihomo-import-modal .xk-mi-panel--preview {
@@ -8971,6 +9036,74 @@ body.panel-page #mihomo-import-modal .xk-mi-preview-wrap {
   border-color: var(--op-border) !important;
   border-radius: var(--op-radius-sm) !important;
   background: var(--op-editor) !important;
+}
+
+body.panel-page #mihomo-import-modal :is([hidden], .hidden) {
+  display: none !important;
+}
+
+body.panel-page #mihomo-import-modal:not([data-mi-layout="preview"]) .modal-resizer {
+  display: none !important;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-footer {
+  flex-direction: row;
+  align-items: center;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-footer-actions {
+  flex-wrap: wrap;
+  margin-left: auto;
+  order: 1;
+}
+
+@media (max-width: 980px) {
+  body.panel-page #mihomo-import-modal[data-mi-layout="preview"] .modal-body {
+    display: block;
+    overflow: auto;
+  }
+  body.panel-page #mihomo-import-modal[data-mi-layout="preview"] .xk-mi-grid {
+    display: block;
+    height: auto;
+  }
+  body.panel-page #mihomo-import-modal[data-mi-layout="preview"] .xk-mi-panel--controls {
+    overflow: visible;
+  }
+  body.panel-page #mihomo-import-modal .xk-mi-panel--preview {
+    height: 320px;
+    margin-top: 12px;
+  }
+}
+
+@media (max-width: 720px) {
+  body.panel-page #mihomo-import-modal,
+  html[data-theme="light"] body.panel-page #mihomo-import-modal {
+    padding: 8px;
+  }
+  body.panel-page #mihomo-import-modal .modal-content,
+  body.panel-page #mihomo-import-modal[data-mi-layout="preview"] .modal-content {
+    width: calc(100vw - 16px);
+    max-width: calc(100vw - 16px);
+    min-height: 0;
+    max-height: calc(100dvh - 16px);
+    grid-template-rows: 50px minmax(0, 1fr) auto;
+    height: auto;
+  }
+  body.panel-page #mihomo-import-modal .xk-mi-footer {
+    gap: 8px;
+    align-items: stretch;
+  }
+  body.panel-page #mihomo-import-modal .xk-mi-footer-actions {
+    display: flex;
+    flex: 1 1 100%;
+    order: 0;
+  }
+  body.panel-page #mihomo-import-modal .xk-mi-footer :is(button, .btn-primary, .btn-secondary) {
+    flex: 1 1 auto;
+    min-height: var(--op-touch-target) !important;
+    height: var(--op-touch-target) !important;
+    max-height: none !important;
+  }
 }
 
 body.panel-page #mihomo-import-modal :is(
