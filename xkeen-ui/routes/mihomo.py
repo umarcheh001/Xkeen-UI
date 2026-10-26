@@ -39,6 +39,7 @@ Endpoints:
 from __future__ import annotations
 
 import base64
+import hashlib
 import ipaddress
 import os
 import re
@@ -1141,47 +1142,141 @@ def create_mihomo_blueprint(
 
     # ---------- API: mihomo config.yaml ----------
 
+    def _config_revision(content: str) -> str:
+        return hashlib.sha256(_norm_text(content).encode("utf-8")).hexdigest()
+
+    def _commit_raw_mihomo_config(
+        content: str,
+        *,
+        restart: bool,
+        expected_revision: str = "",
+        validate_core: bool,
+    ):
+        content = _norm_text(content)
+        ok_yaml, _yaml_err = validate_yaml_syntax(content)
+        if not ok_yaml:
+            return _mihomo_yaml_invalid(stage="validate")
+
+        current_content = load_text(MIHOMO_CONFIG_FILE, default="") or ""
+        expected = str(expected_revision or "").strip()
+        if expected and not secrets.compare_digest(expected, _config_revision(current_content)):
+            return _mihomo_error(
+                "config.yaml изменился вне подготовленного candidate.",
+                409,
+                code="stale_config",
+                hint="Откройте редактор, проверьте новые изменения и подготовьте candidate заново.",
+                current_revision=_config_revision(current_content),
+            )
+
+        validation_log = ""
+        if validate_core:
+            validation_log = str(validate_config(new_content=content) or "")
+            match = re.search(r"\[exit code:\s*(\d+)\]", validation_log)
+            if match is None:
+                return _mihomo_error(
+                    "Проверка Mihomo недоступна: runner не вернул exit code.",
+                    503,
+                    code="validation_unavailable",
+                    hint="Установите/проверьте Mihomo и повторите сохранение.",
+                    validation_log=validation_log,
+                )
+            if int(match.group(1)) != 0:
+                return _mihomo_error(
+                    "Mihomo отклонил candidate конфигурации.",
+                    400,
+                    code="validation_failed",
+                    hint="Исправьте ошибки в candidate и повторите попытку.",
+                    validation_log=validation_log,
+                )
+
+        try:
+            ensure_mihomo_layout()
+            backup = save_config(content)
+        except Exception as exc:
+            return _mihomo_exception(
+                "Не удалось сохранить active config.yaml.",
+                code="config_save_failed",
+                hint="Проверьте конфиг и server logs.",
+                exc=exc,
+                status=400,
+            )
+
+        response = {
+            "ok": True,
+            "saved": True,
+            "restarted": False,
+            "backup": getattr(backup, "filename", ""),
+            "revision": _config_revision(content),
+            "validation_log": validation_log,
+        }
+        if restart:
+            try:
+                job = create_command_job(flag="-restart", stdin_data=None, cmd=None, use_pty=True)
+            except Exception as exc:
+                response.update(
+                    {
+                        "ok": False,
+                        "saved": True,
+                        "restart_queued": False,
+                        "code": "restart_schedule_failed",
+                        "error": "config.yaml сохранён, но restart job не удалось поставить в очередь.",
+                        "hint": "Проверьте restart log; повторите только применение, не импорт.",
+                        "detail": str(exc),
+                    }
+                )
+                return jsonify(response), 500
+            response.update({"restart_queued": True, "restart_job_id": job.id})
+            return jsonify(response), 202
+        return jsonify(response), 200
+
     @bp.get("/api/mihomo-config")
     def api_get_mihomo_config():
         content = load_text(MIHOMO_CONFIG_FILE, default=None)
         if content is None:
             return _mihomo_error("Файл config.yaml не найден.", 404, code="config_not_found")
-        return jsonify({"ok": True, "content": content}), 200
+        return jsonify({"ok": True, "content": content, "revision": _config_revision(content)}), 200
 
     @bp.post("/api/mihomo-config")
     def api_set_mihomo_config():
         data = request.get_json(silent=True) or {}
         content = data.get("content", "")
-
-        ok_yaml, _yaml_err = validate_yaml_syntax(content)
-        if not ok_yaml:
-            return _mihomo_yaml_invalid()
-
-        try:
-            # Сохраняем конфиг через mihomo_server_core, чтобы перед записью делался бэкап
-            ensure_mihomo_layout()
-            save_config(content)
-        except Exception as e:
-            return _mihomo_exception(
-                "Не удалось сохранить active config.yaml.",
-                code="config_save_failed",
-                hint="Проверьте конфиг и server logs.",
-                exc=e,
-                status=400,
+        restart_flag = bool(data.get("restart", True))
+        async_q = request.args.get("async") in ("1", "true", "yes")
+        if async_q:
+            return _commit_raw_mihomo_config(
+                content,
+                restart=restart_flag,
+                validate_core=False,
             )
 
-        restart_flag = bool(data.get("restart", True))
-        async_q = request.args.get("async")
+        committed = _commit_raw_mihomo_config(
+            content,
+            restart=False,
+            validate_core=False,
+        )
+        body, status = committed if isinstance(committed, tuple) else (committed, 200)
+        if status >= 400:
+            return committed
+        if not restart_flag:
+            return committed
+        restarted = restart_xkeen(source="mihomo-config")
+        payload = body.get_json() if hasattr(body, "get_json") else {"ok": True}
+        payload["restarted"] = bool(restarted)
+        return jsonify(payload), 200
 
-        resp = {"ok": True, "restarted": False}
-        if restart_flag and async_q in ("1", "true", "yes"):
-            job = create_command_job(flag="-restart", stdin_data=None, cmd=None, use_pty=True)
-            resp.update({"restart_queued": True, "restart_job_id": job.id})
-            return jsonify(resp), 202
-
-        restarted = restart_flag and restart_xkeen(source="mihomo-config")
-        resp["restarted"] = restarted
-        return jsonify(resp), 200
+    @bp.post("/api/mihomo/import/commit")
+    def api_mihomo_import_commit():
+        """Validate, back up, save and optionally queue a restart for an import candidate."""
+        data = request.get_json(silent=True) or {}
+        content = data.get("content", "")
+        restart = bool(data.get("restart", False))
+        expected_revision = str(data.get("base_revision") or data.get("baseRevision") or "")
+        return _commit_raw_mihomo_config(
+            content,
+            restart=restart,
+            expected_revision=expected_revision,
+            validate_core=True,
+        )
 
     def _mihomo_clash_setup_input() -> tuple[str, Any]:
         supplied = load_text(MIHOMO_CONFIG_FILE, default=None)

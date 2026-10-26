@@ -25848,3 +25848,29 @@ body.panel-page #mihomo-import-modal .xk-mi-destination-option strong {
 body.panel-page #mihomo-import-modal .xk-mi-destination-option small {
   color: var(--op-muted) !important;
 }
+
+body.panel-page #mihomo-import-modal :is(.xk-mi-candidate-summary, .xk-mi-action-status) {
+  border-color: var(--op-border) !important;
+  border-radius: var(--op-radius-sm) !important;
+  background: var(--op-surface-2) !important;
+  box-shadow: none !important;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-candidate-title {
+  color: var(--op-text) !important;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-action-status.is-success {
+  border-left-color: var(--op-success) !important;
+  color: var(--op-success) !important;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-action-status.is-warning {
+  border-left-color: var(--op-warning) !important;
+  color: var(--op-warning) !important;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-action-status.is-error {
+  border-left-color: var(--op-danger) !important;
+  color: var(--op-danger) !important;
+}

@@ -33182,3 +33182,52 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-collapsedLines:f
     width: auto;
   }
 }
+
+/* Mihomo import candidate/actions: explicit draft/save/apply result. */
+.xk-mi-candidate-summary,
+.xk-mi-action-status {
+  display: grid;
+  gap: 4px;
+  padding: 9px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(96, 165, 250, 0.18);
+  background: rgba(14, 165, 233, 0.055);
+}
+
+.xk-mi-candidate-summary.hidden,
+.xk-mi-action-status.hidden {
+  display: none;
+}
+
+.xk-mi-candidate-title {
+  color: var(--fg, #f8fafc);
+  font-size: calc(11px * var(--xk-font-scale));
+  font-weight: 700;
+}
+
+.xk-mi-candidate-details,
+.xk-mi-action-status {
+  color: #a9b8d3;
+  font-size: calc(10.5px * var(--xk-font-scale));
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.xk-mi-action-status.is-success {
+  border-left: 2px solid #34d399;
+  color: #86efac;
+}
+
+.xk-mi-action-status.is-warning {
+  border-left: 2px solid #fbbf24;
+  color: #fde68a;
+}
+
+.xk-mi-action-status.is-error {
+  border-left: 2px solid #f87171;
+  color: #fecaca;
+}
+
+.xk-mi-action-status.is-busy {
+  border-left: 2px solid #60a5fa;
+}

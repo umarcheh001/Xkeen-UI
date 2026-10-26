@@ -89,6 +89,10 @@ let mihomoImportModuleApi = null;
     btnParse: 'mihomo-import-parse-btn',
     btnParseStatic: 'mihomo-import-parse-static-btn',
     btnInsert: 'mihomo-import-insert-btn',
+    btnSave: 'mihomo-import-save-btn',
+    btnApply: 'mihomo-import-apply-btn',
+    candidateSummary: 'mihomo-import-candidate-summary',
+    actionStatus: 'mihomo-import-action-status',
   };
 
   let _inited = false;
@@ -112,6 +116,9 @@ let mihomoImportModuleApi = null;
   let _previewGeneration = 0;
   let _parseOperation = null;
   let _selectedDestination = 'static';
+  let _baseFileRevision = '';
+  let _actionBusy = false;
+  let _lastCandidate = null;
   const _importState = createMihomoImportState();
   const _importApi = createMihomoImportApi({ getCoreHttp: getMihomoCoreHttpApi });
 
@@ -119,8 +126,10 @@ let mihomoImportModuleApi = null;
     invalidateMihomoImportResult(_importState);
     _lastResult = null;
     _selectedDestination = 'static';
+    _lastCandidate = null;
     _amneziaIssuedSelectionKey = '';
     setStatus('', false);
+    setActionStatus('');
     setHint('');
     setPreview('');
     clearMihomoImportResultCards();
@@ -292,6 +301,7 @@ let mihomoImportModuleApi = null;
 
   function applyProviderSettingsFromUi() {
     if (!_lastResult || _selectedDestination !== 'provider') return;
+    _lastCandidate = null;
     const variants = _lastResult.destinationVariants;
     if (!variants || !Array.isArray(variants.provider)) return;
     const configured = providerOutputsForInsert(variants.provider, getEditorText() || '');
@@ -355,6 +365,7 @@ let mihomoImportModuleApi = null;
 
   function setImportDestination(destination) {
     if (!_lastResult) return;
+    _lastCandidate = null;
     const variants = _lastResult.destinationVariants || destinationVariantsForOutputs(_lastResult.outputs);
     const next = destination === 'provider' && Array.isArray(variants.provider) && variants.provider.length
       ? 'provider'
@@ -419,6 +430,8 @@ let mihomoImportModuleApi = null;
     const parse = $(IDS.btnParse);
     const staticBtn = $(IDS.btnParseStatic);
     const insert = $(IDS.btnInsert);
+    const save = $(IDS.btnSave);
+    const apply = $(IDS.btnApply);
     if (parse) {
       parse.disabled = busy;
       parse.classList.toggle('loading', busy);
@@ -427,8 +440,13 @@ let mihomoImportModuleApi = null;
     }
     if (insert) {
       insert.hidden = !hasResult;
-      insert.disabled = busy || !hasResult;
+      insert.disabled = busy || _actionBusy || !hasResult;
     }
+    [save, apply].forEach((button) => {
+      if (!button) return;
+      button.classList.toggle('hidden', !hasResult);
+      button.disabled = busy || _actionBusy || !hasResult;
+    });
     if (staticBtn) {
       const source = String($(IDS.input)?.value || '').trim();
       staticBtn.hidden = hasResult || getImportMode() === 'amnezia-premium' || !isBackendSubscriptionLink(source);
@@ -1822,6 +1840,8 @@ let mihomoImportModuleApi = null;
       resetMihomoImportState(_importState);
       _lastResult = null;
       _parseOperation = null;
+      _lastCandidate = null;
+      setActionStatus('');
       _previewOpen = false;
       _previewGeneration += 1;
       try { disposePreviewMonaco(); } catch (e) {}
@@ -1853,6 +1873,10 @@ let mihomoImportModuleApi = null;
       resetMihomoImportState(_importState);
       _lastResult = null;
       _parseOperation = null;
+      _lastCandidate = null;
+      _baseFileRevision = '';
+      setActionStatus('');
+      void getMihomoFileRevision().then((revision) => { if (modalOpen()) _baseFileRevision = revision; });
       setStatus('', false);
       setHint('');
       setPreview('');
@@ -2704,6 +2728,211 @@ let mihomoImportModuleApi = null;
     };
   }
 
+  async function getMihomoFileRevision() {
+    try {
+      const response = await fetch('/api/mihomo-config', { cache: 'no-store' });
+      const data = await response.json().catch(() => ({}));
+      if (response.ok && data && data.ok && data.revision) return String(data.revision);
+    } catch (e) {}
+    return '';
+  }
+
+  function renderCandidateSummary(candidate) {
+    const host = $(IDS.candidateSummary);
+    if (!host) return;
+    host.replaceChildren();
+    if (!candidate) {
+      host.classList.add('hidden');
+      return;
+    }
+    const title = document.createElement('div');
+    title.className = 'xk-mi-candidate-title';
+    title.textContent = 'Итог candidate';
+    const details = document.createElement('div');
+    details.className = 'xk-mi-candidate-details';
+    details.textContent = [
+      `Добавление в: ${candidate.destinations.join(' + ') || 'config.yaml'}`,
+      `Групп: ${candidate.groups.length ? candidate.groups.join(', ') : 'не выбраны'}`,
+      candidate.missingGroups.length ? `Неизвестные группы: ${candidate.missingGroups.join(', ')}` : '',
+      candidate.editorDirty ? 'Candidate включает текущие несохранённые правки редактора.' : '',
+    ].filter(Boolean).join(' · ');
+    host.append(title, details);
+    host.classList.remove('hidden');
+  }
+
+  function setActionStatus(message, kind = 'info', busy = false) {
+    const host = $(IDS.actionStatus);
+    if (!host) return;
+    host.textContent = String(message || '');
+    host.className = `xk-mi-action-status ${message ? `is-${kind}` : ''} ${busy ? 'is-busy' : ''}`.trim();
+    host.classList.toggle('hidden', !message);
+    $(IDS.modal)?.setAttribute('aria-busy', String(!!busy));
+  }
+
+  async function buildImportCandidate() {
+    if (
+      !_lastResult
+      || !_lastResult.outputs
+      || !_lastResult.outputs.length
+      || !isCurrentMihomoImportResult(_importState, _lastResult)
+    ) {
+      throw new Error('Сначала нажмите «Распознать».');
+    }
+    if (_selectedDestination === 'provider') applyProviderSettingsFromUi();
+    const sourceEditorContent = getEditorText() || '';
+    let content = sourceEditorContent;
+    const selectedOutputs = currentDestinationOutputs();
+    const providerOutputs = selectedOutputs.filter((output) => output.type === 'proxy-provider');
+    content = insertProvidersIntoConfig(content, providerOutputs);
+    const groups = readSelectedGroupsFromUi();
+    const proxies = selectedOutputs.filter((output) => output.type === 'proxy');
+    const missingGroups = [];
+    for (const proxy of proxies) {
+      const inserted = await applyInsertProxy(content, proxy, groups);
+      content = inserted.content;
+      missingGroups.push(...inserted.missingGroups);
+    }
+    if (providerOutputs.length) {
+      const attached = await attachProvidersToGroups(content, providerOutputs, groups);
+      content = attached.content;
+      missingGroups.push(...attached.missingGroups);
+    }
+    const uniqueMissingGroups = uniqueStrings(missingGroups);
+    const editorDirty = !!getMihomoPanelApi()?.isEditorDirty?.();
+    if (!_baseFileRevision) _baseFileRevision = await getMihomoFileRevision();
+    const candidate = {
+      content,
+      destinations: Array.from(new Set(selectedOutputs.map((output) => output.type === 'proxy-provider' ? 'proxy-providers' : 'proxies'))),
+      groups,
+      missingGroups: uniqueMissingGroups,
+      editorDirty,
+      outputs: selectedOutputs,
+      baseRevision: _baseFileRevision,
+      sourceEditorContent,
+    };
+    _lastCandidate = candidate;
+    updateMihomoImportContext(_importState, {
+      destination: providerOutputs.length ? 'mixed-or-provider' : 'proxies',
+      candidate: content,
+    });
+    renderCandidateSummary(candidate);
+    return candidate;
+  }
+
+  async function draftCandidateToEditor() {
+    const candidate = await buildImportCandidate();
+    setEditorText(candidate.content);
+    refreshEditor();
+    try { maybePersistGroupsSelection(); } catch (e) {}
+    showModal(false);
+    toastMsg(
+      candidate.missingGroups.length
+        ? `Черновик готов. Неизвестные группы пропущены: ${candidate.missingGroups.join(', ')}.`
+        : 'Черновик добавлен в редактор. Файл не сохранён.',
+      candidate.missingGroups.length ? 'warning' : false,
+    );
+    return candidate;
+  }
+
+  async function commitCandidate(restart) {
+    if (_actionBusy) return false;
+    _actionBusy = true;
+    const saveBtn = $(IDS.btnSave);
+    const applyBtn = $(IDS.btnApply);
+    [saveBtn, applyBtn].forEach((button) => {
+      if (button) button.disabled = true;
+    });
+    try {
+      const candidate = _lastCandidate || await buildImportCandidate();
+      setActionStatus(restart ? 'Проверка candidate → backup/сохранение → restart job…' : 'Проверка candidate → backup/сохранение…', 'info', true);
+      const response = await fetch('/api/mihomo/import/commit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: candidate.content,
+          restart: restart === true,
+          base_revision: candidate.baseRevision,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok) {
+        const message = data && data.error ? String(data.error) : 'Не удалось сохранить candidate.';
+        setActionStatus(message, 'error');
+        return false;
+      }
+
+      let registrationWarning = '';
+      try {
+        const registrations = await registerImportedXraySubscriptions(candidate.content, candidate.groups);
+        if (registrations.length) {
+          await loadManagedXraySubscriptions(true);
+        }
+      } catch (error) {
+        registrationWarning = ` Автообновление не зарегистрировано: ${error && error.message ? error.message : String(error || 'ошибка')}`;
+      }
+
+      const editorUnchanged = String(getEditorText() || '').replace(/\r\n?/g, '\n')
+        === String(candidate.sourceEditorContent || '').replace(/\r\n?/g, '\n');
+      if (editorUnchanged) {
+        setEditorText(candidate.content);
+        refreshEditor();
+        try { getMihomoPanelApi()?.markEditorClean?.(); } catch (e) {}
+      }
+      if (data.revision) _baseFileRevision = String(data.revision);
+
+      if (restart) {
+        const jobId = data.restart_job_id || data.job_id;
+        if (!jobId) {
+          setActionStatus('Файл сохранён, но restart job не получен.', 'warning');
+          return false;
+        }
+        setActionStatus(`Файл сохранён. Ожидаю результат restart job ${jobId}…`, 'info', true);
+        let result = null;
+        try {
+          const commandJobs = getMihomoPanelApi()?.waitForCommandJob;
+          if (typeof commandJobs === 'function') result = await commandJobs(String(jobId));
+        } catch (e) {}
+        if (!result) {
+          while (true) {
+            const poll = await fetch(`/api/restart-job/${encodeURIComponent(String(jobId))}`);
+            result = await poll.json().catch(() => ({}));
+            if (!poll.ok || result.status === 'finished' || result.status === 'error') break;
+            await new Promise((resolve) => setTimeout(resolve, 800));
+          }
+        }
+        if (!result || !result.ok) {
+          setActionStatus(`Файл сохранён, применение не удалось: ${String(result?.error || result?.message || 'неизвестная ошибка')}`, 'error');
+          return false;
+        }
+        setActionStatus(
+          `${editorUnchanged
+            ? 'Применено: файл сохранён, backup создан, Mihomo перезапущен.'
+            : 'Применено: файл сохранён и Mihomo перезапущен. Новые правки в редакторе сохранены как несохранённые.'}${registrationWarning}`,
+          editorUnchanged ? 'success' : 'warning',
+        );
+      } else {
+        setActionStatus(
+          `${editorUnchanged
+            ? 'Файл сохранён без перезапуска. Backup создан.'
+            : 'Файл сохранён без перезапуска. Новые правки в редакторе не перезаписывались.'}${registrationWarning}`,
+          editorUnchanged && !registrationWarning ? 'success' : 'warning',
+        );
+      }
+      if (candidate.missingGroups.length) {
+        setActionStatus(`${$(IDS.actionStatus)?.textContent || ''} Неизвестные группы пропущены: ${candidate.missingGroups.join(', ')}.`, 'warning');
+      }
+      return true;
+    } catch (error) {
+      setActionStatus(error && error.message ? error.message : String(error || 'Ошибка операции.'), 'error');
+      return false;
+    } finally {
+      _actionBusy = false;
+      [saveBtn, applyBtn].forEach((button) => {
+        if (button) button.disabled = false;
+      });
+    }
+  }
+
   async function registerImportedXraySubscriptions(configText, groups) {
     const grouped = groupXrayOutputsByUri(_lastResult && _lastResult.outputs)
       .map((group) => ({ ...group, refreshParser: 'xray-json' }))
@@ -3368,122 +3597,23 @@ let mihomoImportModuleApi = null;
   }
 
   async function insertIntoEditor() {
-    if (
-      !_lastResult
-      || !_lastResult.outputs
-      || !_lastResult.outputs.length
-      || !isCurrentMihomoImportResult(_importState, _lastResult)
-    ) {
-      setStatus('Сначала нажми «Распознать».', true);
-      return;
+    if (_actionBusy) return;
+    const btn = $(IDS.btnInsert);
+    if (btn) {
+      btn.disabled = true;
+      btn.classList.add('loading');
     }
-
-    const btnIns = $(IDS.btnInsert);
-    const btnParse = $(IDS.btnParse);
-
-    if (btnIns) {
-      btnIns.disabled = true;
-      try { btnIns.classList.add('loading'); } catch (e) {}
-    }
-    if (btnParse) {
-      btnParse.disabled = true;
-      try { btnParse.classList.add('loading'); } catch (e2) {}
-    }
-
-    setStatus('Вставляю в config.yaml…', false, null, { busy: true });
-
     try {
-      let txt = getEditorText() || '';
-      if (_selectedDestination === 'provider') applyProviderSettingsFromUi();
-      const selectedOutputs = currentDestinationOutputs();
-
-      // 1) Providers — локальный патч (секция proxy-providers)
-      const providerOutputs = selectedOutputs.filter((output) => output.type === 'proxy-provider');
-      txt = insertProvidersIntoConfig(txt, providerOutputs);
-
-      // 2) Proxies — через backend apply_insert (вставка + добавление в proxy-groups)
-      const groups = readSelectedGroupsFromUi();
-      const proxies = selectedOutputs.filter((o) => o.type === 'proxy');
-      let missingGroups = [];
-
-      for (const o of proxies) {
-        const inserted = await applyInsertProxy(txt, o, groups);
-        txt = inserted.content;
-        missingGroups.push(...inserted.missingGroups);
-      }
-      if (providerOutputs.length) {
-        const attached = await attachProvidersToGroups(txt, providerOutputs, groups);
-        txt = attached.content;
-        missingGroups = attached.missingGroups;
-      }
-      missingGroups = uniqueStrings(missingGroups);
-      updateMihomoImportContext(_importState, {
-        destination: providerOutputs.length
-          ? 'mixed-or-provider'
-          : 'proxies',
-        candidate: txt,
-      });
-
-      let registeredXrayCount = 0;
-      let xrayRegisterFailed = false;
-      try {
-        const registered = await registerImportedXraySubscriptions(txt, groups);
-        registeredXrayCount = Array.isArray(registered) ? registered.length : 0;
-        if (registeredXrayCount) {
-          try { await loadManagedXraySubscriptions(true); } catch (e4b) {}
-        }
-      } catch (registerErr) {
-        xrayRegisterFailed = true;
-        try { console.warn('mihomo import subscription register failed', registerErr); } catch (e4a) {}
-        toastMsg(
-          'YAML вставлен, но автообновление подписки не сохранилось: ' +
-            (registerErr && registerErr.message ? registerErr.message : String(registerErr || 'ошибка')),
-          true,
-        );
-      }
-
-      setEditorText(txt);
-      refreshEditor();
-
-      // Persist groups selection if requested
-      try { maybePersistGroupsSelection(); } catch (e3) {}
-
-      showModal(false);
-      if (!xrayRegisterFailed) {
-        const missingText = missingGroups.length
-          ? ` Неизвестные группы пропущены: ${missingGroups.join(', ')}.`
-          : '';
-        toastMsg(
-          registeredXrayCount
-            ? `Добавлено в config.yaml. Автообновление: ${registeredXrayCount} ${pluralRu(registeredXrayCount, ['подписка', 'подписки', 'подписок'])}.${missingText}`
-            : `Добавлено в config.yaml ✅${missingText}`,
-          false,
-        );
-      }
-
-      try {
-        // mark last activity badge
-        if (typeof window.updateLastActivity === 'function') {
-          const fp = getXkeenFilePath('mihomo', '/opt/etc/mihomo/config.yaml');
-          window.updateLastActivity('modified', 'mihomo', fp);
-        }
-      } catch (e4) {}
-    } catch (e) {
-      console.error(e);
-      setStatus('Ошибка вставки: ' + (e && e.message ? e.message : String(e || 'ошибка')), true);
-      // keep modal open
+      await draftCandidateToEditor();
+    } catch (error) {
+      setStatus(error && error.message ? error.message : String(error || 'Ошибка подготовки черновика.'), true);
     } finally {
-      if (btnIns) {
-        btnIns.disabled = false;
-        try { btnIns.classList.remove('loading'); } catch (e5) {}
-      }
-      if (btnParse) {
-        btnParse.disabled = false;
-        try { btnParse.classList.remove('loading'); } catch (e6) {}
+      if (btn) {
+        btn.disabled = false;
+        btn.classList.remove('loading');
       }
     }
   }
-
 
   // ---------------------------------------------------------------------------
   // Init
@@ -3512,11 +3642,13 @@ let mihomoImportModuleApi = null;
     wireButton(IDS.groupsAllBtn, () => {
       setAllGroupsChecked(true);
       maybePersistGroupsSelection();
+      _lastCandidate = null;
       updateGroupsUiForDestination();
     });
     wireButton(IDS.groupsNoneBtn, () => {
       setAllGroupsChecked(false);
       maybePersistGroupsSelection();
+      _lastCandidate = null;
       updateGroupsUiForDestination();
     });
     wireButton(IDS.amneziaLocationsAllBtn, () => setAllAmneziaLocationsChecked(true));
@@ -3536,6 +3668,8 @@ let mihomoImportModuleApi = null;
 
     wireButton(IDS.btnParse, () => parseInput());
     wireButton(IDS.btnInsert, () => insertIntoEditor());
+    wireButton(IDS.btnSave, () => commitCandidate(false));
+    wireButton(IDS.btnApply, () => commitCandidate(true));
 
     // Persist groups selection (if remember enabled)
     const rememberCb = $(IDS.groupsRemember);
@@ -3548,6 +3682,7 @@ let mihomoImportModuleApi = null;
     if (groupsBox && (!groupsBox.dataset || groupsBox.dataset.mihomoImportGroupsBound !== '1')) {
       groupsBox.addEventListener('change', () => {
         try { maybePersistGroupsSelection(); } catch (e) {}
+        _lastCandidate = null;
         try { updateGroupsUiForDestination(); } catch (e2) {}
       });
       if (groupsBox.dataset) groupsBox.dataset.mihomoImportGroupsBound = '1';
@@ -3579,6 +3714,7 @@ let mihomoImportModuleApi = null;
     const xrayIntervalInput = $(IDS.xrayInterval);
     if (xrayIntervalInput && (!xrayIntervalInput.dataset || xrayIntervalInput.dataset.mihomoImportXrayIntervalBound !== '1')) {
       xrayIntervalInput.addEventListener('change', () => {
+        _lastCandidate = null;
         const hours = readXrayIntervalHours();
         saveXrayIntervalPref(hours);
         if (_lastResult && (xrayBulkOutputs(_lastResult.outputs).length || providerStaticBulkOutputs(_lastResult.outputs).length)) {

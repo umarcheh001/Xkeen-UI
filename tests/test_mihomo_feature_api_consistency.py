@@ -91,10 +91,10 @@ def test_mihomo_menu_feature_flows_keep_editor_patch_integrations_and_single_sav
 
     expectations = {
         "xkeen-ui/static/js/features/mihomo_import.js": [
-                "const inserted = await applyInsertProxy(txt, o, groups);",
-                "txt = inserted.content;",
-                "await attachProvidersToGroups(txt, providerOutputs, groups);",
-            "setEditorText(txt);",
+                "const inserted = await applyInsertProxy(content, proxy, groups);",
+                "content = inserted.content;",
+                "await attachProvidersToGroups(content, providerOutputs, groups);",
+                "setEditorText(candidate.content);",
             "refreshEditor();",
             "const api = getMihomoPanelApi();",
                 "return _importApi.postJSON('/api/mihomo/provider/probe', {",

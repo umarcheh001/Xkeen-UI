@@ -419,3 +419,35 @@ test('ordinary provider fallback handles fulfilled not_xray_json without eager p
   await page.locator('#mihomo-import-preview-toggle').click();
   await expect(page.locator(`${MODAL} .cm-content`)).toContainText('Stage3-provider');
 });
+
+test('candidate actions distinguish draft, save-only, and apply outcomes', async ({ page }) => {
+  await prepare(page);
+  await open(page);
+  await page.locator('#mihomo-import-input').fill(LINK);
+  await page.locator('#mihomo-import-parse-btn').click();
+  await expect(page.locator('#mihomo-import-save-btn')).toBeVisible();
+  await expect(page.locator('#mihomo-import-apply-btn')).toBeVisible();
+
+  await page.route('**/api/mihomo/import/commit', (route) => route.fulfill({
+    json: { ok: true, saved: true, backup: 'mihomo-2026.yaml', revision: 'saved-revision' },
+  }));
+  await page.locator('#mihomo-import-save-btn').click();
+  await expect(page.locator('#mihomo-import-action-status')).toContainText('Файл сохранён без перезапуска');
+  await expect(page.locator('#mihomo-import-candidate-summary')).toContainText('Итог candidate');
+
+  await page.unroute('**/api/mihomo/import/commit');
+  const requests = [];
+  await page.route('**/api/mihomo/import/commit', (route) => {
+    requests.push(route.request().postDataJSON());
+    return route.fulfill({ status: 202, json: {
+      ok: true, saved: true, backup: 'mihomo-apply.yaml',
+      revision: 'applied-revision', restart_job_id: 'job-stage6',
+    } });
+  });
+  await page.route('**/api/restart-job/job-stage6', (route) => route.fulfill({
+    json: { ok: true, status: 'finished', exit_code: 0, output: 'restart ok' },
+  }));
+  await page.locator('#mihomo-import-apply-btn').click();
+  await expect(page.locator('#mihomo-import-action-status')).toContainText('Применено');
+  expect(requests[0].restart).toBe(true);
+});
