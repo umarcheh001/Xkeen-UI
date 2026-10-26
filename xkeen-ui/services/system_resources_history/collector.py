@@ -34,7 +34,7 @@ from . import sensors
 from .persist import load_history, save_history
 from .problems import ProblemTracker
 from .store import HistoryStore
-from .zones import hotter_than_usual, red_from, zone
+from .zones import hotter_than_usual, red_from, temp_bands, zone
 
 log = logging.getLogger(__name__)
 
@@ -484,6 +484,7 @@ class Collector:
                         "shutdown_c": shutdown,
                         "zone": zone(f"temp:{g.id}", g.value_c, kind=g.kind),
                         "usual_c": usual,
+                        "bands": temp_bands(g.kind),
                         "hotter_by_c": hotter_than_usual(g.value_c, usual) if g.value_c is not None else None,
                     }
                 )

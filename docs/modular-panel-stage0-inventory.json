@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 604,
-      "size_bytes": 8146969,
+      "size_bytes": 8149107,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -358,14 +358,14 @@
         "ndmc (router diagnostics optional)"
       ],
       "removable": true,
-      "unit_count": 43,
-      "size_bytes": 636617,
+      "unit_count": 45,
+      "size_bytes": 678382,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 15,
         "backend_test": 11,
         "frontend_entrypoint": 1,
-        "frontend_feature": 10,
+        "frontend_feature": 12,
         "frontend_javascript": 2,
         "frontend_test": 1,
         "template": 2
@@ -12835,7 +12835,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/router_resource_dashboard.spec.mjs",
-      "size_bytes": 11835,
+      "size_bytes": 22795,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -13850,7 +13850,7 @@
       "module_id": "core",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/panel-operator.css",
-      "size_bytes": 821078,
+      "size_bytes": 822040,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -14170,7 +14170,7 @@
       "module_id": "core",
       "kind": "template",
       "path": "xkeen-ui/templates/panel/modals/diagnostics.html",
-      "size_bytes": 26216,
+      "size_bytes": 16432,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -22747,7 +22747,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_service",
       "path": "xkeen-ui/services/system_resources_history/collector.py",
-      "size_bytes": 34778,
+      "size_bytes": 34843,
       "depends_on": [
         "core"
       ],
@@ -22864,7 +22864,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_service",
       "path": "xkeen-ui/services/system_resources_history/zones.py",
-      "size_bytes": 1935,
+      "size_bytes": 2222,
       "depends_on": [
         "core"
       ],
@@ -22883,7 +22883,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_resource_monitor_frontend.py",
-      "size_bytes": 7958,
+      "size_bytes": 7252,
       "depends_on": [
         "core"
       ],
@@ -22959,7 +22959,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_system_resources_api.py",
-      "size_bytes": 16668,
+      "size_bytes": 16788,
       "depends_on": [
         "core"
       ],
@@ -23430,7 +23430,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor.js",
-      "size_bytes": 82061,
+      "size_bytes": 84352,
       "depends_on": [
         "core"
       ],
@@ -23464,7 +23464,66 @@
       "background_markers": [],
       "registers_routes": false,
       "routes": [],
-      "frontend_bundle": [],
+      "frontend_bundle": [
+        "devtools-page",
+        "mihomo-generator-page",
+        "modules-page",
+        "panel-core",
+        "terminal-lazy",
+        "xkeen-page"
+      ],
+      "system_requirements": [
+        "ndmc (router diagnostics optional)"
+      ],
+      "environment_variables": [],
+      "removable": true
+    },
+    {
+      "module_id": "tool.advanced-diagnostics",
+      "kind": "frontend_feature",
+      "path": "xkeen-ui/static/js/features/resource_monitor/view.js",
+      "size_bytes": 25837,
+      "depends_on": [
+        "core"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [
+        "devtools-page",
+        "mihomo-generator-page",
+        "modules-page",
+        "panel-core",
+        "terminal-lazy",
+        "xkeen-page"
+      ],
+      "system_requirements": [
+        "ndmc (router diagnostics optional)"
+      ],
+      "environment_variables": [],
+      "removable": true
+    },
+    {
+      "module_id": "tool.advanced-diagnostics",
+      "kind": "frontend_feature",
+      "path": "xkeen-ui/static/js/features/resource_monitor/view_css.js",
+      "size_bytes": 13871,
+      "depends_on": [
+        "core"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [
+        "devtools-page",
+        "mihomo-generator-page",
+        "modules-page",
+        "panel-core",
+        "terminal-lazy",
+        "xkeen-page"
+      ],
       "system_requirements": [
         "ndmc (router diagnostics optional)"
       ],
@@ -30225,7 +30284,7 @@
     {
       "id": "panel-core",
       "root": "xkeen-ui/static/js/pages/panel.entry.js",
-      "file_count": 289,
+      "file_count": 292,
       "module_ids": [
         "core",
         "engine.mihomo",
@@ -30338,6 +30397,9 @@
         "xkeen-ui/static/js/features/panel_log_view.js",
         "xkeen-ui/static/js/features/panel_summary.js",
         "xkeen-ui/static/js/features/resource_monitor.js",
+        "xkeen-ui/static/js/features/resource_monitor/canvas_charts.js",
+        "xkeen-ui/static/js/features/resource_monitor/view.js",
+        "xkeen-ui/static/js/features/resource_monitor/view_css.js",
         "xkeen-ui/static/js/features/resource_monitor_model.js",
         "xkeen-ui/static/js/features/resource_summary.js",
         "xkeen-ui/static/js/features/restart_log.js",
@@ -30653,7 +30715,7 @@
     {
       "id": "terminal-lazy",
       "root": "xkeen-ui/static/js/pages/terminal.lazy.entry.js",
-      "file_count": 182,
+      "file_count": 185,
       "module_ids": [
         "core",
         "engine.mihomo",
@@ -30716,6 +30778,9 @@
         "xkeen-ui/static/js/features/mihomo_yaml_patch.js",
         "xkeen-ui/static/js/features/outbounds.js",
         "xkeen-ui/static/js/features/resource_monitor.js",
+        "xkeen-ui/static/js/features/resource_monitor/canvas_charts.js",
+        "xkeen-ui/static/js/features/resource_monitor/view.js",
+        "xkeen-ui/static/js/features/resource_monitor/view_css.js",
         "xkeen-ui/static/js/features/resource_monitor_model.js",
         "xkeen-ui/static/js/features/restart_log.js",
         "xkeen-ui/static/js/features/restart_log_sources.js",
@@ -30898,7 +30963,7 @@
     {
       "id": "devtools-page",
       "root": "xkeen-ui/static/js/pages/devtools.entry.js",
-      "file_count": 289,
+      "file_count": 292,
       "module_ids": [
         "core",
         "engine.mihomo",
@@ -31011,6 +31076,9 @@
         "xkeen-ui/static/js/features/panel_log_view.js",
         "xkeen-ui/static/js/features/panel_summary.js",
         "xkeen-ui/static/js/features/resource_monitor.js",
+        "xkeen-ui/static/js/features/resource_monitor/canvas_charts.js",
+        "xkeen-ui/static/js/features/resource_monitor/view.js",
+        "xkeen-ui/static/js/features/resource_monitor/view_css.js",
         "xkeen-ui/static/js/features/resource_monitor_model.js",
         "xkeen-ui/static/js/features/resource_summary.js",
         "xkeen-ui/static/js/features/restart_log.js",
@@ -31205,7 +31273,7 @@
     {
       "id": "xkeen-page",
       "root": "xkeen-ui/static/js/pages/xkeen.entry.js",
-      "file_count": 289,
+      "file_count": 292,
       "module_ids": [
         "core",
         "engine.mihomo",
@@ -31318,6 +31386,9 @@
         "xkeen-ui/static/js/features/panel_log_view.js",
         "xkeen-ui/static/js/features/panel_summary.js",
         "xkeen-ui/static/js/features/resource_monitor.js",
+        "xkeen-ui/static/js/features/resource_monitor/canvas_charts.js",
+        "xkeen-ui/static/js/features/resource_monitor/view.js",
+        "xkeen-ui/static/js/features/resource_monitor/view_css.js",
         "xkeen-ui/static/js/features/resource_monitor_model.js",
         "xkeen-ui/static/js/features/resource_summary.js",
         "xkeen-ui/static/js/features/restart_log.js",
@@ -31512,7 +31583,7 @@
     {
       "id": "mihomo-generator-page",
       "root": "xkeen-ui/static/js/pages/mihomo_generator.entry.js",
-      "file_count": 289,
+      "file_count": 292,
       "module_ids": [
         "core",
         "engine.mihomo",
@@ -31625,6 +31696,9 @@
         "xkeen-ui/static/js/features/panel_log_view.js",
         "xkeen-ui/static/js/features/panel_summary.js",
         "xkeen-ui/static/js/features/resource_monitor.js",
+        "xkeen-ui/static/js/features/resource_monitor/canvas_charts.js",
+        "xkeen-ui/static/js/features/resource_monitor/view.js",
+        "xkeen-ui/static/js/features/resource_monitor/view_css.js",
         "xkeen-ui/static/js/features/resource_monitor_model.js",
         "xkeen-ui/static/js/features/resource_summary.js",
         "xkeen-ui/static/js/features/restart_log.js",
@@ -31819,7 +31893,7 @@
     {
       "id": "modules-page",
       "root": "xkeen-ui/static/js/pages/modules.entry.js",
-      "file_count": 289,
+      "file_count": 292,
       "module_ids": [
         "core",
         "engine.mihomo",
@@ -31932,6 +32006,9 @@
         "xkeen-ui/static/js/features/panel_log_view.js",
         "xkeen-ui/static/js/features/panel_summary.js",
         "xkeen-ui/static/js/features/resource_monitor.js",
+        "xkeen-ui/static/js/features/resource_monitor/canvas_charts.js",
+        "xkeen-ui/static/js/features/resource_monitor/view.js",
+        "xkeen-ui/static/js/features/resource_monitor/view_css.js",
         "xkeen-ui/static/js/features/resource_monitor_model.js",
         "xkeen-ui/static/js/features/resource_summary.js",
         "xkeen-ui/static/js/features/restart_log.js",
@@ -32763,7 +32840,7 @@
       {
         "from": "tool.advanced-diagnostics",
         "to": "core",
-        "unit_count": 43,
+        "unit_count": 45,
         "examples": [
           "xkeen-ui/routes/system_resources.py",
           "xkeen-ui/services/devtools/__init__.py",
@@ -33199,7 +33276,7 @@
       {
         "from": "tool.advanced-diagnostics",
         "to": "core",
-        "unit_count": 31,
+        "unit_count": 33,
         "examples": [
           "xkeen-ui/routes/system_resources.py",
           "xkeen-ui/services/devtools/__init__.py",
@@ -33789,8 +33866,8 @@
           "size_bytes": 1008333
         },
         "tool.advanced-diagnostics": {
-          "unit_count": 43,
-          "size_bytes": 636617
+          "unit_count": 45,
+          "size_bytes": 678382
         }
       },
       "next_stage": "Этапы 4, 5 и 6."

@@ -27,15 +27,12 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
         "xk-resource-chart-memory",
         "xk-resource-chart-network",
         "xk-resource-chart-load",
-        "xk-resource-poll",
         "xk-resource-export",
-        "xk-resource-dashboard-resource-source",
+        "xk-resource-dashboard-view",
+        "xk-resource-more",
+        "xk-resource-more-menu",
         "xk-clients-show-all",
         "xk-resource-dashboard-refresh",
-        "xk-internet-health",
-        "xk-internet-check-dns-row",
-        "xk-dns-guidance",
-        "xk-conntrack-panel",
         "xk-interface-rows",
         "xk-interface-panel",
         "xk-process-panel",
@@ -57,23 +54,12 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
         "xk-system-details",
     ):
         assert f'id="{element_id}"' in template
-    assert 'data-dns-toggle="false"' in template
-    assert 'aria-controls="xk-dns-guidance"' in template
-    assert 'hidden aria-hidden="true"' in template
-    assert "Ошибки DNS (DoH/DoT)" in template
-    assert "Подробности — в журнале диагностики Keenetic." in template
     assert "Проблемные подключения" not in template
     assert "Что можно сделать" not in template
     assert "Графики показывают нагрузку роутера, а причина указана в блоке DNS ниже" not in script
     assert "Графики ниже показывают ресурсы роутера, но не определяют доступность DNS-upstream" not in template
     assert 'xk-collapsible-panel' in template
     assert 'class="btn-secondary xk-toggle-button" id="xk-channel-trace"' in template
-    for tooltip in (
-        "Шлюз — первый узел провайдера.",
-        "DNS преобразует имена сайтов в IP-адреса.",
-        "Captive portal — страница авторизации сети",
-    ):
-        assert tooltip in template
     for fragment in (
         "setDashboardOpen(true)",
         "data-resource-range",

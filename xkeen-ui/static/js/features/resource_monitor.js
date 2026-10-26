@@ -1,6 +1,10 @@
 import { metricNumber, selectHistory, nearestPointIndex, resourceHealth, buildResourceSnapshot, collectionGap, historyGaps, gapAtTime, selectClients } from "./resource_monitor_model.js";
 
+import { mountDashboardView } from "./resource_monitor/view.js";
+
 const ENDPOINT = "/api/system/resources";
+const SUMMARY_ENDPOINT = "/api/system/summary";
+const HARDWARE_ENDPOINT = "/api/system/hardware";
 const PROCESS_ENDPOINT = "/api/system/processes";
 const CLIENTS_ENDPOINT = "/api/system/router/clients";
 const LTE_ENDPOINT = "/api/system/router/lte";
@@ -216,13 +220,61 @@ function setDashboardOpen(open) {
     if (open) byId("xk-resource-dashboard-close")?.focus();
   }
   if (trigger) trigger.setAttribute("aria-expanded", open ? "true" : "false");
+  if (!open) setMoreMenuOpen(false);
   if (open) {
+    void loadDashboardView();
     try {
       requestAnimationFrame(drawCharts);
     } catch (error) {
       drawCharts();
     }
   }
+}
+
+// The new window (shadow DOM). Task 10 replaces this single fetch with the polling
+// controller; until then the window is filled once per opening.
+let dashboardView = null;
+let dashboardViewRequest = null;
+
+function ensureDashboardView() {
+  if (dashboardView) return dashboardView;
+  const host = byId("xk-resource-dashboard-view");
+  if (!host) return null;
+  dashboardView = mountDashboardView(host);
+  return dashboardView;
+}
+
+async function fetchJson(url) {
+  const response = await fetch(url, { method: "GET", cache: "no-store", credentials: "same-origin" });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
+}
+
+function loadDashboardView() {
+  const view = ensureDashboardView();
+  if (!view) return Promise.resolve();
+  if (dashboardViewRequest) return dashboardViewRequest;
+  dashboardViewRequest = Promise.allSettled([fetchJson(SUMMARY_ENDPOINT), fetchJson(HARDWARE_ENDPOINT)])
+    .then(([summary, hardware]) => {
+      if (hardware.status === "fulfilled") view.renderHardware(hardware.value);
+      if (summary.status === "fulfilled") {
+        view.renderSummary(summary.value);
+        view.renderConnection(summary.value.router);
+      }
+      view.redraw();
+    })
+    .finally(() => {
+      dashboardViewRequest = null;
+    });
+  return dashboardViewRequest;
+}
+
+function setMoreMenuOpen(open) {
+  const menu = byId("xk-resource-more-menu");
+  const button = byId("xk-resource-more");
+  if (!menu || !button) return;
+  menu.hidden = !open;
+  button.setAttribute("aria-expanded", open ? "true" : "false");
 }
 
 function render(payload) {
@@ -1805,13 +1857,26 @@ export function initResourceMonitor() {
       if (section.open) requestAnimationFrame(drawCharts);
     });
   });
-  byId("xk-resource-export")?.addEventListener("click", exportSnapshot);
-  byId("xk-resource-poll")?.addEventListener("change", (event) => {
-    const value = Number(event.target.value);
-    pollMs = [0, 5000, 15000, 30000].includes(value) ? value : POLL_MS;
-    syncTelemetryState();
-    schedule();
+  byId("xk-resource-export")?.addEventListener("click", () => {
+    setMoreMenuOpen(false);
+    exportSnapshot();
   });
+  byId("xk-resource-more")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    setMoreMenuOpen(byId("xk-resource-more-menu")?.hidden !== false);
+  });
+  document.addEventListener("click", (event) => {
+    const menu = byId("xk-resource-more-menu");
+    if (menu && !menu.hidden && !menu.contains(event.target)) setMoreMenuOpen(false);
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    const menu = byId("xk-resource-more-menu");
+    if (!menu || menu.hidden) return;
+    event.stopPropagation();
+    setMoreMenuOpen(false);
+    byId("xk-resource-more")?.focus();
+  }, true);
   const dnsToggle = byId("xk-internet-check-dns-row");
   dnsToggle?.addEventListener("click", toggleDnsGuidance);
   dnsToggle?.addEventListener("keydown", (event) => {
@@ -1829,6 +1894,7 @@ export function initResourceMonitor() {
     "click",
     () => {
       void refresh();
+      void loadDashboardView();
       void loadDnsDiagnostics({ force: true });
     },
   );

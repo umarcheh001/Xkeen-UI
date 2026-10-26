@@ -3,121 +3,22 @@
       <div class="modal-content xk-resource-dashboard-content">
         <div class="modal-header xk-resource-dashboard-header">
           <div class="xk-resource-dashboard-heading">
-            <span class="xk-dashboard-eyebrow">Система / Мониторинг</span>
             <span class="modal-title" id="xk-resource-dashboard-title">Диагностика роутера</span>
-            <span id="xk-resource-dashboard-freshness" class="xk-resource-dashboard-freshness">Ожидание телеметрии</span>
+            <span id="xk-resource-dashboard-freshness" class="xk-resource-dashboard-freshness">Обновлено —</span>
           </div>
           <div class="xk-resource-dashboard-actions">
-            <div class="xk-resource-range" role="group" aria-label="Интервал графиков">
-              <button type="button" class="btn-secondary is-active" data-resource-range="5" aria-pressed="true" data-tooltip="Показать последние 5 минут телеметрии">5 мин</button>
-              <button type="button" class="btn-secondary" data-resource-range="15" aria-pressed="false" data-tooltip="Показать последние 15 минут телеметрии">15 мин</button>
-              <button type="button" class="btn-secondary" data-resource-range="30" aria-pressed="false" data-tooltip="Показать последние 30 минут телеметрии">30 мин</button>
-              <button type="button" class="btn-secondary" data-resource-range="60" aria-pressed="false" data-tooltip="Показать последний час телеметрии">1 ч</button>
-              <button type="button" class="btn-secondary" data-resource-range="360" aria-pressed="false" data-tooltip="Показать последние 6 часов телеметрии">6 ч</button>
-              <button type="button" class="btn-secondary" data-resource-range="1440" aria-pressed="false" data-tooltip="Показать последние 24 часа телеметрии">24 ч</button>
+            <button type="button" class="btn-secondary btn-icon" id="xk-resource-dashboard-refresh" aria-label="Обновить" data-tooltip="Обновить: запросить свежие данные роутера">{{ op_icon('refresh') }}</button>
+            <div class="xk-resource-more">
+              <button type="button" class="btn-secondary btn-icon" id="xk-resource-more" aria-haspopup="true" aria-expanded="false" aria-controls="xk-resource-more-menu" aria-label="Ещё" data-tooltip="Ещё">{{ op_icon('more') }}</button>
+              <div class="xk-resource-more-menu" id="xk-resource-more-menu" role="menu" hidden>
+                <button type="button" role="menuitem" id="xk-resource-export" disabled data-tooltip="Скачать JSON: ресурсы и история за выбранный интервал, без IP-адресов, клиентов и журналов">Снимок JSON</button>
+              </div>
             </div>
-            <label class="xk-dashboard-poll" data-tooltip="Частота лёгкого опроса ресурсов. Тяжёлые проверки запускаются только вручную.">
-              <span>Обновление</span>
-              <select id="xk-resource-poll" aria-label="Автообновление телеметрии">
-                <option value="5000">5 с</option>
-                <option value="15000">15 с</option>
-                <option value="30000">30 с</option>
-                <option value="0">Пауза</option>
-              </select>
-            </label>
-            <button type="button" class="btn-secondary" id="xk-resource-export" disabled data-tooltip="Скачать JSON: ресурсы и история за выбранный интервал, без IP-адресов, клиентов и журналов">Снимок JSON</button>
-            <button type="button" class="btn-secondary btn-icon" id="xk-resource-dashboard-refresh" aria-label="Обновить телеметрию" data-tooltip="Запросить свежую телеметрию роутера">{{ op_icon('refresh') }}</button>
             <button type="button" class="modal-close" id="xk-resource-dashboard-close" aria-label="Закрыть" data-tooltip="Закрыть диагностику роутера">{{ op_icon('close') }}</button>
           </div>
         </div>
         <div class="modal-body xk-resource-dashboard-body">
-          <div class="xk-resource-health" id="xk-resource-health" data-tone="unknown" role="status">
-            <span class="xk-resource-health-dot" aria-hidden="true"></span>
-            <strong id="xk-resource-health-title">Ожидание телеметрии</strong>
-            <span id="xk-resource-health-note">Получаем состояние роутера</span>
-            <span class="xk-dashboard-live" id="xk-resource-live" data-state="waiting">Ожидание</span>
-          </div>
-
-          <details class="xk-dashboard-section" id="xk-dashboard-overview" open>
-            <summary>Обзор <span>Ключевые показатели в реальном времени</span></summary>
-            <section class="xk-resource-overview" aria-label="Ключевые показатели">
-              <article class="xk-dashboard-tile xk-dashboard-resources">
-                <h3>Системные ресурсы</h3>
-                <div class="xk-dashboard-gauge" data-resource-stat="cpu">
-                  <span>CPU</span><div class="xk-resource-stat-meter"><i id="xk-resource-dashboard-cpu-meter"></i></div><strong id="xk-resource-dashboard-cpu">—</strong>
-                </div>
-                <div class="xk-dashboard-gauge" data-resource-stat="memory">
-                  <span>RAM</span><div class="xk-resource-stat-meter"><i id="xk-resource-dashboard-memory-meter"></i></div><strong id="xk-resource-dashboard-memory">—</strong>
-                </div>
-                <div class="xk-dashboard-gauge" data-resource-stat="swap">
-                  <span>Swap</span><div class="xk-resource-stat-meter"><i id="xk-resource-dashboard-swap-meter"></i></div><strong id="xk-resource-dashboard-swap">—</strong>
-                </div>
-                <small id="xk-resource-dashboard-memory-note">Ожидание данных памяти</small>
-                <small id="xk-resource-dashboard-resource-source">Источник показаний определяется</small>
-              </article>
-              <article class="xk-dashboard-tile xk-dashboard-load">
-                <h3 data-tooltip="Load average — число выполняющихся или ожидающих задач, не проценты CPU. Значение около числа ядер означает полную загрузку.">Средняя нагрузка</h3>
-                {% for interval in [1, 5, 15] %}
-                <div class="xk-dashboard-gauge">
-                  <span>{{ interval }} мин</span><div class="xk-resource-stat-meter"><i id="xk-resource-load-{{ interval }}-meter"></i></div><strong id="xk-resource-load-{{ interval }}">—</strong>
-                </div>
-                {% endfor %}
-                <small id="xk-resource-dashboard-load">Load —</small>
-              </article>
-              <article class="xk-dashboard-tile xk-dashboard-network">
-                <h3>Сетевой трафик</h3>
-                <div class="xk-dashboard-rate"><span>↓ Приём</span><strong id="xk-resource-network-receive">—</strong></div>
-                <div class="xk-dashboard-rate"><span>↑ Отдача</span><strong id="xk-resource-network-send">—</strong></div>
-                <small>Сумма интерфейсов, не скорость WAN</small>
-              </article>
-              <article class="xk-dashboard-tile xk-dashboard-single" data-resource-stat="storage">
-                <h3>Диск Entware</h3><strong id="xk-resource-dashboard-storage">—</strong><small id="xk-resource-dashboard-storage-note">—</small>
-                <div class="xk-resource-stat-meter"><i id="xk-resource-dashboard-storage-meter"></i></div>
-              </article>
-              <article class="xk-dashboard-tile xk-dashboard-single" data-resource-stat="temperature">
-                <h3>Температура</h3><strong id="xk-resource-dashboard-temperature">—</strong><small id="xk-resource-dashboard-uptime">Аптайм —</small>
-                <div class="xk-resource-stat-meter"><i id="xk-resource-dashboard-temperature-meter"></i></div>
-              </article>
-            </section>
-          </details>
-
-          <details class="xk-dashboard-section" id="xk-dashboard-connectivity" open>
-            <summary>Подключение <span>Интернет, DNS и таблица соединений</span></summary>
-          <section class="xk-router-diagnostics" aria-label="Состояние подключения и соединений">
-            <article class="xk-resource-panel xk-internet-health" id="xk-internet-health" data-tone="unknown">
-              <header>
-                <div><strong>Доступность интернета</strong><span id="xk-internet-summary">Ожидание данных RCI</span></div>
-                <span class="xk-resource-state-badge" id="xk-internet-state">—</span>
-              </header>
-              <div class="xk-internet-checks">
-                <div data-internet-check="internet"><i></i><span>Internet</span><strong id="xk-internet-check-internet">—</strong></div>
-                <div data-internet-check="gateway" data-tooltip="Шлюз — первый узел провайдера. Проверка показывает, доступен ли выход из вашей сети." data-tooltip-placement="bottom"><i></i><span>Gateway</span><strong id="xk-internet-check-gateway">—</strong></div>
-                <div id="xk-internet-check-dns-row" data-internet-check="dns" data-dns-toggle="false" role="button" tabindex="-1" aria-controls="xk-dns-guidance" aria-expanded="false" aria-disabled="true" data-tooltip="DNS преобразует имена сайтов в IP-адреса. Диагностика также учитывает ошибки зашифрованных DoH/DoT-транспортов в журнале роутера." data-tooltip-placement="bottom"><i></i><span>DNS</span><strong id="xk-internet-check-dns">—</strong></div>
-                <div data-internet-check="captive" data-tooltip="Captive portal — страница авторизации сети, например Wi‑Fi в отеле. «Нет перехвата» означает, что авторизация не требуется." data-tooltip-placement="bottom"><i></i><span>Captive</span><strong id="xk-internet-check-captive">—</strong></div>
-              </div>
-              <dl class="xk-internet-meta">
-                <div><dt>Интерфейс</dt><dd id="xk-internet-interface">—</dd></div>
-                <div><dt>WAN-адрес</dt><dd id="xk-internet-address">—</dd></div>
-                <div><dt>Свежесть</dt><dd id="xk-router-freshness">—</dd></div>
-              </dl>
-            </article>
-
-            <article class="xk-resource-panel xk-conntrack-panel" id="xk-conntrack-panel" data-tone="unknown">
-              <header><div><strong>Conntrack</strong><span>Активные NAT-соединения</span></div><span class="xk-resource-state-badge" id="xk-conntrack-state">—</span></header>
-              <div class="xk-conntrack-value"><strong id="xk-conntrack-percent">—</strong><span id="xk-conntrack-usage">Данные недоступны</span></div>
-              <div class="xk-conntrack-meter" role="progressbar" aria-label="Заполнение таблицы соединений" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="xk-conntrack-meter"></i></div>
-              <span class="xk-conntrack-note" id="xk-conntrack-available">—</span>
-            </article>
-          </section>
-
-          <aside class="xk-dns-guidance" id="xk-dns-guidance" role="status" aria-live="polite" hidden aria-hidden="true" data-state="idle" aria-busy="false">
-            <span class="xk-dns-guidance-dot" aria-hidden="true"></span>
-            <div>
-              <strong id="xk-dns-guidance-title">Ошибки DNS (DoH/DoT)</strong>
-              <span id="xk-dns-guidance-note">Подробности — в журнале диагностики Keenetic.</span>
-            </div>
-          </aside>
-          </details>
+          <div id="xk-resource-dashboard-view"></div>
 
           <details class="xk-dashboard-section" id="xk-dashboard-history" open>
             <summary>История нагрузки <span id="xk-resource-history-note">CPU, память и сеть · для поиска пиков за выбранный интервал</span></summary>

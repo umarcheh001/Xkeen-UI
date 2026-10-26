@@ -50,6 +50,13 @@ def red_from(metric: str) -> float | None:
     return _FIXED[metric][1] if metric in _FIXED else None
 
 
+def temp_bands(kind: str | None) -> dict[str, float] | None:
+    """Degrees from which a sensor kind is orange / red, for drawing the scale; ``None`` for an unknown kind."""
+    if kind not in _TEMP:
+        return None
+    return {"orange_c": _TEMP[kind][0], "red_c": _TEMP[kind][1]}
+
+
 def hotter_than_usual(value: float, median: float | None) -> int | None:
     """Degrees above the usual (median) temperature when that is 15 or more, else ``None``."""
     if median is None:

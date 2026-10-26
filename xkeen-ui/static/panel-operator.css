@@ -22552,6 +22552,13 @@ body.panel-page .xk-resource-dashboard-header { align-items: center; gap: 16px; 
 body.panel-page .xk-resource-dashboard-heading { display: grid; gap: 3px; min-width: 0; }
 body.panel-page .xk-resource-dashboard-freshness { color: var(--op-muted); font-size: calc(10px * var(--xk-font-scale, 1)); }
 body.panel-page .xk-resource-dashboard-actions { display: flex; align-items: center; gap: 7px; margin-left: auto; }
+body.panel-page .xk-resource-more { position: relative; }
+body.panel-page .xk-resource-more-menu { position: absolute; z-index: 5; top: calc(100% + 6px); right: 0; display: grid; min-width: 170px; padding: 4px; border: 1px solid var(--op-border-strong); border-radius: var(--op-radius, 8px); background: var(--op-surface); box-shadow: var(--op-shadow-float); }
+body.panel-page .xk-resource-more-menu[hidden] { display: none; }
+body.panel-page .xk-resource-more-menu button { justify-content: flex-start; min-height: 30px; padding: 0 10px; border: 0; border-radius: var(--op-control-radius, 6px); background: transparent; color: var(--op-text); font: inherit; text-align: left; cursor: pointer; }
+body.panel-page .xk-resource-more-menu button:hover:not(:disabled) { background: var(--op-surface-3); }
+body.panel-page .xk-resource-more-menu button:disabled { color: var(--op-faint); cursor: default; }
+body.panel-page #xk-resource-dashboard-view { min-width: 0; }
 body.panel-page .xk-resource-range { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--op-border); border-radius: var(--op-control-radius); background: var(--op-surface); }
 body.panel-page .xk-resource-range button { min-height: 26px; padding-inline: 8px; border: 0; background: transparent; color: var(--op-muted); font-size: calc(10px * var(--xk-font-scale, 1)); }
 body.panel-page .xk-resource-range button:hover,
