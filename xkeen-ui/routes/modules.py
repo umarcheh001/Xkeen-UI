@@ -22,10 +22,15 @@ def create_modules_blueprint(
     before_change: Callable[[str, bool], dict[str, Any] | None] | None = None,
     lifecycle_service: ModuleLifecycleService | None = None,
     notification_center: NotificationCenter | None = None,
+    panel_update_preparer: Any | None = None,
 ) -> Blueprint:
     """Create the configuration-only module registry API blueprint."""
 
     bp = Blueprint("modules", __name__)
+    if panel_update_preparer is None and lifecycle_service is not None:
+        from services.panel_update_prepare import PanelUpdatePreparer
+
+        panel_update_preparer = PanelUpdatePreparer(lifecycle_service)
 
     def success(payload: dict[str, Any], status: int = 200):
         response = jsonify(payload)
@@ -289,6 +294,23 @@ def create_modules_blueprint(
         return lifecycle_response(
             lambda: lifecycle_service.plan(operation, payload.get("module_id"))
         )
+
+    # A panel update is prepared in the background: the window watches the
+    # download and the check of the release instead of a silent request.
+    @bp.post("/api/modules/panel/prepare")
+    def api_modules_panel_prepare():
+        _payload, failure = lifecycle_body(allowed=set(), required=set())
+        if failure is not None:
+            return failure
+        return lifecycle_response(lambda: {"ok": True, **panel_update_preparer.start()})
+
+    @bp.get("/api/modules/panel/prepare/<prepare_id>")
+    def api_modules_panel_prepare_status(prepare_id: str):
+        return lifecycle_response(lambda: {"ok": True, **panel_update_preparer.status(prepare_id)})
+
+    @bp.post("/api/modules/panel/prepare/<prepare_id>/cancel")
+    def api_modules_panel_prepare_cancel(prepare_id: str):
+        return lifecycle_response(lambda: {"ok": True, **panel_update_preparer.cancel(prepare_id)})
 
     @bp.post("/api/modules/operations/apply")
     def api_modules_operation_apply():

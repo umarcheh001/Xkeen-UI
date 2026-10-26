@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 598,
-      "size_bytes": 8082842,
+      "size_bytes": 8086423,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -56,7 +56,7 @@
         "stylesheet": 9,
         "template": 32
       },
-      "route_count": 104,
+      "route_count": 107,
       "background_task_count": 4,
       "ui_surface_count": 36,
       "representative_paths": [
@@ -919,7 +919,7 @@
       "module_id": "core",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/modules.py",
-      "size_bytes": 22047,
+      "size_bytes": 23196,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -953,6 +953,11 @@
         {
           "method": "GET",
           "path": "/api/modules/operations/status",
+          "decorator": "bp.get"
+        },
+        {
+          "method": "GET",
+          "path": "/api/modules/panel/prepare/<prepare_id>",
           "decorator": "bp.get"
         },
         {
@@ -1018,6 +1023,16 @@
         {
           "method": "POST",
           "path": "/api/modules/operations/plan",
+          "decorator": "bp.post"
+        },
+        {
+          "method": "POST",
+          "path": "/api/modules/panel/prepare",
+          "decorator": "bp.post"
+        },
+        {
+          "method": "POST",
+          "path": "/api/modules/panel/prepare/<prepare_id>/cancel",
           "decorator": "bp.post"
         },
         {
@@ -5943,7 +5958,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_lifecycle_routes.py",
-      "size_bytes": 14043,
+      "size_bytes": 16475,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -27452,7 +27467,7 @@
     }
   ],
   "routes": {
-    "endpoint_count": 330,
+    "endpoint_count": 333,
     "files_with_routes": 51,
     "endpoint_files": [
       {
@@ -27728,6 +27743,11 @@
           },
           {
             "method": "GET",
+            "path": "/api/modules/panel/prepare/<prepare_id>",
+            "decorator": "bp.get"
+          },
+          {
+            "method": "GET",
             "path": "/api/modules/update-channel",
             "decorator": "bp.get"
           },
@@ -27789,6 +27809,16 @@
           {
             "method": "POST",
             "path": "/api/modules/operations/plan",
+            "decorator": "bp.post"
+          },
+          {
+            "method": "POST",
+            "path": "/api/modules/panel/prepare",
+            "decorator": "bp.post"
+          },
+          {
+            "method": "POST",
+            "path": "/api/modules/panel/prepare/<prepare_id>/cancel",
             "decorator": "bp.post"
           },
           {

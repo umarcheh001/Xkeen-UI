@@ -182,6 +182,78 @@ def test_update_channel_route_requires_a_single_channel_field(app_with_lifecycle
     assert service.calls[-1] == ("set_update_channel", "prerelease")
 
 
+class PreparerFake:
+    def __init__(self):
+        self.calls = []
+
+    def _snapshot(self, prepare_id="p1", state="running"):
+        return {"prepare_id": prepare_id, "state": state, "phase": "downloading", "plan": None, "error": None}
+
+    def start(self):
+        self.calls.append(("start",))
+        return self._snapshot()
+
+    def status(self, prepare_id):
+        self.calls.append(("status", prepare_id))
+        if prepare_id != "p1":
+            raise ModuleLifecycleError("panel_prepare_unknown", "panel update preparation is not known", status=404)
+        return self._snapshot(prepare_id)
+
+    def cancel(self, prepare_id):
+        self.calls.append(("cancel", prepare_id))
+        return self._snapshot(prepare_id)
+
+
+@pytest.fixture
+def app_with_preparer():
+    preparer = PreparerFake()
+    app = Flask(__name__)
+    app.config["TESTING"] = True
+    app.register_blueprint(
+        create_modules_blueprint(
+            RegistryFake(),
+            lifecycle_service=LifecycleFake(),
+            notification_center=NotificationCenterFake(),
+            panel_update_preparer=preparer,
+        )
+    )
+    return app.test_client(), preparer
+
+
+def test_panel_prepare_routes_start_poll_and_cancel(app_with_preparer):
+    client, preparer = app_with_preparer
+
+    started = client.post("/api/modules/panel/prepare", json={})
+    polled = client.get("/api/modules/panel/prepare/p1")
+    cancelled = client.post("/api/modules/panel/prepare/p1/cancel", json={})
+
+    for response in (started, polled, cancelled):
+        assert response.status_code == 200
+        assert response.get_json()["ok"] is True
+        assert response.get_json()["prepare_id"] == "p1"
+        assert response.headers["Cache-Control"] == "no-store"
+    assert preparer.calls == [("start",), ("status", "p1"), ("cancel", "p1")]
+
+
+def test_panel_prepare_unknown_is_404(app_with_preparer):
+    client, _preparer = app_with_preparer
+
+    response = client.get("/api/modules/panel/prepare/nope")
+
+    assert response.status_code == 404
+    assert response.get_json()["code"] == "panel_prepare_unknown"
+
+
+def test_panel_prepare_rejects_body_fields(app_with_preparer):
+    client, preparer = app_with_preparer
+
+    response = client.post("/api/modules/panel/prepare", json={"operation": "panel-update"})
+
+    assert response.status_code == 400
+    assert response.get_json()["code"] == "unsupported_lifecycle_fields"
+    assert preparer.calls == []
+
+
 def test_lifecycle_plan_and_apply_routes_validate_and_delegate(app_with_lifecycle):
     client, service, _notifications = app_with_lifecycle
 
