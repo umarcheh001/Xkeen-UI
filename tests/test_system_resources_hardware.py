@@ -133,3 +133,31 @@ def test_garbage_input_does_not_raise():
     assert parse_ports(None) == []
     assert wan_interface({}) is None
     assert router_identity({}) == {"model": None, "firmware": None}
+
+
+def test_internet_connections_fixtures():
+    from services.system_resources_history.hardware import internet_connections
+
+    for router in ("nc1812", "kn1811"):
+        found = internet_connections(load(router, "rci_show_interface.json"))
+        assert [c["id"] for c in found] == ["GigabitEthernet1"], router  # no SSTP / WireGuard / WifiStation
+        assert found[0]["interface_name"] == "ISP"
+        assert found[0]["connected"] is True
+        assert found[0]["label"]
+
+
+def test_internet_connections_priority_order_and_labels():
+    from services.system_resources_history.hardware import internet_connections
+
+    data = {
+        "UsbQmi0": {"id": "UsbQmi0", "interface-name": "UsbQmi0", "global": True, "priority": 100, "connected": "no", "description": ""},
+        "PPPoE0": {"id": "PPPoE0", "interface-name": "PPPoE0", "global": True, "priority": 700, "connected": "yes", "description": " Билайн "},
+        "Wireguard0": {"id": "Wireguard0", "global": False, "priority": 900},
+        "0": {"id": "0", "type": "Port", "global": True},
+        "junk": "x",
+    }
+    assert internet_connections(data) == [
+        {"id": "PPPoE0", "interface_name": "PPPoE0", "label": "Билайн", "priority": 700, "connected": True},
+        {"id": "UsbQmi0", "interface_name": "UsbQmi0", "label": "UsbQmi0", "priority": 100, "connected": False},
+    ]
+    assert internet_connections(None) == [] and internet_connections({}) == []

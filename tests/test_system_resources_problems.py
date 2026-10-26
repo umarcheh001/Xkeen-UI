@@ -238,3 +238,22 @@ def test_events_since_filter_includes_open():
     assert [e["id"] for e in tr.events(T0 + 15)] == [b["id"]]
     assert [e["id"] for e in tr.events(T0)] == [a["id"], b["id"]]
     assert [e["id"] for e in tr.events(T0 + 1000)] == [b["id"]]
+
+
+def test_restore_skips_events_that_could_crash_the_collector():
+    good = {"id": "dns_failed-1-1", "type": "dns_failed", "at": T0, "until": None, "key": ""}
+    junk = [
+        {"type": "dns_failed", "at": T0, "until": None},  # no id
+        {"id": 5, "type": "dns_failed", "at": T0, "until": None},  # id is not a string
+        {"id": "a", "type": "dns_failed", "at": T0, "until": "soon"},  # until is text
+        {"id": "b", "type": "dns_failed", "at": T0, "until": float("inf")},
+        {"id": "c", "type": "dns_failed", "at": T0, "until": float("nan")},
+        {"id": "d", "type": "dns_failed", "at": float("nan"), "until": None},
+        {"id": "e", "type": "dns_failed", "at": True, "until": None},
+    ]
+    tr = ProblemTracker(lambda: T0 + 10, events=junk + [good])
+    assert [e["id"] for e in tr.events(0)] == ["dns_failed-1-1"]
+    # the journal stays usable: pruning and closing do not raise
+    tr.close("dns_failed", T0 + 20)
+    tr.emit("internet_lost", T0 + 30)
+    assert [e["type"] for e in tr.events(0)] == ["dns_failed", "internet_lost"]

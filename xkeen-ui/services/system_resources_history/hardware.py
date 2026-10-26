@@ -163,6 +163,36 @@ def wan_interface(show_interface: dict) -> str | None:
     return str(name) if name else None
 
 
+def internet_connections(show_interface: dict) -> list[dict]:
+    """Connections to the internet (``global: true``), highest priority first.
+
+    Cable, PPPoE, an LTE modem or a second WAN carry that flag; VPN tunnels and
+    the Wi-Fi client do not.  ``id`` is the RCI id (the key of the tariff),
+    ``interface_name`` is what ``show/interface/system-name`` takes.
+    """
+    if not isinstance(show_interface, dict):
+        return []
+    found: list[dict] = []
+    for key, record in show_interface.items():
+        record = _dict(record)
+        if record.get("type") == "Port" or record.get("global") is not True:
+            continue
+        conn_id = str(record.get("id") or key)
+        interface_name = str(record.get("interface-name") or conn_id)
+        priority = _int(record.get("priority"))
+        found.append(
+            {
+                "id": conn_id,
+                "interface_name": interface_name,
+                "label": str(record.get("description") or "").strip() or interface_name,
+                "priority": priority if priority is not None else 0,
+                "connected": str(record.get("connected", "")).lower() in ("yes", "true"),
+            }
+        )
+    found.sort(key=lambda c: (-c["priority"], c["id"]))
+    return found
+
+
 def default_route_iface(proc_net_route: str) -> str | None:
     """Kernel interface of the main-table default route (lowest metric)."""
     best: tuple[int, str] | None = None

@@ -10,6 +10,7 @@ throttling, slow port ...) are opened and closed by the collector through
 
 from __future__ import annotations
 
+import math
 from typing import Callable
 
 RED_HOLD_S = 180.0
@@ -35,6 +36,10 @@ _TYPES: dict[str, tuple[str, str]] = {
 _POINT = {"internet_restored", "router_rebooted"}
 
 
+def _is_number(value: object) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
 def _zone_type(key: str) -> str | None:
     if key == "cpu":
         return "cpu_overload"
@@ -56,7 +61,10 @@ class ProblemTracker:
         self._clear_since: dict[str, float] = {}
         self._seq = 0
         for e in events or []:
-            if not isinstance(e, dict) or e.get("type") not in _TYPES or not isinstance(e.get("at"), (int, float)):
+            if not isinstance(e, dict) or e.get("type") not in _TYPES or not _is_number(e.get("at")):
+                continue
+            # a stored journal can be hand-edited or half-written: never crash on it
+            if not isinstance(e.get("id"), str) or (e.get("until") is not None and not _is_number(e.get("until"))):
                 continue
             ev = dict(e)
             ev.setdefault("until", None)

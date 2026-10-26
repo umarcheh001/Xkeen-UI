@@ -36,7 +36,9 @@ def _tiers_meta() -> dict[str, list[int]]:
     return {name: [step, size] for name, (step, size) in TIERS.items()}
 
 
-def save_history(path: str, store: HistoryStore, events: list[dict], *, now: float) -> None:
+def save_history(
+    path: str, store: HistoryStore, events: list[dict], *, now: float, meta: dict | None = None
+) -> None:
     dumped = store.to_dict()
     # Point start times and counters are exact integers; only values are rounded.
     dumped["tiers"] = _round(dumped["tiers"])
@@ -48,6 +50,8 @@ def save_history(path: str, store: HistoryStore, events: list[dict], *, now: flo
         "store": dumped,
         "events": list(events),
     }
+    if meta:
+        payload["meta"] = dict(meta)
     _atomic_write_json(path, payload, indent=None)
 
 
@@ -55,7 +59,9 @@ def _is_number(value: Any) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
-def _read_one(path: str, metrics: tuple[str, ...]) -> tuple[HistoryStore, list[dict], float] | None:
+def _read_one(
+    path: str, metrics: tuple[str, ...] | None
+) -> tuple[HistoryStore, list[dict], float, dict] | None:
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -75,21 +81,31 @@ def _read_one(path: str, metrics: tuple[str, ...]) -> tuple[HistoryStore, list[d
         if not isinstance(body, dict) or body.get("version") != _STORE_FORMAT_VERSION:
             return None
         restored = HistoryStore.from_dict(body, saved_metrics)
-        store = restored if restored.metrics == tuple(metrics) else restored.with_metrics(metrics)
+        if metrics is None or restored.metrics == tuple(metrics):
+            store = restored
+        else:
+            store = restored.with_metrics(metrics)
         raw_events = data.get("events")
         events = [e for e in raw_events if isinstance(e, dict)] if isinstance(raw_events, list) else []
-        return store, events, float(saved_at)
+        raw_meta = data.get("meta")
+        meta = dict(raw_meta) if isinstance(raw_meta, dict) else {}
+        return store, events, float(saved_at), meta
     except Exception:
         return None
 
 
 def load_history(
-    paths: list[str], metrics: tuple[str, ...]
-) -> tuple[HistoryStore, list[dict], float] | None:
-    """Return the freshest valid copy among ``paths`` or None.  Never raises."""
-    best: tuple[HistoryStore, list[dict], float] | None = None
+    paths: list[str], metrics: tuple[str, ...] | None
+) -> tuple[HistoryStore, list[dict], float, dict] | None:
+    """Return ``(store, events, saved_at, meta)`` of the freshest valid copy or None.
+
+    ``metrics=None`` keeps the metric set the copy was saved with.  ``meta`` is
+    the free-form dict stored by the caller ({} when absent or malformed).
+    Never raises.
+    """
+    best: tuple[HistoryStore, list[dict], float, dict] | None = None
     for path in paths:
-        got = _read_one(path, tuple(metrics))
+        got = _read_one(path, None if metrics is None else tuple(metrics))
         if got is not None and (best is None or got[2] > best[2]):
             best = got
     return best

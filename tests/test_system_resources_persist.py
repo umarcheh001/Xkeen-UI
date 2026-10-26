@@ -26,7 +26,7 @@ def test_roundtrip(tmp_path):
     save_history(p, s, [], now=T0 + 500)
     got = load_history([p], ("cpu",))
     assert got is not None
-    store, events, saved_at = got
+    store, events, saved_at, _meta = got
     assert saved_at == T0 + 500
     assert events == []
     a = s.columns("15m", T0 + 200)["metrics"]["cpu"]
@@ -53,10 +53,10 @@ def test_picks_freshest_of_tmp_and_flash(tmp_path):
     flash = str(tmp_path / "flash" / "h.json")
     save_history(flash, make_store(n=10), [{"k": "old"}], now=1000)
     save_history(tmp, make_store(n=20), [{"k": "new"}], now=2000)
-    store, events, saved_at = load_history([flash, tmp], ("cpu",))
+    store, events, saved_at, _meta = load_history([flash, tmp], ("cpu",))
     assert saved_at == 2000
     assert events == [{"k": "new"}]
-    store, events, saved_at = load_history([tmp, flash], ("cpu",))
+    store, events, saved_at, _meta = load_history([tmp, flash], ("cpu",))
     assert saved_at == 2000
 
 
@@ -81,7 +81,7 @@ def test_metric_set_change_keeps_common_metrics(tmp_path):
     p = str(tmp_path / "h.json")
     s = make_store(("cpu", "rate_up:ISP"))
     save_history(p, s, [], now=T0 + 500)
-    store, _events, _at = load_history([p], ("cpu", "rate_up:UsbQmi0"))
+    store, _events, _at, _meta = load_history([p], ("cpu", "rate_up:UsbQmi0"))
     assert store.metrics == ("cpu", "rate_up:UsbQmi0")
     cols = store.columns("15m", T0 + 200)["metrics"]
     assert "rate_up:ISP" not in cols
@@ -166,3 +166,23 @@ def test_with_metrics_helper():
     cols = r.columns("15m", T0 + 200)["metrics"]
     assert any(v is not None for v in cols["b"]["avg"])
     assert all(v is None for v in cols["c"]["avg"])
+
+
+def test_meta_roundtrip_and_tolerance(tmp_path):
+    p = tmp_path / "h.json"
+    save_history(str(p), make_store(), [], now=3, meta={"uptime_s": 1234.5})
+    assert load_history([str(p)], ("cpu",))[3] == {"uptime_s": 1234.5}
+    data = json.loads(p.read_text(encoding="utf-8"))
+    for bad in ("x", [1], 5, None):
+        data["meta"] = bad
+        p.write_text(json.dumps(data), encoding="utf-8")
+        assert load_history([str(p)], ("cpu",))[3] == {}
+    del data["meta"]
+    p.write_text(json.dumps(data), encoding="utf-8")
+    assert load_history([str(p)], ("cpu",))[3] == {}
+
+
+def test_metrics_none_keeps_saved_set(tmp_path):
+    p = str(tmp_path / "h.json")
+    save_history(p, make_store(("cpu", "rate_up:ISP")), [], now=T0 + 500)
+    assert load_history([p], None)[0].metrics == ("cpu", "rate_up:ISP")

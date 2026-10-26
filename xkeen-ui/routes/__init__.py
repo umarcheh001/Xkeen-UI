@@ -467,6 +467,17 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
             "system_resources_blueprint_init_failed",
             _build_system_resources,
         )
+        # The history thread lives exactly as long as the module that shows it.
+        # Tests build many apps; none of them may leave a sampling thread behind.
+        if not os.environ.get("PYTEST_CURRENT_TEST"):
+            try:
+                from services.system_resources_history.collector import start_collector
+
+                start_collector(ui_state_dir=ctx.ui_state_dir)
+            except Exception:  # noqa: BLE001 - a missing history must not stop the panel
+                import logging
+
+                logging.getLogger(__name__).warning("resource history collector did not start", exc_info=True)
 
     if not module_active("tool.files"):
         publish_blueprint_owner_diagnostic()
