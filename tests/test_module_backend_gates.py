@@ -276,7 +276,7 @@ def test_live_resource_summary_reports_keenetic_metrics_with_diagnostics_module(
     payload = app.test_client().get("/api/system/resources").get_json()
 
     assert payload["cpu"]["percent"] == 3.0
-    assert payload["memory"]["total_bytes"] == 1_048_576 * 1024
+    assert payload["memory"]["total_bytes"] == 991 * 1024 * 1024  # /proc/meminfo is not replaced by the firmware figure
     assert payload["resource_telemetry"]["source"] == "keenetic_rci"
     assert payload["resource_telemetry"]["comparison"]["linux_procfs"]["memory_percent"] == 48.0
 

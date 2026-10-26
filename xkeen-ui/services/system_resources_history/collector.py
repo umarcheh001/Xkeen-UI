@@ -34,7 +34,7 @@ from . import sensors
 from .persist import load_history, save_history
 from .problems import ProblemTracker
 from .store import HistoryStore
-from .zones import hotter_than_usual, zone
+from .zones import hotter_than_usual, red_from, zone
 
 log = logging.getLogger(__name__)
 
@@ -48,6 +48,8 @@ HISTORY_FILE = "resource-history.json"
 TMP_DIR = "/tmp/xkeen-ui"
 BASE_METRICS = ("cpu", "memory", "queue", "online")
 ZONED = ("cpu", "memory", "queue")
+CARD_SPEC = ("fresh", 3, 40)  # card indicator: 40 columns of 45 s, the last 30 minutes
+MIN_SECONDARY_MBPS = 0.05  # a connection below this carries no traffic worth a line
 
 Reader = Callable[[Path], str]
 
@@ -69,6 +71,29 @@ def parse_net_dev(text: str) -> dict[str, tuple[int, int]]:
         except ValueError:
             continue
     return counters
+
+
+def _ru_number(value: float) -> str:
+    return f"{value:.1f}".replace(".", ",")
+
+
+def _cores_word(n: int) -> str:
+    if n % 10 == 1 and n % 100 != 11:
+        return f"{n} ядро"
+    if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14:
+        return f"{n} ядра"
+    return f"{n} ядер"
+
+
+def _duration(seconds: float) -> str:
+    minutes = int(max(0.0, seconds) // 60)
+    days, rest = divmod(minutes, 1440)
+    hours, minutes = divmod(rest, 60)
+    if days:
+        return f"{days} д {hours} ч"
+    if hours:
+        return f"{hours} ч {minutes} мин"
+    return f"{max(1, minutes)} мин"
 
 
 def _first_number(text: str) -> float | None:
@@ -130,6 +155,7 @@ class Collector:
         self._internet: dict = {}
         self._conntrack: dict = {"available": False}
         self._online_value: float | None = None
+        self._rci_ok = False  # whether the last RCI call answered
         # persistence
         now = self._clock()
         self._last_save = {"tmp": now, "flash": now}
@@ -167,9 +193,11 @@ class Collector:
 
     def _rci(self, path: str) -> Any:
         try:
-            return self._rci_fetch(path)
+            answer = self._rci_fetch(path)
         except Exception:  # noqa: BLE001 - the firmware may be down; /proc data goes on
-            return None
+            answer = None
+        self._rci_ok = answer is not None
+        return answer
 
     def refresh_tariffs(self) -> None:
         with self._lock:
@@ -454,6 +482,7 @@ class Collector:
                         "value_c": g.value_c,
                         "sensors": [{"name": n, "value_c": v} for n, v in g.sensors],
                         "shutdown_c": shutdown,
+                        "zone": zone(f"temp:{g.id}", g.value_c, kind=g.kind),
                         "usual_c": usual,
                         "hotter_by_c": hotter_than_usual(g.value_c, usual) if g.value_c is not None else None,
                     }
@@ -461,14 +490,179 @@ class Collector:
             return {
                 "model": self._identity["model"],
                 "firmware": self._identity["firmware"],
+                "identity": dict(self._identity),
                 "cores": self._cores,
                 "memory_total_bytes": self._memory.get("total_bytes"),
+                "memory": dict(self._memory),
                 "temperatures": temps,
                 "ports": [vars(p).copy() for p in self._ports],
+                "slow_ports": [vars(p).copy() for p in hw.slow_ports(self._ports)],
                 "zram": self._zram,
                 "frequency": self._freq,
+                "throttle": dict(self._freq) if self._freq else None,
+                "conntrack": dict(self._conntrack),
                 "links": self._links(),
             }
+
+    # -- the summary (cards, status line) -----------------------------------
+    def _bars(self, data: dict, metric: str) -> dict:
+        values = list(data["metrics"].get(metric, {}).get("avg") or [None] * CARD_SPEC[2])
+        return {"values": values, "zones": [self._zone_of(metric, v, {}) for v in values]}
+
+    def _problem_age(self, now: float, etype: str, key: str | None = None) -> int | None:
+        """Whole minutes the open problem of this type has lasted, or ``None``."""
+        for event in self._tracker.active():
+            if event["type"] == etype and (key is None or event.get("key") == key):
+                return max(1, int((now - event["at"]) // 60))
+        return None
+
+    def _cpu_card(self, data: dict, now: float) -> dict:
+        value, z = self._values.get("cpu"), self._zones.get("cpu")
+        age = self._problem_age(now, "cpu_overload")
+        queue_word = {0: "небольшая", 1: "большая", 2: "забита"}.get(self._zones.get("queue"))
+        if age is not None:
+            text = f"выше {red_from('cpu'):.0f} % уже {age} мин"
+        elif queue_word is None:
+            text = _cores_word(self._cores)
+        else:
+            text = f"{_cores_word(self._cores)} · очередь задач {queue_word}"
+        return {
+            "value": value, "zone": z, "cores": self._cores, "queue": self._values.get("queue"),
+            "queue_zone": self._zones.get("queue"), "text": text, "bars": self._bars(data, "cpu"),
+        }
+
+    def _memory_card(self, data: dict, now: float) -> dict:
+        mem = self._memory
+        mb = lambda key: round(mem.get(key, 0) / 1048576)  # noqa: E731
+        age = self._problem_age(now, "memory_low")
+        if age is not None:
+            text = f"выше {red_from('memory'):.0f} % уже {age} мин"
+        elif mem.get("total_bytes"):
+            text = f"программы {mb('programs_bytes')} МБ · кэш {mb('cache_bytes')} МБ · свободно {mb('free_bytes')} МБ"
+        else:
+            text = "нет данных"
+        return {
+            "value": self._values.get("memory"), "zone": self._zones.get("memory"), "text": text,
+            "programs_bytes": mem.get("programs_bytes"), "cache_bytes": mem.get("cache_bytes"),
+            "free_bytes": mem.get("free_bytes"), "total_bytes": mem.get("total_bytes"),
+            "bars": self._bars(data, "memory"),
+        }
+
+    def _primary_label(self) -> str | None:
+        link = next((l for l in self._links() if l["primary"]), None)
+        if link is None:
+            return None
+        return f"{link['label']} ({link['kernel']})" if link["kernel"] else link["label"]
+
+    def _internet_card(self, data: dict, now: float) -> dict:
+        online, dns = self._internet.get("internet"), self._internet.get("dns")
+        if online is True and dns is False:
+            state, label, z = "dns_failed", "С перебоями", 1
+        elif online is True:
+            state, label, z = "online", "В сети", 0
+        elif online is False:
+            state, label, z = "offline", "Нет связи", 2
+        else:
+            state, label, z = None, "нет данных", None
+        parts = []
+        via = self._primary_label()
+        if via:
+            parts.append(f"Через {via}")
+        if state == "online":
+            lost = [e["until"] for e in self._tracker.events(0) if e["type"] == "internet_lost" and e.get("until") is not None]
+            since = max(lost) if lost else data.get("history_since")
+            if since is not None:
+                parts.append(f"без перерывов {_duration(now - since)}")
+        elif state == "dns_failed":
+            age = self._problem_age(now, "dns_failed")
+            parts.append(f"сбой DNS идёт {age} мин" if age else "сбой DNS")
+        elif state == "offline":
+            age = self._problem_age(now, "internet_lost")
+            parts.append(f"нет связи уже {age} мин" if age else "нет связи")
+        online_cols = list(data["metrics"].get("online", {}).get("avg") or [None] * CARD_SPEC[2])
+        bars = {"values": online_cols, "zones": [None if v is None else (0 if v >= 1.0 else 2) for v in online_cols]}
+        return {"state": state, "label": label, "zone": z, "text": " · ".join(parts), "bars": bars}
+
+    def _link_card(self, data: dict, now: float) -> dict | None:
+        if self._primary is None:
+            return None
+        pid = self._primary
+        link = next((l for l in self._links() if l["id"] == pid), None)
+        if link is None:
+            return None
+        tariff_up, tariff_down = self._tariffs.get(pid, (None, None))
+        has_tariff = tariff_up is not None or tariff_down is not None
+        up_mbps, down_mbps = self._values.get(f"rate_up:{pid}"), self._values.get(f"rate_down:{pid}")
+        up_pct, down_pct = self._values.get(f"link_up:{pid}"), self._values.get(f"link_down:{pid}")
+        zones = [z for z in (self._zones.get(f"link_up:{pid}"), self._zones.get(f"link_down:{pid}")) if z is not None]
+        age = self._problem_age(now, "link_saturated")
+        if age is not None:
+            text = f"выше {red_from('link_up'):.0f} % уже {age} мин"
+        elif not has_tariff:
+            text = "тариф не указан"
+        elif up_mbps is None or down_mbps is None:
+            text = "нет данных"
+        else:
+            shown = lambda v: "—" if v is None else str(v)  # noqa: E731
+            text = (
+                f"{_ru_number(up_mbps)} / {_ru_number(down_mbps)} Мбит/с из "
+                f"{shown(tariff_up)} / {shown(tariff_down)} по тарифу"
+            )
+        suffix = ("link" if has_tariff else "rate")
+        secondary = []
+        for other in self._links():
+            if other["id"] == pid:
+                continue
+            o_up, o_down = self._values.get(f"rate_up:{other['id']}"), self._values.get(f"rate_down:{other['id']}")
+            if max(o_up or 0.0, o_down or 0.0) < MIN_SECONDARY_MBPS:
+                continue
+            secondary.append(
+                {
+                    "label": other["label"],
+                    "up_percent": self._values.get(f"link_up:{other['id']}"),
+                    "down_percent": self._values.get(f"link_down:{other['id']}"),
+                    "up_mbps": o_up,
+                    "down_mbps": o_down,
+                }
+            )
+        return {
+            "id": pid, "label": link["label"], "has_tariff": has_tariff, "tariff": link["tariff"] if has_tariff else None,
+            "up_percent": up_pct, "down_percent": down_pct, "up_mbps": up_mbps, "down_mbps": down_mbps,
+            "zone": max(zones) if zones else None, "text": text,
+            "bars": {"up": self._bars(data, f"{suffix}_up:{pid}"), "down": self._bars(data, f"{suffix}_down:{pid}")},
+            "secondary": secondary,
+        }
+
+    def primary_link(self) -> dict | None:
+        """Main connection's load in percent of its tariff, for the header monitor."""
+        with self._lock:
+            pid = self._primary
+            if pid is None or not any(v is not None for v in self._tariffs.get(pid, (None, None))):
+                return None
+            link = next((l for l in self._links() if l["id"] == pid), None)
+            if link is None:
+                return None
+            return {
+                "label": link["label"],
+                "up_percent": self._values.get(f"link_up:{pid}"),
+                "down_percent": self._values.get(f"link_down:{pid}"),
+            }
+
+    def _summary(self) -> dict:
+        now = self._clock()
+        data = self._store.columns_spec(CARD_SPEC, now)
+        problems = [dict(e) for e in self._tracker.active() if e["severity"] == "problem"]
+        return {
+            "status": {"tone": "problem" if problems else "ok", "problems": problems},
+            "identity": dict(self._identity),
+            "cards": {
+                "cpu": self._cpu_card(data, now),
+                "memory": self._memory_card(data, now),
+                "internet": self._internet_card(data, now),
+                "link": self._link_card(data, now),
+            },
+            "rci_available": self._rci_ok,
+        }
 
     def snapshot(self) -> dict:
         with self._lock:
@@ -487,6 +681,7 @@ class Collector:
                 "conntrack": dict(self._conntrack),
                 "restored_gap_s": self._gap_s,
                 "hardware": self.hardware(),
+                **self._summary(),
             }
 
     def history(self, range_id: str) -> dict:
@@ -502,11 +697,16 @@ class Collector:
                 }
             data["zones"] = zoned
             data["cores"] = self._cores
+            data["links"] = self._links()
             return data
 
     def events(self, since: float) -> list[dict]:
         with self._lock:
             return [dict(e) for e in self._tracker.events(since)]
+
+    def active_events(self) -> list[dict]:
+        with self._lock:
+            return [dict(e) for e in self._tracker.active()]
 
     # -- thread -------------------------------------------------------------
     def _run(self) -> None:

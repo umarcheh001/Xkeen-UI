@@ -45,6 +45,11 @@ def zone(metric: str, value: float | None, *, cores: int = 1, kind: str | None =
     return None
 
 
+def red_from(metric: str) -> float | None:
+    """Percent from which a fixed-threshold metric (``cpu``, ``memory``, ``link_*``) is red."""
+    return _FIXED[metric][1] if metric in _FIXED else None
+
+
 def hotter_than_usual(value: float, median: float | None) -> int | None:
     """Degrees above the usual (median) temperature when that is 15 or more, else ``None``."""
     if median is None:

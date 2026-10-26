@@ -176,7 +176,11 @@ class HistoryStore:
             self._since = ts
 
     def columns(self, range_id: str, now: float) -> dict[str, Any]:
-        tier_name, fold, count = RANGES[range_id]
+        return self.columns_spec(RANGES[range_id], now)
+
+    def columns_spec(self, spec: tuple[str, int, int], now: float) -> dict[str, Any]:
+        """Like :meth:`columns` for any ``(tier, points per column, column count)``."""
+        tier_name, fold, count = spec
         tier = self._tiers[tier_name]
         col_step = tier.step * fold
         last_col = int(now // col_step)

@@ -31,6 +31,9 @@ def test_resource_sampler_returns_cpu_memory_load_and_uptime():
         "percent": 60.0,
         "swap_total_bytes": 204_800,
         "swap_used_bytes": 51_200,
+        "programs_bytes": 614_400,
+        "cache_bytes": 409_600,  # no MemFree line: everything available counts as cache
+        "free_bytes": 0,
     }
     assert payload["uptime_seconds"] == 1234
 
@@ -158,7 +161,7 @@ def test_system_resources_prefers_keenetic_metrics_when_the_rci_branch_is_availa
     payload = app.test_client().get("/api/system/resources").get_json()
 
     assert payload["cpu"]["percent"] == 3.0
-    assert payload["memory"]["percent"] == 44.2
+    assert payload["memory"]["percent"] == 56.0  # /proc/meminfo wins: the firmware counts the cache differently
     assert payload["resource_telemetry"]["source"] == "keenetic_rci"
     assert payload["resource_telemetry"]["comparison"]["linux_procfs"]["memory_percent"] == 56.0
 
@@ -334,3 +337,39 @@ def test_channel_route_rejects_invalid_target(monkeypatch):
 
     assert response.status_code == 400
     assert response.get_json()["code"] == "invalid_channel_target"
+
+
+def test_queue_from_procs_running():
+    samples = {
+        "/proc/stat": "cpu 100 0 0 900\nprocs_running 4\n",
+        "/proc/meminfo": "MemTotal: 100 kB\nMemAvailable: 50 kB\n",
+        "/proc/loadavg": "0 0 0\n",
+        "/proc/uptime": "1 0\n",
+    }
+    reset_system_resource_sampler()
+
+    payload = sample_system_resources(reader=lambda path: samples[path.as_posix()])
+
+    assert payload["cpu"]["queue"] == 3  # the sampler itself is not a waiting task
+    samples["/proc/stat"] = "cpu 100 0 0 900\nprocs_running 1\n"
+    assert sample_system_resources(reader=lambda path: samples[path.as_posix()])["cpu"]["queue"] == 0
+    samples["/proc/stat"] = "cpu 100 0 0 900\n"
+    assert sample_system_resources(reader=lambda path: samples[path.as_posix()])["cpu"]["queue"] == 0
+
+
+def test_memory_is_split_into_programs_cache_and_free():
+    samples = {
+        "/proc/stat": "cpu 100 0 0 900\n",
+        "/proc/meminfo": "MemTotal: 1000 kB\nMemFree: 100 kB\nMemAvailable: 400 kB\n",
+        "/proc/loadavg": "0 0 0\n",
+        "/proc/uptime": "1 0\n",
+    }
+    reset_system_resource_sampler()
+
+    memory = sample_system_resources(reader=lambda path: samples[path.as_posix()])["memory"]
+
+    assert memory["percent"] == 60.0  # (MemTotal - MemAvailable) / MemTotal, cache not counted
+    assert memory["programs_bytes"] == 600 * 1024
+    assert memory["cache_bytes"] == 300 * 1024
+    assert memory["free_bytes"] == 100 * 1024
+    assert memory["used_bytes"] == 600 * 1024  # the old fields stay for the header monitor

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 from flask import Blueprint, jsonify, request
 
 from routes.common.errors import error_response
@@ -15,7 +17,9 @@ from services.router_diagnostics import (
     sample_router_lte,
     sample_router_processes,
 )
-from services.system_resources import sample_system_resources
+from services.system_resources import sample_storage, sample_system_resources
+from services.system_resources_history.collector import get_collector
+from services.system_resources_history.store import RANGES
 from services.memory_guard import get_memory_guard_status
 from services.router_modem_control import ModemControlError, ModemControlService, validate_modem_id
 
@@ -49,6 +53,48 @@ def _no_store_json(payload: dict, status: int = 200):
     return response, status
 
 
+HISTORY_RANGES = frozenset(RANGES)
+
+
+def _tariff_or_none(tariff: dict) -> dict | None:
+    return tariff if any(v is not None for v in tariff.values()) else None
+
+
+def _header_link() -> dict | None:
+    """Main connection's load for the header monitor; absent without collector or tariff."""
+    collector = get_collector()
+    if collector is None:
+        return None
+    try:
+        return collector.primary_link()
+    except Exception:  # noqa: BLE001 - optional telemetry
+        return None
+
+
+def _history_unavailable():
+    response, status = error_response(
+        "История загрузки ещё не собрана: сборщик не запущен.",
+        503,
+        ok=False,
+        code="history_unavailable",
+        retryable=True,
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return response, status
+
+
+def _router_fallback(sampled_at) -> dict:
+    return {
+        "schema_version": 1,
+        "sampled_at": sampled_at,
+        "freshness": {"state": "unavailable", "age_seconds": 0, "stale_after_seconds": 15},
+        "rci": {"available": False, "state": "unavailable"},
+        "internet": {"available": False},
+        "conntrack": {"available": False},
+        "interfaces": {"available": False, "count": 0, "items": [], "truncated": False},
+    }
+
+
 def _modem_control_error(exc: ModemControlError):
     code = str(exc.code)
     if code not in _MODEM_CONTROL_STATUS:
@@ -79,24 +125,109 @@ def create_system_resources_blueprint(*, include_summary: bool = True) -> Bluepr
             try:
                 payload["router"] = cached_router_diagnostics()
             except Exception:  # noqa: BLE001 - optional router telemetry must not hide procfs metrics
-                payload["router"] = {
-                    "schema_version": 1,
-                    "sampled_at": payload.get("sampled_at"),
-                    "freshness": {"state": "unavailable", "age_seconds": 0, "stale_after_seconds": 15},
-                    "rci": {"available": False, "state": "unavailable"},
-                    "internet": {"available": False},
-                    "conntrack": {"available": False},
-                    "interfaces": {"available": False, "count": 0, "items": [], "truncated": False},
-                }
+                payload["router"] = _router_fallback(payload.get("sampled_at"))
             apply_router_resource_telemetry(payload, system_reader=cached_router_system)
             try:
                 payload["ui_process"] = get_memory_guard_status()
             except Exception:  # noqa: BLE001 - optional process telemetry
                 pass
+            link = _header_link()
+            if link is not None:
+                payload["link"] = link
             payload["ok"] = True
             response = jsonify(payload)
             response.headers["Cache-Control"] = "no-store"
             return response, 200
+
+    @bp.get("/api/system/history")
+    def api_system_history():
+        range_id = request.args.get("range", "")
+        if range_id not in HISTORY_RANGES:
+            response, status = error_response(
+                "Неизвестный интервал истории.", 400, ok=False, code="bad_range", retryable=False
+            )
+            response.headers["Cache-Control"] = "no-store"
+            return response, status
+        collector = get_collector()
+        if collector is None:
+            return _history_unavailable()
+        data = collector.history(range_id)
+        zones = data.get("zones", {})
+        metrics = {}
+        for name, columns in data["metrics"].items():
+            entry = {"avg": columns["avg"], "max": columns["max"]}
+            if name in zones:
+                entry["zone"] = zones[name]["avg"]
+                entry["peak_zone"] = zones[name]["max"]
+            metrics[name] = entry
+        links = [dict(link, tariff=_tariff_or_none(link["tariff"])) for link in data["links"]]
+        return _no_store_json(
+            {
+                "ok": True,
+                "range": range_id,
+                "step_s": data["step_s"],
+                "start": data["start"],
+                "history_since": data["history_since"],
+                "cores": data["cores"],
+                "metrics": metrics,
+                "links": links,
+            }
+        )
+
+    @bp.get("/api/system/hardware")
+    def api_system_hardware():
+        collector = get_collector()
+        if collector is None:
+            return _history_unavailable()
+        hardware = collector.hardware()
+        temperatures = []
+        for group in hardware["temperatures"]:
+            group = dict(group)
+            group["hotter_by"] = group.pop("hotter_by_c")
+            temperatures.append(group)
+        return _no_store_json(
+            {
+                "ok": True,
+                "identity": hardware["identity"],
+                "cores": hardware["cores"],
+                "temperatures": temperatures,
+                "throttle": hardware["throttle"],
+                "memory": hardware["memory"],
+                "zram": hardware["zram"],
+                "storage": sample_storage(),
+                "conntrack": hardware["conntrack"],
+                "ports": hardware["ports"],
+                "slow_ports": hardware["slow_ports"],
+            }
+        )
+
+    @bp.get("/api/system/events")
+    def api_system_events():
+        collector = get_collector()
+        if collector is None:
+            return _history_unavailable()
+        try:
+            since = float(request.args.get("since", 0))
+        except (TypeError, ValueError):
+            since = 0.0
+        if not math.isfinite(since):
+            since = 0.0
+        return _no_store_json(
+            {"ok": True, "events": collector.events(since), "active": collector.active_events()}
+        )
+
+    @bp.get("/api/system/summary")
+    def api_system_summary():
+        collector = get_collector()
+        if collector is None:
+            return _history_unavailable()
+        payload = collector.snapshot()
+        try:
+            payload["router"] = cached_router_diagnostics()
+        except Exception:  # noqa: BLE001 - the chain is optional; the history summary stays
+            payload["router"] = _router_fallback(payload.get("ts"))
+        payload["ok"] = True
+        return _no_store_json(payload)
 
     @bp.get("/api/system/processes")
     def api_system_processes():
