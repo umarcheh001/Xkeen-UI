@@ -1155,7 +1155,7 @@ def create_mihomo_blueprint(
         content = _norm_text(content)
         ok_yaml, _yaml_err = validate_yaml_syntax(content)
         if not ok_yaml:
-            return _mihomo_yaml_invalid(stage="validate")
+            return _mihomo_yaml_invalid()
 
         current_content = load_text(MIHOMO_CONFIG_FILE, default="") or ""
         expected = str(expected_revision or "").strip()

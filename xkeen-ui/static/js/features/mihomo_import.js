@@ -2730,9 +2730,8 @@ let mihomoImportModuleApi = null;
 
   async function getMihomoFileRevision() {
     try {
-      const response = await fetch('/api/mihomo-config', { cache: 'no-store' });
-      const data = await response.json().catch(() => ({}));
-      if (response.ok && data && data.ok && data.revision) return String(data.revision);
+      const data = await _importApi.requestJSON('/api/mihomo-config', { method: 'GET' });
+      if (data && data.ok && data.revision) return String(data.revision);
     } catch (e) {}
     return '';
   }
@@ -2845,17 +2844,15 @@ let mihomoImportModuleApi = null;
     try {
       const candidate = _lastCandidate || await buildImportCandidate();
       setActionStatus(restart ? 'Проверка candidate → backup/сохранение → restart job…' : 'Проверка candidate → backup/сохранение…', 'info', true);
-      const response = await fetch('/api/mihomo/import/commit', {
+      const data = await _importApi.requestJSON('/api/mihomo/import/commit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           content: candidate.content,
           restart: restart === true,
           base_revision: candidate.baseRevision,
-        }),
+        },
       });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data.ok) {
+      if (!data || !data.ok) {
         const message = data && data.error ? String(data.error) : 'Не удалось сохранить candidate.';
         setActionStatus(message, 'error');
         return false;
