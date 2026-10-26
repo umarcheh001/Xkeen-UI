@@ -21,7 +21,10 @@ def test_source_result_and_preview_share_one_bounded_shell():
     assert 'function setSourceLayout(hasResult)' in JS
     assert "const layout = expanded ? 'preview' : (hasResult ? 'result' : 'source');" in JS
     assert 'refreshGeometry?.(modal)' in JS
-    assert "modal.dataset.modalKey = 'mihomo-import-preview-v2'" in JS
+    assert "modal.dataset.modalRemember = '1';" in JS
+    assert "modal.dataset.modalKey = expanded ? 'mihomo-import-preview-v2' : 'mihomo-import-source-v3';" in JS
+    assert 'delete modal.dataset.modalNodrag;' in JS
+    assert 'data-modal-position-only="1"' in TEMPLATE
     assert 'grid-template-rows: 50px minmax(0, 1fr) auto;' in CSS
     assert 'max-height: calc(100dvh - 16px)' in CSS
     assert 'height: var(--op-touch-target) !important;' in CSS
@@ -51,3 +54,4 @@ def test_modal_manager_refresh_geometry_is_additive_not_a_new_manager():
     assert 'loadState(modalEl)' in block
     assert 'ensureResizer(modalEl)' in block
     assert 'ensureContentInViewport(modalEl)' in block
+    assert "modalEl.dataset.modalPositionOnly === '1'" in modal

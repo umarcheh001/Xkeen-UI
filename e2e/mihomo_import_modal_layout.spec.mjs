@@ -12,7 +12,8 @@ const AMNEZIA_LOCATIONS = [
 async function openMihomoImport(page) {
   await selectPanelView(page, 'mihomo');
   await expect(page.locator('#view-mihomo')).toBeVisible();
-  await page.locator('#mihomo-clash-tab-config').click();
+  const configTab = page.locator('#mihomo-clash-tab-config');
+  if (await configTab.isVisible()) await configTab.click();
   const menu = page.locator('.xk-mihomo-menu');
   await menu.locator('summary').click();
   await expect(page.locator('#mihomo-import-node-btn')).toBeVisible();
@@ -61,6 +62,44 @@ test('Amnezia Premium locations use compact flags and a two-column scroller', as
   expect(layout.svgWidth).toBeLessThanOrEqual(20);
   expect(layout.svgHeight).toBeGreaterThanOrEqual(10);
   expect(layout.svgHeight).toBeLessThanOrEqual(14);
+});
+
+
+test('Mihomo import compact form is draggable, remembers its position, and keeps the refresh interval compact', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 960 });
+  await page.addInitScript(() => {
+    localStorage.removeItem('xk.modal.state.v1.mihomo-import-source-v3');
+  });
+  await page.goto('/');
+  await openMihomoImport(page);
+
+  const content = page.locator('#mihomo-import-modal .modal-content');
+  const header = page.locator('#mihomo-import-modal .modal-header');
+  const start = await content.boundingBox();
+  const headerBox = await header.boundingBox();
+  if (!start || !headerBox) throw new Error('Mihomo import modal geometry is unavailable');
+
+  await page.mouse.move(headerBox.x + 180, headerBox.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(headerBox.x + 270, headerBox.y + 80, { steps: 8 });
+  await page.mouse.up();
+
+  await expect.poll(async () => (await content.boundingBox())?.x || 0).toBeGreaterThan(start.x + 50);
+  const moved = await content.boundingBox();
+  if (!moved) throw new Error('Mihomo import modal did not move');
+
+  await page.locator('#mihomo-import-close-btn').click();
+  await expect(page.locator('#mihomo-import-modal')).toBeHidden();
+  await openMihomoImport(page);
+  const restored = await content.boundingBox();
+  if (!restored) throw new Error('Mihomo import modal position was not restored');
+  expect(Math.abs(restored.x - moved.x)).toBeLessThanOrEqual(2);
+  expect(Math.abs(restored.y - moved.y)).toBeLessThanOrEqual(2);
+
+  const intervalWidth = await page.locator('#mihomo-import-xray-interval').evaluate(
+    (input) => Number.parseFloat(getComputedStyle(input).width),
+  );
+  expect(intervalWidth).toBe(64);
 });
 
 

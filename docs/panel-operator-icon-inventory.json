@@ -1101,7 +1101,7 @@
       "tabler_asset": "unlink",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/mihomo_import.js:L787",
+          "location": "xkeen-ui/static/js/features/mihomo_import.js:L791",
           "control_type": "runtime-action",
           "accessible_label": "Отсоединиться"
         },
@@ -2139,7 +2139,7 @@
           "accessible_label": "Загрузка"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_import.js:L229",
+          "location": "xkeen-ui/static/js/features/mihomo_import.js:L233",
           "control_type": "runtime-action",
           "accessible_label": "Загрузка"
         },
@@ -2452,7 +2452,7 @@
           "accessible_label": "Открыть"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_import.js:L3310",
+          "location": "xkeen-ui/static/js/features/mihomo_import.js:L3314",
           "control_type": "runtime-action",
           "accessible_label": "Открыть"
         },
@@ -2484,7 +2484,7 @@
       "tabler_asset": "player-pause",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/mihomo_import.js:L772",
+          "location": "xkeen-ui/static/js/features/mihomo_import.js:L776",
           "control_type": "runtime-action",
           "accessible_label": "Пауза"
         },
@@ -2577,7 +2577,7 @@
       "tabler_asset": "player-play",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/mihomo_import.js:L772",
+          "location": "xkeen-ui/static/js/features/mihomo_import.js:L776",
           "control_type": "runtime-action",
           "accessible_label": "Запустить"
         },
@@ -2757,7 +2757,7 @@
           "accessible_label": "Обновить"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_import.js:L781",
+          "location": "xkeen-ui/static/js/features/mihomo_import.js:L785",
           "control_type": "runtime-action",
           "accessible_label": "Обновить"
         },
@@ -3133,7 +3133,7 @@
           "accessible_label": "Сохранить"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_import.js:L767",
+          "location": "xkeen-ui/static/js/features/mihomo_import.js:L771",
           "control_type": "runtime-action",
           "accessible_label": "Сохранить"
         },
@@ -3641,7 +3641,7 @@
           "accessible_label": "Удалить"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_import.js:L793",
+          "location": "xkeen-ui/static/js/features/mihomo_import.js:L797",
           "control_type": "runtime-action",
           "accessible_label": "Удалить"
         },

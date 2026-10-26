@@ -7969,7 +7969,16 @@ html[data-theme="light"] #routing-forced-rules-modal .xk-chip[data-kind="ip"] {
 }
 
 .xk-mi-refresh-field {
-  max-width: 260px;
+  max-width: none;
+  align-items: flex-start;
+}
+
+.xk-mi-refresh-field .xk-mi-control {
+  width: 64px;
+  min-width: 64px;
+  padding: 0 3px 0 8px;
+  appearance: auto;
+  -webkit-appearance: auto;
 }
 
 .xk-mi-refresh-note {

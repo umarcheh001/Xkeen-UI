@@ -198,11 +198,15 @@ let mihomoImportModuleApi = null;
     const layout = expanded ? 'preview' : (hasResult ? 'result' : 'source');
     const changed = modal.dataset.miLayout !== layout;
     modal.dataset.miLayout = layout;
-    modal.dataset.modalRemember = expanded ? '1' : '0';
+    // The compact form is draggable too. It stores only its position so a
+    // previously dragged, content-sized form cannot restore a stale height
+    // after its controls change. The YAML workbench retains its full geometry.
+    modal.dataset.modalRemember = '1';
+    modal.dataset.modalPositionOnly = expanded ? '0' : '1';
     modal.dataset.modalNoresize = expanded ? '0' : '1';
-    modal.dataset.modalNodrag = expanded ? '0' : '1';
-    modal.dataset.modalNopos = expanded ? '0' : '1';
-    modal.dataset.modalKey = 'mihomo-import-preview-v2';
+    delete modal.dataset.modalNodrag;
+    delete modal.dataset.modalNopos;
+    modal.dataset.modalKey = expanded ? 'mihomo-import-preview-v2' : 'mihomo-import-source-v3';
     if (content) content.classList.toggle('xk-mi-modal--source', !hasResult);
     if (controls) controls.classList.toggle('xk-mi-panel--source', !hasResult);
     if (preview) preview.classList.toggle('hidden', !expanded);
