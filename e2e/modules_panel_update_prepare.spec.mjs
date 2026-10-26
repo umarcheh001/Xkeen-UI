@@ -200,6 +200,42 @@ test('операция не откатывается ниже 4 из 7', async (
   await expect(progressBox(page).locator('strong')).toHaveText('Сверка копии архива');
 });
 
+test('повисший запрос статуса во время перезапуска не останавливает окно', async ({ page }) => {
+  test.setTimeout(90_000);
+  await installPanelPrepareRoutes(page, { steps: [prepareReady()] });
+  const panel = { operation: 'panel-update', scope: 'panel', module_id: null, version: '2.11.0' };
+  const running = { ...runningStatus, ...panel, step: 'applying' };
+  const committed = {
+    ...server.install_committed, ...panel, operation_id: running.operation_id,
+    log: ['prepared', 'downloading', 'verifying', 'applying', 'state', 'restarting', 'health', 'committed']
+      .map((step, index) => ({ step, at: 1791463146 + index })),
+  };
+  let phase = 'idle';
+  let hung = 0;
+  await openModules(page);
+  await page.route('**/api/modules/operations/apply', (route) => {
+    phase = 'running';
+    return route.fulfill({ status: 202, json: { ok: true, operation_id: running.operation_id, status: running } });
+  });
+  await page.unroute('**/api/modules/operations/status');
+  await page.route('**/api/modules/operations/status', async (route) => {
+    if (phase === 'idle') return route.fulfill({ json: server.status_none });
+    if (phase === 'running') {
+      // The panel went away while this question was on the way: no answer, no error.
+      phase = 'restarted';
+      hung += 1;
+      return new Promise(() => {});
+    }
+    return route.fulfill({ json: committed });
+  });
+  await updateButton(page).click();
+  await expect(progressBox(page)).toContainText('Готово к обновлению');
+  await page.locator('#modules-plan-apply').click();
+
+  await expect(page.getByRole('dialog', { name: 'Панель обновлена до 2.11.0' })).toBeVisible({ timeout: 40_000 });
+  expect(hung).toBe(1);
+});
+
 test('сорванное на сверке обновление не откатывает полосу назад', async ({ page }) => {
   await installPanelPrepareRoutes(page, { steps: [prepareReady()] });
   const panel = { operation: 'panel-update', scope: 'panel', module_id: null, version: '2.11.0' };
