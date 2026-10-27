@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 604,
-      "size_bytes": 8191505,
+      "size_bytes": 8194217,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -359,7 +359,7 @@
       ],
       "removable": true,
       "unit_count": 61,
-      "size_bytes": 772310,
+      "size_bytes": 773633,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 15,
@@ -12835,7 +12835,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/router_resource_dashboard.spec.mjs",
-      "size_bytes": 77282,
+      "size_bytes": 79994,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -23690,7 +23690,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor/tool_modems.js",
-      "size_bytes": 15438,
+      "size_bytes": 16647,
       "depends_on": [
         "core"
       ],
@@ -23768,7 +23768,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor/tools.js",
-      "size_bytes": 5697,
+      "size_bytes": 5811,
       "depends_on": [
         "core"
       ],
@@ -34379,7 +34379,7 @@
         },
         "tool.advanced-diagnostics": {
           "unit_count": 61,
-          "size_bytes": 772310
+          "size_bytes": 773633
         }
       },
       "next_stage": "Этапы 4, 5 и 6."

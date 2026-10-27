@@ -30,7 +30,8 @@ const TABS = [
 export function mountTools(host, api = {}) {
   const snapshot = () => (typeof api.snapshot === "function" ? api.snapshot() || {} : {});
   let controller = new AbortController();
-  const ctx = { signal: () => controller.signal, snapshot };
+  let modemsEmpty = false;
+  const ctx = { signal: () => controller.signal, snapshot, modemsEmpty: () => { modemsEmpty = true; } };
   const loaded = new Set();
   let active = null;
 
@@ -74,7 +75,7 @@ export function mountTools(host, api = {}) {
 
   function update() {
     const state = snapshot();
-    const modems = hasModems(state);
+    const modems = hasModems(state) && !modemsEmpty;
     tabButton("modems").hidden = !modems;
     if (!modems && active === "modems") {
       active = null;
@@ -118,6 +119,7 @@ export function mountTools(host, api = {}) {
       controller.abort();
       controller = new AbortController();
       loaded.clear();
+      modemsEmpty = false;
       active = null;
       for (const tab of TABS) tabs[tab.id].reset();
       paintActive();

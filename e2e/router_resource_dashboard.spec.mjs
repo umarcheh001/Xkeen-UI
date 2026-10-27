@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures.mjs';
+import { aggregationLabel, frequenciesWord, hasModems } from '../xkeen-ui/static/js/features/resource_monitor/tool_modems.js';
 
 // The dashboard window (shadow DOM). All API answers are replaced with JSON of the real
 // shapes (see tests/test_system_resources_api.py); addresses are documentation ranges.
@@ -1090,7 +1091,7 @@ test('modems render carriers', async ({ page }) => {
   const card = view.locator('.xkt-modem[data-modem-id="UsbQmi0"]');
   await expect(card).toBeVisible();
   await expect(card.locator('.xkt-carrier')).toHaveCount(3);
-  await expect(card.locator('.xkt-agg')).toHaveText('агрегация 3 частот · 50 МГц');
+  await expect(card.locator('.xkt-agg')).toHaveText('агрегация 3 частоты · 50 МГц');
   await expect(card.locator('.xkt-carrier').nth(0)).toContainText('Основная');
   await expect(card.locator('.xkt-carrier').nth(0)).toContainText('B3 · 1800 МГц');
   await expect(card.locator('.xkt-carrier').nth(0)).toContainText('EARFCN 1602 · PCI 241');
@@ -1122,8 +1123,48 @@ test('modems render carriers', async ({ page }) => {
   await expect(view.locator('.xkt-note')).toContainText('Перезапуск из панели отключён');
 });
 
+test('aggregation label uses the Russian plural', () => {
+  expect([1, 2, 5, 11, 21, 22, 14, 25].map(frequenciesWord)).toEqual(['частота', 'частоты', 'частот', 'частот', 'частота', 'частоты', 'частот', 'частот']);
+  const carriers = (n) => Array.from({ length: n }, () => ({ bandwidth: 20 }));
+  expect(aggregationLabel(carriers(2))).toBe('агрегация 2 частоты · 40 МГц');
+  expect(aggregationLabel(carriers(5))).toBe('агрегация 5 частот · 100 МГц');
+  expect(aggregationLabel(carriers(1))).toBe('');
+});
+
+test('modem detection mirrors the backend tokens', () => {
+  const withItems = (items, links = []) => ({ router: { interfaces: { available: true, items } }, links });
+  expect(hasModems(withItems([{ name: 'UsbModem0', kind: 'wan' }]))).toBe(true);
+  expect(hasModems(withItems([{ name: 'Wwan1', description: 'Mobile broadband' }]))).toBe(true);
+  expect(hasModems(withItems([{ name: 'UsbNet0', kind: 'lan' }, { name: 'Bridge0' }]))).toBe(false);
+  expect(hasModems(withItems([{ name: 'Bridge0' }], [{ id: 'UsbLte0' }]))).toBe(true);
+  expect(hasModems({ router: null })).toBe(true);
+  expect(hasModems({ router: { interfaces: { available: false, items: [] } } })).toBe(true);
+});
+
+test('modems tab is shown without interface data and the first load decides', async ({ page }) => {
+  const view = await openDashboard(page, { tools: { lte: { available: false, count: 0, items: [] } } });
+  await expect(tab(view, 'modems')).toBeVisible();
+  await page.waitForTimeout(300);
+  expect(toolRequests()).toEqual([]);
+  await tab(view, 'modems').click();
+  await expect(pane(view, 'modems')).toContainText('LTE-модемы не обнаружены');
+  expect(toolRequests()).toEqual(['/api/system/router/lte']);
+  // the next summary hides the tab that has no modems behind it
+  await expect(tab(view, 'modems')).toBeHidden({ timeout: 10000 });
+});
+
+test('a modem named in an unusual way shows the tab', async ({ page }) => {
+  const base = summary();
+  const sum = summary({ router: { ...base.router, interfaces: { available: true, count: 2, items: [ifaceItem('UsbModem0', 'wan', true), ifaceItem('Bridge0', 'lan', true)] } } });
+  const view = await openDashboard(page, { sum });
+  await expect(tab(view, 'modems')).toBeVisible();
+  expect(toolRequests()).toEqual([]);
+});
+
 test('modems tab hidden without modems', async ({ page }) => {
-  const view = await openDashboard(page, { tools: { lte: lteFixture() } });
+  const base = summary();
+  const sum = summary({ router: { ...base.router, interfaces: { available: true, count: 2, items: [ifaceItem('GigabitEthernet1', 'wan', true), ifaceItem('UsbNet0', 'lan', true)] } } });
+  const view = await openDashboard(page, { sum, tools: { lte: lteFixture() } });
   await expect(tab(view, 'devices')).toBeVisible();
   await expect(tab(view, 'modems')).toBeHidden();
   expect(toolRequests()).toEqual([]);

@@ -57,11 +57,20 @@ function carrierTile(carrier, index, count) {
   return `<div class="xkt-carrier" data-carrier="${index}"><span class="xkt-tile-h">${role}</span><b class="xkt-carrier-b">${esc(name)}</b><span class="xkt-carrier-w"><span class="xkt-meter p"><i style="width:${Math.max(width ? 4 : 0, percentWidth(width, 0, CARRIER_SCALE_MHZ)).toFixed(1)}%"></i></span><span>${width == null ? "" : `${num(width, Number.isInteger(width) ? 0 : 1)}${NBSP}МГц`}</span></span><small>${ids || "&nbsp;"}</small></div>`;
 }
 
-// "агрегация 3 частот · 50 МГц" (the genitive plural follows the word "агрегация")
+// 1 частота, 2-4 частоты, 5-20 частот, 21 частота (11-14 -> частот)
+export function frequenciesWord(count) {
+  const last = count % 10;
+  const tens = count % 100;
+  if (last === 1 && tens !== 11) return "частота";
+  if (last >= 2 && last <= 4 && (tens < 12 || tens > 14)) return "частоты";
+  return "частот";
+}
+
+// "агрегация 3 частоты · 50 МГц"
 export function aggregationLabel(carriers) {
   if (carriers.length < 2) return "";
   const total = carriers.reduce((sum, carrier) => sum + (toNumber(carrier.bandwidth) || 0), 0);
-  return `агрегация ${carriers.length} частот${total > 0 ? ` · ${num(total, Number.isInteger(total) ? 0 : 1)}${NBSP}МГц` : ""}`;
+  return `агрегация ${carriers.length} ${frequenciesWord(carriers.length)}${total > 0 ? ` · ${num(total, Number.isInteger(total) ? 0 : 1)}${NBSP}МГц` : ""}`;
 }
 
 export function maskImei(value) {
@@ -134,6 +143,8 @@ export function createModemsTab(panel, ctx) {
   const lead = panel.querySelector('[data-role="lead"]');
   const body = panel.querySelector('[data-role="body"]');
   const refresh = panel.querySelector('[data-act="refresh"]');
+
+  const modemItems = () => (Array.isArray(state.payload?.items) ? state.payload.items : state.payload?.available ? [state.payload] : []);
 
   const control = (id) => {
     if (!controls.has(id)) controls.set(id, { busy: false, message: "", tone: "", connected: false });
@@ -208,6 +219,7 @@ export function createModemsTab(panel, ctx) {
       state.loading = false;
       refresh.disabled = false;
     }
+    if (!state.error && !modemItems().length) ctx.modemsEmpty?.();
     paint();
   }
 
@@ -263,13 +275,22 @@ export function createModemsTab(panel, ctx) {
   };
 }
 
-// Do the connection list or the interfaces name a mobile modem? The tab exists only then,
-// so the answer must not need the modem request itself.
-const MODEM_ID = /^(usbqmi|usblte|usbmbim|usbnet|modem|wwan)/i;
+// Does the summary name a mobile modem? The tab exists only then, and the answer must not
+// need the modem request itself. The token set mirrors normalize_lte in
+// services/router_diagnostics.py (case-insensitive substrings of id, type, description, traits).
+// When the summary has no interface data (RCI down) the answer is "maybe": the tab is
+// shown and its first load decides (no modems -> the empty-state message, then the tab goes).
+export const MODEM_TOKENS = ["usbqmi", "usblte", "usbmbim", "modem", "mobile"];
+
+const looksLikeModem = (...values) => {
+  const text = values.flat().map((value) => String(value ?? "")).join(" ").toLowerCase();
+  return MODEM_TOKENS.some((token) => text.includes(token));
+};
 
 export function hasModems(snapshot) {
-  const names = [];
-  for (const item of snapshot?.router?.interfaces?.items || []) names.push(item.name, item.kind);
-  for (const link of snapshot?.links || []) names.push(link.id, link.kernel);
-  return names.some((name) => MODEM_ID.test(String(name || "")));
+  const interfaces = snapshot?.router?.interfaces;
+  const items = Array.isArray(interfaces?.items) ? interfaces.items : [];
+  if (!interfaces || interfaces.available === false || !items.length) return true;
+  if (items.some((item) => looksLikeModem(item.name, item.id, item.type, item.description, item.traits))) return true;
+  return (snapshot?.links || []).some((link) => looksLikeModem(link.id, link.kernel, link.label));
 }
