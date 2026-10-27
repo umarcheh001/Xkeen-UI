@@ -40,6 +40,8 @@ def zone(metric: str, value: float | None, *, cores: int = 1, kind: str | None =
         return None
     if metric in _FIXED:
         return _classify(value, *_FIXED[metric])
+    if metric == "online":  # share of the time the internet answered: a gap in it is a failure
+        return 0 if value >= 1.0 else 2
     if metric == "queue":
         n = max(1, int(cores))
         return _classify(value, _QUEUE[0] * n, _QUEUE[1] * n)
@@ -51,6 +53,21 @@ def zone(metric: str, value: float | None, *, cores: int = 1, kind: str | None =
 def red_from(metric: str) -> float | None:
     """Percent from which a fixed-threshold metric (``cpu``, ``memory``, ``link_*``) is red."""
     return _FIXED[metric][1] if metric in _FIXED else None
+
+
+def chart_bands(cores: int = 1) -> dict[str, dict[str, float]]:
+    """Scale values from which the big chart paints a segment orange / red, per chart metric.
+
+    ``cpu``, ``memory`` and ``link`` are percents; ``queue`` is in tasks, with ``scale_max``
+    (twice the cores) as the top of its scale.
+    """
+    n = max(1, int(cores))
+    return {
+        "cpu": {"orange": _FIXED["cpu"][0], "red": _FIXED["cpu"][1]},
+        "memory": {"orange": _FIXED["memory"][0], "red": _FIXED["memory"][1]},
+        "link": {"orange": _FIXED["link_up"][0], "red": _FIXED["link_up"][1]},
+        "queue": {"orange": _QUEUE[0] * n, "red": _QUEUE[1] * n, "scale_max": 2.0 * n},
+    }
 
 
 def zram_pressure(size_bytes: float | None, used_bytes: float | None) -> bool | None:

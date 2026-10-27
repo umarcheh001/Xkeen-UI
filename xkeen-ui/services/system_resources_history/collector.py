@@ -34,7 +34,7 @@ from . import sensors
 from .persist import load_history, save_history
 from .problems import ProblemTracker
 from .store import HistoryStore
-from .zones import hotter_than_usual, red_from, temp_bands, zone, zram_pressure
+from .zones import chart_bands, hotter_than_usual, red_from, temp_bands, zone, zram_pressure
 
 log = logging.getLogger(__name__)
 
@@ -581,7 +581,7 @@ class Collector:
             age = self._problem_age(now, "internet_lost")
             parts.append(f"нет связи уже {age} мин" if age else "нет связи")
         online_cols = list(data["metrics"].get("online", {}).get("avg") or [None] * CARD_SPEC[2])
-        bars = {"values": online_cols, "zones": [None if v is None else (0 if v >= 1.0 else 2) for v in online_cols]}
+        bars = {"values": online_cols, "zones": [zone("online", v) for v in online_cols]}
         return {"state": state, "label": label, "zone": z, "text": " · ".join(parts), "bars": bars}
 
     def _link_card(self, data: dict, now: float) -> dict | None:
@@ -691,13 +691,14 @@ class Collector:
             kinds = {f"temp:{g.id}": g.kind for g in self._groups}
             zoned: dict[str, dict[str, list[int | None]]] = {}
             for metric, series in data["metrics"].items():
-                if metric not in ZONED and not metric.startswith(("link_", "temp:")):
+                if metric not in ZONED and metric != "online" and not metric.startswith(("link_", "temp:")):
                     continue
                 zoned[metric] = {
                     key: [self._zone_of(metric, v, kinds) for v in series[key]] for key in ("avg", "max")
                 }
             data["zones"] = zoned
             data["cores"] = self._cores
+            data["bands"] = chart_bands(self._cores)
             data["links"] = self._links()
             return data
 

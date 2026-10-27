@@ -29,6 +29,9 @@ function summary(over = {}) {
     status: { tone: 'ok', problems: [] },
     identity: { model: 'Netcraze Ultra (NC-1812)', firmware: 'KeeneticOS 5.1.8' },
     uptime_s: 454000,
+    values: { cpu: 19, memory: 47, queue: 0.4, online: 1, 'link_up:ISP': 2, 'link_down:ISP': 6, 'rate_up:ISP': 1.1, 'rate_down:ISP': 5.8 },
+    zones: { cpu: 0, memory: 0, queue: 0, 'link_up:ISP': 0, 'link_down:ISP': 0 },
+    links: [LINK_ISP],
     cards: {
       cpu: { value: 19, zone: 0, cores: 3, queue: 0.4, queue_zone: 0, text: '3 ядра · очередь задач небольшая', bars: bars(wave(15, 50), 60, 85) },
       memory: { value: 47, zone: 0, text: 'программы 456 МБ · кэш 245 МБ · свободно 290 МБ', programs_bytes: 478150656, cache_bytes: 256901120, free_bytes: 304087040, total_bytes: 1039138816, bars: bars(wave(45, 6, 3), 75, 90) },
@@ -93,22 +96,105 @@ function hardware(kind = 'nc1812', over = {}) {
   };
 }
 
-async function openDashboard(page, { sum = summary(), hw = hardware(), width = 1600 } = {}) {
+// ---- history of the big chart (GET /api/system/history?range=...) ------------------------
+
+const TS = 1792602000;
+const RANGE_STEP = { '15m': 15, '30m': 30, '1h': 60, '6h': 300, '24h': 900, '7d': 1800 };
+const RANGE_COLS = { '15m': 60, '30m': 60, '1h': 60, '6h': 72, '24h': 96, '7d': 336 };
+
+const LINK_ISP = { id: 'ISP', label: 'МТС', kernel: 'eth3', primary: true, priority: 700, connected: true, tariff: { up_mbps: 50, down_mbps: 100 } };
+const LINK_LTE = { id: 'UsbQmi0', label: 'Билайн', kernel: 'wwan0', primary: false, priority: 500, connected: true, tariff: null };
+
+function column(values, orange, red) {
+  const max = values.map(v => (v == null ? null : Math.round(v * 115) / 100));
+  return { avg: values, max, zone: values.map(v => zoneOf(v, orange, red)), peak_zone: max.map(v => zoneOf(v, orange, red)) };
+}
+
+function plainColumn(values) {
+  return { avg: values, max: values.map(v => (v == null ? null : v)) };
+}
+
+// `over` replaces single metrics, `down`/`up` are percent series of every tariff link.
+function history(range, { links = [LINK_ISP], over = {}, since = null } = {}) {
+  const step = RANGE_STEP[range];
+  const count = RANGE_COLS[range];
+  const start = Math.floor(TS / step) * step - (count - 1) * step;
+  const series = fn => Array.from({ length: count }, (_, i) => fn(i));
+  const metrics = {
+    cpu: column(series(i => 20 + (i % 7) * 9), 60, 85),
+    memory: column(series(() => 47), 75, 90),
+    queue: column(series(i => 0.4 + (i % 5) * 0.2), 2.1, 3),
+    online: { ...plainColumn(series(i => (i === 5 ? 0.6 : 1))), zone: series(i => (i === 5 ? 2 : 0)), peak_zone: series(() => 0) },
+    'temp:cpu': column(series(() => 54), 80, 95),
+  };
+  for (const link of links) {
+    const tariffed = !!link.tariff;
+    metrics[`link_up:${link.id}`] = tariffed ? column(series(i => 8 + (i % 4)), 70, 90) : plainColumn(series(() => null));
+    metrics[`link_down:${link.id}`] = tariffed ? column(series(i => 54 + (i % 3)), 70, 90) : plainColumn(series(() => null));
+    metrics[`rate_up:${link.id}`] = plainColumn(series(i => 4 + (i % 4)));
+    metrics[`rate_down:${link.id}`] = plainColumn(series(i => 53.7 + (i % 3)));
+  }
+  Object.assign(metrics, over);
+  return {
+    ok: true, range, step_s: step, start, history_since: since ?? start, cores: 3,
+    bands: { cpu: { orange: 60, red: 85 }, memory: { orange: 75, red: 90 }, link: { orange: 70, red: 90 }, queue: { orange: 2.1, red: 3, scale_max: 6 } },
+    metrics, links,
+  };
+}
+
+// Requests the window makes, recorded by the helper below.
+const api = { summary: 0, hardware: 0, history: [], patches: [] };
+
+async function openDashboard(page, { sum = summary(), hw = hardware(), width = 1600, hist = range => history(range), clock = false, patch = null } = {}) {
+  api.summary = 0; api.hardware = 0; api.history = []; api.patches = [];
+  if (clock) await page.clock.install();
   await page.setViewportSize({ width, height: 1000 });
   await page.route('**/api/system/resources', route => route.fulfill({ json: legacyResources() }));
-  await page.route('**/api/system/summary', route => route.fulfill({ json: sum }));
-  await page.route('**/api/system/hardware', route => route.fulfill({ json: hw }));
-  await page.route('**/api/system/history*', route => route.fulfill({ status: 503, json: { ok: false } }));
+  await page.route('**/api/system/summary', route => { api.summary += 1; route.fulfill(sum ? { json: sum } : { status: 503, json: { ok: false } }); });
+  await page.route('**/api/system/hardware', route => { api.hardware += 1; route.fulfill({ json: hw }); });
+  await page.route('**/api/system/history*', route => {
+    const range = new URL(route.request().url()).searchParams.get('range');
+    api.history.push(range);
+    const data = hist(range);
+    route.fulfill(data ? { json: data } : { status: 503, json: { ok: false } });
+  });
   await page.route('**/api/system/events*', route => route.fulfill({ json: { ok: true, events: [], active: [] } }));
+  await page.route('**/api/ui-settings', async route => {
+    if (route.request().method() !== 'PATCH') { await route.fallback(); return; }
+    const body = route.request().postDataJSON();
+    api.patches.push(body);
+    if (patch) { await route.fulfill(patch(body)); return; }
+    await route.fulfill({ json: { ok: true, settings: {} } });
+  });
   await page.goto('/');
   const monitor = page.locator('#xk-resource-monitor');
   await expect(monitor).toHaveAttribute('data-state', 'ready');
   await monitor.evaluate(button => button.click());
   await expect(page.locator('#xk-resource-dashboard-modal')).toBeVisible();
   const view = page.locator('#xk-resource-dashboard-view');
-  await expect(view.locator('.xkm-card').first()).toBeVisible();
-  await expect(view.locator('.hw-grid')).toBeVisible();
+  if (sum) await expect(view.locator('.xkm-card').first()).toBeVisible();
+  if (sum) await expect(view.locator('.hw-grid')).toBeVisible();
   return view;
+}
+
+// Chart geometry through the handle the window keeps on the canvas.
+const chartInfo = (view) => view.locator('.xkc-canvas').evaluate(canvas => {
+  const handle = canvas.xkChart;
+  const rect = canvas.getBoundingClientRect();
+  const probe = (x, y) => (handle.cellAt ? handle.cellAt(x, y) : null);
+  const last = handle.cellAt ? null : handle.columnAt(handle.plot.left + handle.plot.width - 0.5);
+  const grid = handle.cellAt
+    ? { columns: probe(rect.width - 1, 1).column + 1, rows: probe(1, rect.height - 1).row + 1 }
+    : null;
+  return { kind: canvas.dataset.kind, columns: grid ? grid.columns : last + 1, rows: grid ? grid.rows : 1, width: rect.width, height: rect.height, plotWidth: handle.plot.width, count: handle.count };
+});
+
+async function pointOfColumn(view, index) {
+  return view.locator('.xkc-canvas').evaluate((canvas, i) => {
+    const rect = canvas.getBoundingClientRect();
+    const h = canvas.xkChart;
+    return { x: rect.left + h.plot.left + (i + 0.5) * (h.plot.width / h.count), y: rect.top + rect.height * 0.25 };
+  }, index);
 }
 
 const rect = (locator) => locator.evaluate(el => {
@@ -395,4 +481,396 @@ test('memory block colours meters and the zram warning from server zones only', 
   await expect(view.locator('.hw-kv em.o')).toHaveText('роутеру не хватает памяти');
   await expect(view.locator('.hw-meter.r')).toHaveCount(1);
   await expect(view.locator('.hw-meter.o')).toHaveCount(1);
+});
+
+// ---- the big chart: ranges, metrics, network mirror, tariff, polling ----------------------
+
+test('range buttons change column count', async ({ page }) => {
+  const view = await openDashboard(page);
+  await expect(view.locator('.xkc-canvas')).toHaveAttribute('data-kind', 'level');
+  expect(api.history).toEqual(['1h']);
+  expect((await chartInfo(view)).columns).toBe(60);
+  for (const [range, columns] of [['15m', 60], ['30m', 60], ['1h', 60], ['6h', 72]]) {
+    await view.locator(`.xkc-b[data-range="${range}"]`).click();
+    await expect(view.locator(`.xkc-b[data-range="${range}"]`)).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(() => api.history.at(-1)).toBe(range);
+    await expect.poll(async () => (await chartInfo(view)).columns).toBe(columns);
+  }
+  // 24 h: a grid of 96 cells per row, the metric tabs are hidden
+  await view.locator('.xkc-b[data-range="24h"]').click();
+  await expect(view.locator('.xkc-canvas')).toHaveAttribute('data-kind', 'grid24');
+  const day = await chartInfo(view);
+  expect(day.columns).toBe(96);
+  expect(day.rows).toBe(6);
+  await expect(view.locator('.xkc-tabs')).toBeHidden();
+  // 7 d: seven day rows, the tabs come back with "Все" chosen
+  await view.locator('.xkc-b[data-range="7d"]').click();
+  await expect(view.locator('.xkc-canvas')).toHaveAttribute('data-kind', 'grid7');
+  const week = await chartInfo(view);
+  expect(week.rows).toBe(7);
+  expect(week.columns).toBe(48);
+  await expect(view.locator('.xkc-b[data-metric="all"]')).toBeVisible();
+  await expect(view.locator('.xkc-b[data-metric="all"]')).toHaveAttribute('aria-pressed', 'true');
+  // back to a short range: "Все" is gone and the earlier metric returns
+  await view.locator('.xkc-b[data-range="1h"]').click();
+  await expect(view.locator('.xkc-canvas')).toHaveAttribute('data-kind', 'level');
+  await expect(view.locator('.xkc-b[data-metric="all"]')).toBeHidden();
+  await expect(view.locator('.xkc-b[data-metric="cpu"]')).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('metric tabs and the level chart take the bands from the server', async ({ page }) => {
+  const view = await openDashboard(page);
+  await view.locator('.xkc-b[data-metric="queue"]').click();
+  const gutter = view.locator('.xkc-gutter');
+  // scale top = 2 x cores, red from 1 x cores, orange from 0,7 x cores: all of it the server's `bands`
+  await expect(gutter).toContainText('6,0');
+  await expect(gutter).toContainText('3,0');
+  await expect(gutter).toContainText('2,1');
+  await expect(view.locator('.xkc-info')).toContainText('перегрузка выше 3,0');
+  await view.locator('.xkc-b[data-metric="cpu"]').click();
+  await expect(view.locator('.xkc-info')).toContainText('перегрузка выше 85 %');
+  await expect(view.locator('.xkc-summary')).toContainText('Сейчас');
+  await expect(view.locator('.xkc-summary')).toContainText('В среднем');
+  await expect(view.locator('.xkc-summary')).toContainText('В оранжевой зоне');
+  await expect(view.locator('.xkc-summary')).toContainText('В красной');
+  await expect(view.locator('.xkc-summary')).toContainText(/Пик в \d\d:\d\d/);
+  // a zero minute count is neutral, a real one is coloured
+  const red = view.locator('.xkc-summary b').last();
+  await expect(red).toHaveClass(/z2|zero/);
+});
+
+test('card click switches chart metric', async ({ page }) => {
+  const view = await openDashboard(page);
+  const pressed = metric => expect(view.locator(`.xkc-b[data-metric="${metric}"]`)).toHaveAttribute('aria-pressed', 'true');
+  await view.locator('.xkm-card[data-metric="memory"]').click();
+  await pressed('memory');
+  await view.locator('.xkm-card[data-metric="link"]').click();
+  await pressed('net');
+  await expect(view.locator('.xkc-canvas')).toHaveAttribute('data-kind', 'mirror');
+  await view.locator('.xkm-card[data-metric="cpu"]').click();
+  await pressed('cpu');
+  await expect(view.locator('.xkc-canvas')).toHaveAttribute('data-kind', 'level');
+  // the Internet card opens the details of the connection chain
+  await expect(view.locator('.xkm-node-detail')).toHaveCount(0);
+  await view.locator('.xkm-card[data-metric="internet"]').click();
+  await expect(view.locator('.xkm-node-detail')).toBeVisible();
+  // on "24 ч" a metric card returns to a short range
+  await view.locator('.xkc-b[data-range="24h"]').click();
+  await expect(view.locator('.xkc-canvas')).toHaveAttribute('data-kind', 'grid24');
+  await view.locator('.xkm-card[data-metric="memory"]').click();
+  await expect(view.locator('.xkc-canvas')).toHaveAttribute('data-kind', 'level');
+  await pressed('memory');
+});
+
+test('net chart percent and over-tariff tooltip', async ({ page }) => {
+  const over = 105;
+  const hist = range => {
+    const base = history(range);
+    const down = base.metrics['link_down:ISP'];
+    const last = down.avg.length - 1;
+    down.avg[10] = 54; down.max[10] = 55; down.zone[10] = 0; down.peak_zone[10] = 0;
+    down.avg[last] = over; down.max[last] = over + 3; down.zone[last] = 2; down.peak_zone[last] = 2;
+    base.metrics['rate_down:ISP'].avg[10] = 53.7;
+    base.metrics['rate_down:ISP'].avg[last] = 105.4;
+    return base;
+  };
+  const view = await openDashboard(page, { hist });
+  await view.locator('.xkm-card[data-metric="link"]').click();
+  await expect(view.locator('.xkc-canvas')).toHaveAttribute('data-kind', 'mirror');
+  await expect(view.locator('.xkc-gutter')).toContainText('↑ Отдача');
+  await expect(view.locator('.xkc-gutter')).toContainText('↓ Приём');
+  // upload is above the centre line, download below it
+  const order = await view.locator('.xkc-gutter span.b').evaluateAll(els => els.map(el => ({ text: el.textContent, top: el.getBoundingClientRect().top })));
+  expect(order.find(o => o.text.includes('Отдача')).top).toBeLessThan(order.find(o => o.text.includes('Приём')).top);
+  const count = (await chartInfo(view)).count;
+  let p = await pointOfColumn(view, 10);
+  await page.mouse.move(p.x, p.y);
+  await expect(view.locator('.xkc-tip')).toContainText('↓ Приём 54 % · 53,7 Мбит/с');
+  p = await pointOfColumn(view, count - 1);
+  await page.mouse.move(p.x, p.y);
+  await expect(view.locator('.xkc-tip')).toContainText('105 % — выше тарифа');
+  // the over-tariff column is painted red from the server zone: the first lit segment below the centre line
+  const pixel = await view.locator('.xkc-canvas').evaluate((canvas, i) => {
+    const h = canvas.xkChart;
+    const dpr = canvas.width / canvas.getBoundingClientRect().width;
+    const x = Math.round((h.plot.left + (i + 0.5) * (h.plot.width / h.count)) * dpr);
+    const y = Math.round((canvas.getBoundingClientRect().height / 2 + 4) * dpr);
+    return Array.from(canvas.getContext('2d').getImageData(x, y, 1, 1).data);
+  }, count - 1);
+  expect(pixel[3]).toBeGreaterThan(200);
+  expect(pixel[0]).toBeGreaterThan(pixel[1] + 40);
+  await expect(view.locator('.xkc-info')).toContainText('до 70 % тарифа');
+  await expect(view.locator('.xkc-info')).toContainText('Тариф: приём 100, отдача 50 Мбит/с');
+  await expect(view.locator('.xkc-reserve')).toHaveCount(0);
+});
+
+test('no tariff shows Mbit and link', async ({ page }) => {
+  const noTariff = { ...LINK_ISP, tariff: null };
+  const sum = summary({ links: [noTariff] });
+  sum.cards.link = { ...sum.cards.link, has_tariff: false, tariff: null, text: 'тариф не указан' };
+  const view = await openDashboard(page, { sum, hist: range => history(range, { links: [noTariff] }) });
+  await view.locator('.xkm-card[data-metric="link"]').click();
+  await expect(view.locator('.xkc-canvas')).toHaveAttribute('data-kind', 'mirror');
+  await expect(view.locator('.xkc-info [data-link="tariff"]')).toHaveText('указать скорость тарифа');
+  await expect(view.locator('.xkc-gutter')).toContainText('Мбит/с');
+  await expect(view.locator('.xkc-info')).not.toContainText('до 70 % тарифа');
+  const p = await pointOfColumn(view, 20);
+  await page.mouse.move(p.x, p.y);
+  await expect(view.locator('.xkc-tip')).toContainText('↓ Приём');
+  await expect(view.locator('.xkc-tip')).toContainText('Мбит/с');
+  await expect(view.locator('.xkc-tip')).not.toContainText('%');
+  await expect(view.locator('.xkc-reserve')).toHaveCount(0);
+});
+
+test('two connections: switcher, per-connection tariff, secondary line in card, two channel rows in 24h', async ({ page }) => {
+  const links = [LINK_ISP, LINK_LTE];
+  const sum = summary({ links });
+  sum.cards.link = { ...sum.cards.link, secondary: [{ label: 'Билайн', up_percent: 0, down_percent: 3, up_mbps: 0, down_mbps: 0.2 }] };
+  const view = await openDashboard(page, { sum, hist: range => history(range, { links }) });
+  await expect(view.locator('.xkm-card[data-metric="link"]')).toContainText('Билайн: ↑ 0 % / ↓ 3 %');
+  await view.locator('.xkm-card[data-metric="link"]').click();
+  const switcher = view.locator('.xkc-links .xkc-b');
+  await expect(switcher).toHaveCount(2);
+  await expect(switcher.nth(0)).toHaveText('МТС');
+  await expect(switcher.nth(0)).toHaveAttribute('aria-pressed', 'true');
+  await expect(view.locator('.xkc-info')).toContainText('Канал · МТС');
+  await expect(view.locator('.xkc-info')).toContainText('Тариф: приём 100, отдача 50 Мбит/с');
+  // the second connection has no tariff of its own
+  await switcher.nth(1).click();
+  await expect(switcher.nth(1)).toHaveAttribute('aria-pressed', 'true');
+  await expect(view.locator('.xkc-info')).toContainText('Канал · Билайн');
+  await expect(view.locator('.xkc-info [data-link="tariff"]')).toHaveText('указать скорость тарифа');
+  await expect(view.locator('.xkc-gutter')).toContainText('Мбит/с');
+  // the primary one is not "reserve": the other connection has no tariff either
+  await expect(view.locator('.xkc-reserve')).toHaveCount(0);
+  // 24 h: one channel row per connection
+  await view.locator('.xkc-b[data-range="24h"]').click();
+  await expect(view.locator('.xkc-gutter .rl')).toContainText(['Процессор', 'Память', 'Канал · МТС', 'Канал · Билайн', 'Очередь задач', 'Интернет', 'Температура']);
+  expect((await chartInfo(view)).rows).toBe(7);
+});
+
+test('single connection hides the switcher', async ({ page }) => {
+  const view = await openDashboard(page);
+  await view.locator('.xkm-card[data-metric="link"]').click();
+  await expect(view.locator('.xkc-canvas')).toHaveAttribute('data-kind', 'mirror');
+  await expect(view.locator('.xkc-links')).toHaveCount(0);
+});
+
+test('failover to connection without tariff shows «резервный канал»', async ({ page }) => {
+  const links = [{ ...LINK_ISP, primary: false }, { ...LINK_LTE, primary: true }];
+  const sum = summary({ links });
+  sum.cards.link = { ...sum.cards.link, id: 'UsbQmi0', label: 'Билайн', has_tariff: false, tariff: null, text: 'тариф не указан' };
+  const view = await openDashboard(page, { sum, hist: range => history(range, { links }) });
+  await view.locator('.xkm-card[data-metric="link"]').click();
+  await expect(view.locator('.xkc-canvas')).toHaveAttribute('data-kind', 'mirror');
+  await expect(view.locator('.xkc-links .xkc-b[aria-pressed="true"]')).toHaveText('Билайн');
+  await expect(view.locator('.xkc-reserve')).toHaveText('резервный канал');
+  await expect(view.locator('.xkc-gutter')).toContainText('Мбит/с');
+  // the connection that has the tariff is one click away
+  await view.locator('.xkc-links .xkc-b').first().click();
+  await expect(view.locator('.xkc-reserve')).toHaveCount(0);
+  await expect(view.locator('.xkc-info')).toContainText('Тариф: приём 100, отдача 50 Мбит/с');
+});
+
+test('tariff form rejects text and saves numbers', async ({ page }) => {
+  const view = await openDashboard(page, {
+    patch: body => {
+      const t = body.diagnostics.tariffs.ISP;
+      if (t.down_mbps === 99999) return { status: 400, json: { ok: false, code: 'bad_patch', errors: [{ path: 'diagnostics.tariffs.ISP.down_mbps', error: 'Скорость тарифа — целое число от 1 до 10000 Мбит/с' }] } };
+      return { json: { ok: true, settings: {} } };
+    },
+  });
+  await view.locator('.xkm-card[data-metric="link"]').click();
+  await view.locator('.xkc-info [data-link="tariff"]').click();
+  const form = view.locator('.xkt');
+  await expect(form).toBeVisible();
+  await expect(form).toContainText('Тариф · МТС');
+  await expect(form).toContainText('за сутки приём доходил до');
+  await expect(form).toContainText('проверьте, верно ли указан тариф');
+  const up = form.locator('input[name="up"]');
+  const down = form.locator('input[name="down"]');
+  await expect(up).toHaveValue('50');
+  await expect(down).toHaveValue('100');
+  // text and fractions are refused on the client: nothing is sent
+  await up.fill('abc');
+  await form.locator('[type="submit"]').click();
+  await expect(form.locator('[data-for="up"]')).toContainText('целое число');
+  await up.fill('12.5');
+  await form.locator('[type="submit"]').click();
+  await expect(form.locator('[data-for="up"]')).toContainText('целое число');
+  expect(api.patches).toEqual([]);
+  // the server's own message is shown under the field it is about
+  await up.fill('60');
+  await down.fill('99999');
+  await form.locator('[type="submit"]').click();
+  await expect(form.locator('[data-for="down"]')).toContainText('целое число от 1 до 10000');
+  await expect(form.locator('[data-for="up"]')).toHaveText('');
+  expect(api.patches.length).toBe(1);
+  // numbers are saved through the settings patch, the window then reloads its data
+  const before = api.history.length;
+  await down.fill('300');
+  await form.locator('[type="submit"]').click();
+  await expect(form).toHaveCount(0);
+  expect(api.patches.at(-1)).toEqual({ diagnostics: { tariffs: { ISP: { up_mbps: 60, down_mbps: 300 } } } });
+  await expect.poll(() => api.history.length).toBeGreaterThan(before);
+});
+
+test('hidden tab stops polling', async ({ page }) => {
+  const view = await openDashboard(page, { clock: true });
+  await expect(view.locator('.xkc-canvas')).toBeVisible();
+  const setVisibility = state => page.evaluate(value => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => value });
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => value === 'hidden' });
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, state);
+  const requests = () => api.summary + api.hardware + api.history.length;
+  // visible: the 5 s tick asks for the summary
+  const first = api.summary;
+  await page.clock.runFor(5200);
+  await expect.poll(() => api.summary).toBeGreaterThan(first);
+  // hidden: a minute of timers brings no request at all
+  await setVisibility('hidden');
+  await page.waitForTimeout(100);
+  const quiet = requests();
+  await page.clock.runFor(60000);
+  await page.waitForTimeout(300);
+  expect(requests()).toBe(quiet);
+  // back: exactly one history request
+  const historyBefore = api.history.length;
+  await setVisibility('visible');
+  await expect.poll(() => api.history.length).toBe(historyBefore + 1);
+  await page.waitForTimeout(400);
+  expect(api.history.length).toBe(historyBefore + 1);
+});
+
+test('only last column redrawn on tick', async ({ page }) => {
+  const sum = summary();
+  const view = await openDashboard(page, { sum, clock: true });
+  await expect(view.locator('.xkc-canvas')).toBeVisible();
+  const info = await chartInfo(view);
+  expect(info.count).toBe(60);
+  // a heavier sample arrives with the next tick; only the open column changes
+  sum.values = { ...sum.values, cpu: 95 };
+  sum.zones = { ...sum.zones, cpu: 2 };
+  await page.evaluate(() => {
+    window.__clears = [];
+    const original = CanvasRenderingContext2D.prototype.clearRect;
+    CanvasRenderingContext2D.prototype.clearRect = function patched(x, y, w, h) {
+      if (this.canvas.classList.contains('xkc-canvas')) window.__clears.push({ x, y, w, h });
+      return original.call(this, x, y, w, h);
+    };
+  });
+  await page.clock.runFor(5200);
+  await expect.poll(() => page.evaluate(() => window.__clears.length)).toBeGreaterThan(0);
+  const clears = await page.evaluate(() => window.__clears);
+  const column = info.plotWidth / info.count;
+  for (const c of clears) {
+    expect(Math.abs(c.w - column)).toBeLessThan(1);
+    expect(c.w).toBeLessThan(info.width / 2);
+  }
+  // the clears are all at the last column
+  for (const c of clears) expect(c.x).toBeGreaterThan(info.plotWidth - column - 1);
+  expect(api.history).toEqual(['1h']);
+});
+
+test('initial fetch failure shows a message with a retry button', async ({ page }) => {
+  let healthy = false;
+  const view = await openDashboard(page, { sum: null, hist: range => (healthy ? history(range) : null) });
+  const error = view.locator('.xkc-error');
+  await expect(error).toBeVisible();
+  await expect(error).toContainText('Не удалось получить данные диагностики роутера');
+  await expect(error.locator('[data-retry]')).toHaveText('Повторить');
+  await expect(view.locator('.xkc')).toBeHidden();
+  healthy = true;
+  await page.unroute('**/api/system/summary');
+  await page.route('**/api/system/summary', route => route.fulfill({ json: summary() }));
+  await error.locator('[data-retry]').click();
+  await expect(view.locator('.xkc-canvas')).toBeVisible();
+  await expect(view.locator('.xkc-error')).toBeHidden();
+  await expect(view.locator('.xkm-card').first()).toBeVisible();
+});
+
+test('freshness text counts seconds since the last answer', async ({ page }) => {
+  await openDashboard(page, { clock: true });
+  const freshness = page.locator('#xk-resource-dashboard-freshness');
+  await expect(freshness).toHaveText(/Обновлено \d+ с назад/);
+  await page.clock.runFor(3000);
+  await expect(freshness).toHaveText(/Обновлено [1-9]\d* с назад/);
+});
+
+test('JSON snapshot is built from the new data without addresses', async ({ page }) => {
+  const view = await openDashboard(page);
+  await expect(view.locator('.xkc-canvas')).toBeVisible();
+  const modal = page.locator('#xk-resource-dashboard-modal');
+  await expect(modal.locator('#xk-resource-export')).toBeHidden();
+  await modal.locator('#xk-resource-more').click();
+  await expect(modal.locator('#xk-resource-export')).toBeEnabled();
+  const [download] = await Promise.all([page.waitForEvent('download'), modal.locator('#xk-resource-export').click()]);
+  const text = await (await import('node:fs/promises')).readFile(await download.path(), 'utf8');
+  const snapshot = JSON.parse(text);
+  expect(snapshot.schema_version).toBe(2);
+  expect(snapshot.range).toBe('1h');
+  expect(snapshot.history.cpu.avg.length).toBe(60);
+  expect(snapshot.now.cpu_percent).toBe(19);
+  expect(text).not.toContain('192.0.2.');
+  expect(text).not.toContain('МТС');
+  expect(text).not.toContain('Provider A');
+});
+
+test('24 h cell opens 6 h with highlight, the last hour opens 1 h; 7 d last day opens 24 h', async ({ page }) => {
+  const view = await openDashboard(page);
+  await view.locator('.xkc-b[data-range="24h"]').click();
+  await expect(view.locator('.xkc-canvas')).toHaveAttribute('data-kind', 'grid24');
+  const clickCell = async (column, row = 0) => {
+    await view.locator('.xkc-canvas').scrollIntoViewIfNeeded();
+    return clickCellPoint(column, row);
+  };
+  const clickCellPoint = (column, row = 0) => view.locator('.xkc-canvas').evaluate((canvas, [c, r]) => {
+    const rect = canvas.getBoundingClientRect();
+    const h = canvas.xkChart;
+    const cols = Number(canvas.dataset.columns);
+    const rows = Number(canvas.dataset.rows);
+    return { x: rect.left + h.plot.left + (c + 0.5) * (h.plot.width / cols), y: rect.top + (r + 0.5) * (rect.height / rows) };
+  }, [column, row]);
+  // cell 90 of 96 is within the last 3 hours of the day, not the last hour; 80 is 4 hours back
+  let p = await clickCell(80);
+  await page.mouse.move(p.x, p.y);
+  await expect(view.locator('.xkc-tip')).toContainText('Процессор');
+  await page.mouse.click(p.x, p.y);
+  await expect(view.locator('.xkc-canvas')).toHaveAttribute('data-kind', 'level');
+  await expect(view.locator('.xkc-b[data-range="6h"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(view.locator('.xkc-hl')).toBeVisible();
+  await view.locator('.xkc-b[data-range="24h"]').click();
+  await expect(view.locator('.xkc-canvas')).toHaveAttribute('data-kind', 'grid24');
+  p = await clickCell(95);
+  await page.mouse.click(p.x, p.y);
+  await expect(view.locator('.xkc-b[data-range="1h"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(view.locator('.xkc-hl')).toBeVisible();
+  // 7 d: a cell of today opens "24 ч" (the last cell of the first row belongs to the last day)
+  await view.locator('.xkc-b[data-range="7d"]').click();
+  await expect(view.locator('.xkc-canvas')).toHaveAttribute('data-kind', 'grid7');
+  await view.locator('.xkc-canvas').scrollIntoViewIfNeeded();
+  const today = await view.locator('.xkc-canvas').evaluate(canvas => {
+    const rect = canvas.getBoundingClientRect();
+    const h = canvas.xkChart;
+    const now = new Date();
+    const cell = Math.max(0, Math.floor((now.getHours() * 60 + now.getMinutes()) / 30) - 1);
+    return { x: rect.left + h.plot.left + (cell + 0.5) * (h.plot.width / 48), y: rect.top + rect.height / 14 };
+  });
+  await page.mouse.click(today.x, today.y);
+  await expect(view.locator('.xkc-b[data-range="24h"]')).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('phone draws half as many columns', async ({ page }) => {
+  const view = await openDashboard(page, { width: 390 });
+  await expect(view.locator('.xkc-canvas')).toBeVisible();
+  expect((await chartInfo(view)).columns).toBe(30);
+  await view.locator('.xkc-b[data-range="24h"]').click();
+  expect((await chartInfo(view)).columns).toBe(48);
+  const scroll = await page.evaluate(() => {
+    const body = document.querySelector('#xk-resource-dashboard-modal .modal-body');
+    return { body: body.scrollWidth - body.clientWidth, doc: document.documentElement.scrollWidth - innerWidth };
+  });
+  expect(scroll.body).toBeLessThanOrEqual(1);
+  expect(scroll.doc).toBeLessThanOrEqual(1);
 });

@@ -102,7 +102,30 @@ def test_history_zone_fields(tmp_path, monkeypatch):
     assert {z for z in cpu["zone"] if z is not None} == {2}
     assert {z for z in cpu["peak_zone"] if z is not None} == {2}
     assert {z for z in metrics["memory"]["zone"] if z is not None} == {0}
-    assert "zone" not in metrics["online"]  # availability has no zones
+    # availability: a full column is normal, any gap in it is a failure
+    assert {z for z in metrics["online"]["zone"] if z is not None} == {0}
+
+
+def test_history_carries_chart_bands_for_every_chart_metric(tmp_path, monkeypatch):
+    _router, collector = _running(tmp_path)
+    client = _app_with(collector, monkeypatch).test_client()
+
+    body = client.get("/api/system/history?range=1h").get_json()
+
+    cores = body["cores"]
+    assert body["bands"]["cpu"] == {"orange": 60.0, "red": 85.0}
+    assert body["bands"]["memory"] == {"orange": 75.0, "red": 90.0}
+    assert body["bands"]["link"] == {"orange": 70.0, "red": 90.0}
+    assert body["bands"]["queue"] == {"orange": 0.7 * cores, "red": 1.0 * cores, "scale_max": 2.0 * cores}
+
+
+def test_online_zone_is_normal_only_for_a_full_column():
+    from services.system_resources_history.zones import zone
+
+    assert zone("online", 1.0) == 0
+    assert zone("online", 0.93) == 2
+    assert zone("online", 0.0) == 2
+    assert zone("online", None) is None
 
 
 def test_history_links_list_two_connections(tmp_path, monkeypatch):

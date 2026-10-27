@@ -2,6 +2,8 @@
 // panel stylesheet (panel-operator.css) cannot reach them; colours come from the
 // --op-* variables of the panel, which the shadow host inherits from <body>.
 
+import { CHART_CSS } from "./chart_css.js";
+
 export const VIEW_CSS = `
 :host { display: block; min-width: 0; }
 * { box-sizing: border-box; }
@@ -37,6 +39,7 @@ a, .xkm-a { color: var(--op-accent-hover, var(--op-accent)); cursor: pointer; te
 .xkm-big small { margin-left: 3px; color: var(--op-muted); font-size: 14px; font-weight: 500; }
 .xkm-big .sep { margin: 0 8px; color: var(--op-faint); font-weight: 400; }
 .xkm-sub { margin-bottom: 6px; overflow: hidden; color: var(--op-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.xkm-sec { margin-bottom: 6px; overflow: hidden; color: var(--op-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .xkm-spark { display: block; width: 100%; height: 34px; margin-top: auto; }
 
 .xkm-panel-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--op-border); }
@@ -162,4 +165,4 @@ a, .xkm-a { color: var(--op-accent-hover, var(--op-accent)); cursor: pointer; te
   .hw-res.two { grid-template-columns: 1fr; }
   .hw-pop { left: 10%; }
 }
-`;
+` + CHART_CSS;

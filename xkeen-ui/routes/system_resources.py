@@ -170,6 +170,7 @@ def create_system_resources_blueprint(*, include_summary: bool = True) -> Bluepr
                 "start": data["start"],
                 "history_since": data["history_since"],
                 "cores": data["cores"],
+                "bands": data["bands"],
                 "metrics": metrics,
                 "links": links,
             }

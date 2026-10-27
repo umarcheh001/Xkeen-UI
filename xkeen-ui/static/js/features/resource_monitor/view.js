@@ -11,6 +11,7 @@
 //   renderConnection(router) connection chain (summary.router)
 //   onCardClick(cb)          cb(metric) with metric in cpu | memory | internet | link
 //   onLinkClick(cb)          cb(name) with name in tariff | dns-log
+//   focusConnection()        open the details of the connection chain
 //   chartHost, toolsHost     empty containers for the big chart and the tool tabs
 //   redraw()                 repaints the canvases (after the window was resized/shown)
 //   destroy()
@@ -112,13 +113,26 @@ function badge(metric, zone) {
   return `<span class="xkm-badge z${zone}">${esc(ZONE_WORDS[metric][zone])}</span>`;
 }
 
-function card(metric, zone, badgeHtml, big, sub, spark) {
+function card(metric, zone, badgeHtml, big, sub, spark, extra = "") {
   return `<div class="xkm-card" data-metric="${metric}" data-zone="${zone ?? ""}" role="button" tabindex="0">
     <div class="xkm-card-h"><span>${esc(CARD_TITLES[metric] || "")}</span>${badgeHtml}</div>
     <div class="xkm-big">${big}</div>
     <div class="xkm-sub">${sub}</div>
+    ${extra}
     ${spark}
   </div>`;
+}
+
+// "Билайн: ↑ 0 % / ↓ 3 %": the other connections that carry traffic right now.
+function secondaryLine(link) {
+  const items = (link?.secondary || []).map((other) => {
+    const known = finite(other.up_percent) && finite(other.down_percent);
+    const speed = known
+      ? `↑${NBSP}${num(other.up_percent)}${NBSP}% / ↓${NBSP}${num(other.down_percent)}${NBSP}%`
+      : `↑${NBSP}${num(other.up_mbps, 1)} / ↓${NBSP}${num(other.down_mbps, 1)}${NBSP}Мбит/с`;
+    return `${esc(other.label)}: ${speed}`;
+  });
+  return items.length ? `<div class="xkm-sec">${items.join(" · ")}</div>` : "";
 }
 
 const sparkCanvas = (kind) => `<canvas class="xkm-spark" data-kind="${kind}" style="width:100%;height:34px"></canvas>`;
@@ -183,12 +197,13 @@ function cardsHtml(cards) {
   } else if (link.has_tariff) {
     parts.push(card("link", link.zone, badge("link", link.zone),
       `↑${NBSP}${num(link.up_percent)}<small>%</small><span class="sep">/</span>↓${NBSP}${num(link.down_percent)}<small>%</small>`,
-      esc(link.text), sparkCanvas("mirror")));
+      esc(link.text), sparkCanvas("mirror"), secondaryLine(link)));
   } else {
     parts.push(`<div class="xkm-card" data-metric="link" data-zone="" role="button" tabindex="0">
     <div class="xkm-card-h"><span>Интернет-трафик</span><span class="xkm-badge none">тариф не задан</span></div>
     <div class="xkm-big">↑${NBSP}${num(link.up_mbps, 1)}<span class="sep">/</span>↓${NBSP}${num(link.down_mbps, 1)}<small>Мбит/с</small></div>
     <div class="xkm-sub">Отдача / приём · <button type="button" class="xkm-a" data-link="tariff">указать тариф</button></div>
+    ${secondaryLine(link)}
     ${sparkCanvas("mirror")}
   </div>`);
   }
@@ -458,6 +473,13 @@ export function mountDashboardView(host) {
     renderConnection(router) {
       state.router = router || null;
       paintConnection();
+    },
+    // Open the details of the connection chain (the broken link, else the last one).
+    focusConnection() {
+      const failed = chainModel(state.router).find((step) => step.state === "bad");
+      state.openNode = failed ? failed.id : "internet";
+      paintConnection();
+      slot("connection").scrollIntoView?.({ block: "nearest", behavior: "smooth" });
     },
     onCardClick(cb) { state.cardCb = typeof cb === "function" ? cb : null; },
     onLinkClick(cb) { state.linkCb = typeof cb === "function" ? cb : null; },

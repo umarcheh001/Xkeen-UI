@@ -23,10 +23,6 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
     assert 'class="modal hidden xk-resource-dashboard-modal"' in template
     assert 'data-operator-modal-family="master-detail"' in template
     for element_id in (
-        "xk-resource-chart-cpu",
-        "xk-resource-chart-memory",
-        "xk-resource-chart-network",
-        "xk-resource-chart-load",
         "xk-resource-export",
         "xk-resource-dashboard-view",
         "xk-resource-more",
@@ -62,10 +58,6 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
     assert 'class="btn-secondary xk-toggle-button" id="xk-channel-trace"' in template
     for fragment in (
         "setDashboardOpen(true)",
-        "data-resource-range",
-        "MAX_HISTORY = 360",
-        "MAX_HISTORY = 17280",
-        "drawCharts",
         "receive_bytes_per_second",
         "PROCESS_ENDPOINT = \"/api/system/processes\"",
         "CLIENTS_ENDPOINT = \"/api/system/router/clients\"",
@@ -92,12 +84,6 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
         'interfaceFilter = "active"',
         'data-interface-filter',
         'slice(0, 24)',
-        'ctx.createLinearGradient',
-        'traceSmoothLine',
-        'data-chart-toggle',
-        'pointermove',
-        'percentile(values, 95)',
-        'load1: metricNumber(payload?.cpu?.load_1m)',
         'setPressedGroup',
         'setRefreshBusy',
         'syncCollapsiblePanelState',
@@ -115,14 +101,19 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
         'toggleInterfaceErrorDetails',
         'appendInterfaceErrorCell',
         'xk-resource-interface-chip',
-        "drawChartGapAnnotations",
         "clientsShowAll",
         "latestClientsPayload",
-        "historyGaps",
         "selectClients",
     ):
         assert fragment in script
     assert "Проблема с зашифрованным DNS" in MODEL.read_text(encoding="utf-8")
+    # the history, the polling and the charts of the window live in resource_monitor/dashboard.js
+    for removed in ("selectHistory", "historyGaps", "drawCharts", "MAX_HISTORY", "rangeMinutes", "CHARTS"):
+        assert removed not in script
+    assert 'from "./resource_monitor/dashboard.js"' in script
+    assert "openDashboard()" in script and "closeDashboard()" in script and "exportDashboardSnapshot()" in script
+    assert 'id="xk-dashboard-history"' not in template
+    assert 'id="xk-resource-dashboard-view"' in template
     for fragment in (
         ".xk-resource-dashboard-content",
         ".xk-resource-overview",
