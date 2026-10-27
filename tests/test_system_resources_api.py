@@ -167,7 +167,8 @@ def test_hardware_payload_from_fixtures(tmp_path, monkeypatch):
     assert temp["id"] == "soc" and temp["value_c"] == 55.0 and temp["zone"] == 0
     assert "hotter_by" in temp and "hotter_by_c" not in temp
     assert temp["bands"] == {"orange_c": 80.0, "red_c": 95.0}  # the scale is drawn from these, never from JS constants
-    assert body["throttle"] == {"current_mhz": 1200, "max_mhz": 2000, "throttled": True}
+    # below the maximum on one cool sample is an idle governor, not heat
+    assert body["throttle"] == {"current_mhz": 1200, "max_mhz": 2000, "below_max": True, "throttled": False}
     assert body["memory"]["total_bytes"] == 1_000_000 * 1024
     assert body["memory"]["programs_bytes"] + body["memory"]["cache_bytes"] + body["memory"]["free_bytes"] == body["memory"]["total_bytes"]
     assert body["zram"] == {"size_bytes": 1073741824, "used_bytes": 2048 * 1024, "pressure": False}

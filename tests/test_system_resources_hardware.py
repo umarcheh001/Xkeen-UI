@@ -68,9 +68,16 @@ def test_wifi_temps():
 
 
 def test_wifi_temps_missing_or_off():
-    assert wifi_temperatures({}) == {"wifi24": None, "wifi5": None}
+    assert wifi_temperatures({}) == {}  # no radio records: no tiles for radios that do not exist
     off = {"WifiMaster0": {"link": "down"}, "WifiMaster1": {"temperature": "bad"}}
-    assert wifi_temperatures(off) == {"wifi24": None, "wifi5": None}
+    assert wifi_temperatures(off) == {"wifi24": None}  # a known radio that is down keeps its tile
+
+
+def test_wifi_link_up_without_temperature_is_left_out():
+    up = {"WifiMaster0": {"link": "up", "temperature": 49}, "WifiMaster1": {"link": "up"}}
+    assert wifi_temperatures(up) == {"wifi24": 49}
+    only_second = {"WifiMaster1": {"link": "up", "temperature": 53}}
+    assert wifi_temperatures(only_second) == {"wifi5": 53}
 
 
 def test_identity():

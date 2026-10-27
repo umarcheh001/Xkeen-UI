@@ -232,3 +232,12 @@ def test_a_forward_gap_shorter_than_the_week_keeps_the_history():
     feed(s, T0, 600, 30)
     feed(s, T0 + 3 * 86400, 600, 40)
     assert s.columns("7d", T0 + 3 * 86400 + 595)["history_since"] == T0
+
+
+def test_median_waits_for_enough_points():
+    s = HistoryStore(("cpu",))
+    feed(s, T0, 47 * 1800, 30, step=1800)  # 47 half-hours
+    assert s.median("cpu", min_points=48) is None
+    assert s.median("cpu") == 30  # without the requirement the old behaviour stays
+    feed(s, T0 + 47 * 1800, 3 * 1800, 30, step=1800)
+    assert s.median("cpu", min_points=48) == 30

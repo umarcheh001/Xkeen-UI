@@ -217,12 +217,13 @@ class HistoryStore:
             "history_since": self._since,
         }
 
-    def median(self, metric: str, tier: str = "week") -> float | None:
+    def median(self, metric: str, tier: str = "week", min_points: int = 1) -> float | None:
+        """Median of the tier's valid points, or ``None`` with fewer than ``min_points`` of them."""
         i = self._index.get(metric)
         if i is None or tier not in self._tiers:
             return None
         points = self._tiers[tier].valid_points(i)
-        return float(statistics.median(points)) if points else None
+        return float(statistics.median(points)) if len(points) >= max(1, min_points) else None
 
     def memory_bytes(self) -> int:
         total = 0

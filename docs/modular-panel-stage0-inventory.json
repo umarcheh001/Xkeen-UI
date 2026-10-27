@@ -359,7 +359,7 @@
       ],
       "removable": true,
       "unit_count": 64,
-      "size_bytes": 792174,
+      "size_bytes": 800174,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 15,
@@ -22749,7 +22749,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_service",
       "path": "xkeen-ui/services/system_resources_history/collector.py",
-      "size_bytes": 38151,
+      "size_bytes": 39642,
       "depends_on": [
         "core"
       ],
@@ -22771,7 +22771,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_service",
       "path": "xkeen-ui/services/system_resources_history/hardware.py",
-      "size_bytes": 7944,
+      "size_bytes": 8095,
       "depends_on": [
         "core"
       ],
@@ -22828,7 +22828,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_service",
       "path": "xkeen-ui/services/system_resources_history/sensors.py",
-      "size_bytes": 8992,
+      "size_bytes": 9973,
       "depends_on": [
         "core"
       ],
@@ -22847,7 +22847,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_service",
       "path": "xkeen-ui/services/system_resources_history/store.py",
-      "size_bytes": 11543,
+      "size_bytes": 11692,
       "depends_on": [
         "core"
       ],
@@ -22866,7 +22866,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_service",
       "path": "xkeen-ui/services/system_resources_history/zones.py",
-      "size_bytes": 3493,
+      "size_bytes": 3589,
       "depends_on": [
         "core"
       ],
@@ -22961,7 +22961,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_system_resources_api.py",
-      "size_bytes": 19223,
+      "size_bytes": 19316,
       "depends_on": [
         "core"
       ],
@@ -22980,7 +22980,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_system_resources_collector.py",
-      "size_bytes": 29079,
+      "size_bytes": 33009,
       "depends_on": [
         "core"
       ],
@@ -23001,7 +23001,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_system_resources_hardware.py",
-      "size_bytes": 6266,
+      "size_bytes": 6655,
       "depends_on": [
         "core"
       ],
@@ -23058,7 +23058,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_system_resources_sensors.py",
-      "size_bytes": 9397,
+      "size_bytes": 9747,
       "depends_on": [
         "core"
       ],
@@ -23077,7 +23077,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_system_resources_store.py",
-      "size_bytes": 7330,
+      "size_bytes": 7700,
       "depends_on": [
         "core"
       ],
@@ -34438,7 +34438,7 @@
         },
         "tool.advanced-diagnostics": {
           "unit_count": 64,
-          "size_bytes": 792174
+          "size_bytes": 800174
         }
       },
       "next_stage": "Этапы 4, 5 и 6."

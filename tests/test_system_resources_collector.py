@@ -366,16 +366,47 @@ def test_internet_and_dns_events(tmp_path):
     assert all(e["until"] is not None for e in c.events(0))
 
 
-def test_throttle_and_slow_port_events(tmp_path):
+FREQ_CUR = "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq"
+FREQ_MAX = "/sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq"
+
+
+def test_throttle_needs_two_slow_samples_below_max_and_a_warm_chip(tmp_path):
     r = FakeRouter()
-    r.files["/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq"] = "1000000"
-    r.files["/sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq"] = "1350000"
+    r.files[FREQ_CUR], r.files[FREQ_MAX] = "1000000", "1350000"
+    r.thermal_temp = 85_000  # orange for a chip
     c = make(tmp_path, r)
-    r.step(c, 2)
+    r.step(c, 2)  # the first 60 s sample
+    assert c.events(0) == [] and c.hardware()["throttle"]["throttled"] is False
+    r.step(c, 11)  # the second one
     assert [e["type"] for e in c.events(0)] == ["cpu_throttled"]
-    r.files["/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq"] = "1350000"
+    assert c.hardware()["throttle"]["throttled"] is True
+    r.files[FREQ_CUR] = "1350000"
     r.step(c, 12)
     assert c.events(0)[0]["until"] is not None
+    assert c.hardware()["throttle"]["throttled"] is False
+
+
+def test_an_idle_governor_on_a_cool_chip_is_never_throttling(tmp_path):
+    r = FakeRouter()
+    r.files[FREQ_CUR], r.files[FREQ_MAX] = "600000", "1350000"  # ondemand at idle
+    r.thermal_temp = 55_000
+    c = make(tmp_path, r)
+    r.step(c, 60)  # five minutes
+    assert c.events(0) == []
+    assert c.hardware()["throttle"]["throttled"] is False
+
+
+def test_one_slow_sample_below_max_when_hot_is_not_enough(tmp_path):
+    r = FakeRouter()
+    r.files[FREQ_CUR], r.files[FREQ_MAX] = "1000000", "1350000"
+    r.thermal_temp = 85_000
+    c = make(tmp_path, r)
+    r.step(c, 2)
+    r.files[FREQ_CUR] = "1350000"  # the next sample is at the maximum: the streak is broken
+    r.step(c, 11)
+    r.files[FREQ_CUR] = "1000000"
+    r.step(c, 12)
+    assert c.events(0) == []
 
 
 def test_red_cpu_for_three_minutes_makes_a_problem(tmp_path):
@@ -767,3 +798,79 @@ def test_boot_with_a_past_clock_then_ntp_jump_forward(tmp_path):
     assert [e["type"] for e in c.events(0)].count("router_rebooted") == 1  # not pruned later
     assert c.snapshot()["cards"]["internet"]["text"].count("без перерывов") <= 1
     assert "200 д" not in c.snapshot()["cards"]["internet"]["text"]
+
+
+def _soc_after_history(tmp_path, half_hours: int):
+    r = FakeRouter()
+    r.thermal_temp = 78_000
+    c = make(tmp_path, r)
+    c._store.add_metric("temp:soc")
+    for k in range(half_hours, 0, -1):  # oldest first, cool the whole time
+        c._store.add(r.now - 1800 * k, {"temp:soc": 55.0})
+    r.step(c, 2)
+    return next(t for t in c.hardware()["temperatures"] if t["id"] == "soc")
+
+
+def test_hotter_than_usual_needs_a_day_of_history(tmp_path):
+    soc = _soc_after_history(tmp_path, 10)  # five hours: not yet "usual"
+    assert soc["usual_c"] is None and soc["hotter_by_c"] is None
+
+
+def test_hotter_than_usual_shows_after_a_day(tmp_path):
+    soc = _soc_after_history(tmp_path, 60)
+    assert soc["usual_c"] == pytest.approx(55.0, abs=1) and soc["hotter_by_c"] == 23
+
+
+def test_a_failed_zram_step_keeps_the_previous_value(tmp_path, monkeypatch):
+    r = FakeRouter()
+    r.files["/proc/swaps"] = "Filename Type Size Used Priority\n/dev/zram0 partition 1048576 2048 -2\n"
+    r.files["/sys/block/zram0/disksize"] = "1073741824"
+    c = make(tmp_path, r)
+    r.step(c, 2)
+    assert c.hardware()["zram"]["used_bytes"] == 2048 * 1024
+
+    def boom(*a, **k):
+        raise ValueError("garbled swaps")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(collector_mod.sensors, "zram_state", boom)
+        r.step(c, 12)  # the next 60 s step fails
+    assert c.hardware()["zram"]["used_bytes"] == 2048 * 1024
+    r.files["/proc/swaps"] = "Filename Type Size Used Priority\n"  # zram really switched off
+    r.step(c, 12)
+    assert c.hardware()["zram"] is None
+
+
+def test_zone_types_and_trips_are_read_once_a_minute_not_every_tick(tmp_path):
+    r = FakeRouter()
+    reads: list[str] = []
+    real_reader, real_lister = r.reader, r.lister
+
+    def reader(path):
+        reads.append(path.as_posix())
+        return real_reader(path)
+
+    def lister(path):
+        reads.append("ls " + path.as_posix())
+        return real_lister(path)
+
+    c = make(tmp_path, r)
+    c._reader, c._lister = reader, lister
+    r.step(c, 12)  # ticks 0..11: one 60 s step
+    types = [p for p in reads if p.endswith("thermal_zone0/type")]
+    trips = [p for p in reads if p == "ls /sys/class/thermal/thermal_zone0"]
+    temps = [p for p in reads if p.endswith("thermal_zone0/temp")]
+    assert len(types) == 1 and len(trips) == 1
+    assert len(temps) == 12  # the temperature itself every 5 s
+    r.step(c, 1)
+    assert len([p for p in reads if p.endswith("thermal_zone0/type")]) == 2
+
+
+def test_no_phantom_tile_for_a_radio_the_router_does_not_have(tmp_path):
+    r = FakeRouter()
+    r.show_interface.pop("WifiMaster1", None)
+    c = make(tmp_path, r)
+    r.step(c, 2)
+    ids = [t["id"] for t in c.hardware()["temperatures"]]
+    assert "wifi5" not in ids and "wifi24" in ids
+    assert "temp:wifi5" not in c.snapshot()["values"]

@@ -90,23 +90,45 @@ def _shutdown_c(zone_dir: Path, reader: Reader, lister: Lister) -> float | None:
 def read_thermal_zones(
     reader: Reader = _default_reader, lister: Lister = _default_lister
 ) -> list[ThermalZone]:
+    return read_zone_temperatures(discover_thermal_zones(reader, lister), reader)
+
+
+@dataclass(frozen=True)
+class ZoneInfo:
+    """What does not change about a thermal zone: its directory, type and shutdown trip."""
+
+    name: str
+    type: str
+    shutdown_c: float | None
+
+
+def discover_thermal_zones(
+    reader: Reader = _default_reader, lister: Lister = _default_lister
+) -> list[ZoneInfo]:
+    """The list of zones with their types and trip points; ask for it rarely."""
     try:
         names = [n for n in lister(THERMAL_ROOT) if re.fullmatch(r"thermal_zone\d+", n)]
     except OSError:
         return []
-    zones: list[ThermalZone] = []
+    found: list[ZoneInfo] = []
     for name in sorted(names, key=_natural_key):
         zone_dir = THERMAL_ROOT / name
-        raw_temp = _read_number(reader, zone_dir / "temp")
-        if raw_temp is None:
-            continue
         try:
             zone_type = reader(zone_dir / "type").strip()
-        except OSError:
+        except (OSError, ValueError):
             continue
-        if not zone_type:
-            continue
-        zones.append(ThermalZone(zone_type, raw_temp / 1000.0, _shutdown_c(zone_dir, reader, lister)))
+        if zone_type:
+            found.append(ZoneInfo(name, zone_type, _shutdown_c(zone_dir, reader, lister)))
+    return found
+
+
+def read_zone_temperatures(infos: list[ZoneInfo], reader: Reader = _default_reader) -> list[ThermalZone]:
+    """Only the temperature of every known zone is read; one that cannot be read is skipped."""
+    zones: list[ThermalZone] = []
+    for info in infos:
+        raw_temp = _read_number(reader, THERMAL_ROOT / info.name / "temp")
+        if raw_temp is not None:
+            zones.append(ThermalZone(info.type, raw_temp / 1000.0, info.shutdown_c))
     return zones
 
 
@@ -275,6 +297,10 @@ def cpu_frequency(reader: Reader = _default_reader) -> dict | None:
     maximum = _read_number(reader, CPUFREQ_DIR / "scaling_max_freq")
     if current is None or maximum is None or maximum <= 0:
         return None
-    current_mhz = int(round(current / 1000))
-    max_mhz = int(round(maximum / 1000))
-    return {"current_mhz": current_mhz, "max_mhz": max_mhz, "throttled": current_mhz < max_mhz}
+    # "below the maximum" is only a fact about one sample (ondemand/schedutil idle there
+    # all day); whether it is throttling is for the collector to judge.
+    return {
+        "current_mhz": int(round(current / 1000)),
+        "max_mhz": int(round(maximum / 1000)),
+        "below_max": current < maximum,  # raw kHz, not the rounded MHz
+    }

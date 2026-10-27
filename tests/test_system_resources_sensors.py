@@ -249,12 +249,19 @@ def test_no_zram():
 def test_throttle():
     files = {"scaling_cur_freq": "900000", "scaling_max_freq": "1350000"}
     f = cpu_frequency(lambda p: files[p.name])
-    assert f == {"current_mhz": 900, "max_mhz": 1350, "throttled": True}
+    assert f == {"current_mhz": 900, "max_mhz": 1350, "below_max": True}
+
+
+def test_below_max_compares_raw_khz_not_rounded_mhz():
+    files = {"scaling_cur_freq": "1349600", "scaling_max_freq": "1350000"}
+    assert cpu_frequency(lambda p: files[p.name])["below_max"] is True
+    files = {"scaling_cur_freq": "1350000", "scaling_max_freq": "1350000"}
+    assert cpu_frequency(lambda p: files[p.name])["below_max"] is False
 
 
 def test_cpufreq_kn1811_not_throttled():
     f = cpu_frequency(reader("kn1811"))
-    assert f == {"current_mhz": 1350, "max_mhz": 1350, "throttled": False}
+    assert f == {"current_mhz": 1350, "max_mhz": 1350, "below_max": False}
 
 
 def test_no_cpufreq_on_nc1812():

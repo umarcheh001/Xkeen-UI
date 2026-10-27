@@ -34,7 +34,7 @@ from . import sensors
 from .persist import load_history, save_history
 from .problems import ProblemTracker
 from .store import HistoryStore
-from .zones import chart_bands, hotter_than_usual, red_from, temp_bands, zone, zram_pressure
+from .zones import USUAL_MIN_POINTS, chart_bands, hotter_than_usual, red_from, temp_bands, zone, zram_pressure
 
 log = logging.getLogger(__name__)
 
@@ -150,6 +150,8 @@ class Collector:
         self._identity: dict = {"model": None, "firmware": None}
         self._wifi: dict[str, float | None] = {}
         self._groups: list[sensors.TempGroup] = []
+        self._zone_infos: list[sensors.ZoneInfo] | None = None  # types and trips: refreshed every 60 s
+        self._below_max_streak = 0  # slow samples in a row with the frequency under its maximum
         self._chip_shutdown: float | None = None
         self._ports: list[hw.Port] = []
         self._zram: dict | None = None
@@ -274,7 +276,9 @@ class Collector:
                 values["memory"] = self._memory["percent"]
         self._uptime_s = self._read_uptime()
         values.update(self._sample_links(now))
-        zones = sensors.read_thermal_zones(self._reader, self._lister)
+        if self._zone_infos is None:  # before the first 60 s step has looked
+            self._zone_infos = sensors.discover_thermal_zones(self._reader, self._lister)
+        zones = sensors.read_zone_temperatures(self._zone_infos, self._reader)
         shutdowns = [z.shutdown_c for z in zones if z.shutdown_c is not None]
         self._chip_shutdown = max(shutdowns) if shutdowns else None
         self._groups = sensors.group_temperatures(zones, self._wifi)
@@ -417,9 +421,18 @@ class Collector:
             version = self._rci("show/version")
             out["identity"] = self._guarded("identity", lambda: hw.router_identity(version or {}))
         swaps = self._read("/proc/swaps") or ""
-        out["zram"] = self._guarded("zram", lambda: sensors.zram_state(swaps, self._reader))
+        try:  # no zram is an answer (None); a failed step is no answer and keeps the previous value
+            out["zram"] = sensors.zram_state(swaps, self._reader)
+        except Exception:  # noqa: BLE001
+            log.warning("resource history: zram failed", exc_info=True)
         out["freq"] = self._guarded("frequency", lambda: sensors.cpu_frequency(self._reader))
+        out["zones"] = self._guarded("thermal zones", lambda: sensors.discover_thermal_zones(self._reader, self._lister))
         return out
+
+    def _chip_zone(self) -> int:
+        """Worst zone among the chip's own sensors (0 without any)."""
+        zones = [zone(f"temp:{g.id}", g.value_c, kind=g.kind) for g in self._groups if g.kind == "chip" and g.value_c is not None]
+        return max((z for z in zones if z is not None), default=0)
 
     def _apply_slow(self, now: float, got: dict) -> None:
         if got.get("tariffs") is not None:
@@ -433,9 +446,16 @@ class Collector:
             self._guarded("port events", self._judge_ports, now)
         if got.get("identity") is not None:
             self._identity = got["identity"]
-        self._zram = got.get("zram")
+        if "zram" in got:
+            self._zram = got["zram"]
+        if got.get("zones") is not None:
+            self._zone_infos = got["zones"]
         freq = got.get("freq")
         if freq is not None:
+            # Below the maximum is what an idle governor does all day; heat is when it
+            # happens twice in a row while the chip itself is warm.
+            self._below_max_streak = self._below_max_streak + 1 if freq["below_max"] else 0
+            freq = dict(freq, throttled=self._below_max_streak >= 2 and self._chip_zone() >= 1)
             self._freq = freq
             if freq["throttled"]:
                 self._tracker.emit("cpu_throttled", now, f"{freq['current_mhz']} из {freq['max_mhz']} МГц")
@@ -503,7 +523,7 @@ class Collector:
         with self._lock:
             temps = []
             for g in self._groups:
-                usual = self._store.median(f"temp:{g.id}")
+                usual = self._store.median(f"temp:{g.id}", min_points=USUAL_MIN_POINTS)
                 shutdown = g.shutdown_c
                 if shutdown is None and g.kind == "chip":
                     shutdown = self._chip_shutdown  # chip-wide trip for sensors without their own

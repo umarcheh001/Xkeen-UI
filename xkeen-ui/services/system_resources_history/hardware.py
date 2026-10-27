@@ -123,18 +123,24 @@ def slow_ports(ports: list[Port]) -> list[Port]:
 
 
 def wifi_temperatures(show_interface: dict) -> dict[str, float | None]:
-    """Radio temperatures; a radio that is off or without a reading gives None."""
+    """Radio temperatures.
+
+    A radio the router does not have, or one that never reported a temperature, is
+    left out (no phantom tile); a known radio that is down gives None.
+    """
     data = _dict(show_interface)
     result: dict[str, float | None] = {}
     for key, name in (("wifi24", "WifiMaster0"), ("wifi5", "WifiMaster1")):
-        record = _dict(data.get(name))
-        value = None
-        if str(record.get("link", "up")).lower() != "down":
-            try:
-                value = float(record["temperature"])
-            except (KeyError, TypeError, ValueError):
-                value = None
-        result[key] = value
+        record = data.get(name)
+        if not isinstance(record, dict):
+            continue
+        if str(record.get("link", "up")).lower() == "down":
+            result[key] = None
+            continue
+        try:
+            result[key] = float(record["temperature"])
+        except (KeyError, TypeError, ValueError):
+            continue
     return result
 
 

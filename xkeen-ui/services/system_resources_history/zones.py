@@ -24,6 +24,7 @@ _TEMP: dict[str, tuple[float, float]] = {
 _QUEUE = (0.7, 1.0)  # multiplied by the number of cores
 
 HOTTER_THAN_USUAL_C = 15.0
+USUAL_MIN_POINTS = 48  # half-hour points (a full day) of history before "usual" means anything
 
 
 def _classify(value: float, orange: float, red: float) -> int:
