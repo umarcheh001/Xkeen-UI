@@ -19,6 +19,7 @@ never as a rate.
 from __future__ import annotations
 
 import atexit
+import errno
 import logging
 import os
 import threading
@@ -183,7 +184,7 @@ class Collector:
             raw_uptime = meta.get("uptime_s")
             if isinstance(raw_uptime, (int, float)) and not isinstance(raw_uptime, bool):
                 persisted_uptime = float(raw_uptime)
-            # Flash is written every six hours counted from the copy on flash, not from this
+            # Flash is written every hour counted from the copy on flash, not from this
             # start: a panel restarted more often than that must still reach the flash.
             on_flash = load_history([self._paths["flash"]], None)
             self._last_save["flash"] = min(on_flash[2], now) if on_flash is not None else 0.0
@@ -883,6 +884,13 @@ def flush_collector() -> bool:
         return False
     try:
         collector.save("flash")
+    except OSError as exc:
+        if exc.errno != errno.EROFS:
+            log.warning("resource history: save on SIGTERM failed", exc_info=True)
+            return False
+        # a reboot: the firmware has remounted /opt read-only already; the hourly copy stays
+        log.info("resource history: /opt is read-only (reboot), the hourly flash copy is kept")
+        return False
     except Exception:  # noqa: BLE001
         log.warning("resource history: save on SIGTERM failed", exc_info=True)
         return False

@@ -186,3 +186,34 @@ def test_metrics_none_keeps_saved_set(tmp_path):
     p = str(tmp_path / "h.json")
     save_history(p, make_store(("cpu", "rate_up:ISP")), [], now=T0 + 500)
     assert load_history([p], None)[0].metrics == ("cpu", "rate_up:ISP")
+
+
+class _SaveFails:
+    def __init__(self, error):
+        self.error = error
+
+    def save(self, kind):
+        raise self.error
+
+
+def test_sigterm_save_on_read_only_opt_is_one_quiet_line(monkeypatch, caplog):
+    # On reboot KeeneticOS remounts /opt read-only before the panel gets SIGTERM:
+    # expected, the hourly flash copy stays — no traceback in stderr.log.
+    import errno
+
+    from services.system_resources_history import collector as collector_mod
+
+    monkeypatch.setattr(collector_mod, "_collector", _SaveFails(OSError(errno.EROFS, "Read-only file system", "/opt/etc")))
+    with caplog.at_level("INFO", logger=collector_mod.log.name):
+        assert collector_mod.flush_collector() is False
+    assert [r.exc_info for r in caplog.records] == [None]
+    assert "read-only" in caplog.records[0].getMessage()
+
+
+def test_sigterm_save_failure_of_another_kind_keeps_the_traceback(monkeypatch, caplog):
+    from services.system_resources_history import collector as collector_mod
+
+    monkeypatch.setattr(collector_mod, "_collector", _SaveFails(OSError(28, "No space left on device")))
+    with caplog.at_level("INFO", logger=collector_mod.log.name):
+        assert collector_mod.flush_collector() is False
+    assert caplog.records[0].exc_info is not None
