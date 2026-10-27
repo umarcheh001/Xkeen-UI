@@ -93,7 +93,7 @@ function summary(tick = 0) {
     links: [LINKS[0]],
     cards: {
       cpu: { value: cpu, zone: zoneOf(cpu, 60, 85), cores: 3, queue: 0.4, queue_zone: 0, text: '3 ядра · очередь задач небольшая', bars: bars(wave(15, 50), 60, 85) },
-      memory: { value: 47, zone: 0, text: 'программы 456 МБ · кэш 245 МБ · свободно 290 МБ', programs_bytes: 478150656, cache_bytes: 256901120, free_bytes: 304087040, total_bytes: 1039138816, bars: bars(wave(45, 6, 3), 75, 90) },
+      memory: { value: 47, zone: 0, text: 'программы 456 МБ · свободно 535 МБ, из них кэш 245 МБ', programs_bytes: 478150656, cache_bytes: 256901120, free_bytes: 304087040, total_bytes: 1039138816, bars: bars(wave(45, 6, 3), 75, 90) },
       internet: { state: 'online', label: 'В сети', zone: 0, text: 'Через WAN (GigabitEthernet1)', bars: { values: Array.from({ length: 40 }, () => 1), zones: Array.from({ length: 40 }, () => 0) } },
       link: {
         id: 'ISP', label: 'WAN', has_tariff: true, tariff: { up_mbps: 50, down_mbps: 100 },

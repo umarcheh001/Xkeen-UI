@@ -67,7 +67,8 @@ a, .xkm-a { color: var(--op-accent-hover, var(--op-accent)); cursor: pointer; te
 .xkm-conn-meta { display: flex; flex-wrap: wrap; gap: 6px 22px; padding: 6px 14px 14px; color: var(--op-muted); font-size: 12px; }
 .xkm-conn-meta b { color: var(--op-text); font-weight: 600; }
 
-.hw-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr); }
+/* many sensors: tiles three in a row, the ports keep room for "нет кабеля" */
+.hw-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1.25fr); }
 .hw-grid[data-temps="few"] { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1.2fr) minmax(0, 1.35fr); }
 .hw-grid[data-temps="none"] { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
 .hw-sec { display: grid; align-content: start; gap: 14px; min-width: 0; padding: 14px; }
@@ -119,9 +120,11 @@ a, .xkm-a { color: var(--op-accent-hover, var(--op-accent)); cursor: pointer; te
 .hw-stack { display: flex; height: 10px; margin: 6px 0; overflow: hidden; border-radius: 5px; background: var(--op-surface-3); }
 .hw-stack i { display: block; height: 100%; }
 .hw-stack .p, .hw-leg .p { background: var(--op-accent); }
-.hw-stack .c, .hw-leg .c { background: color-mix(in srgb, var(--op-accent) 40%, var(--op-surface-3)); }
+/* the cache is part of the free memory: hatched over the free track */
+.hw-stack .c, .hw-leg .c { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--op-accent) 45%, var(--op-surface-3)) 0 3px, var(--op-surface-3) 3px 6px); }
 .hw-stack .f, .hw-leg .f { background: var(--op-surface-3); }
 .hw-leg { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; }
+.hw-memnote { display: block; margin-top: 6px; color: var(--op-faint); font-size: 11.5px; line-height: 1.4; }
 .hw-leg i { display: inline-block; width: 9px; height: 9px; margin-right: 5px; border: 1px solid var(--op-border); border-radius: 2px; vertical-align: -1px; }
 .hw-kv { display: grid; align-content: start; gap: 3px; min-width: 0; }
 .hw-kv b { color: var(--op-text-strong); font-size: 15px; font-weight: 650; }
@@ -140,7 +143,8 @@ a, .xkm-a { color: var(--op-accent-hover, var(--op-accent)); cursor: pointer; te
 .hw-port.up .jack { border-color: var(--op-success); background: var(--op-success-soft); }
 .hw-port.warn .jack { border-color: var(--op-warning); background: var(--op-warning-soft); }
 .hw-port b { font-size: 12.5px; }
-.hw-port small { max-width: 100%; overflow: hidden; color: var(--op-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.hw-port small { max-width: 100%; overflow: hidden; color: var(--op-muted); font-size: 11px; line-height: 1.25; }
+.hw-port small.d { text-overflow: ellipsis; white-space: nowrap; }
 .hw-port.up small { color: var(--op-success-strong); }
 .hw-port.warn small { color: var(--op-warning-strong); }
 .hw-port small.d { color: var(--op-faint); }

@@ -228,6 +228,17 @@ def test_process_normalizer_understands_real_keenetic_comm_and_kb_fields():
     assert payload["items"][0]["service"] == "KeeneticOS core"
 
 
+def test_process_normalizer_names_a_null_comm_after_its_service():
+    # KeeneticOS 5.1.8 reports the nginx master as comm "null" (/proc/<pid>/comm says nginx)
+    payload = normalize_processes(
+        {"process": [{"comm": "null", "pid": "773", "vm-rss": "10356 kB", "object": {"id": "Nginx", "state": "RUNNING"}}]},
+        sampled_at=42,
+    )
+
+    assert payload["items"][0]["name"] == "nginx"
+    assert payload["items"][0]["service"] == "Nginx"
+
+
 def test_client_normalizer_sorts_top_traffic_and_keeps_negative_rssi():
     payload = normalize_clients(
         {
@@ -289,6 +300,58 @@ def test_client_normalizer_maps_keenetic_mws_txrate_to_client_receive():
     item = payload["items"][0]
     assert item["rx_rate"] == 270_000_000
     assert item["tx_rate"] is None
+
+
+def test_client_normalizer_reads_flat_keenetic_518_hotspot_rows():
+    # KeeneticOS 5.1.8 (NC-1812, KN-1811): Wi-Fi fields sit flat in the host
+    # row next to ``ap``; wired hosts carry their switch port and its speed.
+    payload = normalize_clients(
+        {
+            "host": [
+                {
+                    "hostname": "phone",
+                    "mac": "AA:01",
+                    "ip": "192.0.2.10",
+                    "active": True,
+                    "link": "up",
+                    "interface": {"id": "Bridge1", "name": "Guest"},
+                    "ssid": "Guest",
+                    "ap": "WifiMaster1/AccessPoint1",
+                    "txrate": 867,
+                    "rssi": -63,
+                    "rxbytes": 900,
+                    "txbytes": 300,
+                },
+                {
+                    "hostname": "nas",
+                    "mac": "AA:02",
+                    "ip": "192.0.2.11",
+                    "active": True,
+                    "link": "up",
+                    "interface": {"id": "Bridge0", "name": "Home"},
+                    "auto-negotiation": True,
+                    "speed": 100,
+                    "duplex": True,
+                    "port": "4",
+                    "rxbytes": 100,
+                    "txbytes": 50,
+                },
+            ]
+        },
+        sampled_at=42,
+    )
+
+    phone, nas = payload["items"]
+    assert phone["interface"] == "WifiMaster1/AccessPoint1"
+    assert phone["rx_rate"] == 867_000_000
+    assert phone["tx_rate"] is None
+    assert phone["port"] == ""
+    assert phone["port_speed"] is None
+    assert nas["interface"] == "Bridge0"
+    assert nas["rx_rate"] is None
+    assert nas["port"] == "4"
+    assert nas["port_speed"] == 100_000_000
+    assert [item["name"] for item in payload["wifi"]] == ["phone"]
 
 
 def test_client_normalizer_prefers_compact_hostname_over_registration_name():

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from flask import Flask
 
@@ -258,6 +260,10 @@ def test_summary_has_router_chain_and_rci_flag(tmp_path, monkeypatch):
     assert cards["cpu"]["value"] == pytest.approx(40.0) and cards["cpu"]["zone"] == 0
     assert cards["memory"]["value"] == pytest.approx(60.0)
     assert "программы" in cards["memory"]["text"] and "кэш" in cards["memory"]["text"]
+    # "свободно" includes the cache, as in the router's own UI: programs + free = all memory
+    programs_mb, free_mb, cache_mb = map(int, re.findall(r"(\d+) МБ", cards["memory"]["text"]))
+    assert cache_mb <= free_mb
+    assert abs(programs_mb + free_mb - round(cards["memory"]["total_bytes"] / 1048576)) <= 1
     assert cards["internet"]["state"] == "online"
     assert cards["internet"]["bars"]["values"][-1] == 1.0
 

@@ -113,10 +113,11 @@ function bigBytes(bytes) {
   return megabytes(bytes);
 }
 
+// A plain space on purpose: a narrow socket wraps "100 / Мбит/с" instead of cutting it.
 function speedText(port) {
   if (!port.link || !finite(port.speed_mbps)) return "нет кабеля";
-  if (port.speed_mbps >= 1000) return `${num(port.speed_mbps / 1000, port.speed_mbps % 1000 ? 1 : 0)}${NBSP}Гбит/с`;
-  return `${port.speed_mbps}${NBSP}Мбит/с`;
+  if (port.speed_mbps >= 1000) return `${num(port.speed_mbps / 1000, port.speed_mbps % 1000 ? 1 : 0)} Гбит/с`;
+  return `${port.speed_mbps} Мбит/с`;
 }
 
 function series(bars) {
@@ -348,7 +349,7 @@ function tempTile(group, throttle, edge = "", lone = false) {
   let line = `${TEMP_WORDS[zone]}`;
   if (throttled) line = `процессор замедлился из-за нагрева: ${throttle.current_mhz} из ${throttle.max_mhz} МГц`;
   else if (zone === 2) line += " · выше безопасного";
-  else if (red != null) line += ` · до перегрева ${num(Math.max(0, Math.round(red - value)))} °C`;
+  else if (red != null) line += ` · до перегрева ${num(Math.max(0, Math.round(red - value)))}${NBSP}°C`;
   const hot = finite(group.hotter_by) && group.hotter_by > 0 ? `<small class="hot">на ${num(group.hotter_by)} °C горячее обычного — проверьте, не закрыт ли роутер</small>` : "";
   const pop = tempPop(group, lone);
   return `<div class="hw-t z${zone}" data-temp="${esc(group.id)}"${edge} tabindex="0"><span class="n">${name}</span><b>${num(value)} <small>°C</small></b><span class="hw-track">${track}<i style="left:${mark.toFixed(1)}%"></i></span><small class="s">${esc(line)}</small>${hot}${pop}</div>`;
@@ -377,7 +378,7 @@ function memorySection(hw, two) {
   const total = mem.total_bytes || 0;
   const share = (bytes) => (total ? Math.max(0, Math.min(100, ((bytes || 0) / total) * 100)).toFixed(1) : "0");
   const ram = total
-    ? `<div class="hw-m"><span class="n">Оперативная память · ${megabytes(total)}</span><div class="hw-stack"><i class="p" style="width:${share(mem.programs_bytes)}%"></i><i class="c" style="width:${share(mem.cache_bytes)}%"></i><i class="f" style="width:${share(mem.free_bytes)}%"></i></div><div class="hw-leg"><span><i class="p"></i>программы ${megabytes(mem.programs_bytes)}</span><span><i class="c"></i>кэш ${megabytes(mem.cache_bytes)}</span><span><i class="f"></i>свободно ${megabytes(mem.free_bytes)}</span></div></div>`
+    ? `<div class="hw-m"><span class="n">Оперативная память · ${megabytes(total)}</span><div class="hw-stack"><i class="p" style="width:${share(mem.programs_bytes)}%"></i><i class="c" style="width:${share(mem.cache_bytes)}%"></i><i class="f" style="width:${share(mem.free_bytes)}%"></i></div><div class="hw-leg"><span><i class="p"></i>программы ${megabytes(mem.programs_bytes)}</span><span><i class="f"></i>свободно ${megabytes((mem.cache_bytes || 0) + (mem.free_bytes || 0))}</span><span><i class="c"></i>из них кэш ${megabytes(mem.cache_bytes)}</span></div><small class="hw-memnote">Кэш освобождается сам, когда память нужна программам.</small></div>`
     : '<div class="hw-m"><span class="n">Оперативная память</span><b>нет данных</b></div>';
   const zram = hw.zram;
   let zramHtml;

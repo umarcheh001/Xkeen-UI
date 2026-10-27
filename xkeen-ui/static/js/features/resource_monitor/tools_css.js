@@ -55,7 +55,8 @@ export const TOOLS_CSS = `
 .xkt-st i { width: 8px; height: 8px; border-radius: 50%; background: var(--op-faint); }
 .xkt-st.up i { background: var(--op-success); }
 .xkt-st.down i { background: var(--op-danger); }
-.xkt-cpu { flex-direction: row; align-items: center; gap: 10px; }
+/* a row cell: start at the column edge, under the header (.xkt-c centres a column cell) */
+.xkt-cpu { flex-direction: row; justify-content: flex-start; align-items: center; gap: 10px; }
 .xkt-cpu .xkt-meter { flex: 1; max-width: 160px; }
 
 .xkv { position: relative; overflow-y: auto; overscroll-behavior: contain; }

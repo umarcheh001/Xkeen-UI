@@ -271,6 +271,10 @@ def _client_interface(record: dict[str, Any]) -> str:
         access_point = _first(mws, "ap", "access-point", "interface")
         if access_point is not None:
             return str(access_point)[:64]
+    # KeeneticOS 5.x hotspot rows keep the Wi-Fi access point flat next to
+    # the bridge (``interface`` is then Bridge0/Bridge1, not the radio).
+    if record.get("ap") not in (None, ""):
+        return str(record["ap"])[:64]
     interface = record.get("interface")
     if isinstance(interface, dict):
         return str(_first(interface, "id", "name", "description") or "")[:64]
@@ -302,6 +306,12 @@ def _client_link_rates(record: dict[str, Any]) -> tuple[int | None, int | None]:
     if isinstance(mws, dict):
         receive = _first(mws, "txrate", "tx-rate", "transmit-rate")
         send = _first(mws, "rxrate", "rx-rate", "receive-rate")
+    elif record.get("ap") not in (None, ""):
+        # KeeneticOS 5.x: the same AP-side fields, flat in the host row.
+        return (
+            _client_link_rate(_first(record, "txrate", "tx-rate")),
+            _client_link_rate(_first(record, "rxrate", "rx-rate")),
+        )
     else:
         receive = None
         send = None
@@ -338,6 +348,9 @@ def normalize_clients(payload: Any, *, sampled_at: int) -> dict[str, Any]:
         tx = _counter(raw, "txbytes", "tx-bytes", "sent-bytes", "upload", "tx")
         rssi_value = _signed_number(_client_nested_value(raw, "rssi"))
         receive_rate, send_rate = _client_link_rates(raw)
+        # Wired hosts: the switch port and its negotiated speed (Mbit/s).
+        port = str(raw.get("port") or "")[:16]
+        port_speed = _integer(raw.get("speed")) if port else None
         items.append({
             "name": name,
             "mac": address,
@@ -346,6 +359,8 @@ def normalize_clients(payload: Any, *, sampled_at: int) -> dict[str, Any]:
             "rssi": int(rssi_value) if rssi_value is not None else None,
             "rx_rate": receive_rate,
             "tx_rate": send_rate,
+            "port": port,
+            "port_speed": port_speed * 1_000_000 if port_speed else None,
             "received_bytes": rx,
             "sent_bytes": tx,
             "traffic_bytes": rx + tx,
@@ -1231,7 +1246,11 @@ def normalize_processes(payload: Any, *, sampled_at: int) -> dict[str, Any]:
     seen: set[tuple[int, str]] = set()
     for raw in _walk_processes(payload):
         pid = _integer(raw.get("pid")) or 0
+        object_info = raw.get("object") if isinstance(raw.get("object"), dict) else {}
         name = str(raw.get("comm") or raw.get("name") or raw.get("id") or "process").strip()[:96]
+        # KeeneticOS 5.x reports the nginx master as comm "null": name it after its service.
+        if name == "null" and object_info.get("id"):
+            name = str(object_info["id"]).strip().lower()[:96]
         identity = (pid, name)
         if identity in seen:
             continue
@@ -1240,7 +1259,6 @@ def normalize_processes(payload: Any, *, sampled_at: int) -> dict[str, Any]:
         # vm-size, so keep it as the bounded fallback.
         vm_kib = _kib(_first(raw, "vm-rss", "vm_rss", "rss", "memory", "vm-size", "vm_size"))
         service = raw.get("service") if isinstance(raw.get("service"), dict) else {}
-        object_info = raw.get("object") if isinstance(raw.get("object"), dict) else {}
         items.append({
             "pid": pid,
             "name": name,

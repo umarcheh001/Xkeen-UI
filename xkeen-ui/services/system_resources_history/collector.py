@@ -654,7 +654,10 @@ class Collector:
         if age is not None:
             text = f"выше {red_from('memory'):.0f} % уже {age} мин"
         elif mem.get("total_bytes"):
-            text = f"программы {mb('programs_bytes')} МБ · кэш {mb('cache_bytes')} МБ · свободно {mb('free_bytes')} МБ"
+            # "свободно" counts the cache like the router's own web UI does,
+            # so used % + free % add up to 100 %.
+            free = round((mem.get("cache_bytes", 0) + mem.get("free_bytes", 0)) / 1048576)
+            text = f"программы {mb('programs_bytes')} МБ · свободно {free} МБ, из них кэш {mb('cache_bytes')} МБ"
         else:
             text = "нет данных"
         return {

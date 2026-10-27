@@ -35,7 +35,7 @@ function summary(over = {}) {
     links: [LINK_ISP],
     cards: {
       cpu: { value: 19, zone: 0, cores: 3, queue: 0.4, queue_zone: 0, text: '3 ядра · очередь задач небольшая', bars: bars(wave(15, 50), 60, 85) },
-      memory: { value: 47, zone: 0, text: 'программы 456 МБ · кэш 245 МБ · свободно 290 МБ', programs_bytes: 478150656, cache_bytes: 256901120, free_bytes: 304087040, total_bytes: 1039138816, bars: bars(wave(45, 6, 3), 75, 90) },
+      memory: { value: 47, zone: 0, text: 'программы 456 МБ · свободно 535 МБ, из них кэш 245 МБ', programs_bytes: 478150656, cache_bytes: 256901120, free_bytes: 304087040, total_bytes: 1039138816, bars: bars(wave(45, 6, 3), 75, 90) },
       internet: { state: 'online', label: 'В сети', zone: 0, text: 'Через WAN (GigabitEthernet1) · без перерывов 1 д 0 ч', bars: { values: Array.from({ length: 40 }, (_, i) => (i < 3 ? null : 1)), zones: Array.from({ length: 40 }, (_, i) => (i < 3 ? null : 0)) } },
       link: {
         id: 'ISP', label: 'WAN', has_tariff: true, tariff: { up_mbps: 50, down_mbps: 100 },
@@ -201,6 +201,8 @@ const chartInfo = (view) => view.locator('.xkc-canvas').evaluate(canvas => {
 });
 
 async function pointOfColumn(view, index) {
+  // the chart sits below the hardware panel: bring it into the viewport before aiming the mouse
+  await view.locator('.xkc-canvas').scrollIntoViewIfNeeded();
   return view.locator('.xkc-canvas').evaluate((canvas, i) => {
     const rect = canvas.getBoundingClientRect();
     const h = canvas.xkChart;
@@ -295,6 +297,23 @@ test('hardware layout NC-1812', async ({ page }) => {
   await expect(sockets.nth(0)).toContainText('1 Гбит/с');
   await expect(sockets.nth(2)).toContainText('нет кабеля');
   await expect(view.locator('.hw-res')).not.toHaveClass(/two/);
+  // "свободно" counts the cache, as the router's own UI does: 290 + 245 MB
+  await expect(view.locator('.hw-leg')).toHaveText(/программы 456\sМБ\s*свободно 535\sМБ\s*из них кэш 245\sМБ/);
+});
+
+test('hardware: many sensors keep the temperature tiles compact, port labels are never cut', async ({ page }) => {
+  for (const width of [1280, 1600, 1920]) {
+    const view = await openDashboard(page, { width, hw: hardware('nc1812', { ports: ports(5, { slow: 4 }) }) });
+    await expect(view.locator('.hw-t')).toHaveCount(6);
+    const m = await view.locator('.hw-grid').evaluate(grid => ({
+      temps: grid.querySelector('[data-section="temperature"]').getBoundingClientRect().width,
+      ports: grid.querySelector('[data-section="ports"]').getBoundingClientRect().width,
+      cut: [...grid.querySelectorAll('.hw-port small:not(.d)')].filter(e => e.scrollWidth > e.clientWidth + 1).map(e => e.textContent),
+    }));
+    // the ports get nearly the room of the temperatures (it was ~62 % before the tiles were narrowed)
+    expect(m.ports / m.temps, `ports vs temperatures at ${width}`).toBeGreaterThanOrEqual(0.9);
+    expect(m.cut, `port labels at ${width}`).toEqual([]);
+  }
 });
 
 test('hardware layout KN-1811', async ({ page }) => {
@@ -1156,6 +1175,24 @@ test('closing the window forgets the tools: a reopened window is lazy again', as
   expect(api.tools.length).toBe(before);
 });
 
+test('devices: link speed of a cable host is its port speed, the radio band names a Wi-Fi host', async ({ page }) => {
+  const clients = clientsFixture(3);
+  clients.items[0] = { ...clients.items[0], interface: 'WifiMaster1/AccessPoint1', rx_rate: 867e6, tx_rate: null, port: '', port_speed: null };
+  clients.items[1] = { ...clients.items[1], interface: 'Bridge0', rssi: null, rx_rate: null, tx_rate: null, port: '4', port_speed: 100e6 };
+  clients.items[2] = { ...clients.items[2], interface: 'Bridge0', rssi: null, rx_rate: null, tx_rate: null, port: '2', port_speed: 1000e6 };
+  clients.top = clients.items.slice();
+  const view = await openDashboard(page, { tools: { clients } });
+  await tab(view, 'devices').click();
+  const rows = view.locator('.xkt-row');
+  await expect(rows.nth(0)).toContainText('5 ГГц');
+  await expect(rows.nth(0)).toContainText('867 Мбит/с');
+  await expect(rows.nth(1)).toContainText('порт 4');
+  await expect(rows.nth(1)).toContainText('100 Мбит/с');
+  await expect(rows.nth(1)).not.toContainText('Bridge0');
+  await expect(rows.nth(2)).toContainText('1 Гбит/с');
+  await expect(rows.nth(2)).not.toContainText('1,0');
+});
+
 test('devices: five most active, all of them on demand', async ({ page }) => {
   const view = await openDashboard(page, { tools: { clients: clientsFixture(14) } });
   await tab(view, 'devices').click();
@@ -1396,6 +1433,10 @@ test('processes: notes, bars, sorting', async ({ page }) => {
   await expect(view.locator('.xkt-row').first()).toContainText('xray');
   await expect(view.locator('.xkt-row').first()).toContainText('ядро прокси Xray');
   await expect(view.locator('.xkt-row').first()).toContainText('9,2 %');
+  // the bar starts under its header, not in the middle of a wide column
+  const head = await rect(pane(view, 'procs').locator('.xkt-head > div').nth(1));
+  const meter = await rect(view.locator('.xkt-row').first().locator('.xkt-meter'));
+  expect(Math.abs(meter.left - head.left)).toBeLessThanOrEqual(1);
   await view.locator('[data-sort="memory"]').click();
   await expect(view.locator('.xkt-row').first()).toContainText('python3');
   await expect(pane(view, 'procs').locator('.xkt-lead')).toContainText('по нагрузке на память');

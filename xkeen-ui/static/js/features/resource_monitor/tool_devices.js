@@ -2,7 +2,7 @@
 // "Показать все" turns on the windowed list when there are more than 50 of them.
 
 import { createVirtualRows } from "./virtual_rows.js";
-import { bitsText, bytesText, esc, toNumber } from "./tools_format.js";
+import { NBSP, bitsText, bytesText, esc, num, toNumber } from "./tools_format.js";
 import { isAborted, requestJson } from "./tools_net.js";
 
 const CLIENTS_ENDPOINT = "/api/system/router/clients";
@@ -27,16 +27,30 @@ function signalHtml(rssi) {
   return `<span class="xkt-bars" aria-hidden="true">${bars}</span><span class="xkt-sigword">${level.word}</span>`;
 }
 
+// Same radio numbering as the hardware temperature tiles: WifiMaster0 = 2,4 GHz.
+const WIFI_BANDS = { WifiMaster0: "2,4 ГГц", WifiMaster1: "5 ГГц" };
+
+// Link speed reads like the ports of the hardware section: "1 Гбит/с", "2,4 Гбит/с", "867 Мбит/с".
+function linkText(bitsPerSecond) {
+  const mbps = Math.round(bitsPerSecond / 1e6);
+  if (mbps < 1000) return bitsText(bitsPerSecond);
+  return `${num(mbps / 1000, mbps % 1000 ? 1 : 0)}${NBSP}Гбит/с`;
+}
+
 function connectionHtml(item) {
-  const wifi = toNumber(item.rssi) != null || /wifi|accesspoint/i.test(item.interface || "");
-  const sub = item.interface ? `<small>${esc(item.interface)}</small>` : "";
+  const iface = item.interface || "";
+  const wifi = toNumber(item.rssi) != null || /wifi|accesspoint/i.test(iface);
+  const label = item.port ? `порт ${item.port}` : WIFI_BANDS[iface.split("/")[0]] || iface;
+  const sub = label ? `<small>${esc(label)}</small>` : "";
   return `<span class="xkt-strong">${wifi ? "Wi‑Fi" : "Кабель"}</span>${sub}`;
 }
 
 function rowHtml(item) {
   const name = item.name || item.mac || item.ip || "Устройство";
   const ident = [item.ip, item.mac].filter(Boolean).join(" · ");
-  const rate = toNumber(item.rx_rate) != null ? bitsText(item.rx_rate) : "—";
+  // Wi-Fi: the radio link rate; cable: the negotiated speed of the switch port.
+  const speed = toNumber(item.rx_rate) ?? toNumber(item.port_speed);
+  const rate = speed != null ? linkText(speed) : "—";
   return `<div class="xkt-c xkt-ident"><b>${esc(name)}</b><small>${esc(ident)}</small></div>
     <div class="xkt-c">${connectionHtml(item)}</div>
     <div class="xkt-c xkt-sig">${signalHtml(item.rssi)}</div>
