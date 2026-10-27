@@ -51,6 +51,24 @@ export function setHtml(element, html) {
   return true;
 }
 
+// What a process name means for a person, in one phrase.
+const PROCESS_NOTES = {
+  xray: "ядро прокси Xray",
+  mihomo: "ядро прокси Mihomo",
+  ndm: "система Keenetic",
+  python: "панель Xkeen-UI",
+  python3: "панель Xkeen-UI",
+  dnsmasq: "DNS-сервер",
+  sh: "скрипт обслуживания",
+  dropbear: "SSH-доступ",
+  lighttpd: "веб-сервер",
+  nginx: "веб-сервер",
+  ksoftirqd: "обработка сетевых пакетов",
+  kworker: "фоновые задачи ядра",
+};
+
+export const processNote = (name) => PROCESS_NOTES[String(name || "").toLowerCase()] || "";
+
 export function finite(value) {
   return typeof value === "number" && Number.isFinite(value);
 }

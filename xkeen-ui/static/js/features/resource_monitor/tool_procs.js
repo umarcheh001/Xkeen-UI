@@ -1,26 +1,12 @@
 // Tab "Процессы": top of the router's processes by processor or memory.
 
-import { NBSP, bytesText, clockText, esc, num, percentWidth, toNumber } from "./tools_format.js";
+import { NBSP, bytesText, clockText, esc, num, percentWidth, processNote, toNumber } from "./tools_format.js";
 import { isAborted, requestJson } from "./tools_net.js";
 
 const PROCESS_ENDPOINT = "/api/system/processes";
 const SHOWN = 24;
 
-// What a process name means for a person, in one phrase.
-const PROCESS_NOTES = {
-  xray: "ядро прокси Xray",
-  mihomo: "ядро прокси Mihomo",
-  ndm: "система Keenetic",
-  python: "панель Xkeen-UI",
-  python3: "панель Xkeen-UI",
-  dnsmasq: "DNS-сервер",
-  sh: "скрипт обслуживания",
-  dropbear: "SSH-доступ",
-  lighttpd: "веб-сервер",
-  nginx: "веб-сервер",
-};
-
-const note = (item) => PROCESS_NOTES[String(item.name || "").toLowerCase()] || "";
+const note = (item) => processNote(item.name);
 
 export function createProcsTab(panel, ctx) {
   const state = { payload: null, sort: "cpu", loading: false, error: false };

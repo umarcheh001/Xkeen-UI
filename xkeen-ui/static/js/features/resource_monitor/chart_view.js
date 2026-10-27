@@ -9,7 +9,7 @@
 
 import { drawCellGrid, drawLevelChart, drawMirrorChart, redrawColumn } from "./canvas_charts.js";
 import {
-  METRIC_LABELS, RANGE_LABELS, ZONE_NAMES, cellTimes, foldHistory, grid24Model, grid24Summary, grid7Model,
+  METRIC_LABELS, RANGE_LABELS, ZONE_NAMES, cellTimes, foldHistory, grid24Model, grid24Summary, grid7Model, leaderLines,
   grid7Summary, hasTariff, levelModel, linkOf, minutesText, mirrorModel, num, stepWords, timesOfColumn, xLabels,
   hhmm, columnCount,
 } from "./chart_data.js";
@@ -225,14 +225,17 @@ export function createChartView(host, callbacks = {}) {
   function gridTooltip(cell) {
     const { model } = cur;
     const { hit, times } = cell;
+    const top = cur.history?.top;
     if (model.kind === "grid24") {
-      return { head: times.head, lines: model.rows.map((row) => [row.label, row.cells[hit.column] == null ? "нет данных" : row.describe(hit.column)]) };
+      const lines = model.rows.map((row) => [row.label, row.cells[hit.column] == null ? "нет данных" : row.describe(hit.column)]);
+      return { head: times.head, lines: [...lines, ...leaderLines(top?.[hit.column])] };
     }
     const row = model.rows[hit.row];
     const zone = row.cells[hit.column];
     if (zone == null) return { head: times.head, lines: [["", "нет данных"]] };
     const by = row.by[hit.column];
-    return { head: times.head, lines: [["", `${ZONE_NAMES[zone]}${model.metric === "all" && by ? ` · хуже всего: ${by}` : ""}`]] };
+    const leaders = model.metric === "cpu" || model.metric === "all" ? leaderLines(top?.[row.column[hit.column]]) : [];
+    return { head: times.head, lines: [["", `${ZONE_NAMES[zone]}${model.metric === "all" && by ? ` · хуже всего: ${by}` : ""}`], ...leaders] };
   }
 
   function onMove(event) {

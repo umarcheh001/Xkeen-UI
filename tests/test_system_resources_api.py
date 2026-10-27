@@ -52,7 +52,7 @@ def test_history_ranges_shapes(tmp_path, monkeypatch, range_id, columns):
     assert body["step_s"] > 0 and body["start"] > 0
     assert body["history_since"] == pytest.approx(T0 + 5)
     cpu = body["metrics"]["cpu"]
-    assert len(cpu["avg"]) == len(cpu["max"]) == columns
+    assert len(cpu["avg"]) == len(cpu["max"]) == len(body["top"]) == columns
     assert any(v is not None for v in cpu["avg"])
 
 

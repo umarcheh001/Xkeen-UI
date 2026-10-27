@@ -149,6 +149,9 @@ function problemItems(summary, hardware) {
       throttleShown = true;
       if (throttle) items.push(`процессор замедлился из-за нагрева: ${throttle.current_mhz} из ${throttle.max_mhz} МГц`);
       else items.push(`${lowerFirst(problem.title)}${problem.detail ? `: ${problem.detail}` : ""}`);
+    } else if (problem.type === "cpu_overload" && problem.leaders?.length) {
+      const [name, share] = problem.leaders[0];
+      items.push(`${lowerFirst(problem.title)} — больше всех ${name} (${Math.round(share)} %)`);
     } else {
       items.push(lowerFirst(problem.title));
     }

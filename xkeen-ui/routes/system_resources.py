@@ -162,6 +162,7 @@ def create_system_resources_blueprint(*, include_summary: bool = True) -> Bluepr
                 "bands": data["bands"],
                 "metrics": metrics,
                 "links": links,
+                "top": data.get("top") or [],
             }
         )
 

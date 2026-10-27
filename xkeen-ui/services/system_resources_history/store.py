@@ -152,6 +152,11 @@ class HistoryStore:
     def metrics(self) -> tuple[str, ...]:
         return tuple(self._metrics)
 
+    @property
+    def clock_unset(self) -> bool:
+        """The last sample came on a clock not set yet (see ``UNSET_CLOCK_GIVE_UP_S``)."""
+        return self._unset_since is not None
+
     def add_metric(self, name: str) -> None:
         if name in self._index:
             return

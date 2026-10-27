@@ -31,9 +31,10 @@ from services.ui_settings import get_diagnostics_tariffs
 
 from . import hardware as hw
 from . import sensors
+from . import top_procs
 from .persist import load_history, save_history
 from .problems import ProblemTracker
-from .store import HistoryStore
+from .store import RANGES, HistoryStore
 from .zones import USUAL_MIN_POINTS, chart_bands, hotter_than_usual, red_from, temp_bands, zone, zram_pressure
 
 log = logging.getLogger(__name__)
@@ -160,6 +161,8 @@ class Collector:
         self._conntrack: dict = {"available": False}
         self._online_value: float | None = None
         self._rci_ok = False  # whether the last RCI call answered
+        self._procs_prev: tuple[dict, int] | None = None  # the last process scan and the processor ticks then
+        self._top = top_procs.TopStore()
         # persistence
         now = self._clock()
         self._last_save = {"tmp": now, "flash": now}
@@ -172,6 +175,7 @@ class Collector:
             self._store, events, saved_at, meta = restored
             # a router clock that was wrong when saving must not give a negative gap
             self._gap_s = max(0.0, now - saved_at)
+            self._top = top_procs.TopStore.from_dict(meta.get("top"))
             raw_uptime = meta.get("uptime_s")
             if isinstance(raw_uptime, (int, float)) and not isinstance(raw_uptime, bool):
                 persisted_uptime = float(raw_uptime)
@@ -427,7 +431,14 @@ class Collector:
             log.warning("resource history: zram failed", exc_info=True)
         out["freq"] = self._guarded("frequency", lambda: sensors.cpu_frequency(self._reader))
         out["zones"] = self._guarded("thermal zones", lambda: sensors.discover_thermal_zones(self._reader, self._lister))
+        out["procs"] = self._guarded("processes", self._scan_processes)
         return out
+
+    def _scan_processes(self) -> tuple[dict, int] | None:
+        total = top_procs.total_ticks(self._read("/proc/stat") or "")
+        if total is None:
+            return None
+        return top_procs.scan_processes(self._reader, self._lister), total
 
     def _chip_zone(self) -> int:
         """Worst zone among the chip's own sensors (0 without any)."""
@@ -461,6 +472,20 @@ class Collector:
                 self._tracker.emit("cpu_throttled", now, f"{freq['current_mhz']} из {freq['max_mhz']} МГц")
             else:
                 self._tracker.close("cpu_throttled", now)
+        if got.get("procs") is not None:
+            self._apply_processes(now, got["procs"])
+
+    def _apply_processes(self, now: float, scan: tuple[dict, int]) -> None:
+        prev, self._procs_prev = self._procs_prev, scan
+        if prev is None or self._store.clock_unset:  # leaders on an unset clock would land in the wrong hour
+            return
+        self._top.add(now, top_procs.cpu_shares(prev[0], scan[0], scan[1] - prev[1]))
+        for event in self._tracker.active():
+            if event["type"] == "cpu_overload":
+                leaders = self._top.window(event["at"], now)
+                event["leaders"] = leaders
+                if leaders:
+                    event["detail"] = f"больше всех: {top_procs.leaders_text(leaders)}"
 
     def _judge_ports(self, now: float) -> None:
         slow = {p.id: p for p in hw.slow_ports(self._ports)}
@@ -486,7 +511,9 @@ class Collector:
         with self._lock:
             store = self._store.with_metrics(self._store.metrics)
             events = [dict(e) for e in self._tracker.events(0)]
-            meta = {"uptime_s": self._uptime_s} if self._uptime_s is not None else None
+            meta: dict = {"top": self._top.to_dict()}
+            if self._uptime_s is not None:
+                meta["uptime_s"] = self._uptime_s
             now = self._clock()
         save_history(self._paths[kind], store, events, now=now, meta=meta)
 
@@ -737,6 +764,7 @@ class Collector:
             data["zones"] = zoned
             data["cores"] = self._cores
             data["bands"] = chart_bands(self._cores)
+            data["top"] = self._top.columns(data["step_s"], data["start"], RANGES[range_id][2])
             data["links"] = self._links()
             return data
 

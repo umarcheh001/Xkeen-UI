@@ -896,3 +896,73 @@ def test_reboot_before_ntp_keeps_the_history_from_flash(tmp_path):
     week = c3.history("7d")
     assert week["history_since"] == before
     assert 30.0 in [round(v) if v is not None else None for v in week["metrics"]["cpu"]["avg"]]
+
+
+class BusyRouter(FakeRouter):
+    """One xray process that takes `xray_share` of the whole processor."""
+
+    def __init__(self, xray_share: float = 0.5):
+        super().__init__()
+        self.xray_share = xray_share
+        self.xray_ticks = 0
+        self._set_xray()
+
+    def _set_xray(self) -> None:
+        self.files["/proc/42/stat"] = f"42 (xray) S 1 1 1 0 -1 0 0 0 0 0 {self.xray_ticks} 0 0 0 20 0 1 0 1 1 1"
+
+    def lister(self, path: Path) -> list[str]:
+        if path.as_posix() == "/proc":
+            return ["1", "42", "self"]
+        return super().lister(path)
+
+    def step(self, c: Collector, n: int = 1) -> None:
+        for _ in range(n):
+            self.xray_ticks += int(1000 * self.xray_share)  # a step adds 1000 ticks over both cores
+            self._set_xray()
+            super().step(c)
+
+
+def test_history_says_who_loaded_the_processor(tmp_path):
+    r = BusyRouter(0.5)
+    c = make(tmp_path, r)
+    r.step(c, 12 * 4)
+    top = c.history("1h")["top"]
+    assert len(top) == 60
+    assert top[-2] == [["xray", 50.0]]
+    assert all(col is None for col in top[:-4])  # before the panel ran: no data, not "nobody"
+    assert c.history("24h")["top"][-1][0][0] == "xray"
+
+
+def test_cpu_overload_names_the_leader(tmp_path):
+    r = BusyRouter(0.6)
+    r.busy_share = 0.95
+    c = make(tmp_path, r)
+    r.step(c, 12 * 5)
+    (problem,) = c.snapshot()["status"]["problems"]
+    assert problem["type"] == "cpu_overload"
+    assert problem["leaders"][0] == ["xray", 60.0]
+    assert problem["detail"] == "больше всех: xray 60 %"
+
+
+def test_leaders_survive_a_restart(tmp_path):
+    r = BusyRouter(0.5)
+    c = make(tmp_path, r)
+    r.step(c, 12 * 3)
+    c.save("flash")
+    c2 = make(tmp_path, r)
+    assert c2.history("1h")["top"][-2] == [["xray", 50.0]]
+
+
+def test_no_leaders_on_an_unset_clock(tmp_path):
+    r = BusyRouter(0.5)
+    c = make(tmp_path, r)
+    r.step(c, 12 * 2)
+    c.save("flash")
+    shutdown = r.now
+    r.now = 1_000_000.0
+    c2 = make(tmp_path, r)
+    r.step(c2, 12 * 3)
+    assert all(col is None for col in c2.history("1h")["top"])
+    r.now = shutdown + 600  # NTP
+    r.step(c2, 12 * 2)
+    assert [["xray", 50.0]] in c2.history("1h")["top"]

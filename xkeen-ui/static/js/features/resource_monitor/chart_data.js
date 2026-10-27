@@ -5,6 +5,8 @@
 // Zones (0 green, 1 orange, 2 red, null no data) and the segment bands always come
 // from the server (`zone`, `peak_zone`, `bands`); nothing here knows a threshold.
 
+import { processNote } from "./tools_format.js";
+
 export const METRIC_LABELS = { cpu: "Процессор", memory: "Память", net: "Сеть", queue: "Очередь задач", all: "Все" };
 export const RANGE_LABELS = { "15m": "15 мин", "30m": "30 мин", "1h": "1 ч", "6h": "6 ч", "24h": "24 ч", "7d": "7 д" };
 export const ZONE_NAMES = ["норма", "высокая", "перегрузка"];
@@ -59,6 +61,36 @@ export function seriesOf(history, name) {
   };
 }
 
+const LEADERS_SHOWN = 3;
+const LEADER_MIN_SHARE = 1;
+
+// Leaders of `factor` neighbouring columns: each program's share averaged over the
+// columns that have data (no data stays null, an empty list is "nobody worth a line").
+function foldLeaders(top, factor) {
+  const out = [];
+  for (let i = 0; i < top.length; i += factor) {
+    const cols = top.slice(i, i + factor).filter(Array.isArray);
+    if (!cols.length) { out.push(null); continue; }
+    const sums = new Map();
+    for (const col of cols) for (const [name, share] of col) sums.set(name, (sums.get(name) || 0) + share);
+    out.push([...sums]
+      .map(([name, total]) => [name, Math.round((total / cols.length) * 10) / 10])
+      .filter(([, share]) => share >= LEADER_MIN_SHARE)
+      .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
+      .slice(0, LEADERS_SHOWN));
+  }
+  return out;
+}
+
+// Tooltip lines "who loaded the processor" of one column (`history.top[i]`).
+export function leaderLines(leaders) {
+  if (!Array.isArray(leaders) || !leaders.length) return [];
+  return [["Больше всех нагружали", ""], ...leaders.map(([name, share]) => {
+    const note = processNote(name);
+    return [note ? `${name} · ${note}` : name, pct(share)];
+  })];
+}
+
 const worst = (values) => {
   let top = null;
   for (const v of values) if (v != null && (top == null || v > top)) top = v;
@@ -88,7 +120,8 @@ export function foldHistory(history, factor, only = null) {
     }
     metrics[name] = out;
   }
-  return { ...history, metrics, step_s: history.step_s * factor };
+  const top = Array.isArray(history.top) ? foldLeaders(history.top, factor) : history.top;
+  return { ...history, metrics, top, step_s: history.step_s * factor };
 }
 
 export function linkOf(history, linkId) {
@@ -131,7 +164,8 @@ export function levelModel(history, metric) {
     summary: (stepMin) => levelSummary(series, history, fmt, stepMin),
     tooltip: (i, times) => {
       if (series.avg[i] == null) return { head: times, lines: [["", "нет данных"]] };
-      return { head: times, lines: [["В среднем", fmt(series.avg[i])], ["Пик", fmt(series.max[i])]] };
+      const leaders = metric === "cpu" ? leaderLines(history?.top?.[i]) : [];
+      return { head: times, lines: [["В среднем", fmt(series.avg[i])], ["Пик", fmt(series.max[i])], ...leaders] };
     },
   };
 }

@@ -116,7 +116,7 @@ function plainColumn(values) {
 }
 
 // `over` replaces single metrics, `down`/`up` are percent series of every tariff link.
-function history(range, { links = [LINK_ISP], over = {}, since = null } = {}) {
+function history(range, { links = [LINK_ISP], over = {}, since = null, top = null } = {}) {
   const step = RANGE_STEP[range];
   const count = RANGE_COLS[range];
   const start = Math.floor(TS / step) * step - (count - 1) * step;
@@ -139,7 +139,7 @@ function history(range, { links = [LINK_ISP], over = {}, since = null } = {}) {
   return {
     ok: true, range, step_s: step, start, history_since: since ?? start, cores: 3,
     bands: { cpu: { orange: 60, red: 85 }, memory: { orange: 75, red: 90 }, link: { orange: 70, red: 90 }, queue: { orange: 2.1, red: 3, scale_max: 6 } },
-    metrics, links,
+    metrics, links, top: top ? series(top) : [],
   };
 }
 
@@ -908,6 +908,64 @@ test('24 h cell opens 6 h with highlight, the last hour opens 1 h; 7 d last day 
   });
   await page.mouse.click(today.x, today.y);
   await expect(view.locator('.xkc-b[data-range="24h"]')).toHaveAttribute('aria-pressed', 'true');
+});
+
+// Even columns: xray leads; odd ones: the network packets of the kernel lead; column 3 has no data.
+const LEADERS = i => (i === 3 ? null : i % 2 ? [['ksoftirqd', 30], ['xray', 10]] : [['xray', 40], ['ndm', 2]]);
+
+test('who loaded the processor: chart tooltip, 24 h cell and status line', async ({ page }) => {
+  const sum = summary({
+    status: {
+      tone: 'problem',
+      problems: [{
+        id: 'cpu_overload-1', type: 'cpu_overload', at: 1792601640, until: null, severity: 'problem',
+        title: 'Процессор перегружен', detail: 'больше всех: xray 62 %', key: 'cpu', leaders: [['xray', 62.4], ['ndm', 3]],
+      }],
+    },
+  });
+  const view = await openDashboard(page, { sum, hist: range => history(range, { top: LEADERS }) });
+  await expect(view.locator('.xkm-status')).toContainText('процессор перегружен — больше всех xray (62 %)');
+  await expect(view.locator('.xkc-canvas')).toHaveAttribute('data-kind', 'level');
+  let p = await pointOfColumn(view, 10);
+  await page.mouse.move(p.x, p.y);
+  const tip = view.locator('.xkc-tip');
+  await expect(tip).toContainText('Больше всех нагружали');
+  await expect(tip).toContainText('xray · ядро прокси Xray40 %');
+  await expect(tip).toContainText('ndm · система Keenetic2 %');
+  p = await pointOfColumn(view, 3);
+  await page.mouse.move(p.x, p.y);
+  await expect(tip).toBeVisible();
+  await expect(tip).not.toContainText('Больше всех');
+  // other metrics do not name processes
+  await view.locator('.xkm-card[data-metric="memory"]').click();
+  p = await pointOfColumn(view, 10);
+  await page.mouse.move(p.x, p.y);
+  await expect(tip).toContainText('В среднем');
+  await expect(tip).not.toContainText('Больше всех');
+  // a 24 h cell
+  await view.locator('.xkc-b[data-range="24h"]').click();
+  await expect(view.locator('.xkc-canvas')).toHaveAttribute('data-kind', 'grid24');
+  await view.locator('.xkc-canvas').scrollIntoViewIfNeeded();
+  p = await view.locator('.xkc-canvas').evaluate(canvas => {
+    const rect = canvas.getBoundingClientRect();
+    const h = canvas.xkChart;
+    return { x: rect.left + h.plot.left + 11.5 * (h.plot.width / Number(canvas.dataset.columns)), y: rect.top + rect.height / 2 };
+  });
+  await page.mouse.move(p.x, p.y);
+  await expect(tip).toContainText('ksoftirqd · обработка сетевых пакетов30 %');
+});
+
+test('phone folds the leaders of two columns into one', async ({ page }) => {
+  const view = await openDashboard(page, { width: 390, hist: range => history(range, { top: LEADERS }) });
+  await expect(view.locator('.xkc-canvas')).toBeVisible();
+  await view.locator('.xkc-canvas').scrollIntoViewIfNeeded();
+  // folded column 5 = columns 10 and 11: xray (40 + 10) / 2, ksoftirqd 30 / 2, ndm 2 / 2
+  const p = await pointOfColumn(view, 5);
+  await page.mouse.move(p.x, p.y);
+  const tip = view.locator('.xkc-tip');
+  await expect(tip).toContainText('xray · ядро прокси Xray25 %');
+  await expect(tip).toContainText('ksoftirqd · обработка сетевых пакетов15 %');
+  await expect(tip).toContainText('ndm · система Keenetic1 %');
 });
 
 test('phone draws half as many columns', async ({ page }) => {
