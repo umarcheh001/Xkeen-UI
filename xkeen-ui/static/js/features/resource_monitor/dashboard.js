@@ -160,15 +160,25 @@ function renderChart() {
 
 function syncExport() {
   const button = byId("xk-resource-export");
-  if (button) button.disabled = !(state.summary && state.history);
+  const disabled = !(state.summary && state.history);
+  if (button && button.disabled !== disabled) button.disabled = disabled;
 }
 
 function paintFreshness() {
   const el = byId("xk-resource-dashboard-freshness");
   if (!el) return;
-  if (!state.okAt) { el.textContent = "Обновлено —"; return; }
-  const seconds = Math.max(0, Math.round((Date.now() - state.okAt) / 1000));
-  el.textContent = seconds < 60 ? `Обновлено ${seconds} с назад` : `Обновлено ${Math.floor(seconds / 60)} мин назад`;
+  let text = "Обновлено —";
+  if (state.okAt) {
+    const seconds = Math.max(0, Math.round((Date.now() - state.okAt) / 1000));
+    text = seconds < 60 ? `Обновлено ${seconds} с назад` : `Обновлено ${Math.floor(seconds / 60)} мин назад`;
+  }
+  // the text node is edited in place: no new node, no restyling of the modal around it
+  const node = el.firstChild;
+  if (node && node.nodeType === 3 && !node.nextSibling) {
+    if (node.data !== text) node.data = text;
+  } else {
+    el.textContent = text;
+  }
 }
 
 function applySummary(summary) {

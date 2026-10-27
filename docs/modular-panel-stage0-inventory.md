@@ -36,7 +36,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 | Module ID | Единиц | Размер | Routes | Background | UI surfaces | Removable |
 |---|---:|---:|---:|---:|---:|---|
-| `core` | 604 | 7.81 МБ | 107 | 4 | 36 | нет |
+| `core` | 604 | 7.77 МБ | 107 | 4 | 36 | нет |
 | `engine.xray` | 144 | 3.75 МБ | 62 | 3 | 14 | да |
 | `engine.mihomo` | 134 | 2.99 МБ | 92 | 4 | 6 | да |
 | `tool.editor` | 25 | 813.3 КБ | 0 | 0 | 2 | да |
@@ -44,7 +44,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 | `tool.files` | 85 | 984.7 КБ | 43 | 1 | 1 | да |
 | `tool.backups` | 8 | 99.7 КБ | 14 | 0 | 0 | да |
 | `integration.happ` | 22 | 310.9 КБ | 5 | 0 | 1 | да |
-| `tool.advanced-diagnostics` | 61 | 755.5 КБ | 12 | 0 | 2 | да |
+| `tool.advanced-diagnostics` | 63 | 759.2 КБ | 12 | 0 | 2 | да |
 
 ## Backend routes и регистрация
 
@@ -120,7 +120,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 | `integration.happ` | `engine.mihomo` | 2 | `xkeen-ui/services/mihomo_hwid_sub.py`<br>`xkeen-ui/static/js/features/mihomo_hwid_sub.js` |
 | `integration.happ` | `engine.xray` | 2 | `xkeen-ui/services/happ_decryptor/engine.py`<br>`xkeen-ui/services/mihomo_hwid_sub.py` |
 | `integration.happ` | `tool.advanced-diagnostics` | 2 | `tests/test_happ_decryptor_env.py`<br>`xkeen-ui/static/js/features/devtools/happ_decryptor.js` |
-| `tool.advanced-diagnostics` | `core` | 61 | `xkeen-ui/routes/system_resources.py`<br>`xkeen-ui/services/devtools/__init__.py`<br>`xkeen-ui/services/devtools/common.py` |
+| `tool.advanced-diagnostics` | `core` | 63 | `xkeen-ui/routes/system_resources.py`<br>`xkeen-ui/services/devtools/__init__.py`<br>`xkeen-ui/services/devtools/common.py` |
 | `tool.advanced-diagnostics` | `engine.mihomo` | 1 | `xkeen-ui/static/js/pages/devtools.entry.js` |
 | `tool.advanced-diagnostics` | `engine.xray` | 1 | `xkeen-ui/services/devtools/logs.py` |
 | `tool.advanced-diagnostics` | `integration.happ` | 2 | `xkeen-ui/services/devtools/env.py`<br>`xkeen-ui/static/js/pages/devtools.screen.bootstrap.js` |

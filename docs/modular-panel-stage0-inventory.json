@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 604,
-      "size_bytes": 8194217,
+      "size_bytes": 8145262,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -358,8 +358,8 @@
         "ndmc (router diagnostics optional)"
       ],
       "removable": true,
-      "unit_count": 61,
-      "size_bytes": 773633,
+      "unit_count": 63,
+      "size_bytes": 777370,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 15,
@@ -367,7 +367,7 @@
         "frontend_entrypoint": 1,
         "frontend_feature": 28,
         "frontend_javascript": 2,
-        "frontend_test": 1,
+        "frontend_test": 3,
         "template": 2
       },
       "route_count": 12,
@@ -6753,7 +6753,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_panel_operator_stage0_contract.py",
-      "size_bytes": 10262,
+      "size_bytes": 10420,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -9215,7 +9215,7 @@
       "module_id": "core",
       "kind": "configuration",
       "path": "playwright.config.mjs",
-      "size_bytes": 1304,
+      "size_bytes": 1705,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -9229,6 +9229,7 @@
         "gevent-websocket (optional)"
       ],
       "environment_variables": [
+        "XKEEN_E2E_PERF",
         "XKEEN_E2E_PORT"
       ],
       "removable": false
@@ -13391,7 +13392,7 @@
       "module_id": "core",
       "kind": "frontend_ui",
       "path": "xkeen-ui/static/js/ui/operator_icons_manifest.js",
-      "size_bytes": 1212,
+      "size_bytes": 1186,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -13850,7 +13851,7 @@
       "module_id": "core",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/panel-operator.css",
-      "size_bytes": 822040,
+      "size_bytes": 773557,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -14170,7 +14171,7 @@
       "module_id": "core",
       "kind": "template",
       "path": "xkeen-ui/templates/panel/modals/diagnostics.html",
-      "size_bytes": 3161,
+      "size_bytes": 2156,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -22883,7 +22884,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_resource_monitor_frontend.py",
-      "size_bytes": 7147,
+      "size_bytes": 7839,
       "depends_on": [
         "core"
       ],
@@ -22902,7 +22903,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_resource_monitor_model_runtime.py",
-      "size_bytes": 5470,
+      "size_bytes": 3796,
       "depends_on": [
         "core"
       ],
@@ -23430,7 +23431,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor.js",
-      "size_bytes": 27800,
+      "size_bytes": 10590,
       "depends_on": [
         "core"
       ],
@@ -23508,7 +23509,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor/chart_data.js",
-      "size_bytes": 17478,
+      "size_bytes": 17634,
       "depends_on": [
         "core"
       ],
@@ -23534,7 +23535,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor/chart_view.js",
-      "size_bytes": 19350,
+      "size_bytes": 20224,
       "depends_on": [
         "core"
       ],
@@ -23560,7 +23561,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor/dashboard.js",
-      "size_bytes": 13726,
+      "size_bytes": 14034,
       "depends_on": [
         "core"
       ],
@@ -23768,7 +23769,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor/tools.js",
-      "size_bytes": 5811,
+      "size_bytes": 6215,
       "depends_on": [
         "core"
       ],
@@ -23820,7 +23821,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor/tools_format.js",
-      "size_bytes": 4058,
+      "size_bytes": 5974,
       "depends_on": [
         "core"
       ],
@@ -23872,7 +23873,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor/view.js",
-      "size_bytes": 26957,
+      "size_bytes": 27673,
       "depends_on": [
         "core"
       ],
@@ -23950,7 +23951,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor_model.js",
-      "size_bytes": 5494,
+      "size_bytes": 2733,
       "depends_on": [
         "core"
       ],
@@ -24029,6 +24030,44 @@
       "kind": "frontend_test",
       "path": "e2e/resource_monitor_charts.spec.mjs",
       "size_bytes": 7666,
+      "depends_on": [
+        "core"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "ndmc (router diagnostics optional)"
+      ],
+      "environment_variables": [],
+      "removable": true
+    },
+    {
+      "module_id": "tool.advanced-diagnostics",
+      "kind": "frontend_test",
+      "path": "e2e/resource_monitor_perf.spec.mjs",
+      "size_bytes": 17356,
+      "depends_on": [
+        "core"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "ndmc (router diagnostics optional)"
+      ],
+      "environment_variables": [],
+      "removable": true
+    },
+    {
+      "module_id": "tool.advanced-diagnostics",
+      "kind": "frontend_test",
+      "path": "e2e/resource_monitor_visibility.spec.mjs",
+      "size_bytes": 2960,
       "depends_on": [
         "core"
       ],
@@ -33352,7 +33391,7 @@
       {
         "from": "tool.advanced-diagnostics",
         "to": "core",
-        "unit_count": 61,
+        "unit_count": 63,
         "examples": [
           "xkeen-ui/routes/system_resources.py",
           "xkeen-ui/services/devtools/__init__.py",
@@ -34378,8 +34417,8 @@
           "size_bytes": 1008333
         },
         "tool.advanced-diagnostics": {
-          "unit_count": 61,
-          "size_bytes": 773633
+          "unit_count": 63,
+          "size_bytes": 777370
         }
       },
       "next_stage": "Этапы 4, 5 и 6."

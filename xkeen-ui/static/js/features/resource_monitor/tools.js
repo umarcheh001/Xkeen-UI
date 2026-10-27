@@ -76,15 +76,20 @@ export function mountTools(host, api = {}) {
   function update() {
     const state = snapshot();
     const modems = hasModems(state) && !modemsEmpty;
-    tabButton("modems").hidden = !modems;
+    // every summary calls this: a write that changes nothing would still dirty the tab row
+    const modemsButton = tabButton("modems");
+    if (modemsButton.hidden === modems) modemsButton.hidden = !modems;
     if (!modems && active === "modems") {
       active = null;
       paintActive();
     }
     const problems = Number(state.problems) || 0;
-    counter.hidden = problems <= 0;
-    counter.textContent = problems > 0 ? String(problems) : "";
-    tabButton("events").setAttribute("aria-label", problems > 0 ? `События, проблем сейчас: ${problems}` : "События");
+    if (counter.hidden !== (problems <= 0)) counter.hidden = problems <= 0;
+    const counterText = problems > 0 ? String(problems) : "";
+    if (counter.textContent !== counterText) counter.textContent = counterText;
+    const label = problems > 0 ? `События, проблем сейчас: ${problems}` : "События";
+    const eventsButton = tabButton("events");
+    if (eventsButton.getAttribute("aria-label") !== label) eventsButton.setAttribute("aria-label", label);
     if (active === "ifaces") tabs.ifaces.update();
   }
 

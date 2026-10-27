@@ -13,6 +13,7 @@ import {
   grid7Summary, hasTariff, levelModel, linkOf, minutesText, mirrorModel, num, stepWords, timesOfColumn, xLabels,
   hhmm, columnCount,
 } from "./chart_data.js";
+import { setHtml } from "./tools_format.js";
 
 const RANGES = ["15m", "30m", "1h", "6h", "24h", "7d"];
 const METRICS = ["cpu", "memory", "net", "queue", "all"];
@@ -319,7 +320,7 @@ export function createChartView(host, callbacks = {}) {
     canvas.style.height = `${height}px`;
     canvas.dataset.kind = model.kind;
     panel.style.setProperty("--g", model.kind === "grid24" || model.kind === "grid7" ? (phone ? "78px" : "104px") : (phone ? "52px" : "64px"));
-    info.innerHTML = infoHtml(input, history, model);
+    setHtml(info, infoHtml(input, history, model));
     paintGutter(model, height);
 
     let handle;
@@ -339,21 +340,39 @@ export function createChartView(host, callbacks = {}) {
     canvas.dataset.columns = String(model.kind === "grid24" || model.kind === "grid7" ? model.columns : handle.count);
     canvas.dataset.rows = String(model.rows ? model.rows.length : 1);
     paintAxis(model, history, model.kind === "grid24" || model.kind === "grid7" ? model.columns : handle.count);
-    summaryEl.innerHTML = summaryHtml(model, history);
+    setHtml(summaryEl, summaryHtml(model, history));
     paintHighlight(input, history, model.kind === "grid7" ? 0 : (model.kind === "grid24" ? model.columns : handle.count));
   }
 
   // Only the last column changed (a tick of the open column): repaint that one.
   function updateLast() {
-    const { model, handle, history } = cur;
-    if (!model || !handle || cur.folded || !(model.kind === "level" || model.kind === "mirror")) {
+    let { model, history } = cur;
+    const { handle } = cur;
+    if (!model || !handle || !(model.kind === "level" || model.kind === "mirror")) {
       if (cur.input) render(cur.input);
       return;
+    }
+    if (cur.folded) {
+      // a phone folds two columns into one: fold again (cheap) and repaint the last folded column;
+      // a different column count means a new column opened, then everything is redrawn
+      const { metric, linkId } = cur.input;
+      const id = linkOf(cur.input.history, linkId)?.id;
+      const shown = model.kind === "mirror"
+        ? [`link_up:${id}`, `link_down:${id}`, `rate_up:${id}`, `rate_down:${id}`]
+        : [metric === "all" ? "cpu" : metric];
+      history = foldHistory(cur.input.history, 2, shown);
+      model = model.kind === "mirror" ? mirrorModel(history, linkId) : levelModel(history, metric === "all" ? "cpu" : metric);
+      if (columnCount(history) !== handle.count) {
+        render(cur.input);
+        return;
+      }
+      cur.history = history;
+      cur.model = model;
     }
     const last = handle.count - 1;
     if (last < 0) return;
     redrawColumn(handle, last, model.columnAt(last));
-    summaryEl.innerHTML = summaryHtml(model, history);
+    setHtml(summaryEl, summaryHtml(model, history));
   }
 
   if (typeof ResizeObserver === "function") {

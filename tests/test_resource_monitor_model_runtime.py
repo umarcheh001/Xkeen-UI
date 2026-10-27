@@ -18,7 +18,7 @@ def run_model(code: str):
         ["node", "--input-type=module"],
         input=(
             "import * as model from './xkeen-ui/static/js/features/resource_monitor_model.js';\n"
-            "const { metricNumber, nearestPointIndex, resourceHealth, buildResourceSnapshot, selectClients } = model;\n"
+            "const { metricNumber, buildResourceSnapshot } = model;\n"
             + code
         ),
         cwd=ROOT,
@@ -44,35 +44,11 @@ def test_the_browser_side_history_helpers_are_gone():
     ) == [False, False, False, False]
 
 
-def test_nearest_point_still_finds_the_closest_timestamp():
-    assert run_model("""
-const points = [0, 5, 15, 300, 330, 600].map(at => ({at}));
-console.log(JSON.stringify([0, 301, 580].map(at => nearestPointIndex(points, at))));
-""") == [0, 3, 5]
-
-
-def test_health_uses_connection_and_conntrack_and_preserves_unknown_state():
-    result = run_model("""
-const normal = {
-  cpu: {percent: 5}, memory: {percent: 45},
-  router: {internet: {available: true, internet: true, gateway: true, dns: true, captive: true}},
-};
-console.log(JSON.stringify({
-  normal: resourceHealth(normal),
-  missing: resourceHealth({cpu: {percent: 1}, memory: {percent: 1}}),
-  stale: resourceHealth({...normal, router: {...normal.router, freshness: {state: 'stale'}}}),
-  conntrack: resourceHealth({...normal, router: {...normal.router, conntrack: {available: true, percent: 96}}}),
-  captive: resourceHealth({...normal, router: {internet: {...normal.router.internet, captive: false}}}),
-  dns: resourceHealth(normal, {state: 'error'}),
-}));
-""")
-    assert result["normal"]["tone"] == "normal"
-    assert result["missing"]["tone"] == "unknown"
-    assert result["stale"]["tone"] == "unknown"
-    assert result["conntrack"]["tone"] == "danger"
-    assert "Conntrack" in result["conntrack"]["note"]
-    assert "авторизация" in result["captive"]["note"]
-    assert result["dns"]["title"] == "Проблема с зашифрованным DNS"
+def test_helpers_of_the_old_light_dom_window_are_gone():
+    # the window draws and judges everything from the server's zones now; nothing is kept for the old sections
+    assert run_model(
+        "console.log(JSON.stringify(['nearestPointIndex', 'resourceHealth', 'selectClients'].map(name => name in model)));"
+    ) == [False, False, False]
 
 
 def test_snapshot_has_explicit_allowlist_and_the_new_history_columns():
@@ -116,17 +92,3 @@ console.log(JSON.stringify(buildResourceSnapshot(summary, hardware, history, '1h
     link = result["history"]["links"][0]
     assert link["primary"] is True and link["tariff"] == {"up_mbps": 50, "down_mbps": 100}
     assert link["up_percent"]["avg"] == [3] and link["down_mbps"]["max"] == [6]
-
-
-def test_clients_toggle_uses_cached_full_list_and_keeps_top_five_limit():
-    result = run_model("""
-const items = Array.from({length: 12}, (_, index) => ({name: `client-${index}`}));
-const payload = {items, top: items.slice(0, 5)};
-console.log(JSON.stringify({
-  top: selectClients(payload, false).length,
-  all: selectClients(payload, true).length,
-  absent: selectClients(null, true),
-  bounded: selectClients({items: Array(120).fill({})}, true).length,
-}));
-""")
-    assert result == {"top": 5, "all": 12, "absent": [], "bounded": 100}

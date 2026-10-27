@@ -17,6 +17,7 @@
 //   destroy()
 
 import { drawAvailabilityStrip, drawMiniIndicator, drawMiniMirror } from "./canvas_charts.js";
+import { setHtml } from "./tools_format.js";
 import { VIEW_CSS } from "./view_css.js";
 
 const MB = 1048576;
@@ -210,11 +211,21 @@ function cardsHtml(cards) {
   return parts.join("");
 }
 
-function drawSparks(root, cards) {
+// The indicators change only when a column of their history closes, so a repaint with the same
+// data is skipped (a canvas costs a backing-store clear, a raster and a commit). `force` repaints
+// anyway: after a resize, and at least every SPARK_REPAINT_MS so a changed theme shows up.
+const SPARK_REPAINT_MS = 30000;
+
+function drawSparks(root, cards, force = false) {
+  const now = Date.now();
   for (const canvas of root.querySelectorAll(".xkm-spark")) {
     const metric = canvas.closest(".xkm-card")?.dataset.metric;
     const data = cards?.[metric];
     if (!data) continue;
+    const signature = JSON.stringify(data.bars || null) + (data.has_tariff ? "t" : "");
+    if (!force && canvas.xkSignature === signature && now - canvas.xkPainted < SPARK_REPAINT_MS) continue;
+    canvas.xkSignature = signature;
+    canvas.xkPainted = now;
     try {
       if (metric === "internet") drawAvailabilityStrip(canvas, data.bars?.zones || []);
       else if (metric === "link") {
@@ -405,13 +416,13 @@ export function mountDashboardView(host) {
   const slot = (name) => shadow.querySelector(`[data-slot="${name}"]`);
   const state = { summary: null, hardware: null, router: null, openNode: null, hardwareKey: "", cardCb: null, linkCb: null, frame: 0 };
 
-  const paintStatus = () => { slot("status").innerHTML = statusHtml(state.summary, state.hardware); };
+  const paintStatus = () => { setHtml(slot("status"), statusHtml(state.summary, state.hardware)); };
   const paintConnection = () => {
     const panel = slot("connection");
     panel.hidden = !state.router;
-    if (state.router) panel.innerHTML = connectionHtml(state.router, state.openNode);
+    if (state.router) setHtml(panel, connectionHtml(state.router, state.openNode));
   };
-  const paintSparks = () => drawSparks(shadow, state.summary?.cards);
+  const paintSparks = (force = true) => drawSparks(shadow, state.summary?.cards, force === true);
 
   shadow.addEventListener("click", (event) => {
     const link = event.target.closest?.("[data-link]");
@@ -448,7 +459,7 @@ export function mountDashboardView(host) {
       if (width === lastWidth || !width) return;
       lastWidth = width;
       cancelAnimationFrame(state.frame);
-      state.frame = requestAnimationFrame(paintSparks);
+      state.frame = requestAnimationFrame(() => paintSparks(true));
     });
     observer.observe(host);
   }
@@ -457,8 +468,8 @@ export function mountDashboardView(host) {
     renderSummary(summary) {
       state.summary = summary || null;
       paintStatus();
-      slot("cards").innerHTML = summary ? cardsHtml(summary.cards) : "";
-      paintSparks();
+      setHtml(slot("cards"), summary ? cardsHtml(summary.cards) : "");
+      paintSparks(false);
     },
     renderHardware(hw) {
       state.hardware = hw || null;
@@ -485,7 +496,7 @@ export function mountDashboardView(host) {
     onLinkClick(cb) { state.linkCb = typeof cb === "function" ? cb : null; },
     chartHost: slot("chart"),
     toolsHost: slot("tools"),
-    redraw: paintSparks,
+    redraw: () => paintSparks(true),
     destroy() {
       observer?.disconnect();
       cancelAnimationFrame(state.frame);

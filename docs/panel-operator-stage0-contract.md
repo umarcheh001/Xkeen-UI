@@ -52,7 +52,7 @@ Route-action `Mihomo Генератор` и modal-action `Поддержать` 
 
 | Control | Body | Начальное состояние |
 | --- | --- | --- |
-| `#xk-internet-check-dns-row` | `#xk-dns-guidance` | collapsed |
+| `#xk-resource-more` | `#xk-resource-more-menu` | collapsed |
 | `#routing-dat-header` | `#routing-dat-body` | collapsed |
 | `#inbounds-header` | `#inbounds-body` | collapsed |
 | `#routing-scenario-header` | `#routing-scenario-body` | collapsed |

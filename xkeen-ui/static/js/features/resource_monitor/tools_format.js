@@ -7,6 +7,50 @@ export function esc(value) {
   return String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
 }
 
+// Brings the children of `dst` to the shape of `src`, touching only what differs. Canvases
+// stay (their backing store and layer are expensive to rebuild; their owner redraws them).
+function patchChildren(dst, src) {
+  const wanted = Array.from(src.childNodes);
+  wanted.forEach((next, index) => {
+    const current = dst.childNodes[index];
+    if (!current) {
+      dst.appendChild(next);
+    } else if (current.nodeType !== next.nodeType || current.nodeName !== next.nodeName) {
+      dst.replaceChild(next, current);
+    } else if (next.nodeType !== 1) {
+      if (current.data !== next.data) current.data = next.data;
+    } else {
+      const canvas = current.nodeName === "CANVAS";
+      for (const attr of Array.from(current.attributes)) {
+        if (!next.hasAttribute(attr.name) && !(canvas && /^(width|height|style)$/.test(attr.name))) current.removeAttribute(attr.name);
+      }
+      for (const attr of Array.from(next.attributes)) {
+        if (canvas && /^(width|height|style)$/.test(attr.name)) continue;
+        if (current.getAttribute(attr.name) !== attr.value) current.setAttributeNS(attr.namespaceURI, attr.name, attr.value);
+      }
+      if (!canvas) patchChildren(current, next);
+    }
+  });
+  while (dst.childNodes.length > wanted.length) dst.removeChild(dst.lastChild);
+}
+
+// Writes markup into an element in place. Identical markup costs nothing; a changed one
+// replaces only the text and attributes that differ, so a repaint every few seconds does
+// not rebuild the canvases and the layers around them.
+export function setHtml(element, html) {
+  if (!element || element.xkHtml === html) return false;
+  const first = element.xkHtml === undefined;
+  element.xkHtml = html;
+  if (first) {
+    element.innerHTML = html;
+    return true;
+  }
+  const template = document.createElement("template");
+  template.innerHTML = html;
+  patchChildren(element, template.content);
+  return true;
+}
+
 export function finite(value) {
   return typeof value === "number" && Number.isFinite(value);
 }

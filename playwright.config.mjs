@@ -6,9 +6,15 @@ import { defineConfig, devices } from '@playwright/test';
 // gives the serial run for the local servers.
 const SERIAL = !!process.env.E2E_BASE_URL;
 
+// Speed measurements (tests tagged @perf) are slow to set up and depend on the
+// machine, so a normal run skips them. They run when asked for by name
+// (`npx playwright test e2e/resource_monitor_perf.spec.mjs`) or with XKEEN_E2E_PERF=1.
+const PERF_REQUESTED = !!process.env.XKEEN_E2E_PERF || process.argv.some((arg) => /_perf\.spec/.test(arg));
+
 export default defineConfig({
   testDir: './e2e',
   testMatch: ['**/*.spec.mjs'],
+  grepInvert: PERF_REQUESTED ? undefined : /@perf/,
   // Side-by-side workers share the CPU, so the same test takes longer than
   // in a serial run; the limits leave room for that.
   timeout: SERIAL ? 30_000 : 45_000,

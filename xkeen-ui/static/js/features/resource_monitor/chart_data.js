@@ -67,10 +67,12 @@ const worst = (values) => {
 
 // Fold `factor` neighbouring columns into one (phones draw half as many columns):
 // the average of the averages, the highest peak, the worst zone.
-export function foldHistory(history, factor) {
+// `only`: the metric names to fold (the redraw of one open column needs just the shown ones).
+export function foldHistory(history, factor, only = null) {
   if (!history || !(factor > 1)) return history;
   const metrics = {};
   for (const [name, m] of Object.entries(history.metrics || {})) {
+    if (only && !only.includes(name)) continue;
     const out = { avg: [], max: [] };
     if (m.zone) { out.zone = []; out.peak_zone = []; }
     for (let i = 0; i < m.avg.length; i += factor) {
