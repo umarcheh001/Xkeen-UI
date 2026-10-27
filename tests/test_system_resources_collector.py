@@ -1004,3 +1004,11 @@ def test_reboot_with_the_clock_stepping_like_keeneticos(tmp_path):
     assert lost["at"] >= boot["at"]
     assert c2.history("7d")["history_since"] == before
     assert c2.snapshot()["cards"]["internet"]["state"] == "online"
+
+
+def test_reboot_event_is_the_router_start_not_the_panel_start(tmp_path):
+    r = FakeRouter()
+    r.uptime = 39.0  # the panel comes up 39 s after the router, the clock already set
+    c = make(tmp_path, r)
+    (boot,) = [e for e in c.events(0) if e["type"] == "router_rebooted"]
+    assert boot["at"] == boot["until"] == pytest.approx(T0 - 39.0)

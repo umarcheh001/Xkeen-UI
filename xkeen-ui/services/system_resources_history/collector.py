@@ -197,6 +197,8 @@ class Collector:
         self._last_tick_ts = now
         if self._uptime_s is not None:
             self._boot_event = self._tracker.note_start(self._uptime_s, persisted_uptime)
+            if self._boot_event is not None:  # the moment the router started, not the panel
+                self._tracker.restamp(self._boot_event, now - self._uptime_s)
         self._tariffs = get_diagnostics_tariffs(ui_state_dir)
 
     # -- small helpers ------------------------------------------------------
