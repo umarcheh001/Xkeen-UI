@@ -79,8 +79,8 @@ function hardware(kind = 'nc1812', over = {}) {
   const nc = kind === 'nc1812';
   const none = kind === 'none';
   const temperatures = none ? [] : nc
-    ? [tempGroup('cpu', 'Процессор', 54), tempGroup('soc', 'Чип целиком', 55), tempGroup('tops', 'Сетевой ускоритель', 53), tempGroup('eth', 'Порты и коммутатор', 55), tempGroup('wifi24', 'Wi‑Fi 2,4 ГГц', 47, 'wifi'), tempGroup('wifi5', 'Wi‑Fi 5 ГГц', 53, 'wifi')]
-    : [tempGroup('cpu', 'Процессор', 61), tempGroup('wifi24', 'Wi‑Fi 2,4 ГГц', 70, 'wifi'), tempGroup('wifi5', 'Wi‑Fi 5 ГГц', 63, 'wifi')];
+    ? [tempGroup('cpu', 'Процессор', 54), tempGroup('soc', 'Главный чип', 55), tempGroup('npu', 'Сетевой ускоритель', 53), tempGroup('ports', 'Порты и коммутатор', 55), tempGroup('wifi24', 'Wi‑Fi 2,4 ГГц', 47, 'wifi'), tempGroup('wifi5', 'Wi‑Fi 5 ГГц', 53, 'wifi')]
+    : [tempGroup('soc', 'Главный чип', 61, 'chip', { sensors: [{ name: 'mtktscpu', value_c: 61 }] }), tempGroup('wifi24', 'Wi‑Fi 2,4 ГГц', 70, 'wifi'), tempGroup('wifi5', 'Wi‑Fi 5 ГГц', 63, 'wifi')];
   return {
     ok: true,
     identity: nc ? { model: 'Netcraze Ultra (NC-1812)', firmware: 'KeeneticOS 5.1.8' } : { model: 'Keenetic Ultra (KN-1811)', firmware: 'KeeneticOS 5.1.8' },
@@ -317,6 +317,41 @@ test('hardware layout KN-1811', async ({ page }) => {
   await expect(view.locator('.hw-port')).toHaveCount(6);
 });
 
+test('temperature tiles explain themselves in a hint, without sensor names or counts', async ({ page }) => {
+  const view = await openDashboard(page);
+  const cpu = view.locator('.hw-t[data-temp="cpu"]');
+  await expect(cpu.locator('.n')).toHaveText('Процессор');
+  await expect(view.locator('.hw-sec[data-section="temperature"]')).not.toContainText('датчик');
+  await cpu.hover();
+  const pop = cpu.locator('.hw-pop');
+  await expect(pop).toBeVisible();
+  await expect(pop).toContainText('Ядра процессора');
+  await expect(pop).toContainText('Греется от: шифрование прокси');
+  await expect(pop).toContainText('норма до 80 °C');
+  await expect(pop).toContainText('перегрев выше 95 °C');
+  await expect(pop).not.toContainText('_thermal');
+  // Wi-Fi has its own thresholds; a tile of the right column hangs its hint from the right edge
+  const wifi = view.locator('.hw-t[data-temp="wifi5"]');
+  await wifi.hover();
+  await expect(wifi.locator('.hw-pop')).toContainText('горячо 85–100 °C');
+  const [tile, hint] = [await rect(wifi), await rect(wifi.locator('.hw-pop'))];
+  expect(Math.abs(hint.right - tile.right)).toBeLessThanOrEqual(1);
+});
+
+test('phone: a tapped tile shows its hint inside the screen', async ({ page }) => {
+  const view = await openDashboard(page, { width: 390 });
+  for (const id of ['npu', 'ports']) {
+    const tile = view.locator(`.hw-t[data-temp="${id}"]`);
+    await tile.scrollIntoViewIfNeeded();
+    await tile.focus();
+    const hint = tile.locator('.hw-pop');
+    await expect(hint).toBeVisible();
+    const box = await rect(hint);
+    expect(box.left).toBeGreaterThanOrEqual(0);
+    expect(box.right).toBeLessThanOrEqual(390);
+  }
+});
+
 test('no sensors hides temperature section', async ({ page }) => {
   const view = await openDashboard(page, { hw: hardware('none') });
   await expect(view.locator('.hw-t')).toHaveCount(0);
@@ -389,7 +424,7 @@ test('throttled', async ({ page }) => {
   const hw = hardware('kn1811', { throttle: { current_mhz: 900, max_mhz: 1350, throttled: true } });
   const view = await openDashboard(page, { hw });
   const tile = view.locator('.hw-t').first();
-  await expect(tile).toContainText('Процессор');
+  await expect(tile).toContainText('Главный чип'); // KN-1811: the only sensor is the whole chip
   await expect(tile).toHaveClass(/z2/);
   await expect(tile).toContainText('процессор замедлился из-за нагрева: 900 из 1350 МГц');
   const colours = await view.locator('.hw-t').evaluateAll(els => els.map(el => getComputedStyle(el).borderTopColor));

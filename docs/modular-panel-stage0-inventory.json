@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 604,
-      "size_bytes": 8161537,
+      "size_bytes": 8163399,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -359,7 +359,7 @@
       ],
       "removable": true,
       "unit_count": 66,
-      "size_bytes": 831630,
+      "size_bytes": 834620,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 16,
@@ -12837,7 +12837,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/router_resource_dashboard.spec.mjs",
-      "size_bytes": 83252,
+      "size_bytes": 85114,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -23066,7 +23066,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_service",
       "path": "xkeen-ui/services/system_resources_history/sensors.py",
-      "size_bytes": 9973,
+      "size_bytes": 10149,
       "depends_on": [
         "core"
       ],
@@ -23315,7 +23315,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_system_resources_sensors.py",
-      "size_bytes": 9747,
+      "size_bytes": 9929,
       "depends_on": [
         "core"
       ],
@@ -24169,7 +24169,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor/view.js",
-      "size_bytes": 27907,
+      "size_bytes": 29885,
       "depends_on": [
         "core"
       ],
@@ -24195,7 +24195,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor/view_css.js",
-      "size_bytes": 14122,
+      "size_bytes": 14776,
       "depends_on": [
         "core"
       ],
@@ -34739,7 +34739,7 @@
         },
         "tool.advanced-diagnostics": {
           "unit_count": 66,
-          "size_bytes": 831630
+          "size_bytes": 834620
         }
       },
       "next_stage": "Этапы 4, 5 и 6."

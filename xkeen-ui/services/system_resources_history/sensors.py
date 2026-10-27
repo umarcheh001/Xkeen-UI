@@ -134,7 +134,7 @@ def read_zone_temperatures(infos: list[ZoneInfo], reader: Reader = _default_read
 
 _CHIP_GROUPS: list[tuple[str, str, tuple[str, ...]]] = [
     ("cpu", "Процессор", ("mcusys_thermal", "mtktscpu")),
-    ("soc", "Чип целиком", ("soc_thermal",)),
+    ("soc", "Главный чип", ("soc_thermal",)),
     ("npu", "Сетевой ускоритель", ("tops_thermal",)),
     ("ports", "Порты и коммутатор", ("ethsys_thermal", "eth2p5g_thermal")),
 ]
@@ -162,10 +162,12 @@ def group_temperatures(zones: list[ThermalZone], wifi: dict[str, float | None]) 
     unknown: dict[str, list[ThermalZone]] = {}
     for zone in zones:
         gid = _known_group(zone.type)
-        if gid is not None:
+        if len(zones) == 1:
+            # The only sensor of a model measures the chip as a whole, whatever its name
+            # (`mtktscpu` on KN-1811): the tile says so (owner's decision 27.10.2026).
+            members["soc"].append(zone)
+        elif gid is not None:
             members[gid].append(zone)
-        elif len(zones) == 1:
-            members["cpu"].append(zone)
         else:
             unknown.setdefault(zone.type, []).append(zone)
 
