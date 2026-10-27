@@ -42,10 +42,12 @@ const TEMP_NOTES = {
   ports: ["Блок проводных портов LAN и WAN.", "большой трафик по проводам, особенно на 2,5 Гбит/с."],
   wifi24: ["Радиомодуль Wi‑Fi 2,4 ГГц, отдельная микросхема.", "много клиентов и трафика по Wi‑Fi."],
   wifi5: ["Радиомодуль Wi‑Fi 5 ГГц, отдельная микросхема.", "много клиентов и трафика по Wi‑Fi; 5 ГГц обычно горячее 2,4 ГГц."],
+  // the only sensor of a model: the whole main chip, which is the processor
+  lone: ["Датчик главной микросхемы роутера, в которой и работает процессор. По нему роутер решает, когда аварийно выключиться.", "шифрование прокси, обновление подписок и списков, тесный или закрытый корпус."],
 };
 
-function tempPop(group) {
-  const [what, heat] = TEMP_NOTES[group.id] || [];
+function tempPop(group, lone = false) {
+  const [what, heat] = TEMP_NOTES[lone ? "lone" : group.id] || [];
   const bands = group.bands || {};
   const zones = finite(bands.orange_c) && finite(bands.red_c)
     ? `<span class="zs"><span><i class="g"></i>норма до ${num(bands.orange_c)} °C</span><span><i class="o"></i>горячо ${num(bands.orange_c)}–${num(bands.red_c)} °C</span><span><i class="r"></i>перегрев выше ${num(bands.red_c)} °C</span></span>`
@@ -322,13 +324,14 @@ function connectionHtml(router, openNode) {
 
 // ---- hardware ------------------------------------------------------------
 
-// `edge`: which side the hint hangs from, on a wide grid and on the two-column phone grid.
-function tempTile(group, throttle, edge = "") {
+// `edge`: which side the hint hangs from, on a wide grid and on the two-column phone grid;
+// `lone`: the model's only chip sensor.
+function tempTile(group, throttle, edge = "", lone = false) {
   const value = group.value_c;
   const name = esc(group.label);
   if (!finite(value)) {
     const why = group.kind === "wifi" ? "радио выключено" : "датчик не отвечает";
-    return `<div class="hw-t off" data-temp="${esc(group.id)}"${edge} tabindex="0"><span class="n">${name}</span><b>— <small>°C</small></b><span class="hw-track"><span class="g" style="width:100%"></span></span><small class="s">нет данных · ${why}</small>${tempPop(group)}</div>`;
+    return `<div class="hw-t off" data-temp="${esc(group.id)}"${edge} tabindex="0"><span class="n">${name}</span><b>— <small>°C</small></b><span class="hw-track"><span class="g" style="width:100%"></span></span><small class="s">нет данных · ${why}</small>${tempPop(group, lone)}</div>`;
   }
   const throttled = Boolean(throttle?.throttled);
   const zone = throttled ? 2 : (group.zone ?? 0);
@@ -347,7 +350,7 @@ function tempTile(group, throttle, edge = "") {
   else if (zone === 2) line += " · выше безопасного";
   else if (red != null) line += ` · до перегрева ${num(Math.max(0, Math.round(red - value)))} °C`;
   const hot = finite(group.hotter_by) && group.hotter_by > 0 ? `<small class="hot">на ${num(group.hotter_by)} °C горячее обычного — проверьте, не закрыт ли роутер</small>` : "";
-  const pop = tempPop(group);
+  const pop = tempPop(group, lone);
   return `<div class="hw-t z${zone}" data-temp="${esc(group.id)}"${edge} tabindex="0"><span class="n">${name}</span><b>${num(value)} <small>°C</small></b><span class="hw-track">${track}<i style="left:${mark.toFixed(1)}%"></i></span><small class="s">${esc(line)}</small>${hot}${pop}</div>`;
 }
 
@@ -355,8 +358,9 @@ function temperatureSection(hw) {
   const groups = hw.temperatures || [];
   const count = groups.length;
   const cols = count > 3 ? Math.ceil(count / 2) : count;
-  // throttling is shown on the processor tile, or on the whole chip where it is the only sensor
+  // throttling is shown on the processor tile, or on the main chip on a model without one
   const throttleHost = groups.some((g) => g.id === "cpu") ? "cpu" : "soc";
+  const lone = groups.filter((g) => g.kind === "chip").length === 1;
   const shutdown = Math.max(0, ...groups.map((g) => (finite(g.shutdown_c) ? g.shutdown_c : 0)));
   const hint = shutdown ? `аварийное отключение чипа при ${num(shutdown)} °C` : "";
   const valued = groups.filter((g) => finite(g.value_c));
@@ -365,7 +369,7 @@ function temperatureSection(hw) {
   const alert = hottest && alertZone > 0
     ? `<div class="hw-alert z${alertZone}"><b>${alertZone === 2 ? "Роутер перегревается." : "Роутер сильно нагрелся."}</b> Проверьте, что он стоит открыто: не в шкафу, не накрыт, не рядом с батареей. Сейчас горячее всего — ${esc(lowerFirst(hottest.label))}, ${num(hottest.value_c)} °C.</div>`
     : "";
-  return `<div class="hw-sec" data-section="temperature"><div class="hw-sh"><b>Температура</b>${hint ? `<span>${esc(hint)}</span>` : ""}</div>${alert}<div class="hw-temps" style="--cols:${cols}">${groups.map((g, i) => tempTile(g, g.id === throttleHost ? hw.throttle : null, ` data-edge="${i % cols === cols - 1 && cols > 1 ? "end" : "start"}" data-pedge="${i % 2 ? "end" : "start"}"`)).join("")}</div></div>`;
+  return `<div class="hw-sec" data-section="temperature"><div class="hw-sh"><b>Температура</b>${hint ? `<span>${esc(hint)}</span>` : ""}</div>${alert}<div class="hw-temps" style="--cols:${cols}">${groups.map((g, i) => tempTile(g, g.id === throttleHost ? hw.throttle : null, ` data-edge="${i % cols === cols - 1 && cols > 1 ? "end" : "start"}" data-pedge="${i % 2 ? "end" : "start"}"`, lone && g.kind === "chip")).join("")}</div></div>`;
 }
 
 function memorySection(hw, two) {

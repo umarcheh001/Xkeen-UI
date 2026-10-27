@@ -95,10 +95,10 @@ def test_nc1812_groups():
     assert wifi5.value_c == 53 and wifi5.shutdown_c is None
 
 
-def test_kn1811_single_zone_is_the_whole_chip_and_shutdown_from_active_trip():
+def test_kn1811_single_zone_is_the_processor_and_shutdown_from_active_trip():
     groups = group_temperatures(read_thermal_zones(*fixture("kn1811")), {"wifi24": 70, "wifi5": 63})
-    assert [g.id for g in groups] == ["soc", "wifi24", "wifi5"]
-    assert groups[0].label == "Главный чип"
+    assert [g.id for g in groups] == ["cpu", "wifi24", "wifi5"]
+    assert groups[0].label == "Процессор"
     assert groups[0].value_c == pytest.approx(61.8)
     assert groups[0].shutdown_c == 125
 
@@ -128,10 +128,10 @@ def test_unknown_type_is_own_group():
     assert groups[1].label == "weird_zone"
 
 
-def test_single_zone_of_any_name_is_the_whole_chip():
+def test_single_zone_of_any_name_is_the_processor():
     for name in ("cpu-thermal", "mtktscpu", "mcusys_thermal0", "soc_thermal"):
         (g,) = group_temperatures([ThermalZone(name, 45.0, None)], {})
-        assert (g.id, g.label, g.kind) == ("soc", "Главный чип", "chip"), name
+        assert (g.id, g.label, g.kind) == ("cpu", "Процессор", "chip"), name
 
 
 def test_shutdown_prefers_critical_then_largest_nonzero():

@@ -163,9 +163,10 @@ def group_temperatures(zones: list[ThermalZone], wifi: dict[str, float | None]) 
     for zone in zones:
         gid = _known_group(zone.type)
         if len(zones) == 1:
-            # The only sensor of a model measures the chip as a whole, whatever its name
-            # (`mtktscpu` on KN-1811): the tile says so (owner's decision 27.10.2026).
-            members["soc"].append(zone)
+            # The only sensor of a model measures the whole chip, whatever its name
+            # (`mtktscpu` on KN-1811); that chip is the processor, so the tile is
+            # «Процессор» (owner's decision 27.10.2026).
+            members["cpu"].append(zone)
         elif gid is not None:
             members[gid].append(zone)
         else:

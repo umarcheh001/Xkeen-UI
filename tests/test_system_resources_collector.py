@@ -177,7 +177,7 @@ def test_tick_records_all_metrics(tmp_path):
     assert values[f"rate_up:{ISP}"] == pytest.approx(20.0)
     assert values[f"link_down:{ISP}"] == pytest.approx(25.0)
     assert values[f"link_up:{ISP}"] == pytest.approx(20.0)
-    assert values["temp:soc"] == pytest.approx(55.0)
+    assert values["temp:cpu"] == pytest.approx(55.0)
     assert snap["zones"]["cpu"] == 0 and snap["zones"][f"link_down:{ISP}"] == 0
     assert snap["primary"] == ISP
     hist = c.history("15m")
@@ -804,11 +804,11 @@ def _soc_after_history(tmp_path, half_hours: int):
     r = FakeRouter()
     r.thermal_temp = 78_000
     c = make(tmp_path, r)
-    c._store.add_metric("temp:soc")
+    c._store.add_metric("temp:cpu")
     for k in range(half_hours, 0, -1):  # oldest first, cool the whole time
-        c._store.add(r.now - 1800 * k, {"temp:soc": 55.0})
+        c._store.add(r.now - 1800 * k, {"temp:cpu": 55.0})
     r.step(c, 2)
-    return next(t for t in c.hardware()["temperatures"] if t["id"] == "soc")
+    return next(t for t in c.hardware()["temperatures"] if t["id"] == "cpu")  # the fake router's only sensor is the processor
 
 
 def test_hotter_than_usual_needs_a_day_of_history(tmp_path):

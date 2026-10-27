@@ -165,7 +165,7 @@ def test_hardware_payload_from_fixtures(tmp_path, monkeypatch):
     assert body["identity"]["model"] and body["identity"]["firmware"].startswith("KeeneticOS")
     assert body["cores"] == 2
     temp = body["temperatures"][0]
-    assert temp["id"] == "soc" and temp["value_c"] == 55.0 and temp["zone"] == 0
+    assert temp["id"] == "cpu" and temp["value_c"] == 55.0 and temp["zone"] == 0
     assert "hotter_by" in temp and "hotter_by_c" not in temp
     assert temp["bands"] == {"orange_c": 80.0, "red_c": 95.0}  # the scale is drawn from these, never from JS constants
     # below the maximum on one cool sample is an idle governor, not heat

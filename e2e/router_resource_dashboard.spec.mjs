@@ -80,7 +80,7 @@ function hardware(kind = 'nc1812', over = {}) {
   const none = kind === 'none';
   const temperatures = none ? [] : nc
     ? [tempGroup('cpu', 'Процессор', 54), tempGroup('soc', 'Главный чип', 55), tempGroup('npu', 'Сетевой ускоритель', 53), tempGroup('ports', 'Порты и коммутатор', 55), tempGroup('wifi24', 'Wi‑Fi 2,4 ГГц', 47, 'wifi'), tempGroup('wifi5', 'Wi‑Fi 5 ГГц', 53, 'wifi')]
-    : [tempGroup('soc', 'Главный чип', 61, 'chip', { sensors: [{ name: 'mtktscpu', value_c: 61 }] }), tempGroup('wifi24', 'Wi‑Fi 2,4 ГГц', 70, 'wifi'), tempGroup('wifi5', 'Wi‑Fi 5 ГГц', 63, 'wifi')];
+    : [tempGroup('cpu', 'Процессор', 61, 'chip', { sensors: [{ name: 'mtktscpu', value_c: 61 }] }), tempGroup('wifi24', 'Wi‑Fi 2,4 ГГц', 70, 'wifi'), tempGroup('wifi5', 'Wi‑Fi 5 ГГц', 63, 'wifi')];
   return {
     ok: true,
     identity: nc ? { model: 'Netcraze Ultra (NC-1812)', firmware: 'KeeneticOS 5.1.8' } : { model: 'Keenetic Ultra (KN-1811)', firmware: 'KeeneticOS 5.1.8' },
@@ -338,6 +338,15 @@ test('temperature tiles explain themselves in a hint, without sensor names or co
   expect(Math.abs(hint.right - tile.right)).toBeLessThanOrEqual(1);
 });
 
+test('the only sensor of a model is the processor, its hint speaks of the whole chip', async ({ page }) => {
+  const view = await openDashboard(page, { hw: hardware('kn1811') });
+  const cpu = view.locator('.hw-t[data-temp="cpu"]');
+  await expect(cpu.locator('.n')).toHaveText('Процессор');
+  await cpu.hover();
+  await expect(cpu.locator('.hw-pop')).toContainText('Датчик главной микросхемы роутера');
+  await expect(cpu.locator('.hw-pop')).not.toContainText('Ядра процессора');
+});
+
 test('phone: a tapped tile shows its hint inside the screen', async ({ page }) => {
   const view = await openDashboard(page, { width: 390 });
   for (const id of ['npu', 'ports']) {
@@ -424,7 +433,7 @@ test('throttled', async ({ page }) => {
   const hw = hardware('kn1811', { throttle: { current_mhz: 900, max_mhz: 1350, throttled: true } });
   const view = await openDashboard(page, { hw });
   const tile = view.locator('.hw-t').first();
-  await expect(tile).toContainText('Главный чип'); // KN-1811: the only sensor is the whole chip
+  await expect(tile).toContainText('Процессор');
   await expect(tile).toHaveClass(/z2/);
   await expect(tile).toContainText('процессор замедлился из-за нагрева: 900 из 1350 МГц');
   const colours = await view.locator('.hw-t').evaluateAll(els => els.map(el => getComputedStyle(el).borderTopColor));
