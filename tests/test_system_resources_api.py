@@ -12,6 +12,7 @@ from routes.devtools import create_devtools_blueprint
 from routes.system_resources import create_system_resources_blueprint
 from routes.ui_settings import create_ui_settings_blueprint
 from services import UISettingsStore
+from services.system_resources_history.zones import zone
 from tests.test_system_resources_collector import ISP, T0, USB, FakeRouter, make, tariffs
 
 
@@ -342,12 +343,11 @@ def test_summary_router_failure_keeps_the_history_summary(tmp_path, monkeypatch)
 
 
 # -- the header monitor ------------------------------------------------------
-def _devtools_app(tmp_path, collector, monkeypatch) -> Flask:
-    monkeypatch.setattr(devtools_routes, "get_collector", lambda: collector)
+def _devtools_app(tmp_path, monkeypatch, cpu=5.0, memory=60.0) -> Flask:
     monkeypatch.setattr(
         devtools_routes,
         "sample_system_resources",
-        lambda: {"sampled_at": 10, "cpu": {"percent": 5.0}, "memory": {"percent": 60.0, "total_bytes": 1000}},
+        lambda: {"sampled_at": 10, "cpu": {"percent": cpu}, "memory": {"percent": memory, "total_bytes": 1000}},
     )
     monkeypatch.setattr(devtools_routes, "cached_router_diagnostics", lambda: {"internet": {"available": False}})
     monkeypatch.setattr(
@@ -358,29 +358,16 @@ def _devtools_app(tmp_path, collector, monkeypatch) -> Flask:
     return app
 
 
-def test_resources_has_link_percent_when_tariff(tmp_path, monkeypatch):
-    router = FakeRouter()
-    collector = make(tmp_path, router)
-    tariffs(tmp_path, {ISP: {"up_mbps": 100, "down_mbps": 400}})
-    collector.refresh_tariffs()
-    router.step(collector, 13)
-    label = collector.snapshot()["links"][0]["label"]
-
-    payload = _devtools_app(tmp_path, collector, monkeypatch).test_client().get("/api/system/resources").get_json()
-
+@pytest.mark.parametrize(
+    "cpu,memory,expected",
+    [(5.0, 60.0, {"cpu": 0, "memory": 0}), (60.0, 75.0, {"cpu": 1, "memory": 1}), (95.0, 80.0, {"cpu": 2, "memory": 1}), (85.0, 90.0, {"cpu": 2, "memory": 2})],
+)
+def test_resources_carry_the_zones_for_the_header_colours(tmp_path, monkeypatch, cpu, memory, expected):
+    payload = _devtools_app(tmp_path, monkeypatch, cpu, memory).test_client().get("/api/system/resources").get_json()
     assert payload["ok"] is True
-    assert payload["link"] == {"label": label, "up_percent": pytest.approx(20.0), "down_percent": pytest.approx(25.0)}
-    assert payload["memory"]["percent"] == 60.0  # the old fields stay
-
-
-def test_resources_has_no_link_without_tariff_or_collector(tmp_path, monkeypatch):
-    _router, collector = _running(tmp_path)
-    client = _devtools_app(tmp_path, collector, monkeypatch).test_client()
-    assert "link" not in client.get("/api/system/resources").get_json()
-
-    client = _devtools_app(tmp_path, None, monkeypatch).test_client()
-    payload = client.get("/api/system/resources").get_json()
-    assert payload["ok"] is True and "link" not in payload
+    assert payload["zones"] == expected  # the page has no thresholds of its own
+    assert payload["memory"]["percent"] == memory  # the old fields stay
+    assert "link" not in payload
 
 
 # -- the tariff reaches the running collector at once -------------------------

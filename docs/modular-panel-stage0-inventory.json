@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 604,
-      "size_bytes": 8145653,
+      "size_bytes": 8145883,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -359,7 +359,7 @@
       ],
       "removable": true,
       "unit_count": 64,
-      "size_bytes": 800174,
+      "size_bytes": 800211,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 15,
@@ -816,7 +816,7 @@
       "module_id": "core",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/devtools.py",
-      "size_bytes": 10975,
+      "size_bytes": 10971,
       "depends_on": [
         "tool.advanced-diagnostics"
       ],
@@ -9216,7 +9216,7 @@
       "module_id": "core",
       "kind": "configuration",
       "path": "playwright.config.mjs",
-      "size_bytes": 1705,
+      "size_bytes": 1939,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -22382,7 +22382,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/system_resources.py",
-      "size_bytes": 12531,
+      "size_bytes": 12266,
       "depends_on": [
         "core"
       ],
@@ -22749,7 +22749,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_service",
       "path": "xkeen-ui/services/system_resources_history/collector.py",
-      "size_bytes": 39642,
+      "size_bytes": 38982,
       "depends_on": [
         "core"
       ],
@@ -22866,7 +22866,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_service",
       "path": "xkeen-ui/services/system_resources_history/zones.py",
-      "size_bytes": 3589,
+      "size_bytes": 3865,
       "depends_on": [
         "core"
       ],
@@ -22961,7 +22961,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_system_resources_api.py",
-      "size_bytes": 19316,
+      "size_bytes": 18841,
       "depends_on": [
         "core"
       ],
@@ -23451,7 +23451,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor.js",
-      "size_bytes": 10590,
+      "size_bytes": 10808,
       "depends_on": [
         "core"
       ],
@@ -24087,7 +24087,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_test",
       "path": "e2e/resource_monitor_visibility.spec.mjs",
-      "size_bytes": 2960,
+      "size_bytes": 3903,
       "depends_on": [
         "core"
       ],
@@ -34438,7 +34438,7 @@
         },
         "tool.advanced-diagnostics": {
           "unit_count": 64,
-          "size_bytes": 800174
+          "size_bytes": 800211
         }
       },
       "next_stage": "Этапы 4, 5 и 6."

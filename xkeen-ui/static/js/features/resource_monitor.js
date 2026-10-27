@@ -32,10 +32,13 @@ function formatBytes(value) {
   }
   return `${current.toFixed(current >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
 }
-function tone(percent) {
-  if (percent >= 90) return "danger";
-  if (percent >= 75) return "warning";
-  return "normal";
+// The thresholds live only on the server (zones.py): the payload carries the zone index
+// of each metric (0 normal, 1 orange, 2 red); without it the header stays neutral.
+function tone(zone) {
+  if (zone === 2) return "danger";
+  if (zone === 1) return "warning";
+  if (zone === 0) return "normal";
+  return "unknown";
 }
 function formatPercent(value) {
   if (metricNumber(value) === null) return "—";
@@ -118,8 +121,8 @@ function render(payload) {
   if (cpuMeter) setWidth(cpuMeter, clampPercent(cpuPercent));
   if (memoryMeter) setWidth(memoryMeter, clampPercent(memoryPercent));
   setData(root, "state", "ready");
-  setData(root, "cpuTone", cpuPercent === null ? "unknown" : tone(cpuPercent));
-  setData(root, "memoryTone", memoryPercent === null ? "unknown" : tone(memoryPercent));
+  setData(root, "cpuTone", cpuPercent === null ? "unknown" : tone(payload?.zones?.cpu));
+  setData(root, "memoryTone", memoryPercent === null ? "unknown" : tone(payload?.zones?.memory));
   if (stale && !stale.hidden) stale.hidden = true;
   const cores = Math.max(1, Number(payload?.cpu?.cores) || 1);
   const load = Number(payload?.cpu?.load_1m) || 0;

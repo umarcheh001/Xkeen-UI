@@ -687,21 +687,6 @@ class Collector:
             "secondary": secondary,
         }
 
-    def primary_link(self) -> dict | None:
-        """Main connection's load in percent of its tariff, for the header monitor."""
-        with self._lock:
-            pid = self._primary
-            if pid is None or not any(v is not None for v in self._tariffs.get(pid, (None, None))):
-                return None
-            link = next((l for l in self._links() if l["id"] == pid), None)
-            if link is None:
-                return None
-            return {
-                "label": link["label"],
-                "up_percent": self._values.get(f"link_up:{pid}"),
-                "down_percent": self._values.get(f"link_down:{pid}"),
-            }
-
     def _summary(self) -> dict:
         now = self._clock()
         data = self._store.columns_spec(CARD_SPEC, now)

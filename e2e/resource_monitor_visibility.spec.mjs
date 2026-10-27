@@ -9,6 +9,7 @@ const resources = () => ({
   cpu: { percent: 19, cores: 3, load_1m: 0.4, load_5m: 0.4, load_15m: 0.3, total_tasks: 100, runnable_tasks: 1 },
   memory: { percent: 47, total_bytes: 1024 ** 3, used_bytes: 500000000, swap_total_bytes: 0, swap_used_bytes: 0 },
   storage: { percent: 18.5, total_bytes: 8 * 1024 ** 3, free_bytes: 7 * 1024 ** 3 },
+  zones: { cpu: 0, memory: 0 },
   router: {},
 });
 
@@ -65,4 +66,20 @@ test('header monitor repaints in place and shows the numbers', async ({ page }) 
   await expect(cpu).toHaveText('63%');
   expect(await cpu.evaluate((el) => el.__node === el.firstChild)).toBe(true);
   await expect(page.locator('#xk-resource-monitor')).toHaveAttribute('data-cpu-tone', 'normal');
+});
+
+test('header monitor takes its colours from the server zones, not from numbers in the page', async ({ page }) => {
+  let payload = { ...resources(), cpu: { ...resources().cpu, percent: 95 }, zones: { cpu: 1, memory: 2 } };
+  await page.clock.install();
+  await page.route('**/api/system/resources', (route) => route.fulfill({ json: payload }));
+  await page.goto('/');
+  const monitor = page.locator('#xk-resource-monitor');
+  // 95 % would be red by any local rule; the server said orange
+  await expect(monitor).toHaveAttribute('data-cpu-tone', 'warning');
+  await expect(monitor).toHaveAttribute('data-memory-tone', 'danger');
+  // no zones in the answer (a module without them): neutral, never a guess
+  payload = { ...resources(), cpu: { ...resources().cpu, percent: 95 } };
+  delete payload.zones;
+  await page.clock.runFor(5200);
+  await expect(monitor).toHaveAttribute('data-cpu-tone', 'unknown');
 });

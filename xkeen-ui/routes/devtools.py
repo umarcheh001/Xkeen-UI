@@ -73,7 +73,6 @@ from services.router_diagnostics import (
     cached_router_system,
 )
 from services.system_resources import sample_system_resources
-from services.system_resources_history.collector import get_collector
 
 try:
     from services.logging_setup import refresh_runtime_from_env as _refresh_logging
@@ -121,12 +120,13 @@ def create_devtools_blueprint(
             except Exception:  # noqa: BLE001 - optional process telemetry
                 pass
             try:
-                collector = get_collector()
-                link = collector.primary_link() if collector is not None else None
-            except Exception:  # noqa: BLE001 - optional link telemetry
-                link = None
-            if link is not None:
-                payload["link"] = link
+                from services.system_resources_history.zones import header_zones
+
+                payload["zones"] = header_zones(
+                    (payload.get("cpu") or {}).get("percent"), (payload.get("memory") or {}).get("percent")
+                )
+            except Exception:  # noqa: BLE001 - the header stays neutral without zones
+                pass
         payload["ok"] = True
         response = jsonify(payload)
         response.headers["Cache-Control"] = "no-store"

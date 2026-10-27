@@ -85,6 +85,11 @@ def temp_bands(kind: str | None) -> dict[str, float] | None:
     return {"orange_c": _TEMP[kind][0], "red_c": _TEMP[kind][1]}
 
 
+def header_zones(cpu_percent: float | None, memory_percent: float | None) -> dict[str, int | None]:
+    """Zone indexes for the header monitor, so the page never needs the thresholds."""
+    return {"cpu": zone("cpu", cpu_percent), "memory": zone("memory", memory_percent)}
+
+
 def hotter_than_usual(value: float, median: float | None) -> int | None:
     """Degrees above the usual (median) temperature when that is 15 or more, else ``None``."""
     if median is None:

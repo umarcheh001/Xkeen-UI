@@ -9,7 +9,11 @@ const SERIAL = !!process.env.E2E_BASE_URL;
 // Speed measurements (tests tagged @perf) are slow to set up and depend on the
 // machine, so a normal run skips them. They run when asked for by name
 // (`npx playwright test e2e/resource_monitor_perf.spec.mjs`) or with XKEEN_E2E_PERF=1.
-const PERF_REQUESTED = !!process.env.XKEEN_E2E_PERF || process.argv.some((arg) => /_perf\.spec/.test(arg));
+// `-g "@perf"` / `--grep=@perf` asks for them by tag, `--grep-invert` asks for the opposite.
+const argv = process.argv;
+const PERF_REQUESTED = !!process.env.XKEEN_E2E_PERF
+  || argv.some((arg, i) => /_perf\.spec/.test(arg)
+    || (/@perf/.test(arg) && !/^(-gv|--grep-invert)/.test(arg) && !/^(-gv|--grep-invert)$/.test(argv[i - 1] || '')));
 
 export default defineConfig({
   testDir: './e2e',

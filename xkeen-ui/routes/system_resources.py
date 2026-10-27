@@ -20,7 +20,7 @@ from services.router_diagnostics import (
 from services.system_resources import sample_storage, sample_system_resources
 from services.system_resources_history.collector import get_collector
 from services.system_resources_history.store import RANGES
-from services.system_resources_history.zones import zone as zone_of
+from services.system_resources_history.zones import header_zones, zone as zone_of
 from services.memory_guard import get_memory_guard_status
 from services.router_modem_control import ModemControlError, ModemControlService, validate_modem_id
 
@@ -59,17 +59,6 @@ HISTORY_RANGES = frozenset(RANGES)
 
 def _tariff_or_none(tariff: dict) -> dict | None:
     return tariff if any(v is not None for v in tariff.values()) else None
-
-
-def _header_link() -> dict | None:
-    """Main connection's load for the header monitor; absent without collector or tariff."""
-    collector = get_collector()
-    if collector is None:
-        return None
-    try:
-        return collector.primary_link()
-    except Exception:  # noqa: BLE001 - optional telemetry
-        return None
 
 
 def _history_unavailable():
@@ -132,9 +121,9 @@ def create_system_resources_blueprint(*, include_summary: bool = True) -> Bluepr
                 payload["ui_process"] = get_memory_guard_status()
             except Exception:  # noqa: BLE001 - optional process telemetry
                 pass
-            link = _header_link()
-            if link is not None:
-                payload["link"] = link
+            payload["zones"] = header_zones(
+                (payload.get("cpu") or {}).get("percent"), (payload.get("memory") or {}).get("percent")
+            )
             payload["ok"] = True
             response = jsonify(payload)
             response.headers["Cache-Control"] = "no-store"
