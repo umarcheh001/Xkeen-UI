@@ -100,10 +100,13 @@ def test_clear_needs_2_minutes_and_reports_duration():
     assert any(e["id"] == ev["id"] for e in out)
 
 
-def test_none_zone_is_gap():
+def test_short_gap_keeps_the_problem_open():
     tr = _tr()
     _run(tr, 200, {"cpu": 2})
-    _run(tr, 300, {"cpu": None}, start=T0 + 205)
+    _run(tr, 100, {"cpu": None}, start=T0 + 205)
+    assert len(tr.active()) == 1
+    tr.update(T0 + 310, {"cpu": 2}, {})  # data is back and still red
+    _run(tr, 300, {"cpu": 2}, start=T0 + 315)
     assert len(tr.active()) == 1
 
 
@@ -111,13 +114,74 @@ def test_clear_after_gap_needs_full_120s():
     tr = _tr()
     _run(tr, 200, {"cpu": 2})
     _run(tr, 100, {"cpu": 0}, start=T0 + 205)  # clear timer running (100 s)
-    _run(tr, 300, {"cpu": None}, start=T0 + 310)
-    tr.update(T0 + 620, {"cpu": 0}, {})
+    _run(tr, 100, {"cpu": None}, start=T0 + 310)  # a gap: the timer restarts
+    tr.update(T0 + 415, {"cpu": 0}, {})
     assert len(tr.active()) == 1
-    tr.update(T0 + 735, {"cpu": 0}, {})
+    tr.update(T0 + 530, {"cpu": 0}, {})
     assert len(tr.active()) == 1
-    tr.update(T0 + 740, {"cpu": 0}, {})
+    tr.update(T0 + 535, {"cpu": 0}, {})
     assert tr.active() == []
+
+
+def test_a_metric_that_stops_reporting_closes_its_problem_at_the_last_seen_time():
+    # the tariff was removed: link_up turns from red into "no data" for good
+    tr = _tr()
+    _run(tr, 200, {"link_up": 2})
+    assert [e["type"] for e in tr.active()] == ["link_saturated"]
+    out = _run(tr, 200, {"link_up": None}, start=T0 + 205)
+    assert tr.active() == []
+    (ev,) = tr.events(0)
+    assert ev["until"] == T0 + 200 and any(e is ev for e in out)
+
+
+def test_a_vanished_key_closes_its_problem_too():
+    tr = _tr()
+    _run(tr, 200, {"temp:wifi5": 2})
+    assert len(tr.active()) == 1
+    _run(tr, 130, {"cpu": 0}, start=T0 + 205)
+    assert tr.active() == []
+    assert tr.events(0)[0]["until"] == T0 + 200
+
+
+def test_restored_open_problem_without_a_live_metric_closes_after_the_hold():
+    stored = {"id": "link_saturated-1-1", "type": "link_saturated", "at": T0 - 4000, "until": None,
+              "severity": "problem", "title": "Канал забит", "detail": "", "key": "link_up"}
+    tr = ProblemTracker(lambda: T0, events=[stored])
+    _run(tr, 100, {"cpu": 0})
+    assert len(tr.active()) == 1
+    _run(tr, 40, {"cpu": 0}, start=T0 + 105)
+    assert tr.active() == []
+    assert tr.events(0)[0]["until"] == T0  # first seen as missing
+
+
+def test_close_never_ends_before_the_start_on_a_backward_clock():
+    tr = _tr()
+    ev = tr.emit("dns_failed", T0)
+    tr.close("dns_failed", T0 - 500)
+    assert ev["until"] == T0
+
+
+def test_a_repeat_of_a_point_event_within_a_minute_is_one_event():
+    tr = _tr()
+    tr.emit("internet_restored", T0)
+    tr.emit("internet_restored", T0 + 30)
+    assert len(tr.events(0)) == 1
+    tr.emit("internet_restored", T0 + 400)
+    assert len(tr.events(0)) == 2
+
+
+def test_journal_is_capped_and_keeps_open_events():
+    from services.system_resources_history.problems import MAX_EVENTS
+
+    tr = _tr()
+    tr.emit("dns_failed", T0 - 1)  # open the whole time
+    for i in range(MAX_EVENTS + 200):
+        tr.emit("internet_restored", T0 + 100 * i)
+    events = tr.events(0)
+    assert len(events) <= MAX_EVENTS
+    assert any(e["type"] == "dns_failed" and e["until"] is None for e in events)
+    newest = max(e["at"] for e in events)
+    assert newest == T0 + 100 * (MAX_EVENTS + 199)  # the oldest went, not the newest
 
 
 def test_red_gap_red_restarts_run():

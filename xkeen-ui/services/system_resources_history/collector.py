@@ -42,6 +42,7 @@ STEP_S = 5
 MID_EVERY = 6  # ticks: 30 s
 SLOW_EVERY = 12  # ticks: 60 s
 CLOCK_JUMP_FORWARD_S = 3600  # two ticks this far apart: the clock was set, not the panel asleep
+FAILOVER_HOLD_S = 60  # the route must stay on the reserve this long to count as a failover
 MAX_RATE_DT_S = 6 * STEP_S  # a longer gap between counter reads is not a rate
 TMP_SAVE_EVERY_S = 300
 FLASH_SAVE_EVERY_S = 21600
@@ -181,6 +182,7 @@ class Collector:
         for name in BASE_METRICS:
             self._store.add_metric(name)
         self._tracker = ProblemTracker(self._clock, events=events)
+        self._failover_pending: tuple[str, float] | None = None
         self._boot_event: dict | None = None
         self._last_tick_ts = now
         if self._uptime_s is not None:
@@ -323,11 +325,21 @@ class Collector:
         if current is not None and current.get("key") != matched:
             self._tracker.close("wan_failover", now, current.get("key"))
             current = None
-        if matched == self._original or current is not None:
+        if matched == self._original:
+            self._failover_pending = None
             return
+        if current is not None:
+            return
+        pending = self._failover_pending
+        if pending is None or pending[0] != matched:  # a switch must hold before it is news
+            self._failover_pending = (matched, now)
+            return
+        if now - pending[1] < FAILOVER_HOLD_S:
+            return
+        self._failover_pending = None
         label = next((c["label"] for c in self._connections if c["id"] == matched), matched)
         self._tracker.emit(
-            "wan_failover", now, title=f"Интернет переключился на резервное подключение {label}", key=matched
+            "wan_failover", pending[1], title=f"Интернет переключился на резервное подключение {label}", key=matched
         )
 
     def _zone_of(self, metric: str, value: float | None, kinds: dict[str, str]) -> int | None:

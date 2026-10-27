@@ -272,17 +272,33 @@ def test_failover_event_and_primary_switch(tmp_path):
     assert c.snapshot()["primary"] == ISP and not c.events(0)
     r.route_iface = "wwan0"
     r.step(c)
+    switched_at = r.now
     assert c.snapshot()["primary"] == USB
+    assert not c.events(0)  # a switch has to hold for a minute before it is an event
+    r.step(c, 12)
     (event,) = c.events(0)
     assert event["type"] == "wan_failover" and event["until"] is None
+    assert event["at"] == switched_at
     assert event["title"] == "Интернет переключился на резервное подключение Билайн LTE"
     r.step(c, 5)
     r.route_iface = "eth3"
     r.step(c)
     assert c.snapshot()["primary"] == ISP
     (event,) = c.events(0)
-    assert event["until"] is not None and event["until"] - event["at"] == pytest.approx(30.0)
+    assert event["until"] is not None and event["until"] - event["at"] == pytest.approx(90.0)
     assert not [p for p in c.snapshot()["problems"] if p["type"] == "wan_failover"]
+
+
+def test_a_flapping_route_makes_no_failover_events(tmp_path):
+    r = FakeRouter(with_usb=True)
+    c = make(tmp_path, r)
+    r.step(c, 3)
+    for _ in range(10):
+        r.route_iface = "wwan0"
+        r.step(c, 4)  # 20 s on the reserve
+        r.route_iface = "eth3"
+        r.step(c, 4)
+    assert c.events(0) == []
 
 
 def test_no_default_route_keeps_state(tmp_path):
