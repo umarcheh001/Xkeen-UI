@@ -3,6 +3,7 @@
 // --op-* variables of the panel, which the shadow host inherits from <body>.
 
 import { CHART_CSS } from "./chart_css.js";
+import { TOOLS_CSS } from "./tools_css.js";
 
 export const VIEW_CSS = `
 :host { display: block; min-width: 0; }
@@ -165,4 +166,4 @@ a, .xkm-a { color: var(--op-accent-hover, var(--op-accent)); cursor: pointer; te
   .hw-res.two { grid-template-columns: 1fr; }
   .hw-pop { left: 10%; }
 }
-` + CHART_CSS;
+` + CHART_CSS + TOOLS_CSS;

@@ -143,10 +143,10 @@ function history(range, { links = [LINK_ISP], over = {}, since = null } = {}) {
 }
 
 // Requests the window makes, recorded by the helper below.
-const api = { summary: 0, hardware: 0, history: [], patches: [] };
+const api = { summary: 0, hardware: 0, history: [], patches: [], tools: [] };
 
-async function openDashboard(page, { sum = summary(), hw = hardware(), width = 1600, hist = range => history(range), clock = false, patch = null } = {}) {
-  api.summary = 0; api.hardware = 0; api.history = []; api.patches = [];
+async function openDashboard(page, { sum = summary(), hw = hardware(), width = 1600, hist = range => history(range), clock = false, patch = null, tools = {} } = {}) {
+  api.summary = 0; api.hardware = 0; api.history = []; api.patches = []; api.tools = [];
   if (clock) await page.clock.install();
   await page.setViewportSize({ width, height: 1000 });
   await page.route('**/api/system/resources', route => route.fulfill({ json: legacyResources() }));
@@ -158,7 +158,17 @@ async function openDashboard(page, { sum = summary(), hw = hardware(), width = 1
     const data = hist(range);
     route.fulfill(data ? { json: data } : { status: 503, json: { ok: false } });
   });
-  await page.route('**/api/system/events*', route => route.fulfill({ json: { ok: true, events: [], active: [] } }));
+  // the tool tabs: every request is recorded; a key set to null answers 503
+  const serve = (key, fallback) => route => {
+    api.tools.push(route.request().url());
+    const body = key in tools ? tools[key] : fallback;
+    route.fulfill(body ? { json: body } : { status: 503, json: { ok: false } });
+  };
+  await page.route('**/api/system/events*', serve('events', { ok: true, events: [], active: [] }));
+  await page.route('**/api/system/router/clients*', serve('clients', { available: false, count: 0, items: [], top: [] }));
+  await page.route('**/api/system/router/channel-check*', serve('channel', { available: false, state: 'unavailable', error: 'нет ping' }));
+  await page.route('**/api/system/router/lte', serve('lte', { available: false, count: 0, items: [] }));
+  await page.route('**/api/system/processes*', serve('processes', { available: false, count: 0, items: [] }));
   await page.route('**/api/ui-settings', async route => {
     if (route.request().method() !== 'PATCH') { await route.fallback(); return; }
     const body = route.request().postDataJSON();
@@ -911,4 +921,387 @@ test('phone draws half as many columns', async ({ page }) => {
   });
   expect(scroll.body).toBeLessThanOrEqual(1);
   expect(scroll.doc).toBeLessThanOrEqual(1);
+});
+
+// ---- tool tabs (devices, connection check, interfaces, processes, modems, events) -------------
+// Every tab loads on its first show; "ping" runs only on its button.
+
+const nowS = () => Math.floor(Date.now() / 1000);
+
+const device = (i) => ({
+  name: `Устройство ${i}`, mac: `AA:BB:CC:00:${String(Math.floor(i / 256)).padStart(2, '0')}:${(i % 256).toString(16).padStart(2, '0')}`,
+  ip: `192.168.${Math.floor(i / 250)}.${(i % 250) + 1}`, interface: i % 3 ? 'WifiMaster1/AccessPoint0' : 'GigabitEthernet0/Vlan1',
+  rssi: i % 3 ? -50 - (i % 30) : null, rx_rate: 866e6, tx_rate: 433e6, received_bytes: 1, sent_bytes: 1, traffic_bytes: (100000 - i) * 1e6, online: true,
+});
+
+function clientsFixture(count) {
+  const items = Array.from({ length: count }, (_, i) => device(i + 1));
+  return { available: true, sampled_at: TS, count, items, top: items.slice(0, 5), wifi: [], truncated: false };
+}
+
+const hop = (number, address, latency) => ({ number, responded: address != null, address: address || '', latency_ms: latency });
+
+const channelFixture = () => ({
+  available: true, target: '1.1.1.1', sampled_at: TS, sent: 10, received: 10, loss_percent: 0, latency_ms: 18, jitter_ms: 2.1, state: 'good',
+  trace: '1  192.168.1.1  0.4 ms\n2  10.0.0.1  3 ms', trace_state: 'partial', trace_summary: 'Маршрут получен частично', trace_note: 'Ответили 5 из 6 узлов.',
+  trace_hops: [hop(1, '192.168.1.1', 0.4), hop(2, '10.0.0.1', 3), hop(3, null, null), hop(4, '185.1.2.3', 9), hop(5, '172.70.4.1', 41), hop(6, '1.1.1.1', 18)],
+});
+
+const IMEI = '356938035643809';
+
+const carrier = (band, bandwidth, earfcn, pci) => ({ technology: 'LTE', band, bandwidth, earfcn, phy_cell_id: pci, downlink_frequency: null, uplink_frequency: null });
+
+const modemMegafon = () => ({
+  id: 'UsbQmi0', name: 'MegaFon', operator: 'MegaFon', technology: 'LTE-A', model: 'Quectel EG18-EA', connection_state: 'connected', connected: true, default_route: true,
+  address: '10.120.4.17', uptime: 11520, band: '3', bandwidth: 20, rsrp: -88, rsrq: -9, cinr: 17, rssi: -61, imei: IMEI, sim: 'готова', apn: 'internet', roaming: false,
+  base_station: '', enb_id: '123456', sector_id: '2', tac: '7710', distance: 1200, firmware: 'EG18EAPAR03A08M4G',
+  carriers: [carrier('3', 20, 1602, '241'), carrier('7', 20, 3048, '241'), carrier('20', 10, 6300, '118')],
+});
+
+const lteFixture = (items = [modemMegafon()]) => ({ available: items.length > 0, sampled_at: TS, count: items.length, items });
+
+const processesFixture = () => ({
+  available: true, sampled_at: TS, count: 3, items: [
+    { pid: 2214, name: 'xray', service: '', state: 'S', cpu_percent: 9.2, memory_bytes: 84 * MB, threads: 12 },
+    { pid: 412, name: 'ndm', service: '', state: 'S', cpu_percent: 3.1, memory_bytes: 41 * MB, threads: 9 },
+    { pid: 3381, name: 'python3', service: '', state: 'S', cpu_percent: 1.4, memory_bytes: 120 * MB, threads: 6 },
+  ],
+});
+
+const ifaceItem = (name, kind, online, extra = {}) => ({
+  name, description: '', kind, online, state: online ? 'up' : 'down', address: '', default_gateway: false, received_bytes: 9.1 * 1024 ** 3, sent_bytes: 1.2 * 1024 ** 3,
+  receive_bits_per_second: 5.6e6, send_bits_per_second: 0.8e6, receive_errors: 0, send_errors: 0, receive_dropped: 0, send_dropped: 0, ...extra,
+});
+
+function eventsFixture() {
+  const now = nowS();
+  return {
+    ok: true,
+    events: [
+      { id: 'cpu_overload-1', type: 'cpu_overload', at: now - 3000, until: now - 2760, severity: 'problem', title: 'Процессор перегружен', detail: 'Пик 88 %', key: 'cpu' },
+      { id: 'internet_lost-1', type: 'internet_lost', at: now - 1200, until: null, severity: 'problem', title: 'Связь с интернетом потеряна', detail: 'Шлюз провайдера не отвечал', key: '' },
+      { id: 'dns_failed-1', type: 'dns_failed', at: now - 900, until: now - 400, severity: 'problem', title: 'Не отвечает DNS', detail: '', key: '' },
+      { id: 'internet_restored-1', type: 'internet_restored', at: now - 5000, until: now - 5000, severity: 'info', title: 'Связь с интернетом восстановлена', detail: '', key: '' },
+      { id: 'port_slow-1', type: 'port_slow', at: now - 7200, until: now - 3600, severity: 'warning', title: 'Порт 2 работает на 100 Мбит/с', detail: '', key: '2' },
+    ],
+    active: [],
+  };
+}
+
+const problemItem = (type, title) => ({ id: `${type}-1`, type, at: nowS() - 600, until: null, severity: 'problem', title, detail: '', key: '' });
+
+// the summary of a router with a mobile modem connection; `extra` adds ordinary interfaces
+function withModems(over = {}) {
+  const base = summary();
+  return summary({
+    links: [LINK_ISP, LINK_LTE],
+    router: { ...base.router, interfaces: { available: true, count: 3, items: [ifaceItem('GigabitEthernet1', 'wan', true, { description: 'Интернет (WAN)', address: '192.0.2.1' }), ifaceItem('UsbQmi0', 'wan', true), ifaceItem('Bridge0', 'lan', true, { address: '192.168.1.1' })] } },
+    ...over,
+  });
+}
+
+const toolRequests = () => api.tools.map(url => new URL(url, 'http://x').pathname);
+const tab = (view, id) => view.locator(`[data-tab="${id}"]`);
+const pane = (view, id) => view.locator(`.xkt-panel[data-panel="${id}"]`);
+
+test('tabs load lazily', async ({ page }) => {
+  const view = await openDashboard(page, { sum: withModems(), tools: { clients: clientsFixture(8), lte: lteFixture(), processes: processesFixture(), events: eventsFixture(), channel: channelFixture() } });
+  await expect(tab(view, 'modems')).toBeVisible();
+  await page.waitForTimeout(400);
+  // the window is open and its own data is loaded, no tool was asked for anything
+  expect(toolRequests()).toEqual([]);
+  await expect(view.locator('.xkt-tab[aria-selected="true"]')).toHaveCount(0);
+  await tab(view, 'devices').click();
+  await expect(view.locator('.xkt-row')).toHaveCount(5);
+  expect(toolRequests()).toEqual(['/api/system/router/clients']);
+  // the connection check starts only on its button, not by showing the tab
+  await tab(view, 'ping').click();
+  await expect(view.locator('[data-act="run"]')).toBeVisible();
+  await page.waitForTimeout(200);
+  expect(toolRequests()).toEqual(['/api/system/router/clients']);
+  await view.locator('[data-act="run"]').click();
+  await expect(view.locator('[data-tile="verdict"]')).toBeVisible();
+  expect(toolRequests()).toEqual(['/api/system/router/clients', '/api/system/router/channel-check']);
+  expect(api.tools[1]).toContain('target=1.1.1.1');
+  await tab(view, 'procs').click();
+  await expect(view.locator('.xkt-pr-cols.xkt-row')).toHaveCount(3);
+  await tab(view, 'modems').click();
+  await expect(view.locator('.xkt-modem')).toHaveCount(1);
+  await tab(view, 'events').click();
+  await expect(view.locator('.xkt-ev')).toHaveCount(5);
+  // the interfaces list is a part of the summary: no request of its own
+  await tab(view, 'ifaces').click();
+  await expect(view.locator('[data-iface="GigabitEthernet1"]')).toBeVisible();
+  expect(toolRequests()).toEqual(['/api/system/router/clients', '/api/system/router/channel-check', '/api/system/processes', '/api/system/router/lte', '/api/system/events']);
+  // a shown tab is not loaded again by showing it again
+  await tab(view, 'devices').click();
+  await tab(view, 'procs').click();
+  expect(toolRequests()).toHaveLength(5);
+});
+
+test('closing the window forgets the tools: a reopened window is lazy again', async ({ page }) => {
+  const view = await openDashboard(page, { sum: withModems(), tools: { clients: clientsFixture(8) } });
+  await tab(view, 'devices').click();
+  await expect(view.locator('.xkt-row')).toHaveCount(5);
+  await page.locator('#xk-resource-dashboard-close').click();
+  await expect(page.locator('#xk-resource-dashboard-modal')).toBeHidden();
+  const before = api.tools.length;
+  await page.locator('#xk-resource-monitor').evaluate(button => button.click());
+  await expect(view.locator('.xkm-card').first()).toBeVisible();
+  await expect(view.locator('.xkt-tab[aria-selected="true"]')).toHaveCount(0);
+  await page.waitForTimeout(300);
+  expect(api.tools.length).toBe(before);
+});
+
+test('devices: five most active, all of them on demand', async ({ page }) => {
+  const view = await openDashboard(page, { tools: { clients: clientsFixture(14) } });
+  await tab(view, 'devices').click();
+  await expect(view.locator('.xkt-row')).toHaveCount(5);
+  await expect(pane(view, 'devices').locator('.xkt-lead')).toContainText('Сейчас в сети 14 устройств');
+  await expect(pane(view, 'devices').locator('.xkt-lead')).toContainText('показаны 5 самых активных');
+  await expect(view.locator('.xkt-row').first()).toContainText('Устройство 1');
+  await expect(view.locator('.xkt-row').first()).toContainText('Wi‑Fi');
+  await view.locator('[data-act="all"]').click();
+  await expect(view.locator('.xkt-row')).toHaveCount(14);
+  expect(await view.locator('.xkv').count()).toBe(0);
+});
+
+test('500 devices virtualized', async ({ page }) => {
+  const view = await openDashboard(page, { tools: { clients: clientsFixture(500) } });
+  await tab(view, 'devices').click();
+  await expect(view.locator('.xkt-row')).toHaveCount(5);
+  await view.locator('[data-act="all"]').click();
+  await expect(view.locator('.xkv')).toBeVisible();
+  const drawn = await view.locator('.xkv-row').count();
+  expect(drawn).toBeGreaterThan(0);
+  expect(drawn).toBeLessThanOrEqual(60);
+  await view.locator('.xkv').evaluate(box => { box.scrollTop = box.scrollHeight; });
+  await expect(view.locator('.xkv-row', { hasText: 'Устройство 500' })).toBeVisible();
+  expect(await view.locator('.xkv-row').count()).toBeLessThanOrEqual(60);
+  // the list keeps its place in the middle, too
+  await view.locator('.xkv').evaluate(box => { box.scrollTop = 250 * 52; });
+  await expect(view.locator('.xkv-row', { hasText: 'Устройство 251' })).toBeAttached();
+  expect(await view.locator('.xkv-row').count()).toBeLessThanOrEqual(60);
+});
+
+test('modems render carriers', async ({ page }) => {
+  const view = await openDashboard(page, { sum: withModems(), tools: { lte: lteFixture() } });
+  await tab(view, 'modems').click();
+  const card = view.locator('.xkt-modem[data-modem-id="UsbQmi0"]');
+  await expect(card).toBeVisible();
+  await expect(card.locator('.xkt-carrier')).toHaveCount(3);
+  await expect(card.locator('.xkt-agg')).toHaveText('агрегация 3 частот · 50 МГц');
+  await expect(card.locator('.xkt-carrier').nth(0)).toContainText('Основная');
+  await expect(card.locator('.xkt-carrier').nth(0)).toContainText('B3 · 1800 МГц');
+  await expect(card.locator('.xkt-carrier').nth(0)).toContainText('EARFCN 1602 · PCI 241');
+  await expect(card.locator('.xkt-carrier').nth(2)).toContainText('Доп. 2');
+  // four signal gauges with a verbal rating
+  await expect(card.locator('.xkt-sig-tile')).toHaveCount(4);
+  await expect(card.locator('[data-signal="rsrp"]')).toContainText('−88 дБм');
+  await expect(card.locator('[data-signal="rsrp"]')).toContainText('отличный');
+  await expect(card.locator('[data-signal="cinr"]')).toContainText('хорошо');
+  // the details in four columns
+  const cells = card.locator('.xkt-info-c');
+  await expect(cells).toHaveCount(8);
+  const tops = [];
+  for (let i = 0; i < 8; i += 1) tops.push(Math.round((await rect(cells.nth(i))).top));
+  expect(new Set(tops.slice(0, 4)).size).toBe(1);
+  expect(new Set(tops.slice(4)).size).toBe(1);
+  expect(tops[4]).toBeGreaterThan(tops[0]);
+  await expect(cells.nth(0)).toContainText('eNB 123456, сектор 2');
+  await expect(cells.nth(2)).toContainText('≈ 1,2 км');
+  await expect(card).toContainText('основной канал');
+  await expect(card).toContainText('в сети 3 ч 12 мин');
+  // the IMEI is masked everywhere in the page
+  await expect(card.locator('.xkt-info-c', { hasText: 'IMEI' })).toContainText('•••• •••• 3809');
+  const html = await view.evaluate(host => host.shadowRoot.innerHTML);
+  expect(html).not.toContain(IMEI);
+  expect(html).not.toContain('356938035');
+  // no restart button
+  await expect(view.getByRole('button', { name: /Перезапустить/ })).toHaveCount(0);
+  await expect(view.locator('.xkt-note')).toContainText('Перезапуск из панели отключён');
+});
+
+test('modems tab hidden without modems', async ({ page }) => {
+  const view = await openDashboard(page, { tools: { lte: lteFixture() } });
+  await expect(tab(view, 'devices')).toBeVisible();
+  await expect(tab(view, 'modems')).toBeHidden();
+  expect(toolRequests()).toEqual([]);
+});
+
+test('ping layout full width', async ({ page }) => {
+  for (const width of [1600, 1024, 390]) {
+    const view = await openDashboard(page, { width, tools: { channel: channelFixture() } });
+    await tab(view, 'ping').click();
+    await view.locator('[data-act="run"]').click();
+    await expect(view.locator('[data-tile="verdict"]')).toBeVisible();
+    await view.locator('[data-tile="verdict"]').scrollIntoViewIfNeeded();
+    const area = await rect(view.locator('.xkt-panel[data-panel="ping"]'));
+    const tiles = view.locator('.xkt-tiles > .xkt-tile');
+    await expect(tiles).toHaveCount(4);
+    if (width >= 1100) {
+      const verdict = await rect(view.locator('[data-tile="verdict"]'));
+      expect(Math.abs(area.right - 14 - verdict.right)).toBeLessThanOrEqual(1);
+      const widths = [];
+      const tops = [];
+      for (let i = 0; i < 4; i += 1) { const r = await rect(tiles.nth(i)); widths.push(r.width); tops.push(Math.round(r.top)); }
+      for (const w of widths) expect(Math.abs(w - widths[0])).toBeLessThanOrEqual(1);
+      expect(new Set(tops).size).toBe(1);
+      // the route spans the area: first node near the left edge, last near the right edge
+      const hops = view.locator('.xkt-hop');
+      await expect(hops).toHaveCount(6);
+      const first = await rect(hops.first());
+      const last = await rect(hops.last());
+      expect(Math.abs(first.left - (area.left + 14))).toBeLessThanOrEqual(1);
+      expect(Math.abs(area.right - 14 - last.right)).toBeLessThanOrEqual(1);
+    } else {
+      const verdict = await rect(view.locator('[data-tile="verdict"]'));
+      expect(verdict.right).toBeLessThanOrEqual(area.right - 14 + 1);
+    }
+    await expect(view.locator('.xkt-route-h')).toContainText('Маршрут до 1.1.1.1 · 6 узлов');
+    await expect(view.locator('.xkt-route-h')).toContainText('самый медленный участок — между узлами 4 и 5 (+32 мс)');
+    await expect(view.locator('.xkt-hop.silent')).toContainText('не отвечает');
+    await expect(view.locator('.xkt-hop.silent')).toContainText('это нормально');
+    await expect(view.locator('[data-tile="verdict"]')).toContainText('Связь хорошая');
+    const scroll = await page.evaluate(() => {
+      const body = document.querySelector('#xk-resource-dashboard-modal .modal-body');
+      return { body: body.scrollWidth - body.clientWidth, doc: document.documentElement.scrollWidth - innerWidth };
+    });
+    expect(scroll.body).toBeLessThanOrEqual(1);
+    expect(scroll.doc).toBeLessThanOrEqual(1);
+  }
+});
+
+test('ping: a failed check shows a message and the button works again', async ({ page }) => {
+  const view = await openDashboard(page, { tools: { channel: null } });
+  await tab(view, 'ping').click();
+  await view.locator('.xkt-quick', { hasText: '8.8.8.8' }).click();
+  await expect(view.locator('[data-role="target"]')).toHaveValue('8.8.8.8');
+  await view.locator('[data-act="run"]').click();
+  await expect(view.locator('[data-role="status"]')).toContainText('Проверка канала не выполнена');
+  await expect(view.locator('[data-act="run"]')).toBeEnabled();
+  expect(api.tools[0]).toContain('target=8.8.8.8');
+});
+
+test('events filter and counter', async ({ page }) => {
+  const sum = summary({ status: { tone: 'problem', problems: [problemItem('internet_lost', 'Связь с интернетом потеряна'), problemItem('cpu_overload', 'Процессор перегружен')] } });
+  const view = await openDashboard(page, { sum, tools: { events: eventsFixture() } });
+  // the counter is the number of active problems, known from the summary: no request for it
+  await expect(tab(view, 'events').locator('.xkt-count')).toHaveText('2');
+  expect(toolRequests()).toEqual([]);
+  await tab(view, 'events').click();
+  await expect(view.locator('.xkt-ev')).toHaveCount(5);
+  expect(api.tools[0]).toMatch(/\/api\/system\/events\?since=\d+/);
+  await expect(view.locator('.xkt-ev').first()).toContainText('Не отвечает DNS');
+  await expect(view.locator('.xkt-ev[data-type="cpu_overload"]')).toContainText('длилось 4 мин');
+  await expect(view.locator('.xkt-ev[data-type="internet_lost"]')).toContainText('идёт 20 мин');
+  await expect(view.locator('.xkt-ev[data-type="internet_restored"] .xkt-ev-l')).toHaveText('');
+  await pane(view, 'events').locator('[data-filter="problems"]').click();
+  await expect(view.locator('.xkt-ev')).toHaveCount(3);
+  await expect(view.locator('.xkt-ev[data-severity="info"]')).toHaveCount(0);
+  await expect(view.locator('.xkt-ev[data-severity="warning"]')).toHaveCount(0);
+  await expect(pane(view, 'events').locator('[data-filter="problems"]')).toHaveAttribute('aria-pressed', 'true');
+  await pane(view, 'events').locator('[data-filter="all"]').click();
+  await expect(view.locator('.xkt-ev')).toHaveCount(5);
+});
+
+test('events counter is hidden without active problems', async ({ page }) => {
+  const view = await openDashboard(page);
+  await expect(tab(view, 'events').locator('.xkt-count')).toBeHidden();
+});
+
+test('events: the DNS link of the connection chain opens the journal with DNS failures only', async ({ page }) => {
+  const base = summary();
+  const sum = summary({ router: { ...base.router, internet: { ...base.router.internet, dns: false } } });
+  const view = await openDashboard(page, { sum, tools: { events: eventsFixture() } });
+  await view.locator('[data-node="dns"]').click();
+  await view.locator('[data-link="dns-log"]').click();
+  await expect(tab(view, 'events')).toHaveAttribute('aria-selected', 'true');
+  await expect(view.locator('.xkt-ev')).toHaveCount(1);
+  await expect(view.locator('.xkt-ev')).toContainText('Не отвечает DNS');
+  await expect(view.locator('.xkt-chip')).toContainText('Только сбои DNS');
+  await view.locator('[data-act="clear-only"]').click();
+  await expect(view.locator('.xkt-ev')).toHaveCount(5);
+});
+
+test('interfaces: human names, filter, errors', async ({ page }) => {
+  const base = summary();
+  const items = [
+    ifaceItem('GigabitEthernet1', 'wan', true, { description: 'Интернет (WAN)', address: '192.0.2.1' }),
+    ifaceItem('Bridge0', 'lan', true, { address: '192.168.1.1', receive_dropped: 12 }),
+    ifaceItem('WifiMaster0/AccessPoint1', 'wifi', false),
+  ];
+  const sum = summary({ router: { ...base.router, interfaces: { available: true, count: 3, items } } });
+  const view = await openDashboard(page, { sum });
+  await tab(view, 'ifaces').click();
+  await expect(pane(view, 'ifaces').locator('.xkt-row')).toHaveCount(2);
+  await expect(pane(view, 'ifaces').locator('.xkt-lead')).toContainText('Показаны активные · 2 из 3');
+  await expect(view.locator('[data-iface="GigabitEthernet1"]')).toContainText('Интернет (WAN)');
+  await expect(view.locator('[data-iface="GigabitEthernet1"]')).toContainText('5,6 / 0,8 Мбит/с');
+  await expect(view.locator('[data-iface="GigabitEthernet1"]')).toContainText('9,1 / 1,2 ГБ');
+  await expect(view.locator('[data-iface="Bridge0"]')).toContainText('Домашняя сеть');
+  await expect(view.locator('[data-iface="Bridge0"]')).toContainText('12 потерь');
+  await pane(view, 'ifaces').locator('[data-filter="all"]').click();
+  await expect(view.locator('.xkt-row')).toHaveCount(3);
+  await expect(view.locator('[data-iface="WifiMaster0/AccessPoint1"]')).toContainText('отключён');
+});
+
+test('processes: notes, bars, sorting', async ({ page }) => {
+  const view = await openDashboard(page, { tools: { processes: processesFixture() } });
+  await tab(view, 'procs').click();
+  await expect(view.locator('.xkt-row')).toHaveCount(3);
+  await expect(view.locator('.xkt-row').first()).toContainText('xray');
+  await expect(view.locator('.xkt-row').first()).toContainText('ядро прокси Xray');
+  await expect(view.locator('.xkt-row').first()).toContainText('9,2 %');
+  await view.locator('[data-sort="memory"]').click();
+  await expect(view.locator('.xkt-row').first()).toContainText('python3');
+  await expect(pane(view, 'procs').locator('.xkt-lead')).toContainText('по нагрузке на память');
+});
+
+test('server strings in the tabs are escaped', async ({ page }) => {
+  const hostile = '<img src=x onerror="window.__xss=1">';
+  const clients = clientsFixture(3);
+  clients.items[0].name = hostile;
+  clients.top = clients.items.slice(0, 5);
+  const lte = lteFixture([{ ...modemMegafon(), operator: hostile, apn: hostile }]);
+  const events = eventsFixture();
+  events.events[0].title = hostile;
+  const view = await openDashboard(page, { sum: withModems(), tools: { clients, lte, events } });
+  for (const id of ['devices', 'modems', 'events']) await tab(view, id).click();
+  await expect(view.locator('.xkt-ev').first()).toBeVisible();
+  expect(await page.evaluate(() => window.__xss)).toBeUndefined();
+  expect(await view.locator('img').count()).toBe(0);
+  await expect(view.locator('.xkt-modem')).toContainText(hostile);
+});
+
+test('every tab fits the width at 1024 and 390 without a horizontal scroll', async ({ page }) => {
+  for (const width of [1024, 390]) {
+    const events = eventsFixture();
+    const view = await openDashboard(page, { width, sum: withModems(), tools: { clients: clientsFixture(60), lte: lteFixture([modemMegafon(), { ...modemMegafon(), id: 'UsbQmi1', default_route: false, carriers: [carrier('7', 15, 3300, '77')] }]), processes: processesFixture(), events, channel: channelFixture() } });
+    for (const id of ['devices', 'ping', 'ifaces', 'procs', 'modems', 'events']) {
+      await tab(view, id).click();
+      if (id === 'ping') await view.locator('[data-act="run"]').click();
+      if (id === 'devices') await view.locator('.xkt-row').first().waitFor();
+      if (id === 'modems') await expect(view.locator('.xkt-modem')).toHaveCount(2);
+      if (id === 'events') await expect(view.locator('.xkt-ev').first()).toBeVisible();
+      const area = await rect(view.locator('.xkt-root'));
+      const overflow = await view.locator(`.xkt-panel[data-panel="${id}"]`).evaluate(panel => {
+        const box = panel.getBoundingClientRect();
+        let worst = 0;
+        for (const el of panel.querySelectorAll('*')) {
+          const r = el.getBoundingClientRect();
+          if (r.width > 0 && r.right > box.right + 1) worst = Math.max(worst, r.right - box.right);
+        }
+        return worst;
+      });
+      expect(overflow, `${id} at ${width}`).toBeLessThanOrEqual(1);
+      expect(area.right).toBeLessThanOrEqual(width);
+      const scroll = await page.evaluate(() => {
+        const body = document.querySelector('#xk-resource-dashboard-modal .modal-body');
+        return { body: body.scrollWidth - body.clientWidth, doc: document.documentElement.scrollWidth - innerWidth };
+      });
+      expect(scroll.body, `${id} at ${width}`).toBeLessThanOrEqual(1);
+      expect(scroll.doc, `${id} at ${width}`).toBeLessThanOrEqual(1);
+    }
+  }
 });

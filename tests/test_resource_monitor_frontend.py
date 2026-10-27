@@ -27,26 +27,7 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
         "xk-resource-dashboard-view",
         "xk-resource-more",
         "xk-resource-more-menu",
-        "xk-clients-show-all",
         "xk-resource-dashboard-refresh",
-        "xk-interface-rows",
-        "xk-interface-panel",
-        "xk-process-panel",
-        "xk-process-action",
-        "xk-clients-panel",
-        "xk-clients-action",
-        "xk-client-rows",
-        "xk-channel-panel",
-        "xk-channel-action",
-        "xk-channel-trace",
-        "xk-channel-trace-result",
-        "xk-channel-trace-title",
-        "xk-channel-trace-note",
-        "xk-channel-trace-hops",
-        "xk-lte-panel",
-        "xk-lte-action",
-        "xk-lte-modems",
-        "xk-incidents-list",
         "xk-system-details",
     ):
         assert f'id="{element_id}"' in template
@@ -55,14 +36,12 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
     assert "Графики показывают нагрузку роутера, а причина указана в блоке DNS ниже" not in script
     assert "Графики ниже показывают ресурсы роутера, но не определяют доступность DNS-upstream" not in template
     assert 'xk-collapsible-panel' in template
-    assert 'class="btn-secondary xk-toggle-button" id="xk-channel-trace"' in template
+    # the tool sections moved into the window's shadow root (resource_monitor/tools.js)
+    for gone in ("xk-clients-panel", "xk-channel-panel", "xk-lte-panel", "xk-incidents-list", "xk-interface-panel", "xk-process-panel", "xk-dashboard-tools"):
+        assert f'id="{gone}"' not in template
     for fragment in (
         "setDashboardOpen(true)",
         "receive_bytes_per_second",
-        "PROCESS_ENDPOINT = \"/api/system/processes\"",
-        "CLIENTS_ENDPOINT = \"/api/system/router/clients\"",
-        "LTE_ENDPOINT = \"/api/system/router/lte\"",
-        "CHANNEL_ENDPOINT = \"/api/system/router/channel-check\"",
         "DNS_DIAGNOSTICS_ENDPOINT = \"/api/system/router/dns-diagnostics\"",
         "renderRouterDiagnostics",
         "dns_diagnostics",
@@ -76,15 +55,7 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
         "loadProcesses",
         "loadClients",
         "loadLte",
-        'Array.isArray(payload?.items)',
         "runChannelCheck",
-        "setProcessAction",
-        'setProcessAction("retry", "Повторить")',
-        "activateProcessAction",
-        'interfaceFilter = "active"',
-        'data-interface-filter',
-        'slice(0, 24)',
-        'setPressedGroup',
         'setRefreshBusy',
         'syncCollapsiblePanelState',
         'COLLAPSIBLE_PANEL_SELECTOR = "details.xk-collapsible-panel"',
@@ -92,20 +63,15 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
         'document.addEventListener(\n    "toggle"',
         'mutation.addedNodes.forEach(syncCollapsiblePanels)',
         'observe(document.documentElement, { childList: true, subtree: true })',
-        'aria-pressed',
         'aria-busy',
-        'xk-channel-trace-output',
-        'payload?.trace_summary',
-        'payload?.trace_hops',
         'data-tooltip',
-        'toggleInterfaceErrorDetails',
-        'appendInterfaceErrorCell',
         'xk-resource-interface-chip',
-        "clientsShowAll",
-        "latestClientsPayload",
-        "selectClients",
     ):
         assert fragment in script
+    for name in ("loadProcesses", "loadClients", "loadLte", "runChannelCheck"):
+        assert f"{name}: () => loadDashboardTool(" in script
+    for gone in ("fetch(CLIENTS_ENDPOINT", "async function loadLte", "async function loadProcesses", "renderInterfaces", "renderClients", "renderLte"):
+        assert gone not in script
     assert "Проблема с зашифрованным DNS" in MODEL.read_text(encoding="utf-8")
     # the history, the polling and the charts of the window live in resource_monitor/dashboard.js
     for removed in ("selectHistory", "historyGaps", "drawCharts", "MAX_HISTORY", "rangeMinutes", "CHARTS"):
@@ -150,32 +116,43 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
         assert fragment in css
 
 
+TOOLS = ROOT / "xkeen-ui/static/js/features/resource_monitor"
+
+
 def test_lte_modem_controls_keep_probe_but_explain_reset_is_disabled():
-    script = SCRIPT.read_text(encoding="utf-8")
-    template = TEMPLATE
+    script = (TOOLS / "tool_modems.js").read_text(encoding="utf-8")
     css = CSS.read_text(encoding="utf-8")
 
-    assert 'data-lte-action="probe"' in script
+    assert "data-probe=" in script
     assert "Проверить управление" in script
-    assert "Перезапуск из панели отключён" in template
+    assert "Перезапуск из панели отключён" in script
     assert 'data-lte-action="reset"' not in script
     assert "/reset" not in script
     assert "operationId" not in script
     assert "pollLteOperation" not in script
-    assert "innerHTML" not in script
     assert "body.panel-page .xk-lte-controls" in css
-    assert "body.panel-page .xk-lte-safety-note" in css
-    assert "body.panel-page .xk-lte-control-status" in css
 
 
 def test_lte_modem_mutations_send_the_shared_csrf_header():
-    script = SCRIPT.read_text(encoding="utf-8")
-    request_body = script.split("async function lteControlRequest", 1)[1].split(
-        "async function probeLteModem", 1
-    )[0]
+    request_body = (TOOLS / "tools_net.js").read_text(encoding="utf-8")
 
     assert "coreHttp?.withCSRF" in request_body
     assert 'coreHttp.withCSRF(requestInit, requestInit.method || "GET")' in request_body
     assert 'meta[name="csrf-token"]' in request_body
     assert 'headers.has("X-CSRF-Token")' in request_body
     assert 'headers.set("X-CSRF-Token", token)' in request_body
+    assert 'method: "POST"' in (TOOLS / "tool_modems.js").read_text(encoding="utf-8")
+
+
+def test_tool_tabs_use_the_same_endpoints_and_escape_server_strings():
+    sources = {name: (TOOLS / name).read_text(encoding="utf-8") for name in ("tool_devices.js", "tool_ping.js", "tool_procs.js", "tool_modems.js", "tool_events.js")}
+    assert '"/api/system/router/clients"' in sources["tool_devices.js"]
+    assert '"/api/system/router/channel-check"' in sources["tool_ping.js"]
+    assert '"/api/system/processes"' in sources["tool_procs.js"]
+    assert '"/api/system/router/lte"' in sources["tool_modems.js"]
+    assert '"/api/system/events"' in sources["tool_events.js"]
+    for name, text in sources.items():
+        assert "esc(" in text, name
+    # the IMEI is masked before it reaches the page
+    assert "maskImei(item.imei)" in sources["tool_modems.js"]
+    assert "item.imei}" not in sources["tool_modems.js"]

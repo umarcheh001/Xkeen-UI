@@ -11,6 +11,7 @@ import { buildResourceSnapshot } from "../resource_monitor_model.js";
 import { columnCount, linkOf } from "./chart_data.js";
 import { createChartView } from "./chart_view.js";
 import { mountTariffForm, tariffPeaks } from "./tariff_form.js";
+import { mountTools } from "./tools.js";
 import { mountDashboardView } from "./view.js";
 
 const SUMMARY_ENDPOINT = "/api/system/summary";
@@ -45,6 +46,8 @@ const state = {
 };
 let view = null;
 let chart = null;
+let tools = null;
+let toolListener = null;
 
 const byId = (id) => document.getElementById(id);
 const isHidden = () => document.visibilityState === "hidden" || document.hidden === true;
@@ -71,18 +74,36 @@ function ensureMounted() {
     onMetric: selectMetric,
     onLink: (id) => { state.linkId = id; renderChart(); },
     onTariff: () => void openTariff(),
-    onRetry: () => void refreshDashboard(),
+    onRetry: () => void refreshData(),
     onCell: ({ range, from, to }) => {
       state.highlight = range === "24h" ? null : { from, to };
       selectRange(range, { keepHighlight: true });
     },
   });
+  tools = mountTools(view.toolsHost, { snapshot: toolsSnapshot });
   view.onCardClick(onCardClick);
   view.onLinkClick((name) => {
     if (name === "tariff") void openTariff();
     else byId("xk-resource-dashboard-modal")?.dispatchEvent(new CustomEvent("xk-resource-tool", { bubbles: true, detail: { tool: name } }));
   });
+  if (!toolListener) {
+    toolListener = onToolRequest;
+    byId("xk-resource-dashboard-modal")?.addEventListener("xk-resource-tool", toolListener);
+  }
   return true;
+}
+
+// What the tool tabs need from the summary: connections, interfaces, active problems.
+function toolsSnapshot() {
+  const summary = state.summary;
+  return { router: summary?.router || null, links: summary?.links || [], problems: summary?.status?.problems?.length || 0 };
+}
+
+// The connection chain asks for a tool. The old window had no DNS journal of its own
+// (the guidance lived in sections that are gone), so "dns-log" opens the events tab
+// narrowed to DNS failures.
+function onToolRequest(event) {
+  if (event?.detail?.tool === "dns-log") tools?.show("events", { scroll: true, focus: "dns_failed" });
 }
 
 // ---- state changes -------------------------------------------------------------
@@ -155,6 +176,7 @@ function applySummary(summary) {
   state.okAt = Date.now();
   view.renderSummary(summary);
   view.renderConnection(summary.router);
+  tools?.update();
   paintFreshness();
   syncExport();
 }
@@ -293,9 +315,20 @@ function onVisibilityChange() {
   void Promise.allSettled([loadSummary(), loadHistory()]);
 }
 
-// ---- public ---------------------------------------------------------------------------------
+// Opens a tool tab of the window and loads it again (the entry's old loadProcesses and friends).
+export function loadDashboardTool(tab) {
+  return state.open && tools ? tools.show(tab, { reload: true }) : false;
+}
 
 export async function refreshDashboard() {
+  tools?.refresh();
+  await refreshData();
+}
+
+// ---- public ---------------------------------------------------------------------------------
+
+// The data of the window; the open tool tab is reloaded only by the window's refresh button.
+async function refreshData() {
   if (!state.open || !ensureMounted()) return;
   await Promise.allSettled([loadSummary(), loadHardware(), loadHistory()]);
   chart.showError(historyShown() ? "" : state.history ? HISTORY_ERROR : LOAD_ERROR);
@@ -337,6 +370,7 @@ export function closeDashboard() {
   state.linkId = null;
   state.stale = false;
   chart?.reset();
+  tools?.reset();
   paintFreshness();
 }
 
@@ -355,7 +389,7 @@ async function openTariff() {
   mountTariffForm(chart.formHost, {
     link,
     peaks: day ? tariffPeaks(day, link.id) : null,
-    onSaved: () => void refreshDashboard(),
+    onSaved: () => void refreshData(),
   });
 }
 

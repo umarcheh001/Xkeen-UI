@@ -20,63 +20,6 @@
         <div class="modal-body xk-resource-dashboard-body">
           <div id="xk-resource-dashboard-view"></div>
 
-          <details class="xk-dashboard-section" id="xk-dashboard-tools" open>
-            <summary>Проверки и события <span>Тяжёлые запросы — только по требованию</span></summary>
-          <section class="xk-resource-stage2-grid" aria-label="Расширенная диагностика">
-            <details class="xk-resource-panel xk-stage2-panel xk-collapsible-panel" id="xk-clients-panel">
-              <summary><span><strong>Top‑5 потребителей</strong><small>Клиенты и Wi‑Fi станции · запрос по требованию</small></span><span class="xk-clients-actions"><button type="button" class="btn-secondary xk-stage2-action" id="xk-clients-action" aria-pressed="false" data-tooltip="Загрузить список клиентов через show/ip/hotspot">Загрузить</button><button type="button" class="btn-secondary xk-stage2-action" id="xk-clients-show-all" aria-pressed="false" hidden>Показать всех</button></span></summary>
-              <div class="xk-stage2-content"><div class="xk-stage2-status" id="xk-clients-status">Откройте секцию и загрузите список клиентов.</div><p class="xk-clients-rate-note">Трафик — накопленный объём. RX/TX линка — согласованная скорость Wi‑Fi, не текущее потребление интернета.</p><div class="xk-resource-table-wrap"><table class="xk-resource-table"><thead><tr><th>Клиент</th><th>Трафик</th><th>RX линка</th><th>TX линка</th><th>RSSI</th><th>AP</th></tr></thead><tbody id="xk-client-rows"></tbody></table></div></div>
-            </details>
-            <details class="xk-resource-panel xk-stage2-panel xk-collapsible-panel" id="xk-channel-panel" aria-labelledby="xk-channel-title" open>
-              <summary><span><strong id="xk-channel-title">Проверка канала</strong><small>Ping, jitter, loss; трассировка запускается отдельно</small></span><button type="button" class="btn-secondary xk-stage2-action" id="xk-channel-action" data-tooltip="Проверить задержку и потери до 1.1.1.1">Проверить</button></summary>
-              <div class="xk-channel-controls"><input id="xk-channel-target" value="1.1.1.1" maxlength="253" aria-label="Адрес проверки" title="IP-адрес или имя хоста для ping"><button type="button" class="btn-secondary xk-toggle-button" id="xk-channel-trace" aria-pressed="false" data-tooltip="После ping дополнительно выполнить traceroute">Traceroute</button></div>
-              <div class="xk-stage2-status" id="xk-channel-status">Проверка не запускалась.</div>
-              <section class="xk-channel-trace-result" id="xk-channel-trace-result" aria-live="polite" hidden>
-                <div class="xk-channel-trace-summary">
-                  <span class="xk-channel-trace-icon" aria-hidden="true"></span>
-                  <div><strong id="xk-channel-trace-title">Результат трассировки</strong><span id="xk-channel-trace-note"></span></div>
-                </div>
-                <div class="xk-channel-trace-hops" id="xk-channel-trace-hops" aria-label="Ответившие узлы маршрута" hidden></div>
-                <details class="xk-channel-trace-technical"><summary>Технические детали</summary><pre class="xk-channel-trace" id="xk-channel-trace-output"></pre></details>
-              </section>
-            </details>
-            <details class="xk-resource-panel xk-stage2-panel xk-collapsible-panel" id="xk-lte-panel" open><summary><span><strong>LTE / модемы</strong><small id="xk-lte-summary">Определение при открытии</small></span><button type="button" class="btn-secondary xk-stage2-action" id="xk-lte-action" aria-pressed="false" data-tooltip="Проверить состояние всех LTE-модемов через RCI">Обновить</button></summary><p class="xk-lte-safety-note">Перезапуск из панели отключён: модемами управляет Keenetic.</p><div class="xk-lte-modems" id="xk-lte-modems"><span class="xk-stage2-status">Нажмите «Обновить», чтобы получить данные модемов.</span></div></details>
-            <details class="xk-resource-panel xk-stage2-panel xk-collapsible-panel" id="xk-incidents-panel" open><summary><span><strong>Инциденты</strong><small>Краткая история переходов состояния</small></span></summary><div class="xk-incidents-list" id="xk-incidents-list"><span class="xk-stage2-status">Пока без событий.</span></div></details>
-          </section>
-
-          <details class="xk-resource-panel xk-interface-panel xk-collapsible-panel" id="xk-interface-panel" aria-labelledby="xk-interface-title" open>
-            <summary>
-              <span><strong id="xk-interface-title">Интерфейсы</strong><small id="xk-interface-summary">WAN, LAN, Wi‑Fi и VPN</small></span>
-              <div class="xk-interface-filter" role="group" aria-label="Фильтр интерфейсов">
-                <button type="button" class="btn-secondary is-active" data-interface-filter="active" aria-pressed="true" data-tooltip="Показывать только активные интерфейсы">Активные</button>
-                <button type="button" class="btn-secondary" data-interface-filter="all" aria-pressed="false" data-tooltip="Показывать все интерфейсы, включая неактивные">Все</button>
-              </div>
-            </summary>
-            <div class="xk-resource-table-wrap">
-              <table class="xk-resource-table">
-                <thead><tr><th>Интерфейс</th><th>Состояние</th><th>Адрес</th><th>Приём</th><th>Отдача</th><th>Ошибки / drops</th></tr></thead>
-                <tbody id="xk-interface-rows"><tr><td colspan="6" class="xk-resource-table-empty">Ожидание данных RCI</td></tr></tbody>
-              </table>
-            </div>
-          </details>
-
-          <details class="xk-resource-panel xk-process-panel xk-collapsible-panel" id="xk-process-panel">
-            <summary>
-              <span><strong>Процессы</strong><small>Тяжёлый запрос RCI выполняется только по требованию</small></span>
-              <span class="btn-secondary xk-process-button" id="xk-process-action" role="button" tabindex="0" aria-pressed="false" data-tooltip="Открыть список процессов и загрузить Top CPU/RAM">{{ op_icon('processes') }}<span class="xk-action-label">Показать процессы</span></span>
-            </summary>
-            <div class="xk-process-content">
-              <div class="xk-process-status" id="xk-process-status">Откройте секцию, чтобы загрузить Top CPU и RAM.</div>
-              <div class="xk-resource-table-wrap">
-                <table class="xk-resource-table">
-                  <thead><tr><th>Процесс</th><th>PID</th><th>CPU</th><th>Память</th><th>Потоки</th><th>Состояние</th></tr></thead>
-                  <tbody id="xk-process-rows"></tbody>
-                </table>
-              </div>
-              <button type="button" class="btn-secondary xk-process-button" id="xk-process-refresh" data-tooltip="Повторно запросить список процессов через RCI">{{ op_icon('refresh') }}<span class="xk-action-label">Обновить процессы</span></button>
-            </div>
-          </details>
-
           <details class="xk-resource-details xk-resource-panel xk-collapsible-panel" id="xk-system-details" aria-label="Сведения о системе" open>
             <summary><span><strong>Состояние системы</strong><small>Данные Linux procfs, без внешней телеметрии</small></span></summary>
             <dl>
@@ -87,7 +30,6 @@
               <div><dt>Сеть за время работы</dt><dd id="xk-resource-detail-network">—</dd></div>
               <div class="xk-resource-detail-wide"><dt>Интерфейсы</dt><dd id="xk-resource-detail-interfaces">—</dd></div>
             </dl>
-          </details>
           </details>
         </div>
       </div>
