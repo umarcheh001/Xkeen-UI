@@ -790,6 +790,44 @@ test('initial fetch failure shows a message with a retry button', async ({ page 
   await expect(view.locator('.xkm-card').first()).toBeVisible();
 });
 
+test('reopening starts from the default 1 h, the old chart is cleared on close', async ({ page }) => {
+  const view = await openDashboard(page);
+  await view.locator('.xkc-b[data-range="7d"]').click();
+  await expect(view.locator('.xkc-canvas')).toHaveAttribute('data-kind', 'grid7');
+  await page.locator('#xk-resource-dashboard-close').click();
+  await expect(page.locator('#xk-resource-dashboard-modal')).toBeHidden();
+  expect(await view.locator('.xkc').evaluate(el => el.hidden)).toBe(true);
+  api.history = [];
+  await page.locator('#xk-resource-monitor').evaluate(button => button.click());
+  await expect(view.locator('.xkc-canvas')).toHaveAttribute('data-kind', 'level');
+  expect(api.history[0]).toBe('1h');
+  await expect(view.locator('.xkc-b[data-range="1h"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(view.locator('.xkc-b[data-metric="cpu"]')).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('a failed range switch shows the error and retries to the new range', async ({ page }) => {
+  let healthy = true;
+  const view = await openDashboard(page, { hist: range => (range !== '1h' && !healthy ? null : history(range)) });
+  await expect(view.locator('.xkc-canvas')).toHaveAttribute('data-kind', 'level');
+  healthy = false;
+  await view.locator('.xkc-b[data-range="6h"]').click();
+  await expect(view.locator('.xkc-error')).toBeVisible();
+  await expect(view.locator('.xkc-error')).toContainText('Не удалось загрузить историю');
+  await expect(view.locator('.xkc-b[data-range="6h"]')).toHaveAttribute('aria-pressed', 'true');
+  healthy = true;
+  await view.locator('.xkc-b[data-range="6h"]').click();
+  await expect(view.locator('.xkc-error')).toBeHidden();
+  await expect.poll(async () => (await chartInfo(view)).columns).toBe(72);
+  // the retry button works as well
+  healthy = false;
+  await view.locator('.xkc-b[data-range="15m"]').click();
+  await expect(view.locator('.xkc-error')).toBeVisible();
+  healthy = true;
+  await view.locator('.xkc-error [data-retry]').click();
+  await expect(view.locator('.xkc-error')).toBeHidden();
+  await expect(view.locator('.xkc-b[data-range="15m"]')).toHaveAttribute('aria-pressed', 'true');
+});
+
 test('freshness text counts seconds since the last answer', async ({ page }) => {
   await openDashboard(page, { clock: true });
   const freshness = page.locator('#xk-resource-dashboard-freshness');

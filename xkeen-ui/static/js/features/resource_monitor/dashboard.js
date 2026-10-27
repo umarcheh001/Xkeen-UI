@@ -20,6 +20,7 @@ const TICK_MS = 5000;
 const HARDWARE_EVERY_TICKS = 12;
 const SAMPLE_S = 5;
 const LOAD_ERROR = "Не удалось получить данные диагностики роутера.";
+const HISTORY_ERROR = "Не удалось загрузить историю за выбранный интервал.";
 
 const state = {
   open: false,
@@ -87,7 +88,8 @@ function ensureMounted() {
 // ---- state changes -------------------------------------------------------------
 
 function selectRange(range, { keepHighlight = false } = {}) {
-  if (!range || (range === state.range && !keepHighlight)) return;
+  // the same range is ignored only while its history is on screen; after a failed load it retries
+  if (!range || (range === state.range && !keepHighlight && state.history?.range === range)) return;
   if (!keepHighlight) state.highlight = null;
   if (range === "7d" && state.range !== "7d") {
     state.rememberedMetric = state.metric;
@@ -96,6 +98,7 @@ function selectRange(range, { keepHighlight = false } = {}) {
     state.metric = state.rememberedMetric === "all" ? "cpu" : state.rememberedMetric;
   }
   state.range = range;
+  chart?.markRange(range);
   void loadHistory();
 }
 
@@ -203,12 +206,17 @@ async function loadHistory() {
     applyHistory(data);
   } catch (error) {
     if (!state.open || token !== state.historyToken || state.abort?.signal.aborted) return;
-    if (state.history) {
+    if (state.history && state.history.range === state.range) {
       state.stale = true;
       renderChart();
+    } else {
+      chart.markRange(state.range);
+      chart.showError(state.history ? HISTORY_ERROR : LOAD_ERROR);
     }
   }
 }
+
+const historyShown = () => Boolean(state.history && state.history.range === state.range);
 
 // ---- polling --------------------------------------------------------------------------------
 
@@ -249,7 +257,7 @@ async function tick() {
     const summary = await loadSummary();
     if (summary && state.history) {
       const step = state.history.step_s || 0;
-      if (step && Math.floor(summary.ts / step) !== state.lastCol) await loadHistory();
+      if (!historyShown() || (step && Math.floor(summary.ts / step) !== state.lastCol)) await loadHistory();
       else patchOpenColumn(summary);
     } else if (!summary && state.history) {
       state.stale = true;
@@ -290,7 +298,7 @@ function onVisibilityChange() {
 export async function refreshDashboard() {
   if (!state.open || !ensureMounted()) return;
   await Promise.allSettled([loadSummary(), loadHardware(), loadHistory()]);
-  chart.showError(state.history ? "" : LOAD_ERROR);
+  chart.showError(historyShown() ? "" : state.history ? HISTORY_ERROR : LOAD_ERROR);
 }
 
 export async function openDashboard() {
@@ -323,6 +331,13 @@ export function closeDashboard() {
   state.hardware = null;
   state.okAt = 0;
   state.highlight = null;
+  state.range = "1h";
+  state.metric = "cpu";
+  state.rememberedMetric = "cpu";
+  state.linkId = null;
+  state.stale = false;
+  chart?.reset();
+  paintFreshness();
 }
 
 async function openTariff() {

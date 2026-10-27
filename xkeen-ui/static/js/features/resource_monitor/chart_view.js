@@ -376,6 +376,17 @@ export function createChartView(host, callbacks = {}) {
       errorBox.hidden = !text;
       $(".xkc-error-text").textContent = text || "";
     },
+    markRange(range) {
+      for (const b of panel.querySelectorAll("[data-range]")) b.setAttribute("aria-pressed", String(b.dataset.range === range));
+    },
+    reset() {
+      cur = { input: null, history: null, model: null, handle: null, opts: null, hover: -1, folded: false, tipCell: null };
+      panel.hidden = true;
+      errorBox.hidden = true;
+      tip.hidden = true;
+      $(".xkc-form").hidden = true;
+      $(".xkc-form").innerHTML = "";
+    },
     hasData: () => Boolean(cur.input?.history),
     redraw: () => cur.input && render(cur.input),
     destroy() {
