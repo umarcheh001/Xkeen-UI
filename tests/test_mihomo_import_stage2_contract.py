@@ -2,9 +2,9 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-IMPORT = (ROOT / 'xkeen-ui/static/js/features/mihomo_import.js').read_text()
-STATE = (ROOT / 'xkeen-ui/static/js/features/mihomo_import_state.js').read_text()
-API = (ROOT / 'xkeen-ui/static/js/features/mihomo_import_api.js').read_text()
+IMPORT = (ROOT / 'xkeen-ui/static/js/features/mihomo_import.js').read_text(encoding='utf-8')
+STATE = (ROOT / 'xkeen-ui/static/js/features/mihomo_import_state.js').read_text(encoding='utf-8')
+API = (ROOT / 'xkeen-ui/static/js/features/mihomo_import_api.js').read_text(encoding='utf-8')
 
 
 def test_import_feature_uses_state_and_transport_adapters():

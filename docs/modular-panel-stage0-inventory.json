@@ -132,7 +132,7 @@
       ],
       "removable": true,
       "unit_count": 144,
-      "size_bytes": 3250112,
+      "size_bytes": 3250288,
       "kind_counts": {
         "app_runtime": 4,
         "backend_route": 2,
@@ -16356,7 +16356,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_test",
       "path": "tests/test_mihomo_import_baseline_inventory.py",
-      "size_bytes": 1712,
+      "size_bytes": 1760,
       "depends_on": [
         "core",
         "tool.editor"
@@ -16377,7 +16377,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_test",
       "path": "tests/test_mihomo_import_stage2_contract.py",
-      "size_bytes": 2026,
+      "size_bytes": 2074,
       "depends_on": [
         "core",
         "tool.editor"
@@ -16398,7 +16398,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_test",
       "path": "tests/test_mihomo_import_stage3_contract.py",
-      "size_bytes": 2875,
+      "size_bytes": 2955,
       "depends_on": [
         "core",
         "tool.editor"

@@ -2,9 +2,9 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-JS = (ROOT / 'xkeen-ui/static/js/features/mihomo_import.js').read_text()
-TEMPLATE = (ROOT / 'xkeen-ui/templates/panel/modals/mihomo.html').read_text()
-CSS = (ROOT / 'xkeen-ui/static/panel-operator.css').read_text()
+JS = (ROOT / 'xkeen-ui/static/js/features/mihomo_import.js').read_text(encoding='utf-8')
+TEMPLATE = (ROOT / 'xkeen-ui/templates/panel/modals/mihomo.html').read_text(encoding='utf-8')
+CSS = (ROOT / 'xkeen-ui/static/panel-operator.css').read_text(encoding='utf-8')
 
 
 def test_source_names_controls_and_status_are_accessible():
@@ -42,13 +42,13 @@ def test_runtime_has_no_eager_open_and_guards_async_preview_creation():
 
 
 def test_transport_preserves_structured_errors_for_not_xray_fallback():
-    api = (ROOT / 'xkeen-ui/static/js/features/mihomo_import_api.js').read_text()
+    api = (ROOT / 'xkeen-ui/static/js/features/mihomo_import_api.js').read_text(encoding='utf-8')
     assert 'error.data = data;' in api
     assert "code === 'not_xray_json'" in JS
 
 
 def test_modal_manager_refresh_geometry_is_additive_not_a_new_manager():
-    modal = (ROOT / 'xkeen-ui/static/js/ui/modal.js').read_text()
+    modal = (ROOT / 'xkeen-ui/static/js/ui/modal.js').read_text(encoding='utf-8')
     block = modal[modal.index('Modal.refreshGeometry ='):modal.index('Modal.bindState =')]
     assert 'resetContentPosition(content)' in block
     assert 'loadState(modalEl)' in block

@@ -23,13 +23,13 @@ def test_stage0_inventory_matches_current_source_when_collected():
 
 
 def test_stage0_capture_is_opt_in_and_cannot_target_external_router():
-    config = (ROOT / 'e2e/mihomo_import_baseline.config.mjs').read_text()
-    capture = (ROOT / 'e2e/mihomo_import_stage0_baseline.capture.mjs').read_text()
+    config = (ROOT / 'e2e/mihomo_import_baseline.config.mjs').read_text(encoding='utf-8')
+    capture = (ROOT / 'e2e/mihomo_import_stage0_baseline.capture.mjs').read_text(encoding='utf-8')
     assert "testMatch: 'mihomo_import_stage0_baseline.capture.mjs'" in config
     assert 'if (process.env.E2E_BASE_URL) throw new Error' in capture
     assert "pathname === '/api/mihomo-config'" in capture
     assert 'registration' in capture
     assert 'Stage 0 blocks persistent/runtime mutations' in capture
-    fixtures = json.loads((ROOT / 'e2e/fixtures/mihomo-import/stage0.json').read_text())
+    fixtures = json.loads((ROOT / 'e2e/fixtures/mihomo-import/stage0.json').read_text(encoding='utf-8'))
     assert 'example.com' in fixtures['proxy']
     assert 'Stage 0 synthetic fixture' in fixtures['base_config']

@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import argparse
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 from pathlib import Path
 import re
 import subprocess
-from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[1]
+MOSCOW = timezone(timedelta(hours=3), 'MSK')  # no DST since 2014; Windows Python has no tz database
 SOURCES = [
     'xkeen-ui/templates/panel/modals/mihomo.html',
     'xkeen-ui/static/js/features/mihomo_import.js',
@@ -35,8 +35,8 @@ SOURCES = [
 
 
 def collect() -> dict:
-    text = (ROOT / SOURCES[1]).read_text()
-    template = (ROOT / SOURCES[0]).read_text()
+    text = (ROOT / SOURCES[1]).read_text(encoding='utf-8')
+    template = (ROOT / SOURCES[0]).read_text(encoding='utf-8')
     template = template[template.index('<!-- Mihomo: import'):template.index('<!-- Mihomo: proxy tools')]
     sources = []
     for name in SOURCES:
@@ -47,13 +47,13 @@ def collect() -> dict:
     for file in sorted((ROOT / 'xkeen-ui/static/js').rglob('*.js')):
         if file.name == 'mihomo_import.js':
             continue
-        for number, line in enumerate(file.read_text().splitlines(), 1):
+        for number, line in enumerate(file.read_text(encoding='utf-8').splitlines(), 1):
             if pattern.search(line) and ('mihomo' in str(file) or 'mihomo' in line.lower()):
                 consumers.append({'path': str(file.relative_to(ROOT)), 'line': number, 'source': line.strip()})
     return {
         'schema_version': 1,
         'base_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
-        'capture_date': datetime.now(ZoneInfo('Europe/Moscow')).date().isoformat(),
+        'capture_date': datetime.now(MOSCOW).date().isoformat(),
         'scope': 'source contracts; endpoint paths include dynamic prefixes; not runtime/API reachability claims',
         'sources': sources,
         'dom_ids': re.findall(r'\bid="([^"]+)"', template),
@@ -71,7 +71,7 @@ def main() -> None:
     parser.add_argument('--out', type=Path, default=ROOT / '.tmp/mihomo-import-source-inventory.json')
     args = parser.parse_args()
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(collect(), ensure_ascii=False, indent=2) + '\n')
+    args.out.write_text(json.dumps(collect(), ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     print(args.out)
 
 
