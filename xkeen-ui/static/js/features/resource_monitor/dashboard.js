@@ -17,6 +17,7 @@ import { mountDashboardView } from "./view.js";
 const SUMMARY_ENDPOINT = "/api/system/summary";
 const HARDWARE_ENDPOINT = "/api/system/hardware";
 const HISTORY_ENDPOINT = "/api/system/history";
+const INITRC_ENDPOINT = "/api/system/router/initrc";
 const TICK_MS = 5000;
 const HARDWARE_EVERY_TICKS = 12;
 const SAMPLE_S = 5;
@@ -48,6 +49,8 @@ let view = null;
 let chart = null;
 let tools = null;
 let toolListener = null;
+let initrcState = "hidden";
+let initrcRetry = "apply";
 
 const byId = (id) => document.getElementById(id);
 const isHidden = () => document.visibilityState === "hidden" || document.hidden === true;
@@ -69,6 +72,7 @@ function ensureMounted() {
   const host = byId("xk-resource-dashboard-view");
   if (!host) return false;
   view = mountDashboardView(host);
+  view.onInitrcAction(onInitrcAction);
   chart = createChartView(view.chartHost, {
     onRange: selectRange,
     onMetric: selectMetric,
@@ -107,6 +111,58 @@ function onToolRequest(event) {
 }
 
 // ---- state changes -------------------------------------------------------------
+
+function renderInitrc(stateName, details = "") {
+  initrcState = stateName;
+  view?.renderInitrcHint({ state: stateName, details });
+}
+
+async function loadInitrc() {
+  const session = state.abort;
+  renderInitrc("hidden");
+  try {
+    const response = await fetch(INITRC_ENDPOINT, { cache: "no-store", credentials: "same-origin", signal: session.signal });
+    const data = await response.json();
+    if (session !== state.abort || !state.open || session.signal.aborted) return;
+    if (response.ok && data.ok === true && data.state === "missing" && !data.dismissed) renderInitrc("warning");
+  } catch (error) {
+    // An optional firmware check must not prevent the dashboard from loading.
+  }
+}
+
+function onInitrcAction(action) {
+  if (!state.open || initrcState === "applying" || initrcState === "dismissing") return;
+  if (action === "fix") renderInitrc("confirm");
+  else if (action === "cancel") renderInitrc("warning");
+  else if (action === "confirm") void mutateInitrc("apply");
+  else if (action === "dismiss") void mutateInitrc("dismiss");
+  else if (action === "retry") void mutateInitrc(initrcRetry);
+}
+
+async function mutateInitrc(action) {
+  const session = state.abort;
+  initrcRetry = action;
+  renderInitrc(action === "apply" ? "applying" : "dismissing");
+  try {
+    let init = { method: "POST", cache: "no-store", credentials: "same-origin", signal: session.signal };
+    const http = window.XKeen?.core?.http;
+    if (typeof http?.withCSRF === "function") init = http.withCSRF(init, "POST");
+    else {
+      const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content");
+      if (token) init.headers = { "X-CSRF-Token": token };
+    }
+    const response = await fetch(`${INITRC_ENDPOINT}/${action}`, init);
+    const data = await response.json();
+    if (session !== state.abort || !state.open || session.signal.aborted) return;
+    if (!response.ok || data.ok !== true || (action === "apply" && data.state !== "ok")) {
+      throw new Error([data.error, data.details].filter(Boolean).join("\n") || "Не удалось выполнить действие. Попробуйте ещё раз.");
+    }
+    renderInitrc(action === "apply" ? "success" : "hidden");
+  } catch (error) {
+    if (session !== state.abort || !state.open || session.signal.aborted) return;
+    renderInitrc("error", error?.message || "Не удалось связаться с роутером. Попробуйте ещё раз.");
+  }
+}
 
 function selectRange(range, { keepHighlight = false } = {}) {
   // the same range is ignored only while its history is on screen; after a failed load it retries
@@ -348,6 +404,7 @@ export async function openDashboard() {
   if (state.open || !ensureMounted()) return;
   state.open = true;
   state.abort = new AbortController();
+  void loadInitrc();
   state.tickN = 0;
   state.stale = false;
   document.addEventListener("visibilitychange", onVisibilityChange);
@@ -367,6 +424,7 @@ export function closeDashboard() {
   document.removeEventListener("visibilitychange", onVisibilityChange);
   state.abort?.abort();
   state.abort = null;
+  renderInitrc("hidden");
   state.historyToken += 1;
   state.busy = false;
   state.summary = null;

@@ -14,8 +14,79 @@ from routes.devtools import create_devtools_blueprint
 from routes.system_resources import create_system_resources_blueprint
 from routes.ui_settings import create_ui_settings_blueprint
 from services import UISettingsStore
+from services import entware_initrc
 from services.system_resources_history.zones import zone
 from tests.test_system_resources_collector import ISP, T0, USB, FakeRouter, make, tariffs
+
+
+@pytest.fixture
+def initrc_api(tmp_path, monkeypatch):
+    store = UISettingsStore(ui_state_dir=str(tmp_path))
+    # Patch the provider before creating the blueprint; no real router involved.
+    import services
+    monkeypatch.setattr(services, "get_ui_settings_store", lambda: store)
+    monkeypatch.setattr(resource_routes, "get_ui_settings_store", lambda: store, raising=False)
+    return _app_with(None, monkeypatch).test_client(), store
+
+
+@pytest.mark.parametrize("state,path", [("ok", "/custom/stop"), ("missing", None), ("unknown", None)])
+def test_initrc_status_api(initrc_api, monkeypatch, state, path):
+    client, store = initrc_api
+    monkeypatch.setattr(entware_initrc, "initrc_status", lambda: {"state": state, "path": path})
+    response = client.get("/api/system/router/initrc")
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == "no-store"
+    assert response.json == {"ok": True, "state": state, "path": path, "dismissed": False}
+
+
+def test_initrc_dismiss_persists_without_losing_tariff(initrc_api, monkeypatch):
+    client, store = initrc_api
+    store.patch({"diagnostics": {"tariffs": {"ISP": {"down_mbps": 100}}}})
+    monkeypatch.setattr(entware_initrc, "initrc_status", lambda: {"state": "missing", "path": None})
+    response = client.post("/api/system/router/initrc/dismiss")
+    assert response.status_code == 200 and response.json == {"ok": True}
+    assert response.headers["Cache-Control"] == "no-store"
+    assert client.get("/api/system/router/initrc").json["dismissed"] is True
+    assert store.load()["diagnostics"]["tariffs"]["ISP"]["down_mbps"] == 100
+
+
+def test_initrc_dismiss_write_failure(initrc_api, monkeypatch):
+    client, store = initrc_api
+    def fail(*a):
+        raise OSError("private disk details")
+    monkeypatch.setattr(UISettingsStore, "patch", fail)
+    response = client.post("/api/system/router/initrc/dismiss")
+    assert response.status_code == 500 and response.json["ok"] is False
+    assert response.json["code"] == "settings_save_failed"
+    assert "private disk details" not in response.get_data(as_text=True)
+    assert response.headers["Cache-Control"] == "no-store"
+
+
+def test_initrc_apply_api(initrc_api, monkeypatch):
+    client, _ = initrc_api
+    monkeypatch.setattr(entware_initrc, "apply_initrc", lambda: {"state": "ok", "path": "/opt/etc/init.d/rc.unslung"})
+    response = client.post("/api/system/router/initrc/apply")
+    assert response.status_code == 200 and response.json == {"ok": True, "state": "ok"}
+    assert response.headers["Cache-Control"] == "no-store"
+
+
+def test_initrc_apply_firmware_error_api(initrc_api, monkeypatch):
+    client, _ = initrc_api
+    def fail():
+        raise entware_initrc.InitrcError("Не удалось сохранить настройку.", code="initrc_command_failed", details="% error denied")
+    monkeypatch.setattr(entware_initrc, "apply_initrc", fail)
+    response = client.post("/api/system/router/initrc/apply")
+    assert response.status_code == 502
+    assert response.json["ok"] is False
+    assert response.json["code"] == "initrc_command_failed"
+    assert response.json["details"] == "% error denied"
+    assert response.headers["Cache-Control"] == "no-store"
+
+
+@pytest.mark.parametrize("action", ["apply", "dismiss"])
+def test_initrc_mutations_reject_get(initrc_api, action):
+    client, _ = initrc_api
+    assert client.get(f"/api/system/router/initrc/{action}").status_code == 405
 
 
 def _app_with(collector, monkeypatch) -> Flask:

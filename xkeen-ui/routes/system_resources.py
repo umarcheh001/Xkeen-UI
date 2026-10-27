@@ -4,7 +4,8 @@ import math
 
 from flask import Blueprint, jsonify, request
 
-from routes.common.errors import error_response
+from routes.common.errors import error_response, exception_response
+from services import entware_initrc, get_ui_settings_store
 from services.router_diagnostics import (
     RciUnavailable,
     apply_router_resource_telemetry,
@@ -98,6 +99,40 @@ def _modem_control_error(exc: ModemControlError):
 
 def create_system_resources_blueprint(*, include_summary: bool = True) -> Blueprint:
     bp = Blueprint("system_resources", __name__)
+
+    def initrc_settings_error(exc, *, saving=False):
+        response, status = exception_response(
+            "Не удалось сохранить настройки интерфейса." if saving else "Не удалось загрузить настройки интерфейса.",
+            500, ok=False, code="settings_save_failed" if saving else "settings_load_failed", exc=exc,
+        )
+        response.headers["Cache-Control"] = "no-store"
+        return response, status
+
+    @bp.get("/api/system/router/initrc")
+    def api_router_initrc():
+        try:
+            diagnostics = get_ui_settings_store().load().get("diagnostics", {})
+        except Exception as exc:
+            return initrc_settings_error(exc)
+        return _no_store_json(dict(ok=True, **entware_initrc.initrc_status(), dismissed=diagnostics.get("initrc_hint_dismissed") is True))
+
+    @bp.post("/api/system/router/initrc/apply")
+    def api_router_initrc_apply():
+        try:
+            result = entware_initrc.apply_initrc()
+        except entware_initrc.InitrcError as exc:
+            response, status = error_response(str(exc), 502, ok=False, code=exc.code, details=exc.details)
+            response.headers["Cache-Control"] = "no-store"
+            return response, status
+        return _no_store_json({"ok": True, "state": result["state"]})
+
+    @bp.post("/api/system/router/initrc/dismiss")
+    def api_router_initrc_dismiss():
+        try:
+            get_ui_settings_store().patch({"diagnostics": {"initrc_hint_dismissed": True}})
+        except Exception as exc:
+            return initrc_settings_error(exc, saving=True)
+        return _no_store_json({"ok": True})
 
     if include_summary:
         @bp.get("/api/system/resources")

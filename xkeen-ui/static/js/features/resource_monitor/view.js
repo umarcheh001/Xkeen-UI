@@ -423,11 +423,36 @@ function hardwareHtml(hw) {
 
 // ---- mount ---------------------------------------------------------------
 
+function initrcHtml(state, details) {
+  if (state === "hidden") return "";
+  const button = (action, text, primary = false, disabled = false) => `<button type="button" data-initrc-action="${action}" class="${primary ? "primary" : ""}" ${disabled ? "disabled" : ""}>${text}</button>`;
+  let title = "При перезагрузке роутера теряется часть истории";
+  let copy = "В настройках прошивки для Entware не указан сценарий остановки служб, поэтому перед перезагрузкой панель не успевает сохранить историю. Пропадает всё, что накопилось с последнего сохранения, — до часа графиков и событий.";
+  let actions = button("fix", "Исправить", true) + button("dismiss", "Скрыть");
+  if (state === "confirm" || state === "applying") {
+    title = "Прописать сценарий остановки служб?";
+    copy = "Панель выполнит на роутере две команды прошивки:<br><code>opkg initrc /opt/etc/init.d/rc.unslung</code> и <code>system configuration save</code>.<br>Это штатная настройка Entware; заработает со следующей перезагрузки. Роутер сейчас перезагружать не нужно.";
+    actions = button("confirm", state === "applying" ? "Выполняется…" : "Прописать", true, state === "applying") + button("cancel", "Отмена", false, state === "applying");
+  } else if (state === "dismissing") {
+    actions = button("dismiss", "Сохранение…", false, true);
+  } else if (state === "success") {
+    title = "Готово: сценарий остановки служб прописан";
+    copy = "При следующей перезагрузке панель успеет сохранить историю. Эта строка исчезнет, когда вы закроете окно.";
+    actions = "";
+  } else if (state === "error") {
+    title = "Не удалось выполнить действие";
+    copy = esc(details);
+    actions = button("retry", "Повторить", true) + button("cancel", "Отмена");
+  }
+  return `<div class="xkm-initrc" data-state="${state}" role="status" aria-live="polite" aria-busy="${state === "applying" || state === "dismissing"}"><span class="dot" aria-hidden="true"></span><div class="xkm-initrc-copy"><strong>${title}</strong><div class="note">${copy}</div></div>${actions ? `<div class="xkm-initrc-actions">${actions}</div>` : ""}</div>`;
+}
+
 export function mountDashboardView(host) {
   const shadow = host.shadowRoot || host.attachShadow({ mode: "open" });
   const fallback = adoptViewStyles(shadow);
   shadow.innerHTML = `${fallback}<div class="xkm">
     <div data-slot="status"></div>
+    <div data-slot="initrc" hidden></div>
     <div class="xkm-kpis" data-slot="cards"></div>
     <section class="xkm-panel" data-slot="connection"></section>
     <section class="xkm-panel" data-slot="hardware"></section>
@@ -446,6 +471,11 @@ export function mountDashboardView(host) {
   const paintSparks = (force = true) => drawSparks(shadow, state.summary?.cards, force === true);
 
   shadow.addEventListener("click", (event) => {
+    const initrcAction = event.target.closest?.("[data-initrc-action]");
+    if (initrcAction) {
+      if (!initrcAction.disabled) state.initrcCb?.(initrcAction.dataset.initrcAction);
+      return;
+    }
     const link = event.target.closest?.("[data-link]");
     if (link) {
       event.stopPropagation();
@@ -486,6 +516,12 @@ export function mountDashboardView(host) {
   }
 
   return {
+    renderInitrcHint({ state: hintState = "hidden", details = "" } = {}) {
+      const panel = slot("initrc");
+      panel.hidden = hintState === "hidden";
+      setHtml(panel, initrcHtml(hintState, details));
+    },
+    onInitrcAction(cb) { state.initrcCb = cb; },
     renderSummary(summary) {
       state.summary = summary || null;
       paintStatus();

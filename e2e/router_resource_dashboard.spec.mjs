@@ -146,10 +146,24 @@ function history(range, { links = [LINK_ISP], over = {}, since = null, top = nul
 // Requests the window makes, recorded by the helper below.
 const api = { summary: 0, hardware: 0, history: [], patches: [], tools: [] };
 
-async function openDashboard(page, { sum = summary(), hw = hardware(), width = 1600, hist = range => history(range), clock = false, patch = null, tools = {} } = {}) {
+async function openDashboard(page, { sum = summary(), hw = hardware(), width = 1600, hist = range => history(range), clock = false, patch = null, tools = {}, initrc = { state: 'ok' }, initrcAction = null } = {}) {
   api.summary = 0; api.hardware = 0; api.history = []; api.patches = []; api.tools = [];
   if (clock) await page.clock.install();
   await page.setViewportSize({ width, height: 1000 });
+  api.initrc = []; api.initrcActions = [];
+  await page.route('**/api/system/router/initrc', async route => {
+    api.initrc.push(route.request().method());
+    if (typeof initrc === 'function') { await initrc(route); return; }
+    await route.fulfill({ json: { ok: true, path: null, dismissed: false, ...initrc } });
+  });
+  await page.route('**/api/system/router/initrc/*', async route => {
+    const action = route.request().url().split('/').at(-1);
+    api.initrcActions.push({ action, method: route.request().method(), csrf: route.request().headers()['x-csrf-token'] });
+    if (initrcAction) { await initrcAction(route, action); return; }
+    if (action === 'dismiss') initrc = { state: 'missing', dismissed: true };
+    if (action === 'apply') initrc = { state: 'ok' };
+    await route.fulfill({ json: { ok: true, state: 'ok' } });
+  });
   await page.route('**/api/system/resources', route => route.fulfill({ json: legacyResources() }));
   await page.route('**/api/system/summary', route => { api.summary += 1; route.fulfill(sum ? { json: sum } : { status: 503, json: { ok: false } }); });
   await page.route('**/api/system/hardware', route => { api.hardware += 1; route.fulfill({ json: hw }); });
@@ -214,6 +228,150 @@ const rect = (locator) => locator.evaluate(el => {
   const r = el.getBoundingClientRect();
   return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height };
 });
+
+const INITRC_TITLE = 'При перезагрузке роутера теряется часть истории';
+const INITRC_SUCCESS = 'Готово: сценарий остановки служб прописан';
+const initrcHint = view => view.locator('.xkm-initrc');
+async function reopenInitrcDashboard(page) {
+  await page.locator('#xk-resource-dashboard-close').click();
+  await page.locator('#xk-resource-monitor').evaluate(el => el.click());
+}
+
+test('initrc warning follows status and checks only once per opening', async ({ page }) => {
+  const view = await openDashboard(page, { initrc: { state: 'missing' }, clock: true });
+  await expect(initrcHint(view)).toContainText(INITRC_TITLE);
+  expect((await rect(initrcHint(view))).top).toBeGreaterThan((await rect(view.locator('.xkm-status'))).bottom);
+  await expect(view.locator('.xkm-status')).toContainText('Всё в порядке');
+  await page.clock.runFor(16000);
+  expect(api.initrc).toEqual(['GET']);
+  await reopenInitrcDashboard(page);
+  await expect.poll(() => api.initrc.length).toBe(2);
+});
+
+for (const status of [{ state: 'ok' }, { state: 'unknown' }, { state: 'missing', dismissed: true }]) {
+  test(`initrc hides for ${JSON.stringify(status)}`, async ({ page }) => {
+    const view = await openDashboard(page, { initrc: status });
+    await expect.poll(() => api.initrc.length).toBe(1);
+    await expect(initrcHint(view)).toBeHidden();
+  });
+}
+
+test('initrc confirmation cancel and successful apply with CSRF', async ({ page }) => {
+  let finish;
+  const view = await openDashboard(page, { initrc: { state: 'missing' }, initrcAction: async route => {
+    await new Promise(resolve => { finish = resolve; });
+    await route.fulfill({ json: { ok: true, state: 'ok' } });
+  } });
+  const hint = initrcHint(view);
+  await hint.getByRole('button', { name: 'Исправить', exact: true }).click();
+  await expect(hint).toContainText('Прописать сценарий остановки служб?');
+  await expect(hint).toContainText('opkg initrc /opt/etc/init.d/rc.unslung');
+  expect(api.initrcActions).toHaveLength(0);
+  await hint.getByRole('button', { name: 'Отмена', exact: true }).click();
+  await expect(hint).toContainText(INITRC_TITLE);
+  await hint.getByRole('button', { name: 'Исправить', exact: true }).click();
+  await hint.getByRole('button', { name: 'Прописать', exact: true }).click();
+  await expect.poll(() => api.initrcActions.length).toBe(1);
+  expect(api.initrcActions[0]).toMatchObject({ action: 'apply', method: 'POST' });
+  expect(api.initrcActions[0].csrf).toBeTruthy();
+  await expect(hint.getByRole('button').first()).toBeDisabled();
+  finish();
+  await expect(hint).toContainText(INITRC_SUCCESS);
+  await expect(hint).toHaveAttribute('data-state', 'success');
+});
+
+test('initrc apply failure is text and retry succeeds', async ({ page }) => {
+  let attempts = 0;
+  const details = '<img src=x onerror="window.initrcInjected=true"> % error denied';
+  const view = await openDashboard(page, { initrc: { state: 'missing' }, initrcAction: route => {
+    attempts += 1;
+    return route.fulfill(attempts === 1 ? { status: 502, json: { ok: false, error: 'Ошибка прошивки', details } } : { json: { ok: true, state: 'ok' } });
+  } });
+  const hint = initrcHint(view);
+  await hint.getByRole('button', { name: 'Исправить', exact: true }).click();
+  await hint.getByRole('button', { name: 'Прописать', exact: true }).click();
+  await expect(hint).toContainText(details);
+  await expect(hint.locator('img')).toHaveCount(0);
+  expect(await page.evaluate(() => window.initrcInjected)).toBeUndefined();
+  await hint.getByRole('button', { name: 'Повторить', exact: true }).click();
+  await expect(hint).toContainText(INITRC_SUCCESS);
+  expect(attempts).toBe(2);
+});
+
+test('initrc dismiss persists across opening', async ({ page }) => {
+  const view = await openDashboard(page, { initrc: { state: 'missing' } });
+  await initrcHint(view).getByRole('button', { name: 'Скрыть', exact: true }).click();
+  await expect(initrcHint(view)).toBeHidden();
+  await reopenInitrcDashboard(page);
+  await expect.poll(() => api.initrc.length).toBe(2);
+  await expect(initrcHint(view)).toBeHidden();
+  expect(api.initrcActions.map(r => r.action)).toEqual(['dismiss']);
+});
+
+test('initrc dismiss error retries dismiss instead of apply', async ({ page }) => {
+  let attempts = 0;
+  const view = await openDashboard(page, { initrc: { state: 'missing' }, initrcAction: route => {
+    attempts += 1;
+    return route.fulfill(attempts === 1 ? { status: 500, json: { ok: false, error: 'Не удалось сохранить настройки.' } } : { json: { ok: true } });
+  } });
+  const hint = initrcHint(view);
+  await hint.getByRole('button', { name: 'Скрыть', exact: true }).click();
+  await expect(hint).toContainText('Не удалось сохранить настройки.');
+  await hint.getByRole('button', { name: 'Повторить', exact: true }).click();
+  await expect(hint).toBeHidden();
+  expect(api.initrcActions.map(r => r.action)).toEqual(['dismiss', 'dismiss']);
+});
+
+test('initrc successful apply resets on reopen', async ({ page }) => {
+  const view = await openDashboard(page, { initrc: { state: 'missing' } });
+  const hint = initrcHint(view);
+  await hint.getByRole('button', { name: 'Исправить', exact: true }).click();
+  await hint.getByRole('button', { name: 'Прописать', exact: true }).click();
+  await expect(hint).toContainText(INITRC_SUCCESS);
+  await reopenInitrcDashboard(page);
+  await expect.poll(() => api.initrc.length).toBe(2);
+  await expect(hint).toBeHidden();
+});
+
+test('initrc failed GET keeps diagnostics usable', async ({ page }) => {
+  const view = await openDashboard(page, { initrc: route => route.fulfill({ status: 503, json: { ok: false } }) });
+  await expect(initrcHint(view)).toBeHidden();
+  await expect(view.locator('.xkm-card').first()).toBeVisible();
+});
+
+test('initrc late apply response cannot replace reopened warning', async ({ page }) => {
+  let finish;
+  const view = await openDashboard(page, { initrc: { state: 'missing' }, initrcAction: async route => {
+    await new Promise(resolve => { finish = resolve; });
+    await route.fulfill({ json: { ok: true, state: 'ok' } }).catch(() => {});
+  } });
+  const hint = initrcHint(view);
+  await hint.getByRole('button', { name: 'Исправить', exact: true }).click();
+  await hint.getByRole('button', { name: 'Прописать', exact: true }).click();
+  await expect.poll(() => api.initrcActions.length).toBe(1);
+  await reopenInitrcDashboard(page);
+  await expect(hint).toContainText(INITRC_TITLE);
+  finish();
+  await expect(hint).toHaveAttribute('data-state', 'warning');
+});
+
+for (const width of [1280, 390]) {
+  test(`initrc layout and long errors at ${width}px`, async ({ page }) => {
+    const view = await openDashboard(page, { width, initrc: { state: 'missing' }, initrcAction: route => route.fulfill({ status: 502, json: { ok: false, details: 'error:' + 'x'.repeat(400) } }) });
+    const hint = initrcHint(view);
+    await expect(hint).toContainText(INITRC_TITLE);
+    const noOverflow = async () => expect(await hint.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await noOverflow();
+    if (width === 390) expect((await rect(hint.locator('.xkm-initrc-actions'))).top).toBeGreaterThanOrEqual((await rect(hint.locator('.xkm-initrc-copy'))).bottom);
+    await hint.screenshot({ path: `.superpowers/sdd/2026-10-27-entware-initrc-fix/warning-${width}.png` });
+    await hint.getByRole('button', { name: 'Исправить', exact: true }).click();
+    await noOverflow();
+    await hint.screenshot({ path: `.superpowers/sdd/2026-10-27-entware-initrc-fix/confirm-${width}.png` });
+    await hint.getByRole('button', { name: 'Прописать', exact: true }).click();
+    await expect(hint).toContainText('error:');
+    await noOverflow();
+  });
+}
 
 test('dashboard renders cards with aligned indicators', async ({ page }) => {
   const errors = [];
@@ -962,13 +1120,14 @@ test('24 h cell opens 6 h with highlight, the last hour opens 1 h; 7 d last day 
   await view.locator('.xkc-b[data-range="7d"]').click();
   await expect(view.locator('.xkc-canvas')).toHaveAttribute('data-kind', 'grid7');
   await view.locator('.xkc-canvas').scrollIntoViewIfNeeded();
-  const today = await view.locator('.xkc-canvas').evaluate(canvas => {
+  // the history ends at TS, not at the wall clock: after that hour the cells of today are empty
+  const today = await view.locator('.xkc-canvas').evaluate((canvas, ts) => {
     const rect = canvas.getBoundingClientRect();
     const h = canvas.xkChart;
-    const now = new Date();
-    const cell = Math.max(0, Math.floor((now.getHours() * 60 + now.getMinutes()) / 30) - 1);
+    const last = new Date(ts * 1000);
+    const cell = Math.max(0, Math.floor((last.getHours() * 60 + last.getMinutes()) / 30) - 1);
     return { x: rect.left + h.plot.left + (cell + 0.5) * (h.plot.width / 48), y: rect.top + rect.height / 14 };
-  });
+  }, TS);
   await page.mouse.click(today.x, today.y);
   await expect(view.locator('.xkc-b[data-range="24h"]')).toHaveAttribute('aria-pressed', 'true');
 });

@@ -125,6 +125,7 @@ DEFAULTS: Dict[str, Any] = {
         # {"up_mbps", "down_mbps"}}. Пусто — тариф не задан, окно диагностики
         # показывает канал в Мбит/с без зон загрузки.
         "tariffs": {},
+        "initrc_hint_dismissed": False,
     },
     "mihomo": {
         # Hide nodes only after Mihomo itself reports a stable run of timeout
@@ -344,6 +345,7 @@ def _canonical_empty() -> Dict[str, Any]:
         },
         "diagnostics": {
             "tariffs": {},
+            "initrc_hint_dismissed": False,
         },
         "mihomo": {
             "hideUnavailable": bool(DEFAULTS["mihomo"]["hideUnavailable"]),
@@ -770,8 +772,15 @@ def _sanitize_full(raw: Any) -> Tuple[Dict[str, Any], SettingsReport]:
             tariffs_clean = _sanitize_tariffs(diagnostics_raw.get("tariffs"), strict=False, report=rep)
             if tariffs_clean is not None:
                 out["diagnostics"]["tariffs"] = tariffs_clean
+        if "initrc_hint_dismissed" in diagnostics_raw:
+            dismissed = diagnostics_raw["initrc_hint_dismissed"]
+            if isinstance(dismissed, bool):
+                out["diagnostics"]["initrc_hint_dismissed"] = dismissed
+            else:
+                rep.warnings.append({"path": "diagnostics.initrc_hint_dismissed", "warning": "must be a boolean; reset"})
+                rep.changed = True
         for k in diagnostics_raw.keys():
-            if k != "tariffs":
+            if k not in ("tariffs", "initrc_hint_dismissed"):
                 rep.warnings.append({"path": f"diagnostics.{k}", "warning": "unknown key dropped"})
                 rep.changed = True
 
@@ -1159,8 +1168,14 @@ def _sanitize_patch(patch: Any) -> Tuple[Dict[str, Any], SettingsReport]:
                 tariffs_clean = _sanitize_tariffs(diagnostics_patch.get("tariffs"), strict=True, report=rep)
                 if tariffs_clean and len(rep.errors) == errors_before:
                     out["diagnostics"] = {"tariffs": tariffs_clean}
+            if "initrc_hint_dismissed" in diagnostics_patch:
+                dismissed = diagnostics_patch["initrc_hint_dismissed"]
+                if isinstance(dismissed, bool):
+                    out.setdefault("diagnostics", {})["initrc_hint_dismissed"] = dismissed
+                else:
+                    rep.errors.append({"path": "diagnostics.initrc_hint_dismissed", "error": "must be a boolean"})
             for k in diagnostics_patch.keys():
-                if k != "tariffs":
+                if k not in ("tariffs", "initrc_hint_dismissed"):
                     rep.warnings.append({"path": f"diagnostics.{k}", "warning": "unknown key dropped"})
 
     # mihomo
