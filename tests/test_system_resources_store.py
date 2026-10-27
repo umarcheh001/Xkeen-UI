@@ -102,38 +102,50 @@ def test_clock_jump_back_resets_only_fresh():
     assert day[-1] == 30 or day[-2] == 30
 
 
-def test_backward_jump_day_and_week_keep_recording():
+def test_backward_jump_long_tiers_wait_for_the_clock_to_catch_up():
+    # behind the newest sample the clock is not to be trusted (KeeneticOS boots days back)
     s = HistoryStore(("cpu",))
     feed(s, T0 + 4 * 3600, 600, 30)
     back = T0 + 600
     feed(s, back, 600, 70)
-    now = back + 595
+    assert s.clock_unset
+    assert s.columns("15m", back + 595)["metrics"]["cpu"]["avg"][-1] == 70  # the live view goes on
     for rng in ("6h", "24h", "7d"):
-        avg = s.columns(rng, now)["metrics"]["cpu"]["avg"]
-        assert avg[-1] == 70, rng
-        # nothing dated after `now` leaks in, older data stays
-        assert 30 not in avg, rng
-    s2 = HistoryStore(("cpu",))
-    feed(s2, T0, 600, 30)
-    feed(s2, T0 - 3 * 3600, 600, 70)
-    old = s2.columns("6h", T0 + 595)["metrics"]["cpu"]["avg"]
-    assert old[-1] == 30
-    assert s2.median("cpu") is not None
+        avg = s.columns(rng, T0 + 4 * 3600 + 595)["metrics"]["cpu"]["avg"]
+        assert 70 not in avg, rng  # nothing from the wrong clock in the long history
+        assert 30 in avg, rng
+    assert s.columns("7d", back)["history_since"] == T0 + 4 * 3600
+    # the clock reaches the newest sample again: recording goes on
+    feed(s, T0 + 4 * 3600 + 600, 600, 50)
+    assert not s.clock_unset
+    assert s.columns("6h", T0 + 4 * 3600 + 1195)["metrics"]["cpu"]["avg"][-1] == 50
 
 
-def test_restored_ahead_store_records_immediately():
-    import json
-
+def test_clock_unset_at_tells_ahead_of_the_sample():
     s = HistoryStore(("cpu",))
-    feed(s, T0 + 2 * 3600, 600, 30)
-    data = json.loads(json.dumps(s.to_dict()))
-    r = HistoryStore.from_dict(data, ("cpu",))
-    now = T0 + 120
-    r.add(now, {"cpu": 55})
-    for rng in ("15m", "6h", "7d"):
-        avg = r.columns(rng, now)["metrics"]["cpu"]["avg"]
-        assert avg[-1] == 55, rng
-        assert 30 not in avg, rng
+    assert not s.clock_unset_at(T0)  # no history: nothing to compare with
+    feed(s, T0, 600, 30)
+    assert not s.clock_unset_at(T0 + 600)
+    assert not s.clock_unset_at(T0 + 540)  # a minute back is a correction, not an unset clock
+    assert s.clock_unset_at(T0 - 3600)
+    ahead = HistoryStore(("cpu",))  # a history dated a month ahead
+    feed(ahead, T0 + 30 * 86400, 60, 30)
+    end = feed(ahead, T0, 86400 - 60, 1, step=60)
+    assert ahead.clock_unset_at(end)
+    assert not ahead.clock_unset_at(end + 60)  # a day on it: the clock wins
+
+
+def test_clock_steps_at_boot_do_not_count_as_a_day_on_the_unset_clock():
+    s = HistoryStore(("cpu",))
+    end = feed(s, T0, 600, 30)
+    feed(s, T0 - 4 * 86400, 40, 80)  # boots four days back
+    feed(s, end - 1200, 60, 80)  # steps forward by four days, still behind
+    assert s.clock_unset
+    assert s.columns("7d", end)["history_since"] == T0  # not given up, not reset
+    feed(s, end + 120, 60, 40)  # NTP
+    assert not s.clock_unset
+    avg = s.columns("6h", end + 175)["metrics"]["cpu"]["avg"]
+    assert 30 in avg and 40 in avg and 80 not in avg
 
 
 def test_small_backward_step_does_not_reset():

@@ -197,6 +197,18 @@ class ProblemTracker:
         if event.get("until") is not None:
             event["until"] = at
 
+    def shift_stand_in(self, below: float, by: float) -> None:
+        """Times under ``below`` were taken on a stand-in clock (uptime): move them by ``by``."""
+        for ev in self._events:
+            if ev["at"] < below:
+                ev["at"] += by
+            if ev.get("until") is not None and ev["until"] < below:
+                ev["until"] += by
+        for stamps in (self._red_since, self._clear_since, self._last_seen):
+            for slot, at in stamps.items():
+                if at < below:
+                    stamps[slot] = at + by
+
     def forget_timers(self) -> None:
         """The clock jumped: red/clear stopwatches started before it mean nothing now."""
         self._red_since.clear()

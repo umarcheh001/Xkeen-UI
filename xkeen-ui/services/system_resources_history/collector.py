@@ -46,7 +46,10 @@ CLOCK_JUMP_FORWARD_S = 3600  # two ticks this far apart: the clock was set, not 
 FAILOVER_HOLD_S = 60  # the route must stay on the reserve this long to count as a failover
 MAX_RATE_DT_S = 6 * STEP_S  # a longer gap between counter reads is not a rate
 TMP_SAVE_EVERY_S = 300
-FLASH_SAVE_EVERY_S = 21600
+FLASH_SAVE_EVERY_S = 3600  # a reboot cannot save (/opt is gone before SIGTERM): this is what it may lose
+# While the router clock is not set yet, events are stamped with the uptime (far below any real
+# date) and moved to real time once NTP has set the clock.
+STAND_IN_BELOW = 1e9
 HISTORY_FILE = "resource-history.json"
 TMP_DIR = "/tmp/xkeen-ui"
 BASE_METRICS = ("cpu", "memory", "queue", "online")
@@ -161,6 +164,7 @@ class Collector:
         self._conntrack: dict = {"available": False}
         self._online_value: float | None = None
         self._rci_ok = False  # whether the last RCI call answered
+        self._events_on_uptime = False  # events are stamped with the uptime until the clock is set
         self._procs_prev: tuple[dict, int] | None = None  # the last process scan and the processor ticks then
         self._top = top_procs.TopStore()
         # persistence
@@ -236,7 +240,9 @@ class Collector:
         slow = self._guarded("60 s fetch", self._fetch_slow) if n % SLOW_EVERY == 0 else None
         mid = self._guarded("30 s fetch", self._fetch_mid) if n % MID_EVERY == 0 else None
         with self._lock:
-            if now - self._last_tick_ts > CLOCK_JUMP_FORWARD_S:
+            if self._event_now(now) != now:
+                self._events_on_uptime = True
+            elif now - self._last_tick_ts > CLOCK_JUMP_FORWARD_S:
                 self._on_clock_jump(now)
             self._last_tick_ts = now
             if slow is not None:
@@ -246,6 +252,23 @@ class Collector:
             values = self._sample_fast(now)
             self._store_and_judge(now, values)
         self._save_if_due(now)
+
+    def _event_now(self, now: float) -> float:
+        """The time to stamp events with: the uptime while the clock is not set yet."""
+        if not self._store.clock_unset_at(now):
+            return now
+        uptime = self._read_uptime()
+        return uptime if uptime is not None and uptime < STAND_IN_BELOW else now
+
+    def _on_clock_set(self, now: float) -> None:
+        """NTP has set the clock: events stamped with the uptime move to real time."""
+        self._events_on_uptime = False
+        uptime = self._read_uptime() or 0.0
+        self._tracker.shift_stand_in(STAND_IN_BELOW, now - uptime)
+        boot, self._boot_event = self._boot_event, None
+        if boot is not None:
+            self._tracker.restamp(boot, now - uptime)
+        self._failover_pending = None
 
     def _on_clock_jump(self, now: float) -> None:
         """The clock went far forward between two ticks (NTP after boot).
@@ -323,7 +346,7 @@ class Collector:
             self._primary = matched
         elif self._primary is None and self._connections:
             self._primary = self._connections[0]["id"]
-        self._judge_failover(now, matched)
+        self._judge_failover(self._event_now(now), matched)
 
     def _judge_failover(self, now: float, matched: str | None) -> None:
         """wan_failover is open while the route runs through a connection that is not the main one."""
@@ -360,6 +383,9 @@ class Collector:
         for name in values:
             self._store.add_metric(name)
         self._store.add(now, values)
+        if self._events_on_uptime and not self._store.clock_unset_at(now):
+            self._on_clock_set(now)
+        at = self._event_now(now)
         self._values = values
         kinds = {f"temp:{g.id}": g.kind for g in self._groups}
         self._zones = {m: self._zone_of(m, v, kinds) for m, v in values.items()}
@@ -368,7 +394,7 @@ class Collector:
         if self._primary is not None:
             for direction in ("up", "down"):
                 zones[f"link_{direction}"] = self._zones.get(f"link_{direction}:{self._primary}")
-        self._tracker.update(now, zones, details)
+        self._tracker.update(at, zones, details)
 
     # -- the 30 s step ------------------------------------------------------
     def _fetch_mid(self) -> dict:
@@ -384,6 +410,7 @@ class Collector:
         if not isinstance(payload, dict):
             self._online_value = None
             return
+        now = self._event_now(now)
         status = normalize_internet_status(payload)
         self._internet = status
         online = status.get("internet")
@@ -452,9 +479,10 @@ class Collector:
             self._guarded("apply connections", self._apply_connections, got)
         if got.get("wifi") is not None:
             self._wifi = got["wifi"]
+        at = self._event_now(now)
         if got.get("ports") is not None:
             self._ports = got["ports"]
-            self._guarded("port events", self._judge_ports, now)
+            self._guarded("port events", self._judge_ports, at)
         if got.get("identity") is not None:
             self._identity = got["identity"]
         if "zram" in got:
@@ -469,9 +497,9 @@ class Collector:
             freq = dict(freq, throttled=self._below_max_streak >= 2 and self._chip_zone() >= 1)
             self._freq = freq
             if freq["throttled"]:
-                self._tracker.emit("cpu_throttled", now, f"{freq['current_mhz']} из {freq['max_mhz']} МГц")
+                self._tracker.emit("cpu_throttled", at, f"{freq['current_mhz']} из {freq['max_mhz']} МГц")
             else:
-                self._tracker.close("cpu_throttled", now)
+                self._tracker.close("cpu_throttled", at)
         if got.get("procs") is not None:
             self._apply_processes(now, got["procs"])
 
@@ -510,7 +538,9 @@ class Collector:
         # copy the state under the lock, write the file outside it
         with self._lock:
             store = self._store.with_metrics(self._store.metrics)
-            events = [dict(e) for e in self._tracker.events(0)]
+            # stand-in times and the boot not yet placed in real time would be wrong for good
+            pending = self._boot_event if self._events_on_uptime else None
+            events = [dict(e) for e in self._tracker.events(0) if e["at"] >= STAND_IN_BELOW and e is not pending]
             meta: dict = {"top": self._top.to_dict()}
             if self._uptime_s is not None:
                 meta["uptime_s"] = self._uptime_s
@@ -518,6 +548,8 @@ class Collector:
         save_history(self._paths[kind], store, events, now=now, meta=meta)
 
     def _save_if_due(self, now: float) -> None:
+        if self._store.clock_unset_at(now):  # nothing for the long history yet; the copies stay as they are
+            return
         for kind, every in (("tmp", TMP_SAVE_EVERY_S), ("flash", FLASH_SAVE_EVERY_S)):
             if now < self._last_save[kind]:  # the clock went back: count from here
                 self._last_save[kind] = now
@@ -592,6 +624,7 @@ class Collector:
 
     def _problem_age(self, now: float, etype: str, key: str | None = None) -> int | None:
         """Whole minutes the open problem of this type has lasted, or ``None``."""
+        now = self._event_now(now)
         for event in self._tracker.active():
             if event["type"] == etype and (key is None or event.get("key") == key):
                 return max(1, int((now - event["at"]) // 60))

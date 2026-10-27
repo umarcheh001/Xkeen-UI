@@ -728,7 +728,7 @@ def test_restart_with_a_fresh_flash_copy_does_not_write_flash(tmp_path, monkeypa
     c.save("flash")
     saved = _spy_saves(monkeypatch)
     r2 = FakeRouter()
-    r2.now = r.now + 3600
+    r2.now = r.now + 600  # well inside FLASH_SAVE_EVERY_S
     c2 = make(tmp_path, r2)
     r2.step(c2, 3)
     assert "state" not in saved
@@ -966,3 +966,41 @@ def test_no_leaders_on_an_unset_clock(tmp_path):
     r.now = shutdown + 600  # NTP
     r.step(c2, 12 * 2)
     assert [["xray", 50.0]] in c2.history("1h")["top"]
+
+
+def test_reboot_with_the_clock_stepping_like_keeneticos(tmp_path):
+    # seen on NC-1812 / 5.1.8: the clock boots 4 days back, steps to 20 minutes back, then NTP
+    r = FakeRouter()
+    c = make(tmp_path, r)
+    r.step(c, 24)
+    c.save("flash")
+    flash = tmp_path / "state" / "resource-history.json"
+    saved_at = json.loads(flash.read_text(encoding="utf-8"))["saved_at"]
+    before = c.history("7d")["history_since"]
+    shutdown = r.now
+    r.now, r.uptime = shutdown - 4 * 86400, 30.0
+    r.internet = {"internet": False}
+    c2 = make(tmp_path, r)
+
+    def walk(n):
+        for _ in range(n):
+            r.uptime += 5
+            r.step(c2)
+
+    walk(8)
+    r.now = shutdown - 1200
+    walk(4)
+    r.internet = {"internet": True, "dns-accessible": True}
+    walk(6)
+    assert json.loads(flash.read_text(encoding="utf-8"))["saved_at"] == saved_at  # nothing saved on that clock
+    r.now = shutdown + 120  # NTP
+    walk(12)
+    events = c2.events(0)
+    (boot,) = [e for e in events if e["type"] == "router_rebooted"]
+    assert boot["at"] == pytest.approx(r.now - r.uptime, abs=10)
+    assert all(e["at"] > shutdown - 600 for e in events), events  # every event in real time
+    (lost,) = [e for e in events if e["type"] == "internet_lost"]
+    assert lost["until"] is not None and lost["until"] - lost["at"] < 120  # a minute, not four days
+    assert lost["at"] >= boot["at"]
+    assert c2.history("7d")["history_since"] == before
+    assert c2.snapshot()["cards"]["internet"]["state"] == "online"
