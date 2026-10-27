@@ -232,6 +232,27 @@ def application(environ, start_response):
     return app(environ, start_response)
 
 
+def start_resource_history_if_active() -> bool:
+    """Start the router-resources history thread: only in the real server, only with its module.
+
+    Building the app (tests do it many times) never starts a sampling thread.
+    """
+    if "tool.advanced-diagnostics" not in _ACTIVE_MODULES:
+        return False
+    try:
+        from core.paths import UI_STATE_DIR
+        from services.system_resources_history.collector import install_terminate_save, start_collector
+
+        start_collector(ui_state_dir=UI_STATE_DIR)
+        install_terminate_save()
+    except Exception:  # noqa: BLE001 - a missing history must not stop the panel
+        import logging
+
+        logging.getLogger(__name__).warning("resource history collector did not start", exc_info=True)
+        return False
+    return True
+
+
 if __name__ == "__main__":
     server_port = _server_port()
     # Catalog discovery happens on its own daemon thread.  Startup and the
@@ -244,6 +265,7 @@ if __name__ == "__main__":
         start_memory_guard()
     except Exception:
         pass
+    start_resource_history_if_active()
     if GEVENT_AVAILABLE and _WS_RUNTIME_NEEDED:
         if "tool.terminal" in _ACTIVE_MODULES:
             try:

@@ -34,6 +34,7 @@ RANGES: dict[str, tuple[str, int, int]] = {
 }
 
 BACK_JUMP_RESET_S = 60
+WEEK_SPAN_S = TIERS["week"][0] * TIERS["week"][1]  # a forward gap longer than all the history
 FORMAT_VERSION = 1
 
 
@@ -167,7 +168,12 @@ class HistoryStore:
                 continue
             samples[i] = number
         fresh = self._tiers["fresh"]
-        if self._last_ts is not None and ts < self._last_ts - BACK_JUMP_RESET_S:
+        if self._last_ts is not None and ts - self._last_ts > WEEK_SPAN_S:
+            # The clock was set (NTP after boot): what came before was never real time.
+            for tier in self._tiers.values():
+                tier.reset()
+            self._since = None
+        elif self._last_ts is not None and ts < self._last_ts - BACK_JUMP_RESET_S:
             fresh.reset()
         for name, tier in self._tiers.items():
             tier.add(ts, samples, allow_back=(name == "fresh"))

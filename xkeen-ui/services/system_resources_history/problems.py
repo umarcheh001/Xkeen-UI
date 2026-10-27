@@ -153,6 +153,18 @@ class ProblemTracker:
     def events(self, since: float) -> list[dict]:
         return [e for e in self._events if e["at"] >= since or e.get("until") is None]
 
-    def note_start(self, uptime_s: float, persisted_uptime_s: float | None) -> None:
+    def note_start(self, uptime_s: float, persisted_uptime_s: float | None) -> dict | None:
         if uptime_s < REBOOT_UPTIME_S or (persisted_uptime_s is not None and uptime_s < persisted_uptime_s):
-            self.emit("router_rebooted", self._clock())
+            return self.emit("router_rebooted", self._clock())
+        return None
+
+    def restamp(self, event: dict, at: float) -> None:
+        """Move a point event to another time (the clock was set after it was stamped)."""
+        event["at"] = at
+        if event.get("until") is not None:
+            event["until"] = at
+
+    def forget_timers(self) -> None:
+        """The clock jumped: red/clear stopwatches started before it mean nothing now."""
+        self._red_since.clear()
+        self._clear_since.clear()

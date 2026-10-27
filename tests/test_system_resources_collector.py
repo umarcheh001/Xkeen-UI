@@ -647,3 +647,107 @@ def test_slow_port_event_opens_and_closes(tmp_path):
     r.set_lan_speed("1000")
     r.step(c, 12)
     assert c.events(0)[0]["until"] is not None
+
+
+def _spy_saves(monkeypatch) -> list[str]:
+    saved: list[str] = []
+    real = collector_mod.save_history
+
+    def spy(path, *args, **kwargs):
+        saved.append(Path(path).parent.name)
+        return real(path, *args, **kwargs)
+
+    monkeypatch.setattr(collector_mod, "save_history", spy)
+    return saved
+
+
+def test_restart_with_an_old_flash_copy_saves_flash_on_the_first_tick(tmp_path, monkeypatch):
+    r = FakeRouter()
+    c = make(tmp_path, r)
+    r.step(c, 3)
+    c.save("flash")
+    saved = _spy_saves(monkeypatch)
+    r2 = FakeRouter()
+    r2.now = r.now + 7 * 3600  # the panel was down for seven hours
+    c2 = make(tmp_path, r2)
+    r2.step(c2)
+    assert "state" in saved  # not six hours from this start: the copy on flash is already old
+
+
+def test_restart_with_a_fresh_flash_copy_does_not_write_flash(tmp_path, monkeypatch):
+    r = FakeRouter()
+    c = make(tmp_path, r)
+    r.step(c, 3)
+    c.save("flash")
+    saved = _spy_saves(monkeypatch)
+    r2 = FakeRouter()
+    r2.now = r.now + 3600
+    c2 = make(tmp_path, r2)
+    r2.step(c2, 3)
+    assert "state" not in saved
+
+
+def test_only_a_tmp_copy_after_reboot_still_gets_flash_on_the_first_tick(tmp_path, monkeypatch):
+    r = FakeRouter()
+    c = make(tmp_path, r)
+    r.step(c, 3)
+    c.save("tmp")  # flash has never been written
+    saved = _spy_saves(monkeypatch)
+    r2 = FakeRouter()
+    r2.now = r.now + 60
+    c2 = make(tmp_path, r2)
+    r2.step(c2)
+    assert "state" in saved
+
+
+def test_sigterm_handler_saves_flash_then_dies_as_the_signal_would(tmp_path, monkeypatch):
+    import signal
+
+    handlers: dict = {}
+    killed: list = []
+    monkeypatch.setattr(collector_mod.os, "kill", lambda pid, sig: killed.append(sig))
+    monkeypatch.setattr(signal, "signal", lambda sig, handler: handlers.__setitem__(sig, handler))
+    r = FakeRouter()
+    c = make(tmp_path, r)
+    r.step(c, 3)
+    monkeypatch.setattr(collector_mod, "_collector", c)
+    assert collector_mod.install_terminate_save() is True
+    handler = handlers[signal.SIGTERM]
+    assert not (tmp_path / "state" / "resource-history.json").exists()
+    handler(signal.SIGTERM, None)
+    assert (tmp_path / "state" / "resource-history.json").is_file()
+    assert handlers[signal.SIGTERM] == signal.SIG_DFL and killed == [signal.SIGTERM]
+
+
+def test_sigterm_handler_without_a_collector_still_exits(monkeypatch):
+    import signal
+
+    handlers: dict = {}
+    killed: list = []
+    monkeypatch.setattr(collector_mod.os, "kill", lambda pid, sig: killed.append(sig))
+    monkeypatch.setattr(signal, "signal", lambda sig, handler: handlers.__setitem__(sig, handler))
+    monkeypatch.setattr(collector_mod, "_collector", None)
+    collector_mod.install_terminate_save()
+    handlers[signal.SIGTERM](signal.SIGTERM, None)
+    assert killed == [signal.SIGTERM]
+
+
+def test_boot_with_a_past_clock_then_ntp_jump_forward(tmp_path):
+    r = FakeRouter()
+    r.now = 1_000_000.0  # the router has just booted: the clock is not set yet
+    r.uptime = 40.0
+    c = make(tmp_path, r)
+    r.step(c, 3)
+    (boot,) = [e for e in c.events(0) if e["type"] == "router_rebooted"]
+    assert boot["at"] < 2_000_000
+    r.now = T0  # NTP sets the clock
+    r.step(c, 3)
+    r.step(c, 2)
+    assert T0 - 10 <= c.history("15m")["history_since"] <= T0 + 30
+    boots = [e for e in c.events(0) if e["type"] == "router_rebooted"]
+    assert len(boots) == 1
+    assert boots[0]["at"] == pytest.approx(T0 + 5 - r.uptime, abs=30) and boots[0]["until"] == boots[0]["at"]
+    r.step(c, 5)
+    assert [e["type"] for e in c.events(0)].count("router_rebooted") == 1  # not pruned later
+    assert c.snapshot()["cards"]["internet"]["text"].count("без перерывов") <= 1
+    assert "200 д" not in c.snapshot()["cards"]["internet"]["text"]

@@ -212,3 +212,23 @@ def test_roundtrip_dict():
 def test_memory_budget():
     s = HistoryStore(tuple(f"m{i}" for i in range(14)))
     assert s.memory_bytes() < 110_000
+
+
+def test_forward_jump_beyond_the_week_tier_drops_the_bogus_past():
+    # a sample from before the clock was set must not pin history_since forever
+    s = HistoryStore(("cpu",))
+    s.add(1000, {"cpu": 99})
+    s.add(1005, {"cpu": 99})
+    now = T0
+    feed(s, now, 120, 30)
+    res = s.columns("1h", now + 115)
+    assert res["history_since"] == now
+    assert s.median("cpu") == 30  # the 1970 point is not in the usual-temperature median
+    assert all(v in (None, 30) for v in res["metrics"]["cpu"]["avg"])
+
+
+def test_a_forward_gap_shorter_than_the_week_keeps_the_history():
+    s = HistoryStore(("cpu",))
+    feed(s, T0, 600, 30)
+    feed(s, T0 + 3 * 86400, 600, 40)
+    assert s.columns("7d", T0 + 3 * 86400 + 595)["history_since"] == T0

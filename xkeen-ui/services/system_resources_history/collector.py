@@ -41,6 +41,7 @@ log = logging.getLogger(__name__)
 STEP_S = 5
 MID_EVERY = 6  # ticks: 30 s
 SLOW_EVERY = 12  # ticks: 60 s
+CLOCK_JUMP_FORWARD_S = 3600  # two ticks this far apart: the clock was set, not the panel asleep
 MAX_RATE_DT_S = 6 * STEP_S  # a longer gap between counter reads is not a rate
 TMP_SAVE_EVERY_S = 300
 FLASH_SAVE_EVERY_S = 21600
@@ -171,13 +172,19 @@ class Collector:
             raw_uptime = meta.get("uptime_s")
             if isinstance(raw_uptime, (int, float)) and not isinstance(raw_uptime, bool):
                 persisted_uptime = float(raw_uptime)
+            # Flash is written every six hours counted from the copy on flash, not from this
+            # start: a panel restarted more often than that must still reach the flash.
+            on_flash = load_history([self._paths["flash"]], None)
+            self._last_save["flash"] = min(on_flash[2], now) if on_flash is not None else 0.0
         else:
             self._store = HistoryStore(BASE_METRICS)
         for name in BASE_METRICS:
             self._store.add_metric(name)
         self._tracker = ProblemTracker(self._clock, events=events)
+        self._boot_event: dict | None = None
+        self._last_tick_ts = now
         if self._uptime_s is not None:
-            self._tracker.note_start(self._uptime_s, persisted_uptime)
+            self._boot_event = self._tracker.note_start(self._uptime_s, persisted_uptime)
         self._tariffs = get_diagnostics_tariffs(ui_state_dir)
 
     # -- small helpers ------------------------------------------------------
@@ -221,6 +228,9 @@ class Collector:
         slow = self._guarded("60 s fetch", self._fetch_slow) if n % SLOW_EVERY == 0 else None
         mid = self._guarded("30 s fetch", self._fetch_mid) if n % MID_EVERY == 0 else None
         with self._lock:
+            if now - self._last_tick_ts > CLOCK_JUMP_FORWARD_S:
+                self._on_clock_jump(now)
+            self._last_tick_ts = now
             if slow is not None:
                 self._guarded("60 s apply", self._apply_slow, now, slow)
             if mid is not None:
@@ -228,6 +238,17 @@ class Collector:
             values = self._sample_fast(now)
             self._store_and_judge(now, values)
         self._save_if_due(now)
+
+    def _on_clock_jump(self, now: float) -> None:
+        """The clock went far forward between two ticks (NTP after boot).
+
+        The reboot event was stamped with the unset clock: stamp it where it belongs.
+        """
+        self._tracker.forget_timers()
+        boot, self._boot_event = self._boot_event, None
+        if boot is not None:
+            uptime = self._read_uptime()
+            self._tracker.restamp(boot, now - (uptime if uptime is not None else 0.0))
 
     def _sample_fast(self, now: float) -> dict[str, float | None]:
         values: dict[str, float | None] = {"online": self._online_value}
@@ -766,3 +787,47 @@ def stop_collector() -> None:
         collector, _collector = _collector, None
     if collector is not None:
         collector.stop()
+
+
+def flush_collector() -> bool:
+    """Write the flash copy right now, without waiting for the thread; True when written.
+
+    For the SIGTERM handler: the init script gives the panel only a few seconds
+    before ``kill -9``, so nothing here may wait.
+    """
+    collector = _collector  # no module lock: the signal may arrive while it is held
+    if collector is None:
+        return False
+    try:
+        collector.save("flash")
+    except Exception:  # noqa: BLE001
+        log.warning("resource history: save on SIGTERM failed", exc_info=True)
+        return False
+    return True
+
+
+def install_terminate_save() -> bool:
+    """On SIGTERM save the history to flash, then die as the signal would have done.
+
+    ``atexit`` never runs on SIGTERM, and the init script stops the panel with it.
+    Returns False where the signal cannot be handled (not the main thread).
+    """
+    import signal
+
+    sigterm = getattr(signal, "SIGTERM", None)
+    if sigterm is None:
+        return False
+
+    def _on_term(signum, frame=None):  # noqa: ANN001
+        flush_collector()
+        try:
+            signal.signal(sigterm, signal.SIG_DFL)
+            os.kill(os.getpid(), sigterm)
+        except Exception:  # noqa: BLE001
+            os._exit(0)
+
+    try:
+        signal.signal(sigterm, _on_term)
+    except (ValueError, OSError):
+        return False
+    return True
