@@ -1,0 +1,32 @@
+{
+ "release": "5.01.C.8.0-2",
+ "sandbox": "stable",
+ "title": "5.1.8",
+ "arch": "aarch64",
+ "ndm": {
+  "exact": "0-d43bd79",
+  "cdate": "8 Oct 2026"
+ },
+ "bsp": {
+  "exact": "0-dc9137a8bb",
+  "cdate": "9 Oct 2026"
+ },
+ "ndw": {
+  "features": "dual_image,usb_3_conf,usb_3_first,led_control,wifi_button,wifi5ghz,vht2ghz,mimo2ghz,mimo5ghz,atf2ghz,atf5ghz,wifi7,wifi_ft,wpa3,hwnat,hwnat_mib,link_agg,cable_diag",
+  "components": "base,cloudcontrol,corewireless,dhcpd,dns-https,dns-tls,ext,ext-utils,igmp,ip6,lang-en,lang-ru,nathelper-ftp,ndmp,ndns,opkg,opkg-kmod-fs,opkg-kmod-netfilter,pingcheck,ppe,sstp,storage,trafficcontrol,usb"
+ },
+ "ndw4": {
+  "version": "5.1.C.8.0"
+ },
+ "manufacturer": "Netcraze Ltd.",
+ "vendor": "Netcraze",
+ "series": "NC",
+ "model": "Ultra (NC-1812)",
+ "hw_version": "1218C000",
+ "hw_type": "router",
+ "hw_id": "NC-1812",
+ "device": "Ultra",
+ "consent": "EA",
+ "region": "EA",
+ "description": "Netcraze Ultra (NC-1812)"
+}

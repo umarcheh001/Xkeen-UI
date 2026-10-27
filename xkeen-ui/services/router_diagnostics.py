@@ -1149,10 +1149,13 @@ def apply_router_resource_telemetry(
         }
     procfs_cpu = payload.get("cpu", {}).get("percent")
     procfs_memory = payload.get("memory", {}).get("percent")
+    # "Without cache" memory comes from /proc/meminfo; the firmware counts it
+    # differently (and by its nominal 1 GB), so it is only the fallback.
+    procfs_has_memory = bool(payload.get("memory", {}).get("total_bytes"))
     if keenetic.get("available"):
         if keenetic.get("cpu", {}).get("percent") is not None:
             payload.setdefault("cpu", {})["percent"] = keenetic["cpu"]["percent"]
-        if keenetic.get("memory"):
+        if keenetic.get("memory") and not procfs_has_memory:
             payload["memory"] = dict(keenetic["memory"])
         if keenetic.get("uptime_seconds") is not None:
             payload["uptime_seconds"] = keenetic["uptime_seconds"]

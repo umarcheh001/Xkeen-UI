@@ -120,6 +120,12 @@ DEFAULTS: Dict[str, Any] = {
         # панели показывал значения по умолчанию.
         "dat": {},
     },
+    "diagnostics": {
+        # Тариф канала по подключению к интернету: {"<RCI-идентификатор>":
+        # {"up_mbps", "down_mbps"}}. Пусто — тариф не задан, окно диагностики
+        # показывает канал в Мбит/с без зон загрузки.
+        "tariffs": {},
+    },
     "mihomo": {
         # Hide nodes only after Mihomo itself reports a stable run of timeout
         # samples.  The samples remain in Mihomo's in-memory delay history;
@@ -235,6 +241,69 @@ def _sanitize_dat_prefs(value: Any, *, strict: bool, report: "SettingsReport") -
     return cleaned
 
 
+_TARIFF_MAX_CONNECTIONS = 8
+_TARIFF_MAX_ID_LEN = 64
+_TARIFF_ID_CHARS = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/._-")
+_TARIFF_FIELDS = ("up_mbps", "down_mbps")
+TARIFF_ERROR = "Скорость тарифа — целое число от 1 до 10000 Мбит/с"
+_TARIFF_TOO_MANY = "Тариф можно задать не больше чем для 8 подключений"
+
+
+def _sanitize_tariffs(value: Any, *, strict: bool, report: "SettingsReport") -> Optional[Dict[str, Any]]:
+    """Check the channel tariffs typed into the diagnostics window.
+
+    A patch (``strict``) with a bad value is refused with a readable message; a
+    stored file with a bad value loses that value alone.  In a stored file a
+    connection without any speed left is not kept.
+    """
+
+    def bad(path: str, why: str, error: str) -> None:
+        if strict:
+            report.errors.append({"path": path, "error": error})
+        else:
+            report.warnings.append({"path": path, "warning": why + "; dropped"})
+            report.changed = True
+
+    if not isinstance(value, dict):
+        bad("diagnostics.tariffs", "must be an object", "Тарифы — объект «подключение → скорость»")
+        return None
+    if len(value) > _TARIFF_MAX_CONNECTIONS:
+        bad("diagnostics.tariffs", "too many connections", _TARIFF_TOO_MANY)
+        return None
+    cleaned: Dict[str, Any] = {}
+    for conn, fields in value.items():
+        path = f"diagnostics.tariffs.{conn}"
+        if (
+            not isinstance(conn, str)
+            or not 0 < len(conn) <= _TARIFF_MAX_ID_LEN
+            or not all(ch in _TARIFF_ID_CHARS for ch in conn)
+        ):
+            bad(path, "bad connection id", "Идентификатор подключения — до 64 символов: латиница, цифры и / . _ -")
+            continue
+        if not isinstance(fields, dict):
+            bad(path, "must be an object", TARIFF_ERROR)
+            continue
+        kept: Dict[str, Any] = {}
+        for field, raw in fields.items():
+            if field not in _TARIFF_FIELDS:
+                bad(f"{path}.{field}", "unknown key", "Неизвестное поле тарифа")
+                continue
+            if raw is None:
+                kept[field] = None
+            elif _is_int(raw) and 1 <= raw <= 10000:
+                kept[field] = int(raw)
+            else:
+                bad(f"{path}.{field}", "must be int 1..10000 or null", TARIFF_ERROR)
+                kept[field] = None
+        if not strict:
+            kept = {f: kept.get(f) for f in _TARIFF_FIELDS}
+            if all(v is None for v in kept.values()):
+                continue
+        if kept:
+            cleaned[conn] = kept
+    return cleaned
+
+
 def _canonical_empty() -> Dict[str, Any]:
     """Create a canonical defaults dict with stable key ordering."""
 
@@ -272,6 +341,9 @@ def _canonical_empty() -> Dict[str, Any]:
             "showScenarioCard": bool(DEFAULTS["routing"]["showScenarioCard"]),
             "dnsOverVlessLayout": str(DEFAULTS["routing"]["dnsOverVlessLayout"]),
             "dat": {},
+        },
+        "diagnostics": {
+            "tariffs": {},
         },
         "mihomo": {
             "hideUnavailable": bool(DEFAULTS["mihomo"]["hideUnavailable"]),
@@ -686,6 +758,23 @@ def _sanitize_full(raw: Any) -> Tuple[Dict[str, Any], SettingsReport]:
                 rep.warnings.append({"path": f"routing.{k}", "warning": "unknown key dropped"})
                 rep.changed = True
 
+    # ---- diagnostics ----
+    diagnostics_raw = raw.get("diagnostics")
+    if diagnostics_raw is None:
+        pass
+    elif not isinstance(diagnostics_raw, dict):
+        rep.warnings.append({"path": "diagnostics", "warning": "must be an object; reset"})
+        rep.changed = True
+    else:
+        if diagnostics_raw.get("tariffs") is not None:
+            tariffs_clean = _sanitize_tariffs(diagnostics_raw.get("tariffs"), strict=False, report=rep)
+            if tariffs_clean is not None:
+                out["diagnostics"]["tariffs"] = tariffs_clean
+        for k in diagnostics_raw.keys():
+            if k != "tariffs":
+                rep.warnings.append({"path": f"diagnostics.{k}", "warning": "unknown key dropped"})
+                rep.changed = True
+
     # ---- mihomo ----
     mihomo_raw = raw.get("mihomo")
     if mihomo_raw is None:
@@ -787,7 +876,7 @@ def _sanitize_full(raw: Any) -> Tuple[Dict[str, Any], SettingsReport]:
 
     # ---- top-level unknown keys ----
     for k in raw.keys():
-        if k not in ("schemaVersion", "editor", "format", "layout", "logs", "runtime", "routing", "mihomo"):
+        if k not in ("schemaVersion", "editor", "format", "layout", "logs", "runtime", "routing", "diagnostics", "mihomo"):
             rep.warnings.append({"path": k, "warning": "unknown key dropped"})
             rep.changed = True
 
@@ -1059,6 +1148,21 @@ def _sanitize_patch(patch: Any) -> Tuple[Dict[str, Any], SettingsReport]:
             if p:
                 out["routing"] = p
 
+    # diagnostics
+    if "diagnostics" in patch:
+        diagnostics_patch = patch.get("diagnostics")
+        if not isinstance(diagnostics_patch, dict):
+            rep.errors.append({"path": "diagnostics", "error": "must be an object"})
+        else:
+            if "tariffs" in diagnostics_patch:
+                errors_before = len(rep.errors)
+                tariffs_clean = _sanitize_tariffs(diagnostics_patch.get("tariffs"), strict=True, report=rep)
+                if tariffs_clean and len(rep.errors) == errors_before:
+                    out["diagnostics"] = {"tariffs": tariffs_clean}
+            for k in diagnostics_patch.keys():
+                if k != "tariffs":
+                    rep.warnings.append({"path": f"diagnostics.{k}", "warning": "unknown key dropped"})
+
     # mihomo
     if "mihomo" in patch:
         mihomo_patch = patch.get("mihomo")
@@ -1149,7 +1253,7 @@ def _sanitize_patch(patch: Any) -> Tuple[Dict[str, Any], SettingsReport]:
                 out["mihomo"] = p
 
     for k in patch.keys():
-        if k not in ("schemaVersion", "editor", "format", "layout", "logs", "runtime", "routing", "mihomo"):
+        if k not in ("schemaVersion", "editor", "format", "layout", "logs", "runtime", "routing", "diagnostics", "mihomo"):
             rep.warnings.append({"path": k, "warning": "unknown key dropped"})
 
     return out, rep
@@ -1251,6 +1355,15 @@ def patch_settings(patch: Any, ui_state_dir: str = UI_STATE_DIR) -> Tuple[Dict[s
                 errors=[{"path": "layout", "error": "at least one scroll mode must be enabled"}],
             )
 
+    tariffs = (merged.get("diagnostics") or {}).get("tariffs") if isinstance(merged, dict) else None
+    if isinstance(tariffs, dict):
+        in_use = [c for c, f in tariffs.items() if isinstance(f, dict) and any(v is not None for v in f.values())]
+        if len(in_use) > _TARIFF_MAX_CONNECTIONS:
+            raise UISettingsValidationError(
+                "bad patch",
+                errors=[{"path": "diagnostics.tariffs", "error": _TARIFF_TOO_MANY}],
+            )
+
     # Enforce server-owned schemaVersion.
     if isinstance(merged, dict):
         merged["schemaVersion"] = SCHEMA_VERSION
@@ -1270,3 +1383,17 @@ def patch_settings(patch: Any, ui_state_dir: str = UI_STATE_DIR) -> Tuple[Dict[s
         "errors": rep.errors,
     }
     return saved, report_out
+
+
+def get_diagnostics_tariffs(ui_state_dir: str = UI_STATE_DIR) -> Dict[str, Tuple[Optional[int], Optional[int]]]:
+    """Channel tariff per connection: ``{id: (upload, download)}`` in Mbit/s."""
+
+    try:
+        stored = load_settings(ui_state_dir).get("diagnostics", {}).get("tariffs", {})
+    except Exception:
+        return {}
+    result: Dict[str, Tuple[Optional[int], Optional[int]]] = {}
+    for conn, fields in (stored or {}).items():
+        if isinstance(fields, dict):
+            result[str(conn)] = (fields.get("up_mbps"), fields.get("down_mbps"))
+    return result

@@ -963,6 +963,7 @@ def create_app(*, ws_runtime: bool = False):
                 ("terminal.pty_cleanup", "tool.terminal"),
                 ("files.worker_queue", "tool.files"),
                 ("mihomo.clash_telemetry_workers", "engine.mihomo"),
+                ("diagnostics.resource_history", "tool.advanced-diagnostics"),
             )
         ]
         diagnostic = module_registry.write_runtime_diagnostic(

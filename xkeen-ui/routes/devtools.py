@@ -119,6 +119,14 @@ def create_devtools_blueprint(
                 payload["ui_process"] = get_memory_guard_status()
             except Exception:  # noqa: BLE001 - optional process telemetry
                 pass
+            try:
+                from services.system_resources_history.zones import header_zones
+
+                payload["zones"] = header_zones(
+                    (payload.get("cpu") or {}).get("percent"), (payload.get("memory") or {}).get("percent")
+                )
+            except Exception:  # noqa: BLE001 - the header stays neutral without zones
+                pass
         payload["ok"] = True
         response = jsonify(payload)
         response.headers["Cache-Control"] = "no-store"

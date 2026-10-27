@@ -297,7 +297,13 @@ stop_service() {
     if [ -n "$PID" ]; then
       echo "Останавливаю Xkeen Web UI (PID $PID)..."
       kill "$PID" 2>/dev/null || true
+      # Панель по SIGTERM успевает сохранить историю ресурсов; ждём выхода до 3 с.
+      STOP_WAIT=0
       sleep 1
+      while kill -0 "$PID" 2>/dev/null && [ "$STOP_WAIT" -lt 2 ]; do
+        sleep 1
+        STOP_WAIT=$((STOP_WAIT + 1))
+      done
       if kill -0 "$PID" 2>/dev/null; then
         echo "Принудительное завершение процесса $PID..."
         kill -9 "$PID" 2>/dev/null || true

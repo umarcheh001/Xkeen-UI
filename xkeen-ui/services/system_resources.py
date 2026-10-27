@@ -14,6 +14,8 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
+from services.system_resources_history.sensors import memory_split, procs_running
+
 
 PROC_STAT = Path("/proc/stat")
 PROC_MEMINFO = Path("/proc/meminfo")
@@ -80,7 +82,12 @@ def _memory(text: str) -> dict[str, int | float]:
     used = max(0, total - available)
     swap_total = max(0, values.get("SwapTotal", 0))
     swap_free = max(0, min(swap_total, values.get("SwapFree", 0)))
+    # programs / cache / free sum up to the total; "percent" leaves the cache out
+    split = memory_split(text)
     return {
+        "programs_bytes": split["programs_bytes"],
+        "cache_bytes": split["cache_bytes"],
+        "free_bytes": split["free_bytes"],
         "total_bytes": total,
         "used_bytes": used,
         "available_bytes": available,
@@ -159,6 +166,15 @@ def _storage(disk_usage: Callable[[str], Any]) -> dict[str, int | float | str]:
     }
 
 
+def sample_storage(disk_usage: Callable[[str], Any] = shutil.disk_usage) -> dict[str, int | float | str] | None:
+    """Capacity of the Entware flash, or ``None`` when it cannot be read."""
+
+    try:
+        return _storage(disk_usage)
+    except (OSError, ValueError, TypeError, AttributeError):
+        return None
+
+
 def _temperature(text: str) -> float | None:
     raw = text.strip().splitlines()[0] if text.strip() else ""
     try:
@@ -188,7 +204,8 @@ def sample_system_resources(
     """Return one bounded resource snapshot or raise ``OSError``/``ValueError``."""
 
     now = clock()
-    cpu = _cpu_counters(reader(PROC_STAT))
+    stat_text = reader(PROC_STAT)
+    cpu = _cpu_counters(stat_text)
     memory = _memory(reader(PROC_MEMINFO))
     load_parts = reader(PROC_LOADAVG).split()
     uptime_parts = reader(PROC_UPTIME).split()
@@ -216,6 +233,8 @@ def sample_system_resources(
             "load_15m": loads[2],
             "runnable_tasks": runnable_tasks,
             "total_tasks": total_tasks,
+            # runnable tasks waiting for a core (the sampler itself is not counted)
+            "queue": procs_running(stat_text),
         },
         "memory": memory,
         "uptime_seconds": max(0, uptime),
@@ -224,10 +243,9 @@ def sample_system_resources(
     network_text = _optional_read(reader, PROC_NET_DEV)
     if network_text:
         payload["network"] = _network(network_text, now=now)
-    try:
-        payload["storage"] = _storage(disk_usage)
-    except (OSError, ValueError, TypeError, AttributeError):
-        pass
+    storage = sample_storage(disk_usage)
+    if storage is not None:
+        payload["storage"] = storage
     temperature = _temperature(_optional_read(reader, THERMAL_ZONE))
     if temperature is not None:
         payload["temperature_celsius"] = temperature

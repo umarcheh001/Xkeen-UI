@@ -23,182 +23,156 @@ def test_resource_monitor_opens_diagnostic_dashboard_from_header():
     assert 'class="modal hidden xk-resource-dashboard-modal"' in template
     assert 'data-operator-modal-family="master-detail"' in template
     for element_id in (
-        "xk-resource-chart-cpu",
-        "xk-resource-chart-memory",
-        "xk-resource-chart-network",
-        "xk-resource-chart-load",
-        "xk-resource-poll",
         "xk-resource-export",
-        "xk-resource-dashboard-resource-source",
-        "xk-clients-show-all",
+        "xk-resource-dashboard-view",
+        "xk-resource-more",
+        "xk-resource-more-menu",
         "xk-resource-dashboard-refresh",
-        "xk-internet-health",
-        "xk-internet-check-dns-row",
-        "xk-dns-guidance",
-        "xk-conntrack-panel",
-        "xk-interface-rows",
-        "xk-interface-panel",
-        "xk-process-panel",
-        "xk-process-action",
-        "xk-clients-panel",
-        "xk-clients-action",
-        "xk-client-rows",
-        "xk-channel-panel",
-        "xk-channel-action",
-        "xk-channel-trace",
-        "xk-channel-trace-result",
-        "xk-channel-trace-title",
-        "xk-channel-trace-note",
-        "xk-channel-trace-hops",
-        "xk-lte-panel",
-        "xk-lte-action",
-        "xk-lte-modems",
-        "xk-incidents-list",
-        "xk-system-details",
     ):
         assert f'id="{element_id}"' in template
-    assert 'data-dns-toggle="false"' in template
-    assert 'aria-controls="xk-dns-guidance"' in template
-    assert 'hidden aria-hidden="true"' in template
-    assert "Ошибки DNS (DoH/DoT)" in template
-    assert "Подробности — в журнале диагностики Keenetic." in template
+    # the old light-DOM sections are gone: the window is drawn inside its shadow root
+    for gone_id in ("xk-system-details", "xk-resource-detail-cores", "xk-resource-detail-interfaces", "xk-internet-health", "xk-conntrack-panel", "xk-dns-guidance", "xk-resource-health"):
+        assert f'id="{gone_id}"' not in template
     assert "Проблемные подключения" not in template
     assert "Что можно сделать" not in template
     assert "Графики показывают нагрузку роутера, а причина указана в блоке DNS ниже" not in script
     assert "Графики ниже показывают ресурсы роутера, но не определяют доступность DNS-upstream" not in template
-    assert 'xk-collapsible-panel' in template
-    assert 'class="btn-secondary xk-toggle-button" id="xk-channel-trace"' in template
-    for tooltip in (
-        "Шлюз — первый узел провайдера.",
-        "DNS преобразует имена сайтов в IP-адреса.",
-        "Captive portal — страница авторизации сети",
-    ):
-        assert tooltip in template
+    assert 'xk-collapsible-panel' not in template
+    # the tool sections moved into the window's shadow root (resource_monitor/tools.js)
+    for gone in ("xk-clients-panel", "xk-channel-panel", "xk-lte-panel", "xk-incidents-list", "xk-interface-panel", "xk-process-panel", "xk-dashboard-tools"):
+        assert f'id="{gone}"' not in template
     for fragment in (
         "setDashboardOpen(true)",
-        "data-resource-range",
-        "MAX_HISTORY = 360",
-        "MAX_HISTORY = 17280",
-        "drawCharts",
-        "receive_bytes_per_second",
-        "PROCESS_ENDPOINT = \"/api/system/processes\"",
-        "CLIENTS_ENDPOINT = \"/api/system/router/clients\"",
-        "LTE_ENDPOINT = \"/api/system/router/lte\"",
-        "CHANNEL_ENDPOINT = \"/api/system/router/channel-check\"",
-        "DNS_DIAGNOSTICS_ENDPOINT = \"/api/system/router/dns-diagnostics\"",
+        "loadProcesses",
+        "loadClients",
+        "loadLte",
+        "runChannelCheck",
+        'setRefreshBusy',
+        'aria-busy',
+        'data-tooltip',
+    ):
+        assert fragment in script
+    # what drew the old light-DOM window is gone with it
+    for gone in (
+        "renderDashboard",
+        "renderInternet",
+        "renderConntrack",
         "renderRouterDiagnostics",
-        "dns_diagnostics",
-        "Ошибка DoH/DoT",
+        "DNS_DIAGNOSTICS_ENDPOINT",
+        "dns-diagnostics",
         "syncDnsGuidanceState",
         "toggleDnsGuidance",
         "loadDnsDiagnostics",
         "dnsDiagnosticsLoaded",
-        "formatOptionalBitRate",
-        'value === true ? "Нет перехвата"',
-        "loadProcesses",
-        "loadClients",
-        "loadLte",
-        'Array.isArray(payload?.items)',
-        "runChannelCheck",
-        "setProcessAction",
-        'setProcessAction("retry", "Повторить")',
-        "activateProcessAction",
-        'interfaceFilter = "active"',
-        'data-interface-filter',
-        'slice(0, 24)',
-        'ctx.createLinearGradient',
-        'traceSmoothLine',
-        'data-chart-toggle',
-        'pointermove',
-        'percentile(values, 95)',
-        'load1: metricNumber(payload?.cpu?.load_1m)',
-        'setPressedGroup',
-        'setRefreshBusy',
-        'syncCollapsiblePanelState',
-        'COLLAPSIBLE_PANEL_SELECTOR = "details.xk-collapsible-panel"',
-        'bindCollapsiblePanelState',
-        'document.addEventListener(\n    "toggle"',
-        'mutation.addedNodes.forEach(syncCollapsiblePanels)',
-        'observe(document.documentElement, { childList: true, subtree: true })',
-        'aria-pressed',
-        'aria-busy',
-        'xk-channel-trace-output',
-        'payload?.trace_summary',
-        'payload?.trace_hops',
-        'data-tooltip',
-        'toggleInterfaceErrorDetails',
-        'appendInterfaceErrorCell',
-        'xk-resource-interface-chip',
-        "drawChartGapAnnotations",
-        "clientsShowAll",
-        "latestClientsPayload",
-        "historyGaps",
-        "selectClients",
+        "resourceHealth",
+        "xk-resource-detail",
+        "xk-internet-",
+        "xk-conntrack-",
+        "xk-resource-health",
+        "xk-resource-interface-chip",
+        "bindCollapsiblePanelState",
+        "syncCollapsiblePanelState",
+        "HIDDEN_POLL_MS",
     ):
-        assert fragment in script
-    assert "Проблема с зашифрованным DNS" in MODEL.read_text(encoding="utf-8")
+        assert gone not in script
+    # the header monitor asks for nothing while the tab is hidden
+    assert "document.hidden" in script
+    assert "Math.max(HIDDEN" not in script
+    for name in ("loadProcesses", "loadClients", "loadLte", "runChannelCheck"):
+        assert f"{name}: () => loadDashboardTool(" in script
+    for gone in ("fetch(CLIENTS_ENDPOINT", "async function loadLte", "async function loadProcesses", "renderInterfaces", "renderClients", "renderLte"):
+        assert gone not in script
+    model = MODEL.read_text(encoding="utf-8")
+    for gone in ("Проблема с зашифрованным DNS", "resourceHealth", "selectClients", "nearestPointIndex"):
+        assert gone not in model
+    assert "buildResourceSnapshot" in model
+    # the history, the polling and the charts of the window live in resource_monitor/dashboard.js
+    for removed in ("selectHistory", "historyGaps", "drawCharts", "MAX_HISTORY", "rangeMinutes", "CHARTS"):
+        assert removed not in script
+    assert 'from "./resource_monitor/dashboard.js"' in script
+    assert "openDashboard()" in script and "closeDashboard()" in script and "exportDashboardSnapshot()" in script
+    assert 'id="xk-dashboard-history"' not in template
+    assert 'id="xk-resource-dashboard-view"' in template
+    # what the header monitor and the window's frame still need
     for fragment in (
+        ".xk-resource-monitor",
+        ".xk-resource-meter",
         ".xk-resource-dashboard-content",
-        ".xk-resource-overview",
-        ".xk-resource-chart-card",
-        ".xk-resource-chart-tooltip",
-        ".xk-resource-chart-stats",
-        '[aria-pressed="true"]',
+        ".xk-resource-dashboard-header",
+        ".xk-resource-dashboard-body",
+        ".xk-resource-more-menu",
+        "#xk-resource-dashboard-view",
         "#xk-resource-dashboard-refresh.is-busy",
+        "flex-flow: column nowrap",
+    ):
+        assert fragment in css
+    # the styles of the old light-DOM window were removed with it (the new one styles itself in its shadow root)
+    for gone in (
+        ".xk-resource-overview",
+        ".xk-resource-chart",
+        ".xk-dashboard-",
+        ".xk-conntrack",
+        ".xk-internet-",
         ".xk-resource-health",
         ".xk-router-diagnostics",
         ".xk-dns-guidance",
-        ".xk-dns-guidance-dot",
         ".xk-resource-table",
-        ".xk-process-panel",
-        ".xk-process-button",
+        ".xk-process-",
         ".xk-resource-stage2-grid",
+        ".xk-stage2-",
         ".xk-collapsible-panel",
-        ".xk-stage2-action",
         ".xk-toggle-button",
-        'content: "Вкл.";',
-        ".xk-channel-trace-summary",
-        ".xk-channel-trace-technical",
+        ".xk-channel-",
         ".xk-incident-row",
-        "flex-flow: column nowrap",
-        ".xk-interface-errors",
-        'background: transparent !important;',
-        ".xk-interface-error-detail",
+        ".xk-interface-",
+        ".xk-lte-",
         ".xk-resource-detail-wide",
         ".xk-resource-interface-chip",
         ".xk-history-guide",
         ".xk-load-explanation",
         ".xk-clients-actions",
+        ".xk-resource-range",
     ):
-        assert fragment in css
+        assert gone not in css
+
+
+TOOLS = ROOT / "xkeen-ui/static/js/features/resource_monitor"
 
 
 def test_lte_modem_controls_keep_probe_but_explain_reset_is_disabled():
-    script = SCRIPT.read_text(encoding="utf-8")
-    template = TEMPLATE
+    script = (TOOLS / "tool_modems.js").read_text(encoding="utf-8")
     css = CSS.read_text(encoding="utf-8")
 
-    assert 'data-lte-action="probe"' in script
+    assert "data-probe=" in script
     assert "Проверить управление" in script
-    assert "Перезапуск из панели отключён" in template
+    assert "Перезапуск из панели отключён" in script
     assert 'data-lte-action="reset"' not in script
     assert "/reset" not in script
     assert "operationId" not in script
     assert "pollLteOperation" not in script
-    assert "innerHTML" not in script
-    assert "body.panel-page .xk-lte-controls" in css
-    assert "body.panel-page .xk-lte-safety-note" in css
-    assert "body.panel-page .xk-lte-control-status" in css
+    assert ".xk-lte-controls" not in css
 
 
 def test_lte_modem_mutations_send_the_shared_csrf_header():
-    script = SCRIPT.read_text(encoding="utf-8")
-    request_body = script.split("async function lteControlRequest", 1)[1].split(
-        "async function probeLteModem", 1
-    )[0]
+    request_body = (TOOLS / "tools_net.js").read_text(encoding="utf-8")
 
     assert "coreHttp?.withCSRF" in request_body
     assert 'coreHttp.withCSRF(requestInit, requestInit.method || "GET")' in request_body
     assert 'meta[name="csrf-token"]' in request_body
     assert 'headers.has("X-CSRF-Token")' in request_body
     assert 'headers.set("X-CSRF-Token", token)' in request_body
+    assert 'method: "POST"' in (TOOLS / "tool_modems.js").read_text(encoding="utf-8")
+
+
+def test_tool_tabs_use_the_same_endpoints_and_escape_server_strings():
+    sources = {name: (TOOLS / name).read_text(encoding="utf-8") for name in ("tool_devices.js", "tool_ping.js", "tool_procs.js", "tool_modems.js", "tool_events.js")}
+    assert '"/api/system/router/clients"' in sources["tool_devices.js"]
+    assert '"/api/system/router/channel-check"' in sources["tool_ping.js"]
+    assert '"/api/system/processes"' in sources["tool_procs.js"]
+    assert '"/api/system/router/lte"' in sources["tool_modems.js"]
+    assert '"/api/system/events"' in sources["tool_events.js"]
+    for name, text in sources.items():
+        assert "esc(" in text, name
+    # the IMEI is masked before it reaches the page
+    assert "maskImei(item.imei)" in sources["tool_modems.js"]
+    assert "item.imei}" not in sources["tool_modems.js"]

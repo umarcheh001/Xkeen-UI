@@ -3,209 +3,22 @@
       <div class="modal-content xk-resource-dashboard-content">
         <div class="modal-header xk-resource-dashboard-header">
           <div class="xk-resource-dashboard-heading">
-            <span class="xk-dashboard-eyebrow">Система / Мониторинг</span>
             <span class="modal-title" id="xk-resource-dashboard-title">Диагностика роутера</span>
-            <span id="xk-resource-dashboard-freshness" class="xk-resource-dashboard-freshness">Ожидание телеметрии</span>
+            <span id="xk-resource-dashboard-freshness" class="xk-resource-dashboard-freshness">Обновлено —</span>
           </div>
           <div class="xk-resource-dashboard-actions">
-            <div class="xk-resource-range" role="group" aria-label="Интервал графиков">
-              <button type="button" class="btn-secondary is-active" data-resource-range="5" aria-pressed="true" data-tooltip="Показать последние 5 минут телеметрии">5 мин</button>
-              <button type="button" class="btn-secondary" data-resource-range="15" aria-pressed="false" data-tooltip="Показать последние 15 минут телеметрии">15 мин</button>
-              <button type="button" class="btn-secondary" data-resource-range="30" aria-pressed="false" data-tooltip="Показать последние 30 минут телеметрии">30 мин</button>
-              <button type="button" class="btn-secondary" data-resource-range="60" aria-pressed="false" data-tooltip="Показать последний час телеметрии">1 ч</button>
-              <button type="button" class="btn-secondary" data-resource-range="360" aria-pressed="false" data-tooltip="Показать последние 6 часов телеметрии">6 ч</button>
-              <button type="button" class="btn-secondary" data-resource-range="1440" aria-pressed="false" data-tooltip="Показать последние 24 часа телеметрии">24 ч</button>
+            <button type="button" class="btn-secondary btn-icon" id="xk-resource-dashboard-refresh" aria-label="Обновить" data-tooltip="Обновить: запросить свежие данные роутера">{{ op_icon('refresh') }}</button>
+            <div class="xk-resource-more">
+              <button type="button" class="btn-secondary btn-icon" id="xk-resource-more" aria-haspopup="true" aria-expanded="false" aria-controls="xk-resource-more-menu" aria-label="Ещё" data-tooltip="Ещё">{{ op_icon('more') }}</button>
+              <div class="xk-resource-more-menu" id="xk-resource-more-menu" role="menu" hidden>
+                <button type="button" role="menuitem" id="xk-resource-export" disabled data-tooltip="Скачать JSON: ресурсы и история за выбранный интервал, без IP-адресов, клиентов и журналов">Снимок JSON</button>
+              </div>
             </div>
-            <label class="xk-dashboard-poll" data-tooltip="Частота лёгкого опроса ресурсов. Тяжёлые проверки запускаются только вручную.">
-              <span>Обновление</span>
-              <select id="xk-resource-poll" aria-label="Автообновление телеметрии">
-                <option value="5000">5 с</option>
-                <option value="15000">15 с</option>
-                <option value="30000">30 с</option>
-                <option value="0">Пауза</option>
-              </select>
-            </label>
-            <button type="button" class="btn-secondary" id="xk-resource-export" disabled data-tooltip="Скачать JSON: ресурсы и история за выбранный интервал, без IP-адресов, клиентов и журналов">Снимок JSON</button>
-            <button type="button" class="btn-secondary btn-icon" id="xk-resource-dashboard-refresh" aria-label="Обновить телеметрию" data-tooltip="Запросить свежую телеметрию роутера">{{ op_icon('refresh') }}</button>
             <button type="button" class="modal-close" id="xk-resource-dashboard-close" aria-label="Закрыть" data-tooltip="Закрыть диагностику роутера">{{ op_icon('close') }}</button>
           </div>
         </div>
         <div class="modal-body xk-resource-dashboard-body">
-          <div class="xk-resource-health" id="xk-resource-health" data-tone="unknown" role="status">
-            <span class="xk-resource-health-dot" aria-hidden="true"></span>
-            <strong id="xk-resource-health-title">Ожидание телеметрии</strong>
-            <span id="xk-resource-health-note">Получаем состояние роутера</span>
-            <span class="xk-dashboard-live" id="xk-resource-live" data-state="waiting">Ожидание</span>
-          </div>
-
-          <details class="xk-dashboard-section" id="xk-dashboard-overview" open>
-            <summary>Обзор <span>Ключевые показатели в реальном времени</span></summary>
-            <section class="xk-resource-overview" aria-label="Ключевые показатели">
-              <article class="xk-dashboard-tile xk-dashboard-resources">
-                <h3>Системные ресурсы</h3>
-                <div class="xk-dashboard-gauge" data-resource-stat="cpu">
-                  <span>CPU</span><div class="xk-resource-stat-meter"><i id="xk-resource-dashboard-cpu-meter"></i></div><strong id="xk-resource-dashboard-cpu">—</strong>
-                </div>
-                <div class="xk-dashboard-gauge" data-resource-stat="memory">
-                  <span>RAM</span><div class="xk-resource-stat-meter"><i id="xk-resource-dashboard-memory-meter"></i></div><strong id="xk-resource-dashboard-memory">—</strong>
-                </div>
-                <div class="xk-dashboard-gauge" data-resource-stat="swap">
-                  <span>Swap</span><div class="xk-resource-stat-meter"><i id="xk-resource-dashboard-swap-meter"></i></div><strong id="xk-resource-dashboard-swap">—</strong>
-                </div>
-                <small id="xk-resource-dashboard-memory-note">Ожидание данных памяти</small>
-                <small id="xk-resource-dashboard-resource-source">Источник показаний определяется</small>
-              </article>
-              <article class="xk-dashboard-tile xk-dashboard-load">
-                <h3 data-tooltip="Load average — число выполняющихся или ожидающих задач, не проценты CPU. Значение около числа ядер означает полную загрузку.">Средняя нагрузка</h3>
-                {% for interval in [1, 5, 15] %}
-                <div class="xk-dashboard-gauge">
-                  <span>{{ interval }} мин</span><div class="xk-resource-stat-meter"><i id="xk-resource-load-{{ interval }}-meter"></i></div><strong id="xk-resource-load-{{ interval }}">—</strong>
-                </div>
-                {% endfor %}
-                <small id="xk-resource-dashboard-load">Load —</small>
-              </article>
-              <article class="xk-dashboard-tile xk-dashboard-network">
-                <h3>Сетевой трафик</h3>
-                <div class="xk-dashboard-rate"><span>↓ Приём</span><strong id="xk-resource-network-receive">—</strong></div>
-                <div class="xk-dashboard-rate"><span>↑ Отдача</span><strong id="xk-resource-network-send">—</strong></div>
-                <small>Сумма интерфейсов, не скорость WAN</small>
-              </article>
-              <article class="xk-dashboard-tile xk-dashboard-single" data-resource-stat="storage">
-                <h3>Диск Entware</h3><strong id="xk-resource-dashboard-storage">—</strong><small id="xk-resource-dashboard-storage-note">—</small>
-                <div class="xk-resource-stat-meter"><i id="xk-resource-dashboard-storage-meter"></i></div>
-              </article>
-              <article class="xk-dashboard-tile xk-dashboard-single" data-resource-stat="temperature">
-                <h3>Температура</h3><strong id="xk-resource-dashboard-temperature">—</strong><small id="xk-resource-dashboard-uptime">Аптайм —</small>
-                <div class="xk-resource-stat-meter"><i id="xk-resource-dashboard-temperature-meter"></i></div>
-              </article>
-            </section>
-          </details>
-
-          <details class="xk-dashboard-section" id="xk-dashboard-connectivity" open>
-            <summary>Подключение <span>Интернет, DNS и таблица соединений</span></summary>
-          <section class="xk-router-diagnostics" aria-label="Состояние подключения и соединений">
-            <article class="xk-resource-panel xk-internet-health" id="xk-internet-health" data-tone="unknown">
-              <header>
-                <div><strong>Доступность интернета</strong><span id="xk-internet-summary">Ожидание данных RCI</span></div>
-                <span class="xk-resource-state-badge" id="xk-internet-state">—</span>
-              </header>
-              <div class="xk-internet-checks">
-                <div data-internet-check="internet"><i></i><span>Internet</span><strong id="xk-internet-check-internet">—</strong></div>
-                <div data-internet-check="gateway" data-tooltip="Шлюз — первый узел провайдера. Проверка показывает, доступен ли выход из вашей сети." data-tooltip-placement="bottom"><i></i><span>Gateway</span><strong id="xk-internet-check-gateway">—</strong></div>
-                <div id="xk-internet-check-dns-row" data-internet-check="dns" data-dns-toggle="false" role="button" tabindex="-1" aria-controls="xk-dns-guidance" aria-expanded="false" aria-disabled="true" data-tooltip="DNS преобразует имена сайтов в IP-адреса. Диагностика также учитывает ошибки зашифрованных DoH/DoT-транспортов в журнале роутера." data-tooltip-placement="bottom"><i></i><span>DNS</span><strong id="xk-internet-check-dns">—</strong></div>
-                <div data-internet-check="captive" data-tooltip="Captive portal — страница авторизации сети, например Wi‑Fi в отеле. «Нет перехвата» означает, что авторизация не требуется." data-tooltip-placement="bottom"><i></i><span>Captive</span><strong id="xk-internet-check-captive">—</strong></div>
-              </div>
-              <dl class="xk-internet-meta">
-                <div><dt>Интерфейс</dt><dd id="xk-internet-interface">—</dd></div>
-                <div><dt>WAN-адрес</dt><dd id="xk-internet-address">—</dd></div>
-                <div><dt>Свежесть</dt><dd id="xk-router-freshness">—</dd></div>
-              </dl>
-            </article>
-
-            <article class="xk-resource-panel xk-conntrack-panel" id="xk-conntrack-panel" data-tone="unknown">
-              <header><div><strong>Conntrack</strong><span>Активные NAT-соединения</span></div><span class="xk-resource-state-badge" id="xk-conntrack-state">—</span></header>
-              <div class="xk-conntrack-value"><strong id="xk-conntrack-percent">—</strong><span id="xk-conntrack-usage">Данные недоступны</span></div>
-              <div class="xk-conntrack-meter" role="progressbar" aria-label="Заполнение таблицы соединений" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="xk-conntrack-meter"></i></div>
-              <span class="xk-conntrack-note" id="xk-conntrack-available">—</span>
-            </article>
-          </section>
-
-          <aside class="xk-dns-guidance" id="xk-dns-guidance" role="status" aria-live="polite" hidden aria-hidden="true" data-state="idle" aria-busy="false">
-            <span class="xk-dns-guidance-dot" aria-hidden="true"></span>
-            <div>
-              <strong id="xk-dns-guidance-title">Ошибки DNS (DoH/DoT)</strong>
-              <span id="xk-dns-guidance-note">Подробности — в журнале диагностики Keenetic.</span>
-            </div>
-          </aside>
-          </details>
-
-          <details class="xk-dashboard-section" id="xk-dashboard-history" open>
-            <summary>История нагрузки <span id="xk-resource-history-note">CPU, память и сеть · для поиска пиков за выбранный интервал</span></summary>
-          <section class="xk-resource-charts" aria-label="История показателей">
-            <article class="xk-resource-chart-card xk-resource-chart-card-wide" data-chart-card="load">
-              <header><div><strong>Load average · 1 / 5 / 15 минут</strong><span>Сколько задач одновременно выполняются или ждут CPU · это не проценты</span></div><div class="xk-resource-chart-legend">
-                {% for interval in [1, 5, 15] %}<button type="button" data-chart-toggle="load" data-series="load{{ interval }}" aria-pressed="true">{{ interval }} мин</button>{% endfor %}
-              </div></header>
-              <p class="xk-load-explanation" id="xk-resource-load-explanation">Load average показывает очередь задач, а не проценты CPU.</p>
-              <div class="xk-resource-chart-wrap"><canvas id="xk-resource-chart-load" role="img" aria-label="График средней нагрузки за 1, 5 и 15 минут"></canvas><div class="xk-resource-chart-tooltip" role="status" aria-live="polite" hidden></div><div class="xk-resource-chart-empty">История накапливается</div></div>
-              <div class="xk-resource-chart-stats" id="xk-resource-chart-load-stats" aria-label="Статистика средней нагрузки"></div>
-              <div class="xk-history-guide" aria-label="Как читать load average"><span><strong>1 мин</strong> реакция сейчас</span><span><strong>5 мин</strong> сглаженная нагрузка</span><span><strong>15 мин</strong> длительный тренд</span><span><strong>Ориентир</strong> сравнивайте с числом ядер</span></div>
-            </article>
-            <article class="xk-resource-chart-card" data-chart-card="cpu"><header><div><strong>Процессор</strong><span>Загрузка CPU · наведите для деталей</span></div><div class="xk-resource-chart-legend"><button type="button" data-chart-toggle="cpu" data-series="cpu" aria-pressed="true" data-tooltip="Загрузка процессора">CPU</button></div></header><div class="xk-resource-chart-wrap"><canvas id="xk-resource-chart-cpu" role="img" aria-label="График загрузки CPU"></canvas><div class="xk-resource-chart-tooltip" role="status" aria-live="polite" hidden></div><div class="xk-resource-chart-empty">История накапливается</div></div><div class="xk-resource-chart-stats" id="xk-resource-chart-cpu-stats" aria-label="Статистика нагрузки"></div></article>
-            <article class="xk-resource-chart-card" data-chart-card="memory"><header><div><strong>Память</strong><span>RAM и swap · наведите для деталей</span></div><div class="xk-resource-chart-legend"><button type="button" data-chart-toggle="memory" data-series="memory" aria-pressed="true" data-tooltip="Показать или скрыть использование RAM">RAM</button><button type="button" data-chart-toggle="memory" data-series="swap" aria-pressed="true" data-tooltip="Показать или скрыть использование swap">Swap</button></div></header><div class="xk-resource-chart-wrap"><canvas id="xk-resource-chart-memory" role="img" aria-label="График использования памяти и swap"></canvas><div class="xk-resource-chart-tooltip" role="status" aria-live="polite" hidden></div><div class="xk-resource-chart-empty">История накапливается</div></div><div class="xk-resource-chart-stats" id="xk-resource-chart-memory-stats" aria-label="Статистика памяти"></div></article>
-            <article class="xk-resource-chart-card xk-resource-chart-card-wide" data-chart-card="network"><header><div><strong>Сетевая активность</strong><span>Суммарная скорость интерфейсов · пунктир означает пропуск опроса, а не нулевой трафик</span></div><div class="xk-resource-chart-legend"><button type="button" data-chart-toggle="network" data-series="receive" aria-pressed="true" data-tooltip="Показать или скрыть скорость приёма">Приём</button><button type="button" data-chart-toggle="network" data-series="send" aria-pressed="true" data-tooltip="Показать или скрыть скорость отдачи">Отдача</button></div></header><div class="xk-resource-chart-wrap"><canvas id="xk-resource-chart-network" role="img" aria-label="График сетевой активности"></canvas><div class="xk-resource-chart-tooltip" role="status" aria-live="polite" hidden></div><div class="xk-resource-chart-empty">История накапливается</div></div><div class="xk-resource-chart-stats" id="xk-resource-chart-network-stats" aria-label="Статистика сетевой активности"></div></article>
-          </section>
-          </details>
-
-          <details class="xk-dashboard-section" id="xk-dashboard-tools" open>
-            <summary>Проверки и события <span>Тяжёлые запросы — только по требованию</span></summary>
-          <section class="xk-resource-stage2-grid" aria-label="Расширенная диагностика">
-            <details class="xk-resource-panel xk-stage2-panel xk-collapsible-panel" id="xk-clients-panel">
-              <summary><span><strong>Top‑5 потребителей</strong><small>Клиенты и Wi‑Fi станции · запрос по требованию</small></span><span class="xk-clients-actions"><button type="button" class="btn-secondary xk-stage2-action" id="xk-clients-action" aria-pressed="false" data-tooltip="Загрузить список клиентов через show/ip/hotspot">Загрузить</button><button type="button" class="btn-secondary xk-stage2-action" id="xk-clients-show-all" aria-pressed="false" hidden>Показать всех</button></span></summary>
-              <div class="xk-stage2-content"><div class="xk-stage2-status" id="xk-clients-status">Откройте секцию и загрузите список клиентов.</div><p class="xk-clients-rate-note">Трафик — накопленный объём. RX/TX линка — согласованная скорость Wi‑Fi, не текущее потребление интернета.</p><div class="xk-resource-table-wrap"><table class="xk-resource-table"><thead><tr><th>Клиент</th><th>Трафик</th><th>RX линка</th><th>TX линка</th><th>RSSI</th><th>AP</th></tr></thead><tbody id="xk-client-rows"></tbody></table></div></div>
-            </details>
-            <details class="xk-resource-panel xk-stage2-panel xk-collapsible-panel" id="xk-channel-panel" aria-labelledby="xk-channel-title" open>
-              <summary><span><strong id="xk-channel-title">Проверка канала</strong><small>Ping, jitter, loss; трассировка запускается отдельно</small></span><button type="button" class="btn-secondary xk-stage2-action" id="xk-channel-action" data-tooltip="Проверить задержку и потери до 1.1.1.1">Проверить</button></summary>
-              <div class="xk-channel-controls"><input id="xk-channel-target" value="1.1.1.1" maxlength="253" aria-label="Адрес проверки" title="IP-адрес или имя хоста для ping"><button type="button" class="btn-secondary xk-toggle-button" id="xk-channel-trace" aria-pressed="false" data-tooltip="После ping дополнительно выполнить traceroute">Traceroute</button></div>
-              <div class="xk-stage2-status" id="xk-channel-status">Проверка не запускалась.</div>
-              <section class="xk-channel-trace-result" id="xk-channel-trace-result" aria-live="polite" hidden>
-                <div class="xk-channel-trace-summary">
-                  <span class="xk-channel-trace-icon" aria-hidden="true"></span>
-                  <div><strong id="xk-channel-trace-title">Результат трассировки</strong><span id="xk-channel-trace-note"></span></div>
-                </div>
-                <div class="xk-channel-trace-hops" id="xk-channel-trace-hops" aria-label="Ответившие узлы маршрута" hidden></div>
-                <details class="xk-channel-trace-technical"><summary>Технические детали</summary><pre class="xk-channel-trace" id="xk-channel-trace-output"></pre></details>
-              </section>
-            </details>
-            <details class="xk-resource-panel xk-stage2-panel xk-collapsible-panel" id="xk-lte-panel" open><summary><span><strong>LTE / модемы</strong><small id="xk-lte-summary">Определение при открытии</small></span><button type="button" class="btn-secondary xk-stage2-action" id="xk-lte-action" aria-pressed="false" data-tooltip="Проверить состояние всех LTE-модемов через RCI">Обновить</button></summary><p class="xk-lte-safety-note">Перезапуск из панели отключён: модемами управляет Keenetic.</p><div class="xk-lte-modems" id="xk-lte-modems"><span class="xk-stage2-status">Нажмите «Обновить», чтобы получить данные модемов.</span></div></details>
-            <details class="xk-resource-panel xk-stage2-panel xk-collapsible-panel" id="xk-incidents-panel" open><summary><span><strong>Инциденты</strong><small>Краткая история переходов состояния</small></span></summary><div class="xk-incidents-list" id="xk-incidents-list"><span class="xk-stage2-status">Пока без событий.</span></div></details>
-          </section>
-
-          <details class="xk-resource-panel xk-interface-panel xk-collapsible-panel" id="xk-interface-panel" aria-labelledby="xk-interface-title" open>
-            <summary>
-              <span><strong id="xk-interface-title">Интерфейсы</strong><small id="xk-interface-summary">WAN, LAN, Wi‑Fi и VPN</small></span>
-              <div class="xk-interface-filter" role="group" aria-label="Фильтр интерфейсов">
-                <button type="button" class="btn-secondary is-active" data-interface-filter="active" aria-pressed="true" data-tooltip="Показывать только активные интерфейсы">Активные</button>
-                <button type="button" class="btn-secondary" data-interface-filter="all" aria-pressed="false" data-tooltip="Показывать все интерфейсы, включая неактивные">Все</button>
-              </div>
-            </summary>
-            <div class="xk-resource-table-wrap">
-              <table class="xk-resource-table">
-                <thead><tr><th>Интерфейс</th><th>Состояние</th><th>Адрес</th><th>Приём</th><th>Отдача</th><th>Ошибки / drops</th></tr></thead>
-                <tbody id="xk-interface-rows"><tr><td colspan="6" class="xk-resource-table-empty">Ожидание данных RCI</td></tr></tbody>
-              </table>
-            </div>
-          </details>
-
-          <details class="xk-resource-panel xk-process-panel xk-collapsible-panel" id="xk-process-panel">
-            <summary>
-              <span><strong>Процессы</strong><small>Тяжёлый запрос RCI выполняется только по требованию</small></span>
-              <span class="btn-secondary xk-process-button" id="xk-process-action" role="button" tabindex="0" aria-pressed="false" data-tooltip="Открыть список процессов и загрузить Top CPU/RAM">{{ op_icon('processes') }}<span class="xk-action-label">Показать процессы</span></span>
-            </summary>
-            <div class="xk-process-content">
-              <div class="xk-process-status" id="xk-process-status">Откройте секцию, чтобы загрузить Top CPU и RAM.</div>
-              <div class="xk-resource-table-wrap">
-                <table class="xk-resource-table">
-                  <thead><tr><th>Процесс</th><th>PID</th><th>CPU</th><th>Память</th><th>Потоки</th><th>Состояние</th></tr></thead>
-                  <tbody id="xk-process-rows"></tbody>
-                </table>
-              </div>
-              <button type="button" class="btn-secondary xk-process-button" id="xk-process-refresh" data-tooltip="Повторно запросить список процессов через RCI">{{ op_icon('refresh') }}<span class="xk-action-label">Обновить процессы</span></button>
-            </div>
-          </details>
-
-          <details class="xk-resource-details xk-resource-panel xk-collapsible-panel" id="xk-system-details" aria-label="Сведения о системе" open>
-            <summary><span><strong>Состояние системы</strong><small>Данные Linux procfs, без внешней телеметрии</small></span></summary>
-            <dl>
-              <div><dt>Ядра CPU</dt><dd id="xk-resource-detail-cores">—</dd></div>
-              <div><dt>Load 1 / 5 / 15 мин</dt><dd id="xk-resource-detail-load">—</dd></div>
-              <div><dt>Задачи</dt><dd id="xk-resource-detail-tasks">—</dd></div>
-              <div><dt>Swap</dt><dd id="xk-resource-detail-swap">—</dd></div>
-              <div><dt>Сеть за время работы</dt><dd id="xk-resource-detail-network">—</dd></div>
-              <div class="xk-resource-detail-wide"><dt>Интерфейсы</dt><dd id="xk-resource-detail-interfaces">—</dd></div>
-            </dl>
-          </details>
-          </details>
+          <div id="xk-resource-dashboard-view"></div>
         </div>
       </div>
     </div>

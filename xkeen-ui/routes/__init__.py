@@ -467,6 +467,8 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
             "system_resources_blueprint_init_failed",
             _build_system_resources,
         )
+        # The history thread is started by run_server.py (the production entry),
+        # not here: tests build many apps and none may leave a sampling thread behind.
 
     if not module_active("tool.files"):
         publish_blueprint_owner_diagnostic()

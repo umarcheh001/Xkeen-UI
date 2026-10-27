@@ -93,6 +93,18 @@ def create_ui_settings_blueprint() -> Blueprint:
             except Exception:
                 pass
 
+        diagnostics = payload.get("diagnostics")
+        if isinstance(diagnostics, dict) and "tariffs" in diagnostics:
+            # a new tariff applies to the running history collector at once
+            try:
+                from services.system_resources_history.collector import get_collector
+
+                collector = get_collector()
+                if collector is not None:
+                    collector.refresh_tariffs()
+            except Exception:  # noqa: BLE001 - the collector re-reads tariffs every minute anyway
+                pass
+
         # Client can ignore report; it is helpful for debugging.
         resp: dict[str, Any] = {"ok": True, "settings": cfg}
         if isinstance(report, dict) and (report.get("warnings") or report.get("errors")):

@@ -604,3 +604,32 @@ def test_rci_fetcher_uses_tokenized_request_and_decodes_json():
     assert fetch_rci_json("show/internet/status", opener=opener) == {"internet": True}
     assert captured["url"].endswith("/rci/show/internet/status")
     assert captured["timeout"] == 2.0
+
+
+def test_memory_not_overridden_by_firmware_when_procfs_present():
+    from services.router_diagnostics import apply_router_resource_telemetry
+
+    firmware = {
+        "available": True,
+        "state": "available",
+        "cpu": {"percent": 3.0},
+        "memory": {"percent": 44.9, "used_bytes": 460, "total_bytes": 1024},
+    }
+    procfs = {"cpu": {"percent": 56.0}, "memory": {"percent": 46.6, "total_bytes": 991, "programs_bytes": 462}}
+
+    apply_router_resource_telemetry(procfs, system_reader=lambda: firmware)
+
+    assert procfs["memory"] == {"percent": 46.6, "total_bytes": 991, "programs_bytes": 462}
+    assert procfs["cpu"]["percent"] == 3.0  # the processor figure still comes from the firmware
+    assert procfs["resource_telemetry"]["comparison"]["keenetic_rci"]["memory_percent"] == 44.9
+    assert procfs["resource_telemetry"]["comparison"]["linux_procfs"]["memory_percent"] == 46.6
+
+
+def test_memory_falls_back_to_firmware_without_procfs_data():
+    from services.router_diagnostics import apply_router_resource_telemetry
+
+    firmware = {"available": True, "state": "available", "cpu": {}, "memory": {"percent": 44.9, "total_bytes": 1024}}
+    for broken in ({}, {"total_bytes": 0, "percent": 0.0}):
+        payload = {"cpu": {"percent": 1.0}, "memory": dict(broken)}
+        apply_router_resource_telemetry(payload, system_reader=lambda: firmware)
+        assert payload["memory"] == {"percent": 44.9, "total_bytes": 1024}
