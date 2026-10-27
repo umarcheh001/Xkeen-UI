@@ -874,3 +874,25 @@ def test_no_phantom_tile_for_a_radio_the_router_does_not_have(tmp_path):
     ids = [t["id"] for t in c.hardware()["temperatures"]]
     assert "wifi5" not in ids and "wifi24" in ids
     assert "temp:wifi5" not in c.snapshot()["values"]
+
+
+def test_reboot_before_ntp_keeps_the_history_from_flash(tmp_path):
+    r = FakeRouter()
+    c = make(tmp_path, r)
+    for k in range(48, 0, -1):  # a day of history before the reboot
+        c._store.add(r.now - 1800 * k, {"cpu": 30.0})
+    r.step(c, 2)
+    c.save("flash")
+    before = c.history("7d")["history_since"]
+    shutdown = r.now
+    r.now = 1_000_000.0  # rebooted: the clock is not set yet
+    r.uptime = 40.0
+    c2 = make(tmp_path, r)
+    r.step(c2, 20)
+    c2.save("flash")  # a save before NTP must not spoil the copy either
+    r.now = shutdown + 300  # NTP
+    c3 = make(tmp_path, r)
+    r.step(c3, 3)
+    week = c3.history("7d")
+    assert week["history_since"] == before
+    assert 30.0 in [round(v) if v is not None else None for v in week["metrics"]["cpu"]["avg"]]

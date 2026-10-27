@@ -35,6 +35,10 @@ RANGES: dict[str, tuple[str, int, int]] = {
 
 BACK_JUMP_RESET_S = 60
 WEEK_SPAN_S = TIERS["week"][0] * TIERS["week"][1]  # a forward gap longer than all the history
+# A clock further behind the newest sample than all the history is not set yet
+# (no RTC: after a reboot it starts years back until NTP).  Such samples feed only
+# the fresh tier; after this long of them the old history is given up.
+UNSET_CLOCK_GIVE_UP_S = 86400
 FORMAT_VERSION = 1
 
 
@@ -138,6 +142,8 @@ class HistoryStore:
         self._index: dict[str, int] = {}
         self._tiers = {name: _Tier(name, ()) for name in TIERS}
         self._last_ts: float | None = None
+        self._high_ts: float | None = None  # the newest sample ever: real time as far as known
+        self._unset_since: float | None = None  # first sample of the current run on an unset clock
         self._since: float | None = None
         for name in metrics:
             self.add_metric(name)
@@ -168,16 +174,32 @@ class HistoryStore:
                 continue
             samples[i] = number
         fresh = self._tiers["fresh"]
-        if self._last_ts is not None and ts - self._last_ts > WEEK_SPAN_S:
-            # The clock was set (NTP after boot): what came before was never real time.
-            for tier in self._tiers.values():
-                tier.reset()
-            self._since = None
+        if self._high_ts is not None and ts < self._high_ts - WEEK_SPAN_S:
+            if self._unset_since is None or ts < self._unset_since:
+                self._unset_since = ts
+            if ts - self._unset_since < UNSET_CLOCK_GIVE_UP_S:
+                # The clock is not set yet: keep the live view, leave the history alone.
+                if self._last_ts is not None and ts < self._last_ts - BACK_JUMP_RESET_S:
+                    fresh.reset()
+                fresh.add(ts, samples, allow_back=True)
+                self._last_ts = ts
+                return
+            # A day on such a clock: the saved history was the one dated wrong.
+            self._high_ts = None
+        self._unset_since = None
+        if self._high_ts is None or ts - self._high_ts > WEEK_SPAN_S:
+            if self._high_ts is not None or self._last_ts is not None:
+                # The clock was set (NTP after boot): what came before was never real time.
+                for tier in self._tiers.values():
+                    tier.reset()
+                self._since = None
         elif self._last_ts is not None and ts < self._last_ts - BACK_JUMP_RESET_S:
             fresh.reset()
         for name, tier in self._tiers.items():
             tier.add(ts, samples, allow_back=(name == "fresh"))
         self._last_ts = ts
+        if self._high_ts is None or ts > self._high_ts:
+            self._high_ts = ts
         if self._since is None or ts < self._since:
             self._since = ts
 
@@ -253,6 +275,8 @@ class HistoryStore:
         return {
             "version": FORMAT_VERSION,
             "last_ts": self._last_ts,
+            "high_ts": self._high_ts,
+            "unset_since": self._unset_since,
             "since": self._since,
             "tiers": tiers,
         }
@@ -262,6 +286,8 @@ class HistoryStore:
         new ones are empty, the ones not listed are dropped."""
         out = HistoryStore(tuple(metrics))
         out._last_ts = self._last_ts
+        out._high_ts = self._high_ts
+        out._unset_since = self._unset_since
         out._since = self._since
         for name, tier in self._tiers.items():
             new = out._tiers[name]
@@ -285,6 +311,9 @@ class HistoryStore:
             raise ValueError("unsupported history format")
         store = cls(tuple(metrics))
         store._last_ts = data.get("last_ts")
+        # copies saved before the high-water mark existed: the last sample is the best guess
+        store._high_ts = data.get("high_ts", store._last_ts)
+        store._unset_since = data.get("unset_since")
         store._since = data.get("since")
         for name, tier in store._tiers.items():
             saved = data["tiers"][name]

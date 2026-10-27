@@ -241,3 +241,50 @@ def test_median_waits_for_enough_points():
     assert s.median("cpu") == 30  # without the requirement the old behaviour stays
     feed(s, T0 + 47 * 1800, 3 * 1800, 30, step=1800)
     assert s.median("cpu", min_points=48) == 30
+
+
+def _restored(store):
+    import json
+
+    return HistoryStore.from_dict(json.loads(json.dumps(store.to_dict())), store.metrics)
+
+
+def test_boot_before_ntp_keeps_the_restored_history():
+    # Keenetic has no RTC: after a reboot the clock starts years behind until NTP sets it
+    s = HistoryStore(("cpu",))
+    end = feed(s, T0, 2 * 86400, 30, step=60)
+    r = _restored(s)
+    unset = 1_000_000
+    feed(r, unset, 600, 80)  # ten minutes before NTP
+    live = r.columns("15m", unset + 595)["metrics"]["cpu"]["avg"]
+    assert live[-1] == 80  # the live view works on the unset clock
+    ntp = end + 900  # the router was off for a few minutes
+    feed(r, ntp, 600, 40)
+    week = r.columns("7d", ntp + 595)
+    assert week["history_since"] == T0
+    avg = week["metrics"]["cpu"]["avg"]
+    assert 30 in avg and avg[-1] == 40
+    assert 80 not in avg  # nothing from the unset clock reached the long tiers
+    assert r.median("cpu") == 30
+
+
+def test_save_before_ntp_keeps_the_high_water_mark():
+    s = HistoryStore(("cpu",))
+    end = feed(s, T0, 86400, 30, step=60)
+    r = _restored(s)
+    feed(r, 1_000_000, 300, 80)
+    r2 = _restored(r)  # the panel was restarted before NTP
+    feed(r2, end + 600, 300, 40)
+    assert r2.columns("7d", end + 895)["history_since"] == T0
+
+
+def test_a_clock_stuck_far_behind_for_a_day_starts_a_new_history():
+    # the saved history itself was dated in the future: do not wait for it forever
+    s = HistoryStore(("cpu",))
+    feed(s, T0 + 30 * 86400, 600, 30)
+    r = _restored(s)
+    end = feed(r, T0, 86400 + 60, 50, step=60)
+    res = r.columns("7d", end)
+    assert res["history_since"] is not None and res["history_since"] >= T0 + 86400
+    assert 30 not in res["metrics"]["cpu"]["avg"]
+    assert res["metrics"]["cpu"]["avg"][-1] == 50
