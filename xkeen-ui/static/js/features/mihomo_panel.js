@@ -3629,6 +3629,7 @@ let mihomoPanelModuleApi = null;
   MP.refreshEditor = refreshEditorIfAny;
   MP.reloadFromDiskIfClean = reloadFromDiskIfClean;
   MP.markConfigChanged = markConfigChanged;
+  MP.markEditorClean = markEditorClean;
   MP.isEditorDirty = isEditorDirty;
 })();
 
@@ -3727,6 +3728,10 @@ export function isMihomoPanelEditorDirty(...args) {
   return callMihomoPanelApi('isEditorDirty', ...args);
 }
 
+export function markMihomoPanelEditorClean(...args) {
+  return callMihomoPanelApi('markEditorClean', ...args);
+}
+
 export function disposeMihomoPanel(...args) {
   return callMihomoPanelApi('dispose', ...args);
 }
@@ -3753,5 +3758,6 @@ export const mihomoPanelApi = Object.freeze({
   reloadFromDiskIfClean: reloadMihomoPanelFromDiskIfClean,
   markConfigChanged: markMihomoPanelConfigChanged,
   isEditorDirty: isMihomoPanelEditorDirty,
+  markEditorClean: markMihomoPanelEditorClean,
   dispose: disposeMihomoPanel,
 });

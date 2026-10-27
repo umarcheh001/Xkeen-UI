@@ -164,25 +164,26 @@ rule-set:github@domain
     </div>
 
     <!-- Mihomo: import proxy / subscription modal (parser) -->
-    <div id="mihomo-import-modal" class="modal hidden" data-operator-modal-family="editor-workbench" role="dialog" aria-modal="true" aria-label="Импорт узла Mihomo">
-      <div class="modal-content xk-mi-modal" data-modal-key="mihomo-import">
+    <div id="mihomo-import-modal" class="modal hidden" data-operator-modal-family="editor-workbench" data-modal-focus="#mihomo-import-input" data-modal-key="mihomo-import-source-v3" data-modal-remember="1" data-modal-position-only="1" data-modal-noresize="1" data-mi-layout="source" role="dialog" aria-modal="true" aria-labelledby="mihomo-import-title">
+      <div class="modal-content xk-mi-modal xk-mi-modal--source" data-modal-key="mihomo-import">
         <div class="modal-header xk-mi-header">
           <div class="xk-mi-titlebox">
-            <span class="modal-title">Mihomo Premium Import</span>
+            <span class="modal-title" id="mihomo-import-title">Добавить узлы в Mihomo</span>
           </div>
           <button type="button" class="modal-close" id="mihomo-import-close-btn" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
         </div>
         <div class="modal-body xk-mi-body">
           <div class="xk-mi-grid">
             <section class="xk-mi-panel xk-mi-panel--controls">
+              <p class="modal-hint xk-mi-source-lead">Вставьте ссылку узла, подписку или ключ. Для VPN-конфигурации выберите формат вручную.</p>
               <div class="xk-mi-field-grid">
                 <label class="xk-mi-field">
-                  <span class="hint-label">Тип импорта</span>
+                  <span class="hint-label">Формат источника</span>
                   <select id="mihomo-import-mode" class="xray-log-select xk-mi-control">
-                    <option value="auto">Auto</option>
-                    <option value="proxy">Proxy link</option>
-                    <option value="subscription">HTTPS subscription</option>
-                    <option value="amnezia-premium">Amnezia Premium key (vpn://)</option>
+                    <option value="auto">Автоматически</option>
+                    <option value="proxy">Ссылка узла</option>
+                    <option value="subscription">Подписка HTTPS / Happ</option>
+                    <option value="amnezia-premium">Ключ Amnezia Premium (vpn://)</option>
                     <option value="wireguard">WireGuard / AmneziaWG 3.x (.conf)</option>
                     <option value="openvpn">OpenVPN (.ovpn)</option>
                     <option value="tailscale">Tailscale</option>
@@ -190,12 +191,13 @@ rule-set:github@domain
                 </label>
 
                 <label class="xk-mi-field xk-mi-field--grow">
-                  <span class="hint-label">Ссылка / ключ / подписка / конфиг</span>
-                  <textarea id="mihomo-import-input" class="xkeen-textarea outbounds-gen-preview xk-mi-input" spellcheck="false" placeholder="vless://...
+                  <span class="hint-label">Ссылка, ключ или конфигурация</span>
+                  <textarea id="mihomo-import-input" class="xkeen-textarea outbounds-gen-preview xk-mi-input" rows="6" aria-describedby="mihomo-import-input-hint" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="vless://...
 или
 https://..."></textarea>
                 </label>
               </div>
+              <p id="mihomo-import-input-hint" class="modal-hint">Можно вставить несколько ссылок — по одной на строку. Распознавание не сохраняет config.yaml и не перезапускает ядро.</p>
               <p id="mihomo-import-amnezia-premium-hint" class="modal-hint xk-mi-target hidden">
                 Ключ будет однократно отправлен в Amnezia для выпуска AmneziaWG-конфига. В Xkeen ключ не сохраняется.
               </p>
@@ -214,14 +216,48 @@ https://..."></textarea>
                 <div id="mihomo-import-amnezia-locations-count" class="xk-card-desc">Локации ещё не загружены.</div>
               </div>
 
-              <div id="mihomo-import-status" class="status xk-mi-status hidden"></div>
+              <div id="mihomo-import-status" class="status xk-mi-status hidden" role="status" aria-live="polite" aria-atomic="true"></div>
+              <section id="mihomo-import-result-cards" class="xk-mi-result-cards hidden" aria-label="Результат распознавания"></section>
+              <section id="mihomo-import-candidate-summary" class="xk-mi-candidate-summary hidden" aria-label="Итог изменений"></section>
+              <div id="mihomo-import-action-status" class="xk-mi-action-status hidden" role="status" aria-live="polite"></div>
               <p id="mihomo-import-target-hint" class="modal-hint xk-mi-target hidden"></p>
+              <button type="button" id="mihomo-import-preview-toggle" class="btn-secondary btn-compact hidden" aria-expanded="false" aria-controls="mihomo-import-preview-panel">Показать YAML</button>
 
-              <div id="mihomo-import-groups-block" class="xk-mi-groups-card">
+              <section id="mihomo-import-destination-block" class="xk-mi-groups-card xk-mi-destination hidden" aria-labelledby="mihomo-import-destination-title">
                 <div class="xk-mi-section-head">
                   <div>
-                    <div class="xk-mi-section-title">Добавить в группы</div>
-                    <div class="xk-mi-section-subtitle">Выбор из текущего <code>config.yaml</code> для статических <code>proxies</code>.</div>
+                    <div id="mihomo-import-destination-title" class="xk-mi-section-title">Назначение подписки</div>
+                    <div id="mihomo-import-destination-subtitle" class="xk-mi-section-subtitle">Выберите поддерживаемый способ добавления.</div>
+                  </div>
+                </div>
+                <div id="mihomo-import-destination-options" class="xk-mi-destination-options" role="radiogroup" aria-label="Способ добавления подписки">
+                  <label id="mihomo-import-destination-static-option" class="xk-mi-destination-option">
+                    <input type="radio" name="mihomo-import-destination" value="static">
+                    <span><strong>Статические узлы</strong><small>Добавить в <code>proxies</code>.</small></span>
+                  </label>
+                  <label id="mihomo-import-destination-provider-option" class="xk-mi-destination-option">
+                    <input type="radio" name="mihomo-import-destination" value="provider">
+                    <span><strong>Provider</strong><small>Добавить в <code>proxy-providers</code> и подключить через <code>use</code>.</small></span>
+                  </label>
+                </div>
+                <div id="mihomo-import-provider-settings" class="xk-mi-provider-settings hidden">
+                  <label class="xk-mi-field">
+                    <span class="hint-label">Имя provider</span>
+                    <input id="mihomo-import-provider-name" class="xray-log-filter xk-mi-control" type="text" maxlength="64" autocomplete="off">
+                  </label>
+                  <label class="xk-mi-field xk-mi-provider-interval">
+                    <span class="hint-label">Интервал обновления, часов</span>
+                    <input id="mihomo-import-provider-interval" class="xray-log-select xk-mi-control" type="number" min="1" max="168" step="1" value="12" inputmode="numeric">
+                  </label>
+                  <p id="mihomo-import-provider-note" class="modal-hint xk-mi-refresh-note">Mihomo хранит интервал provider в секундах; здесь он задаётся в часах.</p>
+                </div>
+              </section>
+
+              <div id="mihomo-import-groups-block" class="xk-mi-groups-card hidden">
+                <div class="xk-mi-section-head">
+                  <div>
+                    <div id="mihomo-import-groups-title" class="xk-mi-section-title">Добавить в группы</div>
+                    <div id="mihomo-import-groups-subtitle" class="xk-mi-section-subtitle">Выбор из текущего <code>config.yaml</code> для статических <code>proxies</code>.</div>
                   </div>
                   <div class="xk-mi-inline-actions">
                     <button type="button" id="mihomo-import-groups-all-btn" class="btn-compact" data-tooltip="Выбрать все группы">Все</button>
@@ -231,13 +267,16 @@ https://..."></textarea>
                 <div id="mihomo-import-groups" class="xk-mi-groups-shell">
                   <div class="xk-card-desc" style="opacity:0.75;">Группы будут подхвачены из текущего <code>config.yaml</code>.</div>
                 </div>
+                <p id="mihomo-import-groups-count" class="modal-hint xk-mi-refresh-note"></p>
                 <label class="global-autorestart-toggle xk-mi-remember">
                   <input type="checkbox" id="mihomo-import-groups-remember">
                   <span>Запомнить выбор</span>
                 </label>
               </div>
 
-              <div id="mihomo-import-xray-refresh-block" class="xk-mi-groups-card xk-mi-refresh-card hidden">
+              <details id="mihomo-import-managed-disclosure" class="xk-mi-managed-disclosure hidden">
+                <summary>Автообновление и управление подписками</summary>
+                <div id="mihomo-import-xray-refresh-block" class="xk-mi-groups-card xk-mi-refresh-card hidden">
                 <div class="xk-mi-section-head">
                   <div>
                     <div class="xk-mi-section-title">Автообновление Xray-JSON</div>
@@ -250,10 +289,11 @@ https://..."></textarea>
                 </label>
                 <div id="mihomo-import-xray-managed" class="mihomo-managed-sub-list xk-mi-managed-list"></div>
                 <p id="mihomo-import-xray-refresh-note" class="modal-hint xk-mi-refresh-note">От 1 часа до 7 дней. Отдельная кнопка сохранения не нужна: интервал применяется при вставке в конфиг.</p>
-              </div>
+                </div>
+              </details>
             </section>
 
-            <section class="xk-mi-panel xk-mi-panel--preview">
+            <section id="mihomo-import-preview-panel" class="xk-mi-panel xk-mi-panel--preview hidden" aria-label="Технический YAML">
               <div class="xk-mi-section-head xk-mi-section-head--preview">
                 <div>
                   <div class="xk-mi-section-title">YAML preview</div>
@@ -276,11 +316,13 @@ https://..."></textarea>
         </div>
         <div class="modal-actions xk-mi-footer">
           <div class="xk-mi-footer-actions">
-            <button type="button" id="mihomo-import-parse-btn" class="btn-secondary btn-compact xk-mi-primary-action" data-tooltip="Преобразовать ссылку в YAML и показать результат.">{{ op_icon('format') }}<span class="xk-action-label">Преобразовать</span></button>
-            <button type="button" id="mihomo-import-parse-static-btn" class="btn-secondary btn-compact xk-mi-primary-action" data-tooltip="Скачать подписку через доступные заголовки и вставить найденные узлы как статические proxies.">{{ op_icon('download') }}<span class="xk-action-label">В proxies</span></button>
-            <button type="button" id="mihomo-import-insert-btn" class="btn-primary btn-compact xk-mi-primary-action" data-tooltip="Вставить YAML в config.yaml (proxies / proxy-providers) и закрыть окно." disabled>{{ op_icon('add-node') }}<span class="xk-action-label">Вставить в конфиг</span></button>
+            <button type="button" id="mihomo-import-parse-btn" class="btn-primary btn-compact xk-mi-primary-action" data-tooltip="Распознать источник без сохранения и перезапуска.">{{ op_icon('format') }}<span class="xk-action-label">Распознать</span></button>
+            <button type="button" id="mihomo-import-parse-static-btn" class="btn-secondary btn-compact xk-mi-primary-action" data-tooltip="Использовать поддерживаемый static flow для подписки.">{{ op_icon('download') }}<span class="xk-action-label">Статические узлы</span></button>
+            <button type="button" id="mihomo-import-insert-btn" class="btn-secondary btn-compact xk-mi-primary-action" data-tooltip="Подготовить candidate в главном редакторе без сохранения файла." disabled>{{ op_icon('add-node') }}<span class="xk-action-label">В черновик</span></button>
+            <button type="button" id="mihomo-import-save-btn" class="btn-secondary btn-compact xk-mi-primary-action hidden" data-tooltip="Проверить candidate, создать backup и сохранить без перезапуска." disabled>{{ op_icon('save') }}<span class="xk-action-label">Сохранить</span></button>
+            <button type="button" id="mihomo-import-apply-btn" class="btn-primary btn-compact xk-mi-primary-action hidden" data-tooltip="Проверить, сохранить и применить candidate через restart job." disabled>{{ op_icon('play') }}<span class="xk-action-label">Сохранить и применить</span></button>
           </div>
-          <button type="button" id="mihomo-import-cancel-btn" class="btn-secondary btn-compact" data-operator-dismiss-duplicate="true">Отмена</button>
+          <button type="button" id="mihomo-import-cancel-btn" class="btn-secondary btn-compact">Отмена</button>
         </div>
       </div>
     </div>

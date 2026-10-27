@@ -12,7 +12,8 @@ const AMNEZIA_LOCATIONS = [
 async function openMihomoImport(page) {
   await selectPanelView(page, 'mihomo');
   await expect(page.locator('#view-mihomo')).toBeVisible();
-  await page.locator('#mihomo-clash-tab-config').click();
+  const configTab = page.locator('#mihomo-clash-tab-config');
+  if (await configTab.isVisible()) await configTab.click();
   const menu = page.locator('.xk-mihomo-menu');
   await menu.locator('summary').click();
   await expect(page.locator('#mihomo-import-node-btn')).toBeVisible();
@@ -64,7 +65,45 @@ test('Amnezia Premium locations use compact flags and a two-column scroller', as
 });
 
 
-test('Mihomo import uses the resizable Operator workbench and stretches its YAML preview', async ({ page }) => {
+test('Mihomo import compact form is draggable, remembers its position, and keeps the refresh interval compact', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 960 });
+  await page.addInitScript(() => {
+    localStorage.removeItem('xk.modal.state.v1.mihomo-import-source-v3');
+  });
+  await page.goto('/');
+  await openMihomoImport(page);
+
+  const content = page.locator('#mihomo-import-modal .modal-content');
+  const header = page.locator('#mihomo-import-modal .modal-header');
+  const start = await content.boundingBox();
+  const headerBox = await header.boundingBox();
+  if (!start || !headerBox) throw new Error('Mihomo import modal geometry is unavailable');
+
+  await page.mouse.move(headerBox.x + 180, headerBox.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(headerBox.x + 270, headerBox.y + 80, { steps: 8 });
+  await page.mouse.up();
+
+  await expect.poll(async () => (await content.boundingBox())?.x || 0).toBeGreaterThan(start.x + 50);
+  const moved = await content.boundingBox();
+  if (!moved) throw new Error('Mihomo import modal did not move');
+
+  await page.locator('#mihomo-import-close-btn').click();
+  await expect(page.locator('#mihomo-import-modal')).toBeHidden();
+  await openMihomoImport(page);
+  const restored = await content.boundingBox();
+  if (!restored) throw new Error('Mihomo import modal position was not restored');
+  expect(Math.abs(restored.x - moved.x)).toBeLessThanOrEqual(2);
+  expect(Math.abs(restored.y - moved.y)).toBeLessThanOrEqual(2);
+
+  const intervalWidth = await page.locator('#mihomo-import-xray-interval').evaluate(
+    (input) => Number.parseFloat(getComputedStyle(input).width),
+  );
+  expect(intervalWidth).toBe(64);
+});
+
+
+test('Mihomo import opens as a compact source form and expands into the Operator workbench', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 960 });
   await page.addInitScript(() => {
     localStorage.removeItem('xk.modal.state.v1.mihomo-import');
@@ -79,7 +118,7 @@ test('Mihomo import uses the resizable Operator workbench and stretches its YAML
 
   await page.locator('#mihomo-import-node-btn').click();
   await expect(page.locator('#mihomo-import-modal')).toBeVisible();
-  await expect(page.locator('#mihomo-import-modal .modal-resizer')).toBeVisible();
+  await expect(page.locator('#mihomo-import-modal .modal-resizer')).toBeHidden();
 
   const before = await page.locator('#mihomo-import-modal .xk-mi-preview-wrap').evaluate((node) => {
     const content = document.querySelector('#mihomo-import-modal .modal-content');
@@ -94,9 +133,38 @@ test('Mihomo import uses the resizable Operator workbench and stretches its YAML
     };
   });
 
-  expect(before.gridRows).not.toBe('none');
-  expect(before.previewFlexGrow).toBe('1');
-  expect(before.contentWidth).toBeGreaterThan(1400);
+  expect(before.contentWidth).toBeLessThanOrEqual(760);
+  expect(before.previewHeight).toBe(0);
+  await expect(page.locator('#mihomo-import-groups-block')).toBeHidden();
+
+  await page.locator('#mihomo-import-input').fill(
+    'vless://11111111-1111-1111-1111-111111111111@example.com:443?encryption=none&type=tcp#compact',
+  );
+  await page.locator('#mihomo-import-parse-btn').click();
+  await expect(page.locator('#mihomo-import-insert-btn')).toBeEnabled();
+  await expect(page.locator('#mihomo-import-modal .modal-resizer')).toBeHidden();
+  await expect(page.locator('#mihomo-import-groups-block')).toBeVisible();
+  await expect(page.locator('#mihomo-import-modal .xk-mi-panel--preview')).toBeHidden();
+  await page.locator('#mihomo-import-preview-toggle').click();
+  await expect(page.locator('#mihomo-import-modal .modal-resizer')).toBeVisible();
+  await expect(page.locator('#mihomo-import-modal .xk-mi-panel--preview')).toBeVisible();
+
+  const expanded = await page.locator('#mihomo-import-modal .xk-mi-preview-wrap').evaluate((node) => {
+    const content = document.querySelector('#mihomo-import-modal .modal-content');
+    const style = getComputedStyle(node);
+    const contentStyle = content ? getComputedStyle(content) : null;
+    return {
+      previewHeight: node.getBoundingClientRect().height,
+      contentHeight: content ? content.getBoundingClientRect().height : 0,
+      contentWidth: content ? content.getBoundingClientRect().width : 0,
+      gridRows: contentStyle ? contentStyle.gridTemplateRows : '',
+      previewFlexGrow: style.flexGrow,
+    };
+  });
+
+  expect(expanded.gridRows).not.toBe('none');
+  expect(expanded.previewFlexGrow).toBe('1');
+  expect(expanded.contentWidth).toBeGreaterThan(1000);
 
   const handle = page.locator('#mihomo-import-modal .modal-resizer');
   const box = await handle.boundingBox();
@@ -106,7 +174,7 @@ test('Mihomo import uses the resizable Operator workbench and stretches its YAML
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + 140, { steps: 8 });
   await page.mouse.up();
 
-  await expect.poll(() => page.locator('#mihomo-import-modal .xk-mi-preview-wrap').evaluate((node) => node.getBoundingClientRect().height)).toBeGreaterThan(before.previewHeight + 40);
+  await expect.poll(() => page.locator('#mihomo-import-modal .xk-mi-preview-wrap').evaluate((node) => node.getBoundingClientRect().height)).toBeGreaterThan(expanded.previewHeight + 40);
 
   const after = await page.locator('#mihomo-import-modal .xk-mi-preview-wrap').evaluate((node) => {
     const content = document.querySelector('#mihomo-import-modal .modal-content');
@@ -118,8 +186,8 @@ test('Mihomo import uses the resizable Operator workbench and stretches its YAML
     };
   });
 
-  expect(after.contentHeight).toBeGreaterThan(before.contentHeight + 40);
-  expect(after.previewHeight).toBeGreaterThan(before.previewHeight + 40);
+  expect(after.contentHeight).toBeGreaterThan(expanded.contentHeight + 40);
+  expect(after.previewHeight).toBeGreaterThan(expanded.previewHeight + 40);
   expect(after.editorHeight).toBeGreaterThanOrEqual(after.previewHeight - 2);
 });
 
@@ -149,6 +217,35 @@ test('Mihomo import stays within a narrow viewport', async ({ page }) => {
   expect(frame.width).toBeGreaterThan(360);
   expect(frame.left).toBeGreaterThanOrEqual(0);
   expect(frame.right).toBeLessThanOrEqual(frame.viewportWidth);
+});
+
+test('Mihomo import result cards stay readable and keep the final action reachable at 390px', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await openMihomoImport(page);
+  await page.locator('#mihomo-import-input').fill(
+    'vless://11111111-1111-1111-1111-111111111111@example.com:443?encryption=none&type=tcp#mobile-card',
+  );
+  await page.locator('#mihomo-import-parse-btn').click();
+
+  const card = page.locator('#mihomo-import-result-cards');
+  await expect(card).toBeVisible();
+  await expect(card).toContainText('Адрес: example.com:443');
+  const geometry = await page.evaluate(() => {
+    const cardNode = document.querySelector('#mihomo-import-result-cards');
+    const insert = document.querySelector('#mihomo-import-insert-btn');
+    const cardRect = cardNode?.getBoundingClientRect();
+    const insertRect = insert?.getBoundingClientRect();
+    return {
+      cardWidth: cardRect?.width || 0,
+      insertBottom: insertRect?.bottom || 0,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+    };
+  });
+  expect(geometry.cardWidth).toBeGreaterThan(0);
+  expect(geometry.cardWidth).toBeLessThanOrEqual(geometry.viewportWidth - 16);
+  expect(geometry.insertBottom).toBeLessThanOrEqual(geometry.viewportHeight);
 });
 
 
@@ -237,4 +334,63 @@ test('busy spinner in the import status is centred on the first line of text', a
   expect(Math.abs(geometry.spinnerCentre - geometry.firstLineCentre)).toBeLessThanOrEqual(1);
 
   releaseParse();
+});
+
+
+test('editing source or mode invalidates the previous import result', async ({ page }) => {
+  await page.goto('/');
+  await selectPanelView(page, 'mihomo');
+  await page.locator('#mihomo-clash-tab-config').click();
+  await page.locator('.xk-mihomo-menu summary').click();
+  await page.locator('#mihomo-import-node-btn').click();
+  await expect(page.locator('#mihomo-import-modal')).toBeVisible();
+
+  const input = page.locator('#mihomo-import-input');
+  await input.fill('vless://11111111-1111-1111-1111-111111111111@example.com:443?encryption=none&type=tcp#first');
+  await page.locator('#mihomo-import-parse-btn').click();
+  await expect(page.locator('#mihomo-import-insert-btn')).toBeEnabled();
+
+  await input.fill('vless://22222222-2222-2222-2222-222222222222@example.com:443?encryption=none&type=tcp#second');
+  await expect(page.locator('#mihomo-import-insert-btn')).toBeDisabled();
+
+  await page.locator('#mihomo-import-mode').selectOption('wireguard');
+  await expect(page.locator('#mihomo-import-insert-btn')).toBeDisabled();
+});
+
+
+test('closing the modal invalidates a late parse response', async ({ page }) => {
+  let releaseParse;
+  const parseStarted = new Promise((resolve) => {
+    page.route('**/api/mihomo/parse/xray-json', async (route) => {
+      resolve();
+      await new Promise((resume) => { releaseParse = resume; });
+      await route.fulfill({
+        json: {
+          ok: true,
+          proxies: [{ proxy_name: 'Late node', proxy_yaml: '- name: Late node\n  type: direct\n' }],
+        },
+      });
+    });
+  });
+
+  await page.goto('/');
+  await selectPanelView(page, 'mihomo');
+  await page.locator('#mihomo-clash-tab-config').click();
+  await page.locator('.xk-mihomo-menu summary').click();
+  await page.locator('#mihomo-import-node-btn').click();
+  await expect(page.locator('#mihomo-import-modal')).toBeVisible();
+
+  await page.locator('#mihomo-import-mode').selectOption('subscription');
+  await page.locator('#mihomo-import-input').fill('https://late.example/subscription');
+  await page.locator('#mihomo-import-parse-btn').click();
+  await parseStarted;
+
+  await page.locator('#mihomo-import-close-btn').click();
+  releaseParse();
+  await expect(page.locator('#mihomo-import-modal')).toBeHidden();
+
+  // Reopen must be a clean session; the late response cannot enable Insert.
+  await page.locator('.xk-mihomo-menu summary').click();
+  await page.locator('#mihomo-import-node-btn').click();
+  await expect(page.locator('#mihomo-import-insert-btn')).toBeDisabled();
 });

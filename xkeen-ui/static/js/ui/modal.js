@@ -273,7 +273,7 @@
 
     const viewMaxW = Math.max(200, window.innerWidth - PAD * 2);
     const viewMaxH = Math.max(150, window.innerHeight - PAD * 2);
-
+    const positionOnly = !!(modalEl.dataset && modalEl.dataset.modalPositionOnly === '1');
     const w = Math.min(viewMaxW, Math.max(MIN_W, Number(state.w) || MIN_W));
     const h = Math.min(viewMaxH, Math.max(MIN_H, Number(state.h) || MIN_H));
     const p = clampPos(Number(state.x) || PAD, Number(state.y) || PAD, w, h, PAD);
@@ -282,10 +282,12 @@
       contentEl.style.position = 'fixed';
       contentEl.style.left = Math.round(p.x) + 'px';
       contentEl.style.top = Math.round(p.y) + 'px';
-      contentEl.style.width = Math.round(w) + 'px';
-      contentEl.style.height = Math.round(h) + 'px';
-      contentEl.style.maxWidth = 'none';
-      contentEl.style.maxHeight = 'none';
+      // Content-sized dialogs may grow or shrink between openings. Restore
+      // their location without pinning them to an obsolete saved size.
+      contentEl.style.width = positionOnly ? '' : Math.round(w) + 'px';
+      contentEl.style.height = positionOnly ? '' : Math.round(h) + 'px';
+      contentEl.style.maxWidth = positionOnly ? '' : 'none';
+      contentEl.style.maxHeight = positionOnly ? '' : 'none';
       contentEl.style.transform = 'none';
       contentEl.dataset.xkDragged = '1';
     } catch (e) {
@@ -1106,6 +1108,19 @@
   // Public helpers (optional)
   Modal.ensureInViewport = function (modalEl) { try { ensureContentInViewport(modalEl); } catch (e) {} };
   Modal.resetPosition = function (modalEl) { try { resetContentPosition(getContent(modalEl)); } catch (e) {} };
+  // A compact form can expand into a workbench without opening a second
+  // dialog. Keep geometry restoration/clamping owned by the modal manager.
+  Modal.refreshGeometry = function (modalElOrId) {
+    const modalEl = resolveModal(modalElOrId);
+    const content = getContent(modalEl);
+    if (!modalEl || !content) return;
+    resetContentPosition(content);
+    const state = loadState(modalEl);
+    if (state) applyState(modalEl, content, state);
+    ensureResizer(modalEl);
+    if (isVisibleModal(modalEl)) ensureContentInViewport(modalEl);
+    refreshEmbeds(content);
+  };
   Modal.bindState = function (modalElOrId) {
     try { return ensureStoreBinding(modalElOrId); } catch (e) {}
     return noop;

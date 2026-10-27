@@ -1,0 +1,271 @@
+{
+  "schema_version": 1,
+  "base_commit": "0eece0cefab92b1d4eaa969b950a559d7d4d281d",
+  "capture_date": "2026-10-26",
+  "scope": "source contracts; endpoint paths include dynamic prefixes; not runtime/API reachability claims",
+  "sources": [
+    {
+      "path": "xkeen-ui/templates/panel/modals/mihomo.html",
+      "sha256": "91f0e5b0c5afb31252b9c6d5117e076044301f8243d0c3aa59d0c00309f5cd2f",
+      "lines": 495
+    },
+    {
+      "path": "xkeen-ui/static/js/features/mihomo_import.js",
+      "sha256": "dc7e803284d71ef74c45e2c79858c3e28d82baf7d5e9af4209144a35654fd9e4",
+      "lines": 3143
+    },
+    {
+      "path": "xkeen-ui/static/js/features/mihomo_proxy_tools.js",
+      "sha256": "9a2fad1cfeab0dc907c32e94756f0e41e5f581455e3e26332d3de11402609ca1",
+      "lines": 686
+    },
+    {
+      "path": "xkeen-ui/static/js/features/mihomo_hwid_sub.js",
+      "sha256": "bb09e17c48e6e9c60fe611a65157f315758a14dc8a5b2cbeb2acb1c690612f8a",
+      "lines": 1894
+    },
+    {
+      "path": "xkeen-ui/static/js/features/compat/mihomo_import.js",
+      "sha256": "47a32ebc4c016d8202c65585afd69cb529c8d7354aab735b8bd3ae429f67547a",
+      "lines": 12
+    },
+    {
+      "path": "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js",
+      "sha256": "320af7a757849a8fb9719e83501dc568a8ec5c03dbae18a11daa875c900c994e",
+      "lines": 1048
+    },
+    {
+      "path": "xkeen-ui/static/js/ui/modal.js",
+      "sha256": "2497b88ca1ceda5c5b208c63414798c405889b9b38b4f89f9b6d374e71fc7512",
+      "lines": 1191
+    },
+    {
+      "path": "xkeen-ui/static/js/ui/country_flags.js",
+      "sha256": "2ecd64ad97ea563b0cfeee6a45cfa8113edd13aaa7b43f13423a29f9798b3483",
+      "lines": 115
+    },
+    {
+      "path": "xkeen-ui/static/js/features/mihomo_panel.js",
+      "sha256": "d929ff4e03d82f764bb45f03c7d4646012e4117d96b2f74c76fbef64c330db9c",
+      "lines": 3757
+    },
+    {
+      "path": "xkeen-ui/static/js/features/mihomo_yaml_patch.js",
+      "sha256": "e4e4614a3cfcf37f0f3402bc44fbe797b77f8d4b3363d5fb622d00645eecff3b",
+      "lines": 157
+    },
+    {
+      "path": "xkeen-ui/routes/mihomo.py",
+      "sha256": "de26c109332d06554875cc6f150cc30f238f3e0767e3e3fce1c6724bca82654d",
+      "lines": 3823
+    },
+    {
+      "path": "xkeen-ui/services/mihomo_node_import.py",
+      "sha256": "4ad3db1d85924f7b06e426aec6e850d63811158534f5eac01be31bd9dccc1222",
+      "lines": 452
+    },
+    {
+      "path": "xkeen-ui/services/mihomo_proxy_parsers.py",
+      "sha256": "0442062f7a8daf0447fc29d43f0968b7f0a28657ac271078ec2932a92d3312c1",
+      "lines": 1593
+    },
+    {
+      "path": "xkeen-ui/services/mihomo_proxy_config.py",
+      "sha256": "9a31ae0bd9e9f89cf06a3dcff64e28da5e5a1860cdd0154ffd6fef12061ae6c2",
+      "lines": 601
+    },
+    {
+      "path": "xkeen-ui/services/mihomo_subscriptions.py",
+      "sha256": "3ae7f155b7f6979478b6369f545de7cbabf5c84522cd4ee47e0457b79bded414",
+      "lines": 1403
+    },
+    {
+      "path": "xkeen-ui/services/mihomo_runtime.py",
+      "sha256": "973ff42b737dc747b48577b467e89e6c15553a08c3b72b77a9af8337904d80ce",
+      "lines": 537
+    },
+    {
+      "path": "xkeen-ui/static/styles.css",
+      "sha256": "e03a8799a137a70fd9ee56ce98c41fd8175979a9f63f31a594a461d9444f0f8c",
+      "lines": 32995
+    },
+    {
+      "path": "xkeen-ui/static/panel-operator.css",
+      "sha256": "b865be82288b5ee4ab29a3366692591ec9da64c7874cc4a608773b096a94377c",
+      "lines": 25640
+    }
+  ],
+  "dom_ids": [
+    "mihomo-import-modal",
+    "mihomo-import-close-btn",
+    "mihomo-import-mode",
+    "mihomo-import-input",
+    "mihomo-import-amnezia-premium-hint",
+    "mihomo-import-amnezia-locations-block",
+    "mihomo-import-amnezia-locations-all-btn",
+    "mihomo-import-amnezia-locations-none-btn",
+    "mihomo-import-amnezia-locations",
+    "mihomo-import-amnezia-locations-count",
+    "mihomo-import-status",
+    "mihomo-import-target-hint",
+    "mihomo-import-groups-block",
+    "mihomo-import-groups-all-btn",
+    "mihomo-import-groups-none-btn",
+    "mihomo-import-groups",
+    "mihomo-import-groups-remember",
+    "mihomo-import-xray-refresh-block",
+    "mihomo-import-xray-interval",
+    "mihomo-import-xray-managed",
+    "mihomo-import-xray-refresh-note",
+    "mihomo-import-preview-engine",
+    "mihomo-import-engine-select",
+    "mihomo-import-preview-monaco",
+    "mihomo-import-preview",
+    "mihomo-import-parse-btn",
+    "mihomo-import-parse-static-btn",
+    "mihomo-import-insert-btn",
+    "mihomo-import-cancel-btn"
+  ],
+  "modes": [
+    [
+      "auto",
+      "Auto"
+    ],
+    [
+      "proxy",
+      "Proxy link"
+    ],
+    [
+      "subscription",
+      "HTTPS subscription"
+    ],
+    [
+      "amnezia-premium",
+      "Amnezia Premium key (vpn://)"
+    ],
+    [
+      "wireguard",
+      "WireGuard / AmneziaWG 3.x (.conf)"
+    ],
+    [
+      "openvpn",
+      "OpenVPN (.ovpn)"
+    ],
+    [
+      "tailscale",
+      "Tailscale"
+    ]
+  ],
+  "preferences": [
+    [
+      "GROUPS_PREF_KEY",
+      "xkeen.mihomo.import.groups.v1"
+    ],
+    [
+      "GROUPS_REMEMBER_KEY",
+      "xkeen.mihomo.import.groups.remember_v1"
+    ],
+    [
+      "XRAY_INTERVAL_PREF_KEY",
+      "xkeen.mihomo.import.xray_interval_hours.v1"
+    ],
+    [
+      "MODE_PREF_KEY",
+      "xkeen.mihomo.import.mode.v1"
+    ]
+  ],
+  "api_path_literals": [
+    "/api/mihomo/amnezia-premium/locations",
+    "/api/mihomo/parse/",
+    "/api/mihomo/parse/amnezia-premium",
+    "/api/mihomo/parse/xray-json",
+    "/api/mihomo/patch/apply_insert",
+    "/api/mihomo/provider/probe",
+    "/api/mihomo/subscriptions",
+    "/api/mihomo/subscriptions/",
+    "/api/mihomo/subscriptions/imported-xray"
+  ],
+  "facade_methods": [
+    "generateConfigForMihomo",
+    "init",
+    "open",
+    "openWithInput",
+    "proxyYamlRawFromIndented"
+  ],
+  "esm_exports": [
+    "getMihomoImportApi",
+    "initMihomoImport",
+    "openMihomoImport",
+    "openMihomoImportWithInput",
+    "generateMihomoImportConfig",
+    "proxyYamlRawFromIndentedMihomo",
+    "mihomoImportApi"
+  ],
+  "consumers": [
+    {
+      "path": "xkeen-ui/static/js/features/mihomo_hwid_sub.js",
+      "line": 2,
+      "source": "import { getMihomoImportApi } from './mihomo_import.js';"
+    },
+    {
+      "path": "xkeen-ui/static/js/features/mihomo_hwid_sub.js",
+      "line": 148,
+      "source": "if (api && typeof api.openWithInput === 'function') return api;"
+    },
+    {
+      "path": "xkeen-ui/static/js/features/mihomo_hwid_sub.js",
+      "line": 153,
+      "source": "const api = getMihomoImportApi();"
+    },
+    {
+      "path": "xkeen-ui/static/js/features/mihomo_hwid_sub.js",
+      "line": 154,
+      "source": "if (api && typeof api.openWithInput === 'function') return api;"
+    },
+    {
+      "path": "xkeen-ui/static/js/features/mihomo_hwid_sub.js",
+      "line": 159,
+      "source": "if (api && typeof api.openWithInput === 'function') return api;"
+    },
+    {
+      "path": "xkeen-ui/static/js/features/mihomo_hwid_sub.js",
+      "line": 171,
+      "source": "if (!api || typeof api.openWithInput !== 'function') return false;"
+    },
+    {
+      "path": "xkeen-ui/static/js/features/mihomo_hwid_sub.js",
+      "line": 176,
+      "source": "await api.openWithInput(value, { mode: 'auto' });"
+    },
+    {
+      "path": "xkeen-ui/static/js/features/mihomo_proxy_tools.js",
+      "line": 2,
+      "source": "import { getMihomoImportApi } from './mihomo_import.js';"
+    },
+    {
+      "path": "xkeen-ui/static/js/features/mihomo_proxy_tools.js",
+      "line": 528,
+      "source": "const mi = getMihomoImportApi();"
+    },
+    {
+      "path": "xkeen-ui/static/js/features/mihomo_proxy_tools.js",
+      "line": 529,
+      "source": "if (!mi || typeof mi.generateConfigForMihomo !== 'function') {"
+    },
+    {
+      "path": "xkeen-ui/static/js/features/mihomo_proxy_tools.js",
+      "line": 530,
+      "source": "throw new Error('mihomoImport.generateConfigForMihomo недоступен');"
+    },
+    {
+      "path": "xkeen-ui/static/js/features/mihomo_proxy_tools.js",
+      "line": 532,
+      "source": "const out = mi.generateConfigForMihomo(text, getEditorText());"
+    },
+    {
+      "path": "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js",
+      "line": 102,
+      "source": "getApi: (mod) => (mod && typeof mod.getMihomoImportApi === 'function') ? mod.getMihomoImportApi() : null,"
+    }
+  ]
+}

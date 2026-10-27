@@ -1,0 +1,188 @@
+{
+  "schema_version": 1,
+  "base_commit": "0eece0cefab92b1d4eaa969b950a559d7d4d281d",
+  "captured_date": "2026-10-26",
+  "note": "Historical capture integrity; not a comparison against future redesigned UI. Screenshots include existing defects and only synthetic credentials.",
+  "artifacts": [
+    {
+      "path": "docs/mihomo-node-import-baseline/baseline-measurements.json",
+      "bytes": 16742,
+      "sha256": "0452bf9a4e0138b9dfc10747d2903ee98bc61096fd49cec332cf205a1aabcbb5"
+    },
+    {
+      "path": "docs/mihomo-node-import-baseline/batch.json",
+      "bytes": 1050,
+      "sha256": "15fc5049dbeaf176814bcf3337691a5bb37285645d3d4e0823a9c01755cd0885"
+    },
+    {
+      "path": "docs/mihomo-node-import-baseline/characterization.json",
+      "bytes": 15506,
+      "sha256": "bd01f80f1bc9bf45256884c6a4840e49e30646e6a9049914203b0f02d6778eb7"
+    },
+    {
+      "path": "docs/mihomo-node-import-baseline/current-desktop-amnezia-locations.png",
+      "bytes": 132202,
+      "sha256": "13921488dc0bec37ddd22597ab4b85f1b8c94547543bf10480c1464fe9695c2d"
+    },
+    {
+      "path": "docs/mihomo-node-import-baseline/current-desktop-empty.png",
+      "bytes": 71627,
+      "sha256": "bd838b857077ccdaafb5b238d55b7f42f5e2df57363f66df7fcf20928b4446a0"
+    },
+    {
+      "path": "docs/mihomo-node-import-baseline/current-desktop-parsed.png",
+      "bytes": 112834,
+      "sha256": "8df8781c0f6039e42c76c918b5d077d9cdd8b836fa208aad6a43a2004a02bd3a"
+    },
+    {
+      "path": "docs/mihomo-node-import-baseline/current-mobile-empty.png",
+      "bytes": 45930,
+      "sha256": "7d9f2966d64e866e90e8c942507dbd9ea927015b5105b57269243a712b4a924c"
+    },
+    {
+      "path": "docs/mihomo-node-import-baseline/desktop-dark-amnezia-bottom.png",
+      "bytes": 129951,
+      "sha256": "1b99c11b5a4fff2ccc07b1bc7edaa9dbb048e78d7ad8ec3445c2147767e884a4"
+    },
+    {
+      "path": "docs/mihomo-node-import-baseline/desktop-dark-amnezia-issued.png",
+      "bytes": 140808,
+      "sha256": "87054075940fc6591f51d2d0c2bc7d289bde6cde4685af0b8cd99d70b5205fdb"
+    },
+    {
+      "path": "docs/mihomo-node-import-baseline/desktop-dark-amnezia-locations.png",
+      "bytes": 128532,
+      "sha256": "5eb7398042ded18400748cb1f476ae5fcd351a307659af1ff1d6675bdc08c179"
+    },
+    {
+      "path": "docs/mihomo-node-import-baseline/desktop-dark-empty.png",
+      "bytes": 73011,
+      "sha256": "17fbb72b4baddc9fcf2132075c6d55913776a2b88cb3e4947058b57adf0e2dcc"
+    },
+    {
+      "path": "docs/mihomo-node-import-baseline/desktop-dark-error.png",
+      "bytes": 79036,
+      "sha256": "ef64d1dfcfff7669108ea1f81d2f6b751fb5e636ada008fcfcf0e4035b1d088b"
+    },
+    {
+      "path": "docs/mihomo-node-import-baseline/desktop-dark-mixed-batch.png",
+      "bytes": 147244,
+      "sha256": "43510bafbda25123745b931bce5956c0bdad525c5377fe481202d124e0208888"
+    },
+    {
+      "path": "docs/mihomo-node-import-baseline/desktop-dark-openvpn.png",
+      "bytes": 142582,
+      "sha256": "2c91e102da2db6e7a08d99a0d9b9e48028da876cf567126ca704bd98e4ddd95e"
+    },
+    {
+      "path": "docs/mihomo-node-import-baseline/desktop-dark-provider-static.png",
+      "bytes": 128022,
+      "sha256": "7024d2ce3840306f2ba1a4443518a4aa330611903f1fd8638e0468c386da71f6"
+    },
+    {
+      "path": "docs/mihomo-node-import-baseline/desktop-dark-provider.png",
+      "bytes": 127081,
+      "sha256": "a14bd4e4c8f2cdfcfdefdf48f3d8a931a759ea821f8e39c0a546cd89b1fe6321"
+    },
+    {
+      "path": "docs/mihomo-node-import-baseline/desktop-dark-saved-geometry.png",
+      "bytes": 129184,
+      "sha256": "57e5539ba5350381d96d0aa3bbca352b1e8bc8e538025c194dacb71e32168ee3"
+    },
+    {
+      "path": "docs/mihomo-node-import-baseline/desktop-dark-single.png",
+      "bytes": 114241,
+      "sha256": "3a177131e66fb35c3837360709eed4e0ebbd90ad0ada667c85aedd82174deca3"
+    },
+    {
+      "path": "docs/mihomo-node-import-baseline/desktop-dark-tailscale.png",
+      "bytes": 112863,
+      "sha256": "1c1c5833201cd2bf9482e504b9afc2329774f4466e495ffb197ed978a03b9ad0"
+    },
+    {
+      "path": "docs/mihomo-node-import-baseline/desktop-dark-wireguard.png",
+      "bytes": 152278,
+      "sha256": "a1851fc89caec5aa99eaa74d1cf0af79326766b17f79daf29d95b9baf1a71bb6"
+    },
+    {
+      "path": "docs/mihomo-node-import-baseline/desktop-large-subscription-50.png",
+      "bytes": 131063,
+      "sha256": "9601e9b31e007b1dc29220c3b33750e3e6edb959e8de8e18daaaa8c8e0ce3765"
+    },
+    {
+      "path": "docs/mihomo-node-import-baseline/desktop-light-empty.png",
+      "bytes": 77351,
+      "sha256": "8e2b725952054d24e02b8605ae32c7fd6ae7c2c01cffa940097b3bcb64b786b5"
+    },
+    {
+      "path": "docs/mihomo-node-import-baseline/desktop-light-monaco.png",
+      "bytes": 120406,
+      "sha256": "5b6c437fc78f35bf49ff333c14a16631b77c00c9ee9c3ebb9bdba8ce286deb65"
+    },
+    {
+      "path": "docs/mihomo-node-import-baseline/desktop-short-dark-empty.png",
+      "bytes": 51147,
+      "sha256": "e0b5b7b6e6e540f8f026381c93faab4a32993b9e05fc4d6e69a7b23f7a50264c"
+    },
+    {
+      "path": "docs/mihomo-node-import-baseline/engines.json",
+      "bytes": 2275,
+      "sha256": "a9d0488be8a95e5c0fd99f611a9239decc60eed75bec00ff912daddd03358ba9"
+    },
+    {
+      "path": "docs/mihomo-node-import-baseline/mobile-dark-amnezia.png",
+      "bytes": 67390,
+      "sha256": "12139c7b683ead8af0e6e574d0dce01af35cd1635c2bad4d3d47bffcc3030f36"
+    },
+    {
+      "path": "docs/mihomo-node-import-baseline/mobile-light-empty.png",
+      "bytes": 48408,
+      "sha256": "0c6afd929a860337aef7f489795019d40a8d437f619c7ca59a308341c03cb11c"
+    },
+    {
+      "path": "docs/mihomo-node-import-baseline/mobile-light-fallback.png",
+      "bytes": 62246,
+      "sha256": "b15f7e5f58997403ee44320d7ecf287173667ab1c76a729ccdf0dfc9216c5143"
+    },
+    {
+      "path": "docs/mihomo-node-import-baseline/short.json",
+      "bytes": 643,
+      "sha256": "b616b44702078d961387004770f835355248dabcf5436679b6598358a1e79c4f"
+    },
+    {
+      "path": "docs/mihomo-node-import-baseline/source-inventory.json",
+      "bytes": 8263,
+      "sha256": "af90f4e22baf2594139527d46db3c9170008755eee2ed167f4ca2450197a6b00"
+    },
+    {
+      "path": "docs/mihomo-node-import-baseline/test-results.json",
+      "bytes": 2741,
+      "sha256": "85d0ef27a8fe4d1e067f19fc443451d1df23f251357106d58cd2ae7266c19823"
+    },
+    {
+      "path": "e2e/fixtures/mihomo-import/stage0.json",
+      "bytes": 1889,
+      "sha256": "21bb43969565e0dec027dfec133ac6c2a37d687bd0b71759621abb3a72a8c6d1"
+    },
+    {
+      "path": "e2e/mihomo_import_baseline.config.mjs",
+      "bytes": 248,
+      "sha256": "e1d419b623dc22283a1adc8d4c90f5e746973762527f0d98b7af653971f2cc8b"
+    },
+    {
+      "path": "e2e/mihomo_import_stage0_baseline.capture.mjs",
+      "bytes": 16680,
+      "sha256": "1d5c2a9b5fb25f22f97384a2e6d96520c2e15d9c95351f2171cd9e022a9699b9"
+    },
+    {
+      "path": "scripts/capture_mihomo_import_inventory.py",
+      "bytes": 3530,
+      "sha256": "8128a685f5de86bda927e4b5d75ec45f33cbad18df5cd2174f8e52c571310003"
+    },
+    {
+      "path": "tests/test_mihomo_import_baseline_inventory.py",
+      "bytes": 1712,
+      "sha256": "15806042a74fe969220859b8efbab392d4c4d2a5c4a38a0de2662aa3f5e7a079"
+    }
+  ]
+}

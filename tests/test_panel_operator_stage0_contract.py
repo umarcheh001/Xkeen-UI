@@ -98,7 +98,9 @@ def test_stage0_inventory_covers_views_accordions_engines_and_all_modals(tmp_pat
     # with direct, editable device-profile fields. The optional Mihomo egress
     # and DNS diagnostic cards plus the DNS guidance disclosure extend the ten
     # remaining controls. The Xray logs summary collapses to one line.
-    assert len(accordions) == 14
+    # Mihomo import keeps existing managed-subscription actions in a disclosure
+    # so its source step stays compact without removing those actions.
+    assert len(accordions) == 15
     assert all(item["target_id"] and item["target_present"] for item in accordions)
     assert all(item["states"] == ["collapsed", "expanded"] for item in accordions)
     dns_guidance = next(item for item in accordions if item["control_id"] == "xk-internet-check-dns-row")

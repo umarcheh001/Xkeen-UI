@@ -1,4 +1,5 @@
 from unittest.mock import patch
+from types import SimpleNamespace
 
 import pytest
 from flask import Flask
@@ -47,6 +48,102 @@ proxy-groups:
     assert "  - name: Mobile\n" in result["content"]
     assert '    proxies: [DIRECT, Mobile]' in result["content"]
     assert result["highlight"]["end"] > result["highlight"]["start"]
+    assert config_path.read_text(encoding="utf-8") == "proxies: []\n"
+
+
+def test_attach_provider_route_uses_use_and_reports_unknown_groups(client):
+    http, _config_path = client
+    content = """\
+proxy-providers:
+  source:
+    type: http
+    url: http://127.0.0.1/provider.yaml
+proxy-groups:
+  - name: Main
+    type: select
+    use: [old] # keep
+    filter: "^(old|source)$"
+  - name: Static
+    type: select
+    proxies: [DIRECT]
+"""
+    response = http.post(
+        "/api/mihomo/patch/attach_providers",
+        json={
+            "content": content,
+            "providers": ["source"],
+            "groups": ["Main", "Missing"],
+        },
+    )
+
+    assert response.status_code == 200
+    result = response.get_json()
+    assert result["attached_groups"] == ["Main"]
+    assert result["missing_groups"] == ["Missing"]
+    assert "use: [old, source] # keep" in result["content"]
+    assert 'filter: "^(old|source)$"' in result["content"]
+    assert "proxies: [DIRECT]" in result["content"]
+
+
+def test_apply_insert_reports_unknown_groups_without_registering_proxy(client):
+    http, _config_path = client
+    content = """\
+proxies: []
+proxy-groups:
+  - name: Main
+    type: select
+    proxies: [DIRECT]
+"""
+    response = http.post(
+        "/api/mihomo/patch/apply_insert",
+        json={
+            "content": content,
+            "proxy_yaml": "- name: Fresh\n  type: direct\n",
+            "proxy_name": "Fresh",
+            "groups": ["Main", "Missing"],
+        },
+    )
+
+    assert response.status_code == 200
+    result = response.get_json()
+    assert result["attached_groups"] == ["Main"]
+    assert result["missing_groups"] == ["Missing"]
+    assert "proxies: [DIRECT, Fresh]" in result["content"]
+
+
+def test_import_commit_requires_validation_and_can_queue_explicit_apply(client):
+    http, config_path = client
+    content = "proxies: []\n"
+    with patch("routes.mihomo.validate_config", return_value="$ mihomo -t\n[exit code: 0]\n"), \
+        patch("routes.mihomo.ensure_mihomo_layout"), \
+        patch("routes.mihomo.save_config", return_value=SimpleNamespace(filename="backup.yaml")), \
+        patch("routes.mihomo.create_command_job", return_value=SimpleNamespace(id="job-1")):
+        response = http.post(
+            "/api/mihomo/import/commit",
+            json={"content": content, "restart": True},
+        )
+
+    assert response.status_code == 202
+    result = response.get_json()
+    assert result["saved"] is True
+    assert result["restart_job_id"] == "job-1"
+    assert result["backup"] == "backup.yaml"
+    assert config_path.read_text(encoding="utf-8") == "proxies: []\n"
+
+
+def test_import_commit_rejects_stale_file_revision_without_saving(client):
+    http, config_path = client
+    with patch("routes.mihomo.validate_config") as validate, \
+        patch("routes.mihomo.save_config") as save:
+        response = http.post(
+            "/api/mihomo/import/commit",
+            json={"content": "proxies: []\n", "base_revision": "stale"},
+        )
+
+    assert response.status_code == 409
+    assert response.get_json()["code"] == "stale_config"
+    validate.assert_not_called()
+    save.assert_not_called()
     assert config_path.read_text(encoding="utf-8") == "proxies: []\n"
 
 

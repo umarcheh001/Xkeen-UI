@@ -91,18 +91,21 @@ def test_mihomo_menu_feature_flows_keep_editor_patch_integrations_and_single_sav
 
     expectations = {
         "xkeen-ui/static/js/features/mihomo_import.js": [
-            "txt = await applyInsertProxy(txt, o, groups);",
-            "setEditorText(txt);",
+                "const inserted = await applyInsertProxy(content, proxy, groups);",
+                "content = inserted.content;",
+                "await attachProvidersToGroups(content, providerOutputs, groups);",
+                "setEditorText(candidate.content);",
             "refreshEditor();",
             "const api = getMihomoPanelApi();",
-            "await post('/api/mihomo/provider/probe', {",
+                "return _importApi.postJSON('/api/mihomo/provider/probe', {",
             "return `http://127.0.0.1:${port}/mihomo/provider.yaml?${params.toString()}`;",
             "const out = await buildSubscriptionProviderConfig(line, tmp, {",
             "providerStaticBulk: true,",
             "providerMode === 'static_happ'",
             "providerMode === 'static_happ' ? 'xray-json' : 'mihomo-provider'",
             "provider_proxies",
-            "staticProviderProxies: true",
+                "destinationVariantsForOutputs",
+                "setImportDestination",
             "refresh_parser: group.refreshParser",
             "mihomo-provider",
             "Распознана HWID-подписка:",
@@ -196,7 +199,7 @@ def test_mihomo_import_is_compact_and_surfaces_hwid_provider_warnings():
     assert 'id="mihomo-hwid-sub-btn"' in panel_src
     assert "op_icon('hwid')" in panel_src
     assert '<span class="xk-action-label">HWID</span>' in panel_src
-    assert "Mihomo Premium Import" in panel_src
+    assert "Добавить узлы в Mihomo" in panel_src
     assert "Быстрый импорт без ручного YAML" not in panel_src
     assert "Сначала проверь превью" not in panel_src
     assert "id=\"mihomo-hwid-mode\"" not in panel_src

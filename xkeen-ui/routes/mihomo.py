@@ -39,6 +39,7 @@ Endpoints:
 from __future__ import annotations
 
 import base64
+import hashlib
 import ipaddress
 import os
 import re
@@ -69,6 +70,7 @@ from services.amnezia_premium import (
 )
 from services.mihomo_proxy_config import (
     apply_proxy_insert,
+    insert_provider_into_groups,
     rename_proxy_in_config,
     replace_proxy_in_config,
 )
@@ -1140,47 +1142,141 @@ def create_mihomo_blueprint(
 
     # ---------- API: mihomo config.yaml ----------
 
+    def _config_revision(content: str) -> str:
+        return hashlib.sha256(_norm_text(content).encode("utf-8")).hexdigest()
+
+    def _commit_raw_mihomo_config(
+        content: str,
+        *,
+        restart: bool,
+        expected_revision: str = "",
+        validate_core: bool,
+    ):
+        content = _norm_text(content)
+        ok_yaml, _yaml_err = validate_yaml_syntax(content)
+        if not ok_yaml:
+            return _mihomo_yaml_invalid()
+
+        current_content = load_text(MIHOMO_CONFIG_FILE, default="") or ""
+        expected = str(expected_revision or "").strip()
+        if expected and not secrets.compare_digest(expected, _config_revision(current_content)):
+            return _mihomo_error(
+                "config.yaml изменился вне подготовленного candidate.",
+                409,
+                code="stale_config",
+                hint="Откройте редактор, проверьте новые изменения и подготовьте candidate заново.",
+                current_revision=_config_revision(current_content),
+            )
+
+        validation_log = ""
+        if validate_core:
+            validation_log = str(validate_config(new_content=content) or "")
+            match = re.search(r"\[exit code:\s*(\d+)\]", validation_log)
+            if match is None:
+                return _mihomo_error(
+                    "Проверка Mihomo недоступна: runner не вернул exit code.",
+                    503,
+                    code="validation_unavailable",
+                    hint="Установите/проверьте Mihomo и повторите сохранение.",
+                    validation_log=validation_log,
+                )
+            if int(match.group(1)) != 0:
+                return _mihomo_error(
+                    "Mihomo отклонил candidate конфигурации.",
+                    400,
+                    code="validation_failed",
+                    hint="Исправьте ошибки в candidate и повторите попытку.",
+                    validation_log=validation_log,
+                )
+
+        try:
+            ensure_mihomo_layout()
+            backup = save_config(content)
+        except Exception as exc:
+            return _mihomo_exception(
+                "Не удалось сохранить active config.yaml.",
+                code="config_save_failed",
+                hint="Проверьте конфиг и server logs.",
+                exc=exc,
+                status=400,
+            )
+
+        response = {
+            "ok": True,
+            "saved": True,
+            "restarted": False,
+            "backup": getattr(backup, "filename", ""),
+            "revision": _config_revision(content),
+            "validation_log": validation_log,
+        }
+        if restart:
+            try:
+                job = create_command_job(flag="-restart", stdin_data=None, cmd=None, use_pty=True)
+            except Exception as exc:
+                response.update(
+                    {
+                        "ok": False,
+                        "saved": True,
+                        "restart_queued": False,
+                        "code": "restart_schedule_failed",
+                        "error": "config.yaml сохранён, но restart job не удалось поставить в очередь.",
+                        "hint": "Проверьте restart log; повторите только применение, не импорт.",
+                        "detail": str(exc),
+                    }
+                )
+                return jsonify(response), 500
+            response.update({"restart_queued": True, "restart_job_id": job.id})
+            return jsonify(response), 202
+        return jsonify(response), 200
+
     @bp.get("/api/mihomo-config")
     def api_get_mihomo_config():
         content = load_text(MIHOMO_CONFIG_FILE, default=None)
         if content is None:
             return _mihomo_error("Файл config.yaml не найден.", 404, code="config_not_found")
-        return jsonify({"ok": True, "content": content}), 200
+        return jsonify({"ok": True, "content": content, "revision": _config_revision(content)}), 200
 
     @bp.post("/api/mihomo-config")
     def api_set_mihomo_config():
         data = request.get_json(silent=True) or {}
         content = data.get("content", "")
-
-        ok_yaml, _yaml_err = validate_yaml_syntax(content)
-        if not ok_yaml:
-            return _mihomo_yaml_invalid()
-
-        try:
-            # Сохраняем конфиг через mihomo_server_core, чтобы перед записью делался бэкап
-            ensure_mihomo_layout()
-            save_config(content)
-        except Exception as e:
-            return _mihomo_exception(
-                "Не удалось сохранить active config.yaml.",
-                code="config_save_failed",
-                hint="Проверьте конфиг и server logs.",
-                exc=e,
-                status=400,
+        restart_flag = bool(data.get("restart", True))
+        async_q = request.args.get("async") in ("1", "true", "yes")
+        if async_q:
+            return _commit_raw_mihomo_config(
+                content,
+                restart=restart_flag,
+                validate_core=False,
             )
 
-        restart_flag = bool(data.get("restart", True))
-        async_q = request.args.get("async")
+        committed = _commit_raw_mihomo_config(
+            content,
+            restart=False,
+            validate_core=False,
+        )
+        body, status = committed if isinstance(committed, tuple) else (committed, 200)
+        if status >= 400:
+            return committed
+        if not restart_flag:
+            return committed
+        restarted = restart_xkeen(source="mihomo-config")
+        payload = body.get_json() if hasattr(body, "get_json") else {"ok": True}
+        payload["restarted"] = bool(restarted)
+        return jsonify(payload), 200
 
-        resp = {"ok": True, "restarted": False}
-        if restart_flag and async_q in ("1", "true", "yes"):
-            job = create_command_job(flag="-restart", stdin_data=None, cmd=None, use_pty=True)
-            resp.update({"restart_queued": True, "restart_job_id": job.id})
-            return jsonify(resp), 202
-
-        restarted = restart_flag and restart_xkeen(source="mihomo-config")
-        resp["restarted"] = restarted
-        return jsonify(resp), 200
+    @bp.post("/api/mihomo/import/commit")
+    def api_mihomo_import_commit():
+        """Validate, back up, save and optionally queue a restart for an import candidate."""
+        data = request.get_json(silent=True) or {}
+        content = data.get("content", "")
+        restart = bool(data.get("restart", False))
+        expected_revision = str(data.get("base_revision") or data.get("baseRevision") or "")
+        return _commit_raw_mihomo_config(
+            content,
+            restart=restart,
+            expected_revision=expected_revision,
+            validate_core=True,
+        )
 
     def _mihomo_clash_setup_input() -> tuple[str, Any]:
         supplied = load_text(MIHOMO_CONFIG_FILE, default=None)
@@ -2491,6 +2587,25 @@ def create_mihomo_blueprint(
             return out
         return []
 
+    def _proxy_group_names(content: str):
+        names = []
+        in_groups = False
+        for line in _norm_text(content).splitlines():
+            stripped = line.lstrip()
+            indent = len(line) - len(stripped)
+            if indent == 0 and stripped.startswith("proxy-groups:"):
+                in_groups = True
+                continue
+            if in_groups and indent == 0 and stripped and not stripped.startswith("#"):
+                in_groups = False
+            if in_groups and stripped.startswith("- name:"):
+                raw = stripped.split(":", 1)[1].strip()
+                if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in ("'", '"'):
+                    raw = raw[1:-1]
+                if raw and raw not in names:
+                    names.append(raw)
+        return names
+
     def _infer_proxy_name_from_yaml(proxy_yaml: str) -> str:
         # best-effort: read first "- name:" line
         m = re.search(r"^\s*-\s*name:\s*(.+?)\s*$", proxy_yaml, flags=re.M)
@@ -2530,13 +2645,62 @@ def create_mihomo_blueprint(
             return _api_error("proxy_name is required", 400, ok=False)
 
         try:
-            patched = apply_proxy_insert(content, proxy_yaml, proxy_name, groups)
-            return jsonify({"ok": True, "content": patched}), 200
+            known_groups = _norm_groups(_proxy_group_names(content))
+            missing_groups = [group for group in groups if group not in known_groups]
+            selected_groups = [group for group in groups if group in known_groups]
+            patched = apply_proxy_insert(content, proxy_yaml, proxy_name, selected_groups)
+            return jsonify(
+                {
+                    "ok": True,
+                    "content": patched,
+                    "attached_groups": selected_groups,
+                    "missing_groups": missing_groups,
+                }
+            ), 200
         except Exception as e:
             return _mihomo_exception(
                 "Не удалось вставить прокси в конфиг Mihomo.",
                 code="apply_insert_failed",
                 hint="Проверьте YAML прокси и список целевых групп.",
+                exc=e,
+                status=400,
+            )
+
+    @bp.post("/api/mihomo/patch/attach_providers")
+    def api_mihomo_patch_attach_providers():
+        """Attach proxy-provider names to selected proxy-groups via `use:`."""
+        guard = _patch_guard()
+        if guard is not None:
+            return guard
+
+        data = request.get_json(silent=True) or {}
+        content = _norm_text(data.get("content") or "")
+        providers = _norm_groups(data.get("providers") or data.get("provider_names"))
+        groups = _norm_groups(data.get("groups") or data.get("target_groups"))
+        known_groups = _norm_groups(_proxy_group_names(content))
+        missing_groups = [group for group in groups if group not in known_groups]
+        selected_groups = [group for group in groups if group in known_groups]
+
+        if not providers:
+            return _api_error("providers are required", 400, ok=False)
+
+        try:
+            patched = content
+            for provider_name in providers:
+                patched = insert_provider_into_groups(patched, provider_name, selected_groups)
+            return jsonify(
+                {
+                    "ok": True,
+                    "content": patched,
+                    "attached_groups": selected_groups,
+                    "missing_groups": missing_groups,
+                }
+            ), 200
+        except Exception as e:
+            return _mihomo_exception(
+                "Не удалось подключить provider к группам Mihomo.",
+                code="attach_provider_failed",
+                hint="Проверьте список групп и секцию proxy-groups.",
                 exc=e,
                 status=400,
             )

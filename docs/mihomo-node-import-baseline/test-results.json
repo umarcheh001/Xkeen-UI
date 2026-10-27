@@ -1,0 +1,71 @@
+{
+  "date": "2026-10-26",
+  "base_commit": "0eece0cefab92b1d4eaa969b950a559d7d4d281d",
+  "environment": {
+    "os": "macOS",
+    "node": "24.16.0",
+    "python": "3.11.15",
+    "playwright": "1.59.1",
+    "module_profile": "full",
+    "frontend_mode": "source ESM"
+  },
+  "checks": [
+    {
+      "name": "targeted-server",
+      "command": "python -m pytest -q tests/test_mihomo_node_import.py tests/test_mihomo_node_import_route.py tests/test_mihomo_subscriptions.py tests/test_mihomo_wireguard_parser.py tests/test_mihomo_proxy_hardening_contracts.py tests/test_amnezia_premium.py tests/test_mihomo_async_restart.py tests/test_mihomo_runtime_validation.py",
+      "status": "passed",
+      "passed": 74,
+      "seconds": 2.91
+    },
+    {
+      "name": "compatibility",
+      "command": "node scripts/run_python.mjs -m pytest -q tests/test_mihomo_feature_api_consistency.py tests/test_mihomo_xhttp_support.py tests/test_mihomo_xray_json.py tests/test_mihomo_xray_json_route.py tests/test_mihomo_hwid_sub.py tests/test_mihomo_hwid_routes.py tests/test_panel_operator_stage4_mihomo_forms.py tests/test_modular_panel_stage4_4_modals.py tests/test_operator_icons.py",
+      "status": "passed",
+      "passed": 154,
+      "seconds": 12.22
+    },
+    {
+      "name": "existing-layout-e2e",
+      "command": "npx playwright test e2e/mihomo_import_modal_layout.spec.mjs --workers=1",
+      "status": "passed",
+      "passed": 5,
+      "seconds": 52.7
+    },
+    {
+      "name": "characterization-capture",
+      "command": "MIHOMO_BASELINE_DIR=docs/mihomo-node-import-baseline XKEEN_E2E_PORT=18490 npx playwright test --config=e2e/mihomo_import_baseline.config.mjs",
+      "status": "passed",
+      "passed": 4,
+      "reported_duration": "1.6m"
+    },
+    {
+      "name": "harness-inventory-tests",
+      "command": "node scripts/run_python.mjs -m pytest -q tests/test_mihomo_import_baseline_inventory.py",
+      "status": "passed",
+      "passed": 2
+    },
+    {
+      "name": "static-build",
+      "command": "npm run frontend:verify:static",
+      "status": "passed"
+    },
+    {
+      "name": "inventory",
+      "command": "npm run inventory:check",
+      "status": "passed"
+    }
+  ],
+  "limits": [
+    "Not a live-router apply test",
+    "No real subscription credentials or Amnezia issuance",
+    "Single timing samples include Playwright auto-wait overhead",
+    "No full release build or all-repository test run"
+  ],
+  "initial_harness_repairs": [
+    "Seed canonical editor API instead of unready legacy global",
+    "Do not use virtualized editor DOM as full model",
+    "Exercise actual resize/reopen to discover storage key",
+    "Reset mobile-clamped geometry before desktop Monaco screenshot"
+  ],
+  "production_changes": false
+}

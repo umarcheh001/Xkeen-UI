@@ -7969,7 +7969,16 @@ html[data-theme="light"] #routing-forced-rules-modal .xk-chip[data-kind="ip"] {
 }
 
 .xk-mi-refresh-field {
-  max-width: 260px;
+  max-width: none;
+  align-items: flex-start;
+}
+
+.xk-mi-refresh-field .xk-mi-control {
+  width: 64px;
+  min-width: 64px;
+  padding: 0 3px 0 8px;
+  appearance: auto;
+  -webkit-appearance: auto;
 }
 
 .xk-mi-refresh-note {
@@ -32992,4 +33001,233 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-collapsedLines:f
   background: #a83432;
   color: #fff;
   font-size: 0.7em;
+}
+
+/* Mihomo import result cards: safe parser summary, never raw YAML/source. */
+.xk-mi-result-cards {
+  display: grid;
+  gap: 9px;
+  padding: 11px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(96, 165, 250, 0.18);
+  background: rgba(14, 165, 233, 0.055);
+}
+
+.xk-mi-result-cards.hidden {
+  display: none;
+}
+
+.xk-mi-result-list {
+  display: grid;
+  gap: 7px;
+}
+
+.xk-mi-result-card {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 9px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(2, 6, 23, 0.28);
+}
+
+.xk-mi-result-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.xk-mi-result-card-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fg, #f8fafc);
+  font-size: calc(12px * var(--xk-font-scale));
+  font-weight: 700;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xk-mi-result-badge {
+  flex: 0 1 auto;
+  max-width: 54%;
+  overflow: hidden;
+  padding: 3px 7px;
+  border: 1px solid rgba(96, 165, 250, 0.20);
+  border-radius: 999px;
+  color: #bae6fd;
+  font-size: calc(10px * var(--xk-font-scale));
+  font-weight: 650;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xk-mi-result-source,
+.xk-mi-result-detail,
+.xk-mi-result-notice,
+.xk-mi-result-diagnostic {
+  overflow-wrap: anywhere;
+  color: #a9b8d3;
+  font-size: calc(10.5px * var(--xk-font-scale));
+  line-height: 1.4;
+}
+
+.xk-mi-result-source {
+  color: #cbd5e1;
+}
+
+.xk-mi-result-notice {
+  padding-left: 7px;
+  border-left: 2px solid rgba(96, 165, 250, 0.60);
+}
+
+.xk-mi-result-notice.is-warning,
+.xk-mi-result-diagnostics {
+  border-color: rgba(251, 191, 36, 0.75);
+  color: #fde68a;
+}
+
+.xk-mi-result-diagnostics {
+  display: grid;
+  gap: 4px;
+  padding: 8px 9px;
+  border-radius: 10px;
+  border: 1px solid rgba(251, 191, 36, 0.22);
+  border-left: 2px solid rgba(251, 191, 36, 0.75);
+  background: rgba(120, 53, 15, 0.10);
+}
+
+.xk-mi-result-diagnostics-title {
+  color: #fde68a;
+  font-size: calc(11px * var(--xk-font-scale));
+  font-weight: 700;
+}
+
+/* Mihomo import destination chooser: explicit provider/static flow. */
+.xk-mi-destination {
+  gap: 10px;
+}
+
+.xk-mi-destination-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.xk-mi-destination-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 9px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 10px;
+  background: rgba(2, 6, 23, 0.24);
+  cursor: pointer;
+}
+
+.xk-mi-destination-option:has(input:checked) {
+  border-color: rgba(96, 165, 250, 0.55);
+  background: rgba(37, 99, 235, 0.12);
+}
+
+.xk-mi-destination-option input {
+  margin-top: 2px;
+  flex: 0 0 auto;
+}
+
+.xk-mi-destination-option span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.xk-mi-destination-option strong {
+  color: var(--fg, #f8fafc);
+  font-size: calc(11px * var(--xk-font-scale));
+}
+
+.xk-mi-destination-option small {
+  color: #a9b8d3;
+  font-size: calc(10px * var(--xk-font-scale));
+  line-height: 1.35;
+}
+
+.xk-mi-provider-settings {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+}
+
+.xk-mi-provider-settings.hidden,
+.xk-mi-destination-option.hidden {
+  display: none;
+}
+
+.xk-mi-provider-interval {
+  width: 132px;
+}
+
+@media (max-width: 620px) {
+  .xk-mi-destination-options,
+  .xk-mi-provider-settings {
+    grid-template-columns: 1fr;
+  }
+  .xk-mi-provider-interval {
+    width: auto;
+  }
+}
+
+/* Mihomo import candidate/actions: explicit draft/save/apply result. */
+.xk-mi-candidate-summary,
+.xk-mi-action-status {
+  display: grid;
+  gap: 4px;
+  padding: 9px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(96, 165, 250, 0.18);
+  background: rgba(14, 165, 233, 0.055);
+}
+
+.xk-mi-candidate-summary.hidden,
+.xk-mi-action-status.hidden {
+  display: none;
+}
+
+.xk-mi-candidate-title {
+  color: var(--fg, #f8fafc);
+  font-size: calc(11px * var(--xk-font-scale));
+  font-weight: 700;
+}
+
+.xk-mi-candidate-details,
+.xk-mi-action-status {
+  color: #a9b8d3;
+  font-size: calc(10.5px * var(--xk-font-scale));
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.xk-mi-action-status.is-success {
+  border-left: 2px solid #34d399;
+  color: #86efac;
+}
+
+.xk-mi-action-status.is-warning {
+  border-left: 2px solid #fbbf24;
+  color: #fde68a;
+}
+
+.xk-mi-action-status.is-error {
+  border-left: 2px solid #f87171;
+  color: #fecaca;
+}
+
+.xk-mi-action-status.is-busy {
+  border-left: 2px solid #60a5fa;
 }

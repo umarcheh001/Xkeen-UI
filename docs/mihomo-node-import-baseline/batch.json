@@ -1,0 +1,41 @@
+{
+  "method": "one local Chromium run, wall time with Playwright overhead, actual local apply_insert endpoint; parse and registration use synthetic responses, not provider/router latency",
+  "timings": [
+    {
+      "count": 1,
+      "parseMs": 256,
+      "insertMs": 336,
+      "postCounts": {
+        "/api/mihomo/parse/xray-json": 1,
+        "/api/mihomo/patch/apply_insert": 1,
+        "/api/mihomo/subscriptions/imported-xray": 1
+      }
+    },
+    {
+      "count": 10,
+      "parseMs": 329,
+      "insertMs": 408,
+      "postCounts": {
+        "/api/mihomo/parse/xray-json": 1,
+        "/api/mihomo/patch/apply_insert": 10,
+        "/api/mihomo/subscriptions/imported-xray": 1
+      }
+    },
+    {
+      "count": 50,
+      "parseMs": 370,
+      "insertMs": 1119,
+      "postCounts": {
+        "/api/mihomo/parse/xray-json": 1,
+        "/api/mihomo/patch/apply_insert": 50,
+        "/api/mihomo/subscriptions/imported-xray": 1
+      }
+    }
+  ],
+  "calls": {
+    "discovery": 0,
+    "issuance": 0,
+    "registrations": 3
+  },
+  "forbidden": []
+}
