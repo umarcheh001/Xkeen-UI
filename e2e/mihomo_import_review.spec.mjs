@@ -42,6 +42,33 @@ test('review precedes commit, warns about editor changes, and goes back without 
   expect(commits).toBe(0);
 });
 
+test('review separates imported fragments from file diff and keeps YAML inside the dialog', async ({ page }) => {
+  await setup(page);
+  await editor(page, CONFIG + '# editor-only change\n');
+  await page.locator('#mihomo-import-review-btn').click();
+  const dialog = page.locator('#mihomo-import-modal');
+  const imported = dialog.locator('[data-mi-review-view="import"]');
+  const file = dialog.locator('[data-mi-review-view="file"]');
+  const yaml = dialog.locator('[data-mi-review-view="yaml"]');
+
+  await imported.locator('summary').click();
+  await expect(imported.locator('pre')).toContainText('Добавляемые фрагменты');
+  await expect(imported.locator('pre')).not.toContainText('editor-only change');
+  await file.locator('summary').click();
+  await expect(imported).not.toHaveAttribute('open');
+  await expect(file.locator('pre')).toContainText('editor-only change');
+  await yaml.locator('summary').click();
+  await expect(file).not.toHaveAttribute('open');
+  await expect(yaml.locator('.xk-mi-yaml-key').first()).toBeVisible();
+  const sizes = await dialog.evaluate((modal) => ({
+    scroll: modal.querySelector('.modal-content').scrollWidth,
+    width: modal.querySelector('.modal-content').clientWidth,
+  }));
+  expect(sizes.scroll).toBeLessThanOrEqual(sizes.width + 1);
+  await dialog.click({ position: { x: 4, y: 4 } });
+  await expect(dialog).toBeVisible();
+});
+
 test('editor edit after review requires renewed confirmation without writing', async ({ page }) => {
   let commits = 0;
   await page.route('**/api/mihomo/import/commit', route => { commits++; return route.fulfill({ json: { ok: true, saved: true, revision: 'saved' } }); });

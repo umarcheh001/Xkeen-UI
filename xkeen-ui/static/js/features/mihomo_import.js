@@ -3064,11 +3064,23 @@ let mihomoImportModuleApi = null;
 
   function showReviewTechnicalView(details) {
     if (!details.open || !_lastCandidate) return;
+    details.parentElement.querySelectorAll('details').forEach((other) => {
+      if (other !== details) other.open = false;
+    });
     const candidate = _lastCandidate;
     const kind = details.dataset.miReviewView;
     const limit = 240;
     let lines;
     if (kind === 'yaml') lines = candidate.content.split('\n');
+    else if (kind === 'import') {
+      lines = ['@@ Добавляемые фрагменты @@'];
+      (candidate.outputs || []).forEach((output) => {
+        const fragment = String(output.content || output.proxy_yaml || '').trimEnd();
+        if (!fragment) return;
+        lines.push(...fragment.split('\n').map((line) => `+ ${line}`));
+      });
+      if (lines.length === 1) lines = ['Импортируемых изменений нет.'];
+    }
     else {
       const before = (kind === 'file' ? candidate.baseFileContent : candidate.sourceEditorContent).split('\n');
       const after = candidate.content.split('\n');
@@ -3080,8 +3092,41 @@ let mihomoImportModuleApi = null;
         ...after.slice(start, after.length - end).map(line => `+ ${line}`)];
       if (lines.length === 1) lines = ['Изменений нет.'];
     }
-    details.querySelector('pre').textContent = lines.slice(0, limit).join('\n')
+    const output = lines.slice(0, limit).join('\n')
       + (lines.length > limit ? `\n… Скрыто строк: ${lines.length - limit}. Сохраняется полный конфиг.` : '');
+    const pre = details.querySelector('pre');
+    if (kind === 'yaml') renderReviewYaml(pre, output);
+    else pre.textContent = output;
+  }
+
+  function renderReviewYaml(pre, source) {
+    pre.replaceChildren();
+    String(source || '').split('\n').forEach((line, index) => {
+      if (index) pre.append(document.createTextNode('\n'));
+      if (line.trimStart().startsWith('#')) {
+        appendReviewToken(pre, 'xk-mi-yaml-comment', line);
+        return;
+      }
+      const match = line.match(/^(\s*(?:-\s*)?)([\w.-]+)(\s*:)(.*)$/);
+      if (!match) {
+        pre.append(document.createTextNode(line));
+        return;
+      }
+      pre.append(document.createTextNode(match[1]));
+      appendReviewToken(pre, 'xk-mi-yaml-key', match[2]);
+      pre.append(document.createTextNode(match[3]));
+      const value = match[4];
+      if (/^\s*(?:true|false|null|~|-?\d+(?:\.\d+)?|"[^"]*"|'[^']*')\s*$/i.test(value)) {
+        appendReviewToken(pre, 'xk-mi-yaml-value', value);
+      } else pre.append(document.createTextNode(value));
+    });
+  }
+
+  function appendReviewToken(pre, className, text) {
+    const token = document.createElement('span');
+    token.className = className;
+    token.textContent = text;
+    pre.append(token);
   }
 
 
@@ -3874,18 +3919,6 @@ let mihomoImportModuleApi = null;
     }
 
     try { bindPreviewResizeObserver(); } catch (e) {}
-
-    // Close on backdrop click (outside content)
-    if (!modal.dataset || modal.dataset.xkBackdrop !== '1') {
-      modal.addEventListener('click', (e) => {
-        try {
-          const content = modal.querySelector('.modal-content');
-          if (!content) return;
-          if (e.target === modal) showModal(false);
-        } catch (err) {}
-      });
-      if (modal.dataset) modal.dataset.xkBackdrop = '1';
-    }
 
     // Ctrl+Enter = parse, Ctrl+Shift+Enter = insert
     const inp = $(IDS.input);

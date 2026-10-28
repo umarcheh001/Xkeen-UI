@@ -25475,6 +25475,7 @@ body.panel-page #mihomo-import-modal .xk-mi-action-status.is-error {
 body.panel-page #mihomo-import-modal .xk-mi-review {
   display: grid;
   gap: 14px;
+  min-width: 0;
 }
 body.panel-page #mihomo-import-modal[data-mi-layout="review"] .xk-mi-body {
   display: flex;
@@ -25483,6 +25484,8 @@ body.panel-page #mihomo-import-modal[data-mi-layout="review"] .xk-mi-body {
 }
 body.panel-page #mihomo-import-modal[data-mi-layout="review"] .xk-mi-modal {
   width: min(720px, calc(100vw - 24px));
+  min-width: 0;
+  overflow-x: hidden;
 }
 body.panel-page #mihomo-import-modal .xk-mi-review .xk-mi-candidate-summary {
   margin: 0;
@@ -25503,6 +25506,7 @@ body.panel-page #mihomo-import-modal .xk-mi-review-tools {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  min-width: 0;
 }
 body.panel-page #mihomo-import-modal .xk-mi-review-tools details[open] {
   flex: 1 1 100%;
@@ -25512,15 +25516,43 @@ body.panel-page #mihomo-import-modal .xk-mi-review-tools summary {
   cursor: pointer;
   list-style: none;
 }
+body.panel-page #mihomo-import-modal .xk-mi-review-tools summary:hover,
+body.panel-page #mihomo-import-modal .xk-mi-review-tools summary:focus-visible {
+  border-color: var(--op-accent) !important;
+  background: var(--op-accent-soft) !important;
+  color: var(--op-text-strong) !important;
+}
+body.panel-page #mihomo-import-modal .xk-mi-review-tools details[open] > summary {
+  border-color: var(--op-accent) !important;
+  background: var(--op-accent-soft) !important;
+  color: var(--op-text-strong) !important;
+}
 body.panel-page #mihomo-import-modal .xk-mi-review-tools pre {
   max-height: 260px;
+  min-width: 0;
+  max-width: 100%;
   overflow: auto;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
+  box-sizing: border-box;
   padding: 12px;
   color: var(--op-text);
   background: var(--op-surface-2);
   border: 1px solid var(--op-border);
   border-radius: var(--op-radius-md, 8px);
   font-size: 12px;
+}
+body.panel-page #mihomo-import-modal .xk-mi-review .xk-mi-yaml-key {
+  color: #93c5fd;
+  font-weight: 600;
+}
+body.panel-page #mihomo-import-modal .xk-mi-review .xk-mi-yaml-value {
+  color: #86efac;
+}
+body.panel-page #mihomo-import-modal .xk-mi-review .xk-mi-yaml-comment {
+  color: var(--op-muted);
+  font-style: italic;
 }
 
 /* Mihomo traffic uses the router diagnostics dashboard's surface and status language. */
