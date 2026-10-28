@@ -83,12 +83,13 @@ test('subscription controls expose one tooltip per field', async ({ page }) => {
   ));
   expect(nestedOwners).toEqual([]);
 
-  for (const suffix of ['name', 'tag', 'interval', 'url', 'name-filter', 'type-filter', 'transport-filter']) {
+  for (const suffix of ['name', 'tag', 'schedule-mode', 'interval', 'url', 'name-filter', 'type-filter', 'transport-filter']) {
     const input = page.locator(`#outbounds-subscriptions-${suffix}`);
     await expect(input).toHaveAttribute('data-tooltip', /\S/);
     await expect(input.locator('xpath=..')).not.toHaveAttribute('data-tooltip');
   }
   await expect(page.locator('#outbounds-subscriptions-tag')).toHaveAttribute('data-tooltip', /балансировщики/);
+  await expect(page.locator('#outbounds-subscriptions-schedule-mode')).toHaveAttribute('data-tooltip', /Cron по времени роутера/);
   await expect(page.locator('#outbounds-subscriptions-url')).toHaveAttribute('data-tooltip', /JSON-списки/);
   for (const suffix of ['enabled', 'ping', 'refresh-now', 'routing-auto-rule', 'entware-mark-btn']) {
     const input = page.locator(`#outbounds-subscriptions-${suffix}`);
@@ -102,6 +103,8 @@ test('subscription controls expose one tooltip per field', async ({ page }) => {
 
   await page.locator('#outbounds-subscriptions-name').hover();
   await expect(page.locator('#xk-tooltip-portal .xk-tooltip-text')).toContainText('Короткое имя подписки');
+  await page.locator('#outbounds-subscriptions-schedule-mode').hover();
+  await expect(page.locator('#xk-tooltip-portal .xk-tooltip-text')).toContainText('Cron по времени роутера');
   await page.locator('label:has(#outbounds-subscriptions-name) > .xk-pool-fieldlabel').hover();
   await expect(page.locator('#xk-tooltip-portal')).toBeHidden();
 });

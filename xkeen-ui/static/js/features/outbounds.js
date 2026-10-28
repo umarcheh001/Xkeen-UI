@@ -5927,7 +5927,7 @@ let outboundsModuleApi = null;
                     </label>
                     <div class="xk-sub-wide xk-sub-schedule">
                       <label><span class="xk-pool-fieldlabel">Режим обновления</span>
-                        <select id="outbounds-subscriptions-schedule-mode" class="xray-log-filter" aria-label="Режим обновления">
+                        <select id="outbounds-subscriptions-schedule-mode" class="xray-log-filter" aria-label="Режим обновления" data-tooltip-multiline data-tooltip="Как панель будет обновлять подписку.&#10;Интервал: повторное обновление через выбранное число часов (по умолчанию 24).&#10;Cron по времени роутера: обновление по расписанию cron, например каждый день в 04:00.">
                           <option value="interval">Интервал</option><option value="cron">Cron по времени роутера</option>
                         </select>
                       </label>
