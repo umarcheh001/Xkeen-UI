@@ -181,7 +181,7 @@
           "accessible_label": "Применить"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_import.js:L3037",
+          "location": "xkeen-ui/static/js/features/mihomo_import.js:L3042",
           "control_type": "runtime-action",
           "accessible_label": "Применить"
         },
@@ -1916,7 +1916,7 @@
           "accessible_label": "Импортировать"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_import.js:L2972",
+          "location": "xkeen-ui/static/js/features/mihomo_import.js:L2939",
           "control_type": "runtime-action",
           "accessible_label": "Импортировать"
         },
@@ -2462,7 +2462,7 @@
           "accessible_label": "Открыть"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_import.js:L4017",
+          "location": "xkeen-ui/static/js/features/mihomo_import.js:L4022",
           "control_type": "runtime-action",
           "accessible_label": "Открыть"
         },

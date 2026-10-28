@@ -115,7 +115,7 @@ export function createMihomoConfigOperations({
         try {
           while (now() < deadline) {
             const result = await request(`/api/restart-job/${encodeURIComponent(current.jobId)}`);
-            const log = redactMihomoImportDiagnostic(result.output || '');
+            const log = result.output ? redactMihomoImportDiagnostic(result.output) : '';
             update({ log });
             if (result.status === 'error' || result.error || (result.status === 'finished' && result.exit_code !== 0)) {
               return update({ state: 'apply-failed', error: redactMihomoImportDiagnostic(result.error || `Код завершения: ${result.exit_code ?? 'неизвестен'}`) });

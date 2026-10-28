@@ -111,6 +111,11 @@ test('diagnostic hides bearer authorization values', () => {
   const text = redactMihomoImportDiagnostic('Authorization: Bearer very-secret-value');
   assert.doesNotMatch(text, /very-secret-value/);
 });
+
+test('diagnostic removes terminal control sequences from restart output', () => {
+  const text = redactMihomoImportDiagnostic('\u001b[32mStarted\u001b[0m\n\u001b]0;terminal title\u0007Ready');
+  assert.equal(text, 'Started Ready');
+});
 test('large result lists disclose hidden count without truncating the import', async () => {
   const model = await import('../../xkeen-ui/static/js/features/mihomo_import_result.js');
   assert.equal(typeof model.limitMihomoImportItems, 'function');

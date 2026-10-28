@@ -2935,7 +2935,12 @@ let mihomoImportModuleApi = null;
 
   function renderOperationStatus() {
     const op = _configOperations.operation;
-    if (!op || !modalOpen()) return;
+    if (!modalOpen()) return;
+    if (op?.origin !== 'import') {
+      setActionStatus('');
+      $('mihomo-import-recovery')?.classList.add('hidden');
+      return;
+    }
     let message = '';
     let kind = 'info';
     if (op.state === 'saving') message = 'Проверка конфигурации → резервная копия → сохранение…';
@@ -3022,7 +3027,7 @@ let mihomoImportModuleApi = null;
   }
 
   async function recoverImportOperation(action) {
-    if (_actionBusy) return;
+    if (_actionBusy || _configOperations.operation?.origin !== 'import') return;
     let release;
     try {
       release = _configOperations.acquire({ recovery: true });

@@ -63,7 +63,10 @@ export function safeMihomoSourceDomain(value) {
 }
 
 export function redactMihomoImportDiagnostic(value) {
-  let text = clean(value);
+  let text = clean(value)
+    .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
+    .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '')
+    .replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '');
   if (!text) return 'Неизвестная причина.';
   text = text.replace(URL_RE, (url) => {
     const domain = safeMihomoSourceDomain(url);
