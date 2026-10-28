@@ -234,6 +234,31 @@ def test_batch_patch_preserves_nodes_under_a_commented_section_header(client):
     assert "# existing nodes" in result
 
 
+def test_batch_patch_preserves_or_rejects_anchored_proxy_section(client):
+    http, _ = client
+    source = "proxies: &nodes\n  - name: old\n    type: direct\nproxy-groups: []\n"
+    response = http.post("/api/mihomo/patch/apply_batch", json={"content": source, "proxies": [
+        {"proxy_name": "new", "proxy_yaml": "- name: new\n  type: direct\n"},
+    ]})
+    if response.status_code == 200:
+        import yaml
+        result = response.get_json()["content"]
+        assert [node["name"] for node in yaml.safe_load(result)["proxies"]] == ["old", "new"]
+        assert result.count("proxies:") == 1
+    else:
+        assert response.status_code == 400
+        assert "content" not in response.get_json()
+
+
+def test_batch_patch_accepts_empty_config(client):
+    http, _ = client
+    response = http.post("/api/mihomo/patch/apply_batch", json={"content": "", "proxies": [
+        {"proxy_name": "new", "proxy_yaml": "- name: new\n  type: direct\n"},
+    ]})
+    assert response.status_code == 200
+    assert "name: new" in response.get_json()["content"]
+
+
 def test_import_commit_replay_does_not_save_or_restart_twice(client):
     http, _ = client
     body = {"content": "proxies: []\n", "restart": True, "operation_id": "same-import",

@@ -1,7 +1,34 @@
 import { redactMihomoImportDiagnostic } from './mihomo_import_result.js';
 
 const normalize = value => String(value || '').replace(/\r\n?/g, '\n');
-const comparable = value => normalize(value).split('\n').map(line => line.trim()).filter(Boolean).join('\n');
+const comparable = value => {
+  const lines = normalize(value).split('\n').map(line => line.trim());
+  while (lines.length && (!lines[lines.length - 1] || lines[lines.length - 1].startsWith('#'))) lines.pop();
+  return lines.filter(Boolean).join('\n');
+};
+const proxyBlocks = value => {
+  const lines = normalize(value).split('\n');
+  const headers = lines.map((line, index) => /^proxies\s*:\s*(?:#.*)?$/.test(line) ? index : -1).filter(index => index >= 0);
+  if (headers.length !== 1) return [];
+  const section = [];
+  for (const line of lines.slice(headers[0] + 1)) {
+    if (/^[^\s#-]/.test(line)) break;
+    section.push(line);
+  }
+  const first = section.find(line => /^\s*-\s+/.test(line));
+  if (!first) return [];
+  const indent = first.match(/^\s*/)[0].length;
+  const blocks = [];
+  let block = [];
+  for (const line of section) {
+    if (/^\s*-\s+/.test(line) && line.match(/^\s*/)[0].length === indent) {
+      if (block.length) blocks.push(comparable(block.join('\n')));
+      block = [line];
+    } else if (block.length) block.push(line);
+  }
+  if (block.length) blocks.push(comparable(block.join('\n')));
+  return blocks;
+};
 
 /** Shared, page-owned operation state; closing a dialog does not erase a job. */
 export function createMihomoConfigOperations({
@@ -50,11 +77,11 @@ export function createMihomoConfigOperations({
       let failed = 0;
       let registered = 0;
       const errors = [];
-      const text = comparable(content);
+      const blocks = proxyBlocks(content);
       for (const entry of pending.values()) {
         if (entry.done) continue;
         const proxies = entry.intent.proxies || [];
-        if (!proxies.length || !proxies.every(proxy => text.includes(comparable(proxy.proxy_yaml)))) continue;
+        if (!proxies.length || !proxies.every(proxy => blocks.includes(comparable(proxy.proxy_yaml)))) continue;
         try {
           const result = await request('/api/mihomo/subscriptions/imported-xray', {
             method: 'POST', body: { ...entry.intent, config: content },

@@ -50,7 +50,7 @@ function safeHost(value) {
 export function safeMihomoSourceDomain(value) {
   const raw = clean(value);
   if (!raw) return '';
-  if (/^happ:\/\//i.test(raw) || /^happ\*:/i.test(raw)) return 'Happ-адаптер';
+  if (/^happ:\/\//i.test(raw) || /^happ\*:/i.test(raw)) return 'Утилита ссылок подписок';
   try {
     const url = new URL(raw);
     const host = clean(url.hostname).toLowerCase();
@@ -70,7 +70,8 @@ export function redactMihomoImportDiagnostic(value) {
     return domain ? `источник ${domain}` : 'источник скрыт';
   });
   text = text.replace(/\b(?:vless|vmess|trojan|ss|hy2|hysteria2|wireguard|openvpn|tailscale|vpn):[^\s]+/gi, 'ссылка скрыта');
-  text = text.replace(/\b([\w.-]*(?:password|uuid|private[-_ ]?key|public[-_ ]?key|token|secret|auth(?:orization)?|sid|short[-_ ]?id)[\w.-]*)\s*[:=]\s*[^\s,;]+/gi, '$1: скрыто');
+  text = text.replace(/\bBearer\s+[^\s,;]+/gi, 'Bearer скрыто');
+  text = text.replace(/\b([\w.-]*(?:password|uuid|private[-_ ]?key|public[-_ ]?key|token|secret|auth(?:orization)?|sid|short[-_ ]?id)[\w.-]*)\s*[:=]\s*(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|"[^\r\n]*|'[^\r\n]*|[^\s,;]+)/gi, '$1: скрыто');
   text = text.replace(/\s+/g, ' ').trim();
   if (text.length > MAX_DIAGNOSTIC_LENGTH) text = `${text.slice(0, MAX_DIAGNOSTIC_LENGTH - 1).trimEnd()}…`;
   return text || 'Неизвестная причина.';

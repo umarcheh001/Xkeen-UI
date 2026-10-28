@@ -74,6 +74,22 @@ test('a different proxy with the same name does not activate pending registratio
   assert.equal(calls, 0);
 });
 
+test('proxy-like text outside proxies section does not activate a subscription', async () => {
+  let calls = 0;
+  const ops = make({ request: async () => { calls++; return { ok: true }; } });
+  ops.addPending([{ url: 'https://sub.example/a', proxies: [{ proxy_name: 'A', proxy_yaml: '- name: A\n  type: direct\n' }] }]);
+  await ops.registerPending('proxies: []\nother:\n  - name: A\n    type: direct\n');
+  assert.equal(calls, 0);
+});
+
+test('comments after a matching proxy do not prevent registration', async () => {
+  let calls = 0;
+  const ops = make({ request: async () => { calls++; return { ok: true }; } });
+  ops.addPending([{ url: 'https://sub.example/a', proxies: [{ proxy_name: 'A', proxy_yaml: '- name: A\n  type: direct\n' }] }]);
+  await ops.registerPending('proxies:\n  - name: A\n    type: direct\n  # comment\nrules: []\n');
+  assert.equal(calls, 1);
+});
+
 test('HTTP success with a failed process is an apply failure', async () => {
   const ops = make({ request: async () => ({ ok: true, status: 'finished', exit_code: 1, error: 'failed' }) });
   ops.remember({ jobId: 'job-1', saved: true });

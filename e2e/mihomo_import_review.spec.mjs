@@ -195,3 +195,29 @@ test('unknown toolbar restart can be monitored again from the import dialog', as
   await page.locator('#mihomo-import-resume').click();
   await expect(page.locator('#mihomo-import-action-status')).toContainText('Применено');
 });
+
+test('HTML in a node name is displayed as text in result and review', async ({ page }) => {
+  const name = '<img src=x onerror=alert(1)>';
+  await setup(page, LINK.replace('#Review', `#${encodeURIComponent(name)}`));
+  await expect(page.locator('#mihomo-import-result-cards')).toContainText(name);
+  await expect(page.locator('#mihomo-import-result-cards img')).toHaveCount(0);
+  await page.locator('#mihomo-import-review-btn').click();
+  await expect(page.locator('#mihomo-import-candidate-summary')).toContainText(name);
+  await expect(page.locator('#mihomo-import-candidate-summary img')).toHaveCount(0);
+});
+
+test('import write endpoints require a session and a CSRF token', async ({ page, browser, baseURL }) => {
+  await page.goto('/');
+  const unauthenticated = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+  try {
+    for (const path of ['/api/mihomo/import/commit', '/api/mihomo/import/apply', '/api/mihomo/patch/apply_batch']) {
+      const noSession = await unauthenticated.request.post(`${baseURL}${path}`, { data: {} });
+      expect(noSession.status()).toBe(401);
+      const noCsrf = await page.request.post(`${baseURL}${path}`, { data: {} });
+      expect(noCsrf.status()).toBe(403);
+      expect((await noCsrf.json()).error).toBe('csrf_failed');
+    }
+  } finally {
+    await unauthenticated.close();
+  }
+});

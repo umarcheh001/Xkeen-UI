@@ -65,7 +65,7 @@ test('subscription results group static and provider sources by safe domain', ()
       content: '  provider_1:\n    type: http\n', uri: 'happ://crypt1/opaque-secret',
     }],
   });
-  assert.equal(providerModel.cards[0].title, 'Happ-адаптер');
+  assert.equal(providerModel.cards[0].title, 'Утилита ссылок подписок');
   assert.equal(providerModel.cards[0].destination, 'proxy-providers');
   assert.doesNotMatch(JSON.stringify(providerModel), /opaque-secret/);
 });
@@ -100,6 +100,16 @@ test('safe domain and diagnostics redact credentials and source paths', () => {
   const message = redactMihomoImportDiagnostic('failed https://user:pass@sub.example.org/a?token=x; uuid=private-value');
   assert.match(message, /источник sub\.example\.org/);
   assert.doesNotMatch(message, /user:pass|token=x|private-value/);
+});
+
+test('diagnostic redacts quoted secrets containing spaces', () => {
+  const text = redactMihomoImportDiagnostic('password: "first second" token=\'third fourth\'');
+  assert.doesNotMatch(text, /first|second|third|fourth/);
+});
+
+test('diagnostic hides bearer authorization values', () => {
+  const text = redactMihomoImportDiagnostic('Authorization: Bearer very-secret-value');
+  assert.doesNotMatch(text, /very-secret-value/);
 });
 test('large result lists disclose hidden count without truncating the import', async () => {
   const model = await import('../../xkeen-ui/static/js/features/mihomo_import_result.js');

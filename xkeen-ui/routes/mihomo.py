@@ -2756,6 +2756,23 @@ def create_mihomo_blueprint(
             # Validate every item before producing any result. No file writes.
             import yaml
 
+            def checked_proxy_section(document):
+                tree = yaml.compose(document)
+                if tree is None:
+                    return []
+                if not isinstance(tree, yaml.MappingNode):
+                    raise ValueError("Ожидается YAML-конфиг с разделами.")
+                if sum(1 for key, _ in tree.value if key.value == "proxies") > 1:
+                    raise ValueError("Повторяющийся раздел proxies.")
+                parsed_document = yaml.safe_load(document)
+                proxies = parsed_document.get("proxies")
+                if proxies is None:
+                    return []
+                if not isinstance(proxies, list):
+                    raise ValueError("Раздел proxies должен быть списком.")
+                return proxies
+
+            original_proxies = checked_proxy_section(content)
             normalized = []
             names = set()
             for item in items:
@@ -2773,6 +2790,9 @@ def create_mihomo_blueprint(
             patched = content
             for fragment, name in normalized:
                 patched = apply_proxy_insert(patched, fragment, name, selected)
+            patched_proxies = checked_proxy_section(patched)
+            if patched_proxies[:len(original_proxies)] != original_proxies or len(patched_proxies) != len(original_proxies) + len(normalized):
+                raise ValueError("Не удалось сохранить существующие узлы.")
             ok_yaml, _ = validate_yaml_syntax(patched)
             if not ok_yaml:
                 raise ValueError("Результат вставки содержит некорректный YAML.")
