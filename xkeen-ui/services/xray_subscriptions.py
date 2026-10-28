@@ -25,6 +25,8 @@ import time
 import urllib.error
 import urllib.request
 import uuid
+import weakref
+from contextvars import ContextVar
 from typing import Any, Callable, Dict, Iterable, List, Tuple
 from urllib.parse import parse_qs, unquote, urlparse
 
@@ -32,6 +34,7 @@ from services import happ_links, happ_payloads
 from services import xray_subscription_displacement as displacement
 from services import xray_transactions
 from services.io.atomic import _atomic_write_json, _atomic_write_text
+from services.subscription_cron import next_cron, next_update
 from services.subscription_schedule import plan_alignment
 from services.subscription_request_profile import (
     normalize_request_profile,
@@ -64,7 +67,6 @@ from services.xray_observatory import (
     replace_section,
 )
 from utils.fs import load_text
-
 
 STATE_VERSION = 1
 STATE_FILENAME = "xray_subscriptions.json"
@@ -142,6 +144,8 @@ _SUPPORTED_LINK_RE = re.compile(
 )
 
 _STATE_LOCK = threading.RLock()
+_REFRESH_LOCKS: weakref.WeakValueDictionary = weakref.WeakValueDictionary()
+_BATCH_FETCH_CACHE: ContextVar[dict | None] = ContextVar("subscription_batch_fetch", default=None)
 _SCHEDULER_LOCK = threading.Lock()
 _SCHEDULER_STARTED = False
 _MISSING = object()
@@ -948,6 +952,12 @@ def upsert_subscription(ui_state_dir: str, payload: Dict[str, Any]) -> Dict[str,
         base = _ensure_runtime_snapshot_defaults(dict(existing or {}))
         tag = _clean_tag_prefix(data.get("tag") or base.get("tag") or sub_id, sub_id)
         interval = _clamp_interval(data.get("interval_hours") or data.get("intervalHours") or base.get("interval_hours") or DEFAULT_INTERVAL_HOURS)
+        schedule_mode = str(data.get("schedule_mode", base.get("schedule_mode", "interval")))
+        if schedule_mode not in {"interval", "cron"}:
+            raise ValueError("Режим расписания: interval или cron.")
+        cron_expression = " ".join(str(data.get("cron_expression", base.get("cron_expression", ""))).split())
+        if schedule_mode == "cron":
+            next_cron(cron_expression, _now())
         output_file = str(base.get("output_file") or _subscription_output_file(sub_id)).strip()
         output_file = os.path.basename(output_file) or _subscription_output_file(sub_id)
         if not output_file.lower().endswith(".json"):
@@ -1046,18 +1056,26 @@ def upsert_subscription(ui_state_dir: str, payload: Dict[str, Any]) -> Dict[str,
                 "output_file": output_file,
                 "node_latency": _prune_node_latency_map(base.get("node_latency"), _normalize_last_nodes(base.get("last_nodes"))),
                 "updated_ts": now_ts,
+                "schedule_mode": schedule_mode,
+                "cron_expression": cron_expression,
             }
         )
         if not sub.get("created_ts"):
             sub["created_ts"] = now_ts
-        if not sub.get("next_update_ts"):
+        if (
+            not sub.get("next_update_ts")
+            or schedule_mode != base.get("schedule_mode", "interval")
+            or cron_expression != base.get("cron_expression", "")
+            or interval != base.get("interval_hours", interval)
+            or sub["enabled"] != base.get("enabled", True)
+        ):
             # Schedule the first auto-refresh one full interval out instead of
             # marking the subscription due immediately. The UI provides an
             # explicit "Обновить сразу" path that does the immediate fetch+
             # restart; without this guard the background scheduler would pick
             # up a freshly-saved sub within ~60s and restart Xray even when
             # the user unchecked that option.
-            sub["next_update_ts"] = (now_ts + interval * 3600) if sub["enabled"] else None
+            sub["next_update_ts"] = next_update(sub, now_ts)
 
         if idx >= 0:
             subs[idx] = sub
@@ -6078,7 +6096,29 @@ def sync_subscription_routing_plan(
     }
 
 
-def _rebuild_subscription_runtime(
+def _runtime_file_state(configs_dir: str) -> Dict[str, Any]:
+    """Compare effective JSON, ignoring whitespace and comments, but preserving list order."""
+    result = {}
+    for name in sorted(os.listdir(configs_dir)) if os.path.isdir(configs_dir) else []:
+        if name.endswith(".json") and os.path.isfile(os.path.join(configs_dir, name)):
+            text = load_text(os.path.join(configs_dir, name), default="")
+            parsed = _load_jsonc_text(text)
+            result[name] = text if parsed is None else parsed
+    return result
+
+
+def _rebuild_subscription_runtime(ui_state_dir: str, *, xray_configs_dir: str, **kwargs) -> Dict[str, Any]:
+    before = _runtime_file_state(xray_configs_dir)
+    result = _rebuild_subscription_runtime_impl(ui_state_dir, xray_configs_dir=xray_configs_dir, **kwargs)
+    after = _runtime_file_state(xray_configs_dir)
+    # Restore/reapply can report edits even when the final file equals the original.
+    if before == after:
+        for flag in ("routing_changed", "observatory_changed", "outbounds_changed"):
+            result[flag] = False
+    return result
+
+
+def _rebuild_subscription_runtime_impl(
     ui_state_dir: str,
     *,
     xray_configs_dir: str,
@@ -6422,6 +6462,30 @@ def refresh_subscription(
     restart_xkeen: RestartCallback | None = None,
     restart: bool = True,
 ) -> Dict[str, Any]:
+    # A manual request can arrive while the scheduler is downloading this source.
+    # Keep the lock alive locally; unused subscription IDs do not accumulate.
+    key = (os.path.realpath(ui_state_dir), _clean_id(sub_id))
+    with _STATE_LOCK:
+        lock = _REFRESH_LOCKS.get(key)
+        if lock is None:
+            lock = threading.RLock()
+            _REFRESH_LOCKS[key] = lock
+    with lock:
+        return _refresh_subscription_impl(
+            ui_state_dir, sub_id, xray_configs_dir=xray_configs_dir,
+            snapshot=snapshot, restart_xkeen=restart_xkeen, restart=restart,
+        )
+
+
+def _refresh_subscription_impl(
+    ui_state_dir: str,
+    sub_id: str,
+    *,
+    xray_configs_dir: str,
+    snapshot: SnapshotCallback | None = None,
+    restart_xkeen: RestartCallback | None = None,
+    restart: bool = True,
+) -> Dict[str, Any]:
     with _STATE_LOCK:
         state = load_subscription_state(ui_state_dir)
         idx, sub = _find_subscription(state, sub_id)
@@ -6476,13 +6540,24 @@ def refresh_subscription(
 
     try:
         request_profile = normalize_request_profile(sub.get("request_profile"))
-        if request_profile["mode"] == "auto":
-            body, headers, fetch_meta = fetch_subscription_body_for_xray(str(sub.get("url") or ""))
-        else:
-            body, headers, fetch_meta = fetch_subscription_body_for_xray(
-                str(sub.get("url") or ""),
-                request_profile=request_profile,
-            )
+        fetch_cache = _BATCH_FETCH_CACHE.get()
+        fetch_key = (str(sub.get("url") or ""), json.dumps(request_profile, sort_keys=True))
+        cached = fetch_cache.get(fetch_key) if fetch_cache is not None else None
+        if isinstance(cached, Exception):
+            raise cached
+        if cached is None:
+            try:
+                if request_profile["mode"] == "auto":
+                    cached = fetch_subscription_body_for_xray(str(sub.get("url") or ""))
+                else:
+                    cached = fetch_subscription_body_for_xray(str(sub.get("url") or ""), request_profile=request_profile)
+            except Exception as exc:
+                if fetch_cache is not None:
+                    fetch_cache[fetch_key] = exc
+                raise
+            if fetch_cache is not None:
+                fetch_cache[fetch_key] = cached
+        body, headers, fetch_meta = copy.deepcopy(cached)
         links = parse_subscription_links(body)
         placeholder_links = _subscription_links_are_hwid_placeholders(links)
         unsupported_client_links = _subscription_links_are_unsupported_client_placeholders(links)
@@ -6687,7 +6762,7 @@ def refresh_subscription(
                 "last_fetch_mode": str(fetch_meta.get("fetch_mode") or "direct"),
                 "last_hwid_response_headers": fetch_meta.get("hwid_response_headers") or {},
                 "last_hwid_limit_info": fetch_meta.get("hwid_limit_info") or {},
-                "next_update_ts": now_ts + (interval * 3600) if bool(sub.get("enabled", True)) else None,
+                "next_update_ts": next_update(sub, _now() if sub.get("schedule_mode") == "cron" else now_ts),
                 "interval_hours": interval,
             }
         )
@@ -7096,7 +7171,7 @@ def refresh_due_subscriptions(
             due_ts = 0.0
         if due_ts <= now_ts:
             has_due = True
-        elif due_ts > now_ts + lookahead:
+        elif sub.get("schedule_mode") == "cron" or due_ts > now_ts + lookahead:
             continue
         due_subs.append(sub)
 
@@ -7109,21 +7184,26 @@ def refresh_due_subscriptions(
     batch_restart = bool(restart and restart_xkeen and env_flag("XKEEN_SUBSCRIPTIONS_RESTART_BATCH", True))
     item_restart = bool(restart and not batch_restart)
 
-    results: List[Dict[str, Any]] = []
-    for sub in due_subs:
-        try:
-            results.append(
-                refresh_subscription(
-                    ui_state_dir,
-                    str(sub.get("id") or ""),
-                    xray_configs_dir=xray_configs_dir,
-                    snapshot=snapshot,
-                    restart_xkeen=restart_xkeen,
-                    restart=item_restart,
+    cache_token = _BATCH_FETCH_CACHE.set({})
+    try:
+        results: List[Dict[str, Any]] = []
+        for sub in due_subs:
+            try:
+                results.append(
+                    refresh_subscription(
+                        ui_state_dir,
+                        str(sub.get("id") or ""),
+                        xray_configs_dir=xray_configs_dir,
+                        snapshot=snapshot,
+                        restart_xkeen=restart_xkeen,
+                        restart=item_restart,
+                    )
                 )
-            )
-        except Exception as exc:
-            results.append({"id": sub.get("id"), "ok": False, "error": str(exc)})
+            except Exception as exc:
+                results.append({"id": sub.get("id"), "ok": False, "error": str(exc)})
+
+    finally:
+        _BATCH_FETCH_CACHE.reset(cache_token)
 
     if batch_restart and any(_refresh_result_needs_restart(item) for item in results):
         try:

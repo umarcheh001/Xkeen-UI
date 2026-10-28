@@ -502,7 +502,7 @@ let outboundsModuleApi = null;
       }
       const files = new Set();
       try {
-        const res = await fetch('/api/xray/subscriptions', { cache: 'no-store' });
+        const res = await fetch('/api/xray/subscriptions', { cache: 'no-store', headers: { 'X-Subscriptions-Compact': '1' } });
         const data = await res.json().catch(() => ({}));
         const items = Array.isArray(data && data.subscriptions) ? data.subscriptions : [];
         items.forEach((sub) => {
@@ -5061,6 +5061,8 @@ let outboundsModuleApi = null;
         sockopt_mark_255: isEntwareMarkEnabled(SUB_IDS.sockoptMark),
         routing_balancer_tags: subsSelectedBalancerTags(),
         excluded_node_keys: subsGetExcludedKeysValue().slice().sort(),
+        schedule_mode: String(document.getElementById('outbounds-subscriptions-schedule-mode')?.value || 'interval'),
+        cron_expression: String(document.getElementById('outbounds-subscriptions-cron')?.value || '').trim(),
         interval_raw: String(($(SUB_IDS.interval) && $(SUB_IDS.interval).value) || '').trim(),
         enabled: !!($(SUB_IDS.enabled) && $(SUB_IDS.enabled).checked),
         ping_enabled: !!($(SUB_IDS.ping) && $(SUB_IDS.ping).checked),
@@ -5237,6 +5239,8 @@ let outboundsModuleApi = null;
         sockopt_mark_255: !!state.sockopt_mark_255,
         routing_balancer_tags: subsNormalizeBalancerTags(state.routing_balancer_tags),
         excluded_node_keys: (Array.isArray(state.excluded_node_keys) ? state.excluded_node_keys : []).map((item) => String(item || '').trim()).filter(Boolean).sort(),
+        schedule_mode: String(state.schedule_mode || 'interval'),
+        cron_expression: String(state.cron_expression || '').trim(),
         interval_raw: String(state.interval_raw || '').trim(),
         enabled: !!state.enabled,
         ping_enabled: !!state.ping_enabled,
@@ -5298,19 +5302,123 @@ let outboundsModuleApi = null;
       } catch (e3) {}
     }
 
+    let _subscriptionFilterResult = null;
+    let _subscriptionFilterTimer = null;
+    let _subscriptionFilterController = null;
+    let _subscriptionFilterGeneration = 0;
+    let _subscriptionScheduleTimer = null;
+    let _subscriptionScheduleGeneration = 0;
+    let _subscriptionScheduleError = '';
+    let _subscriptionRouterTimezone = '';
+    let _subscriptionLoadGeneration = 0;
+
     function subsValidateRegex(raw, label) {
+      // Python re is authoritative. JavaScript rejects valid Python constructs
+      // such as inline flags and named groups, and differs on Unicode boundaries.
       const text = String(raw || '').trim();
       if (!text) return '';
-      try {
-        new RegExp(text, 'i');
-        return '';
-      } catch (e) {
-        return `Некорректный regex для ${label}: ${String((e && e.message) || e || 'ошибка')}`;
+      const result = _subscriptionFilterResult;
+      return result && result.error && result.filters.includes(text) && (!result.error.includes('Некорректный regex для') || result.error.includes(label))
+        ? result.error : '';
+    }
+
+    function subsWriteSchedule(sub) {
+      const mode = document.getElementById('outbounds-subscriptions-schedule-mode');
+      const cron = document.getElementById('outbounds-subscriptions-cron');
+      if (mode) mode.value = sub.schedule_mode || 'interval';
+      if (cron) cron.value = sub.cron_expression || '';
+      subsSyncSchedule();
+    }
+
+    function subsSyncSchedule() {
+      const mode = document.getElementById('outbounds-subscriptions-schedule-mode');
+      const cron = document.getElementById('outbounds-subscriptions-cron');
+      const field = document.getElementById('outbounds-subscriptions-cron-field');
+      if (!mode || !cron || !field) return;
+      const calendar = mode.value === 'cron';
+      field.hidden = !calendar;
+      const interval = $(SUB_IDS.interval);
+      if (interval) interval.disabled = calendar;
+      const intervalField = document.getElementById('outbounds-subscriptions-interval-field');
+      if (intervalField) intervalField.hidden = calendar;
+      clearTimeout(_subscriptionScheduleTimer);
+      const generation = ++_subscriptionScheduleGeneration;
+      _subscriptionScheduleError = '';
+      if (!calendar) return;
+      _subscriptionScheduleError = 'Проверяем расписание cron…';
+      _subscriptionScheduleTimer = setTimeout(async () => {
+        const note = document.getElementById('outbounds-subscriptions-cron-note');
+        try {
+          const response = await fetch('/api/xray/subscriptions/schedule-preview', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cron_expression: cron.value.trim() }),
+          });
+          const data = await response.json();
+          if (generation !== _subscriptionScheduleGeneration) return;
+          if (!response.ok || !data.ok) throw new Error(data.error || 'Некорректное расписание cron.');
+          _subscriptionRouterTimezone = data.router_timezone || '';
+          _subscriptionScheduleError = '';
+          if (note) note.textContent = `Время роутера: ${_subscriptionRouterTimezone}. Следующий запуск: ${data.next_update_local}.`;
+          cron.removeAttribute('aria-invalid');
+        } catch (error) {
+          if (generation !== _subscriptionScheduleGeneration) return;
+          _subscriptionScheduleError = String(error.message || error);
+          if (note) note.textContent = _subscriptionScheduleError;
+          cron.setAttribute('aria-invalid', 'true');
+        }
+        subsSyncSubscriptionFormState();
+      }, 250);
+    }
+
+    function subsBackendFilters(nodes, draft) {
+      const filters = [draft.nameFilter, draft.typeFilter, draft.transportFilter];
+      if (!filters.some(Boolean)) {
+        clearTimeout(_subscriptionFilterTimer);
+        _subscriptionFilterController?.abort();
+        _subscriptionFilterController = null;
+        ++_subscriptionFilterGeneration;
+        _subscriptionFilterResult = null;
+        return { reasons: {} };
       }
+      const payload = {
+        name_filter: filters[0], type_filter: filters[1], transport_filter: filters[2],
+        nodes: nodes.map(({ key, name, protocol, transport }) => ({ key, name, protocol, transport })),
+      };
+      const key = JSON.stringify(payload);
+      if (_subscriptionFilterResult?.key === key) return _subscriptionFilterResult;
+      if (_subscriptionFilterController?.key === key) return null;
+      clearTimeout(_subscriptionFilterTimer);
+      if (_subscriptionFilterController) _subscriptionFilterController.abort();
+      const controller = new AbortController();
+      controller.key = key;
+      _subscriptionFilterController = controller;
+      const generation = ++_subscriptionFilterGeneration;
+      _subscriptionFilterTimer = setTimeout(async () => {
+        try {
+          const response = await fetch('/api/xray/subscriptions/validate-filters', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: key, signal: controller.signal,
+          });
+          const data = await response.json();
+          if (generation !== _subscriptionFilterGeneration) return;
+          _subscriptionFilterResult = { key, filters, reasons: data.reasons || {}, error: response.ok && data.ok ? '' : (data.error || 'Некорректный regex для фильтров.') };
+        } catch (error) {
+          if (controller.signal.aborted || generation !== _subscriptionFilterGeneration) return;
+          _subscriptionFilterResult = { key, filters, reasons: {}, error: String(error.message || error) };
+        }
+        if (generation !== _subscriptionFilterGeneration) return;
+        _subscriptionFilterController = null;
+        subsSyncSubscriptionFormState();
+        subsRenderNodeList();
+      }, 180);
+      return null;
     }
 
     function subsValidateFormState(formState) {
       const state = (formState && typeof formState === 'object') ? formState : subsReadFormState();
+      if (!_subscriptionEditId && !_subscriptionPreview) {
+        subsBackendFilters([], { nameFilter: state.name_filter, typeFilter: state.type_filter, transportFilter: state.transport_filter });
+      }
       const errors = {
         name: '',
         tag: '',
@@ -5337,7 +5445,8 @@ let outboundsModuleApi = null;
         }
       }
 
-      const intervalRaw = String(state.interval_raw || '').trim();
+      if (state.schedule_mode === 'cron' && _subscriptionScheduleError) errors.interval = _subscriptionScheduleError;
+      const intervalRaw = state.schedule_mode === 'cron' ? '' : String(state.interval_raw || '').trim();
       if (intervalRaw) {
         const intervalValue = Number(intervalRaw);
         if (!Number.isFinite(intervalValue) || !Number.isInteger(intervalValue) || intervalValue < 1 || intervalValue > 168) {
@@ -5666,6 +5775,7 @@ let outboundsModuleApi = null;
       try { $(SUB_IDS.transportFilter).value = String((baseline && baseline.transport_filter) || ''); } catch (e) {}
       try { subsWriteRequestProfile(baseline && baseline.request_profile); } catch (e) {}
       subsSetExcludedKeysValue(Array.isArray(baseline && baseline.excluded_node_keys) ? baseline.excluded_node_keys : []);
+      subsWriteSchedule(baseline || {});
       try { $(SUB_IDS.interval).value = String((baseline && baseline.interval_raw) || SUB_DEFAULT_INTERVAL_HOURS); } catch (e) {}
       try { $(SUB_IDS.enabled).checked = baseline ? !!baseline.enabled : true; } catch (e) {}
       try { $(SUB_IDS.ping).checked = baseline ? !!baseline.ping_enabled : true; } catch (e) {}
@@ -5696,6 +5806,8 @@ let outboundsModuleApi = null;
         name: state.name,
         tag: state.tag,
         url: state.url,
+        schedule_mode: state.schedule_mode,
+        cron_expression: state.cron_expression,
         name_filter: state.name_filter,
         type_filter: state.type_filter,
         transport_filter: state.transport_filter,
@@ -5806,17 +5918,23 @@ let outboundsModuleApi = null;
                   <form id="outbounds-subscriptions-form" class="xk-sub-form">
                     <input id="outbounds-subscriptions-id" type="hidden">
                     <input id="outbounds-subscriptions-excluded-keys" type="hidden">
-                    <label class="xk-sub-span-5" data-tooltip="Короткое имя подписки в списке. Можно оставить пустым: при сохранении панель сгенерирует его автоматически.">
+                    <label class="xk-sub-span-6" data-tooltip="Короткое имя подписки в списке. Можно оставить пустым: при сохранении панель сгенерирует его автоматически.">
                       <span class="xk-pool-fieldlabel">Название</span>
                       <input id="outbounds-subscriptions-name" class="xray-log-filter" type="text" placeholder="Моя подписка" title="Название подписки" aria-describedby="outbounds-subscriptions-name-note" data-tooltip="Короткое имя подписки в списке. Если оставить поле пустым, имя будет сгенерировано автоматически при сохранении.">
                       <span id="outbounds-subscriptions-name-note" class="xk-sub-field-note" hidden></span>
                     </label>
-                    <label class="xk-sub-span-4" data-tooltip="С этого префикса начинаются теги всех узлов подписки: при префиксе sub узлы получат теги вида sub--имя. По нему балансировщики и замер находят узлы подписки. Можно оставить пустым — при сохранении панель придумает префикс сама.">
+                    <label class="xk-sub-span-6" data-tooltip="С этого префикса начинаются теги всех узлов подписки: при префиксе sub узлы получат теги вида sub--имя. По нему балансировщики и замер находят узлы подписки. Можно оставить пустым — при сохранении панель придумает префикс сама.">
                       <span class="xk-pool-fieldlabel">Префикс тегов</span>
                       <input id="outbounds-subscriptions-tag" class="xray-log-filter" type="text" placeholder="sub" title="Префикс тегов" aria-describedby="outbounds-subscriptions-tag-note" data-tooltip="Теги узлов будут начинаться с этого префикса: sub → sub--имя. Пусто — панель придумает префикс при сохранении.">
                       <span id="outbounds-subscriptions-tag-note" class="xk-sub-field-note" hidden></span>
                     </label>
-                    <label class="xk-sub-span-3 xk-sub-interval-field" data-tooltip="Как часто панель обновляет подписку. По умолчанию 24 часа. Если провайдер присылает свой интервал, он показывается рядом как рекомендация и само поле не меняет.">
+                    <div class="xk-sub-wide xk-sub-schedule">
+                      <label><span class="xk-pool-fieldlabel">Режим обновления</span>
+                        <select id="outbounds-subscriptions-schedule-mode" class="xray-log-filter" aria-label="Режим обновления">
+                          <option value="interval">Интервал</option><option value="cron">Cron по времени роутера</option>
+                        </select>
+                      </label>
+                      <label id="outbounds-subscriptions-interval-field" class="xk-sub-interval-field" data-tooltip="Как часто панель обновляет подписку. По умолчанию 24 часа. Если провайдер присылает свой интервал, он показывается рядом как рекомендация и само поле не меняет.">
                       <span class="xk-pool-fieldlabel">Интервал обновления</span>
                       <div class="xk-sub-interval-inline">
                         <input id="outbounds-subscriptions-interval" class="xray-log-filter" type="number" min="1" max="168" step="1" value="${SUB_DEFAULT_INTERVAL_HOURS}" title="Интервал обновления" aria-describedby="outbounds-subscriptions-interval-unit outbounds-subscriptions-interval-note" data-tooltip="Как часто панель будет обновлять подписку: от 1 до 168 часов. Рекомендация провайдера не меняет выбранное значение.">
@@ -5826,7 +5944,12 @@ let outboundsModuleApi = null;
                       <div class="xk-sub-interval-meta">
                         <span id="outbounds-subscriptions-interval-note" class="xk-sub-field-note xk-sub-interval-note-inline" hidden></span>
                       </div>
-                    </label>
+                      </label>
+                      <label id="outbounds-subscriptions-cron-field" hidden><span class="xk-pool-fieldlabel">Расписание cron</span>
+                        <input id="outbounds-subscriptions-cron" class="xray-log-filter" type="text" placeholder="0 4 * * *" aria-label="Расписание cron" aria-describedby="outbounds-subscriptions-cron-note" spellcheck="false">
+                        <span id="outbounds-subscriptions-cron-note" class="xk-sub-field-hint" role="status">Минута час день месяц день-недели. Пример: 0 4 * * * — ежедневно в 04:00.</span>
+                      </label>
+                    </div>
                     <div class="xk-sub-wide xk-sub-url-row">
                       <label class="xk-sub-url-field" data-tooltip="Ссылка на подписку: обычный HTTP(S)-адрес, адрес мобильного коннектора или ссылка Happ (happ://crypt…). Внутри могут быть share-ссылки, base64 или JSON-список outbounds Xray.">
                         <span class="xk-pool-fieldlabel">URL подписки <span class="xk-op-required" aria-hidden="true">*</span></span>
@@ -5848,22 +5971,22 @@ let outboundsModuleApi = null;
                         <span class="xk-sub-advanced-summary">Фильтры, маршрутизация и служебные параметры</span>
                       </summary>
                       <div class="xk-sub-advanced-grid">
-                    <label class="xk-sub-filter-field xk-sub-span-4" data-tooltip="Регулярное выражение по имени узла. Например: Germany|Netherlands|SG. Пусто — без фильтра.">
+                    <label class="xk-sub-filter-field xk-sub-span-4" data-tooltip="Регулярное выражение по имени узла. Например: Germany|Netherlands|SG. Исключение: ^(?!.*ws).*$. Группы: (?P&lt;region&gt;Germany). Пусто — без фильтра.">
                       <span class="xk-pool-fieldlabel">Фильтр по имени</span>
-                      <input id="outbounds-subscriptions-name-filter" class="xray-log-filter" type="text" placeholder="Germany|Netherlands|SG" title="Фильтр имени" aria-describedby="outbounds-subscriptions-name-filter-note" data-tooltip="Оставить только узлы, чьё имя подходит под регулярное выражение. Например: Germany|Netherlands|SG.">
-                      <span class="xk-sub-field-hint">Рег. выражение; пусто — все.</span>
+                      <input id="outbounds-subscriptions-name-filter" class="xray-log-filter" type="text" placeholder="Germany|Netherlands|SG" title="Фильтр имени" aria-describedby="outbounds-subscriptions-name-filter-note" data-tooltip="Оставить только узлы, чьё имя подходит под регулярное выражение. Например: Germany|Netherlands|SG. Исключение: ^(?!.*ws).*$. Группы: (?P&lt;region&gt;Germany).">
+                      <span class="xk-sub-field-hint">Python regex, без учёта регистра; пусто — все.</span>
                       <span id="outbounds-subscriptions-name-filter-note" class="xk-sub-field-note" hidden></span>
                     </label>
                     <label class="xk-sub-filter-field xk-sub-span-4" data-tooltip="Регулярное выражение по протоколу узла. Например: vless|trojan|vmess. Пусто — без фильтра.">
                       <span class="xk-pool-fieldlabel">Фильтр по типу</span>
                       <input id="outbounds-subscriptions-type-filter" class="xray-log-filter" type="text" placeholder="vless|trojan|vmess" title="Фильтр типа" aria-describedby="outbounds-subscriptions-type-filter-note" data-tooltip="Оставить только узлы с указанными протоколами. Например: vless|trojan|vmess|ss|hy2.">
-                      <span class="xk-sub-field-hint">Рег. выражение; пусто — все.</span>
+                      <span class="xk-sub-field-hint">Python regex, без учёта регистра; пусто — все.</span>
                       <span id="outbounds-subscriptions-type-filter-note" class="xk-sub-field-note" hidden></span>
                     </label>
                     <label class="xk-sub-filter-field xk-sub-span-4" data-tooltip="Регулярное выражение по транспорту узла. Например: ws|grpc|tcp|xhttp. Пусто — без фильтра.">
                       <span class="xk-pool-fieldlabel">Фильтр по транспорту</span>
                       <input id="outbounds-subscriptions-transport-filter" class="xray-log-filter" type="text" placeholder="ws|grpc|tcp|xhttp" title="Фильтр транспорта" aria-describedby="outbounds-subscriptions-transport-filter-note" data-tooltip="Оставить только узлы с нужным транспортом. Например: ws|grpc|tcp|xhttp|quic.">
-                      <span class="xk-sub-field-hint">Рег. выражение; пусто — все.</span>
+                      <span class="xk-sub-field-hint">Python regex, без учёта регистра; пусто — все.</span>
                       <span id="outbounds-subscriptions-transport-filter-note" class="xk-sub-field-note" hidden></span>
                     </label>
                     <details class="xk-sub-request-profile xk-sub-wide">
@@ -6766,30 +6889,6 @@ let outboundsModuleApi = null;
       return values;
     }
 
-    function subsCompilePreviewRegex(id) {
-      const el = $(id);
-      if (!el) return null;
-      const raw = String(el.value || '').trim();
-      try { el.classList.remove('is-invalid'); } catch (e) {}
-      if (!raw) return null;
-      try {
-        return new RegExp(raw, 'i');
-      } catch (e) {
-        try { el.classList.add('is-invalid'); } catch (e2) {}
-        return null;
-      }
-    }
-
-    function subsSafeRegExp(raw) {
-      const text = String(raw || '').trim();
-      if (!text) return null;
-      try {
-        return new RegExp(text, 'i');
-      } catch (e) {
-        return null;
-      }
-    }
-
     function subsCurrentDraftFor(sub) {
       const s = sub && typeof sub === 'object' ? sub : {};
       const currentId = String(_subscriptionEditId || '');
@@ -6804,24 +6903,6 @@ let outboundsModuleApi = null;
         transportFilter: isCurrent ? String(($(SUB_IDS.transportFilter) && $(SUB_IDS.transportFilter).value) || '').trim() : String(s.transport_filter || '').trim(),
         excludedKeys: isCurrent ? subsGetExcludedKeysValue() : (Array.isArray(s.excluded_node_keys) ? s.excluded_node_keys.map((item) => String(item || '').trim()).filter(Boolean) : []),
       };
-    }
-
-    function subsProtocolFilterText(protocol) {
-      const value = String(protocol || '').trim().toLowerCase();
-      if (value === 'ss') return 'ss shadowsocks';
-      if (value === 'shadowsocks') return 'ss shadowsocks';
-      if (value === 'hy2' || value === 'hysteria2' || value === 'hysteria') return 'hy2 hysteria2 hysteria';
-      return value;
-    }
-
-    function subsTransportFilterText(transport, protocol) {
-      const items = [String(transport || '').trim().toLowerCase()];
-      const proto = String(protocol || '').trim().toLowerCase();
-      if (proto === 'hy2' || proto === 'hysteria2' || proto === 'hysteria') {
-        items.push('quic');
-        items.push('udp');
-      }
-      return Array.from(new Set(items.filter(Boolean))).join(' ');
     }
 
     function subsDeprecatedTransportNote(transport, enabled) {
@@ -6843,15 +6924,13 @@ let outboundsModuleApi = null;
 
     function subsNodeReasonCodes(node, draft, compiled) {
       const reasons = [];
-      const excluded = new Set(Array.isArray(draft && draft.excludedKeys) ? draft.excludedKeys : []);
+      const excluded = compiled.excluded;
       const key = String(node && node.key ? node.key : '').trim();
       const name = String(node && node.name ? node.name : '').trim();
       const protocol = String(node && node.protocol ? node.protocol : '').trim().toLowerCase();
       const transport = String(node && node.transport ? node.transport : '').trim().toLowerCase();
       if (key && excluded.has(key)) reasons.push('manual');
-      if (compiled && compiled.name && !compiled.name.test(name)) reasons.push('name');
-      if (compiled && compiled.type && !compiled.type.test(subsProtocolFilterText(protocol))) reasons.push('type');
-      if (compiled && compiled.transport && !compiled.transport.test(subsTransportFilterText(transport, protocol))) reasons.push('transport');
+      reasons.push(...(compiled.reasons[key] || []));
       return reasons;
     }
 
@@ -6879,6 +6958,7 @@ let outboundsModuleApi = null;
 
     function subsIntervalSummary(sub) {
       const s = sub && typeof sub === 'object' ? sub : {};
+      if (s.schedule_mode === 'cron') return `cron ${s.cron_expression} · время роутера ${_subscriptionRouterTimezone}`;
       const interval = Number(s.interval_hours || SUB_DEFAULT_INTERVAL_HOURS);
       const profileInterval = Number(s.profile_update_interval_hours || 0);
       const safeInterval = Number.isFinite(interval) && interval > 0 ? interval : SUB_DEFAULT_INTERVAL_HOURS;
@@ -7107,6 +7187,9 @@ let outboundsModuleApi = null;
         };
       }
       if (nextTs <= 0) return { text: interval, title: '' };
+      if (s.schedule_mode === 'cron' && s.next_update_local) {
+        return { text: `Следующее обновление ${s.next_update_local} · ${interval}`, title: `По часовому поясу роутера: ${_subscriptionRouterTimezone}` };
+      }
       let day = '';
       let clock = '';
       try {
@@ -7210,6 +7293,7 @@ let outboundsModuleApi = null;
       try { $(SUB_IDS.transportFilter).value = ''; } catch (e) {}
       try { subsWriteRequestProfile(Object.assign({}, _subscriptionDetectedProfile, { mode: 'auto' })); } catch (e) {}
       subsSetExcludedKeysValue([]);
+      subsWriteSchedule({});
       try { $(SUB_IDS.interval).value = String(SUB_DEFAULT_INTERVAL_HOURS); } catch (e) {}
       try { $(SUB_IDS.enabled).checked = true; } catch (e) {}
       try { $(SUB_IDS.ping).checked = true; } catch (e) {}
@@ -7250,6 +7334,7 @@ let outboundsModuleApi = null;
       try { $(SUB_IDS.transportFilter).value = String(s.transport_filter || ''); } catch (e) {}
       try { subsWriteRequestProfile(s.request_profile || { mode: 'auto' }); } catch (e) {}
       subsSetExcludedKeysValue(Array.isArray(s.excluded_node_keys) ? s.excluded_node_keys : []);
+      subsWriteSchedule(s);
       try { $(SUB_IDS.interval).value = String(s.interval_hours || SUB_DEFAULT_INTERVAL_HOURS); } catch (e) {}
       try { $(SUB_IDS.enabled).checked = s.enabled !== false; } catch (e) {}
       try { $(SUB_IDS.ping).checked = s.ping_enabled !== false; } catch (e) {}
@@ -7517,6 +7602,8 @@ let outboundsModuleApi = null;
         type_filter: String(sub.type_filter || '').trim(),
         transport_filter: String(sub.transport_filter || '').trim(),
         excluded_node_keys: Array.isArray(sub.excluded_node_keys) ? sub.excluded_node_keys.slice() : [],
+        schedule_mode: sub.schedule_mode || "interval",
+        cron_expression: sub.cron_expression || "",
         interval_hours: sub.interval_hours || SUB_DEFAULT_INTERVAL_HOURS,
         enabled: sub.enabled !== false,
         ping_enabled: sub.ping_enabled !== false,
@@ -7560,17 +7647,21 @@ let outboundsModuleApi = null;
 
       const nodes = isPreview ? preview.nodes : (Array.isArray(sub.last_nodes) ? sub.last_nodes : []);
       const draft = subsCurrentDraftFor(sub);
-      const compiled = {
-        name: subId === String(_subscriptionEditId || '') ? subsCompilePreviewRegex(SUB_IDS.nameFilter) : subsSafeRegExp(draft.nameFilter),
-        type: subId === String(_subscriptionEditId || '') ? subsCompilePreviewRegex(SUB_IDS.typeFilter) : subsSafeRegExp(draft.typeFilter),
-        transport: subId === String(_subscriptionEditId || '') ? subsCompilePreviewRegex(SUB_IDS.transportFilter) : subsSafeRegExp(draft.transportFilter),
-      };
+      const compiled = subsBackendFilters(nodes, draft);
+      if (!compiled || compiled.error) {
+        listEl.innerHTML = '';
+        empty.textContent = compiled?.error || 'Проверяем фильтры…';
+        empty.style.display = 'block';
+        summary.textContent = '…';
+        return;
+      }
       const rows = [];
       let enabledCount = 0;
       let hiddenCount = 0;
       const showHidden = !!_subscriptionShowHidden;
       const excluded = new Set(Array.isArray(draft.excludedKeys) ? draft.excludedKeys : []);
 
+      compiled.excluded = excluded;
       nodes.forEach((node) => {
         const reasons = subsNodeReasonCodes(node, draft, compiled);
         const enabled = reasons.length === 0;
@@ -7630,7 +7721,7 @@ let outboundsModuleApi = null;
         rows.push(`
           <div class="xk-sub-node-item ${enabled ? 'is-enabled' : 'is-disabled'}" data-node-key="${key}">
             <div class="xk-sub-node-main">
-              <div class="xk-sub-node-name">${countryBadge}<span class="xk-sub-node-title-text">${name}</span></div>
+              <div class="xk-sub-node-name">${countryBadge}<span class="xk-sub-node-title-text" tabindex="0">${name}</span></div>
               <div class="xk-sub-node-meta xk-sub-node-protocol" aria-label="Протокол">
                 <span class="xk-sub-node-protocol-text ${deprecatedTransportNote ? 'is-warning' : ''}">${protocolSummary}</span>
               </div>
@@ -7779,11 +7870,9 @@ let outboundsModuleApi = null;
       let hasPingable = false;
       if (sub && Array.isArray(sub.last_nodes)) {
         const draft = subsCurrentDraftFor(sub);
-        const compiled = {
-          name: subsCompilePreviewRegex(SUB_IDS.nameFilter),
-          type: subsCompilePreviewRegex(SUB_IDS.typeFilter),
-          transport: subsCompilePreviewRegex(SUB_IDS.transportFilter),
-        };
+        const compiled = subsBackendFilters(sub.last_nodes, draft);
+        if (!compiled || compiled.error) { btn.disabled = true; return; }
+        compiled.excluded = new Set(draft.excludedKeys);
         hasPingable = sub.last_nodes.some((node) => (
           node && node.tag
           && (_subscriptionProbeMode !== 'tcp' || subsNodeSupportsTcpProbe(node))
@@ -7825,11 +7914,9 @@ let outboundsModuleApi = null;
 
       const nodes = Array.isArray(sub.last_nodes) ? sub.last_nodes : [];
       const draft = subsCurrentDraftFor(sub);
-      const compiled = {
-        name: subsCompilePreviewRegex(SUB_IDS.nameFilter),
-        type: subsCompilePreviewRegex(SUB_IDS.typeFilter),
-        transport: subsCompilePreviewRegex(SUB_IDS.transportFilter),
-      };
+      const compiled = subsBackendFilters(nodes, draft);
+      if (!compiled || compiled.error) return false;
+      compiled.excluded = new Set(draft.excludedKeys);
       const hasPingableNodes = nodes.some((node) => node && node.tag);
       const targets = nodes.filter((node) => {
         if (!node || !node.key || !node.tag) return false;
@@ -8032,13 +8119,16 @@ let outboundsModuleApi = null;
     }
 
     async function subsLoad() {
+      const generation = ++_subscriptionLoadGeneration;
       try {
-        const res = await fetch('/api/xray/subscriptions', { cache: 'no-store' });
+        const res = await fetch('/api/xray/subscriptions', { cache: 'no-store', headers: { 'X-Subscriptions-Compact': '1' } });
         const data = await res.json().catch(() => ({}));
+        if (generation !== _subscriptionLoadGeneration) return false;
         if (!res.ok || !data || data.ok === false) {
           throw new Error(String((data && (data.error || data.message)) || ('HTTP ' + res.status)));
         }
         _subscriptions = Array.isArray(data.subscriptions) ? data.subscriptions : [];
+        _subscriptionRouterTimezone = String(data.router_timezone || '');
         _subscriptionsPaused = !!data.paused;
         _subscriptionsPausedTs = Number(data.paused_ts || 0) || 0;
         _subscriptionRoutingBalancers = Array.isArray(data.routing_balancers) ? data.routing_balancers : [];
@@ -8070,6 +8160,7 @@ let outboundsModuleApi = null;
         try { subsSyncSubscriptionFormState(); } catch (e3) {}
         return true;
       } catch (e) {
+        if (generation !== _subscriptionLoadGeneration) return false;
         subsSetStatus('Ошибка загрузки: ' + String(e && e.message ? e.message : e), true);
         return false;
       }
@@ -8111,6 +8202,8 @@ let outboundsModuleApi = null;
         url: formState.url,
         tag: formState.tag,
         name: formState.name,
+        schedule_mode: formState.schedule_mode,
+        cron_expression: formState.cron_expression,
         name_filter: formState.name_filter,
         type_filter: formState.type_filter,
         transport_filter: formState.transport_filter,
@@ -9171,8 +9264,7 @@ let outboundsModuleApi = null;
       try { subsResetForm(); } catch (e) {}
       subsShow(true);
       subsSetStatus('', false);
-      await subsLoadDetectedRequestProfile();
-      await subsLoad();
+      await Promise.all([subsLoadDetectedRequestProfile(), subsLoad()]);
       try { subsSyncSubscriptionFormState(); } catch (e) {}
       try { $(SUB_IDS.url).focus(); } catch (e) {}
     }
@@ -9186,6 +9278,12 @@ let outboundsModuleApi = null;
       if (!ok) return false;
       try { subsDiscardUnprotectedDraftOnClose(); } catch (e) {}
       try { subsShowRequestProfileHelp(false); } catch (e0) {}
+      clearTimeout(_subscriptionFilterTimer);
+      clearTimeout(_subscriptionScheduleTimer);
+      ++_subscriptionFilterGeneration;
+      ++_subscriptionScheduleGeneration;
+      _subscriptionFilterController?.abort();
+      _subscriptionFilterController = null;
       subsShow(false);
       try { subsResetForm(); } catch (e) {}
       return true;
@@ -9344,6 +9442,27 @@ let outboundsModuleApi = null;
           try { subsSyncSubscriptionFormState(); } catch (e) {}
         });
         if (balancersRoot.dataset) balancersRoot.dataset.xkSubBalancersBound = '1';
+      }
+      ['outbounds-subscriptions-schedule-mode', 'outbounds-subscriptions-cron'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (!el || el.dataset.scheduleBound) return;
+        el.addEventListener('input', () => { subsSyncSchedule(); subsSyncSubscriptionFormState(); });
+        el.dataset.scheduleBound = '1';
+      });
+      if (!modal.dataset.nodeTitleBound) {
+        const showTitle = (event) => {
+          const title = event.target.closest?.('.xk-sub-node-title-text');
+          if (!title) return;
+          if (title.scrollWidth > title.clientWidth + 1) {
+            title.setAttribute('title', title.textContent);
+            title.setAttribute('data-tooltip', title.textContent);
+          } else {
+            title.removeAttribute('title'); title.removeAttribute('data-tooltip');
+          }
+        };
+        modal.addEventListener('mouseover', showTitle);
+        modal.addEventListener('focusin', showTitle);
+        modal.dataset.nodeTitleBound = '1';
       }
       [SUB_IDS.nameFilter, SUB_IDS.typeFilter, SUB_IDS.transportFilter].forEach((id) => {
         const el = $(id);

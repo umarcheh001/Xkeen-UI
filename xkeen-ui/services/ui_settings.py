@@ -79,6 +79,7 @@ DEFAULTS: Dict[str, Any] = {
         # or keep either one as the sole scrolling surface.
         "pageScrollEnabled": True,
         "workspaceScrollEnabled": True,
+        "stickyHeaderEnabled": True,
     },
     "logs": {
         # Render ANSI colors in UI (future feature flag).
@@ -326,6 +327,7 @@ def _canonical_empty() -> Dict[str, Any]:
         "layout": {
             "pageScrollEnabled": bool(DEFAULTS["layout"]["pageScrollEnabled"]),
             "workspaceScrollEnabled": bool(DEFAULTS["layout"]["workspaceScrollEnabled"]),
+            "stickyHeaderEnabled": bool(DEFAULTS["layout"]["stickyHeaderEnabled"]),
         },
         "logs": {
             "ansi": bool(DEFAULTS["logs"]["ansi"]),
@@ -622,7 +624,7 @@ def _sanitize_full(raw: Any) -> Tuple[Dict[str, Any], SettingsReport]:
         rep.warnings.append({"path": "layout", "warning": "must be an object; reset"})
         rep.changed = True
     else:
-        for key in ("pageScrollEnabled", "workspaceScrollEnabled"):
+        for key in ("pageScrollEnabled", "workspaceScrollEnabled", "stickyHeaderEnabled"):
             if key not in layout_raw:
                 continue
             value = layout_raw.get(key)
@@ -633,7 +635,7 @@ def _sanitize_full(raw: Any) -> Tuple[Dict[str, Any], SettingsReport]:
                 rep.changed = True
 
         for k in layout_raw.keys():
-            if k not in ("pageScrollEnabled", "workspaceScrollEnabled"):
+            if k not in ("pageScrollEnabled", "workspaceScrollEnabled", "stickyHeaderEnabled"):
                 rep.warnings.append({"path": f"layout.{k}", "warning": "unknown key dropped"})
                 rep.changed = True
 
@@ -1025,7 +1027,7 @@ def _sanitize_patch(patch: Any) -> Tuple[Dict[str, Any], SettingsReport]:
             rep.errors.append({"path": "layout", "error": "must be an object"})
         else:
             p: Dict[str, Any] = {}
-            for key in ("pageScrollEnabled", "workspaceScrollEnabled"):
+            for key in ("pageScrollEnabled", "workspaceScrollEnabled", "stickyHeaderEnabled"):
                 if key not in layout_patch:
                     continue
                 value = layout_patch.get(key)
@@ -1035,7 +1037,7 @@ def _sanitize_patch(patch: Any) -> Tuple[Dict[str, Any], SettingsReport]:
                     rep.errors.append({"path": f"layout.{key}", "error": "must be boolean"})
 
             for k in layout_patch.keys():
-                if k not in ("pageScrollEnabled", "workspaceScrollEnabled"):
+                if k not in ("pageScrollEnabled", "workspaceScrollEnabled", "stickyHeaderEnabled"):
                     rep.warnings.append({"path": f"layout.{k}", "warning": "unknown key dropped"})
 
             if p:

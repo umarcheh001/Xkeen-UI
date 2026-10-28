@@ -28,6 +28,7 @@ const DEFAULT_UI_SETTINGS = {
   layout: {
     pageScrollEnabled: true,
     workspaceScrollEnabled: true,
+    stickyHeaderEnabled: true,
   },
   logs: {
     ansi: false,

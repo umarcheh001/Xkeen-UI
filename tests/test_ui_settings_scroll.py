@@ -13,6 +13,7 @@ def test_scroll_settings_default_to_both_enabled(tmp_path):
     assert loaded["layout"] == {
         "pageScrollEnabled": True,
         "workspaceScrollEnabled": True,
+        "stickyHeaderEnabled": True,
     }
 
 
@@ -46,6 +47,7 @@ def test_scroll_settings_reject_disabling_both_surfaces(tmp_path):
     assert ui_settings.load_settings(ui_state_dir=str(tmp_path))["layout"] == {
         "pageScrollEnabled": False,
         "workspaceScrollEnabled": True,
+        "stickyHeaderEnabled": True,
     }
 
 
@@ -69,4 +71,16 @@ def test_invalid_file_recovers_to_page_scrolling(tmp_path):
     assert loaded["layout"] == {
         "pageScrollEnabled": True,
         "workspaceScrollEnabled": False,
+        "stickyHeaderEnabled": True,
     }
+
+
+def test_sticky_header_setting_is_independent_and_persists(tmp_path):
+    patched, report = ui_settings.patch_settings(
+        {"layout": {"stickyHeaderEnabled": False}},
+        ui_state_dir=str(tmp_path),
+    )
+
+    assert report == {"warnings": [], "errors": []}
+    assert patched["layout"]["stickyHeaderEnabled"] is False
+    assert ui_settings.load_settings(ui_state_dir=str(tmp_path))["layout"]["stickyHeaderEnabled"] is False

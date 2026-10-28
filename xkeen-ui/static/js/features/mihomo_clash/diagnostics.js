@@ -16,7 +16,7 @@ let currentView = 'traffic';
 let trafficTimer = 0;
 let trafficRequest = null;
 let trafficFilters = { device: '', route: '' };
-const trafficVisibleSeries = new Set(['mihomo', 'outside']);
+const trafficVisibleSeries = new Set(['mihomo', 'outside', 'download', 'upload']);
 const TRAFFIC_SERIES = Object.freeze({
   mihomo: { field: 'mihomo_bytes', label: 'Через Mihomo', tone: 'mihomo' },
   outside: { field: 'outside_bytes', label: 'Оценочный остаток', tone: 'outside' },
@@ -242,7 +242,7 @@ function renderTrafficSummary(summary = {}) {
     ['Устройства / маршруты', `${summary.device_count || 0} / ${summary.route_count || 0}`, 'neutral'],
   ];
   target.innerHTML = cards.map(([label, value, tone]) => (
-    `<div class="xk-mihomo-diagnostic-stat" data-tone="${tone}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`
+    `<div class="xk-mihomo-diagnostic-stat xkm-card" data-tone="${tone}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`
   )).join('');
 }
 
@@ -250,8 +250,8 @@ function renderTrafficChart(payload) {
   const target = byId('mihomo-clash-traffic-chart');
   if (!target) return;
   const rows = Array.isArray(payload?.series) ? payload.series : [];
-  const points = rows.filter((item) => Number(item?.total_bytes) > 0);
-  if (!points.length) {
+  const points = rows.filter((item) => Number.isFinite(Number(item?.at))).sort((a, b) => Number(a.at) - Number(b.at));
+  if (!points.some((item) => Number(item.total_bytes) > 0)) {
     target.classList.add('is-empty');
     target.innerHTML = '<div class="xk-mihomo-traffic-empty">Данных для графика пока нет.</div>';
     renderTrafficChartStats([]);
@@ -259,32 +259,38 @@ function renderTrafficChart(payload) {
   }
   target.classList.remove('is-empty');
   const visibleSeries = Object.keys(TRAFFIC_SERIES).filter((key) => trafficVisibleSeries.has(key));
-  if (!visibleSeries.length) trafficVisibleSeries.add('mihomo');
   const width = Math.max(320, Math.round(target.clientWidth || 1000));
-  const height = 220;
-  const padding = { top: 18, right: 12, bottom: 32, left: 54 };
+  const height = 234;
+  const padding = { top: 20, right: 14, bottom: 28, left: 58 };
   const innerWidth = width - padding.left - padding.right;
   const innerHeight = height - padding.top - padding.bottom;
-  const activeFields = visibleSeries.map((key) => TRAFFIC_SERIES[key].field);
-  const maxValue = Math.max(
-    ...points.flatMap((item) => activeFields.map((field) => Number(item[field]) || 0)),
-    1,
-  );
-  const x = (index) => padding.left + (points.length === 1 ? innerWidth / 2 : index * innerWidth / (points.length - 1));
-  const y = (value) => padding.top + innerHeight - (Math.max(0, Number(value) || 0) / maxValue) * innerHeight;
-  const path = (field) => points.map((item, index) => `${index ? 'L' : 'M'} ${x(index).toFixed(1)} ${y(item[field]).toFixed(1)}`).join(' ');
-  const tickIndexes = Array.from(new Set([
-    0,
-    Math.floor((points.length - 1) / 4),
-    Math.floor((points.length - 1) / 2),
-    Math.floor((points.length - 1) * 3 / 4),
-    points.length - 1,
-  ]));
-  const yTicks = [0, .5, 1];
+  const value = (point, field) => Math.max(0, Number(point?.[field]) || 0);
+  const plottedValue = (key, point) => key === 'outside'
+    ? value(point, 'outside_bytes') + (trafficVisibleSeries.has('mihomo') ? value(point, 'mihomo_bytes') : 0)
+    : value(point, TRAFFIC_SERIES[key].field);
+  const peak = points.reduce((max, point) => Math.max(max, ...visibleSeries.map((key) => plottedValue(key, point))), 0);
+  const magnitude = 10 ** Math.floor(Math.log10(Math.max(peak * 1.08, 1)));
+  const maxValue = [1, 1.25, 1.5, 2, 2.5, 3, 4, 5, 7.5, 10]
+    .map((step) => step * magnitude).find((step) => step >= peak * 1.08) || 10 * magnitude;
+  const firstAt = Number(points[0].at);
+  const lastAt = Number(points.at(-1).at);
+  const x = (index) => padding.left + (firstAt === lastAt ? innerWidth / 2 : (Number(points[index].at) - firstAt) / (lastAt - firstAt) * innerWidth);
+  const y = (amount) => padding.top + innerHeight - Math.max(0, Number(amount) || 0) / maxValue * innerHeight;
+  const linePath = (key) => {
+    const d = points.map((point, index) => `${index ? 'L' : 'M'} ${x(index).toFixed(1)} ${y(plottedValue(key, point)).toFixed(1)}`).join(' ');
+    return points.length === 1 ? `${d} l .1 0` : d;
+  };
+  const areaPath = (lower, upper) => {
+    const upperEdge = points.map((point, index) => `${index ? 'L' : 'M'} ${x(index).toFixed(1)} ${y(upper(point)).toFixed(1)}`).join(' ');
+    const lowerEdge = points.map((point, index) => `L ${x(points.length - 1 - index).toFixed(1)} ${y(lower(points[points.length - 1 - index])).toFixed(1)}`).join(' ');
+    return `${upperEdge} ${lowerEdge} Z`;
+  };
+  const tickCount = Math.min(7, Math.max(3, Math.floor(innerWidth / 170) + 1));
+  const tickIndexes = Array.from(new Set(Array.from({ length: tickCount }, (_, index) => Math.round(index * (points.length - 1) / (tickCount - 1)))));
   target.innerHTML = `${mihomoTrafficChartSvg({
     width,
     height,
-    yTicks: yTicks.map((ratio) => ({
+    yTicks: [0, .25, .5, .75, 1].map((ratio) => ({
       x1: padding.left,
       y1: y(maxValue * ratio),
       x2: width - padding.right,
@@ -293,10 +299,29 @@ function renderTrafficChart(payload) {
       labelY: y(maxValue * ratio) + 4,
       label: formatBytes(maxValue * ratio),
     })),
+    xTicks: tickIndexes.map((index) => ({
+      x: x(index),
+      labelY: height - 7,
+      anchor: index === 0 ? 'start' : index === points.length - 1 ? 'end' : 'middle',
+      label: formatChartTime(points[index].at, payload?.range_seconds),
+    })),
+    areas: [
+      ...(trafficVisibleSeries.has('mihomo') ? [{
+        key: 'mihomo', tone: 'mihomo',
+        d: areaPath(() => 0, (point) => value(point, 'mihomo_bytes')),
+      }] : []),
+      ...(trafficVisibleSeries.has('outside') ? [{
+        key: 'outside', tone: 'outside',
+        d: areaPath(
+          (point) => trafficVisibleSeries.has('mihomo') ? value(point, 'mihomo_bytes') : 0,
+          (point) => plottedValue('outside', point),
+        ),
+      }] : []),
+    ],
     paths: visibleSeries.map((key) => ({
       key,
       tone: TRAFFIC_SERIES[key].tone,
-      d: path(TRAFFIC_SERIES[key].field),
+      d: linePath(key),
     })),
     guide: {
       x: x(0),
@@ -307,14 +332,9 @@ function renderTrafficChart(payload) {
       x: padding.left,
       y: padding.top,
       width: innerWidth,
-      height: innerHeight + 4,
+      height: innerHeight,
     },
-    xLabels: tickIndexes.map((index) => ({
-      x: x(index),
-      y: height - 8,
-      anchor: index === 0 ? 'start' : index === points.length - 1 ? 'end' : 'middle',
-      label: formatChartTime(points[index].at, payload?.range_seconds),
-    })),
+    axisLabel: 'Б за 5 мин',
   })}<div id="mihomo-clash-traffic-tooltip" class="xk-mihomo-traffic-tooltip" role="status" aria-live="polite" hidden></div>`;
   syncTrafficSeriesButtons();
   renderTrafficChartStats(points);
@@ -322,32 +342,62 @@ function renderTrafficChart(payload) {
   const hit = target.querySelector('[data-chart-hit]');
   const guide = target.querySelector('[data-chart-guide]');
   const tooltip = target.querySelector('#mihomo-clash-traffic-tooltip');
-  const showPoint = (event) => {
+  let activeIndex = points.length - 1;
+  const showPoint = (index, event) => {
     if (!hit || !tooltip || !guide) return;
     const svgRect = svg.getBoundingClientRect();
     const targetRect = target.getBoundingClientRect();
-    const relativeX = Math.max(0, Math.min(svgRect.width, event.clientX - svgRect.left));
-    const ratio = svgRect.width ? relativeX / svgRect.width : 0;
-    const index = Math.max(0, Math.min(points.length - 1, Math.round(ratio * (points.length - 1))));
+    activeIndex = index;
     const point = points[index];
     const pointX = x(index);
     guide.setAttribute('x1', String(pointX));
     guide.setAttribute('x2', String(pointX));
-    guide.hidden = false;
-    tooltip.innerHTML = `<strong>${escapeHtml(formatChartDate(point.at))}</strong>${
-      visibleSeries.map((key) => `<span><span>${escapeHtml(TRAFFIC_SERIES[key].label)}</span><b>${escapeHtml(formatBytes(point[TRAFFIC_SERIES[key].field]))}</b></span>`).join('')
-    }`;
+    guide.removeAttribute('hidden');
+    target.querySelectorAll('[data-chart-marker]').forEach((marker) => {
+      marker.setAttribute('cx', String(pointX));
+      marker.setAttribute('cy', String(y(plottedValue(marker.dataset.chartMarker, point))));
+      marker.removeAttribute('hidden');
+    });
+    tooltip.innerHTML = `<strong>${escapeHtml(formatChartDate(point.at))}</strong>${visibleSeries.map((key) => (
+      `<div class="xk-mihomo-traffic-tooltip-row" data-series="${key}"><i></i><span>${escapeHtml(TRAFFIC_SERIES[key].label)}</span><b>${escapeHtml(formatBytes(point[TRAFFIC_SERIES[key].field]))}</b></div>`
+    )).join('')}`;
     tooltip.hidden = false;
-    const left = Math.max(6, Math.min(targetRect.width - tooltip.offsetWidth - 6, event.clientX - targetRect.left + 10));
-    const top = Math.max(6, Math.min(targetRect.height - tooltip.offsetHeight - 6, event.clientY - targetRect.top - tooltip.offsetHeight - 8));
+    const clientX = event?.clientX ?? svgRect.left + pointX / width * svgRect.width;
+    const clientY = event?.clientY ?? svgRect.top + 30;
+    const left = Math.max(6, Math.min(targetRect.width - tooltip.offsetWidth - 6, clientX - targetRect.left + 10));
+    const top = Math.max(6, Math.min(targetRect.height - tooltip.offsetHeight - 6, clientY - targetRect.top - tooltip.offsetHeight - 8));
     tooltip.style.left = `${left}px`;
     tooltip.style.top = `${top}px`;
   };
-  hit?.addEventListener('pointermove', showPoint);
-  hit?.addEventListener('pointerleave', () => {
-    if (guide) guide.hidden = true;
+  const hidePoint = () => {
+    if (guide) guide.setAttribute('hidden', '');
     if (tooltip) tooltip.hidden = true;
+    target.querySelectorAll('[data-chart-marker]').forEach((marker) => { marker.setAttribute('hidden', ''); });
+  };
+  hit?.addEventListener('pointermove', (event) => {
+    const svgRect = svg.getBoundingClientRect();
+    const svgX = (event.clientX - svgRect.left) / svgRect.width * width;
+    const at = firstAt + Math.max(0, Math.min(1, (svgX - padding.left) / innerWidth)) * (lastAt - firstAt);
+    let low = 0;
+    let high = points.length - 1;
+    while (low < high) {
+      const middle = Math.floor((low + high) / 2);
+      if (Number(points[middle].at) < at) low = middle + 1;
+      else high = middle;
+    }
+    const index = low > 0 && at - Number(points[low - 1].at) < Number(points[low].at) - at ? low - 1 : low;
+    showPoint(index, event);
   });
+  hit?.addEventListener('pointerleave', hidePoint);
+  target.onkeydown = (event) => {
+    if (event.key === 'Escape') { hidePoint(); return; }
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const index = event.key === 'Home' ? 0 : event.key === 'End' ? points.length - 1
+      : Math.max(0, Math.min(points.length - 1, activeIndex + (event.key === 'ArrowLeft' ? -1 : 1)));
+    showPoint(index);
+  };
+  target.onblur = hidePoint;
 }
 
 function formatChartTime(value, rangeSeconds = 0) {
@@ -412,7 +462,9 @@ function renderTrafficDevices(devices = []) {
       <header><div><strong>${escapeHtml(device.name || device.ip || 'Устройство')}</strong><span>${escapeHtml(device.ip || '')}</span></div><em>${escapeHtml(formatBytes(total))}</em></header>
       <div class="xk-mihomo-device-split" role="img" aria-label="${escapeHtml(`Через Mihomo ${formatBytes(mihomo)}, вне Mihomo ${formatBytes(outside)}`)}"><i class="is-mihomo" style="width:${total ? mihomo * 100 / total : 0}%"></i><i class="is-outside" style="width:${total ? outside * 100 / total : 0}%"></i></div>
       <div class="xk-mihomo-device-meta"><span>↓ <strong>${escapeHtml(formatBytes(deviceDownload(device)))}</strong></span><span>↑ <strong>${escapeHtml(formatBytes(deviceUpload(device)))}</strong></span><span>Через Mihomo <strong>${escapeHtml(formatBytes(mihomo))}</strong></span><span>Оценочный остаток <strong>${escapeHtml(formatBytes(outside))}</strong></span></div>
-      <div class="xk-mihomo-device-routes">${routes.length ? routes.map((route) => routeBar(route, Math.max(mihomo, 1))).join('') : '<span class="xk-mihomo-traffic-empty">Маршруты ещё не накоплены.</span>'}</div>
+      ${routes.length
+    ? `<div class="xk-mihomo-device-routes">${routes.map((route) => routeBar(route, Math.max(mihomo, 1))).join('')}</div>`
+    : '<small class="xk-mihomo-device-no-routes">Маршруты ещё не накоплены</small>'}
     </article>`;
   }).join('') || '<div class="xk-mihomo-traffic-empty">Устройства появятся после накопления трафика.</div>';
 }

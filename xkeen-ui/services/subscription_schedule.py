@@ -43,7 +43,7 @@ def _candidates(subs: Iterable[Any]) -> tuple[List[Dict[str, Any]], int]:
             skipped += 1
             continue
         due_ts = _timestamp(item.get("next_update_ts"))
-        if not bool(item.get("enabled", True)) or due_ts <= 0:
+        if item.get("schedule_mode") == "cron" or not bool(item.get("enabled", True)) or due_ts <= 0:
             skipped += 1
             continue
         picked.append(

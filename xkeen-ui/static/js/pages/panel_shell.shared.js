@@ -69,6 +69,7 @@ import { wireTopLevelNavigation } from './top_level_nav.shared.js';
     const workspaceWasEnabled = !body.classList.contains('xk-workspace-scroll-disabled');
     body.classList.toggle('xk-page-scroll-disabled', !pageScrollEnabled);
     body.classList.toggle('xk-workspace-scroll-disabled', !workspaceScrollEnabled);
+    body.classList.toggle('xk-header-sticky', layout.stickyHeaderEnabled !== false);
 
     if (pageWasEnabled && !pageScrollEnabled) {
       try { window.scrollTo(0, 0); } catch (error) {}
