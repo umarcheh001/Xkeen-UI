@@ -28,6 +28,10 @@ def test_install_script_supports_pip_mirror_fallbacks_for_flask_and_gevent():
     assert 'pip_install_with_fallback "gevent" "$GEVENT_PIP_SPEC" gevent-websocket' in text
     assert 'XKEEN_PIP_INDEX_URL=$PIP_FALLBACK_INDEX_DEFAULT sh install.sh' in text
     assert 'export XKEEN_GEVENT_PIP_SPEC=${XKEEN_GEVENT_PIP_SPEC:-$GEVENT_PIP_SPEC}' in text
+    assert 'NEED_PYYAML' in text
+    assert 'provision_opkg install python3-yaml' in text
+    assert 'pip_install_with_fallback "pyyaml"' in text
+    assert "встроенный fallback" in text
 
 
 def test_install_script_repairs_entware_pip_truststore_failures():

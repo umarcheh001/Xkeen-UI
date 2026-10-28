@@ -39,6 +39,7 @@ if [ "$1" = "-m" ] && [ "$2" = "pip" ]; then
       for arg in "$@"; do
         case "$arg" in
           flask|cryptography|pip|setuptools|wheel) echo "$arg" >> "$FAKE_STATE" ;;
+          'PyYAML>=6,<7') [ "$FAKE_YAML_PIP" = "broken" ] && exit 1; echo yaml >> "$FAKE_STATE" ;;
           gevent*websocket) echo "geventwebsocket" >> "$FAKE_STATE" ;;
           gevent*) echo "gevent" >> "$FAKE_STATE" ;;
         esac
@@ -51,11 +52,15 @@ exit 0
 FAKE_OPKG = """#!/bin/sh
 echo "$*" >> "$FAKE_OPKG_LOG"
 [ "$FAKE_OPKG" = "dead" ] && exit 1
+if [ "$*" = "install python3-yaml" ]; then
+  [ "$FAKE_YAML_OPKG" = "missing" ] && exit 1
+  echo yaml >> "$FAKE_STATE"
+fi
 exit 0
 """
 
 
-def _run(tmp_path: Path, body: str, *, modules: str, opkg: str = "ok", pip: str = "ok"):
+def _run(tmp_path: Path, body: str, *, modules: str, opkg: str = "ok", pip: str = "ok", yaml_opkg: str = "ok", yaml_pip: str = "ok"):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     for name, text in (("python3", FAKE_PYTHON), ("opkg", FAKE_OPKG)):
@@ -86,6 +91,9 @@ def _run(tmp_path: Path, body: str, *, modules: str, opkg: str = "ok", pip: str 
         "FAKE_OPKG_LOG": (tmp_path / "opkg.log").as_posix(),
         "FAKE_OPKG": opkg,
         "FAKE_PIP": pip,
+        "FAKE_YAML_OPKG": yaml_opkg,
+        "FAKE_YAML_PIP": yaml_pip,
+        "UI_DIR": tmp_path.as_posix(),
         "XKEEN_OPKG_CONF": conf.as_posix(),
         "XKEEN_OPKG_UPDATE_TIMEOUT": "5",
         "TMPDIR": tmp_path.as_posix(),
@@ -100,29 +108,77 @@ def _run(tmp_path: Path, body: str, *, modules: str, opkg: str = "ok", pip: str 
 
 
 STEPS = "provision_python_libs_check; provision_python_libs_install"
-REPORT = '; echo "need=$NEED_FLASK$NEED_CRYPTOGRAPHY$NEED_GEVENT ws=$WS_VERDICT"'
+REPORT = '; echo "need=$NEED_FLASK$NEED_CRYPTOGRAPHY$NEED_GEVENT$NEED_PYYAML ws=$WS_VERDICT"'
 
 
 def test_a_router_that_has_everything_is_left_alone(tmp_path):
-    proc, python, opkg = _run(tmp_path, STEPS + REPORT, modules="flask cryptography gevent geventwebsocket")
+    proc, python, opkg = _run(tmp_path, STEPS + REPORT, modules="flask cryptography gevent geventwebsocket yaml")
 
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert "need=000 ws=on" in proc.stdout
+    assert "need=0000 ws=on" in proc.stdout
     assert opkg == []
     assert not [line for line in python if "pip install" in line]
 
 
-def test_a_missing_library_comes_from_entware_first(tmp_path):
-    proc, _python, opkg = _run(tmp_path, STEPS + REPORT, modules="flask gevent geventwebsocket")
+def test_missing_pyyaml_is_installed_from_entware(tmp_path):
+    proc, python, opkg = _run(tmp_path, STEPS + REPORT, modules="flask cryptography gevent geventwebsocket")
 
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert "need=010" in proc.stdout
+    assert "need=0001 ws=on" in proc.stdout
+    assert "install python3-yaml" in opkg
+    assert not [line for line in python if "pip install" in line]
+
+
+def test_missing_entware_pyyaml_uses_pip(tmp_path):
+    proc, python, _opkg = _run(
+        tmp_path, STEPS + REPORT,
+        modules="flask cryptography gevent geventwebsocket",
+        yaml_opkg="missing",
+    )
+
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "need=0001 ws=on" in proc.stdout
+    assert any("pip install" in line and line.endswith("PyYAML>=6,<7") for line in python)
+    assert "PyYAML установлен через pip" in proc.stdout
+
+
+def test_missing_pyyaml_and_installers_keep_panel_available(tmp_path):
+    proc, python, _opkg = _run(
+        tmp_path, STEPS + REPORT,
+        modules="flask cryptography gevent geventwebsocket",
+        yaml_opkg="missing", yaml_pip="broken",
+    )
+
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert any("pip install" in line and line.endswith("PyYAML>=6,<7") for line in python)
+    assert "встроенный fallback" in proc.stdout
+    assert "ws=on" in proc.stdout
+
+
+def test_missing_pyyaml_without_entware_or_pip_uses_fallback(tmp_path):
+    proc, python, opkg = _run(
+        tmp_path, STEPS + REPORT,
+        modules="flask cryptography gevent geventwebsocket",
+        opkg="dead", pip="broken",
+    )
+
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "install python3-yaml" in opkg
+    assert not [line for line in python if "pip install" in line]
+    assert "встроенный fallback" in proc.stdout
+
+
+def test_a_missing_library_comes_from_entware_first(tmp_path):
+    proc, _python, opkg = _run(tmp_path, STEPS + REPORT, modules="flask gevent geventwebsocket yaml")
+
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "need=0100" in proc.stdout
     assert "update" in opkg
     assert "install python3-cryptography" in opkg
 
 
 def test_an_unreachable_entware_does_not_stop_what_pip_can_bring(tmp_path):
-    proc, python, opkg = _run(tmp_path, STEPS + REPORT, modules="flask gevent geventwebsocket", opkg="dead")
+    proc, python, opkg = _run(tmp_path, STEPS + REPORT, modules="flask gevent geventwebsocket yaml", opkg="dead")
 
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert any("pip install" in line and line.rstrip().endswith("cryptography") for line in python)
@@ -136,7 +192,7 @@ def test_without_entware_and_without_pip_the_reason_is_named(tmp_path):
     proc, _python, _opkg = _run(
         tmp_path,
         'provision_python_libs_check; provision_python_libs_install || echo "stopped: $PROVISION_ERROR"',
-        modules="flask gevent geventwebsocket",
+        modules="flask gevent geventwebsocket yaml",
         opkg="dead",
         pip="broken",
     )

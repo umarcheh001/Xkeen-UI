@@ -41,6 +41,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import ipaddress
+import json
 import os
 import re
 import secrets
@@ -2694,6 +2695,87 @@ def create_mihomo_blueprint(
             raw = re.sub(r"\s+#.*$", "", raw).strip()
         return raw.strip("'\"")
 
+    def _batch_proxy_names_without_yaml(content: str):
+        """Read the plain block-style proxies section on routers without PyYAML."""
+        lines = content.splitlines()
+        if any(re.match(r"^['\"]proxies['\"]\s*:", line) for line in lines):
+            raise ValueError("Quoted proxies key requires a YAML parser.")
+        headers = [idx for idx, line in enumerate(lines) if re.match(r"^proxies\s*:", line)]
+        if len(headers) > 1:
+            raise ValueError("Repeated proxies section.")
+        if not headers:
+            return [], []
+        start = headers[0]
+        header_value = re.sub(r"^proxies\s*:\s*", "", lines[start]).split("#", 1)[0].strip()
+        if header_value not in ("", "[]", "null", "~"):
+            raise ValueError("Unsupported proxies section.")
+        end = len(lines)
+        for idx in range(start + 1, len(lines)):
+            line = lines[idx]
+            if line.strip() and not line.lstrip().startswith("#") and not line.startswith((" ", "\t")):
+                if line.startswith("-"):
+                    raise ValueError("Unsupported proxy indentation.")
+                end = idx
+                break
+        body = lines[start + 1:end]
+        names = []
+        for line in body:
+            if not line.strip() or line.lstrip().startswith("#"):
+                continue
+            if line.startswith("\t") or re.match(r"^  -\s", line) and not re.match(r"^  - name:\s*\S", line):
+                raise ValueError("Unsupported proxy item.")
+            match = re.match(r"^  - name:\s*(.+?)\s*$", line)
+            if match:
+                raw = match.group(1).strip()
+                if raw.startswith('"'):
+                    name = json.loads(raw)
+                elif raw.startswith("'") and raw.endswith("'"):
+                    name = raw[1:-1].replace("''", "'")
+                else:
+                    name = raw.split(" #", 1)[0].strip()
+                if not isinstance(name, str) or not name.strip():
+                    raise ValueError("Invalid proxy name.")
+                names.append(name)
+            elif not line.startswith("    "):
+                raise ValueError("Unsupported proxy indentation.")
+        if header_value and any(line.strip() and not line.lstrip().startswith("#") for line in body):
+            raise ValueError("Invalid proxies section.")
+        if len(names) != len(set(names)):
+            raise ValueError("Repeated proxy name.")
+        return names, [line for line in body if line.strip()]
+
+    def _batch_patch_without_yaml(content: str, items: list, selected: list):
+        if selected and re.search(r"(?m)^[ \t]+(?:['\"]proxies['\"]\s*:|proxies\s*:\s*[*&])", content):
+            raise ValueError("Unsupported group proxy list without a YAML parser.")
+        original_names, original_lines = _batch_proxy_names_without_yaml(content)
+        names = set(original_names)
+        normalized = []
+        for item in items:
+            if not isinstance(item, dict):
+                raise ValueError("Invalid proxy item.")
+            fragment = _norm_text(item.get("proxy_yaml") or "")
+            name = str(item.get("proxy_name") or "").strip()
+            lines = [line for line in fragment.splitlines() if line.strip()]
+            if not lines or not re.match(r"^- name:\s*\S", lines[0]):
+                raise ValueError("Invalid proxy fragment.")
+            if any(not line.startswith(("  ", "#")) for line in lines[1:]):
+                raise ValueError("Proxy fragment contains another top-level item.")
+            parsed_names, _ = _batch_proxy_names_without_yaml("proxies:\n" + "\n".join("  " + line for line in lines))
+            if len(parsed_names) != 1 or parsed_names[0] != name or name in names:
+                raise ValueError("Invalid or repeated proxy name.")
+            names.add(name)
+            normalized.append((fragment, name))
+        patched = content
+        for fragment, name in normalized:
+            patched = apply_proxy_insert(patched, fragment, name, selected)
+        patched_names, patched_lines = _batch_proxy_names_without_yaml(patched)
+        if patched_names != original_names + [name for _, name in normalized]:
+            raise ValueError("Proxy insertion changed existing items.")
+        old_lines = iter(patched_lines)
+        if any(not any(line == current for current in old_lines) for line in original_lines):
+            raise ValueError("Proxy insertion changed existing content.")
+        return patched
+
     @bp.post("/api/mihomo/patch/apply_insert")
     def api_mihomo_patch_apply_insert():
         """Insert proxy YAML under `proxies:` and register it in target proxy-groups."""
@@ -2761,7 +2843,15 @@ def create_mihomo_blueprint(
         selected = [group for group in groups if group in known]
         try:
             # Validate every item before producing any result. No file writes.
-            import yaml
+            try:
+                import yaml
+            except ImportError:
+                yaml = None
+
+            if yaml is None:
+                patched = _batch_patch_without_yaml(content, items, selected)
+                return jsonify({"ok": True, "content": patched, "attached_groups": selected,
+                                "missing_groups": [group for group in groups if group not in known]}), 200
 
             def checked_proxy_section(document):
                 tree = yaml.compose(document)

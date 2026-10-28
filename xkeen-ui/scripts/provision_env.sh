@@ -1344,16 +1344,16 @@ provision_pip_record_end() {
 }
 
 provision_python_libs_check() {
-  # Что из нужного уже есть: выставляет NEED_FLASK, NEED_CRYPTOGRAPHY, NEED_GEVENT.
+  # Что из нужного уже есть: выставляет NEED_FLASK, NEED_CRYPTOGRAPHY, NEED_GEVENT, NEED_PYYAML.
 
-  echo "[*] Проверяю наличие Flask/cryptography/gevent для Python3..."
+  echo "[*] Проверяю наличие Flask/cryptography/gevent/PyYAML для Python3..."
 
-  # Flask и cryptography обязательны; gevent/geventwebsocket — опциональны
-  # для общего WebSocket runtime панели.
+  # Flask и cryptography обязательны; gevent/geventwebsocket и PyYAML опциональны.
 
   NEED_FLASK=0
   NEED_CRYPTOGRAPHY=0
   NEED_GEVENT=0
+  NEED_PYYAML=0
 
   # Проверяем flask
   if ! "$PYTHON_BIN" -c "import flask" >/dev/null 2>&1; then
@@ -1365,6 +1365,9 @@ provision_python_libs_check() {
     NEED_CRYPTOGRAPHY=1
   fi
 
+  if ! "$PYTHON_BIN" -c "import yaml" >/dev/null 2>&1; then
+    NEED_PYYAML=1
+  fi
 
   # Проверяем gevent и geventwebsocket (только если архитектура позволяет).
   if [ "$WANT_GEVENT" -eq 1 ]; then
@@ -1377,6 +1380,36 @@ provision_python_libs_check() {
   else
     echo "[*] Архитектура $ARCH: пропускаю установку gevent/gevent-websocket, будет использован HTTP-пулинг."
   fi
+}
+
+provision_optional_pyyaml() {
+  [ "$NEED_PYYAML" -eq 1 ] || return 0
+
+  echo "[*] PyYAML не найден. Пытаюсь установить его для работы с YAML Mihomo..."
+  if [ "${PROVISION_OPKG_OFFLINE:-0}" -eq 0 ]; then
+    if command -v opkg >/dev/null 2>&1; then
+      OPKG_BIN="$(command -v opkg)"
+    elif [ -x /opt/bin/opkg ]; then
+      OPKG_BIN=/opt/bin/opkg
+    fi
+    if [ -n "${OPKG_BIN:-}" ] && provision_opkg install python3-yaml && "$PYTHON_BIN" -c "import yaml" >/dev/null 2>&1; then
+      echo "[*] PyYAML установлен пакетом Entware python3-yaml."
+      return 0
+    fi
+  fi
+
+  if "$PYTHON_BIN" -m pip --version >/dev/null 2>&1; then
+    provision_pip_record_begin
+    pip_install_with_fallback "pyyaml" 'PyYAML>=6,<7' || true
+    provision_pip_record_end || true
+    if "$PYTHON_BIN" -c "import yaml" >/dev/null 2>&1; then
+      echo "[*] PyYAML установлен через pip."
+      return 0
+    fi
+  fi
+
+  echo "[!] PyYAML недоступен; импорт узлов Mihomo продолжит работу через встроенный fallback."
+  return 0
 }
 
 provision_python_libs_install() {
@@ -1518,6 +1551,8 @@ provision_python_libs_install() {
     provision_fail "cryptography установлен некорректно, поэтому каталог модулей нельзя проверить."
     return 1
   fi
+
+  provision_optional_pyyaml
 
   # gevent/geventwebsocket — опциональны: предупреждаем, но НЕ падаем.
   # Вердикт запоминаем, чтобы напечатать его в итоге установки — предупреждение

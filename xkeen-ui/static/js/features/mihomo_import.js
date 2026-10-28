@@ -1155,12 +1155,12 @@ let mihomoImportModuleApi = null;
       const subWord = pluralRu(groups.length, ['подписка', 'подписки', 'подписок']);
       const nodeWord = pluralRu(count, ['узел', 'узла', 'узлов']);
       if (hasManagedImport) {
-        note.textContent = `Будет создана запись автообновления: ${groups.length} ${subWord}, ${count} ${nodeWord}. Интервал применится при «Вставить в конфиг».`;
+        note.textContent = `Будет создана запись автообновления: ${groups.length} ${subWord}, ${count} ${nodeWord}. Интервал сохранится при «Сохранить» или «Сохранить и применить». Для «В черновик» — после сохранения черновика в редакторе.`;
       } else if (managed.length) {
         const managedWord = pluralRu(managed.length, ['подписка уже управляется', 'подписки уже управляются', 'подписок уже управляется']);
         note.textContent = `${managed.length} ${managedWord}. Для существующей записи интервал меняется кнопкой сохранения.`;
       } else {
-        note.textContent = 'От 1 часа до 7 дней. Отдельная кнопка сохранения не нужна: интервал применяется при вставке в конфиг.';
+        note.textContent = 'От 1 часа до 7 дней. Для новой подписки интервал сохранится вместе с конфигурацией.';
       }
     }
   }
@@ -3442,7 +3442,7 @@ let mihomoImportModuleApi = null;
       }
       const selectionKey = selectedAmneziaLocationsKey();
       if (_lastResult && _amneziaIssuedSelectionKey && _amneziaIssuedSelectionKey === selectionKey) {
-        setStatus('Конфигурации для этого набора локаций уже готовы. Нажмите «Вставить в конфиг».', false);
+        setStatus('Конфигурации для этого набора локаций уже готовы. Нажмите «Проверить изменение».', false);
         return;
       }
       try {
@@ -3686,22 +3686,22 @@ let mihomoImportModuleApi = null;
     } else if (xrayNodeCount > 0) {
       const intervalHours = readXrayIntervalHours();
       setStatus(
-        `Распознана Xray-подписка: ${xrayNodeCount} узлов будут вставлены как блок proxies. Автообновление: каждые ${intervalHours} ч после вставки.`,
+        `Распознана Xray-подписка: ${xrayNodeCount} узлов будут добавлены в proxies. Автообновление: каждые ${intervalHours} ч после сохранения.`,
         false,
       );
     } else if (providerStaticNodeCount > 0) {
       const intervalHours = readXrayIntervalHours();
       setStatus(
-        `Распознана HWID-подписка: ${providerStaticNodeCount} узлов будут вставлены как блок proxies. Автообновление: каждые ${intervalHours} ч после вставки.`,
+        `Распознана HWID-подписка: ${providerStaticNodeCount} узлов будут добавлены в proxies. Автообновление: каждые ${intervalHours} ч после сохранения.`,
         false,
       );
     } else if (mode === 'amnezia-premium') {
       setStatus(
-        `Готово: ${outputs.length} ${pluralRu(outputs.length, ['локация', 'локации', 'локаций'])} будет добавлено в выбранные proxy-groups. После вставки выбирайте их в селекторах Mihomo/Clash API.`,
+        `Готово: ${outputs.length} ${pluralRu(outputs.length, ['локация', 'локации', 'локаций'])} будет добавлено в выбранные proxy-groups. После применения выбирайте их в селекторах Mihomo/Clash API.`,
         false,
       );
     } else {
-      setStatus('Готово. Нажми «Вставить в конфиг».', false);
+      setStatus('Готово. Нажмите «Проверить изменение».', false);
     }
 
     const ins = $(IDS.btnInsert);
@@ -3843,7 +3843,7 @@ let mihomoImportModuleApi = null;
         if (_lastResult && (xrayBulkOutputs(_lastResult.outputs).length || providerStaticBulkOutputs(_lastResult.outputs).length)) {
           const count = xrayBulkOutputs(_lastResult.outputs).length + providerStaticBulkOutputs(_lastResult.outputs).length;
           setStatus(
-            `Распознана статическая подписка: ${count} узлов будут вставлены как блок proxies. Автообновление: каждые ${hours} ч после вставки.`,
+            `Распознана статическая подписка: ${count} узлов будут добавлены в proxies. Автообновление: каждые ${hours} ч после сохранения.`,
             false,
           );
         }

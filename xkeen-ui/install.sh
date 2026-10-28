@@ -913,7 +913,7 @@ provision_python_libs_check
 
 ui_step_done
 ui_step "Библиотеки панели"
-if [ "$NEED_FLASK" -eq 1 ] || [ "$NEED_CRYPTOGRAPHY" -eq 1 ] || [ "$NEED_GEVENT" -eq 1 ]; then
+if [ "$NEED_FLASK" -eq 1 ] || [ "$NEED_CRYPTOGRAPHY" -eq 1 ] || [ "$NEED_GEVENT" -eq 1 ] || [ "$NEED_PYYAML" -eq 1 ]; then
   ui_info "Настраиваю Python-зависимости панели..."
 fi
 provision_python_libs_install || fail_install "${PROVISION_ERROR:-Не удалось подготовить библиотеки панели.}"

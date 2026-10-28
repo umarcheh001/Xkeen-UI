@@ -86,6 +86,11 @@ test('draft defers registration until toolbar saves the matching nodes', async (
     return route.fulfill({ json: { ok: true, saved: true, revision: 'saved' } });
   });
   await setup(page, 'https://sub.example/subscription');
+  await expect(page.locator('#mihomo-import-xray-refresh-note')).toContainText('«В черновик»');
+  await expect(page.locator('#mihomo-import-xray-refresh-note')).not.toContainText('Вставить в конфиг');
+  await page.locator('#mihomo-import-xray-interval').fill('12');
+  await page.locator('#mihomo-import-xray-interval').dispatchEvent('change');
+  await expect(page.locator('#mihomo-import-status')).toContainText('каждые 12 ч после сохранения');
   await page.locator('#mihomo-import-review-btn').click();
   await page.locator('#mihomo-import-insert-btn').click();
   await expect(page.locator('#mihomo-import-modal')).toBeHidden();
