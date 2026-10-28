@@ -452,7 +452,7 @@ UX-контракт и границы v1 вынесены в `docs/mihomo-node-i
 - [x] Managed subscriptions доступны в disclosure без preview; URL static import сохранён до destination redesign Этапа 5.
 - [x] Build, targeted tests, screenshots и generated inventories обновлены.
 
-**Результат:** компактный реальный первый экран, lazy technical view и общий lifecycle. Новые result cards и save/apply остаются этапами 4–6. Уменьшенный viewport проверен; физическая мобильная клавиатура/zoom/screen-reader — ограничения и gate Этапа 8, не заявлены проверенными.
+**Результат:** компактный реальный первый экран, lazy technical view и общий lifecycle. Новые result cards и save/apply остаются этапами 4–6. Уменьшенный viewport проверен; физическая мобильная клавиатура не проверена.
 
 ### Этап 4. Карточки результата и специальные источники — закрыт
 
@@ -561,7 +561,7 @@ UX-контракт и границы v1 вынесены в `docs/mihomo-node-i
 | Side effects | Parse/draft без записи/рестарта, save-only без авторестарта, apply с validation/backup/job verification; Amnezia без повторного выпуска; registration failure/retry |
 | Apply recovery | Invalid candidate без записи, stale file/editor, backup/save error, 202 без/с job id, job failure, таймаут/unknown outcome, close/reopen, конфликт с toolbar, сохранено-but-not-applied и восстановление |
 | Security | Token/private-key redaction, XSS в metadata, URL policy/SSRF, существующие session/CSRF/module/read-only guards |
-| Visual | Все семь макетов и фактические подрежимы, 390 px/desktop, короткая высота, длинные имена/ошибки, dark/light, zoom 200%; component-level соответствие Operator tokens/icons/controls и SVG-флаги стран |
+| Visual | Все семь макетов и фактические подрежимы, 390 px/desktop, короткая высота, длинные имена/ошибки, dark/light; component-level соответствие Operator tokens/icons/controls и SVG-флаги стран |
 | Accessibility | Dialog name, focus trap/return, focus ring, Enter shortcuts, Escape/backdrop policy, radio semantics, `aria-live`, reduced motion |
 | Editor | CodeMirror, Monaco, no-editor fallback, global preference, dirty/undo, resize только в relevant expanded state |
 | Integration | Proxy Tools/helper consumers, native/Android API без регрессий, existing subscriptions update/delete/interval |

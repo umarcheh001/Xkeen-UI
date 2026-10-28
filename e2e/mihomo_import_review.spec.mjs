@@ -244,8 +244,6 @@ test('review dialog supports keyboard focus cycle and return with reduced motion
 
 for (const theme of ['dark', 'light']) {
   test(`review stays operable at 640x480 in ${theme} theme`, async ({ page }) => {
-    // CSS viewport equivalent to 1280x960 at 200% browser zoom; actual browser
-    // zoom and screen-reader behavior still require separate manual checks.
     await page.setViewportSize({ width: 640, height: 480 });
     await page.addInitScript(value => localStorage.setItem('xkeen-theme', value), theme);
     await setup(page);
