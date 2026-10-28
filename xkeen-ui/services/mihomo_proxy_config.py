@@ -509,6 +509,7 @@ def apply_proxy_insert(
     proxy_yaml_block: str,
     proxy_name: str,
     target_groups: Iterable[str],
+    position: str = "end",
 ) -> str:
     """High-level helper to insert proxy YAML and register it in proxy-groups."""
     content = content.replace("\r\n", "\n")
@@ -547,21 +548,26 @@ def apply_proxy_insert(
                     section_end = j
                     break
 
-            insert_at = section_end
-            while insert_at > idx + 1 and not lines[insert_at - 1].strip():
-                insert_at -= 1
-            while insert_at > idx + 1 and lines[insert_at - 1].lstrip().startswith("#"):
-                insert_at -= 1
+            if position == "start":
+                insert_at = idx + 1
+                while insert_at < section_end and (not lines[insert_at].strip() or lines[insert_at].lstrip().startswith("#")):
+                    insert_at += 1
+            else:
+                insert_at = section_end
+                while insert_at > idx + 1 and not lines[insert_at - 1].strip():
+                    insert_at -= 1
+                while insert_at > idx + 1 and lines[insert_at - 1].lstrip().startswith("#"):
+                    insert_at -= 1
 
             has_existing_items = any(
                 item.strip() and not item.lstrip().startswith("#")
-                for item in lines[idx + 1 : insert_at]
+                for item in lines[idx + 1 : section_end]
             )
             block_lines = [f"{base_indent}  {block_line}" for block_line in yaml_block_lines]
             insert_lines = list(block_lines)
-            if has_existing_items and insert_at > idx + 1 and lines[insert_at - 1].strip():
+            if position != "start" and has_existing_items and insert_at > idx + 1 and lines[insert_at - 1].strip():
                 insert_lines.insert(0, "")
-            if insert_at < len(lines) and lines[insert_at].strip():
+            if position != "start" and insert_at < len(lines) and lines[insert_at].strip():
                 insert_lines.append("")
             lines[insert_at:insert_at] = insert_lines
             inserted = True

@@ -1,4 +1,5 @@
 import { getMihomoPanelApi } from './mihomo_panel.js';
+import { load as loadYaml } from 'js-yaml';
 import { getMihomoYamlPatchApi } from './mihomo_yaml_patch.js';
 import {
   confirmMihomoAction,
@@ -93,6 +94,7 @@ let mihomoImportModuleApi = null;
     btnSave: 'mihomo-import-save-btn',
     btnApply: 'mihomo-import-apply-btn',
     candidateSummary: 'mihomo-import-candidate-summary',
+    replaceTarget: 'mihomo-import-replace-target',
     actionStatus: 'mihomo-import-action-status',
   };
 
@@ -120,6 +122,8 @@ let mihomoImportModuleApi = null;
   let _baseFileRevision = '';
   let _actionBusy = false;
   let _lastCandidate = null;
+  let _placementMode = 'end';
+  let _replaceTarget = '';
   let _reviewOpen = false;
   let _baseFileContent = '';
   let _fileBaselinePromise = null;
@@ -1898,6 +1902,8 @@ let mihomoImportModuleApi = null;
       _lastResult = null;
       _parseOperation = null;
       _lastCandidate = null;
+      _placementMode = 'end';
+      _replaceTarget = '';
       _baseFileRevision = '';
       setActionStatus('');
       _baseFileContent = '';
@@ -2714,7 +2720,7 @@ let mihomoImportModuleApi = null;
     }
   }
 
-  function insertProvidersIntoConfig(existingText, outputs) {
+  function insertProvidersIntoConfig(existingText, outputs, position = 'end') {
     let txt = String(existingText || '');
     const yp = yamlPatch();
 
@@ -2723,8 +2729,8 @@ let mihomoImportModuleApi = null;
     }
 
     const providers = (outputs || []).filter((o) => o.type === 'proxy-provider');
-    providers.forEach((o) => {
-      txt = yp.insertIntoSection(txt, 'proxy-providers', o.content);
+    (position === 'start' ? providers.reverse() : providers).forEach((o) => {
+      txt = yp.insertIntoSection(txt, 'proxy-providers', o.content, { position });
     });
     return txt;
   }
@@ -2769,11 +2775,12 @@ let mihomoImportModuleApi = null;
     }
     const title = document.createElement('div');
     title.className = 'xk-mi-candidate-title';
-    title.textContent = 'Будет добавлено';
+    title.textContent = candidate.placement === 'replace' ? 'Будет заменено' : 'Будет добавлено';
     const details = document.createElement('div');
     details.className = 'xk-mi-candidate-details';
     details.textContent = [
       `${candidate.outputs.length} ${pluralRu(candidate.outputs.length, ['элемент', 'элемента', 'элементов'])} → ${candidate.destinations.join(' + ') || 'config.yaml'}`,
+      candidate.placement === 'replace' ? `Заменяемый узел: ${candidate.replaceName}` : `Размещение: ${candidate.placement === 'start' ? 'в начале' : 'в конце'} секции`,
       candidate.outputs.slice(0, 5).map(output => output.proxy_name || output.provider_name || '').filter(Boolean).join(', '),
       `Групп: ${candidate.groups.length ? candidate.groups.join(', ') : 'не выбраны'}`,
       candidate.missingGroups.length ? `Неизвестные группы: ${candidate.missingGroups.join(', ')}` : '',
@@ -2798,6 +2805,36 @@ let mihomoImportModuleApi = null;
     $(IDS.modal)?.setAttribute('aria-busy', String(!!busy));
   }
 
+  function replacementTargets() {
+    try {
+      const proxies = loadYaml(getEditorText() || '')?.proxies;
+      return Array.isArray(proxies)
+        ? Array.from(new Set(proxies.map(proxy => String(proxy?.name || '').trim()).filter(Boolean)))
+        : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function renderPlacementOptions() {
+    const outputs = currentDestinationOutputs();
+    const targets = replacementTargets();
+    const canReplace = outputs.length === 1 && outputs[0].type === 'proxy' && targets.length > 0;
+    if (!canReplace && _placementMode === 'replace') _placementMode = 'end';
+    if (!targets.includes(_replaceTarget)) _replaceTarget = targets[0] || '';
+    const select = $(IDS.replaceTarget);
+    if (select) {
+      select.replaceChildren(...targets.map(name => new Option(name, name)));
+      select.value = _replaceTarget;
+      select.parentElement.classList.toggle('hidden', _placementMode !== 'replace');
+    }
+    $(IDS.modal)?.querySelectorAll('[data-mi-placement]').forEach(button => {
+      const mode = button.dataset.miPlacement;
+      button.setAttribute('aria-pressed', String(mode === _placementMode));
+      if (mode === 'replace') button.setAttribute('aria-disabled', String(!canReplace));
+    });
+  }
+
   async function buildImportCandidate() {
     if (
       !_lastResult
@@ -2815,14 +2852,15 @@ let mihomoImportModuleApi = null;
     let content = sourceEditorContent;
     const selectedOutputs = currentDestinationOutputs();
     const providerOutputs = selectedOutputs.filter((output) => output.type === 'proxy-provider');
-    content = insertProvidersIntoConfig(content, providerOutputs);
+    content = insertProvidersIntoConfig(content, providerOutputs, _placementMode);
     const groups = readSelectedGroupsFromUi();
     const proxies = selectedOutputs.filter((output) => output.type === 'proxy');
     const missingGroups = [];
     if (proxies.length > 512) throw new Error('За один импорт поддерживается не более 512 узлов. Разделите подписку на части.');
     if (proxies.length) {
       const inserted = await _importApi.postJSON('/api/mihomo/patch/apply_batch', {
-        content, groups, proxies: proxies.map(proxy => ({ proxy_yaml: proxy.content, proxy_name: proxy.proxy_name || proxy.proxyName })),
+        content, groups, position: _placementMode, replace_name: _placementMode === 'replace' ? _replaceTarget : '',
+        proxies: proxies.map(proxy => ({ proxy_yaml: proxy.content, proxy_name: proxy.proxy_name || proxy.proxyName })),
       });
       content = String(inserted.content || '');
       missingGroups.push(...(inserted.missing_groups || []));
@@ -2842,6 +2880,8 @@ let mihomoImportModuleApi = null;
     }
     const candidate = {
       content,
+      placement: _placementMode,
+      replaceName: _placementMode === 'replace' ? _replaceTarget : '',
       destinations: Array.from(new Set(selectedOutputs.map((output) => output.type === 'proxy-provider' ? 'proxy-providers' : 'proxies'))),
       groups,
       missingGroups: uniqueMissingGroups,
@@ -2885,6 +2925,7 @@ let mihomoImportModuleApi = null;
   function importContext() {
     return JSON.stringify([getMihomoPanelApi()?.getActiveProfileName?.() || '',
       _importState.sessionId, _importState.sourceRevision, _selectedDestination,
+      _placementMode, _replaceTarget,
       readSelectedGroupsFromUi(), $(IDS.providerName)?.value, $(IDS.providerInterval)?.value,
       $(IDS.xrayInterval)?.value]);
   }
@@ -2894,6 +2935,7 @@ let mihomoImportModuleApi = null;
     _actionBusy = true;
     syncImportActions();
     try {
+      renderPlacementOptions();
       await buildImportCandidate();
       _reviewOpen = true;
       setActionStatus('');
@@ -2935,7 +2977,12 @@ let mihomoImportModuleApi = null;
 
   function renderOperationStatus() {
     const op = _configOperations.operation;
-    if (!op || !modalOpen()) return;
+    if (!modalOpen()) return;
+    if (op?.origin !== 'import') {
+      setActionStatus('');
+      $('mihomo-import-recovery')?.classList.add('hidden');
+      return;
+    }
     let message = '';
     let kind = 'info';
     if (op.state === 'saving') message = 'Проверка конфигурации → резервная копия → сохранение…';
@@ -3022,7 +3069,7 @@ let mihomoImportModuleApi = null;
   }
 
   async function recoverImportOperation(action) {
-    if (_actionBusy) return;
+    if (_actionBusy || _configOperations.operation?.origin !== 'import') return;
     let release;
     try {
       release = _configOperations.acquire({ recovery: true });
@@ -3073,7 +3120,7 @@ let mihomoImportModuleApi = null;
     let lines;
     if (kind === 'yaml') lines = candidate.content.split('\n');
     else if (kind === 'import') {
-      lines = ['@@ Добавляемые фрагменты @@'];
+      lines = [candidate.placement === 'replace' ? '@@ Заменяемый узел @@' : '@@ Добавляемые фрагменты @@'];
       (candidate.outputs || []).forEach((output) => {
         const fragment = String(output.content || output.proxy_yaml || '').trimEnd();
         if (!fragment) return;
@@ -3828,6 +3875,23 @@ let mihomoImportModuleApi = null;
     }
 
     wireButton('mihomo-import-review-btn', () => prepareImportReview());
+    modal.querySelectorAll('[data-mi-placement]').forEach(button => button.addEventListener('click', async () => {
+      if (_actionBusy) return;
+      if (button.getAttribute('aria-disabled') === 'true') {
+        setActionStatus('Замена доступна для одного статического узла при наличии узлов в конфиге.', 'warning');
+        return;
+      }
+      if (_placementMode === button.dataset.miPlacement) return;
+      _placementMode = button.dataset.miPlacement;
+      _lastCandidate = null;
+      await prepareImportReview();
+    }));
+    $(IDS.replaceTarget)?.addEventListener('change', async (event) => {
+      if (_actionBusy) return;
+      _replaceTarget = event.target.value;
+      _lastCandidate = null;
+      await prepareImportReview();
+    });
     wireButton('mihomo-import-review-back', () => { _reviewOpen = false; _lastCandidate = null; setSourceLayout(true); });
     wireButton('mihomo-import-resume', () => recoverImportOperation('resume'));
     wireButton('mihomo-import-retry-apply', () => recoverImportOperation('apply'));

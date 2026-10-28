@@ -183,6 +183,17 @@ rule-set:github@domain
             <p class="modal-hint">Источник → Результат и группы → <strong>Проверка изменений</strong></p>
             <section id="mihomo-import-candidate-summary" class="xk-mi-candidate-summary" aria-label="Итог изменений"></section>
             <section id="mihomo-import-review-warning" class="xk-mi-candidate-summary xk-mi-review-warning hidden"></section>
+            <div class="xk-mi-placement" role="group" aria-label="Размещение узлов">
+              <span class="xk-mi-placement-label">Размещение узлов</span>
+              <div class="xk-mi-placement-actions">
+                <button type="button" class="btn-secondary btn-compact" data-mi-placement="start" aria-pressed="false" data-tooltip="Добавить импортируемые узлы перед существующими в секции config.yaml.">В начало</button>
+                <button type="button" class="btn-secondary btn-compact" data-mi-placement="end" aria-pressed="true" data-tooltip="Добавить импортируемые узлы после существующих в секции config.yaml.">В конец</button>
+                <button type="button" class="btn-secondary btn-compact" data-mi-placement="replace" aria-pressed="false" data-tooltip="Заменить выбранный существующий узел. Доступно для одного статического узла.">Заменить</button>
+              </div>
+              <label class="xk-mi-replace-field hidden">Заменить узел
+                <select id="mihomo-import-replace-target" class="xray-log-select xk-mi-control"></select>
+              </label>
+            </div>
             <div class="xk-mi-review-tools">
               <details data-mi-review-view="import"><summary class="btn-secondary btn-compact">Изменения импорта</summary><pre tabindex="0"></pre></details>
               <details data-mi-review-view="file"><summary class="btn-secondary btn-compact">Все изменения файла</summary><pre tabindex="0"></pre></details>

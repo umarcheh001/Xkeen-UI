@@ -944,7 +944,11 @@ function renderNode(group, node) {
   const countryCode = mihomoNodeCountryCode(node.name);
   const displayName = nodeDisplayName(node, countryCode);
   const protocol = [node.type || 'unknown', node.network, node.security].filter(Boolean).join(' · ');
-  const meta = [protocol, providerCopy(node), node.udp === true ? 'UDP' : ''].filter(Boolean).join(' · ');
+  const fullMeta = [protocol, providerCopy(node), node.udp === true ? 'UDP' : ''].filter(Boolean).join(' · ');
+  // Provider count and UDP are useful diagnostics but make the compact tile
+  // compete with its name and latency. Keep them available through the tile
+  // tooltip while the visible line stays focused on connection type.
+  const meta = protocol;
   const endpoint = [node.server, node.port].filter((value) => value !== '' && value != null).join(':');
   const smart = smartWeights[group.name]?.[node.name];
   const smartRank = smart && String(smart.rank || '').trim();
@@ -961,8 +965,8 @@ function renderNode(group, node) {
         ${!selectable || selected || selectPending || selection || selectionDisabled ? 'disabled' : ''}>
         <span class="xk-mihomo-node-main">
           <strong>${fixed ? iconHtml('lock') : ''}${nodeVisualIconHtml(node)}${nodeFlagHtml(countryCode)}<span>${escapeHtml(displayName)}</span></strong>
-          <small>${escapeHtml(meta)}</small>
-          ${endpoint ? `<small class="xk-mihomo-node-endpoint">${escapeHtml(endpoint)}</small>` : ''}
+          <small data-tooltip="${escapeHtml(fullMeta)}">${escapeHtml(meta)}</small>
+          ${endpoint ? `<small class="xk-mihomo-node-endpoint" data-tooltip="${escapeHtml(endpoint)}">${escapeHtml(endpoint)}</small>` : ''}
            ${smartCopy}
         </span>
       </button>

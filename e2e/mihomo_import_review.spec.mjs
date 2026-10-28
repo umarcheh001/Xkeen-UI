@@ -42,6 +42,46 @@ test('review precedes commit, warns about editor changes, and goes back without 
   expect(commits).toBe(0);
 });
 
+test('review lets a single node move to the start or replace a chosen existing node', async ({ page }) => {
+  let committed;
+  await page.route('**/api/mihomo/import/commit', route => {
+    committed = route.request().postDataJSON();
+    return route.fulfill({ json: { ok: true, saved: true, revision: 'saved' } });
+  });
+  await setup(page);
+  await editor(page, CONFIG.replace('proxies: []', 'proxies:\n  - name: Existing\n    type: direct')
+    .replace('proxies: [DIRECT]', 'proxies: [DIRECT, Existing]'));
+  await page.locator('#mihomo-import-review-btn').click();
+  const start = page.locator('[data-mi-placement="start"]');
+  const replace = page.locator('[data-mi-placement="replace"]');
+  await start.click();
+  await expect(start).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#mihomo-import-candidate-summary')).toContainText('в начале');
+  const yaml = page.locator('[data-mi-review-view="yaml"]');
+  await yaml.locator('summary').click();
+  const prepended = await yaml.locator('pre').innerText();
+  expect(prepended.indexOf('name: Review')).toBeLessThan(prepended.indexOf('name: Existing'));
+
+  await replace.click();
+  await expect(replace).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#mihomo-import-replace-target')).toHaveValue('Existing');
+  await expect(page.locator('#mihomo-import-candidate-summary')).toContainText('Заменяемый узел: Existing');
+  await yaml.locator('summary').click();
+  const replaced = await yaml.locator('pre').innerText();
+  expect(replaced).toContain('name: Review');
+  expect(replaced).not.toContain('name: Existing');
+  expect(replaced).toContain('proxies: [DIRECT, "Review"]');
+  await page.locator('#mihomo-import-save-btn').click();
+  expect(committed.content.trimEnd()).toBe(replaced.trimEnd());
+});
+
+test('replacement requires one imported static node', async ({ page }) => {
+  await setup(page, `${LINK}\n${LINK.replace('#Review', '#Second')}`);
+  await page.locator('#mihomo-import-review-btn').click();
+  await expect(page.locator('[data-mi-placement="replace"]')).toHaveAttribute('aria-disabled', 'true');
+  await expect(page.locator('[data-mi-placement="end"]')).toHaveAttribute('aria-pressed', 'true');
+});
+
 test('review separates imported fragments from file diff and keeps YAML inside the dialog', async ({ page }) => {
   await setup(page);
   await editor(page, CONFIG + '# editor-only change\n');
@@ -86,13 +126,15 @@ test('failed process is not reported as applied and status survives close/reopen
     ok: true, saved: true, revision: 'saved', backup: 'backup.yaml', restart_job_id: 'review-job',
   } }));
   await page.route('**/api/restart-job/review-job', route => route.fulfill({ json: {
-    ok: true, status: 'finished', exit_code: 1, error: 'Restart failed', output: 'Restart failed',
+    ok: true, status: 'finished', exit_code: 1, error: 'Restart failed', output: '\u001b[31mRestart failed\u001b[0m',
   } }));
   await setup(page);
   await page.locator('#mihomo-import-review-btn').click();
   await page.locator('#mihomo-import-apply-btn').click();
   await expect(page.locator('#mihomo-import-action-status')).toContainText('применение не удалось');
   await expect(page.locator('#mihomo-import-action-status')).not.toContainText('Применено:');
+  await expect(page.locator('#mihomo-import-action-status')).not.toContainText('[31m');
+  await expect(page.locator('#mihomo-import-action-status')).not.toContainText('[0m');
   await page.locator('#mihomo-import-close-btn').click();
   const menu = page.locator('.xk-mihomo-menu');
   if (!await menu.evaluate(el => el.open)) await menu.locator('summary').click();
@@ -201,7 +243,7 @@ test('recovery handles a saved file with queue failure after a lost first respon
   expect(attempts).toBe(2);
 });
 
-test('unknown toolbar restart can be monitored again from the import dialog', async ({ page }) => {
+test('editor restart status is not shown in the import dialog', async ({ page }) => {
   await setup(page);
   await page.locator('#mihomo-import-close-btn').click();
   await page.route('**/api/mihomo-config?async=1', route => route.fulfill({ status: 202, json: {
@@ -220,12 +262,31 @@ test('unknown toolbar restart can be monitored again from the import dialog', as
   const menu = page.locator('.xk-mihomo-menu');
   if (!await menu.evaluate(el => el.open)) await menu.locator('summary').click();
   await page.locator('#mihomo-import-node-btn').click();
-  await expect(page.locator('#mihomo-import-resume')).toBeVisible();
-  await page.unroute('**/api/restart-job/toolbar-job');
-  await page.route('**/api/restart-job/toolbar-job', route => route.fulfill({ json: { ok: true, status: 'finished', exit_code: 0 } }));
-  await page.route('**/api/mihomo/import/runtime', route => route.fulfill({ json: { ok: true, running: true } }));
-  await page.locator('#mihomo-import-resume').click();
-  await expect(page.locator('#mihomo-import-action-status')).toContainText('Применено');
+  await expect(page.locator('#mihomo-import-action-status')).toBeHidden();
+  await expect(page.locator('#mihomo-import-recovery')).toBeHidden();
+});
+
+test('successful editor apply log does not appear when opening the import dialog', async ({ page }) => {
+  await setup(page);
+  await page.locator('#mihomo-import-close-btn').click();
+  await page.route('**/api/mihomo-config?async=1', route => route.fulfill({ status: 202, json: {
+    ok: true, saved: true, revision: 'saved', restart_job_id: 'editor-job',
+  } }));
+  await page.route('**/api/restart-job/editor-job', route => route.fulfill({ json: {
+    ok: true, status: 'finished', exit_code: 0, output: '\u001b[32mMihomo started\u001b[0m',
+  } }));
+  await page.route('**/api/mihomo/import/runtime', route => route.fulfill({ json: {
+    ok: true, running: true, api_checked: true,
+  } }));
+  await page.evaluate(async () => {
+    const { getMihomoPanelApi } = await import('/static/js/features/mihomo_panel.js');
+    await getMihomoPanelApi().saveAndRestart();
+  });
+  const menu = page.locator('.xk-mihomo-menu');
+  if (!await menu.evaluate(el => el.open)) await menu.locator('summary').click();
+  await page.locator('#mihomo-import-node-btn').click();
+  await expect(page.locator('#mihomo-import-action-status')).toBeHidden();
+  await expect(page.locator('#mihomo-import-recovery')).toBeHidden();
 });
 
 test('HTML in a node name is displayed as text in result and review', async ({ page }) => {

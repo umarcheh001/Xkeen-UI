@@ -76,6 +76,7 @@ from services.amnezia_premium import (
 )
 from services.mihomo_proxy_config import (
     apply_proxy_insert,
+    insert_proxy_into_groups,
     insert_provider_into_groups,
     rename_proxy_in_config,
     replace_proxy_in_config,
@@ -2744,7 +2745,7 @@ def create_mihomo_blueprint(
             raise ValueError("Repeated proxy name.")
         return names, [line for line in body if line.strip()]
 
-    def _batch_patch_without_yaml(content: str, items: list, selected: list):
+    def _batch_patch_without_yaml(content: str, items: list, selected: list, position: str = "end", replace_name: str = ""):
         if selected and re.search(r"(?m)^[ \t]+(?:['\"]proxies['\"]\s*:|proxies\s*:\s*[*&])", content):
             raise ValueError("Unsupported group proxy list without a YAML parser.")
         original_names, original_lines = _batch_proxy_names_without_yaml(content)
@@ -2761,19 +2762,39 @@ def create_mihomo_blueprint(
             if any(not line.startswith(("  ", "#")) for line in lines[1:]):
                 raise ValueError("Proxy fragment contains another top-level item.")
             parsed_names, _ = _batch_proxy_names_without_yaml("proxies:\n" + "\n".join("  " + line for line in lines))
-            if len(parsed_names) != 1 or parsed_names[0] != name or name in names:
+            if len(parsed_names) != 1 or parsed_names[0] != name or (name in names and name != replace_name):
                 raise ValueError("Invalid or repeated proxy name.")
             names.add(name)
             normalized.append((fragment, name))
-        patched = content
-        for fragment, name in normalized:
-            patched = apply_proxy_insert(patched, fragment, name, selected)
+        if position == "replace":
+            if len(normalized) != 1 or replace_name not in original_names:
+                raise ValueError("Replacement requires one existing proxy.")
+            fragment, name = normalized[0]
+            patched, changed = replace_proxy_in_config(content, replace_name, fragment)
+            if not changed:
+                raise ValueError("Proxy to replace was not found.")
+            if name != replace_name:
+                patched = rename_proxy_in_config(patched, replace_name, name)
+            patched = insert_proxy_into_groups(patched, name, selected)
+        else:
+            patched = content
+            ordered = reversed(normalized) if position == "start" else normalized
+            for fragment, name in ordered:
+                patched = apply_proxy_insert(patched, fragment, name, [] if position == "start" else selected, position=position)
+            if position == "start":
+                for _, name in normalized:
+                    patched = insert_proxy_into_groups(patched, name, selected)
         patched_names, patched_lines = _batch_proxy_names_without_yaml(patched)
-        if patched_names != original_names + [name for _, name in normalized]:
+        expected_names = (original_names[:original_names.index(replace_name)] + [normalized[0][1]]
+                          + original_names[original_names.index(replace_name) + 1:] if position == "replace"
+                          else ([name for _, name in normalized] + original_names if position == "start"
+                                else original_names + [name for _, name in normalized]))
+        if patched_names != expected_names:
             raise ValueError("Proxy insertion changed existing items.")
-        old_lines = iter(patched_lines)
-        if any(not any(line == current for current in old_lines) for line in original_lines):
-            raise ValueError("Proxy insertion changed existing content.")
+        if position != "replace":
+            old_lines = iter(patched_lines)
+            if any(not any(line == current for current in old_lines) for line in original_lines):
+                raise ValueError("Proxy insertion changed existing content.")
         return patched
 
     @bp.post("/api/mihomo/patch/apply_insert")
@@ -2835,8 +2856,14 @@ def create_mihomo_blueprint(
         content = _norm_text(data.get("content") or "")
         items = data.get("proxies")
         groups = _norm_groups(data.get("groups"))
+        position = str(data.get("position") or "end").strip().lower()
+        replace_name = str(data.get("replace_name") or "").strip()
         if not isinstance(items, list) or not items or len(items) > 512:
             return _api_error("Ожидается от 1 до 512 узлов.", 400, ok=False)
+        if position not in ("start", "end", "replace") or (position == "replace" and (len(items) != 1 or not replace_name)):
+            return _api_error("Выберите место вставки или один узел для замены.", 400, ok=False)
+        if position != "replace":
+            replace_name = ""
         if re.search(r"(?m)^proxies\s*:\s*\[(?!\s*\])", content):
             return _api_error("Непустая flow-style секция proxies не поддерживается. Используйте блочный YAML.", 400, ok=False)
         known = _norm_groups(_proxy_group_names(content))
@@ -2849,7 +2876,7 @@ def create_mihomo_blueprint(
                 yaml = None
 
             if yaml is None:
-                patched = _batch_patch_without_yaml(content, items, selected)
+                patched = _batch_patch_without_yaml(content, items, selected, position, replace_name)
                 return jsonify({"ok": True, "content": patched, "attached_groups": selected,
                                 "missing_groups": [group for group in groups if group not in known]}), 200
 
@@ -2880,15 +2907,39 @@ def create_mihomo_blueprint(
                 parsed = yaml.safe_load(fragment)
                 if not isinstance(parsed, list) or len(parsed) != 1 or not isinstance(parsed[0], dict):
                     raise ValueError("Каждый элемент должен содержать один узел YAML.")
-                if not name or parsed[0].get("name") != name or name in names:
+                if not name or parsed[0].get("name") != name or (name in names and name != replace_name):
                     raise ValueError("Проверьте имена импортируемых узлов.")
                 names.add(name)
                 normalized.append((fragment, name))
-            patched = content
-            for fragment, name in normalized:
-                patched = apply_proxy_insert(patched, fragment, name, selected)
+            if position == "replace":
+                if not isinstance(original_proxies, list) or replace_name not in [str(proxy.get("name") or "").strip() for proxy in original_proxies if isinstance(proxy, dict)]:
+                    raise ValueError("Узел для замены не найден.")
+                fragment, name = normalized[0]
+                patched, changed = replace_proxy_in_config(content, replace_name, fragment)
+                if not changed:
+                    raise ValueError("Узел для замены не найден.")
+                if name != replace_name:
+                    patched = rename_proxy_in_config(patched, replace_name, name)
+                patched = insert_proxy_into_groups(patched, name, selected)
+            else:
+                patched = content
+                ordered = reversed(normalized) if position == "start" else normalized
+                for fragment, name in ordered:
+                    patched = apply_proxy_insert(patched, fragment, name, [] if position == "start" else selected, position=position)
+                if position == "start":
+                    for _, name in normalized:
+                        patched = insert_proxy_into_groups(patched, name, selected)
             patched_proxies = checked_proxy_section(patched)
-            if patched_proxies[:len(original_proxies)] != original_proxies or len(patched_proxies) != len(original_proxies) + len(normalized):
+            imported_proxies = [yaml.safe_load(fragment)[0] for fragment, _ in normalized]
+            if position == "replace":
+                replace_index = next(i for i, proxy in enumerate(original_proxies)
+                                     if isinstance(proxy, dict) and proxy.get("name") == replace_name)
+                expected_proxies = original_proxies[:replace_index] + imported_proxies + original_proxies[replace_index + 1:]
+            elif position == "start":
+                expected_proxies = imported_proxies + original_proxies
+            else:
+                expected_proxies = original_proxies + imported_proxies
+            if patched_proxies != expected_proxies:
                 raise ValueError("Не удалось сохранить существующие узлы.")
             ok_yaml, _ = validate_yaml_syntax(patched)
             if not ok_yaml:
