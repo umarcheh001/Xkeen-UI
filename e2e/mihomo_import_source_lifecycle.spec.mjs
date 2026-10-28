@@ -225,7 +225,7 @@ for (const [width, height] of [[390, 844], [390, 480], [1280, 600]]) {
   });
 }
 
-test('Escape/backdrop, focus cycle and repeated open use the shared modal manager', async ({ page }) => {
+test('Escape, protected backdrop, focus cycle and repeated open use the shared modal manager', async ({ page }) => {
   await prepare(page);
   await open(page);
   // DOM order (not visual order) ends with Cancel in the shared footer.
@@ -239,6 +239,8 @@ test('Escape/backdrop, focus cycle and repeated open use the shared modal manage
   expect(await page.evaluate(() => window.XKeen.ui.modal.isOpen('mihomo-import-modal'))).toBe(false);
   await open(page);
   await page.locator(MODAL).click({ position: { x: 2, y: 2 } });
+  await expect(page.locator(MODAL)).toBeVisible();
+  await page.locator('#mihomo-import-close-btn').click();
   await expect(page.locator(MODAL)).toBeHidden();
   await open(page);
   await expect(page.locator(`${MODAL} .cm-editor, ${MODAL} .monaco-editor`)).toHaveCount(0);

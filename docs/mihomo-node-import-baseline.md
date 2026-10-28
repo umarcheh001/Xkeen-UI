@@ -141,7 +141,7 @@ Batch measured на настоящем local `apply_insert`, remote parse и reg
 | Resize viewport при открытом модале может закреплять промежуточную геометрию | Mobile → desktop capture; исправляется закрытием/reopen в harness | Этап 3: modal geometry lifecycle |
 | Граница модала в viewport не гарантирует доступность всех действий: на mobile длинные controls перекрываются, кнопка вставки уходит за видимую часть footer | `mobile-dark-amnezia.png`, `mobile-light-fallback.png`; прежний narrow E2E проверяет только frame | Этап 3/8: доступность всех controls и footer, не только ширина окна |
 
-Все это baseline, не новые регрессии. Проверки focus trap, zoom 200%, реальной экранной клавиатуры, всех протоколов в browser, race responses и live router apply **не** объявлены выполненными — их test plan уже находится в этапах 2–8. Отсутствие живого роутера не мешает закрыть inventory-этап.
+Все это baseline, не новые регрессии. Проверки focus trap, реальной экранной клавиатуры, всех протоколов в browser, race responses и live router apply **не** объявлены выполненными — их test plan уже находится в этапах 2–8. Отсутствие живого роутера не мешает закрыть inventory-этап.
 
 ## 7. Результаты проверок
 

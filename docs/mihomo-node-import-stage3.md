@@ -101,6 +101,6 @@ npm run frontend:verify
 - [x] Реальный local E2E, build, source contracts и screenshot QA.
 - [x] План и docs index содержат закрытие этапа, generated inventories синхронизированы.
 
-**Ограничения:** 390×480 — эмуляция уменьшенного viewport, не тест физической iOS/Android экранной клавиатуры. VisualViewport-specific поведение на реальном устройстве, zoom 200% и полный screen-reader audit остаются gate Этапа 8. Просмотрены 17 PNG (contact sheets для всех, полноразмерно ключевые mobile/Monaco/Amnezia/source); все редакторы/списки не прокручивались построчно. Исторические baseline дефекты не переносятся в новые regression expectations. Production save/apply и новый result UI этим этапом не закрыты.
+**Ограничения:** 390×480 — эмуляция уменьшенного viewport, не тест физической iOS/Android экранной клавиатуры. VisualViewport-specific поведение на реальном устройстве не проверено. Просмотрены 17 PNG (contact sheets для всех, полноразмерно ключевые mobile/Monaco/Amnezia/source); все редакторы/списки не прокручивались построчно. Исторические baseline дефекты не переносятся в новые regression expectations. Production save/apply и новый result UI этим этапом не закрыты.
 
 **Следующий этап:** Этап 4 — карточки результата и специальные источники.
