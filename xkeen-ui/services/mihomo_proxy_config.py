@@ -535,7 +535,7 @@ def apply_proxy_insert(
     for idx, line in enumerate(lines):
         stripped = line.lstrip()
         indent = len(line) - len(stripped)
-        if stripped == "proxies:" and indent == 0:
+        if indent == 0 and re.fullmatch(r"proxies\s*:\s*(?:#.*)?", stripped):
             base_indent = line[: len(line) - len(stripped)]
 
             section_end = len(lines)

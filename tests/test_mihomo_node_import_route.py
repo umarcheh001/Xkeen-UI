@@ -120,7 +120,7 @@ def test_import_commit_requires_validation_and_can_queue_explicit_apply(client):
         patch("routes.mihomo.create_command_job", return_value=SimpleNamespace(id="job-1")):
         response = http.post(
             "/api/mihomo/import/commit",
-            json={"content": content, "restart": True},
+            json={"content": content, "restart": True, "base_revision": http.get("/api/mihomo-config").get_json()["revision"]},
         )
 
     assert response.status_code == 202
@@ -144,7 +144,143 @@ def test_import_commit_rejects_stale_file_revision_without_saving(client):
     assert response.get_json()["code"] == "stale_config"
     validate.assert_not_called()
     save.assert_not_called()
-    assert config_path.read_text(encoding="utf-8") == "proxies: []\n"
+
+
+def test_import_commit_requires_file_revision(client):
+    http, _ = client
+    with patch("routes.mihomo.save_config") as save:
+        response = http.post("/api/mihomo/import/commit", json={"content": "proxies: []\n"})
+    assert response.status_code == 409
+    assert response.get_json()["code"] == "revision_required"
+    save.assert_not_called()
+
+
+def test_import_commit_rechecks_revision_after_validation(client):
+    http, config = client
+    revision = http.get("/api/mihomo-config").get_json()["revision"]
+
+    def validate(**_kwargs):
+        config.write_text("proxies: []\n# external writer\n", encoding="utf-8")
+        return "[exit code: 0]"
+
+    with patch("routes.mihomo.validate_config", side_effect=validate), patch("routes.mihomo.save_config", return_value=None) as save:
+        response = http.post("/api/mihomo/import/commit", json={"content": "proxies: []\n# candidate\n", "base_revision": revision})
+    assert response.status_code == 409
+    assert response.get_json()["code"] == "stale_config"
+    save.assert_not_called()
+
+
+def test_batch_patch_is_atomic_and_preserves_group_comments(client):
+    http, config = client
+    content = "proxies: []\nproxy-groups:\n  - name: Main\n    type: select\n    proxies: [DIRECT] # keep\nrules: []\n"
+    response = http.post("/api/mihomo/patch/apply_batch", json={
+        "content": content, "groups": ["Main", "Missing"], "proxies": [
+            {"proxy_name": "One", "proxy_yaml": "- name: One\n  type: direct\n"},
+            {"proxy_name": "Two", "proxy_yaml": "- name: Two\n  type: direct\n"},
+        ],
+    })
+    assert response.status_code == 200
+    data = response.get_json()
+    assert "proxies: [DIRECT, One, Two] # keep" in data["content"]
+    assert data["missing_groups"] == ["Missing"]
+    assert config.read_text(encoding="utf-8") == "proxies: []\n"
+    rejected = http.post("/api/mihomo/patch/apply_batch", json={
+        "content": content, "proxies": [{"proxy_name": "One", "proxy_yaml": "- name: One\n  type: direct\n"}, {"proxy_name": "Bad", "proxy_yaml": "[invalid"}],
+    })
+    assert rejected.status_code == 400
+    assert "content" not in rejected.get_json()
+
+
+def test_batch_patch_rejects_flow_style_instead_of_duplicating_section(client):
+    http, _ = client
+    response = http.post("/api/mihomo/patch/apply_batch", json={
+        "content": "proxies: [{name: Old, type: direct}]\n",
+        "proxies": [{"proxy_name": "New", "proxy_yaml": "- name: New\n  type: direct\n"}],
+    })
+    assert response.status_code == 400
+
+
+def test_retry_apply_does_not_save_the_config_again(client):
+    http, _ = client
+    revision = http.get("/api/mihomo-config").get_json()["revision"]
+    with patch("routes.mihomo.save_config") as save, patch("routes.mihomo.create_command_job", return_value=SimpleNamespace(id="retry-job")):
+        response = http.post("/api/mihomo/import/apply", json={"base_revision": revision})
+    assert response.status_code == 202
+    assert response.get_json()["restart_job_id"] == "retry-job"
+    save.assert_not_called()
+
+
+def test_import_baseline_supports_new_config_without_creating_a_file(client):
+    http, config = client
+    config.unlink()
+    response = http.get("/api/mihomo-config?baseline=1")
+    assert response.status_code == 200
+    assert response.get_json()["exists"] is False
+    assert response.get_json()["revision"]
+    assert not config.exists()
+
+
+def test_batch_patch_preserves_nodes_under_a_commented_section_header(client):
+    http, _ = client
+    content = "proxies: # existing nodes\n  - name: old\n    type: direct\nproxy-groups: []\n"
+    response = http.post("/api/mihomo/patch/apply_batch", json={"content": content, "proxies": [
+        {"proxy_name": "new", "proxy_yaml": "- name: new\n  type: direct\n"},
+    ]})
+    assert response.status_code == 200
+    import yaml
+    result = response.get_json()["content"]
+    assert [node["name"] for node in yaml.safe_load(result)["proxies"]] == ["old", "new"]
+    assert result.count("proxies:") == 1
+    assert "# existing nodes" in result
+
+
+def test_import_commit_replay_does_not_save_or_restart_twice(client):
+    http, _ = client
+    body = {"content": "proxies: []\n", "restart": True, "operation_id": "same-import",
+            "base_revision": http.get("/api/mihomo-config").get_json()["revision"]}
+    with patch("routes.mihomo.validate_config", return_value="[exit code: 0]"), \
+        patch("routes.mihomo.ensure_mihomo_layout"), \
+        patch("routes.mihomo.save_config", return_value=None) as save, \
+        patch("routes.mihomo.create_command_job", return_value=SimpleNamespace(id="one-job")) as job:
+        first = http.post("/api/mihomo/import/commit", json=body)
+        second = http.post("/api/mihomo/import/commit", json=body)
+    assert first.status_code == second.status_code == 202
+    assert second.get_json()["restart_job_id"] == "one-job"
+    assert save.call_count == job.call_count == 1
+
+
+def test_retry_apply_replay_does_not_schedule_twice(client):
+    http, _ = client
+    body = {"base_revision": http.get("/api/mihomo-config").get_json()["revision"], "operation_id": "same-apply"}
+    with patch("routes.mihomo.create_command_job", return_value=SimpleNamespace(id="one-job")) as job:
+        http.post("/api/mihomo/import/apply", json=body)
+        second = http.post("/api/mihomo/import/apply", json=body)
+    assert second.status_code == 202
+    assert job.call_count == 1
+
+
+@pytest.mark.parametrize("log,status", [("[exit code: 1]", 400), ("runner unavailable", 503)])
+def test_import_validation_failure_never_writes_or_restarts(client, log, status):
+    http, _ = client
+    revision = http.get("/api/mihomo-config").get_json()["revision"]
+    with patch("routes.mihomo.validate_config", return_value=log), \
+        patch("routes.mihomo.save_config") as save, patch("routes.mihomo.create_command_job") as job:
+        response = http.post("/api/mihomo/import/commit", json={"content": "proxies: []\n", "base_revision": revision, "restart": True})
+    assert response.status_code == status
+    save.assert_not_called()
+    job.assert_not_called()
+
+
+def test_import_save_failure_does_not_schedule_restart(client):
+    http, _ = client
+    revision = http.get("/api/mihomo-config").get_json()["revision"]
+    with patch("routes.mihomo.validate_config", return_value="[exit code: 0]"), \
+        patch("routes.mihomo.ensure_mihomo_layout"), \
+        patch("routes.mihomo.save_config", side_effect=OSError("backup failed")), \
+        patch("routes.mihomo.create_command_job") as job:
+        response = http.post("/api/mihomo/import/commit", json={"content": "proxies: []\n", "base_revision": revision, "restart": True})
+    assert response.status_code == 400
+    job.assert_not_called()
 
 
 def test_parse_amnezia_premium_key_returns_mihomo_proxy(client):

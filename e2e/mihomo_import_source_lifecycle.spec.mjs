@@ -35,8 +35,8 @@ async function open(page) {
 async function parse(page) {
   await page.locator('#mihomo-import-input').fill(LINK);
   await page.locator('#mihomo-import-parse-btn').click();
-  await expect(page.locator('#mihomo-import-insert-btn')).toBeVisible();
-  await expect(page.locator('#mihomo-import-insert-btn')).toBeEnabled();
+  await expect(page.locator('#mihomo-import-review-btn')).toBeVisible();
+  await expect(page.locator('#mihomo-import-review-btn')).toBeEnabled();
 }
 
 async function visibleInViewport(locator) {
@@ -89,7 +89,7 @@ test('source/result have no preview runtime; disclosure loads CM and close reset
   await expect(page.locator(`${MODAL} .cm-editor, ${MODAL} .monaco-editor`)).toHaveCount(0);
   await open(page);
   await expect(page.locator('#mihomo-import-input')).toHaveValue(LINK);
-  await expect(page.locator('#mihomo-import-insert-btn')).toBeHidden();
+  await expect(page.locator('#mihomo-import-review-btn')).toBeHidden();
   expect((await page.locator(`${MODAL} .modal-content`).boundingBox()).width).toBeLessThanOrEqual(720);
 });
 
@@ -211,16 +211,16 @@ for (const [width, height] of [[390, 844], [390, 480], [1280, 600]]) {
     await open(page);
     await page.locator('#mihomo-import-input').fill(LINK);
     await page.locator('#mihomo-import-input').press('Control+Enter');
-    await expect(page.locator('#mihomo-import-insert-btn')).toBeEnabled();
-    await visibleInViewport(page.locator('#mihomo-import-insert-btn'));
+    await expect(page.locator('#mihomo-import-review-btn')).toBeEnabled();
+    await visibleInViewport(page.locator('#mihomo-import-review-btn'));
     await capture(page, `result-${width}x${height}`, testInfo);
     await page.locator('#mihomo-import-preview-toggle').click();
-    await visibleInViewport(page.locator('#mihomo-import-insert-btn'));
+    await visibleInViewport(page.locator('#mihomo-import-review-btn'));
     if (width < 980) {
       await page.locator('#mihomo-import-preview-panel').scrollIntoViewIfNeeded();
       await expect(page.locator(`${MODAL} .cm-editor`)).toBeVisible();
       await capture(page, `preview-${width}x${height}`, testInfo);
-      await visibleInViewport(page.locator('#mihomo-import-insert-btn'));
+      await visibleInViewport(page.locator('#mihomo-import-review-btn'));
     }
   });
 }
@@ -266,7 +266,7 @@ test('remote source is requested only on explicit parse; busy hotkeys do not dup
   await page.locator('#mihomo-import-input').press('Control+Enter');
   expect(requests).toBe(1);
   release();
-  await expect(page.locator('#mihomo-import-insert-btn')).toBeEnabled();
+  await expect(page.locator('#mihomo-import-review-btn')).toBeEnabled();
 });
 
 test('managed subscriptions remain reachable from the source without loading preview', async ({ page }) => {
@@ -299,7 +299,7 @@ test('VPN formats send the entire textarea; source errors retain the editable in
   await page.locator('#mihomo-import-mode').selectOption('wireguard');
   await page.locator('#mihomo-import-input').fill(source);
   await page.locator('#mihomo-import-parse-btn').click();
-  await expect(page.locator('#mihomo-import-insert-btn')).toBeEnabled();
+  await expect(page.locator('#mihomo-import-review-btn')).toBeEnabled();
   expect(bodies).toEqual([{ text: source }]);
   await page.locator('#mihomo-import-mode').selectOption('proxy');
   await expect(page.locator('#mihomo-import-input')).toHaveValue(source);
@@ -307,7 +307,7 @@ test('VPN formats send the entire textarea; source errors retain the editable in
   await expect(page.locator('#mihomo-import-groups-block')).toBeHidden();
   await page.locator('#mihomo-import-input').fill(`${LINK}\n${LINK.replace('#Stage3', '#Second')}`);
   await page.locator('#mihomo-import-parse-btn').click();
-  await expect(page.locator('#mihomo-import-insert-btn')).toBeEnabled();
+  await expect(page.locator('#mihomo-import-review-btn')).toBeEnabled();
   await page.locator('#mihomo-import-preview-toggle').click();
   await expect(page.locator(`${MODAL} .cm-content`)).toContainText('Second');
 });
@@ -379,6 +379,7 @@ test('subscription destination switches provider use links and supported static 
       missing_groups: [],
     } });
   });
+  await page.locator('#mihomo-import-review-btn').click();
   await page.locator('#mihomo-import-insert-btn').click();
   await expect.poll(() => attachBodies.length).toBe(1);
   expect(attachBodies[0].providers).toEqual(['chosen-provider']);
@@ -411,7 +412,7 @@ test('ordinary provider fallback handles fulfilled not_xray_json without eager p
   await open(page);
   await page.locator('#mihomo-import-input').fill('https://provider.example/subscription');
   await page.locator('#mihomo-import-parse-btn').click();
-  await expect(page.locator('#mihomo-import-insert-btn')).toBeEnabled();
+  await expect(page.locator('#mihomo-import-review-btn')).toBeEnabled();
   expect(probes).toBe(1);
   await expect(page.locator('#mihomo-import-groups-block')).toBeVisible();
   await expect(page.locator('#mihomo-import-groups-title')).toHaveText('Подключить provider к группам');
@@ -425,6 +426,7 @@ test('candidate actions distinguish draft, save-only, and apply outcomes', async
   await open(page);
   await page.locator('#mihomo-import-input').fill(LINK);
   await page.locator('#mihomo-import-parse-btn').click();
+  await page.locator('#mihomo-import-review-btn').click();
   await expect(page.locator('#mihomo-import-save-btn')).toBeVisible();
   await expect(page.locator('#mihomo-import-apply-btn')).toBeVisible();
 
@@ -433,11 +435,11 @@ test('candidate actions distinguish draft, save-only, and apply outcomes', async
   }));
   await page.locator('#mihomo-import-save-btn').click();
   await expect(page.locator('#mihomo-import-action-status')).toContainText('Файл сохранён без перезапуска');
-  await expect(page.locator('#mihomo-import-candidate-summary')).toContainText('Итог candidate');
+  await expect(page.locator('#mihomo-import-candidate-summary')).toContainText('Будет добавлено');
 
   await page.unroute('**/api/mihomo/import/commit');
   const requests = [];
-  await page.route('**/api/mihomo/import/commit', (route) => {
+  await page.route('**/api/mihomo/import/apply', (route) => {
     requests.push(route.request().postDataJSON());
     return route.fulfill({ status: 202, json: {
       ok: true, saved: true, backup: 'mihomo-apply.yaml',
@@ -447,7 +449,9 @@ test('candidate actions distinguish draft, save-only, and apply outcomes', async
   await page.route('**/api/restart-job/job-stage6', (route) => route.fulfill({
     json: { ok: true, status: 'finished', exit_code: 0, output: 'restart ok' },
   }));
+  await page.route('**/api/mihomo/import/runtime', route => route.fulfill({ json: { ok: true, running: true, api_checked: false } }));
   await page.locator('#mihomo-import-apply-btn').click();
   await expect(page.locator('#mihomo-import-action-status')).toContainText('Применено');
-  expect(requests[0].restart).toBe(true);
+  expect(requests[0].base_revision).toBe('saved-revision');
+  expect(requests[0].content).toBeUndefined();
 });

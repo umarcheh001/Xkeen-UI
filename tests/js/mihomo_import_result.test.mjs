@@ -101,3 +101,12 @@ test('safe domain and diagnostics redact credentials and source paths', () => {
   assert.match(message, /источник sub\.example\.org/);
   assert.doesNotMatch(message, /user:pass|token=x|private-value/);
 });
+test('large result lists disclose hidden count without truncating the import', async () => {
+  const model = await import('../../xkeen-ui/static/js/features/mihomo_import_result.js');
+  assert.equal(typeof model.limitMihomoImportItems, 'function');
+  const input = Array.from({ length: 60 }, (_, i) => ({ title: String(i) }));
+  const result = model.limitMihomoImportItems(input);
+  assert.equal(result.items.length, 50);
+  assert.equal(result.hidden, 10);
+  assert.equal(input.length, 60);
+});

@@ -23,7 +23,7 @@ def test_stage6_has_three_explicit_actions_and_candidate_summary():
         "buildImportCandidate",
         "draftCandidateToEditor",
         "commitCandidate(restart)",
-        "base_revision: candidate.baseRevision",
+        "baseRevision: candidate.baseRevision",
         "restart: restart === true",
         "registerImportedXraySubscriptions(candidate.content",
     ):

@@ -44,6 +44,7 @@ import ipaddress
 import os
 import re
 import secrets
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -1145,7 +1146,32 @@ def create_mihomo_blueprint(
     def _config_revision(content: str) -> str:
         return hashlib.sha256(_norm_text(content).encode("utf-8")).hexdigest()
 
-    def _commit_raw_mihomo_config(
+    config_commit_lock = threading.RLock()
+    commit_results: dict[str, tuple[str, dict, int]] = {}
+
+    def _commit_raw_mihomo_config(content: str, **kwargs):
+        if not config_commit_lock.acquire(blocking=False):
+            return _mihomo_error("Операция с конфигом уже выполняется.", 409, code="config_busy")
+        try:
+            operation_id = str(kwargs.pop("operation_id", "") or "")[:128]
+            fingerprint = _config_revision(str(content) + str(kwargs.get("restart")))
+            if operation_id and operation_id in commit_results:
+                old_fingerprint, payload, status = commit_results[operation_id]
+                if old_fingerprint != fingerprint:
+                    return _mihomo_error("Изменилось содержимое операции.", 409, code="operation_conflict")
+                return jsonify(payload), status
+            result = _commit_raw_mihomo_config_unlocked(content, **kwargs)
+            body, status = result if isinstance(result, tuple) else (result, 200)
+            payload = body.get_json() if hasattr(body, "get_json") else {}
+            if operation_id and payload.get("saved"):
+                if len(commit_results) >= 64:
+                    commit_results.pop(next(iter(commit_results)))
+                commit_results[operation_id] = fingerprint, payload, status
+            return result
+        finally:
+            config_commit_lock.release()
+
+    def _commit_raw_mihomo_config_unlocked(
         content: str,
         *,
         restart: bool,
@@ -1188,6 +1214,13 @@ def create_mihomo_blueprint(
                     hint="Исправьте ошибки в candidate и повторите попытку.",
                     validation_log=validation_log,
                 )
+
+        # Validation can take seconds. Detect an external writer once more
+        # immediately before backup/save; panel writers share the lock above.
+        if expected and not secrets.compare_digest(
+            expected, _config_revision(load_text(MIHOMO_CONFIG_FILE, default="") or "")
+        ):
+            return _mihomo_error("config.yaml изменился во время проверки.", 409, code="stale_config")
 
         try:
             ensure_mihomo_layout()
@@ -1233,6 +1266,8 @@ def create_mihomo_blueprint(
     def api_get_mihomo_config():
         content = load_text(MIHOMO_CONFIG_FILE, default=None)
         if content is None:
+            if request.args.get("baseline") == "1":
+                return jsonify({"ok": True, "exists": False, "content": "", "revision": _config_revision("")}), 200
             return _mihomo_error("Файл config.yaml не найден.", 404, code="config_not_found")
         return jsonify({"ok": True, "content": content, "revision": _config_revision(content)}), 200
 
@@ -1271,12 +1306,47 @@ def create_mihomo_blueprint(
         content = data.get("content", "")
         restart = bool(data.get("restart", False))
         expected_revision = str(data.get("base_revision") or data.get("baseRevision") or "")
+        if not expected_revision:
+            return _mihomo_error("Подготовьте проверку изменений заново: нет ревизии файла.", 409, code="revision_required")
         return _commit_raw_mihomo_config(
             content,
             restart=restart,
             expected_revision=expected_revision,
             validate_core=True,
+            operation_id=data.get("operation_id"),
         )
+
+    @bp.get("/api/mihomo/import/runtime")
+    def api_mihomo_import_runtime():
+        """Process verification is separate from controller API availability."""
+        return jsonify({"ok": True, "running": core_runtime().has("mihomo"), "api_checked": False})
+
+    @bp.post("/api/mihomo/import/apply")
+    def api_mihomo_import_apply():
+        """Retry only restart after a confirmed save, without inserting/saving."""
+        data = request.get_json(silent=True) or {}
+        expected = str(data.get("base_revision") or "")
+        operation_id = "apply:" + str(data.get("operation_id") or "")[:128] if data.get("operation_id") else ""
+        with config_commit_lock:
+            if operation_id and operation_id in commit_results:
+                old_expected, payload, status = commit_results[operation_id]
+                if old_expected != expected:
+                    return _mihomo_error("Изменилась ревизия операции.", 409, code="operation_conflict")
+                return jsonify(payload), status
+            if not expected or not secrets.compare_digest(
+                expected, _config_revision(load_text(MIHOMO_CONFIG_FILE, default="") or "")
+            ):
+                return _mihomo_error("Файл изменился. Проверьте его перед применением.", 409, code="stale_config")
+            try:
+                job = create_command_job(flag="-restart", stdin_data=None, cmd=None, use_pty=True)
+            except Exception:
+                return _mihomo_error("Не удалось запустить применение сохранённого файла.", 503, code="restart_schedule_failed")
+            payload = {"ok": True, "saved": True, "restart_job_id": job.id}
+            if operation_id:
+                if len(commit_results) >= 64:
+                    commit_results.pop(next(iter(commit_results)))
+                commit_results[operation_id] = expected, payload, 202
+            return jsonify(payload), 202
 
     def _mihomo_clash_setup_input() -> tuple[str, Any]:
         supplied = load_text(MIHOMO_CONFIG_FILE, default=None)
@@ -2665,6 +2735,51 @@ def create_mihomo_blueprint(
                 exc=e,
                 status=400,
             )
+
+    @bp.post("/api/mihomo/patch/apply_batch")
+    def api_mihomo_patch_apply_batch():
+        """Patch already parsed proxies atomically; never fetch or issue keys."""
+        guard = _patch_guard()
+        if guard is not None:
+            return guard
+        data = request.get_json(silent=True) or {}
+        content = _norm_text(data.get("content") or "")
+        items = data.get("proxies")
+        groups = _norm_groups(data.get("groups"))
+        if not isinstance(items, list) or not items or len(items) > 512:
+            return _api_error("Ожидается от 1 до 512 узлов.", 400, ok=False)
+        if re.search(r"(?m)^proxies\s*:\s*\[(?!\s*\])", content):
+            return _api_error("Непустая flow-style секция proxies не поддерживается. Используйте блочный YAML.", 400, ok=False)
+        known = _norm_groups(_proxy_group_names(content))
+        selected = [group for group in groups if group in known]
+        try:
+            # Validate every item before producing any result. No file writes.
+            import yaml
+
+            normalized = []
+            names = set()
+            for item in items:
+                if not isinstance(item, dict):
+                    raise ValueError("Некорректный элемент списка узлов.")
+                fragment = _norm_text(item.get("proxy_yaml") or "")
+                name = str(item.get("proxy_name") or "").strip()
+                parsed = yaml.safe_load(fragment)
+                if not isinstance(parsed, list) or len(parsed) != 1 or not isinstance(parsed[0], dict):
+                    raise ValueError("Каждый элемент должен содержать один узел YAML.")
+                if not name or parsed[0].get("name") != name or name in names:
+                    raise ValueError("Проверьте имена импортируемых узлов.")
+                names.add(name)
+                normalized.append((fragment, name))
+            patched = content
+            for fragment, name in normalized:
+                patched = apply_proxy_insert(patched, fragment, name, selected)
+            ok_yaml, _ = validate_yaml_syntax(patched)
+            if not ok_yaml:
+                raise ValueError("Результат вставки содержит некорректный YAML.")
+            return jsonify({"ok": True, "content": patched, "attached_groups": selected,
+                            "missing_groups": [group for group in groups if group not in known]}), 200
+        except Exception:
+            return _api_error("Не удалось подготовить список узлов. Проверьте YAML и имена.", 400, ok=False)
 
     @bp.post("/api/mihomo/patch/attach_providers")
     def api_mihomo_patch_attach_providers():

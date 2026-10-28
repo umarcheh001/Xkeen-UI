@@ -15,7 +15,7 @@ def test_import_feature_uses_state_and_transport_adapters():
     assert "fetch('/api/" not in IMPORT
     assert "fetch(\"/api/" not in IMPORT
     assert "return _importApi.postJSON('/api/mihomo/provider/probe'" in IMPORT
-    assert "await _importApi.postJSON('/api/mihomo/patch/apply_insert'" in IMPORT
+    assert "await _importApi.postJSON('/api/mihomo/patch/apply_batch'" in IMPORT
 
 
 def test_import_feature_invalidates_input_and_mode_changes():

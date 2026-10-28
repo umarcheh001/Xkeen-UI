@@ -310,3 +310,8 @@ export function createMihomoImportPresentation({
     cards,
   };
 }
+/** Bound rendering only: parser outputs remain intact for the full import. */
+export function limitMihomoImportItems(items, limit = 50) {
+  const all = Array.isArray(items) ? items : [];
+  return { items: all.slice(0, limit), hidden: Math.max(0, all.length - limit) };
+}

@@ -23,7 +23,8 @@ import {
   updateMihomoImportContext,
 } from './mihomo_import_state.js';
 import { createMihomoImportApi } from './mihomo_import_api.js';
-import { createMihomoImportPresentation } from './mihomo_import_result.js';
+import { getMihomoConfigOperations } from './mihomo_config_operations.js';
+import { createMihomoImportPresentation, redactMihomoImportDiagnostic, limitMihomoImportItems } from './mihomo_import_result.js';
 
 let mihomoImportModuleApi = null;
 
@@ -119,6 +120,10 @@ let mihomoImportModuleApi = null;
   let _baseFileRevision = '';
   let _actionBusy = false;
   let _lastCandidate = null;
+  let _reviewOpen = false;
+  let _baseFileContent = '';
+  let _fileBaselinePromise = null;
+  const _configOperations = getMihomoConfigOperations();
   const _importState = createMihomoImportState();
   const _importApi = createMihomoImportApi({ getCoreHttp: getMihomoCoreHttpApi });
 
@@ -393,8 +398,12 @@ let mihomoImportModuleApi = null;
       _previewOpen = false;
       _previewGeneration += 1;
     }
-    const expanded = hasResult && _previewOpen;
-    const layout = expanded ? 'preview' : (hasResult ? 'result' : 'source');
+    const expanded = hasResult && _previewOpen && !_reviewOpen;
+    const layout = _reviewOpen ? 'review' : (expanded ? 'preview' : (hasResult ? 'result' : 'source'));
+    modal.querySelector('.xk-mi-grid')?.classList.toggle('hidden', _reviewOpen);
+    $('mihomo-import-review')?.classList.toggle('hidden', !_reviewOpen);
+    const title = $('mihomo-import-title');
+    if (title) title.textContent = _reviewOpen ? 'Проверка изменений' : 'Добавить узлы в Mihomo';
     const changed = modal.dataset.miLayout !== layout;
     modal.dataset.miLayout = layout;
     // The compact form is draggable too. It stores only its position so a
@@ -439,12 +448,13 @@ let mihomoImportModuleApi = null;
       parse.classList.toggle('btn-secondary', hasResult);
     }
     if (insert) {
-      insert.hidden = !hasResult;
+      insert.hidden = !hasResult || !_reviewOpen;
+      insert.classList.toggle('hidden', insert.hidden);
       insert.disabled = busy || _actionBusy || !hasResult;
     }
     [save, apply].forEach((button) => {
       if (!button) return;
-      button.classList.toggle('hidden', !hasResult);
+      button.classList.toggle('hidden', !hasResult || !_reviewOpen);
       button.disabled = busy || _actionBusy || !hasResult;
     });
     if (staticBtn) {
@@ -452,6 +462,13 @@ let mihomoImportModuleApi = null;
       staticBtn.hidden = hasResult || getImportMode() === 'amnezia-premium' || !isBackendSubscriptionLink(source);
       staticBtn.disabled = busy;
     }
+    parse?.classList.toggle('hidden', _reviewOpen);
+    const review = $('mihomo-import-review-btn');
+    review?.classList.toggle('hidden', !hasResult || _reviewOpen);
+    if (review) review.disabled = busy || _actionBusy || !hasResult;
+    $('mihomo-import-review-back')?.classList.toggle('hidden', !_reviewOpen);
+    $(IDS.btnCancel)?.classList.toggle('hidden', _reviewOpen);
+    if (_reviewOpen && staticBtn) staticBtn.hidden = true;
     setDestinationUiFromResult();
     updateGroupsUiForDestination();
   }
@@ -602,7 +619,8 @@ let mihomoImportModuleApi = null;
 
     const list = document.createElement('div');
     list.className = 'xk-mi-result-list';
-    (model.cards || []).forEach((card) => {
+    const visibleCards = limitMihomoImportItems(model.cards);
+    visibleCards.items.forEach((card) => {
       const item = document.createElement('article');
       item.className = 'xk-mi-result-card';
       const cardHead = document.createElement('div');
@@ -629,6 +647,7 @@ let mihomoImportModuleApi = null;
       list.appendChild(item);
     });
     if (list.childElementCount) host.appendChild(list);
+    if (visibleCards.hidden) appendResultCardText(host, 'modal-hint', `Скрыто карточек: ${visibleCards.hidden}. В импорт войдут все распознанные узлы.`);
 
     if (Array.isArray(model.diagnostics) && model.diagnostics.length) {
       const diagnostics = document.createElement('div');
@@ -1837,6 +1856,7 @@ let mihomoImportModuleApi = null;
     if (!modal) return;
     const manager = getMihomoModalApi();
     if (!show) {
+      _reviewOpen = false;
       resetMihomoImportState(_importState);
       _lastResult = null;
       _parseOperation = null;
@@ -1844,6 +1864,9 @@ let mihomoImportModuleApi = null;
       setActionStatus('');
       _previewOpen = false;
       _previewGeneration += 1;
+      _previewResizeObserver?.disconnect();
+      if (_previewLayoutRaf) cancelAnimationFrame(_previewLayoutRaf);
+      _previewLayoutRaf = 0;
       try { disposePreviewMonaco(); } catch (e) {}
       try { disposeCodeMirrorEditor(_previewCm); } catch (e) {}
       _previewCm = null;
@@ -1870,13 +1893,17 @@ let mihomoImportModuleApi = null;
 
     if (show) {
       // reset
+      _reviewOpen = false;
       resetMihomoImportState(_importState);
       _lastResult = null;
       _parseOperation = null;
       _lastCandidate = null;
       _baseFileRevision = '';
       setActionStatus('');
-      void getMihomoFileRevision().then((revision) => { if (modalOpen()) _baseFileRevision = revision; });
+      _baseFileContent = '';
+      _fileBaselinePromise = getMihomoFileRevision();
+      if (_previewResizeObserver) _previewResizeObserver.observe(modal.querySelector('.modal-content'));
+      renderOperationStatus();
       setStatus('', false);
       setHint('');
       setPreview('');
@@ -2697,21 +2724,6 @@ let mihomoImportModuleApi = null;
     return txt;
   }
 
-  async function applyInsertProxy(txt, proxyOut, groups) {
-    const body = {
-      content: String(txt || ''),
-      proxy_yaml: String(proxyOut && proxyOut.content ? proxyOut.content : ''),
-      proxy_name: String((proxyOut && (proxyOut.proxy_name || proxyOut.proxyName)) || '').trim(),
-      groups: Array.isArray(groups) ? groups : [],
-    };
-
-    const data = await _importApi.postJSON('/api/mihomo/patch/apply_insert', body);
-    return {
-      content: String(data.content || ''),
-      missingGroups: Array.isArray(data.missing_groups) ? data.missing_groups : [],
-    };
-  }
-
   async function attachProvidersToGroups(txt, providerOutputs, groups) {
     const providers = (providerOutputs || [])
       .map((output) => String(output && output.provider_name || '').trim())
@@ -2730,8 +2742,14 @@ let mihomoImportModuleApi = null;
 
   async function getMihomoFileRevision() {
     try {
-      const data = await _importApi.requestJSON('/api/mihomo-config', { method: 'GET' });
-      if (data && data.ok && data.revision) return String(data.revision);
+      const session = _importState.sessionId;
+      const data = await _importApi.requestJSON('/api/mihomo-config?baseline=1', { method: 'GET' });
+      if (session !== _importState.sessionId) return '';
+      if (data && data.ok && data.revision) {
+        _baseFileContent = String(data.content || '');
+        _baseFileRevision = String(data.revision);
+        return _baseFileRevision;
+      }
     } catch (e) {}
     return '';
   }
@@ -2746,17 +2764,24 @@ let mihomoImportModuleApi = null;
     }
     const title = document.createElement('div');
     title.className = 'xk-mi-candidate-title';
-    title.textContent = 'Итог candidate';
+    title.textContent = 'Будет добавлено';
     const details = document.createElement('div');
     details.className = 'xk-mi-candidate-details';
     details.textContent = [
-      `Добавление в: ${candidate.destinations.join(' + ') || 'config.yaml'}`,
+      `${candidate.outputs.length} ${pluralRu(candidate.outputs.length, ['элемент', 'элемента', 'элементов'])} → ${candidate.destinations.join(' + ') || 'config.yaml'}`,
+      candidate.outputs.slice(0, 5).map(output => output.proxy_name || output.provider_name || '').filter(Boolean).join(', '),
       `Групп: ${candidate.groups.length ? candidate.groups.join(', ') : 'не выбраны'}`,
       candidate.missingGroups.length ? `Неизвестные группы: ${candidate.missingGroups.join(', ')}` : '',
-      candidate.editorDirty ? 'Candidate включает текущие несохранённые правки редактора.' : '',
-    ].filter(Boolean).join(' · ');
+      'Доступность серверов не проверялась.',
+    ].filter(Boolean).join('\n');
     host.append(title, details);
     host.classList.remove('hidden');
+    const warning = $('mihomo-import-review-warning');
+    if (warning) {
+      warning.textContent = candidate.editorDirty ? 'В редакторе есть несохранённые правки. При сохранении они войдут в config.yaml вместе с новым узлом. Перед записью проверим весь конфиг и создадим резервную копию.' : '';
+      warning.classList.toggle('hidden', !candidate.editorDirty);
+    }
+    document.querySelectorAll('[data-mi-review-view]').forEach(details => { details.open = false; details.querySelector('pre').textContent = ''; });
   }
 
   function setActionStatus(message, kind = 'info', busy = false) {
@@ -2779,6 +2804,9 @@ let mihomoImportModuleApi = null;
     }
     if (_selectedDestination === 'provider') applyProviderSettingsFromUi();
     const sourceEditorContent = getEditorText() || '';
+    const context = importContext();
+    const result = _lastResult;
+    const session = _importState.sessionId;
     let content = sourceEditorContent;
     const selectedOutputs = currentDestinationOutputs();
     const providerOutputs = selectedOutputs.filter((output) => output.type === 'proxy-provider');
@@ -2786,10 +2814,13 @@ let mihomoImportModuleApi = null;
     const groups = readSelectedGroupsFromUi();
     const proxies = selectedOutputs.filter((output) => output.type === 'proxy');
     const missingGroups = [];
-    for (const proxy of proxies) {
-      const inserted = await applyInsertProxy(content, proxy, groups);
-      content = inserted.content;
-      missingGroups.push(...inserted.missingGroups);
+    if (proxies.length > 512) throw new Error('За один импорт поддерживается не более 512 узлов. Разделите подписку на части.');
+    if (proxies.length) {
+      const inserted = await _importApi.postJSON('/api/mihomo/patch/apply_batch', {
+        content, groups, proxies: proxies.map(proxy => ({ proxy_yaml: proxy.content, proxy_name: proxy.proxy_name || proxy.proxyName })),
+      });
+      content = String(inserted.content || '');
+      missingGroups.push(...(inserted.missing_groups || []));
     }
     if (providerOutputs.length) {
       const attached = await attachProvidersToGroups(content, providerOutputs, groups);
@@ -2798,7 +2829,12 @@ let mihomoImportModuleApi = null;
     }
     const uniqueMissingGroups = uniqueStrings(missingGroups);
     const editorDirty = !!getMihomoPanelApi()?.isEditorDirty?.();
+    await _fileBaselinePromise;
     if (!_baseFileRevision) _baseFileRevision = await getMihomoFileRevision();
+    if (!_baseFileRevision) throw new Error('Не удалось прочитать файл на роутере. Повторите проверку.');
+    if (session !== _importState.sessionId || result !== _lastResult || !_configOperations.isCurrent({ sourceEditorContent, context }, getEditorText(), importContext())) {
+      throw new Error('Редактор или настройки изменились. Повторите проверку изменений.');
+    }
     const candidate = {
       content,
       destinations: Array.from(new Set(selectedOutputs.map((output) => output.type === 'proxy-provider' ? 'proxy-providers' : 'proxies'))),
@@ -2808,6 +2844,10 @@ let mihomoImportModuleApi = null;
       outputs: selectedOutputs,
       baseRevision: _baseFileRevision,
       sourceEditorContent,
+      context,
+      baseFileContent: _baseFileContent,
+      registrations: importedRegistrationIntents(selectedOutputs, groups),
+      operationId: crypto.randomUUID(),
     };
     _lastCandidate = candidate;
     updateMihomoImportContext(_importState, {
@@ -2819,7 +2859,10 @@ let mihomoImportModuleApi = null;
   }
 
   async function draftCandidateToEditor() {
-    const candidate = await buildImportCandidate();
+    if (!_reviewOpen) return prepareImportReview();
+    const candidate = await checkedCandidate();
+    if (!candidate) return;
+    _configOperations.addPending(candidate.registrations);
     setEditorText(candidate.content);
     refreshEditor();
     try { maybePersistGroupsSelection(); } catch (e) {}
@@ -2833,140 +2876,207 @@ let mihomoImportModuleApi = null;
     return candidate;
   }
 
-  async function commitCandidate(restart) {
-    if (_actionBusy) return false;
-    _actionBusy = true;
-    const saveBtn = $(IDS.btnSave);
-    const applyBtn = $(IDS.btnApply);
-    [saveBtn, applyBtn].forEach((button) => {
-      if (button) button.disabled = true;
-    });
-    try {
-      const candidate = _lastCandidate || await buildImportCandidate();
-      setActionStatus(restart ? 'Проверка candidate → backup/сохранение → restart job…' : 'Проверка candidate → backup/сохранение…', 'info', true);
-      const data = await _importApi.requestJSON('/api/mihomo/import/commit', {
-        method: 'POST',
-        body: {
-          content: candidate.content,
-          restart: restart === true,
-          base_revision: candidate.baseRevision,
-        },
-      });
-      if (!data || !data.ok) {
-        const message = data && data.error ? String(data.error) : 'Не удалось сохранить candidate.';
-        setActionStatus(message, 'error');
-        return false;
-      }
 
-      let registrationWarning = '';
-      try {
-        const registrations = await registerImportedXraySubscriptions(candidate.content, candidate.groups);
-        if (registrations.length) {
-          await loadManagedXraySubscriptions(true);
-        }
-      } catch (error) {
-        registrationWarning = ` Автообновление не зарегистрировано: ${error && error.message ? error.message : String(error || 'ошибка')}`;
-      }
-
-      const editorUnchanged = String(getEditorText() || '').replace(/\r\n?/g, '\n')
-        === String(candidate.sourceEditorContent || '').replace(/\r\n?/g, '\n');
-      if (editorUnchanged) {
-        setEditorText(candidate.content);
-        refreshEditor();
-        try { getMihomoPanelApi()?.markEditorClean?.(); } catch (e) {}
-      }
-      if (data.revision) _baseFileRevision = String(data.revision);
-
-      if (restart) {
-        const jobId = data.restart_job_id || data.job_id;
-        if (!jobId) {
-          setActionStatus('Файл сохранён, но restart job не получен.', 'warning');
-          return false;
-        }
-        setActionStatus(`Файл сохранён. Ожидаю результат restart job ${jobId}…`, 'info', true);
-        let result = null;
-        try {
-          const commandJobs = getMihomoPanelApi()?.waitForCommandJob;
-          if (typeof commandJobs === 'function') result = await commandJobs(String(jobId));
-        } catch (e) {}
-        if (!result) {
-          while (true) {
-            const poll = await fetch(`/api/restart-job/${encodeURIComponent(String(jobId))}`);
-            result = await poll.json().catch(() => ({}));
-            if (!poll.ok || result.status === 'finished' || result.status === 'error') break;
-            await new Promise((resolve) => setTimeout(resolve, 800));
-          }
-        }
-        if (!result || !result.ok) {
-          setActionStatus(`Файл сохранён, применение не удалось: ${String(result?.error || result?.message || 'неизвестная ошибка')}`, 'error');
-          return false;
-        }
-        setActionStatus(
-          `${editorUnchanged
-            ? 'Применено: файл сохранён, backup создан, Mihomo перезапущен.'
-            : 'Применено: файл сохранён и Mihomo перезапущен. Новые правки в редакторе сохранены как несохранённые.'}${registrationWarning}`,
-          editorUnchanged ? 'success' : 'warning',
-        );
-      } else {
-        setActionStatus(
-          `${editorUnchanged
-            ? 'Файл сохранён без перезапуска. Backup создан.'
-            : 'Файл сохранён без перезапуска. Новые правки в редакторе не перезаписывались.'}${registrationWarning}`,
-          editorUnchanged && !registrationWarning ? 'success' : 'warning',
-        );
-      }
-      if (candidate.missingGroups.length) {
-        setActionStatus(`${$(IDS.actionStatus)?.textContent || ''} Неизвестные группы пропущены: ${candidate.missingGroups.join(', ')}.`, 'warning');
-      }
-      return true;
-    } catch (error) {
-      setActionStatus(error && error.message ? error.message : String(error || 'Ошибка операции.'), 'error');
-      return false;
-    } finally {
-      _actionBusy = false;
-      [saveBtn, applyBtn].forEach((button) => {
-        if (button) button.disabled = false;
-      });
-    }
+  function importContext() {
+    return JSON.stringify([getMihomoPanelApi()?.getActiveProfileName?.() || '',
+      _importState.sessionId, _importState.sourceRevision, _selectedDestination,
+      readSelectedGroupsFromUi(), $(IDS.providerName)?.value, $(IDS.providerInterval)?.value,
+      $(IDS.xrayInterval)?.value]);
   }
 
-  async function registerImportedXraySubscriptions(configText, groups) {
-    const grouped = groupXrayOutputsByUri(_lastResult && _lastResult.outputs)
-      .map((group) => ({ ...group, refreshParser: 'xray-json' }))
-      .concat(
-        groupProviderStaticOutputsByUri(_lastResult && _lastResult.outputs)
-          .map((group) => ({
-            ...group,
-            refreshParser: group.items.some((item) => item && item.refresh_parser === 'xray-json')
-              ? 'xray-json'
-              : 'mihomo-provider',
-          })),
-      );
-    if (!grouped.length) return [];
+  async function prepareImportReview() {
+    if (_actionBusy || _configOperations.busy) return;
+    _actionBusy = true;
+    syncImportActions();
+    try {
+      await buildImportCandidate();
+      _reviewOpen = true;
+      setActionStatus('');
+      setSourceLayout(true);
+      $('mihomo-import-review-back')?.focus();
+    } catch (error) {
+      setActionStatus(redactMihomoImportDiagnostic(error.message), 'error');
+    } finally { _actionBusy = false; syncImportActions(); }
+  }
 
-    const intervalHours = readXrayIntervalHours();
-    saveXrayIntervalPref(intervalHours);
-
-    const results = [];
-    for (const group of grouped) {
-      const data = await _importApi.postJSON('/api/mihomo/subscriptions/imported-xray', {
-        url: group.uri,
-        config: String(configText || ''),
-        groups: Array.isArray(groups) ? groups : [],
-        interval_hours: intervalHours,
-        refresh_parser: group.refreshParser,
-        tag: group.refreshParser === 'mihomo-provider' ? 'mihomo-provider:' + hostFromUrl(group.uri) : undefined,
-        proxies: group.items.map((item) => ({
-          proxy_name: String(item.proxy_name || '').trim(),
-          proxy_yaml: String(item.content || '').trimEnd(),
-        })),
-      });
-      if (!data || data.ok === false) {
-        throw new Error((data && data.error) ? data.error : 'subscription register failed');
+  async function checkedCandidate() {
+    if (!_lastCandidate || !_configOperations.isCurrent(_lastCandidate, getEditorText(), importContext())) {
+      if (_lastCandidate?.saved) {
+        setActionStatus('Редактор изменился после сохранения. Продолжите работу в редакторе или откройте новый импорт.', 'warning');
+        return null;
       }
-      if (data.subscription) results.push(data.subscription);
+      await buildImportCandidate();
+      setActionStatus('Редактор или настройки изменились. Проверьте новый итог и подтвердите действие ещё раз.', 'warning');
+      return null;
     }
-    return results;
+    return _lastCandidate;
+  }
+
+  function importedRegistrationIntents(outputs, groups) {
+    const grouped = groupXrayOutputsByUri(outputs).map(group => ({ ...group, refreshParser: 'xray-json' }))
+      .concat(groupProviderStaticOutputsByUri(outputs).map(group => ({ ...group,
+        refreshParser: group.items.some(item => item.refresh_parser === 'xray-json') ? 'xray-json' : 'mihomo-provider' })));
+    const intervalHours = readXrayIntervalHours();
+    return grouped.map(group => ({ url: group.uri, groups: [...groups], interval_hours: intervalHours,
+      refresh_parser: group.refreshParser,
+      proxies: group.items.map(item => ({ proxy_name: String(item.proxy_name || '').trim(), proxy_yaml: String(item.content || '').trimEnd() })),
+    }));
+  }
+
+  async function registerImportedXraySubscriptions(configText, groups, intents = []) {
+    _configOperations.addPending(intents);
+    return _configOperations.registerPending(configText);
+  }
+
+  function renderOperationStatus() {
+    const op = _configOperations.operation;
+    if (!op || !modalOpen()) return;
+    let message = '';
+    let kind = 'info';
+    if (op.state === 'saving') message = 'Проверка конфигурации → резервная копия → сохранение…';
+    if (op.state === 'saved') { message = 'Файл сохранён без перезапуска.'; kind = 'success'; }
+    if (op.state === 'applying') message = 'Файл сохранён. Ожидаю завершение перезапуска…';
+    if (op.state === 'apply-failed') { message = `Файл сохранён, применение не удалось: ${op.error || ''}`; kind = 'error'; }
+    if (op.state === 'unknown') { message = `Результат неизвестен. ${op.error || 'Восстановите наблюдение.'}`; kind = 'warning'; }
+    if (op.state === 'failed') { message = op.error || 'Конфигурация не сохранена.'; kind = 'error'; }
+    if (op.state === 'applied') { message = 'Применено: файл сохранён, процесс Mihomo запущен.'; kind = 'success'; }
+    if (op.saved) message += ` Путь: ${getXkeenFilePath('mihomo', '/opt/etc/mihomo/config.yaml')}.`;
+    if (op.backup) message += ` Резервная копия: ${op.backup}.`;
+    if (op.state === 'applied' && !op.apiChecked) message += ' Доступность API не подтверждена.';
+    if (op.registration?.failed) { message += ' Автообновление зарегистрировано не полностью. Повторите регистрацию.'; kind = 'warning'; }
+    if (op.log) message += ` Журнал: ${op.log}`;
+    setActionStatus(message, kind, ['saving', 'applying'].includes(op.state));
+    const recoverable = ['unknown', 'apply-failed'].includes(op.state) || !!op.registration?.failed;
+    $('mihomo-import-recovery')?.classList.toggle('hidden', !recoverable);
+    $('mihomo-import-resume')?.classList.toggle('hidden', op.state !== 'unknown');
+    $('mihomo-import-retry-apply')?.classList.toggle('hidden', op.state !== 'apply-failed');
+    $('mihomo-import-retry-registration')?.classList.toggle('hidden', !op.registration?.failed);
+  }
+
+  async function finishSavedOperation(candidate, data, restart) {
+    candidate.saved = true;
+    candidate.baseRevision = String(data.revision || candidate.baseRevision);
+    _baseFileRevision = candidate.baseRevision;
+    const editorUnchanged = _configOperations.isCurrent(candidate, getEditorText(), importContext());
+    if (editorUnchanged) {
+      setEditorText(candidate.content);
+      refreshEditor();
+      getMihomoPanelApi()?.markEditorClean?.(candidate.content);
+      candidate.sourceEditorContent = candidate.content;
+    }
+    _configOperations.remember({ origin: 'import', state: restart ? 'applying' : 'saved', saved: true,
+      content: candidate.content, revision: candidate.baseRevision, backup: data.backup || '',
+      jobId: data.restart_job_id || data.job_id || '', candidate });
+    const registration = await registerImportedXraySubscriptions(candidate.content, candidate.groups, candidate.registrations);
+    Object.assign(_configOperations.operation, { registration });
+    if (restart && _configOperations.operation.jobId) await _configOperations.monitor();
+    else if (restart) Object.assign(_configOperations.operation, { state: 'apply-failed', error: 'Задание перезапуска не получено.' });
+    renderOperationStatus();
+  }
+
+  async function commitCandidate(restart) {
+    if (_actionBusy) return false;
+    if (!_reviewOpen) return prepareImportReview();
+    let release;
+    _actionBusy = true;
+    syncImportActions();
+    try {
+      release = _configOperations.acquire();
+      const candidate = await checkedCandidate();
+      if (!candidate) return false;
+      if (candidate.saved) {
+        if (restart && _configOperations.operation?.state === 'saved') {
+          await startSavedApply(_configOperations.operation);
+          return true;
+        }
+        setActionStatus('Этот итог уже сохранён. Повторная запись не требуется.', 'info');
+        return false;
+      }
+      _configOperations.remember({ origin: 'import', state: 'saving', candidate });
+      const data = await _configOperations.commit({ content: candidate.content, restart: restart === true,
+        baseRevision: candidate.baseRevision, operationId: candidate.operationId });
+      await finishSavedOperation(candidate, data, restart);
+      return true;
+    } catch (error) {
+      if (!release) { setActionStatus(redactMihomoImportDiagnostic(error.message), 'warning'); return false; }
+      const op = _configOperations.operation;
+      const candidate = op?.candidate;
+      if (_configOperations.operation?.pendingApply) {
+        _configOperations.remember({ ..._configOperations.operation, state: error.status ? 'apply-failed' : 'unknown',
+          pendingApply: error.status ? null : _configOperations.operation.pendingApply,
+          error: redactMihomoImportDiagnostic(error.message) });
+      } else if (error.data?.saved && candidate) {
+        await finishSavedOperation(candidate, error.data, true);
+      } else if (candidate) {
+        _configOperations.remember({ ...op, state: error.status ? 'failed' : 'unknown',
+          error: redactMihomoImportDiagnostic(error.message), requestedRestart: restart });
+      } else setActionStatus(redactMihomoImportDiagnostic(error.message), 'error');
+      renderOperationStatus();
+      return false;
+    } finally { release?.(); _actionBusy = false; syncImportActions(); }
+  }
+
+  async function recoverImportOperation(action) {
+    if (_actionBusy) return;
+    let release;
+    try {
+      release = _configOperations.acquire({ recovery: true });
+      _actionBusy = true;
+      const op = _configOperations.operation;
+      if (!op) return;
+      if (action === 'registration') {
+        const latest = await _importApi.requestJSON('/api/mihomo-config?baseline=1');
+        op.content = String(latest.content || '');
+        op.revision = String(latest.revision || '');
+        op.registration = await _configOperations.registerPending(op.content);
+      } else if (action === 'apply') {
+        await startSavedApply(op);
+      } else if (op.pendingApply) await startSavedApply(op);
+      else if (op.jobId) await _configOperations.monitor();
+      else if (op.candidate) {
+        const data = await _configOperations.commit({ content: op.candidate.content, restart: op.requestedRestart,
+          baseRevision: op.candidate.baseRevision, operationId: op.candidate.operationId });
+        await finishSavedOperation(op.candidate, data, op.requestedRestart);
+      }
+    } catch (error) {
+      const op = _configOperations.operation;
+      if (op?.pendingApply) _configOperations.remember({ ...op, state: error.status ? 'apply-failed' : 'unknown',
+        pendingApply: error.status ? null : op.pendingApply, error: redactMihomoImportDiagnostic(error.message) });
+      else if (error.data?.saved && op?.candidate) await finishSavedOperation(op.candidate, error.data, true);
+      else if (op) _configOperations.remember({ ...op, error: redactMihomoImportDiagnostic(error.message) });
+      else setActionStatus(redactMihomoImportDiagnostic(error.message), 'warning');
+    }
+    finally { release?.(); _actionBusy = false; renderOperationStatus(); syncImportActions(); }
+  }
+
+  async function startSavedApply(op) {
+    const body = op.pendingApply || { base_revision: op.revision, operation_id: crypto.randomUUID() };
+    _configOperations.remember({ ...op, pendingApply: body, jobId: '', state: 'applying' });
+    const data = await _importApi.requestJSON('/api/mihomo/import/apply', { method: 'POST', body });
+    _configOperations.remember({ ..._configOperations.operation, pendingApply: null, jobId: data.restart_job_id, state: 'applying' });
+    await _configOperations.monitor();
+  }
+
+  function showReviewTechnicalView(details) {
+    if (!details.open || !_lastCandidate) return;
+    const candidate = _lastCandidate;
+    const kind = details.dataset.miReviewView;
+    const limit = 240;
+    let lines;
+    if (kind === 'yaml') lines = candidate.content.split('\n');
+    else {
+      const before = (kind === 'file' ? candidate.baseFileContent : candidate.sourceEditorContent).split('\n');
+      const after = candidate.content.split('\n');
+      let start = 0;
+      while (start < before.length && start < after.length && before[start] === after[start]) start++;
+      let end = 0;
+      while (end < before.length - start && end < after.length - start && before[before.length - 1 - end] === after[after.length - 1 - end]) end++;
+      lines = [`@@ строка ${start + 1} @@`, ...before.slice(start, before.length - end).map(line => `- ${line}`),
+        ...after.slice(start, after.length - end).map(line => `+ ${line}`)];
+      if (lines.length === 1) lines = ['Изменений нет.'];
+    }
+    details.querySelector('pre').textContent = lines.slice(0, limit).join('\n')
+      + (lines.length > limit ? `\n… Скрыто строк: ${lines.length - limit}. Сохраняется полный конфиг.` : '');
   }
 
 
@@ -3663,6 +3773,13 @@ let mihomoImportModuleApi = null;
       if (modeSel.dataset) modeSel.dataset.mihomoImportModeBound = '1';
     }
 
+    wireButton('mihomo-import-review-btn', () => prepareImportReview());
+    wireButton('mihomo-import-review-back', () => { _reviewOpen = false; _lastCandidate = null; setSourceLayout(true); });
+    wireButton('mihomo-import-resume', () => recoverImportOperation('resume'));
+    wireButton('mihomo-import-retry-apply', () => recoverImportOperation('apply'));
+    wireButton('mihomo-import-retry-registration', () => recoverImportOperation('registration'));
+    _configOperations.subscribe(() => renderOperationStatus());
+    modal.querySelectorAll('[data-mi-review-view]').forEach(details => details.addEventListener('toggle', () => showReviewTechnicalView(details)));
     wireButton(IDS.btnParse, () => parseInput());
     wireButton(IDS.btnInsert, () => insertIntoEditor());
     wireButton(IDS.btnSave, () => commitCandidate(false));

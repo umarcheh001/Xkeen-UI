@@ -19,7 +19,7 @@ def test_source_names_controls_and_status_are_accessible():
 
 def test_source_result_and_preview_share_one_bounded_shell():
     assert 'function setSourceLayout(hasResult)' in JS
-    assert "const layout = expanded ? 'preview' : (hasResult ? 'result' : 'source');" in JS
+    assert "const layout = _reviewOpen ? 'review' : (expanded ? 'preview' : (hasResult ? 'result' : 'source'));" in JS
     assert 'refreshGeometry?.(modal)' in JS
     assert "modal.dataset.modalRemember = '1';" in JS
     assert "modal.dataset.modalKey = expanded ? 'mihomo-import-preview-v2' : 'mihomo-import-source-v3';" in JS

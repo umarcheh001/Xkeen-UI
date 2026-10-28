@@ -25404,3 +25404,54 @@ body.panel-page #mihomo-import-modal .xk-mi-action-status.is-error {
   border-left-color: var(--op-danger) !important;
   color: var(--op-danger) !important;
 }
+/* Import review uses the same bounded modal body and sticky footer. */
+body.panel-page #mihomo-import-modal .xk-mi-review {
+  display: grid;
+  gap: 14px;
+}
+body.panel-page #mihomo-import-modal[data-mi-layout="review"] .xk-mi-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+body.panel-page #mihomo-import-modal[data-mi-layout="review"] .xk-mi-modal {
+  width: min(720px, calc(100vw - 24px));
+}
+body.panel-page #mihomo-import-modal .xk-mi-review .xk-mi-candidate-summary {
+  margin: 0;
+  padding: 14px;
+  background: var(--op-surface-2);
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-radius-md, 8px);
+  line-height: 1.7;
+}
+body.panel-page #mihomo-import-modal .xk-mi-review-warning {
+  border-left: 3px solid var(--op-accent) !important;
+}
+body.panel-page #mihomo-import-modal .xk-mi-review .xk-mi-candidate-details {
+  color: var(--op-text);
+  white-space: pre-line;
+}
+body.panel-page #mihomo-import-modal .xk-mi-review-tools {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+body.panel-page #mihomo-import-modal .xk-mi-review-tools details[open] {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+body.panel-page #mihomo-import-modal .xk-mi-review-tools summary {
+  cursor: pointer;
+  list-style: none;
+}
+body.panel-page #mihomo-import-modal .xk-mi-review-tools pre {
+  max-height: 260px;
+  overflow: auto;
+  padding: 12px;
+  color: var(--op-text);
+  background: var(--op-surface-2);
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-radius-md, 8px);
+  font-size: 12px;
+}

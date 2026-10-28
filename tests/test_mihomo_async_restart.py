@@ -21,9 +21,11 @@ def test_mihomo_async_restart_flow_persists_full_restart_log():
     jobs_src = _read("xkeen-ui/services/command_jobs.py")
     restart_log_src = _read("xkeen-ui/services/restart_log.py")
 
-    assert "const url = restart ? '/api/mihomo-config?async=1' : '/api/mihomo-config';" in panel_src
-    assert "const jobId = data.restart_job_id || data.job_id || data.restartJobId || null;" in panel_src
-    assert "/api/restart-job/" in panel_src
+    assert "url: restart ? '/api/mihomo-config?async=1' : '/api/mihomo-config'" in panel_src
+    operations_src = _read("xkeen-ui/static/js/features/mihomo_config_operations.js")
+    assert "ops.acquire()" in panel_src
+    assert "/api/restart-job/" in operations_src
+    assert "result.exit_code === 0" in operations_src
     assert "const canWs = (typeof options.hasWs === 'boolean') ? options.hasWs : true;" in command_job_src
     assert "res.status === 404 && statusPath !== restartStatusPath" in command_job_src
     assert 'async_q = request.args.get("async")' in route_src
@@ -78,12 +80,12 @@ def test_core_restart_job_status_is_available_without_terminal_module(monkeypatc
 def test_routing_editor_save_and_restart_uses_raw_config_endpoint():
     panel_src = _read("xkeen-ui/static/js/features/mihomo_panel.js")
 
-    save_restart_start = panel_src.index("MP.saveAndRestart = async function saveAndRestart() {")
+    save_restart_start = panel_src.index("async function saveEditorConfig(restart)")
     save_restart_end = panel_src.index("MP.openZashboardUi", save_restart_start)
     save_restart_src = panel_src[save_restart_start:save_restart_end]
 
-    assert "fetch('/api/mihomo-config?async=1'" in save_restart_src
-    assert "JSON.stringify({ content, restart: true })" in save_restart_src
+    assert "url: restart ? '/api/mihomo-config?async=1' : '/api/mihomo-config'" in save_restart_src
+    assert "ops.commit({ content, restart" in save_restart_src
     assert "/api/mihomo/generate_apply" not in save_restart_src
     assert "configOverride" not in save_restart_src
 

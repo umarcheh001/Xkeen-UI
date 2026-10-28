@@ -1,3 +1,4 @@
+import { getMihomoConfigOperations } from './mihomo_config_operations.js';
 import {
   clearSharedMihomoEditor,
   confirmMihomoAction,
@@ -1209,7 +1210,8 @@ let mihomoPanelModuleApi = null;
     try { editor._xkeenDiffScope = 'mihomo'; } catch (e2) {}
   }
 
-  function markEditorClean() {
+  function markEditorClean(savedText) {
+    if (savedText !== undefined) _diffBaselineText = String(savedText);
     _editorDirty = false;
   }
 
@@ -1780,38 +1782,6 @@ let mihomoPanelModuleApi = null;
     });
   }
 
-  async function waitForRestartJob(jobId, onChunk) {
-    const restartStatusUrl = `/api/restart-job/${encodeURIComponent(String(jobId))}`;
-    const CJ = getCommandJobApi();
-    if (CJ && typeof CJ.waitForCommandJob === 'function') {
-      return CJ.waitForCommandJob(String(jobId), {
-        maxWaitMs: 5 * 60 * 1000,
-        onChunk: (chunk) => {
-          if (!chunk) return;
-          try { onChunk(chunk); } catch (e) {}
-        }
-      });
-    }
-
-    let lastLen = 0;
-    while (true) {
-      const pr = await fetch(restartStatusUrl);
-      const pj = await pr.json().catch(() => ({}));
-      const out = (pj && typeof pj.output === 'string') ? pj.output : '';
-      if (out.length > lastLen) {
-        const chunk = out.slice(lastLen);
-        lastLen = out.length;
-        if (chunk) {
-          try { onChunk(chunk); } catch (e) {}
-        }
-      }
-      if (!pr.ok || pj.ok === false || pj.status === 'finished' || pj.status === 'error') {
-        return pj;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-    }
-  }
-
   async function loadLiveConfigIntoEditor() {
     try {
       const res = await fetch('/api/mihomo-config', { cache: 'no-store' });
@@ -1913,286 +1883,52 @@ let mihomoPanelModuleApi = null;
     return reloadFromDiskIfClean();
   }
 
-  MP.saveConfig = async function saveConfig() {
+
+  async function saveEditorConfig(restart) {
     const content = String(getEditorText() || '');
-    if (!content.trim()) {
-      setStatus('config.yaml пустой, сохранять нечего.', true);
-      return false;
-    }
-
-    const restart = shouldAutoRestartAfterSave();
-    if (restart && MP._restartJobRunning) {
-      setStatus('Перезапуск уже выполняется…', true);
-      return false;
-    }
-
-    const btn = $(IDS.btnSave);
-    const setBtnBusy = (busy) => {
-      if (!btn) return;
-      try { btn.disabled = !!busy; } catch (e) {}
-      try { btn.classList.toggle('is-busy', !!busy); } catch (e) {}
-    };
-
+    if (!content.trim()) { setStatus('config.yaml пустой, сохранять нечего.', true); return false; }
+    const ops = getMihomoConfigOperations();
+    let release;
+    const buttons = [$(IDS.btnSave), $(IDS.btnSaveRestart)].filter(Boolean);
     try {
-      if (restart) {
-        MP._restartJobRunning = true;
-        setBtnBusy(true);
-        clearYamlErrorMarker();
-        setStatus('Сохраняю config.yaml и запускаю перезапуск…', false, true);
-        await clearSharedRestartLogUi();
-        await appendSharedRestartLog('⏳ Запуск xkeen -restart (job)…\n');
-      } else {
-        setStatus('Сохранение config.yaml...', false);
+      release = ops.acquire();
+      MP._restartJobRunning = restart;
+      buttons.forEach(button => { button.disabled = true; });
+      setStatus(restart ? 'Сохраняю config.yaml и запускаю перезапуск…' : 'Сохранение config.yaml…', false, true);
+      const data = await ops.commit({ content, restart,
+        url: restart ? '/api/mihomo-config?async=1' : '/api/mihomo-config' });
+      if (normalizeEditorText(getEditorText()) === normalizeEditorText(content)) {
+        markEditorClean();
+        _diffBaselineText = content;
       }
-
-      const url = restart ? '/api/mihomo-config?async=1' : '/api/mihomo-config';
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, restart }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.ok) {
-        setStatus((data && data.error) || 'Ошибка сохранения config.yaml.', true);
-        return false;
-      }
-      markEditorClean();
-      _diffBaselineText = content;
-      try { setXkeenPageConfigValue('flags.mihomoConfigExists', true); } catch (e) {}
-      try {
-        if (typeof window.updateLastActivity === 'function') {
-          const fp = getXkeenFilePath('mihomo', '/opt/etc/mihomo/config.yaml');
-          window.updateLastActivity('saved', 'mihomo', fp);
-        }
-      } catch (e) {}
-
+      const registration = await ops.registerPending(content);
+      ops.remember({ origin: 'editor', state: 'saved', saved: true, content,
+        revision: data.revision, backup: data.backup, registration });
+      try { setXkeenPageConfigValue('flags.mihomoConfigExists', true); } catch (_) {}
       if (restart) {
-        const jobId = data.restart_job_id || data.job_id || data.restartJobId || null;
-        if (!jobId) {
-          setStatus('Перезапуск запущен, но job_id не получен.', true);
+        ops.remember({ ...ops.operation, origin: 'editor', saved: true, content, revision: data.revision,
+          backup: data.backup, jobId: data.restart_job_id || data.job_id, state: 'applying' });
+        if (!ops.operation.jobId) throw new Error('Файл сохранён, но задание перезапуска не получено.');
+        const result = await ops.monitor();
+        if (result.state !== 'applied') {
+          setStatus(`Файл сохранён. ${result.error || 'Применение не подтверждено.'}`, true);
           return false;
         }
-
-        setStatus('Перезапуск в очереди (job ' + String(jobId) + ')…', false, true);
-        const result = await waitForRestartJob(String(jobId), (chunk) => {
-          try { void appendSharedRestartLog(chunk); } catch (e) {}
-        });
-        const ok = !!(result && result.ok);
-
-        if (ok) {
-          setStatus('Готово', false);
-        } else {
-          const err = (result && (result.error || result.message)) ? String(result.error || result.message) : '';
-          const exitCode = (result && typeof result.exit_code === 'number') ? result.exit_code : null;
-          const detail = err
-            ? ('Ошибка: ' + err)
-            : (exitCode !== null
-                ? ('Ошибка (exit_code=' + exitCode + ')')
-                : 'Ошибка перезапуска.');
-          setStatus('Ошибка', true);
-          try { if (detail && detail !== 'Ошибка') await appendSharedRestartLog('\n' + detail + '\n'); } catch (e) {}
-          try { if (detail) setStatus(detail, true, true); } catch (e) {}
-        }
-
-        return ok;
       }
-
-      const msg = 'config.yaml сохранён.';
-      setStatus(msg, false, !!(data && data.restarted));
-      try {
-        if (data.restarted) refreshRestartLog();
-      } catch (e) {}
+      setStatus(registration.failed ? 'Файл сохранён. Не всё автообновление зарегистрировано.' : 'config.yaml сохранён.', !!registration.failed);
       return true;
-    } catch (e) {
-      console.error(e);
-      setStatus('Ошибка сохранения config.yaml.', true);
+    } catch (error) {
+      setStatus(error.message || 'Ошибка сохранения config.yaml.', true);
       return false;
     } finally {
-      if (restart) {
-        MP._restartJobRunning = false;
-        setBtnBusy(false);
-      }
-    }
-  };
-
-  MP.saveAndRestart = async function saveAndRestart() {
-    const content = String(getEditorText() || '');
-    if (!content.trim()) {
-      setStatus('config.yaml пустой, сохранять нечего.', true);
-      return false;
-    }
-    // Feature E: job-based restart (no long-running HTTP request).
-    if (MP._restartJobRunning) {
-      setStatus('Перезапуск уже выполняется…', true);
-      return false;
-    }
-
-    const btn = $(IDS.btnSaveRestart);
-    const setBtnBusy = (busy) => {
-      if (!btn) return;
-      try { btn.disabled = !!busy; } catch (e) {}
-      try { btn.classList.toggle('is-busy', !!busy); } catch (e) {}
-    };
-
-    const clearRestartLogUi = async () => {
-      try {
-        const api = await getRestartLogFeatureApi();
-        if (api && typeof api.setRaw === 'function') {
-          api.setRaw('');
-          return;
-        }
-      } catch (e) {}
-      try {
-        const api = await getRestartLogFeatureApi();
-        if (api && typeof api.clear === 'function') {
-          api.clear();
-          return;
-        }
-      } catch (e) {}
-
-      const els = [];
-      try {
-        document.querySelectorAll('[data-xk-restart-log="1"]').forEach((el) => {
-          if (el) els.push(el);
-        });
-      } catch (e) {}
-      try {
-        const legacy = document.getElementById('restart-log');
-        if (legacy && els.indexOf(legacy) === -1) els.push(legacy);
-      } catch (e) {}
-      els.forEach((el) => {
-        try { el.dataset.rawText = ''; } catch (e) {}
-        try { el.innerHTML = ''; } catch (e) {}
-        try { el.scrollTop = 0; } catch (e) {}
-      });
-    };
-
-    const appendRestartLog = async (chunk) => {
-      if (!chunk) return;
-      try {
-        const api = await getRestartLogFeatureApi();
-        if (api && typeof api.append === 'function') {
-          api.append(String(chunk));
-          return;
-        }
-      } catch (e) {}
-      const els = [];
-      try {
-        document.querySelectorAll('[data-xk-restart-log="1"]').forEach((el) => {
-          if (el) els.push(el);
-        });
-      } catch (e) {}
-      try {
-        const legacy = document.getElementById('restart-log');
-        if (legacy && els.indexOf(legacy) === -1) els.push(legacy);
-      } catch (e) {}
-      els.forEach((el) => {
-        try {
-          const prev = el.textContent || '';
-          el.textContent = prev + String(chunk);
-          el.scrollTop = el.scrollHeight;
-        } catch (e) {}
-      });
-    };
-
-    try {
-      MP._restartJobRunning = true;
-      setBtnBusy(true);
-      clearYamlErrorMarker();
-
-      // Avoid noisy "loading..." toast: status line + streaming log is enough.
-      setStatus('Сохраняю config.yaml и запускаю перезапуск…', false, true);
-      await clearRestartLogUi();
-      await appendRestartLog('⏳ Запуск xkeen -restart (job)…\n');
-
-      // This toolbar edits the active raw config.yaml. Do not send it through
-      // the generator endpoint: that endpoint also requires generator state
-      // (notably state.profile), which is not present on the routing editor.
-      // The raw config endpoint saves the exact editor contents and queues the
-      // same background xkeen restart job.
-      const res = await fetch('/api/mihomo-config?async=1', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, restart: true }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.ok) {
-        const errMsg = (data && data.error) ? String(data.error) : 'Ошибка сохранения/перезапуска.';
-        try {
-          const lc = extractYamlLineCol(errMsg);
-          if (lc && Number.isFinite(lc.line)) markYamlErrorLine(Math.max(0, lc.line - 1));
-        } catch (e2) {}
-        setStatus(errMsg, true);
-        return false;
-      }
-
-      const jobId = data.restart_job_id || data.job_id || data.restartJobId || null;
-      if (!jobId) {
-        setStatus('Перезапуск запущен, но job_id не получен.', true);
-        return false;
-      }
-
-      // Config is saved at this point.
-      markEditorClean();
-      _diffBaselineText = content;
-      bumpLastActivity('saved');
-
-      setStatus('Перезапуск в очереди (job ' + String(jobId) + ')…', false, true);
-
-      // Stream output via existing command_jobs polling/WS util.
-      const CJ = getCommandJobApi();
-      let result = null;
-
-      if (CJ && typeof CJ.waitForCommandJob === 'function') {
-        result = await CJ.waitForCommandJob(String(jobId), {
-          maxWaitMs: 5 * 60 * 1000,
-          onChunk: (chunk) => {
-            try { void appendRestartLog(chunk); } catch (e) {}
-          }
-        });
-      } else {
-        // Minimal HTTP polling fallback.
-        let lastLen = 0;
-        const restartStatusUrl = `/api/restart-job/${encodeURIComponent(String(jobId))}`;
-        while (true) {
-          const pr = await fetch(restartStatusUrl);
-          const pj = await pr.json().catch(() => ({}));
-          const out = (pj && typeof pj.output === 'string') ? pj.output : '';
-          if (out.length > lastLen) {
-            await appendRestartLog(out.slice(lastLen));
-            lastLen = out.length;
-          }
-          if (!pr.ok || pj.ok === false || pj.status === 'finished' || pj.status === 'error') {
-            result = pj;
-            break;
-          }
-          await new Promise(r => setTimeout(r, 1000));
-        }
-      }
-
-      const ok = !!(result && result.ok);
-      if (ok) {
-        setStatus('Готово', false);
-      } else {
-        const err = (result && (result.error || result.message)) ? String(result.error || result.message) : '';
-        const exitCode = (result && typeof result.exit_code === 'number') ? result.exit_code : null;
-        const msg = err ? ('Ошибка: ' + err) : (exitCode !== null ? ('Ошибка (exit_code=' + exitCode + ')') : 'Ошибка перезапуска.');
-        // Requirement: final toast should be exactly "Ошибка"; show details in status/log without extra toast.
-        setStatus('Ошибка', true);
-        try { if (msg && msg !== 'Ошибка') await appendRestartLog('\n' + msg + '\n'); } catch (e) {}
-        try { if (msg) setStatus(msg, true, true); } catch (e) {}
-      }
-
-      return ok;
-    } catch (e) {
-      console.error(e);
-      setStatus('Ошибка перезапуска (job).', true);
-      return false;
-    } finally {
+      release?.();
       MP._restartJobRunning = false;
-      setBtnBusy(false);
+      buttons.forEach(button => { button.disabled = false; });
     }
-  };
+  }
+
+  MP.saveConfig = async function saveConfig() { return saveEditorConfig(shouldAutoRestartAfterSave()); };
+  MP.saveAndRestart = async function saveAndRestart() { return saveEditorConfig(true); };
 
   MP.openZashboardUi = function openZashboardUi() {
     const url = window.location.protocol + '//' + window.location.host + '/mihomo_panel/ui/';
@@ -3631,6 +3367,7 @@ let mihomoPanelModuleApi = null;
   MP.markConfigChanged = markConfigChanged;
   MP.markEditorClean = markEditorClean;
   MP.isEditorDirty = isEditorDirty;
+  MP.getActiveProfileName = () => _activeProfileName || '';
 })();
 
 export function getMihomoPanelApi() {

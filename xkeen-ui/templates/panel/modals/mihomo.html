@@ -173,6 +173,23 @@ rule-set:github@domain
           <button type="button" class="modal-close" id="mihomo-import-close-btn" title="Закрыть" aria-label="Закрыть">{{ op_icon('close') }}</button>
         </div>
         <div class="modal-body xk-mi-body">
+          <div id="mihomo-import-action-status" class="xk-mi-action-status hidden" role="status" aria-live="polite"></div>
+          <div id="mihomo-import-recovery" class="xk-mi-review-tools hidden">
+            <button type="button" id="mihomo-import-resume" class="btn-secondary btn-compact">Восстановить наблюдение</button>
+            <button type="button" id="mihomo-import-retry-apply" class="btn-secondary btn-compact">Повторить применение</button>
+            <button type="button" id="mihomo-import-retry-registration" class="btn-secondary btn-compact">Повторить регистрацию автообновления</button>
+          </div>
+          <section id="mihomo-import-review" class="xk-mi-review hidden" aria-label="Проверка изменений">
+            <p class="modal-hint">Источник → Результат и группы → <strong>Проверка изменений</strong></p>
+            <section id="mihomo-import-candidate-summary" class="xk-mi-candidate-summary" aria-label="Итог изменений"></section>
+            <section id="mihomo-import-review-warning" class="xk-mi-candidate-summary xk-mi-review-warning hidden"></section>
+            <div class="xk-mi-review-tools">
+              <details data-mi-review-view="import"><summary class="btn-secondary btn-compact">Изменения импорта</summary><pre tabindex="0"></pre></details>
+              <details data-mi-review-view="file"><summary class="btn-secondary btn-compact">Все изменения файла</summary><pre tabindex="0"></pre></details>
+              <details data-mi-review-view="yaml"><summary class="btn-secondary btn-compact">Итоговый YAML</summary><pre tabindex="0"></pre></details>
+            </div>
+            <p class="modal-hint">«В черновик» изменит только редактор. «Сохранить» запишет файл без перезапуска. «Сохранить и применить» также перезапустит ядро.</p>
+          </section>
           <div class="xk-mi-grid">
             <section class="xk-mi-panel xk-mi-panel--controls">
               <p class="modal-hint xk-mi-source-lead">Вставьте ссылку узла, подписку или ключ. Для VPN-конфигурации выберите формат вручную.</p>
@@ -218,8 +235,6 @@ https://..."></textarea>
 
               <div id="mihomo-import-status" class="status xk-mi-status hidden" role="status" aria-live="polite" aria-atomic="true"></div>
               <section id="mihomo-import-result-cards" class="xk-mi-result-cards hidden" aria-label="Результат распознавания"></section>
-              <section id="mihomo-import-candidate-summary" class="xk-mi-candidate-summary hidden" aria-label="Итог изменений"></section>
-              <div id="mihomo-import-action-status" class="xk-mi-action-status hidden" role="status" aria-live="polite"></div>
               <p id="mihomo-import-target-hint" class="modal-hint xk-mi-target hidden"></p>
               <button type="button" id="mihomo-import-preview-toggle" class="btn-secondary btn-compact hidden" aria-expanded="false" aria-controls="mihomo-import-preview-panel">Показать YAML</button>
 
@@ -316,6 +331,8 @@ https://..."></textarea>
         </div>
         <div class="modal-actions xk-mi-footer">
           <div class="xk-mi-footer-actions">
+            <button type="button" id="mihomo-import-review-back" class="btn-secondary btn-compact hidden">Назад</button>
+            <button type="button" id="mihomo-import-review-btn" class="btn-primary btn-compact hidden">{{ op_icon('check') }}<span class="xk-action-label">Проверить изменение</span></button>
             <button type="button" id="mihomo-import-parse-btn" class="btn-primary btn-compact xk-mi-primary-action" data-tooltip="Распознать источник без сохранения и перезапуска.">{{ op_icon('format') }}<span class="xk-action-label">Распознать</span></button>
             <button type="button" id="mihomo-import-parse-static-btn" class="btn-secondary btn-compact xk-mi-primary-action" data-tooltip="Использовать поддерживаемый static flow для подписки.">{{ op_icon('download') }}<span class="xk-action-label">Статические узлы</span></button>
             <button type="button" id="mihomo-import-insert-btn" class="btn-secondary btn-compact xk-mi-primary-action" data-tooltip="Подготовить candidate в главном редакторе без сохранения файла." disabled>{{ op_icon('add-node') }}<span class="xk-action-label">В черновик</span></button>

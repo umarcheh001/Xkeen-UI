@@ -141,7 +141,7 @@ test('Mihomo import opens as a compact source form and expands into the Operator
     'vless://11111111-1111-1111-1111-111111111111@example.com:443?encryption=none&type=tcp#compact',
   );
   await page.locator('#mihomo-import-parse-btn').click();
-  await expect(page.locator('#mihomo-import-insert-btn')).toBeEnabled();
+  await expect(page.locator('#mihomo-import-review-btn')).toBeEnabled();
   await expect(page.locator('#mihomo-import-modal .modal-resizer')).toBeHidden();
   await expect(page.locator('#mihomo-import-groups-block')).toBeVisible();
   await expect(page.locator('#mihomo-import-modal .xk-mi-panel--preview')).toBeHidden();
@@ -233,7 +233,7 @@ test('Mihomo import result cards stay readable and keep the final action reachab
   await expect(card).toContainText('Адрес: example.com:443');
   const geometry = await page.evaluate(() => {
     const cardNode = document.querySelector('#mihomo-import-result-cards');
-    const insert = document.querySelector('#mihomo-import-insert-btn');
+    const insert = document.querySelector('#mihomo-import-review-btn');
     const cardRect = cardNode?.getBoundingClientRect();
     const insertRect = insert?.getBoundingClientRect();
     return {
@@ -348,13 +348,13 @@ test('editing source or mode invalidates the previous import result', async ({ p
   const input = page.locator('#mihomo-import-input');
   await input.fill('vless://11111111-1111-1111-1111-111111111111@example.com:443?encryption=none&type=tcp#first');
   await page.locator('#mihomo-import-parse-btn').click();
-  await expect(page.locator('#mihomo-import-insert-btn')).toBeEnabled();
+  await expect(page.locator('#mihomo-import-review-btn')).toBeEnabled();
 
   await input.fill('vless://22222222-2222-2222-2222-222222222222@example.com:443?encryption=none&type=tcp#second');
-  await expect(page.locator('#mihomo-import-insert-btn')).toBeDisabled();
+  await expect(page.locator('#mihomo-import-review-btn')).toBeDisabled();
 
   await page.locator('#mihomo-import-mode').selectOption('wireguard');
-  await expect(page.locator('#mihomo-import-insert-btn')).toBeDisabled();
+  await expect(page.locator('#mihomo-import-review-btn')).toBeDisabled();
 });
 
 
@@ -392,5 +392,5 @@ test('closing the modal invalidates a late parse response', async ({ page }) => 
   // Reopen must be a clean session; the late response cannot enable Insert.
   await page.locator('.xk-mihomo-menu summary').click();
   await page.locator('#mihomo-import-node-btn').click();
-  await expect(page.locator('#mihomo-import-insert-btn')).toBeDisabled();
+  await expect(page.locator('#mihomo-import-review-btn')).toBeDisabled();
 });
