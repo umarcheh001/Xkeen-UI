@@ -1219,7 +1219,7 @@
           "accessible_label": "Скачать"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/diagnostics.js:L24",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/diagnostics.js:L19",
           "control_type": "runtime-action",
           "accessible_label": "Скачать"
         },
@@ -3715,7 +3715,7 @@
           "accessible_label": "Загрузить"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_clash/diagnostics.js:L25",
+          "location": "xkeen-ui/static/js/features/mihomo_clash/diagnostics.js:L19",
           "control_type": "runtime-action",
           "accessible_label": "Загрузить"
         },

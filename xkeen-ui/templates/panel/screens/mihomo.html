@@ -363,8 +363,8 @@
           <button type="button" id="mihomo-clash-diagnostics-tab-trace" data-mihomo-diagnostics-view="trace" role="tab" aria-selected="false" aria-controls="mihomo-clash-diagnostics-view-trace">{{ op_icon('ping') }}<span>Трассировка домена</span></button>
         </div>
 
-        <div id="mihomo-clash-diagnostics-view-traffic" data-mihomo-diagnostics-panel="traffic" role="tabpanel" aria-labelledby="mihomo-clash-diagnostics-tab-traffic">
-          <div class="xk-mihomo-diagnostics-head">
+        <div id="mihomo-clash-diagnostics-view-traffic" class="xk-mihomo-traffic-dashboard" data-mihomo-diagnostics-panel="traffic" role="tabpanel" aria-labelledby="mihomo-clash-diagnostics-tab-traffic">
+          <div class="xk-mihomo-diagnostics-head xk-mihomo-traffic-head">
             <div>
               <h3 id="mihomo-clash-diagnostics-title"><span class="xk-mihomo-traffic-title-tooltip" data-tooltip="Локальная история по устройствам, маршрутам/VPN и запрошенным доменам. Сохраняются только минутные счётчики, без содержимого трафика.">Аналитика трафика</span></h3>
             </div>
@@ -379,9 +379,9 @@
               <button type="button" id="mihomo-clash-traffic-refresh" class="btn-secondary">{{ op_icon('refresh') }}<span>Обновить</span></button>
             </div>
           </div>
-          <div id="mihomo-clash-traffic-notice" class="xk-mihomo-diagnostics-notice" role="status" aria-live="polite">Сборщик накапливает данные локально. Первые значения появятся после двух снимков.</div>
+          <div id="mihomo-clash-traffic-notice" class="xk-mihomo-diagnostics-notice xk-mihomo-traffic-status" role="status" aria-live="polite">Сборщик накапливает данные локально. Первые значения появятся после двух снимков.</div>
           <div id="mihomo-clash-traffic-content" hidden>
-            <div id="mihomo-clash-traffic-summary" class="xk-mihomo-diagnostic-summary"></div>
+            <div id="mihomo-clash-traffic-summary" class="xk-mihomo-diagnostic-summary xkm-kpis"></div>
             <div class="xk-mihomo-traffic-filters" role="toolbar" aria-label="Фильтры и экспорт аналитики трафика">
               <label><span>Устройство</span><select id="mihomo-clash-traffic-device" aria-label="Фильтр по устройству"><option value="">Все устройства</option></select></label>
               <label><span>VPN / узел</span><select id="mihomo-clash-traffic-route" aria-label="Фильтр по VPN или узлу"><option value="">Все маршруты</option></select></label>
@@ -391,42 +391,42 @@
                 <button type="button" id="mihomo-clash-traffic-export-json" class="btn-secondary">{{ op_icon('export') }}<span>JSON</span></button>
               </div>
             </div>
-            <section class="xk-mihomo-traffic-quality" aria-labelledby="mihomo-clash-traffic-quality-title">
-              <div class="xk-mihomo-diagnostic-steps-head">
+            <section class="xk-mihomo-traffic-quality xkm-panel" aria-labelledby="mihomo-clash-traffic-quality-title">
+              <div class="xk-mihomo-diagnostic-steps-head xkm-panel-h">
                 <h4 id="mihomo-clash-traffic-quality-title">Качество данных</h4>
                 <span id="mihomo-clash-traffic-quality-state">—</span>
               </div>
               <div id="mihomo-clash-traffic-quality" class="xk-mihomo-traffic-quality-grid"></div>
               <p id="mihomo-clash-traffic-quality-note">Статистика VPN является наблюдаемой нижней границей: короткие соединения между снимками могут быть пропущены.</p>
             </section>
-            <section class="xk-mihomo-traffic-chart-section" aria-labelledby="mihomo-clash-traffic-chart-title">
-              <div class="xk-mihomo-diagnostic-steps-head">
+            <section class="xk-mihomo-traffic-chart-section xkm-panel" aria-labelledby="mihomo-clash-traffic-chart-title">
+              <div class="xk-mihomo-diagnostic-steps-head xkm-panel-h">
                 <h4 id="mihomo-clash-traffic-chart-title">Общий трафик по времени</h4>
                 <div class="xk-mihomo-traffic-chart-tools">
                   <div id="mihomo-clash-traffic-series" class="xk-mihomo-traffic-series" role="toolbar" aria-label="Серии графика">
                     <button type="button" class="is-active" data-mihomo-traffic-series="mihomo" aria-pressed="true"><i></i><span>Через Mihomo</span></button>
                     <button type="button" class="is-active" data-mihomo-traffic-series="outside" aria-pressed="true"><i></i><span>Оценочный остаток</span></button>
                     <button type="button" data-mihomo-traffic-series="unmatched" aria-pressed="false"><i></i><span>Mihomo без пары</span></button>
-                    <button type="button" data-mihomo-traffic-series="download" aria-pressed="false"><i></i><span>Загрузка</span></button>
-                    <button type="button" data-mihomo-traffic-series="upload" aria-pressed="false"><i></i><span>Отдача</span></button>
+                    <button type="button" class="is-active" data-mihomo-traffic-series="download" aria-pressed="true"><i></i><span>Загрузка</span></button>
+                    <button type="button" class="is-active" data-mihomo-traffic-series="upload" aria-pressed="true"><i></i><span>Отдача</span></button>
                   </div>
                   <span id="mihomo-clash-traffic-coverage">—</span>
                 </div>
               </div>
-              <div id="mihomo-clash-traffic-chart" class="xk-mihomo-traffic-chart" role="img" aria-label="График трафика через Mihomo и вне Mihomo">
+              <div id="mihomo-clash-traffic-chart" class="xk-mihomo-traffic-chart" role="img" tabindex="0" aria-label="График трафика по пятиминутным интервалам. Стрелки влево и вправо показывают значения точек">
                 <div id="mihomo-clash-traffic-tooltip" class="xk-mihomo-traffic-tooltip" role="status" aria-live="polite" hidden></div>
               </div>
               <div id="mihomo-clash-traffic-chart-stats" class="xk-mihomo-traffic-chart-stats" aria-label="Статистика серий графика"></div>
             </section>
-            <section class="xk-mihomo-traffic-section" aria-labelledby="mihomo-clash-traffic-devices-title">
-              <div class="xk-mihomo-diagnostic-steps-head">
+            <section class="xk-mihomo-traffic-section xkm-panel" aria-labelledby="mihomo-clash-traffic-devices-title">
+              <div class="xk-mihomo-diagnostic-steps-head xkm-panel-h">
                 <h4 id="mihomo-clash-traffic-devices-title">Устройства и маршруты</h4>
                 <span>Трафик через Mihomo распределён по фактической цепочке соединения</span>
               </div>
               <div id="mihomo-clash-traffic-devices" class="xk-mihomo-traffic-devices"></div>
             </section>
-            <section class="xk-mihomo-traffic-section" aria-labelledby="mihomo-clash-traffic-routes-title">
-              <div class="xk-mihomo-diagnostic-steps-head"><h4 id="mihomo-clash-traffic-routes-title">VPN и маршруты</h4></div>
+            <section class="xk-mihomo-traffic-section xkm-panel" aria-labelledby="mihomo-clash-traffic-routes-title">
+              <div class="xk-mihomo-diagnostic-steps-head xkm-panel-h"><h4 id="mihomo-clash-traffic-routes-title">VPN и маршруты</h4></div>
               <div class="xk-mihomo-traffic-table-wrap">
                 <table class="xk-mihomo-traffic-table"><thead><tr><th>Маршрут</th><th>Узел</th><th>Устройств</th><th>↓</th><th>↑</th></tr></thead><tbody id="mihomo-clash-traffic-routes"></tbody></table>
               </div>

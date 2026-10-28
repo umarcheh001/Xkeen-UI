@@ -207,6 +207,32 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
     await expect(page.locator('#mihomo-clash-traffic-notice')).toContainText('Демо-режим');
     await expect(page.locator('#mihomo-clash-traffic-devices .xk-mihomo-traffic-device')).toHaveCount(2);
     await expect(page.locator('#mihomo-clash-traffic-devices')).toContainText('vpn-a');
+    await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+    await page.screenshot({ path: `C:/Users/umar/.codex/visualizations/2026/10/28/01a18204-0351-7571-be5b-5b23a52b066e/mihomo-traffic-compact-final-${viewport.width}.png` });
+    if (viewport.width < 521) {
+      await page.locator('.xk-mihomo-traffic-quality').scrollIntoViewIfNeeded();
+      await page.screenshot({ path: 'C:/Users/umar/.codex/visualizations/2026/10/28/01a18204-0351-7571-be5b-5b23a52b066e/mihomo-traffic-compact-mobile-quality.png' });
+    }
+    if (viewport.width < 521) {
+      const summaryColumns = await page.locator('#mihomo-clash-traffic-summary').evaluate((element) => (
+        getComputedStyle(element).gridTemplateColumns.split(' ').length
+      ));
+      expect(summaryColumns).toBe(2);
+      const qualityColumns = await page.locator('#mihomo-clash-traffic-quality').evaluate((element) => (
+        getComputedStyle(element).gridTemplateColumns.split(' ').length
+      ));
+      expect(qualityColumns).toBe(2);
+      const controlsAligned = await page.evaluate(() => {
+        const range = document.querySelector('#mihomo-clash-traffic-range')?.getBoundingClientRect();
+        const refresh = document.querySelector('#mihomo-clash-traffic-refresh')?.getBoundingClientRect();
+        return Math.abs((range?.top || 0) - (refresh?.top || 0)) <= 1;
+      });
+      expect(controlsAligned).toBe(true);
+      const actionsAligned = await page.locator('.xk-mihomo-traffic-filter-actions button').evaluateAll((buttons) => (
+        new Set(buttons.map((button) => Math.round(button.getBoundingClientRect().top))).size === 1
+      ));
+      expect(actionsAligned).toBe(true);
+    }
     const diagnosticsTabs = page.locator('.xk-mihomo-groups-toolbar #mihomo-clash-diagnostics-tabs');
     await expect(diagnosticsTabs).toBeVisible();
     if (viewport.width >= 800) {
@@ -224,12 +250,26 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
       await expect(trafficTitle).toHaveCSS('cursor', 'help');
     }
     await expect(page.getByRole('heading', { name: 'Запрошенные ресурсы' })).toHaveCount(0);
-    await expect(page.locator('.xk-mihomo-traffic-svg path.mihomo')).toHaveCount(1);
+    await expect(page.locator('.xk-mihomo-traffic-svg path[data-series-path="mihomo"]')).toHaveCount(1);
     await expect(page.locator('#mihomo-clash-traffic-quality')).toContainText('90%');
-    await expect(page.locator('#mihomo-clash-traffic-chart-stats .xk-mihomo-traffic-chart-stat')).toHaveCount(2);
-    await expect(page.locator('#mihomo-clash-traffic-chart path.mihomo')).toHaveCount(1);
+    await expect(page.locator('#mihomo-clash-traffic-chart-stats .xk-mihomo-traffic-chart-stat')).toHaveCount(4);
+    if (viewport.width < 521) {
+      const statColumns = await page.locator('#mihomo-clash-traffic-chart-stats').evaluate((element) => (
+        getComputedStyle(element).gridTemplateColumns.split(' ').length
+      ));
+      expect(statColumns).toBe(2);
+    }
+    await expect(page.locator('#mihomo-clash-traffic-chart path[data-series-path="mihomo"]')).toHaveCount(1);
+    await expect(page.locator('#mihomo-clash-traffic-chart [data-chart-area]')).toHaveCount(2);
+    expect(await page.locator('#mihomo-clash-traffic-chart .grid-vertical').count()).toBeGreaterThanOrEqual(3);
+    await expect(page.locator('#mihomo-clash-traffic-chart path.download')).toHaveCount(1);
+    await page.locator('[data-mihomo-traffic-series="unmatched"]').click();
+    await expect(page.locator('#mihomo-clash-traffic-chart path.unmatched')).toHaveCount(1);
+    await page.locator('[data-mihomo-traffic-series="unmatched"]').click();
     await page.locator('[data-mihomo-traffic-series="download"]').click();
     await expect(page.locator('#mihomo-clash-traffic-chart-stats .xk-mihomo-traffic-chart-stat')).toHaveCount(3);
+    await page.locator('[data-mihomo-traffic-series="upload"]').click();
+    await page.locator('[data-mihomo-traffic-series="download"]').click();
     await page.locator('[data-mihomo-traffic-series="upload"]').click();
     await page.mouse.move(0, 0);
     // The last clicked button animates its background; read the state only
@@ -258,6 +298,12 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
       });
       await expect(page.locator('#mihomo-clash-traffic-tooltip')).toBeVisible();
       await expect(page.locator('#mihomo-clash-traffic-tooltip')).toContainText('Загрузка');
+      await expect(page.locator('#mihomo-clash-traffic-chart .chart-marker:not([hidden])')).toHaveCount(4);
+      await page.locator('#mihomo-clash-traffic-chart').focus();
+      await page.keyboard.press('Home');
+      await expect(page.locator('#mihomo-clash-traffic-tooltip')).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(page.locator('#mihomo-clash-traffic-tooltip')).toBeHidden();
     }
     await page.locator('#mihomo-clash-traffic-device').selectOption('192.0.2.10');
     await expect(page.locator('#mihomo-clash-traffic-devices .xk-mihomo-traffic-device')).toHaveCount(1);
@@ -347,7 +393,7 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
 }
 
 
-test('traffic analytics offers week and fourteen-day ranges with seven quality cards on desktop', async ({ page }) => {
+test('traffic analytics offers week and fourteen-day ranges with dashboard quality metrics', async ({ page }) => {
   await openDiagnostics(page, { width: 1440, height: 900 });
   const range = page.locator('#mihomo-clash-traffic-range');
   await expect(range.locator('option[value="7d"]')).toHaveText('Неделя');
@@ -362,6 +408,109 @@ test('traffic analytics offers week and fourteen-day ranges with seven quality c
     getComputedStyle(element).gridTemplateColumns.split(' ').length
   ));
   expect(columns).toBe(7);
+  const density = await page.evaluate(() => {
+    const bounds = (selector) => document.querySelector(selector)?.getBoundingClientRect();
+    const summary = bounds('#mihomo-clash-traffic-summary .xk-mihomo-diagnostic-stat');
+    const quality = bounds('.xk-mihomo-traffic-quality');
+    const filters = document.querySelector('.xk-mihomo-traffic-filters > label');
+    const filterLabel = filters?.querySelector('span')?.getBoundingClientRect();
+    const filterSelect = filters?.querySelector('select')?.getBoundingClientRect();
+    return {
+      summaryHeight: summary?.height || 0,
+      qualityHeight: quality?.height || 0,
+      filterAlignment: Math.abs((filterLabel?.top || 0) - (filterSelect?.top || 0)),
+      chartStatHeight: bounds('.xk-mihomo-traffic-chart-stat')?.height || 0,
+    };
+  });
+  expect(density.summaryHeight).toBeLessThanOrEqual(70);
+  expect(density.qualityHeight).toBeLessThanOrEqual(125);
+  expect(density.filterAlignment).toBeLessThanOrEqual(1);
+  expect(density.chartStatHeight).toBeLessThanOrEqual(60);
+  await expect(page.locator('#mihomo-clash-traffic-notice')).toHaveCSS('border-top-style', 'solid');
+  await expect(page.locator('.xk-mihomo-traffic-chart-section')).toHaveCSS('background-color', await page.locator('.xk-mihomo-traffic-quality').evaluate((element) => getComputedStyle(element).backgroundColor));
+});
+
+test('traffic chart preserves empty five-minute buckets on the time axis', async ({ page }) => {
+  const payload = trafficPayload();
+  payload.series[1] = { ...payload.series[1], mihomo_bytes: 0, outside_bytes: 0, download_bytes: 0, upload_bytes: 0, total_bytes: 0 };
+  await openDiagnostics(page, { width: 1440, height: 900 }, payload);
+  const hit = page.locator('#mihomo-clash-traffic-chart [data-chart-hit]');
+  const box = await hit.boundingBox();
+  await hit.dispatchEvent('pointermove', { clientX: box.x + box.width / 2, clientY: box.y + box.height / 2 });
+  await expect(page.locator('#mihomo-clash-traffic-tooltip .xk-mihomo-traffic-tooltip-row b')).toHaveText(['0 Б', '0 Б', '0 Б', '0 Б']);
+  await expect(page.locator('.xk-mihomo-traffic-chart-stat[data-series="mihomo"] dd').nth(1)).toHaveText('6.99 МБ');
+});
+
+test('traffic chart renders a dense day with peaks and a collection gap', async ({ page }) => {
+  const payload = trafficPayload();
+  const end = Math.floor(Date.now() / 300000) * 300;
+  payload.series = Array.from({ length: 288 }, (_, index) => {
+    const gap = index >= 85 && index <= 88;
+    const wave = 1 + .28 * Math.sin(index * .16) + .12 * Math.sin(index * .71);
+    const burst = index % 47 >= 42 ? 2.4 : 1;
+    const download = gap ? 0 : Math.round(6_000_000 * wave * burst);
+    const upload = gap ? 0 : Math.round(1_200_000 * (1 + .3 * Math.sin(index * .21)));
+    const total = download + upload;
+    const mihomo = Math.round(total * .78);
+    return {
+      at: end - (287 - index) * 300,
+      mihomo_bytes: mihomo,
+      outside_bytes: total - mihomo,
+      download_bytes: download,
+      upload_bytes: upload,
+      total_bytes: total,
+    };
+  });
+  await openDiagnostics(page, { width: 1440, height: 900 }, payload);
+  const line = page.locator('#mihomo-clash-traffic-chart [data-series-path="mihomo"]');
+  await expect(line).toHaveCount(1);
+  expect((await line.getAttribute('d')).match(/\b[ML]\b/g)).toHaveLength(288);
+  await expect(page.locator('#mihomo-clash-traffic-chart .grid-vertical')).toHaveCount(7);
+  await page.locator('#mihomo-clash-traffic-chart').focus();
+  await page.keyboard.press('Home');
+  await expect(page.locator('#mihomo-clash-traffic-tooltip')).toBeVisible();
+  await page.keyboard.press('End');
+  await expect(page.locator('#mihomo-clash-traffic-tooltip')).toBeVisible();
+});
+
+test('traffic device cards keep natural heights in balanced columns', async ({ page }) => {
+  const payload = trafficPayload();
+  const base = payload.devices[0];
+  const route = base.routes[0];
+  payload.devices = [
+    { ...base, name: 'Много маршрутов', routes: Array.from({ length: 9 }, (_, index) => ({ ...route, node: `vpn-${index}` })) },
+    { ...base, ip: '192.0.2.11', name: 'Один маршрут', routes: [route] },
+    { ...base, ip: '192.0.2.12', name: 'Без маршрутов', mihomo_bytes: 0, outside_bytes: base.total_bytes, routes: [] },
+    { ...base, ip: '192.0.2.13', name: 'Несколько маршрутов', routes: base.routes },
+  ];
+  await openDiagnostics(page, { width: 1440, height: 900 }, payload);
+  const cards = page.locator('#mihomo-clash-traffic-devices .xk-mihomo-traffic-device');
+  await expect(cards).toHaveCount(4);
+  const layout = await cards.evaluateAll((elements) => elements.map((element) => {
+    const box = element.getBoundingClientRect();
+    return { left: Math.round(box.left), top: box.top, bottom: box.bottom, height: box.height };
+  }));
+  expect(new Set(layout.map((box) => box.left)).size).toBe(2);
+  expect(layout[0].height).toBeGreaterThan(layout[1].height * 2);
+  expect(layout[2].height).toBeLessThan(160);
+  const internalGaps = await cards.evaluateAll((elements) => elements.map((element) => {
+    const header = element.querySelector('header')?.getBoundingClientRect();
+    const split = element.querySelector('.xk-mihomo-device-split')?.getBoundingClientRect();
+    return split && header ? split.top - header.bottom : 0;
+  }));
+  expect(Math.max(...internalGaps)).toBeLessThanOrEqual(12);
+  for (const left of new Set(layout.map((box) => box.left))) {
+    const column = layout.filter((box) => box.left === left).sort((a, b) => a.top - b.top);
+    for (let index = 1; index < column.length; index += 1) {
+      expect(column[index].top - column[index - 1].bottom).toBeLessThanOrEqual(10);
+    }
+  }
+  await expect(cards.nth(2)).toContainText('Маршруты ещё не накоплены');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(cards).toHaveCount(4);
+  const mobileColumns = await page.locator('#mihomo-clash-traffic-devices').evaluate((element) => getComputedStyle(element).columnCount);
+  expect(mobileColumns).toBe('1');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
 });
 
 
