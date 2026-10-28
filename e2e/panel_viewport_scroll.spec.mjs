@@ -217,6 +217,7 @@ test('UI settings can keep either panel scroll surface without allowing both off
   await expect(page.locator('body')).toHaveClass(/xk-page-scroll-disabled/);
   let contract = await readScrollContract(page, 'view-routing');
   expect(contract.bodyOverflowY).toBe('hidden');
+  expect(await page.locator('.panel-header').evaluate((node) => getComputedStyle(node).position)).toBe('relative');
   expect(['auto', 'scroll']).toContain(contract.viewOverflowY);
   expect(contract.viewScrollHeight).toBeGreaterThan(contract.viewClientHeight);
   await page.locator('#view-routing').evaluate((node) => { node.scrollTop = node.scrollHeight; });
@@ -248,4 +249,69 @@ test('UI settings can keep either panel scroll surface without allowing both off
   await page.evaluate(() => window.XKeen.topLevel.router.navigate('/'));
   await expect(page.locator('body')).toHaveClass(/panel-page/);
   await expect(page.locator('body')).toHaveClass(/xk-workspace-scroll-disabled/);
+});
+
+
+test('sticky header follows document scroll without covering settings', async ({ page }) => {
+  test.setTimeout(120_000);
+
+  for (const viewport of [{ width: 1366, height: 768 }, { width: 390, height: 400 }]) {
+    await openPanel(page, viewport);
+    await page.evaluate(() => {
+      const spacer = document.createElement('div');
+      spacer.style.height = '1400px';
+      document.getElementById('view-routing').append(spacer);
+    });
+
+    await openScrollSettings(page);
+    const stickyHeader = page.locator('[data-ui-settings-control="layout-sticky-header"]');
+    const stickySlider = page.locator('[data-item-id="layout-sticky-header"] .dt-switch-slider');
+    const workspaceSlider = page.locator('[data-item-id="layout-workspace-scroll"] .dt-switch-slider');
+    await expect(stickyHeader).toBeChecked();
+    await page.locator('#ui-settings-close-btn').click();
+    await page.evaluate(() => window.scrollTo(0, 500));
+    expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+    expect(await page.locator('.panel-header').evaluate((node) => node.getBoundingClientRect().top)).toBeGreaterThanOrEqual(-1);
+    await page.evaluate(() => window.scrollTo(0, 0));
+
+    await openScrollSettings(page);
+    await workspaceSlider.click();
+    await page.locator('#ui-settings-close-btn').click();
+
+    await page.evaluate(() => window.scrollTo(0, 500));
+    const pinned = await page.locator('.panel-header').evaluate((node) => ({
+      position: getComputedStyle(node).position,
+      top: node.getBoundingClientRect().top,
+      height: node.getBoundingClientRect().height,
+      viewportHeight: window.innerHeight,
+      scrollY: window.scrollY,
+    }));
+    expect(pinned.scrollY).toBeGreaterThan(0);
+    expect(pinned.position).toBe('sticky');
+    expect(pinned.top).toBeGreaterThanOrEqual(-1);
+    expect(pinned.height).toBeLessThan(pinned.viewportHeight / 2);
+
+    await openScrollSettings(page);
+    const modalOnTop = await page.locator('#ui-settings-modal').evaluate((modal) => {
+      const rect = modal.getBoundingClientRect();
+      return modal.contains(document.elementFromPoint(rect.left + rect.width / 2, rect.top + 30));
+    });
+    expect(modalOnTop).toBe(true);
+    await stickySlider.click();
+    await expect(stickyHeader).not.toBeChecked();
+    await page.locator('#ui-settings-close-btn').click();
+    await page.evaluate(() => window.scrollTo(0, 500));
+    const unpinned = await page.locator('.panel-header').evaluate((node) => ({
+      position: getComputedStyle(node).position,
+      top: node.getBoundingClientRect().top,
+    }));
+    expect(unpinned.position).toBe('relative');
+    expect(unpinned.top).toBeLessThan(-20);
+
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await openScrollSettings(page);
+    await stickySlider.click();
+    await workspaceSlider.click();
+    await page.locator('#ui-settings-close-btn').click();
+  }
 });

@@ -35,6 +35,7 @@
     layout: {
       pageScrollEnabled: true,
       workspaceScrollEnabled: true,
+      stickyHeaderEnabled: true,
     },
     logs: {
       ansi: false,

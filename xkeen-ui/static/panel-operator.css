@@ -632,6 +632,11 @@ body.panel-page:not(.mihomo-generator-page):is(.modal-open, .xk-no-scroll) {
   -webkit-backdrop-filter: none !important;
 }
 
+html body.panel-page.xk-header-sticky:not(.xk-page-scroll-disabled) .panel-header.panel-header-shell {
+  position: sticky;
+  top: 0;
+}
+
 /* The editor toolbar has its own z-index: 50. While a header menu is open the
  * header must establish a higher stacking context, or the menu cannot cover
  * the toolbar even with a larger z-index of its own. A menu can only be open
