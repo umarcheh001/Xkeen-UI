@@ -74,7 +74,7 @@ test('a failed subscription leads with the failure, not with a stale count', asy
     last_count: 3,
     last_source_count: 3,
     last_filtered_out_count: 0,
-    last_error: 'провайдер ответил 403',
+    last_error: 'HTTP Error 403: Forbidden',
     last_update_ts: now - 7200,
     next_update_ts: now + 3600,
   })]);
@@ -83,7 +83,7 @@ test('a failed subscription leads with the failure, not with a stale count', asy
   const seen = await readState(page, 'bad-sub');
   expect(seen.tone).toBe('bad');
   expect(seen.word).toBe('Ошибка обновления');
-  expect(seen.lines[0]).toContain('провайдер ответил 403');
+  expect(seen.lines[0]).toContain('Сервер вернул ошибку HTTP 403');
 });
 
 test('an overdue subscription states it plainly instead of a due badge', async ({ page }) => {

@@ -1,3 +1,4 @@
+import { decodeSchedule, encodeSchedule, describeSchedule, subscriptionErrorSummary } from './xray_subscription_schedule.js';
 import { loadBackupsFeatureApi } from './backup_actions_loader.js';
 import { getRestartLogApi } from './restart_log.js';
 import { getRoutingApi } from './routing.js';
@@ -5306,6 +5307,8 @@ let outboundsModuleApi = null;
     let _subscriptionScheduleTimer = null;
     let _subscriptionScheduleGeneration = 0;
     let _subscriptionScheduleError = '';
+    let _subscriptionCustomCron = '';
+    let _subscriptionLastScheduleKind = 'daily';
     let _subscriptionRouterTimezone = '';
     let _subscriptionLoadGeneration = 0;
 
@@ -5324,6 +5327,18 @@ let outboundsModuleApi = null;
       const cron = document.getElementById('outbounds-subscriptions-cron');
       if (mode) mode.value = sub.schedule_mode || 'interval';
       if (cron) cron.value = sub.cron_expression || '';
+      const decoded = decodeSchedule(cron?.value || '0 4 * * *');
+      const repeat = document.getElementById('outbounds-subscriptions-repeat');
+      const time = document.getElementById('outbounds-subscriptions-time');
+      const day = document.getElementById('outbounds-subscriptions-month-day');
+      if (repeat) repeat.value = decoded.kind;
+      _subscriptionCustomCron = decoded.kind === 'custom' ? cron.value : '';
+      _subscriptionLastScheduleKind = decoded.kind;
+      if (time) time.value = decoded.time || '04:00';
+      if (day) day.value = String(decoded.day || 1);
+      document.querySelectorAll('#outbounds-subscriptions-weekdays input').forEach(el => {
+        el.checked = (decoded.weekdays || []).includes(Number(el.value));
+      });
       subsSyncSchedule();
     }
 
@@ -5333,7 +5348,28 @@ let outboundsModuleApi = null;
       const field = document.getElementById('outbounds-subscriptions-cron-field');
       if (!mode || !cron || !field) return;
       const calendar = mode.value === 'cron';
-      field.hidden = !calendar;
+      mode.closest('.xk-sub-schedule').classList.toggle('is-calendar', calendar);
+      const repeat = document.getElementById('outbounds-subscriptions-repeat');
+      const kind = repeat?.value || 'daily';
+      if (kind !== _subscriptionLastScheduleKind) {
+        if (_subscriptionLastScheduleKind === 'custom') _subscriptionCustomCron = cron.value;
+        if (kind === 'custom' && _subscriptionCustomCron) cron.value = _subscriptionCustomCron;
+        _subscriptionLastScheduleKind = kind;
+      }
+      if (kind === 'custom') _subscriptionCustomCron = cron.value;
+      const presets = document.getElementById('outbounds-subscriptions-presets');
+      const time = document.getElementById('outbounds-subscriptions-time');
+      const day = document.getElementById('outbounds-subscriptions-month-day');
+      const weekdays = document.getElementById('outbounds-subscriptions-weekdays');
+      if (presets) presets.hidden = !calendar;
+      field.hidden = !calendar || kind !== 'custom';
+      if (time) time.closest('label').hidden = !calendar || kind === 'custom';
+      if (day) day.closest('label').hidden = !calendar || kind !== 'monthly';
+      if (weekdays) weekdays.hidden = !calendar || kind !== 'weekly';
+      if (calendar && kind !== 'custom') {
+        cron.value = encodeSchedule({ kind, time: time?.value, day: day?.value,
+          weekdays: [...(weekdays?.querySelectorAll('input:checked') || [])].map(el => Number(el.value)) });
+      }
       const interval = $(SUB_IDS.interval);
       if (interval) interval.disabled = calendar;
       const intervalField = document.getElementById('outbounds-subscriptions-interval-field');
@@ -5928,7 +5964,7 @@ let outboundsModuleApi = null;
                     <div class="xk-sub-wide xk-sub-schedule">
                       <label><span class="xk-pool-fieldlabel">Режим обновления</span>
                         <select id="outbounds-subscriptions-schedule-mode" class="xray-log-filter" aria-label="Режим обновления" data-tooltip-multiline data-tooltip="Как панель будет обновлять подписку.&#10;Интервал: повторное обновление через выбранное число часов (по умолчанию 24).&#10;Cron по времени роутера: обновление по расписанию cron, например каждый день в 04:00.">
-                          <option value="interval">Интервал</option><option value="cron">Cron по времени роутера</option>
+                          <option value="interval">Интервал</option><option value="cron">По расписанию</option>
                         </select>
                       </label>
                       <label id="outbounds-subscriptions-interval-field" class="xk-sub-interval-field">
@@ -5942,10 +5978,14 @@ let outboundsModuleApi = null;
                         <span id="outbounds-subscriptions-interval-note" class="xk-sub-field-note xk-sub-interval-note-inline" hidden></span>
                       </div>
                       </label>
-                      <label id="outbounds-subscriptions-cron-field" hidden><span class="xk-pool-fieldlabel">Расписание cron</span>
-                        <input id="outbounds-subscriptions-cron" class="xray-log-filter" type="text" placeholder="0 4 * * *" aria-label="Расписание cron" aria-describedby="outbounds-subscriptions-cron-note" spellcheck="false">
-                        <span id="outbounds-subscriptions-cron-note" class="xk-sub-field-hint" role="status">Минута час день месяц день-недели. Пример: 0 4 * * * — ежедневно в 04:00.</span>
-                      </label>
+                      <div id="outbounds-subscriptions-presets" class="xk-sub-calendar" hidden>
+                        <label><span class="xk-pool-fieldlabel">Повторять</span><select id="outbounds-subscriptions-repeat" class="xray-log-filter"><option value="daily">Каждый день</option><option value="weekly">По дням недели</option><option value="monthly">Раз в месяц</option><option value="custom">Своё расписание (для опытных)</option></select></label>
+                        <div id="outbounds-subscriptions-weekdays" class="xk-sub-weekdays" hidden>${[['Пн',1],['Вт',2],['Ср',3],['Чт',4],['Пт',5],['Сб',6],['Вс',0]].map(([name, value]) => `<label><input type="checkbox" value="${value}"><span>${name}</span></label>`).join('')}</div>
+                        <label hidden><span class="xk-pool-fieldlabel">Число месяца</span><input id="outbounds-subscriptions-month-day" class="xray-log-filter" type="number" min="1" max="31" value="1"></label>
+                        <label><span class="xk-pool-fieldlabel">Время</span><input id="outbounds-subscriptions-time" class="xray-log-filter" type="time" value="04:00"></label>
+                        <label id="outbounds-subscriptions-cron-field" hidden><span class="xk-pool-fieldlabel">Расписание cron</span><input id="outbounds-subscriptions-cron" class="xray-log-filter" type="text" value="0 4 * * *" placeholder="0 4 * * *" aria-label="Расписание cron" aria-describedby="outbounds-subscriptions-cron-note" spellcheck="false"></label>
+                        <span id="outbounds-subscriptions-cron-note" class="xk-sub-field-hint" role="status"></span>
+                      </div>
                     </div>
                     <div class="xk-sub-wide xk-sub-url-row">
                       <label class="xk-sub-url-field">
@@ -6955,7 +6995,7 @@ let outboundsModuleApi = null;
 
     function subsIntervalSummary(sub) {
       const s = sub && typeof sub === 'object' ? sub : {};
-      if (s.schedule_mode === 'cron') return `cron ${s.cron_expression} · время роутера ${_subscriptionRouterTimezone}`;
+      if (s.schedule_mode === 'cron') return describeSchedule(s.cron_expression);
       const interval = Number(s.interval_hours || SUB_DEFAULT_INTERVAL_HOURS);
       const profileInterval = Number(s.profile_update_interval_hours || 0);
       const safeInterval = Number.isFinite(interval) && interval > 0 ? interval : SUB_DEFAULT_INTERVAL_HOURS;
@@ -7146,11 +7186,10 @@ let outboundsModuleApi = null;
         };
       }
       if (s.last_ok === false) {
-        const errorText = String(s.last_error || '').trim();
         return {
           tone: 'bad',
           word: 'Ошибка обновления',
-          detail: errorText || 'последнее обновление не удалось',
+          detail: subscriptionErrorSummary(s.last_error),
         };
       }
       if (subsDownloadTs(s) <= 0) {
@@ -7367,6 +7406,16 @@ let outboundsModuleApi = null;
         const pausedAttr = sub && sub.paused ? 'disabled' : '';
         const state = subsStateOf(sub, nowTs);
         const schedule = subsNextUpdateSummary(sub, nowTs);
+        const isCalendar = sub && sub.schedule_mode === 'cron';
+        const scheduleText = isCalendar ? schedule.text.replace(` · ${subsIntervalSummary(sub)}`, '') : schedule.text;
+        const failureSince = subsTimestamp(sub && sub.first_scheduled_failure_ts);
+        const lastSuccess = subsTimestamp(sub && sub.last_success_ts);
+        const failureAge = failureSince ? Math.max(0, Math.floor((nowTs - failureSince) / 86400)) : null;
+        const failureDetail = sub && sub.last_ok === false ? [
+          failureAge !== null ? (failureAge ? `Не удаётся обновить ${failureAge} д` : 'Не удаётся обновить меньше дня') : '',
+          failureSince ? `Первый сбой: ${subsFormatTime(failureSince)}` : '',
+          lastSuccess ? `Последняя успешная загрузка: ${subsFormatTime(lastSuccess)}` : '',
+        ].filter(Boolean) : [];
         const title = escapeHtml(String(sub && sub.name ? sub.name : sub && sub.id ? sub.id : ''));
         const tag = escapeHtml(String(sub && sub.tag ? sub.tag : ''));
         const url = escapeHtml(subsShortUrl(sub && sub.url));
@@ -7397,7 +7446,9 @@ let outboundsModuleApi = null;
               <div class="xk-sub-state" data-state="${state.tone}"><i aria-hidden="true"></i><b>${escapeHtml(state.word)}</b></div>
               <div class="xk-sub-muted">${escapeHtml(state.detail)}</div>
             </div>
-            <div class="xk-sub-muted"${schedule.title ? ` title="${escapeHtml(schedule.title)}" data-tooltip="${escapeHtml(schedule.title)}"` : ''}>${escapeHtml(schedule.text)}</div>
+            ${failureDetail.map(line => `<div class="xk-sub-muted">${escapeHtml(line)}</div>`).join('')}
+            <div class="xk-sub-muted"${schedule.title ? ` title="${escapeHtml(schedule.title)}" data-tooltip="${escapeHtml(schedule.title)}"` : ''}>${escapeHtml(scheduleText)}</div>
+            ${isCalendar ? `<div class="xk-sub-muted">${escapeHtml(subsIntervalSummary(sub))}</div>` : ''}
           </td>
           <td class="xk-sub-file-cell">
             <button
@@ -9440,7 +9491,7 @@ let outboundsModuleApi = null;
         });
         if (balancersRoot.dataset) balancersRoot.dataset.xkSubBalancersBound = '1';
       }
-      ['outbounds-subscriptions-schedule-mode', 'outbounds-subscriptions-cron'].forEach((id) => {
+      ['outbounds-subscriptions-schedule-mode', 'outbounds-subscriptions-cron', 'outbounds-subscriptions-repeat', 'outbounds-subscriptions-time', 'outbounds-subscriptions-month-day', 'outbounds-subscriptions-weekdays'].forEach((id) => {
         const el = document.getElementById(id);
         if (!el || el.dataset.scheduleBound) return;
         el.addEventListener('input', () => { subsSyncSchedule(); subsSyncSubscriptionFormState(); });

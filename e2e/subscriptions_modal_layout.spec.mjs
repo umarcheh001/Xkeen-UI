@@ -37,6 +37,7 @@ test('source fields share one row when the subscriptions form is wide enough', a
   await page.screenshot({ path: testInfo.outputPath('source-fields-850.png') });
 
   await page.locator('#outbounds-subscriptions-schedule-mode').selectOption('cron');
+  await page.locator('#outbounds-subscriptions-repeat').selectOption('custom');
   const cronField = page.locator('#outbounds-subscriptions-cron-field');
   await expect(cronField).toBeVisible();
   const cronGeometry = await page.evaluate(() => ({
@@ -44,7 +45,7 @@ test('source fields share one row when the subscriptions form is wide enough', a
     name: document.getElementById('outbounds-subscriptions-name').closest('label').getBoundingClientRect().toJSON(),
     panel: document.querySelector('#outbounds-subscriptions-modal .xk-sub-form-panel').getBoundingClientRect().toJSON(),
   }));
-  expect(cronGeometry.cron.top).toBeCloseTo(cronGeometry.name.top, 0);
+  expect(cronGeometry.cron.top).toBeGreaterThan(cronGeometry.name.top);
   expect(cronGeometry.cron.right).toBeLessThanOrEqual(cronGeometry.panel.right + 1);
   await page.locator('#outbounds-subscriptions-schedule-mode').selectOption('interval');
 

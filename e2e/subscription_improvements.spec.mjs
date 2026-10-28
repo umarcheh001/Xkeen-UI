@@ -40,13 +40,14 @@ test('calendar schedule and Python regex share the saved semantics', async ({ pa
     await expect(page.locator('#outbounds-subscriptions-interval-field')).toBeVisible();
     await expectScheduleRow(page, 'outbounds-subscriptions-interval');
     await page.locator('#outbounds-subscriptions-schedule-mode').selectOption('cron');
+    await page.locator('#outbounds-subscriptions-repeat').selectOption('custom');
     await page.locator('#outbounds-subscriptions-cron').fill('0 4 * * *');
     await expect(page.locator('#outbounds-subscriptions-cron-note')).toContainText('Следующий запуск');
     await expect(page.locator('#outbounds-subscriptions-interval-field')).toBeHidden();
     await expect(page.locator('#outbounds-subscriptions-interval')).toBeDisabled();
-    await expectScheduleRow(page, 'outbounds-subscriptions-cron');
+    await expect(page.locator('#outbounds-subscriptions-cron')).toBeVisible();
     await page.setViewportSize({ width: 390, height: 844 });
-    await expectScheduleRow(page, 'outbounds-subscriptions-cron');
+    await expect(page.locator('#outbounds-subscriptions-cron')).toBeVisible();
     await expect(page.locator('#outbounds-subscriptions-interval-field')).toBeHidden();
     await page.setViewportSize({ width: 1600, height: 1100 });
   await page.locator('#outbounds-subscriptions-name-filter').fill('(?i)^(?!.*ws)(?P<region>Germany|France).*$');
@@ -62,6 +63,7 @@ test('calendar schedule and Python regex share the saved semantics', async ({ pa
 test('cron and filters report errors and save calendar fields', async ({ page }) => {
   await demo(page);
   await page.locator('#outbounds-subscriptions-schedule-mode').selectOption('cron');
+  await page.locator('#outbounds-subscriptions-repeat').selectOption('custom');
   await page.locator('#outbounds-subscriptions-cron').fill('70 4 * * *');
   await expect(page.locator('#outbounds-subscriptions-cron')).toHaveAttribute('aria-invalid', 'true');
   await page.locator('#outbounds-subscriptions-cron').fill('0 4 * * *');

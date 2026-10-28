@@ -13175,6 +13175,37 @@ body.panel-page #outbounds-subscriptions-modal .xk-sub-schedule > label {
   min-width: 0;
 }
 body.panel-page #outbounds-subscriptions-modal .xk-sub-schedule [hidden] { display: none !important; }
+body.panel-page #outbounds-subscriptions-modal .xk-sub-calendar {
+  display: contents;
+}
+body.panel-page #outbounds-subscriptions-modal .xk-sub-form > .xk-sub-schedule.is-calendar {
+  grid-column: 1 / -1;
+  padding: 14px;
+  border: 1px solid var(--op-border);
+  border-radius: 10px;
+  background: var(--op-surface-2);
+}
+body.panel-page #outbounds-subscriptions-modal .xk-sub-calendar > label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+body.panel-page #outbounds-subscriptions-modal .xk-sub-calendar > :is(#outbounds-subscriptions-repeat, #outbounds-subscriptions-weekdays, #outbounds-subscriptions-cron-field, #outbounds-subscriptions-cron-note),
+body.panel-page #outbounds-subscriptions-modal .xk-sub-calendar > #outbounds-subscriptions-cron-note {
+  grid-column: 1 / -1;
+}
+body.panel-page #outbounds-subscriptions-modal .xk-sub-weekdays {
+  display: flex;
+  gap: 5px;
+}
+body.panel-page #outbounds-subscriptions-modal .xk-sub-weekdays label { flex: 1; min-width: 0; }
+body.panel-page #outbounds-subscriptions-modal .xk-sub-weekdays input { position: absolute; opacity: 0; }
+body.panel-page #outbounds-subscriptions-modal .xk-sub-weekdays span {
+  display: block; padding: 8px 2px; text-align: center; border: 1px solid var(--op-border);
+  border-radius: 6px; cursor: pointer;
+}
+body.panel-page #outbounds-subscriptions-modal .xk-sub-weekdays input:checked + span { background: var(--op-accent); color: white; }
+body.panel-page #outbounds-subscriptions-modal .xk-sub-weekdays input:focus-visible + span { outline: 2px solid var(--op-accent); outline-offset: 2px; }
 
 @container xk-sub-source (min-width: 740px) {
   body.panel-page #outbounds-subscriptions-modal .xk-sub-form {

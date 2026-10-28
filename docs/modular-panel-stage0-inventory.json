@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 610,
-      "size_bytes": 8244496,
+      "size_bytes": 8246346,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -87,16 +87,16 @@
         "xray"
       ],
       "removable": true,
-      "unit_count": 144,
-      "size_bytes": 3940694,
+      "unit_count": 147,
+      "size_bytes": 3960558,
       "kind_counts": {
         "backend_route": 13,
         "backend_service": 20,
-        "backend_test": 50,
+        "backend_test": 51,
         "configuration": 4,
         "editor_schema": 4,
-        "frontend_feature": 37,
-        "frontend_test": 10,
+        "frontend_feature": 38,
+        "frontend_test": 11,
         "frontend_ui": 1,
         "template": 5
       },
@@ -13121,7 +13121,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/subscription_improvements.spec.mjs",
-      "size_bytes": 5494,
+      "size_bytes": 5680,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -13161,7 +13161,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/subscriptions_modal_layout.spec.mjs",
-      "size_bytes": 46046,
+      "size_bytes": 46127,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -13181,7 +13181,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/subscriptions_modal_status.spec.mjs",
-      "size_bytes": 20661,
+      "size_bytes": 20659,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -13974,7 +13974,7 @@
       "module_id": "core",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/panel-operator.css",
-      "size_bytes": 801687,
+      "size_bytes": 803272,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -19560,7 +19560,7 @@
       "module_id": "engine.xray",
       "kind": "backend_service",
       "path": "xkeen-ui/services/xray_subscriptions.py",
-      "size_bytes": 335949,
+      "size_bytes": 336924,
       "depends_on": [
         "core",
         "tool.editor",
@@ -20538,8 +20538,29 @@
     {
       "module_id": "engine.xray",
       "kind": "backend_test",
+      "path": "tests/test_xray_subscription_schedule_age.py",
+      "size_bytes": 2914,
+      "depends_on": [
+        "core",
+        "tool.editor"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "xkeen",
+        "xray"
+      ],
+      "environment_variables": [],
+      "removable": true
+    },
+    {
+      "module_id": "engine.xray",
+      "kind": "backend_test",
       "path": "tests/test_xray_subscriptions.py",
-      "size_bytes": 256274,
+      "size_bytes": 256704,
       "depends_on": [
         "core",
         "tool.editor"
@@ -20916,7 +20937,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/outbounds.js",
-      "size_bytes": 469913,
+      "size_bytes": 474514,
       "depends_on": [
         "core",
         "tool.editor",
@@ -21957,6 +21978,35 @@
     },
     {
       "module_id": "engine.xray",
+      "kind": "frontend_feature",
+      "path": "xkeen-ui/static/js/features/xray_subscription_schedule.js",
+      "size_bytes": 3239,
+      "depends_on": [
+        "core",
+        "tool.editor"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [
+        "devtools-page",
+        "mihomo-generator-page",
+        "modules-page",
+        "panel-core",
+        "panel-routing",
+        "terminal-lazy",
+        "xkeen-page"
+      ],
+      "system_requirements": [
+        "xkeen",
+        "xray"
+      ],
+      "environment_variables": [],
+      "removable": true
+    },
+    {
+      "module_id": "engine.xray",
       "kind": "frontend_test",
       "path": "e2e/dns_over_vless_core_down.spec.mjs",
       "size_bytes": 2922,
@@ -22151,6 +22201,27 @@
       "kind": "frontend_test",
       "path": "e2e/xray_operator_header.spec.mjs",
       "size_bytes": 3001,
+      "depends_on": [
+        "core",
+        "tool.editor"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "xkeen",
+        "xray"
+      ],
+      "environment_variables": [],
+      "removable": true
+    },
+    {
+      "module_id": "engine.xray",
+      "kind": "frontend_test",
+      "path": "e2e/xray_subscription_schedule.spec.mjs",
+      "size_bytes": 7705,
       "depends_on": [
         "core",
         "tool.editor"
@@ -31299,7 +31370,7 @@
     {
       "id": "panel-core",
       "root": "xkeen-ui/static/js/pages/panel.entry.js",
-      "file_count": 312,
+      "file_count": 313,
       "module_ids": [
         "core",
         "engine.mihomo",
@@ -31481,6 +31552,7 @@
         "xkeen-ui/static/js/features/xray_log_parser.js",
         "xkeen-ui/static/js/features/xray_log_view.js",
         "xkeen-ui/static/js/features/xray_logs.js",
+        "xkeen-ui/static/js/features/xray_subscription_schedule.js",
         "xkeen-ui/static/js/pages/codemirror6.shared.js",
         "xkeen-ui/static/js/pages/config_shell.shared.js",
         "xkeen-ui/static/js/pages/devtools.init.js",
@@ -31629,7 +31701,7 @@
     {
       "id": "panel-routing",
       "root": "xkeen-ui/static/js/pages/panel.routing.bundle.js",
-      "file_count": 71,
+      "file_count": 72,
       "module_ids": [
         "core",
         "engine.xray",
@@ -31689,6 +31761,7 @@
         "xkeen-ui/static/js/features/xray_log_parser.js",
         "xkeen-ui/static/js/features/xray_log_view.js",
         "xkeen-ui/static/js/features/xray_logs.js",
+        "xkeen-ui/static/js/features/xray_subscription_schedule.js",
         "xkeen-ui/static/js/pages/config_shell.shared.js",
         "xkeen-ui/static/js/pages/logs_shell.shared.js",
         "xkeen-ui/static/js/pages/panel.routing.bundle.js",
@@ -31752,7 +31825,7 @@
     {
       "id": "terminal-lazy",
       "root": "xkeen-ui/static/js/pages/terminal.lazy.entry.js",
-      "file_count": 203,
+      "file_count": 204,
       "module_ids": [
         "core",
         "engine.mihomo",
@@ -31875,6 +31948,7 @@
         "xkeen-ui/static/js/features/xray_log_parser.js",
         "xkeen-ui/static/js/features/xray_log_view.js",
         "xkeen-ui/static/js/features/xray_logs.js",
+        "xkeen-ui/static/js/features/xray_subscription_schedule.js",
         "xkeen-ui/static/js/pages/codemirror6.shared.js",
         "xkeen-ui/static/js/pages/config_shell.shared.js",
         "xkeen-ui/static/js/pages/editor.shared.js",
@@ -32018,7 +32092,7 @@
     {
       "id": "devtools-page",
       "root": "xkeen-ui/static/js/pages/devtools.entry.js",
-      "file_count": 312,
+      "file_count": 313,
       "module_ids": [
         "core",
         "engine.mihomo",
@@ -32200,6 +32274,7 @@
         "xkeen-ui/static/js/features/xray_log_parser.js",
         "xkeen-ui/static/js/features/xray_log_view.js",
         "xkeen-ui/static/js/features/xray_logs.js",
+        "xkeen-ui/static/js/features/xray_subscription_schedule.js",
         "xkeen-ui/static/js/pages/codemirror6.shared.js",
         "xkeen-ui/static/js/pages/config_shell.shared.js",
         "xkeen-ui/static/js/pages/devtools.entry.js",
@@ -32348,7 +32423,7 @@
     {
       "id": "xkeen-page",
       "root": "xkeen-ui/static/js/pages/xkeen.entry.js",
-      "file_count": 312,
+      "file_count": 313,
       "module_ids": [
         "core",
         "engine.mihomo",
@@ -32530,6 +32605,7 @@
         "xkeen-ui/static/js/features/xray_log_parser.js",
         "xkeen-ui/static/js/features/xray_log_view.js",
         "xkeen-ui/static/js/features/xray_logs.js",
+        "xkeen-ui/static/js/features/xray_subscription_schedule.js",
         "xkeen-ui/static/js/pages/codemirror6.shared.js",
         "xkeen-ui/static/js/pages/config_shell.shared.js",
         "xkeen-ui/static/js/pages/devtools.init.js",
@@ -32678,7 +32754,7 @@
     {
       "id": "mihomo-generator-page",
       "root": "xkeen-ui/static/js/pages/mihomo_generator.entry.js",
-      "file_count": 312,
+      "file_count": 313,
       "module_ids": [
         "core",
         "engine.mihomo",
@@ -32860,6 +32936,7 @@
         "xkeen-ui/static/js/features/xray_log_parser.js",
         "xkeen-ui/static/js/features/xray_log_view.js",
         "xkeen-ui/static/js/features/xray_logs.js",
+        "xkeen-ui/static/js/features/xray_subscription_schedule.js",
         "xkeen-ui/static/js/pages/codemirror6.shared.js",
         "xkeen-ui/static/js/pages/config_shell.shared.js",
         "xkeen-ui/static/js/pages/devtools.init.js",
@@ -33008,7 +33085,7 @@
     {
       "id": "modules-page",
       "root": "xkeen-ui/static/js/pages/modules.entry.js",
-      "file_count": 312,
+      "file_count": 313,
       "module_ids": [
         "core",
         "engine.mihomo",
@@ -33190,6 +33267,7 @@
         "xkeen-ui/static/js/features/xray_log_parser.js",
         "xkeen-ui/static/js/features/xray_log_view.js",
         "xkeen-ui/static/js/features/xray_logs.js",
+        "xkeen-ui/static/js/features/xray_subscription_schedule.js",
         "xkeen-ui/static/js/pages/codemirror6.shared.js",
         "xkeen-ui/static/js/pages/config_shell.shared.js",
         "xkeen-ui/static/js/pages/devtools.init.js",
@@ -33867,7 +33945,7 @@
       {
         "from": "engine.xray",
         "to": "core",
-        "unit_count": 144,
+        "unit_count": 147,
         "examples": [
           "xkeen-ui/routes/routing/__init__.py",
           "xkeen-ui/routes/routing/blueprint.py",
@@ -33908,7 +33986,7 @@
       {
         "from": "engine.xray",
         "to": "tool.editor",
-        "unit_count": 144,
+        "unit_count": 147,
         "examples": [
           "xkeen-ui/routes/routing/__init__.py",
           "xkeen-ui/routes/routing/blueprint.py",
@@ -34304,7 +34382,7 @@
       {
         "from": "engine.xray",
         "to": "core",
-        "unit_count": 84,
+        "unit_count": 85,
         "examples": [
           "xkeen-ui/routes/routing/__init__.py",
           "xkeen-ui/routes/routing/blueprint.py",
@@ -34345,7 +34423,7 @@
       {
         "from": "engine.xray",
         "to": "tool.editor",
-        "unit_count": 84,
+        "unit_count": 85,
         "examples": [
           "xkeen-ui/routes/routing/__init__.py",
           "xkeen-ui/routes/routing/blueprint.py",

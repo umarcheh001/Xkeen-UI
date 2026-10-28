@@ -1076,6 +1076,7 @@ def upsert_subscription(ui_state_dir: str, payload: Dict[str, Any]) -> Dict[str,
             # up a freshly-saved sub within ~60s and restart Xray even when
             # the user unchecked that option.
             sub["next_update_ts"] = next_update(sub, now_ts)
+            sub["scheduled_update_ts"] = sub["next_update_ts"]
 
         if idx >= 0:
             subs[idx] = sub
@@ -6728,6 +6729,7 @@ def _refresh_subscription_impl(
         fetch_warnings = [str(item) for item in fetch_meta.get("warnings", []) if str(item or "").strip()]
         warnings = fetch_warnings + _subscription_result_warnings(preview_nodes)
         sub.pop("last_error_retry_seconds", None)
+        sub.pop("first_scheduled_failure_ts", None)
         runtime_balancer_tags = _read_string_list_value(sub, ROUTING_BALANCER_TAGS_KEYS)
         runtime_auto_rule = _read_bool_value(sub, ROUTING_AUTO_RULE_KEYS, True)
         runtime_active = bool(tags) and bool(
@@ -6742,6 +6744,7 @@ def _refresh_subscription_impl(
                 "last_ok": True,
                 "last_error": "",
                 "last_update_ts": now_ts,
+                "last_success_ts": now_ts,
                 "last_count": len(outbounds),
                 "last_source_count": source_count,
                 "last_filtered_out_count": filtered_out_count,
@@ -6766,6 +6769,8 @@ def _refresh_subscription_impl(
                 "interval_hours": interval,
             }
         )
+
+        sub["scheduled_update_ts"] = sub["next_update_ts"]
 
         state_for_runtime = load_subscription_state(ui_state_dir)
         previous_state_for_runtime = _normalize_state(copy.deepcopy(state_for_runtime))
@@ -6886,6 +6891,19 @@ def _refresh_subscription_impl(
             sub.update(sub_before_writes)
         interval = _clamp_interval(sub.get("interval_hours") or DEFAULT_INTERVAL_HOURS)
         retry_seconds = _refresh_error_retry_seconds(interval)
+        if sub.get("last_ok") is True and not sub.get("last_success_ts"):
+            sub["last_success_ts"] = sub.get("last_update_ts")
+        scheduled = sub.get("scheduled_update_ts")
+        if not scheduled and sub.get("last_ok") is not False:
+            scheduled = sub.get("next_update_ts")
+        try:
+            scheduled = float(scheduled) if scheduled else None
+        except (TypeError, ValueError):
+            scheduled = None
+        if scheduled and not sub.get("scheduled_update_ts"):
+            sub["scheduled_update_ts"] = scheduled
+        if scheduled and scheduled <= now_ts and not sub.get("first_scheduled_failure_ts"):
+            sub["first_scheduled_failure_ts"] = now_ts
         fetch_warnings = [str(item) for item in fetch_meta.get("warnings", []) if str(item or "").strip()]
         sub.update(
             {
@@ -7100,6 +7118,7 @@ def apply_schedule_alignment(ui_state_dir: str) -> Dict[str, Any]:
         for sub in subs:
             if isinstance(sub, dict) and str(sub.get("id") or "") in targets:
                 sub["next_update_ts"] = anchor
+                sub["scheduled_update_ts"] = anchor
         _write_state(ui_state_dir, state)
 
     return plan

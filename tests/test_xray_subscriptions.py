@@ -1201,6 +1201,7 @@ def test_refresh_subscription_failure_schedules_short_retry_and_preserves_fragme
     )
     assert first["ok"] is True
     out_path = xray_dir / "04_outbounds.demo.json"
+    success_time = subs.load_subscription_state(str(ui_state_dir))["subscriptions"][0]["last_success_ts"]
     generated_before = out_path.read_text(encoding="utf-8")
 
     def _fail_fetch(_url: str):
@@ -1225,6 +1226,8 @@ def test_refresh_subscription_failure_schedules_short_retry_and_preserves_fragme
 
     saved = subs.load_subscription_state(str(ui_state_dir))["subscriptions"][0]
     assert saved["last_ok"] is False
+    assert saved["last_success_ts"] == success_time
+    assert not saved.get("first_scheduled_failure_ts")
     assert saved["last_error"] == "network down"
     assert saved["last_error_retry_seconds"] == subs.DEFAULT_ERROR_RETRY_SECONDS
     assert saved["next_update_ts"] - saved["last_update_ts"] == pytest.approx(subs.DEFAULT_ERROR_RETRY_SECONDS)
@@ -7062,6 +7065,8 @@ def test_align_schedule_brings_every_subscription_to_one_moment(tmp_path: Path, 
     assert plan["total"] == 3
     assert plan["moved"] == 2
     assert set(_due_moments(subs, ui_state_dir).values()) == {plan["anchor_ts"]}
+    aligned = subs.load_subscription_state(str(ui_state_dir))["subscriptions"]
+    assert all(sub["scheduled_update_ts"] == plan["anchor_ts"] for sub in aligned if sub["id"] in {move["id"] for move in plan["moves"]})
 
 
 def test_align_schedule_dry_run_leaves_the_state_alone(tmp_path: Path, monkeypatch):
