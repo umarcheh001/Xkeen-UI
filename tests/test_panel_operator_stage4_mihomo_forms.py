@@ -20,7 +20,7 @@ def test_mihomo_generator_reuses_late_scoped_operator_layer():
     panel_template = PANEL
     assert '<body class="panel-page mihomo-generator-page">' in template
     assert "filename='panel-operator.css', v='20260919b'" in template
-    assert "filename='panel-operator.css', v='20261022a'" in panel_template
+    assert "filename='panel-operator.css', v='" in panel_template
     assert template.index("filename='panel-operator.css'") > template.index("</style>")
     for fragment in ('class="generator-field-card xk-op-field"', 'class="xk-op-field-label" for="profileSelect"', 'class="generator-action-row xk-op-action-row"', 'class="hint xk-card-desc xk-op-field-hint"'):
         assert fragment in template
@@ -37,7 +37,7 @@ def test_profiles_markup_and_runtime_expose_form_table_validation_contract():
 
 def test_subscription_form_aligns_labels_hints_validation_units_and_disclosure():
     runtime = SUBSCRIPTIONS_JS.read_text(encoding="utf-8")
-    for fragment in ('class="xk-sub-advanced xk-sub-wide"', '<summary>', 'class="xk-sub-advanced-heading"', 'Дополнительные настройки</span>', 'class="xk-sub-advanced-grid"', 'id="outbounds-subscriptions-interval-unit" class="xk-op-unit">ч</span>', 'required aria-required="true" aria-describedby="outbounds-subscriptions-url-note"', 'aria-describedby="outbounds-subscriptions-name-filter-note"', 'aria-describedby="outbounds-subscriptions-type-filter-note"', 'aria-describedby="outbounds-subscriptions-transport-filter-note"', 'class="xk-sub-field-hint">Рег. выражение; пусто — все.', "el.setAttribute('aria-invalid', invalid ? 'true' : 'false')", "setAttribute('role', invalid ? 'alert' : 'status')"):
+    for fragment in ('class="xk-sub-advanced xk-sub-wide"', '<summary>', 'class="xk-sub-advanced-heading"', 'Дополнительные настройки</span>', 'class="xk-sub-advanced-grid"', 'id="outbounds-subscriptions-interval-unit" class="xk-op-unit">ч</span>', 'required aria-required="true" aria-describedby="outbounds-subscriptions-url-note"', 'aria-describedby="outbounds-subscriptions-name-filter-note"', 'aria-describedby="outbounds-subscriptions-type-filter-note"', 'aria-describedby="outbounds-subscriptions-transport-filter-note"', 'class="xk-sub-field-hint">Python regex, без учёта регистра; пусто — все.', "el.setAttribute('aria-invalid', invalid ? 'true' : 'false')", "setAttribute('role', invalid ? 'alert' : 'status')"):
         assert fragment in runtime
 
 

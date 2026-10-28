@@ -9310,12 +9310,12 @@
         "value": "unmatched"
       },
       {
-        "locator": "button@L1503",
+        "locator": "button.is-active@L1503",
         "name": "data-mihomo-traffic-series",
         "value": "download"
       },
       {
-        "locator": "button@L1504",
+        "locator": "button.is-active@L1504",
         "name": "data-mihomo-traffic-series",
         "value": "upload"
       },

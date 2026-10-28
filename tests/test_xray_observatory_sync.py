@@ -301,9 +301,12 @@ def _rebuild_with(subs, monkeypatch, tmp_path, xray_dir, *, planned, delivered):
         "sync_subscription_runtime_plan_delta",
         lambda **_k: {"observatory_changed": False, "has_runtime_targets": delivered},
     )
-    monkeypatch.setattr(
-        subs, "_undo_observatory_conversion", lambda *_a, **_k: calls.append("undo") or True
-    )
+    def undo(*_args, **_kwargs):
+        calls.append("undo")
+        (xray_dir / "07_observatory.json").write_text('{"observatory": {}}\n', encoding="utf-8")
+        return True
+
+    monkeypatch.setattr(subs, "_undo_observatory_conversion", undo)
     plans = iter([{"has_runtime_targets": True}, {"has_runtime_targets": planned}])
     monkeypatch.setattr(subs, "_build_runtime_sync_plan", lambda _state: next(plans))
     result = subs._rebuild_subscription_runtime(
