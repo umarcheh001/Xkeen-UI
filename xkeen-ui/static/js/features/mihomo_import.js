@@ -1931,10 +1931,15 @@ let mihomoImportModuleApi = null;
         if (inp) inp.focus();
       } catch (e3) {}
     } else {
-      const trigger = $(IDS.btnOpen);
-      const fallback = document.querySelector('.xk-mihomo-menu summary');
-      const focusTarget = trigger?.getClientRects().length ? trigger : fallback;
-      try { focusTarget?.focus({ preventScroll: true }); } catch (e) {}
+      requestAnimationFrame(() => {
+        if (modalOpen() || document.querySelector('.modal:not(.hidden)')) return;
+        const trigger = $(IDS.btnOpen);
+        const fallback = document.querySelector('.xk-mihomo-menu summary');
+        try {
+          trigger?.focus({ preventScroll: true });
+          if (document.activeElement !== trigger) fallback?.focus({ preventScroll: true });
+        } catch (e) {}
+      });
     }
   }
 
@@ -3738,6 +3743,10 @@ let mihomoImportModuleApi = null;
     wireButton(IDS.btnOpen, () => showModal(true));
     wireButton(IDS.btnClose, () => showModal(false));
     wireButton(IDS.btnCancel, () => showModal(false));
+    modal.addEventListener('xkeen:modal-request-close', (event) => {
+      event.preventDefault();
+      showModal(false);
+    });
     wireButton(IDS.previewToggle, () => {
       if (!_lastResult) return;
       _previewOpen = !_previewOpen;

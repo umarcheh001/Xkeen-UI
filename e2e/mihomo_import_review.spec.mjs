@@ -221,3 +221,42 @@ test('import write endpoints require a session and a CSRF token', async ({ page,
     await unauthenticated.close();
   }
 });
+
+test('review dialog supports keyboard focus cycle and return with reduced motion', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await setup(page);
+  await page.locator('#mihomo-import-review-btn').click();
+  const dialog = page.getByRole('dialog', { name: 'Проверка изменений' });
+  await expect(dialog).toBeVisible();
+  await expect(page.locator('#mihomo-import-review-back')).toBeFocused();
+  await page.locator('#mihomo-import-apply-btn').focus();
+  await page.keyboard.press('Tab');
+  await expect(page.locator('#mihomo-import-close-btn')).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(page.locator('#mihomo-import-apply-btn')).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect.poll(() => page.evaluate(() => {
+    const active = document.activeElement;
+    return active?.id === 'mihomo-import-node-btn' || active === document.querySelector('.xk-mihomo-menu summary');
+  })).toBe(true);
+});
+
+for (const theme of ['dark', 'light']) {
+  test(`review stays operable at 640x480 in ${theme} theme`, async ({ page }) => {
+    // CSS viewport equivalent to 1280x960 at 200% browser zoom; actual browser
+    // zoom and screen-reader behavior still require separate manual checks.
+    await page.setViewportSize({ width: 640, height: 480 });
+    await page.addInitScript(value => localStorage.setItem('xkeen-theme', value), theme);
+    await setup(page);
+    await page.locator('#mihomo-import-review-btn').click();
+    await expect(page.getByRole('dialog', { name: 'Проверка изменений' })).toBeVisible();
+    const apply = page.locator('#mihomo-import-apply-btn');
+    await expect(apply).toBeVisible();
+    const rect = await apply.boundingBox();
+    expect(rect.x).toBeGreaterThanOrEqual(0);
+    expect(rect.y).toBeGreaterThanOrEqual(0);
+    expect(rect.x + rect.width).toBeLessThanOrEqual(640);
+    expect(rect.y + rect.height).toBeLessThanOrEqual(480);
+  });
+}
