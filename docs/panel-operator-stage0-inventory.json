@@ -2242,19 +2242,19 @@
               "accessible_name": false
             },
             {
-              "control": "control@2043",
+              "control": "control@2073",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@2198",
+              "control": "control@2228",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@2355",
+              "control": "control@2385",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
@@ -2290,7 +2290,7 @@
               "accessible_name": false
             },
             {
-              "control": "control@10095",
+              "control": "control@10125",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
@@ -8315,7 +8315,7 @@
       "xray-snapshot-status",
       "xray-snapshot-title"
     ],
-    "data_attribute_count": 651,
+    "data_attribute_count": 652,
     "data_attributes": [
       {
         "locator": "header.panel-header.panel-header-shell@L96",
@@ -11061,6 +11061,11 @@
         "locator": "#mihomo-import-modal",
         "name": "data-mi-layout",
         "value": "source"
+      },
+      {
+        "locator": "#mihomo-import-modal",
+        "name": "data-modal-backdrop-close",
+        "value": "0"
       },
       {
         "locator": "#mihomo-import-modal",

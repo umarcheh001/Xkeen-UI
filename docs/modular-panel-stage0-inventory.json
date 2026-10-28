@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 610,
-      "size_bytes": 8240625,
+      "size_bytes": 8244496,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -88,7 +88,7 @@
       ],
       "removable": true,
       "unit_count": 144,
-      "size_bytes": 3940297,
+      "size_bytes": 3940694,
       "kind_counts": {
         "backend_route": 13,
         "backend_service": 20,
@@ -132,7 +132,7 @@
       ],
       "removable": true,
       "unit_count": 146,
-      "size_bytes": 3318579,
+      "size_bytes": 3329609,
       "kind_counts": {
         "app_runtime": 4,
         "backend_route": 2,
@@ -4937,7 +4937,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_install_script_pip_fallbacks.py",
-      "size_bytes": 4081,
+      "size_bytes": 4278,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -7534,7 +7534,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_provision_python_libs.py",
-      "size_bytes": 6236,
+      "size_bytes": 8476,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -9401,7 +9401,7 @@
       "module_id": "core",
       "kind": "configuration",
       "path": "xkeen-ui/install.sh",
-      "size_bytes": 74758,
+      "size_bytes": 74786,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -13161,7 +13161,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/subscriptions_modal_layout.spec.mjs",
-      "size_bytes": 45684,
+      "size_bytes": 46046,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -13974,7 +13974,7 @@
       "module_id": "core",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/panel-operator.css",
-      "size_bytes": 800643,
+      "size_bytes": 801687,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -14742,7 +14742,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/mihomo.py",
-      "size_bytes": 180861,
+      "size_bytes": 185748,
       "depends_on": [
         "core",
         "tool.editor",
@@ -16640,7 +16640,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_test",
       "path": "tests/test_mihomo_node_import_route.py",
-      "size_bytes": 27385,
+      "size_bytes": 30118,
       "depends_on": [
         "core",
         "tool.editor"
@@ -17702,7 +17702,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/mihomo_import.js",
-      "size_bytes": 166267,
+      "size_bytes": 167756,
       "depends_on": [
         "core",
         "tool.editor",
@@ -18293,7 +18293,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_test",
       "path": "e2e/mihomo_import_review.spec.mjs",
-      "size_bytes": 14900,
+      "size_bytes": 16791,
       "depends_on": [
         "core",
         "tool.editor"
@@ -18440,7 +18440,7 @@
       "module_id": "engine.mihomo",
       "kind": "template",
       "path": "xkeen-ui/templates/panel/modals/mihomo.html",
-      "size_bytes": 44963,
+      "size_bytes": 44993,
       "depends_on": [
         "core",
         "tool.editor"
@@ -20916,7 +20916,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/outbounds.js",
-      "size_bytes": 469516,
+      "size_bytes": 469913,
       "depends_on": [
         "core",
         "tool.editor",
