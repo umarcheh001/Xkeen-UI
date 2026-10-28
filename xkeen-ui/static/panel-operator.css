@@ -25501,6 +25501,44 @@ body.panel-page #mihomo-import-modal .xk-mi-review .xk-mi-candidate-summary {
 body.panel-page #mihomo-import-modal .xk-mi-review-warning {
   border-left: 3px solid var(--op-accent) !important;
 }
+body.panel-page #mihomo-import-modal .xk-mi-placement {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  min-width: 0;
+}
+body.panel-page #mihomo-import-modal .xk-mi-placement-label,
+body.panel-page #mihomo-import-modal .xk-mi-replace-field {
+  color: var(--op-muted);
+  font-size: 12px;
+}
+body.panel-page #mihomo-import-modal .xk-mi-placement-actions {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+body.panel-page #mihomo-import-modal .xk-mi-placement-actions [aria-pressed="true"] {
+  border-color: var(--op-accent) !important;
+  background: var(--op-accent-soft) !important;
+  color: var(--op-text-strong) !important;
+}
+body.panel-page #mihomo-import-modal .xk-mi-placement-actions [aria-disabled="true"] {
+  opacity: .5;
+}
+body.panel-page #mihomo-import-modal .xk-mi-replace-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 100%;
+}
+body.panel-page #mihomo-import-modal .xk-mi-replace-field.hidden {
+  display: none;
+}
+body.panel-page #mihomo-import-modal .xk-mi-replace-field select {
+  flex: 1;
+  min-width: 0;
+}
 body.panel-page #mihomo-import-modal .xk-mi-review .xk-mi-candidate-details {
   color: var(--op-text);
   white-space: pre-line;

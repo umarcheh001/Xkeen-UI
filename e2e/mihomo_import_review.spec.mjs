@@ -42,6 +42,46 @@ test('review precedes commit, warns about editor changes, and goes back without 
   expect(commits).toBe(0);
 });
 
+test('review lets a single node move to the start or replace a chosen existing node', async ({ page }) => {
+  let committed;
+  await page.route('**/api/mihomo/import/commit', route => {
+    committed = route.request().postDataJSON();
+    return route.fulfill({ json: { ok: true, saved: true, revision: 'saved' } });
+  });
+  await setup(page);
+  await editor(page, CONFIG.replace('proxies: []', 'proxies:\n  - name: Existing\n    type: direct')
+    .replace('proxies: [DIRECT]', 'proxies: [DIRECT, Existing]'));
+  await page.locator('#mihomo-import-review-btn').click();
+  const start = page.locator('[data-mi-placement="start"]');
+  const replace = page.locator('[data-mi-placement="replace"]');
+  await start.click();
+  await expect(start).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#mihomo-import-candidate-summary')).toContainText('в начале');
+  const yaml = page.locator('[data-mi-review-view="yaml"]');
+  await yaml.locator('summary').click();
+  const prepended = await yaml.locator('pre').innerText();
+  expect(prepended.indexOf('name: Review')).toBeLessThan(prepended.indexOf('name: Existing'));
+
+  await replace.click();
+  await expect(replace).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#mihomo-import-replace-target')).toHaveValue('Existing');
+  await expect(page.locator('#mihomo-import-candidate-summary')).toContainText('Заменяемый узел: Existing');
+  await yaml.locator('summary').click();
+  const replaced = await yaml.locator('pre').innerText();
+  expect(replaced).toContain('name: Review');
+  expect(replaced).not.toContain('name: Existing');
+  expect(replaced).toContain('proxies: [DIRECT, "Review"]');
+  await page.locator('#mihomo-import-save-btn').click();
+  expect(committed.content.trimEnd()).toBe(replaced.trimEnd());
+});
+
+test('replacement requires one imported static node', async ({ page }) => {
+  await setup(page, `${LINK}\n${LINK.replace('#Review', '#Second')}`);
+  await page.locator('#mihomo-import-review-btn').click();
+  await expect(page.locator('[data-mi-placement="replace"]')).toHaveAttribute('aria-disabled', 'true');
+  await expect(page.locator('[data-mi-placement="end"]')).toHaveAttribute('aria-pressed', 'true');
+});
+
 test('review separates imported fragments from file diff and keeps YAML inside the dialog', async ({ page }) => {
   await setup(page);
   await editor(page, CONFIG + '# editor-only change\n');

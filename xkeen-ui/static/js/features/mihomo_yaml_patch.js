@@ -59,6 +59,7 @@ function normalizeInlineSection(text, key) {
  * @param {string} snippet  YAML fragment to append inside section
  * @param {object=} opts
  *   - avoidDuplicates (default true): if snippet already present, do nothing
+ *   - position: "start" inserts before existing entries; default is "end"
  */
 export function insertIntoSection(text, key, snippet, opts) {
   const o = opts || {};
@@ -80,6 +81,10 @@ export function insertIntoSection(text, key, snippet, opts) {
     try {
       if (src.includes(sn.trim())) return src;
     } catch (e) {}
+  }
+
+  if (o.position === 'start') {
+    return src.slice(0, sec.bodyStart) + sn + src.slice(sec.bodyStart);
   }
 
   const before = src.slice(0, sec.bodyEnd);

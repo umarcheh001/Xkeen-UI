@@ -278,6 +278,45 @@ def test_batch_patch_is_atomic_and_preserves_group_comments(client):
     assert "content" not in rejected.get_json()
 
 
+@pytest.mark.parametrize("without_yaml", [False, True])
+def test_batch_patch_can_prepend_nodes_in_source_order(client, without_yaml):
+    http, _ = client
+    source = ("proxies:\n  - name: Existing\n    type: direct\nproxy-groups:\n"
+              "  - name: Main\n    type: select\n    proxies: [DIRECT]\n")
+    body = {"content": source, "position": "start", "groups": ["Main"], "proxies": [
+        {"proxy_name": name, "proxy_yaml": f"- name: {name}\n  type: direct\n"}
+        for name in ("First", "Second")
+    ]}
+    with patch.dict("sys.modules", {"yaml": None} if without_yaml else {}):
+        response = http.post("/api/mihomo/patch/apply_batch", json=body)
+    assert response.status_code == 200
+    result = response.get_json()["content"]
+    assert result.index("name: First") < result.index("name: Second") < result.index("name: Existing")
+    assert 'proxies: [DIRECT, First, Second]' in result
+
+
+@pytest.mark.parametrize("without_yaml", [False, True])
+def test_batch_patch_replaces_one_node_and_updates_group_references(client, without_yaml):
+    http, _ = client
+    source = ("proxies:\n  - name: Existing\n    type: direct\n  - name: Keep\n    type: direct\n"
+              "proxy-groups:\n  - name: Main\n    type: select\n    proxies: [DIRECT, Existing] # keep\n")
+    body = {"content": source, "position": "replace", "replace_name": "Existing", "groups": ["Main"],
+            "proxies": [{"proxy_name": "New", "proxy_yaml": "- name: New\n  type: reject\n"}]}
+    with patch.dict("sys.modules", {"yaml": None} if without_yaml else {}):
+        response = http.post("/api/mihomo/patch/apply_batch", json=body)
+    assert response.status_code == 200
+    result = response.get_json()["content"]
+    assert "name: Existing" not in result
+    assert result.index("name: New") < result.index("name: Keep")
+    assert 'proxies: [DIRECT, "New"] # keep' in result
+
+    duplicate = {**body, "proxies": [{"proxy_name": "Keep", "proxy_yaml": "- name: Keep\n  type: reject\n"}]}
+    with patch.dict("sys.modules", {"yaml": None} if without_yaml else {}):
+        rejected = http.post("/api/mihomo/patch/apply_batch", json=duplicate)
+    assert rejected.status_code == 400
+    assert "content" not in rejected.get_json()
+
+
 def test_batch_patch_without_pyyaml_handles_router_subscription(client):
     http, config = client
     source = "proxies:\n  - name: Existing\n    type: direct\nproxy-groups:\n  - name: Main\n    type: select\n    proxies: [DIRECT] # keep\nrules: []\n"
