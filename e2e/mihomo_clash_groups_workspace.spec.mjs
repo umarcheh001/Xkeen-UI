@@ -54,6 +54,34 @@ test('Mihomo control view does not start connections telemetry beside group load
   await expect.poll(() => tokenRequests).toBeGreaterThan(0);
 });
 
+test('Mihomo node tiles keep compact metadata and reserve room for latency', async ({ page }) => {
+  const payload = groupsPayload();
+  const nodeData = payload.groups[0].nodes[0];
+  nodeData.server = 'cp.landing-se.rfid-technology.example.test';
+  nodeData.provider_ambiguous = true;
+  nodeData.provider_candidates = Array.from({ length: 19 }, (_, index) => `provider-${index}`);
+  await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
+  await page.route(/\/api\/mihomo\/clash\/proxy-groups(?:\/.*)?$/, (route) => route.fulfill({ json: payload }));
+  await page.goto('/');
+  await selectPanelView(page, 'mihomo');
+  await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head').click();
+
+  const node = page.locator('[data-group-name="AUTO"] [data-node-name="node-a"]');
+  await expect(node.locator('.xk-mihomo-node-main > small').first()).toHaveText('VLESS · xhttp · tls');
+  await expect(node.locator('.xk-mihomo-node-main > small').first()).toHaveAttribute('data-tooltip', 'VLESS · xhttp · tls · 19 providers · UDP');
+  await expect(node.locator('.xk-mihomo-node-endpoint')).toHaveAttribute('data-tooltip', 'cp.landing-se.rfid-technology.example.test:443');
+  const geometry = async () => node.evaluate((row) => {
+    const endpoint = row.querySelector('.xk-mihomo-node-endpoint').getBoundingClientRect();
+    const probe = row.querySelector('.xk-mihomo-node-probe').getBoundingClientRect();
+    return { endpointRight: endpoint.right, probeLeft: probe.left };
+  });
+  const desktop = await geometry();
+  expect(desktop.endpointRight).toBeLessThanOrEqual(desktop.probeLeft + 1);
+  await page.setViewportSize({ width: 375, height: 800 });
+  const mobile = await geometry();
+  expect(mobile.endpointRight).toBeLessThanOrEqual(mobile.probeLeft + 1);
+});
+
 
 test('Mihomo egress card shows routed IP, refreshes and stays compact on mobile', async ({ page }) => {
   const egressRequests = [];

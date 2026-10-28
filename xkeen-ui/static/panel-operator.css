@@ -21948,7 +21948,7 @@ body.panel-page .xk-mihomo-node-select {
   height: auto !important;
   min-height: 0 !important;
   max-height: none !important;
-  padding: 0 38px 0 0 !important;
+  padding: 0 48px 0 0 !important;
   border-color: transparent !important;
   background: transparent !important;
   text-align: left;
@@ -22034,6 +22034,9 @@ body.panel-page .xk-mihomo-node-main small {
 }
 
 body.panel-page .xk-mihomo-node-main .xk-mihomo-node-endpoint {
+  box-sizing: border-box;
+  max-width: 100%;
+  padding-right: 2px;
   color: var(--op-data-faint);
   font-size: calc(9.5px * var(--xk-font-scale, 1));
   font-family: "SFMono-Regular", Consolas, monospace;
