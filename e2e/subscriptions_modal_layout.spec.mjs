@@ -7,6 +7,123 @@ import {
 // Xray subscriptions window: layout of the window and of the outbounds card,
 // server tiles, flags and latency.
 
+test('source fields share one row when the subscriptions form is wide enough', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 850, height: 900 });
+  await page.route('**/api/xray/subscriptions', (route) => route.fulfill({ json: { ok: true, subscriptions: [] } }));
+  await openSubscriptionsModal(page);
+
+  const fields = await page.evaluate(() => {
+    const input = (id) => document.getElementById(id);
+    const bounds = (element) => {
+      const rect = element.getBoundingClientRect();
+      return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+    };
+    return {
+      name: bounds(input('outbounds-subscriptions-name').closest('label')),
+      tag: bounds(input('outbounds-subscriptions-tag').closest('label')),
+      mode: bounds(input('outbounds-subscriptions-schedule-mode').closest('label')),
+      interval: bounds(input('outbounds-subscriptions-interval-field')),
+      url: bounds(input('outbounds-subscriptions-url')),
+      panel: bounds(document.querySelector('#outbounds-subscriptions-modal .xk-sub-form-panel')),
+    };
+  });
+  expect(Math.max(...['name', 'tag', 'mode', 'interval'].map((key) => fields[key].top))
+    - Math.min(...['name', 'tag', 'mode', 'interval'].map((key) => fields[key].top))).toBeLessThanOrEqual(1);
+  expect(fields.name.right).toBeLessThan(fields.tag.left);
+  expect(fields.tag.right).toBeLessThan(fields.mode.left);
+  expect(fields.mode.right).toBeLessThan(fields.interval.left);
+  expect(fields.interval.right).toBeLessThanOrEqual(fields.panel.right);
+  expect(fields.url.top).toBeGreaterThan(fields.name.bottom);
+  await page.screenshot({ path: testInfo.outputPath('source-fields-850.png') });
+
+  await page.locator('#outbounds-subscriptions-schedule-mode').selectOption('cron');
+  const cronField = page.locator('#outbounds-subscriptions-cron-field');
+  await expect(cronField).toBeVisible();
+  const cronGeometry = await page.evaluate(() => ({
+    cron: document.getElementById('outbounds-subscriptions-cron-field').getBoundingClientRect().toJSON(),
+    name: document.getElementById('outbounds-subscriptions-name').closest('label').getBoundingClientRect().toJSON(),
+    panel: document.querySelector('#outbounds-subscriptions-modal .xk-sub-form-panel').getBoundingClientRect().toJSON(),
+  }));
+  expect(cronGeometry.cron.top).toBeCloseTo(cronGeometry.name.top, 0);
+  expect(cronGeometry.cron.right).toBeLessThanOrEqual(cronGeometry.panel.right + 1);
+  await page.locator('#outbounds-subscriptions-schedule-mode').selectOption('interval');
+
+  for (const width of [390, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    const geometry = await page.locator('#outbounds-subscriptions-form').evaluate((form) => {
+      const panel = form.closest('.xk-sub-form-panel');
+      const panelBounds = panel.getBoundingClientRect();
+      const fieldIds = ['name', 'tag', 'schedule-mode', 'interval'];
+      return {
+        formFits: form.scrollWidth <= form.clientWidth + 1,
+        fieldsFit: fieldIds.every((suffix) => {
+          const field = document.getElementById(`outbounds-subscriptions-${suffix}`);
+          const bounds = field.getBoundingClientRect();
+          return bounds.left >= panelBounds.left - 1 && bounds.right <= panelBounds.right + 1;
+        }),
+      };
+    });
+    expect(geometry.formFits, `form overflows at ${width}px`).toBe(true);
+    expect(geometry.fieldsFit, `field overflows at ${width}px`).toBe(true);
+  }
+});
+
+test('subscription controls expose one tooltip per field', async ({ page }) => {
+  const subscription = buildDemoSubscription(buildDemoNodes());
+  await page.route('**/api/xray/subscriptions', (route) => route.fulfill({
+    json: { ok: true, subscriptions: [subscription] },
+  }));
+  await openSubscriptionsModal(page);
+  await expect(page.locator('#outbounds-subscriptions-modal .xk-sub-table tbody tr')).toHaveCount(1);
+
+  const nestedOwners = await page.locator('#outbounds-subscriptions-modal').evaluate((modal) => (
+    [...modal.querySelectorAll('[data-tooltip]')]
+      .filter((element) => element.parentElement?.closest('[data-tooltip]'))
+      .map((element) => element.id || element.className || element.tagName)
+  ));
+  expect(nestedOwners).toEqual([]);
+
+  for (const suffix of ['name', 'tag', 'interval', 'url', 'name-filter', 'type-filter', 'transport-filter']) {
+    const input = page.locator(`#outbounds-subscriptions-${suffix}`);
+    await expect(input).toHaveAttribute('data-tooltip', /\S/);
+    await expect(input.locator('xpath=..')).not.toHaveAttribute('data-tooltip');
+  }
+  await expect(page.locator('#outbounds-subscriptions-tag')).toHaveAttribute('data-tooltip', /балансировщики/);
+  await expect(page.locator('#outbounds-subscriptions-url')).toHaveAttribute('data-tooltip', /JSON-списки/);
+  for (const suffix of ['enabled', 'ping', 'refresh-now', 'routing-auto-rule', 'entware-mark-btn']) {
+    const input = page.locator(`#outbounds-subscriptions-${suffix}`);
+    await expect(input.locator('xpath=..')).toHaveAttribute('data-tooltip', /\S/);
+    await expect(input).not.toHaveAttribute('data-tooltip');
+    await expect(input).not.toHaveAttribute('title');
+  }
+  await expect(page.locator('#outbounds-subscriptions-ping')).not.toHaveAttribute('data-tooltip-placement');
+  await expect(page.locator('#outbounds-subscriptions-ping').locator('xpath=..')).toHaveAttribute('data-tooltip-placement', 'bottom');
+  await expect(page.locator('#outbounds-subscriptions-routing-mode')).toHaveAttribute('data-tooltip-placement', 'bottom');
+
+  await page.locator('#outbounds-subscriptions-name').hover();
+  await expect(page.locator('#xk-tooltip-portal .xk-tooltip-text')).toContainText('Короткое имя подписки');
+  await page.locator('label:has(#outbounds-subscriptions-name) > .xk-pool-fieldlabel').hover();
+  await expect(page.locator('#xk-tooltip-portal')).toBeHidden();
+});
+
+test('clicking outside the subscriptions modal keeps it open', async ({ page }) => {
+  await page.route('**/api/xray/subscriptions', (route) => route.fulfill({ json: { ok: true, subscriptions: [] } }));
+  await openSubscriptionsModal(page);
+
+  const modal = page.locator('#outbounds-subscriptions-modal');
+  await expect(modal).toHaveAttribute('data-modal-backdrop-close', '0');
+  const name = page.locator('#outbounds-subscriptions-name');
+  await name.fill('Новая подписка');
+  await page.mouse.click(5, 5);
+  await expect(modal).toBeVisible();
+  await expect(name).toHaveValue('Новая подписка');
+  await expect(page.locator('#confirm-modal')).toHaveClass(/hidden/);
+
+  await page.locator('#outbounds-subscriptions-close-btn').click();
+  await expect(page.locator('#confirm-modal')).not.toHaveClass(/hidden/);
+  await expect(modal).toBeVisible();
+});
+
 test('global toasts stay above the runtime Xray subscriptions modal', async ({ page }) => {
   await page.route('**/api/xray/subscriptions', async (route) => {
     await route.fulfill({ json: { ok: true, subscriptions: [] } });

@@ -4,8 +4,10 @@ from pathlib import Path
 
 from services.mihomo_traffic_analytics import (
     BUCKET_SECONDS,
+    DEFAULT_RETENTION_SECONDS,
     MAX_RESOURCE_ROWS_PER_BUCKET,
     MihomoTrafficAnalyticsCollector,
+    _bucket,
 )
 from services.mihomo_traffic_simulator import MihomoTrafficScenario
 
@@ -48,6 +50,22 @@ def client_snapshot(*, received: int, sent: int):
             }
         ],
     }
+
+
+def test_month_range_includes_older_retained_buckets(tmp_path: Path):
+    clock = Clock()
+    collector = MihomoTrafficAnalyticsCollector(
+        db_path=str(tmp_path / "traffic.sqlite3"),
+        connections_factory=lambda: {},
+        clients_factory=lambda: {},
+        clock=clock,
+    )
+    old_bucket = _bucket(clock() - 8 * 24 * 3600)
+    collector._pending_totals[(old_bucket, "192.0.2.10", "Ноутбук")][0] = 100
+
+    assert collector.retention_seconds == DEFAULT_RETENTION_SECONDS == 30 * 24 * 3600
+    assert collector.summary(range_seconds=30 * 24 * 3600)["summary"]["total_bytes"] == 100
+    assert collector.summary(range_seconds=7 * 24 * 3600)["summary"]["total_bytes"] == 0
 
 
 def test_collector_attributes_deltas_to_device_route_and_resource(tmp_path: Path):

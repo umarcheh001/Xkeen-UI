@@ -738,6 +738,7 @@ def test_diagnostics_traffic_analytics_exposes_devices_routes_and_history():
         'id="mihomo-clash-traffic-range"',
         '<option value="7d">Неделя</option>',
         '<option value="14d">14 дней</option>',
+        '<option value="30d">Месяц</option>',
         'xk-mihomo-traffic-title-tooltip',
         'Локальная история по устройствам, маршрутам/VPN и запрошенным доменам.',
         'id="mihomo-clash-traffic-chart"',

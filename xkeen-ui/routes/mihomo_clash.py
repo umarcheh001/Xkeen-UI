@@ -944,7 +944,7 @@ def create_mihomo_clash_blueprint(
                 os.environ.get("XKEEN_MIHOMO_TRAFFIC_CLIENT_SECONDS", "30") or 30
             )
             retention_days = int(
-                os.environ.get("XKEEN_MIHOMO_TRAFFIC_RETENTION_DAYS", "7") or 7
+                os.environ.get("XKEEN_MIHOMO_TRAFFIC_RETENTION_DAYS", "30") or 30
             )
             analytics = MihomoTrafficAnalyticsCollector(
                 db_path=str(Path(ui_state_dir) / "mihomo-traffic.sqlite3"),
@@ -1665,10 +1665,11 @@ def create_mihomo_clash_blueprint(
             "24h": 24 * 3600,
             "7d": 7 * 24 * 3600,
             "14d": 14 * 24 * 3600,
+            "30d": 30 * 24 * 3600,
         }.get(raw_range)
         if range_seconds is None:
             return error_response(
-                "Допустимые диапазоны: 1h, 6h, 24h, 7d или 14d.",
+                "Допустимые диапазоны: 1h, 6h, 24h, 7d, 14d или 30d.",
                 400,
                 ok=False,
                 code="mihomo_traffic_range_invalid",

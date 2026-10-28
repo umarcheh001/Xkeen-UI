@@ -9,7 +9,7 @@ The collector deliberately keeps two sources separate:
   ``outside_estimated`` because it may also contain LAN/local traffic.
 
 No packet payloads, URLs or controller credentials are persisted.  The store
-contains minute aggregates only and is retained for a bounded seven-day
+contains five-minute aggregates only and is retained for a bounded 30-day
 window.
 """
 
@@ -28,7 +28,7 @@ from typing import Any
 TRAFFIC_ANALYTICS_SCHEMA_VERSION = 1
 DEFAULT_SAMPLE_INTERVAL_SECONDS = 10.0
 DEFAULT_CLIENT_INTERVAL_SECONDS = 30.0
-DEFAULT_RETENTION_SECONDS = 7 * 24 * 60 * 60
+DEFAULT_RETENTION_SECONDS = 30 * 24 * 60 * 60
 BUCKET_SECONDS = 5 * 60
 FLUSH_SECONDS = 60
 MAX_CONNECTIONS = 1000

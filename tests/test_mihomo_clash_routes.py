@@ -590,7 +590,7 @@ def test_diagnostics_traffic_rejects_unknown_range():
         ready_discovery(),
         StubClient(),
         traffic_analytics=Analytics(),
-    ).test_client().get("/api/mihomo/clash/diagnostics/traffic?range=30d")
+    ).test_client().get("/api/mihomo/clash/diagnostics/traffic?range=31d")
 
     assert response.status_code == 400
     assert response.get_json()["code"] == "mihomo_traffic_range_invalid"
@@ -618,6 +618,21 @@ def test_diagnostics_traffic_accepts_fourteen_days():
 
     assert response.status_code == 200
     assert analytics.calls == [14 * 24 * 3600]
+
+
+def test_diagnostics_traffic_accepts_month():
+    class Analytics:
+        def summary(self, *, range_seconds):
+            return {"range_seconds": range_seconds, "summary": {}}
+
+    response = make_app(
+        ready_discovery(),
+        StubClient(),
+        traffic_analytics=Analytics(),
+    ).test_client().get("/api/mihomo/clash/diagnostics/traffic?range=30d")
+
+    assert response.status_code == 200
+    assert response.get_json()["range_seconds"] == 30 * 24 * 3600
 
 
 def test_diagnostics_traffic_demo_mode_needs_no_router_or_database(monkeypatch):

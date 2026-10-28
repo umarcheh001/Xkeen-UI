@@ -283,12 +283,17 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
       active: button.classList.contains('is-active'),
       background: getComputedStyle(button).backgroundColor,
       color: getComputedStyle(button).color,
+      shadow: getComputedStyle(button).boxShadow,
     })));
     expect(seriesState.filter((item) => item.key !== 'unmatched').every((item) => item.pressed === 'true' && item.active)).toBe(true);
     expect(seriesState.find((item) => item.key === 'unmatched')).toMatchObject({ pressed: 'false', active: false });
     const activeSeriesState = seriesState.filter((item) => item.key !== 'unmatched');
     expect(new Set(activeSeriesState.map((item) => item.background)).size).toBe(1);
     expect(new Set(activeSeriesState.map((item) => item.color)).size).toBe(1);
+    const inactiveSeriesState = seriesState.find((item) => item.key === 'unmatched');
+    expect(activeSeriesState[0].background).not.toBe(inactiveSeriesState.background);
+    expect(activeSeriesState[0].shadow).toContain('inset');
+    expect(inactiveSeriesState.shadow).not.toContain('inset');
     if (viewport.width >= 800) {
       const hit = page.locator('#mihomo-clash-traffic-chart [data-chart-hit]');
       const box = await hit.boundingBox();
@@ -393,16 +398,23 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
 }
 
 
-test('traffic analytics offers week and fourteen-day ranges with dashboard quality metrics', async ({ page }) => {
+test('traffic analytics offers a month range and clear button feedback', async ({ page }) => {
   await openDiagnostics(page, { width: 1440, height: 900 });
   const range = page.locator('#mihomo-clash-traffic-range');
   await expect(range.locator('option[value="7d"]')).toHaveText('Неделя');
   await expect(range.locator('option[value="14d"]')).toHaveText('14 дней');
+  await expect(range.locator('option[value="30d"]')).toHaveText('Месяц');
   const request = page.waitForRequest((candidate) => (
-    candidate.url().includes('/api/mihomo/clash/diagnostics/traffic?range=14d')
+    candidate.url().includes('/api/mihomo/clash/diagnostics/traffic?range=30d')
   ));
-  await range.selectOption('14d');
+  await range.selectOption('30d');
   await request;
+  for (const selector of ['#mihomo-clash-traffic-refresh', '#mihomo-clash-traffic-export-csv', '[data-mihomo-traffic-series="unmatched"]']) {
+    const button = page.locator(selector);
+    const initial = await button.evaluate((element) => getComputedStyle(element).transform);
+    await button.hover();
+    await expect.poll(() => button.evaluate((element) => getComputedStyle(element).transform)).not.toBe(initial);
+  }
   await expect(page.locator('#mihomo-clash-traffic-quality .xk-mihomo-traffic-quality-item')).toHaveCount(7);
   const columns = await page.locator('#mihomo-clash-traffic-quality').evaluate((element) => (
     getComputedStyle(element).gridTemplateColumns.split(' ').length

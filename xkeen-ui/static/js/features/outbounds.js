@@ -4908,53 +4908,50 @@ let outboundsModuleApi = null;
 
     function subsApplySubscriptionCopy(formState) {
       const state = (formState && typeof formState === 'object') ? formState : subsReadFormState();
-      const setCheckCopy = (id, text, labelTooltip, inputTooltip, multiline) => {
+      const setCheckCopy = (id, text, labelTooltip, multiline) => {
         const input = $(id);
         const label = input && input.closest ? input.closest('label') : null;
-        [label, input].filter(Boolean).forEach((node) => {
-          try {
-            if (multiline) node.setAttribute('data-tooltip-multiline', '');
-            else node.removeAttribute('data-tooltip-multiline');
-          } catch (e) {}
-        });
         if (label) {
           try { label.setAttribute('data-tooltip', labelTooltip); } catch (e) {}
+          if (multiline) label.setAttribute('data-tooltip-multiline', '');
+          else label.removeAttribute('data-tooltip-multiline');
           try { label.setAttribute('aria-label', text); } catch (e1) {}
         }
         if (input) {
-          try { input.setAttribute('title', inputTooltip || text); } catch (e2) {}
           try { input.setAttribute('aria-label', text); } catch (e2a) {}
-          try { input.setAttribute('data-tooltip', inputTooltip || text); } catch (e3) {}
+          input.removeAttribute('title');
+          input.removeAttribute('data-tooltip');
+          input.removeAttribute('data-tooltip-multiline');
         }
       };
       const setTooltipPlacement = (id, placement) => {
         const input = $(id);
         if (input) {
-          try { input.setAttribute('data-tooltip-placement', placement); } catch (e) {}
+          if (input.hasAttribute('data-tooltip')) input.setAttribute('data-tooltip-placement', placement);
+          else input.removeAttribute('data-tooltip-placement');
           const label = input.closest ? input.closest('label') : null;
           if (label) {
-            try { label.setAttribute('data-tooltip-placement', placement); } catch (e2) {}
+            if (label.hasAttribute('data-tooltip')) label.setAttribute('data-tooltip-placement', placement);
+            else label.removeAttribute('data-tooltip-placement');
           }
         }
       };
       setCheckCopy(
         SUB_IDS.enabled,
         '\u0410\u0432\u0442\u043e',
-        '\u0412\u043a\u043b\u044e\u0447\u0438\u0442\u044c \u043f\u043b\u0430\u043d\u043e\u0432\u043e\u0435 \u0430\u0432\u0442\u043e\u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u0435 \u044d\u0442\u043e\u0439 \u043f\u043e\u0434\u043f\u0438\u0441\u043a\u0438.',
         '\u0412\u043a\u043b\u044e\u0447\u0438\u0442\u044c \u043f\u043b\u0430\u043d\u043e\u0432\u043e\u0435 \u0430\u0432\u0442\u043e\u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u0435 \u044d\u0442\u043e\u0439 \u043f\u043e\u0434\u043f\u0438\u0441\u043a\u0438.'
       );
 
       const pingTooltip = subsPingLocked(state)
         ? 'Фоновая проверка скорости узлов\nXray сам, раз в заданный интервал, проверяет задержку каждого узла этой подписки.\nНужно, чтобы балансировщики (служебный пул и отмеченные ниже) выбирали самый быстрый узел. Без замеров им не по чему выбирать.\nВыключить можно, если узлы подписки используются только напрямую по тегу. На кнопку «Пинг всех узлов» это не влияет.\nСейчас включён «Пул» — без замера он не работает, поэтому «Замер» выключить нельзя.'
         : 'Фоновая проверка скорости узлов\nXray сам, раз в заданный интервал, проверяет задержку каждого узла этой подписки.\nНужно, чтобы балансировщики (служебный пул и отмеченные ниже) выбирали самый быстрый узел. Без замеров им не по чему выбирать.\nВыключить можно, если узлы подписки используются только напрямую по тегу. На кнопку «Пинг всех узлов» это не влияет.';
-      setCheckCopy(SUB_IDS.ping, 'Замер', pingTooltip, pingTooltip, true);
+      setCheckCopy(SUB_IDS.ping, 'Замер', pingTooltip, true);
       setCheckCopy(
         SUB_IDS.refreshNow,
         '\u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c',
-        '\u041f\u043e\u0441\u043b\u0435 \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u0438\u044f \u0441\u0440\u0430\u0437\u0443 \u0441\u043a\u0430\u0447\u0430\u0442\u044c \u043f\u043e\u0434\u043f\u0438\u0441\u043a\u0443 \u0438 \u0441\u043e\u0437\u0434\u0430\u0442\u044c \u0444\u0440\u0430\u0433\u043c\u0435\u043d\u0442.',
-        '\u0421\u0440\u0430\u0437\u0443 \u0441\u043a\u0430\u0447\u0430\u0442\u044c \u043f\u043e\u0434\u043f\u0438\u0441\u043a\u0443 \u043f\u043e\u0441\u043b\u0435 \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u0438\u044f.'
+        '\u041f\u043e\u0441\u043b\u0435 \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u0438\u044f \u0441\u0440\u0430\u0437\u0443 \u0441\u043a\u0430\u0447\u0430\u0442\u044c \u043f\u043e\u0434\u043f\u0438\u0441\u043a\u0443 \u0438 \u0441\u043e\u0437\u0434\u0430\u0442\u044c \u0444\u0440\u0430\u0433\u043c\u0435\u043d\u0442.'
       );
-      setCheckCopy(SUB_IDS.routingAutoRule, 'Пул', 'Пускать трафик через самый быстрый узел\nУзлы подписки попадают в общий служебный балансировщик proxy, а панель держит правило, по которому трафик клиентов роутера (redirect/tproxy) идёт через этот балансировщик.\nXray сам выбирает узел с наименьшей задержкой, а если живых узлов нет, пускает трафик напрямую.\nВыключи, если подписка нужна только в других балансировщиках, отмеченных ниже.\nРаботает только вместе с «Замером»: при включении «Пула» он включается сам.', 'Пускать трафик через самый быстрый узел\nУзлы подписки попадают в общий служебный балансировщик proxy, а панель держит правило, по которому трафик клиентов роутера (redirect/tproxy) идёт через этот балансировщик.\nXray сам выбирает узел с наименьшей задержкой, а если живых узлов нет, пускает трафик напрямую.\nВыключи, если подписка нужна только в других балансировщиках, отмеченных ниже.\nРаботает только вместе с «Замером»: при включении «Пула» он включается сам.', true);
+      setCheckCopy(SUB_IDS.routingAutoRule, 'Пул', 'Пускать трафик через самый быстрый узел\nУзлы подписки попадают в общий служебный балансировщик proxy, а панель держит правило, по которому трафик клиентов роутера (redirect/tproxy) идёт через этот балансировщик.\nXray сам выбирает узел с наименьшей задержкой, а если живых узлов нет, пускает трафик напрямую.\nВыключи, если подписка нужна только в других балансировщиках, отмеченных ниже.\nРаботает только вместе с «Замером»: при включении «Пула» он включается сам.', true);
       setTooltipPlacement(SUB_IDS.enabled, 'bottom');
       setTooltipPlacement(SUB_IDS.ping, 'bottom');
       setTooltipPlacement(SUB_IDS.refreshNow, 'bottom');
@@ -5875,7 +5872,7 @@ let outboundsModuleApi = null;
       if (!document.body) return null;
 
       document.body.insertAdjacentHTML('beforeend', `
-        <div id="outbounds-subscriptions-modal" class="modal hidden" data-modal-key="outbounds-subscriptions-v1" data-modal-remember="0" data-modal-nopos="1" data-modal-nodrag="1" role="dialog" aria-modal="true" aria-label="Подписки Xray">
+        <div id="outbounds-subscriptions-modal" class="modal hidden" data-modal-key="outbounds-subscriptions-v1" data-modal-remember="0" data-modal-nopos="1" data-modal-nodrag="1" data-modal-backdrop-close="0" role="dialog" aria-modal="true" aria-label="Подписки Xray">
           <div class="modal-content xk-sub-modal" data-modal-key="outbounds-subscriptions-v1-content">
             <div class="modal-header xk-sub-header">
               <div class="xk-sub-titleblock">
@@ -5918,14 +5915,14 @@ let outboundsModuleApi = null;
                   <form id="outbounds-subscriptions-form" class="xk-sub-form">
                     <input id="outbounds-subscriptions-id" type="hidden">
                     <input id="outbounds-subscriptions-excluded-keys" type="hidden">
-                    <label class="xk-sub-span-6" data-tooltip="Короткое имя подписки в списке. Можно оставить пустым: при сохранении панель сгенерирует его автоматически.">
+                    <label class="xk-sub-span-6">
                       <span class="xk-pool-fieldlabel">Название</span>
                       <input id="outbounds-subscriptions-name" class="xray-log-filter" type="text" placeholder="Моя подписка" title="Название подписки" aria-describedby="outbounds-subscriptions-name-note" data-tooltip="Короткое имя подписки в списке. Если оставить поле пустым, имя будет сгенерировано автоматически при сохранении.">
                       <span id="outbounds-subscriptions-name-note" class="xk-sub-field-note" hidden></span>
                     </label>
-                    <label class="xk-sub-span-6" data-tooltip="С этого префикса начинаются теги всех узлов подписки: при префиксе sub узлы получат теги вида sub--имя. По нему балансировщики и замер находят узлы подписки. Можно оставить пустым — при сохранении панель придумает префикс сама.">
+                    <label class="xk-sub-span-6">
                       <span class="xk-pool-fieldlabel">Префикс тегов</span>
-                      <input id="outbounds-subscriptions-tag" class="xray-log-filter" type="text" placeholder="sub" title="Префикс тегов" aria-describedby="outbounds-subscriptions-tag-note" data-tooltip="Теги узлов будут начинаться с этого префикса: sub → sub--имя. Пусто — панель придумает префикс при сохранении.">
+                      <input id="outbounds-subscriptions-tag" class="xray-log-filter" type="text" placeholder="sub" title="Префикс тегов" aria-describedby="outbounds-subscriptions-tag-note" data-tooltip="С этого префикса начинаются теги узлов: sub → sub--имя. По нему балансировщики и замер находят узлы подписки. Можно оставить пустым — при сохранении панель придумает префикс сама.">
                       <span id="outbounds-subscriptions-tag-note" class="xk-sub-field-note" hidden></span>
                     </label>
                     <div class="xk-sub-wide xk-sub-schedule">
@@ -5934,10 +5931,10 @@ let outboundsModuleApi = null;
                           <option value="interval">Интервал</option><option value="cron">Cron по времени роутера</option>
                         </select>
                       </label>
-                      <label id="outbounds-subscriptions-interval-field" class="xk-sub-interval-field" data-tooltip="Как часто панель обновляет подписку. По умолчанию 24 часа. Если провайдер присылает свой интервал, он показывается рядом как рекомендация и само поле не меняет.">
+                      <label id="outbounds-subscriptions-interval-field" class="xk-sub-interval-field">
                       <span class="xk-pool-fieldlabel">Интервал обновления</span>
                       <div class="xk-sub-interval-inline">
-                        <input id="outbounds-subscriptions-interval" class="xray-log-filter" type="number" min="1" max="168" step="1" value="${SUB_DEFAULT_INTERVAL_HOURS}" title="Интервал обновления" aria-describedby="outbounds-subscriptions-interval-unit outbounds-subscriptions-interval-note" data-tooltip="Как часто панель будет обновлять подписку: от 1 до 168 часов. Рекомендация провайдера не меняет выбранное значение.">
+                        <input id="outbounds-subscriptions-interval" class="xray-log-filter" type="number" min="1" max="168" step="1" value="${SUB_DEFAULT_INTERVAL_HOURS}" title="Интервал обновления" aria-describedby="outbounds-subscriptions-interval-unit outbounds-subscriptions-interval-note" data-tooltip="Как часто панель обновляет подписку: от 1 до 168 часов (по умолчанию 24). Рекомендация провайдера показывается рядом и не меняет выбранное значение.">
                         <span id="outbounds-subscriptions-interval-unit" class="xk-op-unit">ч</span>
                         <button type="button" id="outbounds-subscriptions-interval-apply-btn" class="btn-secondary btn-compact xk-sub-interval-apply" hidden></button>
                       </div>
@@ -5951,9 +5948,9 @@ let outboundsModuleApi = null;
                       </label>
                     </div>
                     <div class="xk-sub-wide xk-sub-url-row">
-                      <label class="xk-sub-url-field" data-tooltip="Ссылка на подписку: обычный HTTP(S)-адрес, адрес мобильного коннектора или ссылка Happ (happ://crypt…). Внутри могут быть share-ссылки, base64 или JSON-список outbounds Xray.">
+                      <label class="xk-sub-url-field">
                         <span class="xk-pool-fieldlabel">URL подписки <span class="xk-op-required" aria-hidden="true">*</span></span>
-                        <input id="outbounds-subscriptions-url" class="xray-log-filter" type="text" inputmode="url" required aria-required="true" aria-describedby="outbounds-subscriptions-url-note" placeholder="https://... (в том числе коннектор) или happ://crypt..." title="URL подписки" data-tooltip="Вставь HTTP(S)-адрес подписки, адрес мобильного коннектора или ссылку Happ. Панель сама достанет вложенную ссылку happ://crypt… и расшифрует тело подписки.">
+                        <input id="outbounds-subscriptions-url" class="xray-log-filter" type="text" inputmode="url" required aria-required="true" aria-describedby="outbounds-subscriptions-url-note" placeholder="https://... (в том числе коннектор) или happ://crypt..." title="URL подписки" data-tooltip="HTTP(S)-адрес подписки, адрес мобильного коннектора или ссылка Happ (happ://crypt…). Поддерживаются share-ссылки, base64 и JSON-списки outbounds Xray; вложенную ссылку Happ панель расшифрует сама.">
                         <span id="outbounds-subscriptions-url-note" class="xk-sub-field-note" hidden></span>
                       </label>
                       <div class="xk-sub-url-action">
@@ -5971,21 +5968,21 @@ let outboundsModuleApi = null;
                         <span class="xk-sub-advanced-summary">Фильтры, маршрутизация и служебные параметры</span>
                       </summary>
                       <div class="xk-sub-advanced-grid">
-                    <label class="xk-sub-filter-field xk-sub-span-4" data-tooltip="Регулярное выражение по имени узла. Например: Germany|Netherlands|SG. Исключение: ^(?!.*ws).*$. Группы: (?P&lt;region&gt;Germany). Пусто — без фильтра.">
+                    <label class="xk-sub-filter-field xk-sub-span-4">
                       <span class="xk-pool-fieldlabel">Фильтр по имени</span>
-                      <input id="outbounds-subscriptions-name-filter" class="xray-log-filter" type="text" placeholder="Germany|Netherlands|SG" title="Фильтр имени" aria-describedby="outbounds-subscriptions-name-filter-note" data-tooltip="Оставить только узлы, чьё имя подходит под регулярное выражение. Например: Germany|Netherlands|SG. Исключение: ^(?!.*ws).*$. Группы: (?P&lt;region&gt;Germany).">
+                      <input id="outbounds-subscriptions-name-filter" class="xray-log-filter" type="text" placeholder="Germany|Netherlands|SG" title="Фильтр имени" aria-describedby="outbounds-subscriptions-name-filter-note" data-tooltip="Оставить узлы, чьё имя подходит под регулярное выражение без учёта регистра. Например: Germany|Netherlands|SG, ^(?!.*ws).*$. Поддерживаются группы (?P&lt;region&gt;Germany). Пусто — без фильтра.">
                       <span class="xk-sub-field-hint">Python regex, без учёта регистра; пусто — все.</span>
                       <span id="outbounds-subscriptions-name-filter-note" class="xk-sub-field-note" hidden></span>
                     </label>
-                    <label class="xk-sub-filter-field xk-sub-span-4" data-tooltip="Регулярное выражение по протоколу узла. Например: vless|trojan|vmess. Пусто — без фильтра.">
+                    <label class="xk-sub-filter-field xk-sub-span-4">
                       <span class="xk-pool-fieldlabel">Фильтр по типу</span>
-                      <input id="outbounds-subscriptions-type-filter" class="xray-log-filter" type="text" placeholder="vless|trojan|vmess" title="Фильтр типа" aria-describedby="outbounds-subscriptions-type-filter-note" data-tooltip="Оставить только узлы с указанными протоколами. Например: vless|trojan|vmess|ss|hy2.">
+                      <input id="outbounds-subscriptions-type-filter" class="xray-log-filter" type="text" placeholder="vless|trojan|vmess" title="Фильтр типа" aria-describedby="outbounds-subscriptions-type-filter-note" data-tooltip="Оставить узлы с указанными протоколами. Например: vless|trojan|vmess|ss|hy2. Пусто — без фильтра.">
                       <span class="xk-sub-field-hint">Python regex, без учёта регистра; пусто — все.</span>
                       <span id="outbounds-subscriptions-type-filter-note" class="xk-sub-field-note" hidden></span>
                     </label>
-                    <label class="xk-sub-filter-field xk-sub-span-4" data-tooltip="Регулярное выражение по транспорту узла. Например: ws|grpc|tcp|xhttp. Пусто — без фильтра.">
+                    <label class="xk-sub-filter-field xk-sub-span-4">
                       <span class="xk-pool-fieldlabel">Фильтр по транспорту</span>
-                      <input id="outbounds-subscriptions-transport-filter" class="xray-log-filter" type="text" placeholder="ws|grpc|tcp|xhttp" title="Фильтр транспорта" aria-describedby="outbounds-subscriptions-transport-filter-note" data-tooltip="Оставить только узлы с нужным транспортом. Например: ws|grpc|tcp|xhttp|quic.">
+                      <input id="outbounds-subscriptions-transport-filter" class="xray-log-filter" type="text" placeholder="ws|grpc|tcp|xhttp" title="Фильтр транспорта" aria-describedby="outbounds-subscriptions-transport-filter-note" data-tooltip="Оставить узлы с нужным транспортом. Например: ws|grpc|tcp|xhttp|quic. Пусто — без фильтра.">
                       <span class="xk-sub-field-hint">Python regex, без учёта регистра; пусто — все.</span>
                       <span id="outbounds-subscriptions-transport-filter-note" class="xk-sub-field-note" hidden></span>
                     </label>
@@ -6021,14 +6018,14 @@ let outboundsModuleApi = null;
                       </div>
                     </details>
                     <div class="xk-sub-controls">
-                      <label class="dt-switch xk-sub-check" aria-label="Автообновление" data-tooltip="Включить плановое автообновление этой подписки."><input id="outbounds-subscriptions-enabled" type="checkbox" checked title="Автообновление" aria-label="Автообновление" data-tooltip="Включить плановое автообновление этой подписки."><span class="dt-switch-slider" aria-hidden="true"></span><span class="xk-sub-switch-label">Автообн.</span></label>
-                      <label class="dt-switch xk-sub-check" aria-label="Замер" data-tooltip-multiline data-tooltip="Фоновая проверка скорости узлов&#10;Xray сам, раз в заданный интервал, проверяет задержку каждого узла этой подписки.&#10;Нужно, чтобы балансировщики (служебный пул и отмеченные ниже) выбирали самый быстрый узел. Без замеров им не по чему выбирать.&#10;Выключить можно, если узлы подписки используются только напрямую по тегу. На кнопку «Пинг всех узлов» это не влияет."><input id="outbounds-subscriptions-ping" type="checkbox" checked title="Замер" aria-label="Замер" data-tooltip-multiline data-tooltip="Фоновая проверка скорости узлов&#10;Xray сам, раз в заданный интервал, проверяет задержку каждого узла этой подписки.&#10;Нужно, чтобы балансировщики (служебный пул и отмеченные ниже) выбирали самый быстрый узел. Без замеров им не по чему выбирать.&#10;Выключить можно, если узлы подписки используются только напрямую по тегу. На кнопку «Пинг всех узлов» это не влияет."><span class="dt-switch-slider" aria-hidden="true"></span><span class="xk-sub-switch-label">Замер</span></label>
-                      <label class="dt-switch xk-sub-check" aria-label="Обновить сразу" data-tooltip-multiline data-tooltip="Скачать сразу после сохранения&#10;Подписка скачивается, и Xray перезапускается сразу.&#10;Сними, если добавляешь несколько подписок подряд: сохрани их все, а потом нажми «Обновить просроченные» — они скачаются одной пачкой с одним перезапуском."><input id="outbounds-subscriptions-refresh-now" type="checkbox" checked title="Обновить сразу" aria-label="Обновить сразу" data-tooltip="Сразу скачать подписку после сохранения."><span class="dt-switch-slider" aria-hidden="true"></span><span class="xk-sub-switch-label">Сразу</span></label>
+                      <label class="dt-switch xk-sub-check" aria-label="Автообновление" data-tooltip="Включить плановое автообновление этой подписки."><input id="outbounds-subscriptions-enabled" type="checkbox" checked aria-label="Автообновление"><span class="dt-switch-slider" aria-hidden="true"></span><span class="xk-sub-switch-label">Автообн.</span></label>
+                      <label class="dt-switch xk-sub-check" aria-label="Замер" data-tooltip-multiline data-tooltip="Фоновая проверка скорости узлов&#10;Xray сам, раз в заданный интервал, проверяет задержку каждого узла этой подписки.&#10;Нужно, чтобы балансировщики (служебный пул и отмеченные ниже) выбирали самый быстрый узел. Без замеров им не по чему выбирать.&#10;Выключить можно, если узлы подписки используются только напрямую по тегу. На кнопку «Пинг всех узлов» это не влияет."><input id="outbounds-subscriptions-ping" type="checkbox" checked aria-label="Замер"><span class="dt-switch-slider" aria-hidden="true"></span><span class="xk-sub-switch-label">Замер</span></label>
+                      <label class="dt-switch xk-sub-check" aria-label="Обновить сразу" data-tooltip-multiline data-tooltip="Скачать сразу после сохранения&#10;Подписка скачивается, и Xray перезапускается сразу.&#10;Сними, если добавляешь несколько подписок подряд: сохрани их все, а потом нажми «Обновить просроченные» — они скачаются одной пачкой с одним перезапуском."><input id="outbounds-subscriptions-refresh-now" type="checkbox" checked aria-label="Обновить сразу"><span class="dt-switch-slider" aria-hidden="true"></span><span class="xk-sub-switch-label">Сразу</span></label>
                       <label class="dt-switch xk-sub-check xk-sub-auto-rule-check" aria-label="Пул" data-tooltip-multiline data-tooltip="Пускать трафик через самый быстрый узел&#10;Узлы подписки попадают в общий служебный балансировщик proxy, а панель держит правило, по которому трафик клиентов роутера (redirect/tproxy) идёт через этот балансировщик.&#10;Xray сам выбирает узел с наименьшей задержкой, а если живых узлов нет, пускает трафик напрямую.&#10;Выключи, если подписка нужна только в других балансировщиках, отмеченных ниже.&#10;Работает только вместе с «Замером»: при включении «Пула» он включается сам.">
-                        <input id="outbounds-subscriptions-routing-auto-rule" type="checkbox" checked title="Пул" aria-label="Пул" data-tooltip-multiline data-tooltip="Пускать трафик через самый быстрый узел&#10;Узлы подписки попадают в общий служебный балансировщик proxy, а панель держит правило, по которому трафик клиентов роутера (redirect/tproxy) идёт через этот балансировщик.&#10;Xray сам выбирает узел с наименьшей задержкой, а если живых узлов нет, пускает трафик напрямую.&#10;Выключи, если подписка нужна только в других балансировщиках, отмеченных ниже.&#10;Работает только вместе с «Замером»: при включении «Пула» он включается сам.">
+                        <input id="outbounds-subscriptions-routing-auto-rule" type="checkbox" checked aria-label="Пул">
                         <span class="dt-switch-slider" aria-hidden="true"></span><span class="xk-sub-switch-label">Пул</span>
                       </label>
-                      <label class="dt-switch xk-sub-check xk-sub-mark-switch" aria-label="Entware mark 255" data-tooltip="Ставить sockopt.mark=255 на все узлы подписки — нужно для проксирования трафика Entware."><input id="outbounds-subscriptions-entware-mark-btn" type="checkbox" title="Ставить sockopt.mark=255 на все узлы подписки — нужно для проксирования трафика Entware" aria-label="Entware mark 255"><span class="dt-switch-slider" aria-hidden="true"></span><span class="xk-sub-switch-label">mark 255</span></label>
+                      <label class="dt-switch xk-sub-check xk-sub-mark-switch" aria-label="Entware mark 255" data-tooltip="Ставить sockopt.mark=255 на все узлы подписки — нужно для проксирования трафика Entware."><input id="outbounds-subscriptions-entware-mark-btn" type="checkbox" aria-label="Entware mark 255"><span class="dt-switch-slider" aria-hidden="true"></span><span class="xk-sub-switch-label">mark 255</span></label>
                       <label class="xk-sub-routing-mode" for="outbounds-subscriptions-routing-mode">
                         <span class="xk-sub-inline-label">Применение</span>
                         <select id="outbounds-subscriptions-routing-mode" class="xray-log-filter" title="Режим маршрутизации подписки" data-tooltip-multiline data-tooltip="Как подписка уживается с твоим основным сервером&#10;Рядом с моим сервером: ничего твоего не трогаем. Остальной трафик идёт через самый быстрый узел, и твой сервер vless-reality тоже участвует в выборе. Сайты, которые ты сам направил на свой сервер, так и ходят через него. Выбирай, если сомневаешься.&#10;Мои правила — через пул: правила «сайт → мой сервер» тоже переводятся на самый быстрый узел. Правила со своим ruleTag не трогаются. Вернёшь «Рядом с моим сервером» — правила вернутся как были.&#10;Только подписка: твой сервер больше не нужен — весь проксируемый трафик, в том числе по твоим правилам, идёт только через узлы подписки. Правила на direct, block и dns остаются. Выйдешь из режима — убранные серверы и правила вернутся на место; то, что ты за это время поправил сам, панель не затрёт и скажет об этом.">
@@ -9522,10 +9519,6 @@ let outboundsModuleApi = null;
         } catch (e2) {}
         if (modal.dataset) modal.dataset.xkSubResizeBound = '1';
       }
-
-      modal.addEventListener('click', (e) => {
-        try { if (e && e.target === modal) void subsClose(); } catch (e2) {}
-      });
 
       document.addEventListener('keydown', (e) => {
         if (!e || e.key !== 'Escape') return;
