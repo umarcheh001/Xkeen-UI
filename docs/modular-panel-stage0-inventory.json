@@ -359,7 +359,7 @@
       ],
       "removable": true,
       "unit_count": 66,
-      "size_bytes": 863787,
+      "size_bytes": 878310,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 16,
@@ -23062,7 +23062,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_service",
       "path": "xkeen-ui/services/system_resources_history/collector.py",
-      "size_bytes": 44106,
+      "size_bytes": 47020,
       "depends_on": [
         "core"
       ],
@@ -23122,7 +23122,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_service",
       "path": "xkeen-ui/services/system_resources_history/problems.py",
-      "size_bytes": 10044,
+      "size_bytes": 10488,
       "depends_on": [
         "core"
       ],
@@ -23160,7 +23160,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_service",
       "path": "xkeen-ui/services/system_resources_history/store.py",
-      "size_bytes": 15565,
+      "size_bytes": 18590,
       "depends_on": [
         "core"
       ],
@@ -23179,7 +23179,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_service",
       "path": "xkeen-ui/services/system_resources_history/top_procs.py",
-      "size_bytes": 9303,
+      "size_bytes": 11695,
       "depends_on": [
         "core"
       ],
@@ -23312,7 +23312,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_system_resources_collector.py",
-      "size_bytes": 42449,
+      "size_bytes": 45130,
       "depends_on": [
         "core"
       ],
@@ -23371,7 +23371,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_system_resources_problems.py",
-      "size_bytes": 11841,
+      "size_bytes": 12269,
       "depends_on": [
         "core"
       ],
@@ -23409,7 +23409,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_system_resources_store.py",
-      "size_bytes": 12485,
+      "size_bytes": 13904,
       "depends_on": [
         "core"
       ],
@@ -23428,7 +23428,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_system_resources_top_procs.py",
-      "size_bytes": 5111,
+      "size_bytes": 6331,
       "depends_on": [
         "core"
       ],
@@ -34829,7 +34829,7 @@
         },
         "tool.advanced-diagnostics": {
           "unit_count": 66,
-          "size_bytes": 863787
+          "size_bytes": 878310
         }
       },
       "next_stage": "Этапы 4, 5 и 6."

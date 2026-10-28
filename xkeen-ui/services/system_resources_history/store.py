@@ -163,6 +163,10 @@ class HistoryStore:
         """The last sample came on a clock not set yet (see ``UNSET_CLOCK_GIVE_UP_S``)."""
         return self._unset_since is not None
 
+    @property
+    def history_since(self) -> float | None:
+        return self._since
+
     def clock_unset_at(self, ts: float) -> bool:
         """Whether a sample taken at ``ts`` would be one of a clock not set yet."""
         if self._high_ts is None or ts >= self._high_ts - BACK_JUMP_RESET_S:
@@ -290,6 +294,57 @@ class HistoryStore:
             for arr in tier.avg + tier.peak:
                 total += len(arr) * arr.itemsize
         return total
+
+    def rebase_time(self, seconds: float) -> None:
+        """Move a new boot's unanchored history onto its corrected clock.
+
+        Aggregates keep their values; their placement has the tier's original
+        resolution. The open aggregate follows the newest actual sample.
+        """
+        if self._last_ts is None:
+            return
+        for tier in self._tiers.values():
+            old_avgs, old_peaks = tier.avg, tier.peak
+            starts = array("q", [-1]) * tier.size
+            avgs = [array("f", [NAN]) * tier.size for _ in self._metrics]
+            peaks = [array("f", [NAN]) * tier.size for _ in self._metrics]
+            groups: dict[int, list[int]] = {}
+            for old_slot, at in enumerate(tier.starts):
+                if at < 0:
+                    continue
+                observed = max(at, self._since) if self._since is not None else at
+                point = int((observed + seconds) // tier.step)
+                groups.setdefault(point, []).append(old_slot)
+            for point, old_slots in sorted(groups.items()):
+                slot = point % tier.size
+                starts[slot] = point * tier.step
+                for i in range(len(self._metrics)):
+                    values = [old_avgs[i][j] for j in old_slots if not math.isnan(old_avgs[i][j])]
+                    maxima = [old_peaks[i][j] for j in old_slots if not math.isnan(old_peaks[i][j])]
+                    avgs[i][slot] = sum(values) / len(values) if values else NAN
+                    peaks[i][slot] = max(maxima) if maxima else NAN
+            tier.starts, tier.avg, tier.peak = starts, avgs, peaks
+            if tier.cur is not None:
+                tier.cur = int((self._last_ts + seconds) // tier.step)
+                if tier.cur in groups:
+                    # Like folding chart columns: each old interval has equal weight.
+                    # A closed point must not disappear behind the new open point.
+                    for i in range(len(self._metrics)):
+                        values = [old_avgs[i][j] for j in groups[tier.cur] if not math.isnan(old_avgs[i][j])]
+                        maxima = [old_peaks[i][j] for j in groups[tier.cur] if not math.isnan(old_peaks[i][j])]
+                        if tier.cnt[i]:
+                            values.append(tier.sum[i] / tier.cnt[i])
+                            maxima.append(tier.mx[i])
+                        tier.sum[i], tier.cnt[i] = sum(values), len(values)
+                        tier.mx[i] = max(maxima) if maxima else NAN
+                    slot = tier.cur % tier.size
+                    tier.starts[slot] = -1
+                    for i in range(len(self._metrics)):
+                        tier.avg[i][slot] = tier.peak[i][slot] = NAN
+        for name in ("_last_ts", "_high_ts", "_since", "_unset_since"):
+            value = getattr(self, name)
+            if value is not None:
+                setattr(self, name, value + seconds)
 
     def to_dict(self) -> dict[str, Any]:
         tiers: dict[str, Any] = {}

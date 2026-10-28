@@ -21,6 +21,7 @@ from __future__ import annotations
 import atexit
 import errno
 import logging
+import math
 import os
 import threading
 import time
@@ -34,8 +35,8 @@ from . import hardware as hw
 from . import sensors
 from . import top_procs
 from .persist import load_history, save_history
-from .problems import ProblemTracker
-from .store import RANGES, HistoryStore
+from .problems import REBOOT_UPTIME_S, ProblemTracker
+from .store import BACK_JUMP_RESET_S, RANGES, HistoryStore
 from .zones import USUAL_MIN_POINTS, chart_bands, hotter_than_usual, red_from, temp_bands, zone, zram_pressure
 
 log = logging.getLogger(__name__)
@@ -178,6 +179,8 @@ class Collector:
         self._uptime_s = self._read_uptime()
         restored = load_history([self._paths["tmp"], self._paths["flash"]], None)
         persisted_uptime = None
+        same_clock_boot = False
+        clock_anchor: dict = {}
         events: list[dict] = []
         if restored is not None:
             self._store, events, saved_at, meta = restored
@@ -188,6 +191,17 @@ class Collector:
             raw_uptime = meta.get("uptime_s")
             if isinstance(raw_uptime, (int, float)) and not isinstance(raw_uptime, bool):
                 persisted_uptime = float(raw_uptime)
+            raw_anchor = meta.get("clock_anchor")
+            clock_anchor = raw_anchor if isinstance(raw_anchor, dict) else {}
+            anchor_wall, anchor_uptime = clock_anchor.get("wall_ts"), clock_anchor.get("uptime_s")
+            same_clock_boot = bool(
+                self._boot_id and meta.get("clock_origin_boot_id") == self._boot_id
+                and persisted_uptime is not None and self._uptime_s is not None
+                and self._uptime_s >= persisted_uptime
+                and isinstance(anchor_wall, (int, float)) and math.isfinite(anchor_wall)
+                and isinstance(anchor_uptime, (int, float)) and math.isfinite(anchor_uptime)
+                and self._uptime_s >= anchor_uptime
+            )
             # Flash is written every hour counted from the copy on flash, not from this
             # start: a panel restarted more often than that must still reach the flash.
             on_flash = load_history([self._paths["flash"]], None)
@@ -199,11 +213,20 @@ class Collector:
         self._tracker = ProblemTracker(self._clock, events=events)
         self._failover_pending: tuple[str, float] | None = None
         self._boot_event: dict | None = None
-        self._last_tick_ts = now
-        if self._uptime_s is not None:
+        self._cold_clock = same_clock_boot or (
+            restored is None and self._uptime_s is not None and 0 <= self._uptime_s < REBOOT_UPTIME_S
+        )
+        self._last_tick_ts = clock_anchor["wall_ts"] if same_clock_boot else now
+        self._last_tick_uptime = clock_anchor["uptime_s"] if same_clock_boot else self._uptime_s
+        if same_clock_boot:
+            self._correct_cold_clock(now, self._uptime_s)
+            self._gap_s = max(0.0, self._uptime_s - persisted_uptime)
+            self._boot_event = next((e for e in reversed(self._tracker.events(0)) if e["type"] == "router_rebooted"), None)
+        elif self._uptime_s is not None:
             self._boot_event = self._tracker.note_start(self._uptime_s, persisted_uptime)
             if self._boot_event is not None:  # the moment the router started, not the panel
                 self._tracker.restamp(self._boot_event, now - self._uptime_s)
+        self._last_tick_ts, self._last_tick_uptime = now, self._uptime_s
         self._tariffs = get_diagnostics_tariffs(ui_state_dir)
 
     # -- small helpers ------------------------------------------------------
@@ -242,16 +265,19 @@ class Collector:
         # Only this thread calls tick().  Slow RCI and file reads happen outside
         # the lock, so a timing-out firmware never blocks snapshot()/history().
         now = self._clock()
+        uptime = self._read_uptime()
         n = self._n
         self._n += 1
         slow = self._guarded("60 s fetch", self._fetch_slow) if n % SLOW_EVERY == 0 else None
         mid = self._guarded("30 s fetch", self._fetch_mid) if n % MID_EVERY == 0 else None
         with self._lock:
+            self._correct_cold_clock(now, uptime)
             if self._event_now(now) != now:
                 self._events_on_uptime = True
             elif now - self._last_tick_ts > CLOCK_JUMP_FORWARD_S:
                 self._on_clock_jump(now)
             self._last_tick_ts = now
+            self._last_tick_uptime = uptime
             if slow is not None:
                 self._guarded("60 s apply", self._apply_slow, now, slow)
             if mid is not None:
@@ -259,6 +285,26 @@ class Collector:
             values = self._sample_fast(now)
             self._store_and_judge(now, values)
         self._save_if_due(now)
+
+    def _correct_cold_clock(self, now: float, uptime: float | None) -> None:
+        if not self._cold_clock or uptime is None or self._last_tick_uptime is None or uptime < self._last_tick_uptime:
+            return
+        if not all(math.isfinite(value) for value in (now, uptime, self._last_tick_ts, self._last_tick_uptime)):
+            return
+        seconds = now - self._last_tick_ts - (uptime - self._last_tick_uptime)
+        if abs(seconds) <= BACK_JUMP_RESET_S:
+            return
+        since = self._store.history_since
+        self._store.rebase_time(seconds)
+        self._top.rebase_time(seconds, since=since)
+        self._tracker.rebase_time(seconds)
+        if self._boot_event is not None:
+            self._tracker.restamp(self._boot_event, now - uptime)
+        if self._failover_pending is not None:
+            key, at = self._failover_pending
+            self._failover_pending = (key, at + seconds)
+        self._last_save = {kind: min(now, at + seconds) for kind, at in self._last_save.items()}
+        self._last_tick_ts += seconds
 
     def _event_now(self, now: float) -> float:
         """The time to stamp events with: the uptime while the clock is not set yet."""
@@ -560,6 +606,9 @@ class Collector:
             meta: dict = {"top": self._top.to_dict()}
             if self._internet_seen_online and self._boot_id:
                 meta["internet_ready_boot_id"] = self._boot_id
+            if self._cold_clock and self._boot_id:
+                meta["clock_origin_boot_id"] = self._boot_id
+                meta["clock_anchor"] = {"wall_ts": self._last_tick_ts, "uptime_s": self._last_tick_uptime}
             if self._uptime_s is not None:
                 meta["uptime_s"] = self._uptime_s
             now = self._clock()

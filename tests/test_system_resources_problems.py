@@ -14,6 +14,17 @@ from services.system_resources_history.zones import hotter_than_usual, zone  # n
 T0 = 1_800_000_000.0
 
 
+def test_rebase_event_times_preserves_elapsed_problem_timers():
+    tr = ProblemTracker(lambda: T0)
+    port = tr.emit("port_slow", T0 + 5, key="4")
+    tr.update(T0 + 10, {"cpu": 2}, {})
+    tr.rebase_time(1200)
+    assert port["at"] == T0 + 1205
+    tr.update(T0 + 1390, {"cpu": 2}, {})
+    overload = [e for e in tr.events(0) if e["type"] == "cpu_overload"]
+    assert len(overload) == 1 and overload[0]["at"] == T0 + 1210
+
+
 @pytest.mark.parametrize(
     "metric,value,kwargs,expected",
     [

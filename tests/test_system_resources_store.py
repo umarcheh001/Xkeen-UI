@@ -4,6 +4,8 @@ import math
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "xkeen-ui"))
 
 from services.system_resources_history.store import TIERS, HistoryStore  # noqa: E402
@@ -195,6 +197,44 @@ def test_small_backward_step_does_not_reset():
     s.add(T0 + 290, {"cpu": 30})
     fresh = s.columns("15m", T0 + 290)["metrics"]["cpu"]["avg"]
     assert len([v for v in fresh if v is not None]) >= 15
+
+
+def test_rebase_new_history_keeps_partial_point_values_and_correct_calendar_cells():
+    s = HistoryStore(("cpu",))
+    s.add(T0 + 1249, {"cpu": 10})
+    s.add(T0 + 1254, {"cpu": 50})
+    s.rebase_time(42246)
+    now = T0 + 43500
+    assert s.columns("15m", now)["history_since"] == T0 + 43495
+    for range_id in ("15m", "6h", "7d"):
+        point = s.columns(range_id, now)["metrics"]["cpu"]
+        assert point["avg"][-1] == 30
+        assert point["max"][-1] == 50
+    s.add(now + 5, {"cpu": 30})
+    assert s.columns("6h", now + 5)["metrics"]["cpu"]["avg"][-1] == 30
+
+
+def test_rebase_new_history_keeps_closed_points_across_ring_wrap():
+    s = HistoryStore(("cpu",))
+    feed(s, T0, 3900, 30)
+    s.rebase_time(3600)
+    fresh = s.columns("1h", T0 + 7495)["metrics"]["cpu"]
+    assert fresh["avg"] == [30] * 60
+    assert fresh["max"] == [30] * 60
+
+
+def test_rebase_merges_closed_and_open_intervals_without_losing_a_point():
+    s = HistoryStore(("cpu",))
+    s.add(1004, {"cpu": 10})
+    s.add(1006, {"cpu": 50})
+    s.rebase_time(80)
+    point = s.columns("15m", 1086)["metrics"]["cpu"]
+    assert point["avg"][-1] == 30 and point["max"][-1] == 50
+    s.add(1087, {"cpu": 70})
+    s.rebase_time(0)  # the closed point must not be counted a second time
+    point = s.columns("15m", 1087)["metrics"]["cpu"]
+    assert point["avg"][-1] == pytest.approx(130 / 3)
+    assert point["max"][-1] == 70
 
 
 def test_ring_wraps_after_7_days():

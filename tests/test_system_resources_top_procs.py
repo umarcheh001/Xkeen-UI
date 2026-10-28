@@ -8,6 +8,36 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "xkeen-ui"))
 
+
+def test_rebase_process_leaders_keeps_values_in_new_calendar_window():
+    from services.system_resources_history.top_procs import TopStore
+    store = TopStore()
+    store.add(1_800_000_000, {"xray": 25.0})
+    store.add(1_800_000_060, {"xray": 50.0})
+    store.rebase_time(3600, since=1_800_000_000)
+    assert store.columns(60, 1_800_003_600, 2) == [[["xray", 25.0]], [["xray", 50.0]]]
+    assert store.columns(60, 1_800_000_000, 2) == [None, None]
+
+
+def test_rebase_process_open_point_follows_actual_last_scan():
+    from services.system_resources_history.top_procs import TopStore
+    store = TopStore()
+    store.add(1021, {"a": 10})
+    store.add(1079, {"b": 20})
+    store.rebase_time(62, since=1021)
+    assert store.columns(60, 1140, 1) == [[["b", 10.0], ["a", 5.0]]]
+
+
+def test_rebase_process_points_merge_when_partial_intervals_coincide():
+    from services.system_resources_history.top_procs import TopStore
+    store = TopStore()
+    store.add(1079, {"a": 10})
+    store.add(1081, {"b": 20})
+    store.rebase_time(3, since=1079)
+    assert store.columns(60, 1080, 1) == [[["b", 10.0], ["a", 5.0]]]
+    store.rebase_time(0, since=1082)
+    assert store.columns(60, 1080, 1) == [[["b", 10.0], ["a", 5.0]]]
+
 from services.system_resources_history.top_procs import (  # noqa: E402
     TopStore,
     cpu_shares,

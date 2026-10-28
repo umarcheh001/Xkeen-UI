@@ -197,6 +197,16 @@ class ProblemTracker:
         if event.get("until") is not None:
             event["until"] = at
 
+    def rebase_time(self, seconds: float) -> None:
+        """Correct a new boot's calendar times without restarting its stopwatches."""
+        for event in self._events:
+            event["at"] += seconds
+            if event.get("until") is not None:
+                event["until"] += seconds
+        for stamps in (self._red_since, self._clear_since, self._last_seen):
+            for key in stamps:
+                stamps[key] += seconds
+
     def shift_stand_in(self, below: float, by: float) -> None:
         """Times under ``below`` were taken on a stand-in clock (uptime): move them by ``by``."""
         for ev in self._events:

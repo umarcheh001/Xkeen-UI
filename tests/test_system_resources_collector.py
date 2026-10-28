@@ -914,6 +914,79 @@ def test_boot_with_a_past_clock_then_ntp_jump_forward(tmp_path):
     assert "200 д" not in c.snapshot()["cards"]["internet"]["text"]
 
 
+def test_clean_boot_clock_steps_rebase_history_and_port_event(tmp_path):
+    r = FakeRouter()
+    r.now, r.uptime = T0 - 42246, 40.0
+    r.files["/proc/sys/kernel/random/boot_id"] = "cold-boot"
+    r.set_lan_speed("100", only="4")
+    c = make(tmp_path, r)
+    def walk(n):
+        for _ in range(n):
+            r.uptime += 5
+            r.step(c)
+    walk(3)
+    r.now += 41046  # intermediate firmware correction, still 20 minutes behind
+    walk(1)
+    r.now += 1200  # NTP final correction (< the old one-hour detector)
+    walk(1)
+    events = c.events(0)
+    (port,) = [e for e in events if e["type"] == "port_slow"]
+    assert port["at"] == pytest.approx(T0 + 5, rel=0, abs=0.01)
+    assert c.history("15m")["history_since"] == pytest.approx(T0 + 5, rel=0, abs=0.01)
+    (boot,) = [e for e in events if e["type"] == "router_rebooted"]
+    assert boot["at"] == pytest.approx(r.now - r.uptime, rel=0, abs=0.01)
+    assert not [e for e in events if e["type"] in ("internet_lost", "internet_restored")]
+    c.save("tmp")
+    payload = json.loads((tmp_path / "tmp" / "resource-history.json").read_text(encoding="utf-8"))
+    assert payload["store"]["since"] >= T0
+    assert all(t < 0 or t >= T0 for t in payload["store"]["tiers"]["week"]["starts"])
+
+
+def test_clean_boot_real_pause_does_not_shift_earlier_history(tmp_path):
+    r = FakeRouter()
+    r.uptime = 40.0
+    c = make(tmp_path, r)
+    r.step(c)
+    before = c.history("15m")["history_since"]
+    r.now += 7200
+    r.uptime += 7200
+    r.step(c)
+    assert c.history("7d")["history_since"] == before
+
+
+def test_clean_boot_panel_restart_corrects_jump_between_processes(tmp_path):
+    r = FakeRouter()
+    r.now, r.uptime = T0 - 42246, 40.0
+    r.files["/proc/sys/kernel/random/boot_id"] = "cold-boot"
+    r.set_lan_speed("100", only="4")
+    c = make(tmp_path, r)
+    r.uptime += 5
+    r.step(c)
+    c.stop()
+    r.now += 42276
+    r.uptime += 30
+    restarted = make(tmp_path, r)
+    r.step(restarted)
+    assert restarted.history("15m")["history_since"] == pytest.approx(T0 + 5, rel=0, abs=0.01)
+    (port,) = [e for e in restarted.events(0) if e["type"] == "port_slow"]
+    assert port["at"] == pytest.approx(T0 + 5, rel=0, abs=0.01)
+    assert len([e for e in restarted.events(0) if e["type"] == "router_rebooted"]) == 1
+
+
+def test_clean_boot_delayed_save_does_not_fabricate_a_clock_step(tmp_path):
+    r = FakeRouter()
+    r.uptime = 40.0
+    r.files["/proc/sys/kernel/random/boot_id"] = "cold-boot"
+    c = make(tmp_path, r)
+    r.uptime += 5
+    r.step(c)
+    r.now += 120
+    r.uptime += 120
+    c.save("flash")
+    restarted = make(tmp_path, r)
+    assert restarted.history("15m")["history_since"] == T0 + 5
+
+
 def _soc_after_history(tmp_path, half_hours: int):
     r = FakeRouter()
     r.thermal_temp = 78_000

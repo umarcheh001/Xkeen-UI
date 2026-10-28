@@ -166,11 +166,55 @@ def _merge(points: Iterable[tuple | None]) -> list[list] | None:
 class TopStore:
     def __init__(self) -> None:
         self._tiers = {name: _Tier(name) for name in TIERS}
+        self._last_ts: float | None = None
 
     def add(self, ts: float, shares: dict[str, float]) -> None:
         """One scan; an empty dict is a measured minute where nobody worked."""
         for tier in self._tiers.values():
             tier.add(ts, shares)
+        self._last_ts = ts
+
+    def rebase_time(self, seconds: float, *, since: float | None = None) -> None:
+        """Move leaders collected on the new boot's provisional clock."""
+        for tier in self._tiers.values():
+            starts, points = [-1] * tier.size, [None] * tier.size
+            groups: dict[int, list[int]] = {}
+            for old_slot, at in enumerate(tier.starts):
+                if at < 0:
+                    continue
+                observed = max(at, since) if since is not None else at
+                point = int((observed + seconds) // tier.step)
+                groups.setdefault(point, []).append(old_slot)
+            sums_by_point: dict[int, tuple[dict[str, float], int]] = {}
+            for point, old_slots in sorted(groups.items()):
+                sums: dict[str, float] = {}
+                count = 0
+                for j in old_slots:
+                    old = tier.points[j]
+                    if old is None:
+                        continue
+                    count += 1
+                    for i in range(0, len(old), 2):
+                        sums[old[i]] = sums.get(old[i], 0.0) + old[i + 1]
+                sums_by_point[point] = (sums, count)
+                slot = point % tier.size
+                starts[slot] = point * tier.step
+                points[slot] = _top(sums, count, KEEP) if count else None
+            tier.starts, tier.points = starts, points
+            if tier.cur is not None:
+                observed = self._last_ts if self._last_ts is not None else tier.cur * tier.step
+                tier.cur = int((observed + seconds) // tier.step)
+                if tier.cur in sums_by_point:
+                    sums, count = sums_by_point[tier.cur]
+                    if tier.cnt:
+                        for name, total in tier.run.items():
+                            sums[name] = sums.get(name, 0.0) + total / tier.cnt
+                        count += 1
+                    tier.run, tier.cnt = sums, count
+                    slot = tier.cur % tier.size
+                    tier.starts[slot], tier.points[slot] = -1, None
+        if self._last_ts is not None:
+            self._last_ts += seconds
 
     def _tier_for(self, step_s: float) -> _Tier:
         if step_s >= TIERS["week"][0]:
@@ -198,6 +242,7 @@ class TopStore:
     def to_dict(self) -> dict[str, Any]:
         return {
             "version": FORMAT_VERSION,
+            "last_ts": self._last_ts,
             "tiers": {
                 name: {
                     "starts": list(t.starts),
@@ -217,6 +262,8 @@ class TopStore:
         try:
             if data.get("version") != FORMAT_VERSION:
                 return store
+            last_ts = data.get("last_ts")
+            store._last_ts = float(last_ts) if isinstance(last_ts, (int, float)) else None
             for name, tier in store._tiers.items():
                 saved = data["tiers"][name]
                 starts = [int(v) for v in saved["starts"]]
