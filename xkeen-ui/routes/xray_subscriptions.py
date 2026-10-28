@@ -3,20 +3,23 @@
 from __future__ import annotations
 
 import os
+import time
 from typing import Any, Callable
 
 from flask import Blueprint, jsonify, request
-
-from routes.common.errors import error_response, exception_response
 from services import subscription_pause
 from services.latency_jobs import create_latency_job, get_latency_job
-from services.xray_config_files import ROUTING_FILE
+from services.subscription_cron import next_cron, router_timezone
 from services.subscription_request_profile import (
     detected_xray_request_profile,
     validate_request_profile,
 )
+from services.xray_config_files import ROUTING_FILE
 from services.xray_subscriptions import (
     SubscriptionConfigRejected,
+    SubscriptionPlaceholderError,
+    _compile_regex_filter,
+    _subscription_filter_reasons,
     apply_schedule_alignment,
     delete_subscription,
     get_subscription_routing_meta,
@@ -24,7 +27,6 @@ from services.xray_subscriptions import (
     list_subscriptions,
     plan_schedule_alignment,
     preview_subscription,
-    SubscriptionPlaceholderError,
     probe_subscription_node_latency,
     probe_subscription_node_tcp_latency,
     probe_subscription_nodes_latency,
@@ -33,6 +35,8 @@ from services.xray_subscriptions import (
     refresh_subscription,
     upsert_subscription,
 )
+
+from routes.common.errors import error_response, exception_response
 
 
 def create_xray_subscriptions_blueprint(
@@ -83,12 +87,25 @@ def create_xray_subscriptions_blueprint(
     def api_list_xray_subscriptions():
         try:
             subscriptions = list_subscriptions(ui_state_dir)
+            subscriptions = [
+                {**sub, "next_update_local": time.strftime("%Y-%m-%d %H:%M", time.localtime(float(sub["next_update_ts"])))}
+                if sub.get("schedule_mode") == "cron" and sub.get("next_update_ts") else sub
+                for sub in subscriptions
+            ]
+            # Opt-in projection keeps API compatibility while avoiding full generated
+            # outbound configs in the browser on every list reload.
+            if _bool_arg("compact", False) or request.headers.get("X-Subscriptions-Compact") == "1":
+                subscriptions = [
+                    {key: value for key, value in sub.items() if key != "last_generated_outbounds"}
+                    for sub in subscriptions
+                ]
             paused_since = [item.get("paused_ts") for item in subscriptions if item.get("paused")]
             return (
                 jsonify(
                     {
                         "ok": True,
                         "subscriptions": subscriptions,
+                        "router_timezone": router_timezone(),
                         # One switch for all of them; the date is when it was thrown.
                         "paused": bool(paused_since),
                         "paused_ts": min((ts for ts in paused_since if ts), default=None),
@@ -110,6 +127,41 @@ def create_xray_subscriptions_blueprint(
                 exc=exc,
                 log_tag="xray_subscriptions.list_failed",
             )
+
+    @bp.post("/api/xray/subscriptions/validate-filters")
+    def api_validate_subscription_filters():
+        payload = request.get_json(silent=True) or {}
+        try:
+            patterns = {
+                key: _compile_regex_filter(payload.get(key), label)
+                for key, label in (("name_filter", "фильтра имени"), ("type_filter", "фильтра типа"), ("transport_filter", "фильтра транспорта"))
+            }
+            nodes = payload.get("nodes", [])
+            if not isinstance(nodes, list) or len(nodes) > 10000:
+                raise ValueError("Укажите не более 10000 узлов для предпросмотра.")
+            reasons = {}
+            for node in nodes:
+                if not isinstance(node, dict):
+                    raise ValueError("Некорректный узел.")
+                key = str(node.get("key") or "")
+                reasons[key] = _subscription_filter_reasons(
+                    key=key, node_name=str(node.get("name") or ""),
+                    protocol=str(node.get("protocol") or ""), transport=str(node.get("transport") or ""),
+                    name_filter=patterns["name_filter"], type_filter=patterns["type_filter"],
+                    transport_filter=patterns["transport_filter"],
+                )
+            return jsonify({"ok": True, "reasons": reasons})
+        except ValueError as exc:
+            return error_response(str(exc), 400, ok=False)
+
+    @bp.post("/api/xray/subscriptions/schedule-preview")
+    def api_subscription_schedule_preview():
+        payload = request.get_json(silent=True) or {}
+        try:
+            stamp = next_cron(str(payload.get("cron_expression") or ""), time.time())
+            return jsonify({"ok": True, "next_update_ts": stamp, "next_update_local": time.strftime("%Y-%m-%d %H:%M", time.localtime(stamp)), "router_timezone": router_timezone()})
+        except ValueError as exc:
+            return error_response(str(exc), 400, ok=False)
 
     @bp.post("/api/xray/subscriptions")
     def api_upsert_xray_subscription():

@@ -13156,6 +13156,19 @@ body.panel-page #outbounds-subscriptions-modal .terminal-menu-title {
 body.panel-page #outbounds-subscriptions-modal .xk-sub-form {
   gap: 8px 10px;
 }
+body.panel-page #outbounds-subscriptions-modal .xk-sub-form > .xk-sub-span-6 { grid-column: span 6; }
+body.panel-page #outbounds-subscriptions-modal .xk-sub-schedule {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 10px;
+}
+body.panel-page #outbounds-subscriptions-modal .xk-sub-schedule > label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+body.panel-page #outbounds-subscriptions-modal .xk-sub-schedule [hidden] { display: none !important; }
 
 body.panel-page #outbounds-subscriptions-modal .xk-sub-field-note[hidden],
 body.panel-page #outbounds-subscriptions-modal .xk-sub-interval-meta:empty,
@@ -13971,6 +13984,10 @@ body.panel-page #outbounds-subscriptions-modal .xk-sub-node-title-text {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+body.panel-page #outbounds-subscriptions-modal .xk-sub-node-title-text:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
 }
 
 body.panel-page #outbounds-subscriptions-modal .xk-sub-node-country {

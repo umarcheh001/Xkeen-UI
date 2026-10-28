@@ -41,9 +41,8 @@ def test_xray_subscription_form_exposes_regex_filters_and_payload_fields():
     assert "function subsIntervalSummary(sub) {" in outbounds_src
     assert "profile_update_interval_hours" in outbounds_src
     assert 'xk-sub-filter-field xk-sub-span-4' in outbounds_src
-    assert 'class="xk-sub-span-5"' in outbounds_src
-    assert 'class="xk-sub-span-4"' in outbounds_src
-    assert 'class="xk-sub-span-3 xk-sub-interval-field"' in outbounds_src
+    assert outbounds_src.count('class="xk-sub-span-6"') == 2
+    assert 'id="outbounds-subscriptions-interval-field" class="xk-sub-interval-field"' in outbounds_src
     assert "name_filter: String(($(SUB_IDS.nameFilter) && $(SUB_IDS.nameFilter).value) || '').trim()," in outbounds_src
     assert "type_filter: String(($(SUB_IDS.typeFilter) && $(SUB_IDS.typeFilter).value) || '').trim()," in outbounds_src
     assert "routing_mode: String(($(SUB_IDS.routingMode) && $(SUB_IDS.routingMode).value) || 'safe-fallback').trim() || 'safe-fallback'," in outbounds_src
@@ -403,8 +402,8 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "function subsDecorateActionButtons(modal) {" in outbounds_src
     assert "function subsRenderRoutingBalancers(selectedTags) {" in outbounds_src
     assert "subsSuggestedAutoRuleDefault()" in outbounds_src
-    assert "function subsTransportFilterText(transport, protocol) {" in outbounds_src
-    assert "function subsProtocolFilterText(protocol) {" in outbounds_src
+    assert "function subsBackendFilters(nodes, draft) {" in outbounds_src
+    assert "'/api/xray/subscriptions/validate-filters'" in outbounds_src
     assert "xk-sub-update-note" in outbounds_src
     assert "Автообновление" in outbounds_src
     assert "Как работают подписки" in outbounds_src
@@ -585,7 +584,7 @@ def test_xray_subscription_modal_protects_drafts_and_explains_autofill():
     assert 'class="xk-sub-url-action"' in outbounds_src
     assert 'class="xk-pool-fieldlabel xk-sub-url-action-label"' in outbounds_src
     assert 'id="outbounds-subscriptions-interval-apply-btn"' in outbounds_src
-    assert 'class="xk-sub-span-3 xk-sub-interval-field"' in outbounds_src
+    assert 'id="outbounds-subscriptions-interval-field" class="xk-sub-interval-field"' in outbounds_src
     assert 'class="xk-sub-interval-inline"' in outbounds_src
     assert "saveBtn.disabled = !validation.valid || _subscriptionSaveBusy;" in outbounds_src
     assert "previewBtn.disabled = !validation.valid || _subscriptionPreviewBusy;" in outbounds_src
