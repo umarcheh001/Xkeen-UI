@@ -366,6 +366,120 @@ def test_internet_and_dns_events(tmp_path):
     assert all(e["until"] is not None for e in c.events(0))
 
 
+@pytest.mark.parametrize("router", ["nc1812", "kn1811"])
+def test_reboot_waits_for_first_internet_without_red_bars_or_recovery(tmp_path, router):
+    r = FakeRouter(router)
+    c = make(tmp_path, r)
+    r.step(c, 24)
+    c.save("flash")
+    since = c.history("7d")["history_since"]
+    r.uptime = 40.0
+    r.internet = {"internet": False, "dns-accessible": False}
+    restarted = make(tmp_path, r)
+    r.step(restarted, 6)
+    snap = restarted.snapshot()
+    assert snap["values"]["online"] is None
+    assert snap["cards"]["internet"]["state"] is None
+    assert 0.0 not in series(restarted, "online")
+    assert not [e for e in restarted.events(0) if e["type"] in ("internet_lost", "internet_restored", "dns_failed")]
+
+    r.uptime = 70.0
+    r.internet = {"internet": True, "dns-accessible": True}
+    r.step(restarted, 6)
+    assert restarted.snapshot()["cards"]["internet"]["state"] == "online"
+    assert restarted.snapshot()["values"]["online"] == 1.0
+    assert not [e for e in restarted.events(0) if e["type"] in ("internet_lost", "internet_restored")]
+    assert restarted.history("7d")["history_since"] == since
+    assert "без перерывов 2 мин" in restarted.snapshot()["cards"]["internet"]["text"]
+
+
+@pytest.mark.parametrize("uptime, expected", [(119.0, None), (120.0, 0.0), (1000.0, 0.0), (None, 0.0)])
+def test_internet_startup_grace_ends_at_router_uptime_120(tmp_path, uptime, expected):
+    r = FakeRouter()
+    if uptime is None:
+        r.files["/proc/uptime"] = ""
+    else:
+        r.uptime = uptime
+    r.internet = {"internet": False, "dns-accessible": False}
+    c = make(tmp_path, r)
+    r.step(c)
+    assert c.snapshot()["values"]["online"] == expected
+    lost = [e for e in c.events(0) if e["type"] == "internet_lost"]
+    assert len(lost) == (0 if expected is None else 1)
+
+
+def test_internet_startup_timeout_reports_only_confirmed_failure_after_deadline(tmp_path):
+    r = FakeRouter()
+    r.uptime = 90.0
+    r.internet = {"internet": False}
+    c = make(tmp_path, r)
+    r.step(c, 6)
+    r.uptime = 120.0
+    r.step(c, 6)
+    (lost,) = [e for e in c.events(0) if e["type"] == "internet_lost"]
+    assert lost["at"] == T0 + 35
+    assert c.snapshot()["values"]["online"] == 0.0
+    online_before = list(series(c, "online"))
+    assert None in online_before and 0.0 in online_before
+    r.internet = {"internet": True, "dns-accessible": True}
+    r.uptime = 150.0
+    r.step(c, 6)
+    (lost,) = [e for e in c.events(0) if e["type"] == "internet_lost"]
+    assert lost["until"] == T0 + 65
+    assert len([e for e in c.events(0) if e["type"] == "internet_restored"]) == 1
+    assert c.snapshot()["cards"]["internet"]["state"] == "online"
+
+
+def test_real_internet_loss_after_first_success_is_not_hidden_during_startup(tmp_path):
+    r = FakeRouter()
+    r.uptime = 30.0
+    c = make(tmp_path, r)
+    r.step(c, 6)
+    r.uptime = 60.0
+    r.internet = {"internet": False}
+    r.step(c, 6)
+    assert c.snapshot()["values"]["online"] == 0.0
+    assert [e["type"] for e in c.events(0)].count("internet_lost") == 1
+
+
+@pytest.mark.parametrize("next_boot_id, expected", [("boot-a", 0.0), ("boot-b", None), ("", None)])
+def test_early_panel_restart_preserves_first_success_only_in_same_boot(tmp_path, next_boot_id, expected):
+    r = FakeRouter()
+    r.uptime = 30.0
+    r.files["/proc/sys/kernel/random/boot_id"] = "boot-a\n"
+    c = make(tmp_path, r)
+    r.step(c)
+    c.stop()  # normal panel restart saves the history, including startup readiness
+
+    r.uptime = 60.0
+    r.files["/proc/sys/kernel/random/boot_id"] = next_boot_id
+    r.internet = {"internet": False}
+    restarted = make(tmp_path, r)
+    r.step(restarted)
+    assert restarted.snapshot()["values"]["online"] == expected
+    lost = [e for e in restarted.events(0) if e["type"] == "internet_lost"]
+    assert len(lost) == (1 if expected == 0.0 else 0)
+
+
+def test_unavailable_startup_probe_keeps_gap_until_first_success(tmp_path):
+    r = FakeRouter()
+    r.uptime = 30.0
+    r.rci_down = True
+    c = make(tmp_path, r)
+    r.step(c, 6)
+    assert c.snapshot()["values"]["online"] is None
+    r.rci_down = False
+    r.uptime = 60.0
+    r.internet = {"internet": False}
+    r.step(c, 6)
+    assert c.snapshot()["values"]["online"] is None
+    r.uptime = 90.0
+    r.internet = {"internet": True, "dns-accessible": True}
+    r.step(c, 6)
+    assert c.snapshot()["values"]["online"] == 1.0
+    assert not [e for e in c.events(0) if e["type"] in ("internet_lost", "internet_restored")]
+
+
 FREQ_CUR = "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq"
 FREQ_MAX = "/sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq"
 
@@ -980,6 +1094,7 @@ def test_reboot_with_the_clock_stepping_like_keeneticos(tmp_path):
     shutdown = r.now
     r.now, r.uptime = shutdown - 4 * 86400, 30.0
     r.internet = {"internet": False}
+    r.busy_share = 0.80
     c2 = make(tmp_path, r)
 
     def walk(n):
@@ -994,16 +1109,17 @@ def test_reboot_with_the_clock_stepping_like_keeneticos(tmp_path):
     walk(6)
     assert json.loads(flash.read_text(encoding="utf-8"))["saved_at"] == saved_at  # nothing saved on that clock
     r.now = shutdown + 120  # NTP
+    r.busy_share = 0.20
     walk(12)
     events = c2.events(0)
     (boot,) = [e for e in events if e["type"] == "router_rebooted"]
     assert boot["at"] == pytest.approx(r.now - r.uptime, abs=10)
     assert all(e["at"] > shutdown - 600 for e in events), events  # every event in real time
-    (lost,) = [e for e in events if e["type"] == "internet_lost"]
-    assert lost["until"] is not None and lost["until"] - lost["at"] < 120  # a minute, not four days
-    assert lost["at"] >= boot["at"]
+    assert not [e for e in events if e["type"] in ("internet_lost", "internet_restored")]
     assert c2.history("7d")["history_since"] == before
     assert c2.snapshot()["cards"]["internet"]["state"] == "online"
+    cpu = series(c2, "cpu")
+    assert 40 in cpu and 20 in cpu and 80 not in cpu
 
 
 def test_reboot_event_is_the_router_start_not_the_panel_start(tmp_path):

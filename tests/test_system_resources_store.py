@@ -92,14 +92,55 @@ def test_clock_jump_forward_makes_gap():
     assert avg[-37] == 30
 
 
-def test_clock_jump_back_resets_only_fresh():
+def test_clock_jump_back_keeps_trusted_fresh_separate_from_live_view():
     s = HistoryStore(("cpu",))
     feed(s, T0, 600, 30)
     s.add(T0 + 600 - 3600, {"cpu": 5})
     fresh = s.columns("15m", T0 + 600 - 3600)["metrics"]["cpu"]["avg"]
     assert [v for v in fresh if v is not None] == [5]
+    trusted = s.columns("15m", T0 + 600)["metrics"]["cpu"]["avg"]
+    assert 30 in trusted and 5 not in trusted
+    s.add(T0 + 660, {"cpu": 40})
+    restored = s.columns("15m", T0 + 660)["metrics"]["cpu"]
+    assert 30 in restored["avg"] and restored["avg"][-1] == 40
+    assert 5 not in restored["avg"] and 5 not in restored["max"]
     day = s.columns("6h", T0 + 600)["metrics"]["cpu"]["avg"]
     assert day[-1] == 30 or day[-2] == 30
+
+
+def test_multiple_boot_clock_steps_cannot_overwrite_fresh_ring_slots():
+    s = HistoryStore(("cpu",))
+    feed(s, T0, 3600, 30)
+    s.add(T0 + 3595, {"cpu": 70})
+    before = s.columns("1h", T0 + 3595)
+    feed(s, T0 - 4 * 86400, 40, 80)
+    feed(s, T0 + 2400, 60, 90)  # falls directly on saved fresh ring slots
+    after = s.columns("1h", T0 + 3595)  # NTP has changed the query clock, no tick yet
+    assert after["metrics"] == before["metrics"]
+    s.add(T0 + 3660, {"cpu": 20})
+    restored = s.columns("1h", T0 + 3660)["metrics"]["cpu"]
+    assert restored["avg"][:57] == [30] * 57
+    assert 70 in restored["max"]
+    assert restored["avg"][-1] == 20
+    assert 80 not in restored["max"] and 90 not in restored["max"]
+
+
+def test_unset_clock_clone_remap_and_roundtrip_keep_trusted_fresh():
+    s = HistoryStore(("cpu",))
+    feed(s, T0, 600, 30)
+    s.add(T0 - 3600, {"cpu": 80})
+    s.add_metric("memory")
+    s.add(T0 - 3595, {"cpu": 80, "memory": 60})
+    clone = s.with_metrics(("memory", "cpu"))
+    assert clone.columns("15m", T0 - 3595)["metrics"]["memory"]["avg"][-1] == 60
+    clone.add(T0 - 3580, {"cpu": 90, "memory": 70})
+    assert s.columns("15m", T0 - 3580)["metrics"]["cpu"]["avg"][-1] is None
+    trusted = s.columns("15m", T0 + 600)["metrics"]["cpu"]
+    restored = HistoryStore.from_dict(s.to_dict(), ("cpu", "memory"))
+    assert restored.columns("15m", T0 + 600)["metrics"]["cpu"] == trusted
+    assert 30 in trusted["avg"] and 80 not in trusted["avg"]
+    restored.add(T0 + 660, {"cpu": 20, "memory": 50})
+    assert 30 in restored.columns("15m", T0 + 660)["metrics"]["cpu"]["avg"]
 
 
 def test_backward_jump_long_tiers_wait_for_the_clock_to_catch_up():

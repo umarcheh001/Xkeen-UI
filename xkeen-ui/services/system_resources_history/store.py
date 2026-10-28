@@ -37,7 +37,7 @@ BACK_JUMP_RESET_S = 60
 WEEK_SPAN_S = TIERS["week"][0] * TIERS["week"][1]  # a forward gap longer than all the history
 # A clock behind the newest sample ever (the high-water mark) is not set yet: there is
 # no RTC, and after a reboot KeeneticOS starts days back and steps forward more than
-# once before NTP.  Such samples feed only the fresh tier; after this long of them the
+# once before NTP. Such samples feed a temporary fresh tier; after this long of them the
 # saved history itself is taken for the one dated wrong and given up.
 UNSET_CLOCK_GIVE_UP_S = 86400
 # Time on such a clock is summed over ordinary steps between samples only: a longer step
@@ -145,6 +145,7 @@ class HistoryStore:
         self._metrics: list[str] = []
         self._index: dict[str, int] = {}
         self._tiers = {name: _Tier(name, ()) for name in TIERS}
+        self._unset_fresh: _Tier | None = None
         self._last_ts: float | None = None
         self._high_ts: float | None = None  # the newest sample ever: real time as far as known
         self._unset_since: float | None = None  # first sample of the current run on an unset clock
@@ -181,6 +182,8 @@ class HistoryStore:
         self._metrics.append(name)
         for tier in self._tiers.values():
             tier.add_metric()
+        if self._unset_fresh is not None:
+            self._unset_fresh.add_metric()
 
     def add(self, ts: float, values: dict[str, float | None]) -> None:
         samples: list[float | None] = [None] * len(self._metrics)
@@ -201,16 +204,20 @@ class HistoryStore:
             if self._unset_since is None:
                 self._unset_since = ts
             if self._unset_for < UNSET_CLOCK_GIVE_UP_S:
-                # The clock is not set yet: keep the live view, leave the history alone.
-                if self._last_ts is not None and ts < self._last_ts - BACK_JUMP_RESET_S:
-                    fresh.reset()
-                fresh.add(ts, samples, allow_back=True)
+                # Wrong dates must not erase or overwrite the saved, trustworthy hour.
+                # Keep only the live view on a separate ring until the clock is set.
+                if self._unset_fresh is None:
+                    self._unset_fresh = _Tier("fresh", self._metrics)
+                elif self._last_ts is not None and ts < self._last_ts - BACK_JUMP_RESET_S:
+                    self._unset_fresh.reset()
+                self._unset_fresh.add(ts, samples, allow_back=True)
                 self._last_ts = ts
                 return
             # A day on such a clock: the saved history was the one dated wrong.
             self._high_ts = None
         self._unset_since = None
         self._unset_for = 0.0
+        self._unset_fresh = None
         if self._high_ts is None or ts - self._high_ts > WEEK_SPAN_S:
             if self._high_ts is not None or self._last_ts is not None:
                 # The clock was set (NTP after boot): what came before was never real time.
@@ -234,6 +241,8 @@ class HistoryStore:
         """Like :meth:`columns` for any ``(tier, points per column, column count)``."""
         tier_name, fold, count = spec
         tier = self._tiers[tier_name]
+        if tier_name == "fresh" and self._unset_fresh is not None and self.clock_unset_at(now):
+            tier = self._unset_fresh
         col_step = tier.step * fold
         last_col = int(now // col_step)
         first_col = last_col - count + 1
@@ -273,7 +282,10 @@ class HistoryStore:
 
     def memory_bytes(self) -> int:
         total = 0
-        for tier in self._tiers.values():
+        tiers = list(self._tiers.values())
+        if self._unset_fresh is not None:
+            tiers.append(self._unset_fresh)
+        for tier in tiers:
             total += len(tier.starts) * tier.starts.itemsize
             for arr in tier.avg + tier.peak:
                 total += len(arr) * arr.itemsize
@@ -315,8 +327,11 @@ class HistoryStore:
         out._unset_since = self._unset_since
         out._unset_for = self._unset_for
         out._since = self._since
-        for name, tier in self._tiers.items():
-            new = out._tiers[name]
+        tier_pairs = [(tier, out._tiers[name]) for name, tier in self._tiers.items()]
+        if self._unset_fresh is not None:
+            out._unset_fresh = _Tier("fresh", out._metrics)
+            tier_pairs.append((self._unset_fresh, out._unset_fresh))
+        for tier, new in tier_pairs:
             new.starts = array("q", tier.starts)
             new.cur = tier.cur
             for m, j in out._index.items():

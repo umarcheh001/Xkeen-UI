@@ -48,6 +48,7 @@ FAILOVER_HOLD_S = 60  # the route must stay on the reserve this long to count as
 MAX_RATE_DT_S = 6 * STEP_S  # a longer gap between counter reads is not a rate
 TMP_SAVE_EVERY_S = 300
 FLASH_SAVE_EVERY_S = 3600  # a reboot cannot save (/opt is gone before SIGTERM): this is what it may lose
+INTERNET_STARTUP_GRACE_S = 120  # early negative firmware probes can mean the network is still starting
 # While the router clock is not set yet, events are stamped with the uptime (far below any real
 # date) and moved to real time once NTP has set the clock.
 STAND_IN_BELOW = 1e9
@@ -164,6 +165,8 @@ class Collector:
         self._internet: dict = {}
         self._conntrack: dict = {"available": False}
         self._online_value: float | None = None
+        self._internet_seen_online = False
+        self._boot_id = (self._read("/proc/sys/kernel/random/boot_id") or "").strip()
         self._rci_ok = False  # whether the last RCI call answered
         self._events_on_uptime = False  # events are stamped with the uptime until the clock is set
         self._procs_prev: tuple[dict, int] | None = None  # the last process scan and the processor ticks then
@@ -181,6 +184,7 @@ class Collector:
             # a router clock that was wrong when saving must not give a negative gap
             self._gap_s = max(0.0, now - saved_at)
             self._top = top_procs.TopStore.from_dict(meta.get("top"))
+            self._internet_seen_online = bool(self._boot_id and meta.get("internet_ready_boot_id") == self._boot_id)
             raw_uptime = meta.get("uptime_s")
             if isinstance(raw_uptime, (int, float)) and not isinstance(raw_uptime, bool):
                 persisted_uptime = float(raw_uptime)
@@ -415,8 +419,17 @@ class Collector:
             return
         now = self._event_now(now)
         status = normalize_internet_status(payload)
-        self._internet = status
         online = status.get("internet")
+        if online is True:
+            self._internet_seen_online = True
+        elif online is False and not self._internet_seen_online:
+            uptime = self._read_uptime()
+            if uptime is not None and 0 <= uptime < INTERNET_STARTUP_GRACE_S:
+                # The first connection after boot is not a recovery from an outage.
+                # Share the unknown state across the card, history and event journal.
+                status = dict(status, internet=None, dns=None)
+                online = None
+        self._internet = status
         self._online_value = None if online is None else (1.0 if online else 0.0)
         if online is True:
             if self._tracker.close("internet_lost", now) is not None:
@@ -545,6 +558,8 @@ class Collector:
             pending = self._boot_event if self._events_on_uptime else None
             events = [dict(e) for e in self._tracker.events(0) if e["at"] >= STAND_IN_BELOW and e is not pending]
             meta: dict = {"top": self._top.to_dict()}
+            if self._internet_seen_online and self._boot_id:
+                meta["internet_ready_boot_id"] = self._boot_id
             if self._uptime_s is not None:
                 meta["uptime_s"] = self._uptime_s
             now = self._clock()
