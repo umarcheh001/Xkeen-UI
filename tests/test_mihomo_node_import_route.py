@@ -85,6 +85,78 @@ proxy-groups:
     assert "proxies: [DIRECT]" in result["content"]
 
 
+def test_attach_provider_never_returns_a_corrupted_group_alias(client):
+    import yaml
+    http, _ = client
+    source = 'refs: &refs [old]\nproxy-groups:\n  - name: Main\n    type: select\n    use: *refs\nrules: []\n'
+    response = http.post('/api/mihomo/patch/attach_providers', json={
+        'content': source, 'providers': ['new'], 'groups': ['Main'],
+    })
+    if response.status_code != 200:
+        assert response.status_code == 400
+        return
+    result = yaml.safe_load(response.get_json()['content'])
+    assert result['proxy-groups'][0]['use'] == ['old', 'new']
+    assert result['refs'] == ['old']
+
+
+def test_attach_provider_does_not_duplicate_quoted_use_key(client):
+    import yaml
+    http, _ = client
+    source = 'proxy-groups:\n  - name: Main\n    type: select\n    "use": [new]\nrules: []\n'
+    response = http.post('/api/mihomo/patch/attach_providers', json={
+        'content': source, 'providers': ['new'], 'groups': ['Main'],
+    })
+    if response.status_code != 200:
+        assert response.status_code == 400
+        return
+    tree = yaml.compose(response.get_json()['content'])
+    groups = next(value for key, value in tree.value if key.value == 'proxy-groups')
+    assert sum(key.value == 'use' for key, _ in groups.value[0].value) == 1
+
+
+def test_attach_provider_does_not_log_secret_from_invalid_yaml(client, caplog):
+    http, _ = client
+    secret = 'diagnostic-sensitive-value'
+    source = f'proxy-groups:\n  - name: Main\n    use: ["{secret}", broken\n'
+    response = http.post('/api/mihomo/patch/attach_providers', json={
+        'content': source, 'providers': ['new'], 'groups': ['Main'],
+    })
+    assert response.status_code == 400
+    assert secret not in response.get_data(as_text=True)
+    assert secret not in caplog.text
+
+
+def test_batch_never_claims_attachment_if_group_alias_is_unmodified(client):
+    import yaml
+    http, _ = client
+    source = 'refs: &refs [DIRECT]\nproxies: []\nproxy-groups:\n  - name: Main\n    type: select\n    proxies: *refs\nrules: []\n'
+    response = http.post('/api/mihomo/patch/apply_batch', json={
+        'content': source, 'groups': ['Main'], 'proxies': [{'proxy_name': 'new', 'proxy_yaml': '- name: new\n  type: direct\n'}],
+    })
+    if response.status_code != 200:
+        assert response.status_code == 400
+        return
+    result = yaml.safe_load(response.get_json()['content'])
+    assert result['proxy-groups'][0]['proxies'] == ['DIRECT', 'new']
+    assert result['refs'] == ['DIRECT']
+
+
+def test_batch_does_not_duplicate_quoted_group_proxies_key(client):
+    import yaml
+    http, _ = client
+    source = 'proxies: []\nproxy-groups:\n  - name: Main\n    type: select\n    "proxies": [new]\nrules: []\n'
+    response = http.post('/api/mihomo/patch/apply_batch', json={
+        'content': source, 'groups': ['Main'], 'proxies': [{'proxy_name': 'new', 'proxy_yaml': '- name: new\n  type: direct\n'}],
+    })
+    if response.status_code != 200:
+        assert response.status_code == 400
+        return
+    tree = yaml.compose(response.get_json()['content'])
+    groups = next(value for key, value in tree.value if key.value == 'proxy-groups')
+    assert sum(key.value == 'proxies' for key, _ in groups.value[0].value) == 1
+
+
 def test_apply_insert_reports_unknown_groups_without_registering_proxy(client):
     http, _config_path = client
     content = """\
@@ -167,6 +239,21 @@ def test_import_commit_rechecks_revision_after_validation(client):
         response = http.post("/api/mihomo/import/commit", json={"content": "proxies: []\n# candidate\n", "base_revision": revision})
     assert response.status_code == 409
     assert response.get_json()["code"] == "stale_config"
+    save.assert_not_called()
+
+
+def test_import_commit_rejects_profile_change_with_identical_content(client):
+    http, _ = client
+    identity = {'path': 'profile-one.yaml'}
+    with patch('routes.mihomo._active_config_identity', side_effect=lambda _path: identity['path']):
+        revision = http.get('/api/mihomo-config').get_json()['revision']
+        identity['path'] = 'profile-two.yaml'
+        with patch('routes.mihomo.save_config') as save:
+            response = http.post('/api/mihomo/import/commit', json={
+                'content': 'proxies: []\n', 'base_revision': revision,
+            })
+    assert response.status_code == 409
+    assert response.get_json()['code'] == 'stale_config'
     save.assert_not_called()
 
 
@@ -257,6 +344,41 @@ def test_batch_patch_accepts_empty_config(client):
     ]})
     assert response.status_code == 200
     assert "name: new" in response.get_json()["content"]
+
+
+def test_batch_rejects_new_node_with_existing_name(client):
+    http, _ = client
+    response = http.post('/api/mihomo/patch/apply_batch', json={
+        'content': 'proxies:\n  - name: duplicate\n    type: direct\n',
+        'proxies': [{'proxy_name': 'duplicate', 'proxy_yaml': '- name: duplicate\n  type: reject\n'}],
+    })
+    assert response.status_code == 400
+    assert 'content' not in response.get_json()
+
+
+@pytest.mark.parametrize("source", [
+    'proxies:\n  - name: "старый: один"\n    type: direct\nproxy-groups: []\n',
+    'proxies:\n- name: old\n  type: direct\nproxy-groups: []\n',
+    'proxies: &nodes\n  - name: old\n    type: direct\ncopy: *nodes\n',
+    '"proxies":\n  - name: old\n    type: direct\nproxy-groups: []\n',
+])
+def test_batch_handles_complex_yaml_without_losing_original_nodes(client, source):
+    import yaml
+    http, _ = client
+    old = yaml.safe_load(source)
+    response = http.post("/api/mihomo/patch/apply_batch", json={"content": source, "proxies": [
+        {"proxy_name": "Новый: 1", "proxy_yaml": '- name: "Новый: 1"\n  type: direct\n'},
+    ]})
+    if response.status_code != 200:
+        assert response.status_code == 400
+        assert "content" not in response.get_json()
+        return
+    result = response.get_json()["content"]
+    new = yaml.safe_load(result)
+    assert new["proxies"][:-1] == old["proxies"]
+    assert new["proxies"][-1]["name"] == "Новый: 1"
+    for key in old.keys() - {"proxies"}:
+        assert new[key] == old[key]
 
 
 def test_import_commit_replay_does_not_save_or_restart_twice(client):

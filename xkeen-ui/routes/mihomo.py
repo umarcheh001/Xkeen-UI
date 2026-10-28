@@ -50,6 +50,10 @@ import urllib.parse
 import urllib.request
 from typing import Any, Dict
 
+
+def _active_config_identity(path: str) -> str:
+    return os.path.normcase(os.path.realpath(str(path)))
+
 from flask import Blueprint, jsonify, request, current_app, redirect
 
 from routes.common.errors import exception_response
@@ -1144,7 +1148,8 @@ def create_mihomo_blueprint(
     # ---------- API: mihomo config.yaml ----------
 
     def _config_revision(content: str) -> str:
-        return hashlib.sha256(_norm_text(content).encode("utf-8")).hexdigest()
+        value = _active_config_identity(MIHOMO_CONFIG_FILE) + "\0" + _norm_text(content)
+        return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
     config_commit_lock = threading.RLock()
     commit_results: dict[str, tuple[str, dict, int]] = {}
@@ -1154,7 +1159,9 @@ def create_mihomo_blueprint(
             return _mihomo_error("Операция с конфигом уже выполняется.", 409, code="config_busy")
         try:
             operation_id = str(kwargs.pop("operation_id", "") or "")[:128]
-            fingerprint = _config_revision(str(content) + str(kwargs.get("restart")))
+            fingerprint = hashlib.sha256(
+                (_norm_text(str(content)) + "\0" + str(bool(kwargs.get("restart")))).encode("utf-8")
+            ).hexdigest()
             if operation_id and operation_id in commit_results:
                 old_fingerprint, payload, status = commit_results[operation_id]
                 if old_fingerprint != fingerprint:
@@ -2774,7 +2781,7 @@ def create_mihomo_blueprint(
 
             original_proxies = checked_proxy_section(content)
             normalized = []
-            names = set()
+            names = {str(proxy.get("name") or "").strip() for proxy in original_proxies if isinstance(proxy, dict)}
             for item in items:
                 if not isinstance(item, dict):
                     raise ValueError("Некорректный элемент списка узлов.")
@@ -2820,9 +2827,50 @@ def create_mihomo_blueprint(
             return _api_error("providers are required", 400, ok=False)
 
         try:
+            import yaml
+
+            before = yaml.safe_load(content) or {}
+            if not isinstance(before, dict):
+                raise ValueError("Ожидается YAML-конфиг с разделами.")
             patched = content
             for provider_name in providers:
                 patched = insert_provider_into_groups(patched, provider_name, selected_groups)
+            after = yaml.safe_load(patched) or {}
+            if not isinstance(after, dict):
+                raise ValueError("Получен некорректный YAML-конфиг.")
+            tree = yaml.compose(patched)
+            if isinstance(tree, yaml.MappingNode):
+                for key, value in tree.value:
+                    if key.value != "proxy-groups" or not isinstance(value, yaml.SequenceNode):
+                        continue
+                    for group in value.value:
+                        if isinstance(group, yaml.MappingNode) and sum(1 for field, _ in group.value if field.value == "use") > 1:
+                            raise ValueError("Повторяющийся ключ use в группе.")
+            if any(before.get(key) != after.get(key) for key in (before.keys() | after.keys()) - {"proxy-groups"}):
+                raise ValueError("Изменились посторонние разделы конфига.")
+            old_groups = before.get("proxy-groups") or []
+            new_groups = after.get("proxy-groups") or []
+            if not isinstance(old_groups, list) or not isinstance(new_groups, list) or len(old_groups) != len(new_groups):
+                raise ValueError("Не удалось сохранить группы.")
+            for old_group, new_group in zip(old_groups, new_groups):
+                if not isinstance(old_group, dict) or not isinstance(new_group, dict):
+                    raise ValueError("Некорректная группа.")
+                name = old_group.get("name")
+                if name not in selected_groups:
+                    if old_group != new_group:
+                        raise ValueError("Изменилась невыбранная группа.")
+                    continue
+                if {k: v for k, v in old_group.items() if k != "use"} != {k: v for k, v in new_group.items() if k != "use"}:
+                    raise ValueError("Изменились настройки группы.")
+                old_use = old_group.get("use") or []
+                expected_use = list(old_use) if isinstance(old_use, list) else None
+                if expected_use is None:
+                    raise ValueError("Неподдерживаемый список provider.")
+                for provider_name in providers:
+                    if provider_name not in expected_use:
+                        expected_use.append(provider_name)
+                if new_group.get("use") != expected_use:
+                    raise ValueError("Не удалось подключить provider к группе.")
             return jsonify(
                 {
                     "ok": True,
@@ -2831,6 +2879,13 @@ def create_mihomo_blueprint(
                     "missing_groups": missing_groups,
                 }
             ), 200
+        except yaml.YAMLError:
+            return _mihomo_error(
+                "Не удалось подключить provider к группам Mihomo.",
+                400,
+                code="attach_provider_failed",
+                hint="Проверьте YAML и список групп.",
+            )
         except Exception as e:
             return _mihomo_exception(
                 "Не удалось подключить provider к группам Mihomo.",

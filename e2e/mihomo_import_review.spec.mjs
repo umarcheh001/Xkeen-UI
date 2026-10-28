@@ -260,3 +260,15 @@ for (const theme of ['dark', 'light']) {
     expect(rect.y + rect.height).toBeLessThanOrEqual(480);
   });
 }
+
+test('review exposes its name, actions and operation status to accessibility APIs', async ({ page }) => {
+  await setup(page);
+  await page.locator('#mihomo-import-review-btn').click();
+  const dialog = page.getByRole('dialog', { name: 'Проверка изменений' });
+  await expect(dialog).toHaveAttribute('aria-modal', 'true');
+  for (const name of ['Назад', 'В черновик', 'Сохранить', 'Сохранить и применить']) {
+    await expect(dialog.getByRole('button', { name, exact: true })).toBeVisible();
+  }
+  await expect(page.locator('#mihomo-import-action-status')).toHaveAttribute('role', 'status');
+  await expect(page.locator('#mihomo-import-action-status')).toHaveAttribute('aria-live', 'polite');
+});

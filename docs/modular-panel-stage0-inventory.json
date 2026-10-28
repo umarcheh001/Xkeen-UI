@@ -132,7 +132,7 @@
       ],
       "removable": true,
       "unit_count": 146,
-      "size_bytes": 3292674,
+      "size_bytes": 3302390,
       "kind_counts": {
         "app_runtime": 4,
         "backend_route": 2,
@@ -14680,7 +14680,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/mihomo.py",
-      "size_bytes": 177352,
+      "size_bytes": 180861,
       "depends_on": [
         "core",
         "tool.editor",
@@ -16578,7 +16578,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_test",
       "path": "tests/test_mihomo_node_import_route.py",
-      "size_bytes": 21935,
+      "size_bytes": 27385,
       "depends_on": [
         "core",
         "tool.editor"
@@ -18231,7 +18231,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_test",
       "path": "e2e/mihomo_import_review.spec.mjs",
-      "size_bytes": 14300,
+      "size_bytes": 15057,
       "depends_on": [
         "core",
         "tool.editor"
