@@ -50,6 +50,7 @@ def collect() -> dict:
         for number, line in enumerate(file.read_text(encoding='utf-8').splitlines(), 1):
             if pattern.search(line) and ('mihomo' in str(file) or 'mihomo' in line.lower()):
                 consumers.append({'path': str(file.relative_to(ROOT)), 'line': number, 'source': line.strip()})
+    mode_select = re.search(r'<select\b[^>]*\bid="mihomo-import-mode"[^>]*>(.*?)</select>', template, re.S)
     return {
         'schema_version': 1,
         'base_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
@@ -57,7 +58,7 @@ def collect() -> dict:
         'scope': 'source contracts; endpoint paths include dynamic prefixes; not runtime/API reachability claims',
         'sources': sources,
         'dom_ids': re.findall(r'\bid="([^"]+)"', template),
-        'modes': re.findall(r'<option value="([^"]+)">([^<]+)', template)[:7],
+        'modes': re.findall(r'<option value="([^"]+)">([^<]+)', mode_select.group(1)) if mode_select else [],
         'preferences': re.findall(r"const (\w*PREF_KEY|\w*REMEMBER_KEY|MODE_PREF_KEY) = '([^']+)'", text),
         'api_path_literals': sorted(set(re.findall(r"['\"](/api/mihomo/[^'\"\s]+)['\"]", text))),
         'facade_methods': sorted(set(re.findall(r'\bMI\.(\w+)\s*=', text))),

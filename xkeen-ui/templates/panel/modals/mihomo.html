@@ -217,6 +217,37 @@ rule-set:github@domain
                       <select id="mihomo-import-replace-target" class="xray-log-select xk-mi-control"></select>
                     </label>
                   </div>
+                  <div class="xk-mi-connection-options" aria-label="Параметры подключений">
+                    <div class="xk-mi-connection-options-head">
+                      <span class="xk-mi-placement-label">Параметры узлов</span>
+                      <span class="xk-mi-connection-options-hint">Применятся перед записью в config.yaml</span>
+                    </div>
+                    <div class="xk-mi-connection-options-grid">
+                      <label class="xk-mi-field">
+                        <span class="hint-label">Фингерпринт клиента</span>
+                        <select id="mihomo-import-fingerprint" class="xray-log-select xk-mi-control">
+                          <option value="inherit">Наследовать от источника</option>
+                          <option value="chrome">chrome</option>
+                          <option value="firefox">firefox</option>
+                          <option value="safari">safari</option>
+                          <option value="iOS">iOS</option>
+                          <option value="android">android</option>
+                          <option value="edge">edge</option>
+                          <option value="360">360</option>
+                          <option value="qq">qq</option>
+                          <option value="random">random</option>
+                        </select>
+                      </label>
+                      <label class="xk-mi-field">
+                        <span class="hint-label">X25519MLKEM768 <span class="xk-mi-info" data-tooltip="Работает только для VLESS Reality и требует Mihomo v1.19.29 или новее." aria-label="Подробнее о X25519MLKEM768">i</span></span>
+                        <select id="mihomo-import-x25519" class="xray-log-select xk-mi-control">
+                          <option value="inherit">Наследовать от источника</option>
+                          <option value="enable">Включить принудительно</option>
+                          <option value="disable">Выключить принудительно</option>
+                        </select>
+                      </label>
+                    </div>
+                  </div>
                 </div>
               </div>
               <div class="xk-mi-flow-step xk-mi-flow-step--technical">
@@ -276,7 +307,6 @@ https://..."></textarea>
               </div>
 
               <div id="mihomo-import-status" class="status xk-mi-status hidden" role="status" aria-live="polite" aria-atomic="true"></div>
-              <section id="mihomo-import-result-cards" class="xk-mi-result-cards hidden" aria-label="Результат распознавания"></section>
               <p id="mihomo-import-target-hint" class="modal-hint xk-mi-target hidden"></p>
               <button type="button" id="mihomo-import-preview-toggle" class="btn-secondary btn-compact hidden" aria-expanded="false" aria-controls="mihomo-import-preview-panel">Показать YAML</button>
 
@@ -310,26 +340,26 @@ https://..."></textarea>
                 </div>
               </section>
 
-              <div id="mihomo-import-groups-block" class="xk-mi-groups-card hidden">
-                <div class="xk-mi-section-head">
-                  <div>
-                    <div id="mihomo-import-groups-title" class="xk-mi-section-title">Добавить в группы</div>
-                    <div id="mihomo-import-groups-subtitle" class="xk-mi-section-subtitle">Выбор из текущего <code>config.yaml</code> для статических <code>proxies</code>.</div>
-                  </div>
-                  <div class="xk-mi-inline-actions">
+              <details id="mihomo-import-groups-block" class="xk-mi-groups-card xk-mi-groups-disclosure hidden">
+                <summary class="xk-mi-groups-summary">
+                  <span id="mihomo-import-groups-title" class="xk-mi-section-title">Добавить в группы</span>
+                  <span class="xk-mi-inline-actions">
                     <button type="button" id="mihomo-import-groups-all-btn" class="btn-compact" data-tooltip="Выбрать все группы">Все</button>
                     <button type="button" id="mihomo-import-groups-none-btn" class="btn-compact" data-tooltip="Снять выбор со всех групп">Снять</button>
+                  </span>
+                </summary>
+                <div class="xk-mi-groups-disclosure-body">
+                  <div id="mihomo-import-groups-subtitle" class="xk-mi-section-subtitle">Выбор из текущего <code>config.yaml</code> для статических <code>proxies</code>.</div>
+                  <div id="mihomo-import-groups" class="xk-mi-groups-shell">
+                    <div class="xk-card-desc" style="opacity:0.75;">Группы будут подхвачены из текущего <code>config.yaml</code>.</div>
                   </div>
+                  <p id="mihomo-import-groups-count" class="modal-hint xk-mi-refresh-note"></p>
+                  <label class="global-autorestart-toggle xk-mi-remember">
+                    <input type="checkbox" id="mihomo-import-groups-remember">
+                    <span>Запомнить выбор</span>
+                  </label>
                 </div>
-                <div id="mihomo-import-groups" class="xk-mi-groups-shell">
-                  <div class="xk-card-desc" style="opacity:0.75;">Группы будут подхвачены из текущего <code>config.yaml</code>.</div>
-                </div>
-                <p id="mihomo-import-groups-count" class="modal-hint xk-mi-refresh-note"></p>
-                <label class="global-autorestart-toggle xk-mi-remember">
-                  <input type="checkbox" id="mihomo-import-groups-remember">
-                  <span>Запомнить выбор</span>
-                </label>
-              </div>
+              </details>
 
               <details id="mihomo-import-managed-disclosure" class="xk-mi-managed-disclosure hidden">
                 <summary>Автообновление и управление подписками</summary>

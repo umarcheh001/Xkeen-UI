@@ -225,6 +225,55 @@ def test_sync_imported_xray_subscription_stores_config_source(tmp_path):
     assert state["last_config_hash"] == svc._hash_text(config)
 
 
+def test_imported_subscription_connection_options_survive_refresh(tmp_path, monkeypatch):
+    old_block = (
+        "- name: Old Node\n  type: vless\n  server: old.example\n  port: 443\n"
+        "  tls: true\n  client-fingerprint: chrome\n  reality-opts:\n"
+        "    public-key: old-key\n    short-id: '1234'\n"
+    )
+    current = "proxies:\n" + "\n".join("  " + line for line in old_block.splitlines()) + "\n"
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(current, encoding="utf-8")
+    saved = svc.sync_imported_xray_subscription(
+        str(tmp_path),
+        url="https://example.test/reality",
+        config_text=current,
+        proxy_yamls=[old_block],
+        connection_options={"fingerprint": "firefox", "x25519": "disable"},
+    )
+    assert saved["connection_options"] == {"fingerprint": "firefox", "x25519": "disable"}
+
+    new_block = (
+        "- name: New Node\n  type: vless\n  server: new.example\n  port: 443\n"
+        "  tls: true\n  client-fingerprint: chrome\n  reality-opts:\n"
+        "    public-key: new-key\n    short-id: '5678'\n"
+    )
+    monkeypatch.setattr(svc, "fetch_subscription_body", lambda url: ("ignored", {}, {}))
+    monkeypatch.setattr(svc, "convert_subscription_source_text", lambda body, **kwargs: (
+        [type("Proxy", (), {"yaml": new_block})()], [], "xray-json",
+    ))
+    result = svc.refresh_subscription(
+        str(tmp_path), saved["id"], mihomo_config_file=str(config_path),
+        save_callback=lambda text: config_path.write_text(text, encoding="utf-8"),
+    )
+    assert result["ok"] is True
+    written = config_path.read_text(encoding="utf-8")
+    assert "New Node" in written and "Old Node" not in written
+    assert "client-fingerprint: firefox" in written
+    assert "support-x25519mlkem768: false" in written
+    assert "short-id: '5678'" in written
+
+
+def test_connection_options_leave_non_tls_and_non_reality_nodes_alone():
+    options = {"fingerprint": "safari", "x25519": "enable"}
+    direct = "- name: Direct\n  type: direct\n"
+    tls = "- name: TLS\n  type: trojan\n  tls: true\n"
+    assert svc._apply_connection_options_to_proxy_block(direct, options) == direct.strip()
+    updated_tls = svc._apply_connection_options_to_proxy_block(tls, options)
+    assert "client-fingerprint: safari" in updated_tls
+    assert "support-x25519mlkem768" not in updated_tls
+
+
 def test_refresh_mihomo_provider_static_subscription_uses_provider_parser(tmp_path, monkeypatch):
     old_yaml = "- name: Old Node\n  type: vless\n  server: 1.1.1.1\n  port: 443\n"
     config = (

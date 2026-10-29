@@ -219,7 +219,7 @@ test('Mihomo import stays within a narrow viewport', async ({ page }) => {
   expect(frame.right).toBeLessThanOrEqual(frame.viewportWidth);
 });
 
-test('Mihomo import result cards stay readable and keep the final action reachable at 390px', async ({ page }) => {
+test('Mihomo import status stays readable and keeps the final action reachable at 390px', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
   await openMihomoImport(page);
@@ -228,23 +228,24 @@ test('Mihomo import result cards stay readable and keep the final action reachab
   );
   await page.locator('#mihomo-import-parse-btn').click();
 
-  const card = page.locator('#mihomo-import-result-cards');
-  await expect(card).toBeVisible();
-  await expect(card).toContainText('Адрес: example.com:443');
+  const status = page.locator('#mihomo-import-status');
+  await expect(page.locator('#mihomo-import-result-cards')).toHaveCount(0);
+  await expect(status).toBeVisible();
+  await expect(status).toContainText('example.com:443');
   const geometry = await page.evaluate(() => {
-    const cardNode = document.querySelector('#mihomo-import-result-cards');
+    const statusNode = document.querySelector('#mihomo-import-status');
     const insert = document.querySelector('#mihomo-import-review-btn');
-    const cardRect = cardNode?.getBoundingClientRect();
+    const statusRect = statusNode?.getBoundingClientRect();
     const insertRect = insert?.getBoundingClientRect();
     return {
-      cardWidth: cardRect?.width || 0,
+      statusWidth: statusRect?.width || 0,
       insertBottom: insertRect?.bottom || 0,
       viewportWidth: window.innerWidth,
       viewportHeight: window.innerHeight,
     };
   });
-  expect(geometry.cardWidth).toBeGreaterThan(0);
-  expect(geometry.cardWidth).toBeLessThanOrEqual(geometry.viewportWidth - 16);
+  expect(geometry.statusWidth).toBeGreaterThan(0);
+  expect(geometry.statusWidth).toBeLessThanOrEqual(geometry.viewportWidth - 16);
   expect(geometry.insertBottom).toBeLessThanOrEqual(geometry.viewportHeight);
 });
 

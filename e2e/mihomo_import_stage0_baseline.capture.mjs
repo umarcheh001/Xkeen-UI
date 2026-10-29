@@ -137,6 +137,7 @@ test('stage0 source, geometry and lifecycle characterization', async ({ page }) 
   await expect(page.locator(`${MODAL} .cm-editor`)).toBeVisible();
   const states = { empty: await capture(page, 'desktop-dark-empty') };
   const singleMs = await parse(page, 'auto', DATA.proxy);
+  await page.locator('#mihomo-import-groups-block > summary').click();
   await page.locator('#mihomo-import-groups input[data-group="Main"]').check();
   states.single = await capture(page, 'desktop-dark-single');
   // Characterize existing stale-result behavior, not a target invariant.
@@ -258,8 +259,9 @@ test('stage0 actual local draft patch request count by batch size', async ({ pag
   for (const count of [1, 10, 50]) {
     await open(page);
     const begin = requests.length;
-    await page.locator('#mihomo-import-groups input[data-group="Main"]').check();
     const parseMs = await parse(page, 'subscription', `https://subscription.example/bulk-${count}`);
+    await page.locator('#mihomo-import-groups-block > summary').click();
+    await page.locator('#mihomo-import-groups input[data-group="Main"]').check();
     if (count === 50) await capture(page, 'desktop-large-subscription-50');
     const start = performance.now();
     await page.locator('#mihomo-import-insert-btn').click();

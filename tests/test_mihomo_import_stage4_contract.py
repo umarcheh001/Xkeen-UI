@@ -10,14 +10,14 @@ PLAN = (ROOT / "README-mihomo-node-import-redesign-plan.md").read_text(encoding=
 DOC = (ROOT / "docs/mihomo-node-import-stage4.md").read_text(encoding="utf-8")
 
 
-def test_stage4_has_a_safe_presentation_model_and_card_host():
+def test_stage4_has_a_safe_presentation_model_and_compact_status_host():
     assert "createMihomoImportPresentation" in JS
-    assert "renderMihomoImportResultCards" in JS
-    assert 'id="mihomo-import-result-cards"' in TEMPLATE
+    assert "buildImportStatusSummary" in JS
+    assert 'id="mihomo-import-status"' in TEMPLATE
+    assert 'id="mihomo-import-result-cards"' not in TEMPLATE
     assert "safeMihomoSourceDomain" in RESULT
     assert "redactMihomoImportDiagnostic" in RESULT
-    assert "textContent = String(card.title" in JS
-    assert "innerHTML" not in JS[JS.index("function renderMihomoImportResultCards"):JS.index("function isTruthyHeader")]
+    assert "textContent" in JS
 
 
 def test_stage4_distinguishes_result_outcomes_and_special_sources():
@@ -39,5 +39,5 @@ def test_stage4_distinguishes_result_outcomes_and_special_sources():
 def test_stage4_docs_and_operator_styles_are_present():
     assert "### Этап 4. Карточки результата и специальные источники — закрыт" in PLAN
     assert "Этап 4" in DOC
-    assert "xk-mi-result-cards" in CSS
+    assert "xk-mi-status" in CSS
     assert "safe domain" in DOC.lower() or "безопасн" in DOC.lower()

@@ -69,7 +69,7 @@ export function createMihomoConfigOperations({
     addPending(intents) {
       for (const value of intents || []) {
         const intent = JSON.parse(JSON.stringify(value));
-        const key = JSON.stringify([intent.url, intent.refresh_parser, intent.interval_hours, intent.groups, intent.proxies]);
+        const key = JSON.stringify([intent.url, intent.refresh_parser, intent.interval_hours, intent.groups, intent.proxies, intent.connection_options]);
         if (!pending.has(key)) pending.set(key, { intent, done: false });
       }
     },

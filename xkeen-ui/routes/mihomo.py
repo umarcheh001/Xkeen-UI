@@ -3722,6 +3722,7 @@ def create_mihomo_blueprint(
                 interval_hours=payload.get("interval_hours", payload.get("intervalHours")),
                 tag=(payload.get("tag") or "").strip() or None,
                 refresh_parser=payload.get("refresh_parser", payload.get("refreshParser")),
+                connection_options=payload.get("connection_options", payload.get("connectionOptions")),
             )
         except Exception as e:
             return _mihomo_exception(

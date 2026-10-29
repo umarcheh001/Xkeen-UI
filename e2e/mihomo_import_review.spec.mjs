@@ -36,10 +36,30 @@ test('review precedes commit, warns about editor changes, and goes back without 
   await expect(page.locator('#mihomo-import-review-warning')).toContainText('несохранённые');
   expect(commits).toBe(0);
   await page.locator('#mihomo-import-review-back').click();
-  await expect(page.locator('#mihomo-import-result-cards')).toBeVisible();
+  await expect(page.locator('#mihomo-import-result-cards')).toHaveCount(0);
+  await expect(page.locator('#mihomo-import-status')).toContainText('example.com:443');
   await page.locator('#mihomo-import-review-btn').click();
   await expect(page.locator('#mihomo-import-review')).toBeVisible();
   expect(commits).toBe(0);
+});
+
+test('review applies fingerprint and ML-KEM choices to imported Reality nodes', async ({ page }) => {
+  let committed;
+  await page.route('**/api/mihomo/import/commit', route => {
+    committed = route.request().postDataJSON();
+    return route.fulfill({ json: { ok: true, saved: true, revision: 'saved' } });
+  });
+  const realityLink = LINK.replace('?type=tcp#Review', '?type=tcp&security=reality&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&sid=1234#Review');
+  await setup(page, realityLink);
+  await page.locator('#mihomo-import-review-btn').click();
+  await expect(page.locator('#mihomo-import-fingerprint')).toBeVisible();
+  await page.locator('#mihomo-import-fingerprint').selectOption('firefox');
+  await page.locator('#mihomo-import-x25519').selectOption('enable');
+  await expect(page.locator('#mihomo-import-candidate-summary')).toContainText('фингерпринт: firefox');
+  await expect(page.locator('#mihomo-import-candidate-summary')).toContainText('X25519MLKEM768: включить');
+  await page.locator('#mihomo-import-save-btn').click();
+  expect(committed.content).toContain('client-fingerprint: firefox');
+  expect(committed.content).toContain('support-x25519mlkem768: true');
 });
 
 test('review lets a single node move to the start or replace a chosen existing node', async ({ page }) => {
@@ -266,11 +286,10 @@ test('successful editor apply log does not appear when opening the import dialog
   await expect(page.locator('#mihomo-import-recovery')).toBeHidden();
 });
 
-test('HTML in a node name is displayed as text in result and review', async ({ page }) => {
+test('HTML in a node name is displayed as text in review', async ({ page }) => {
   const name = '<img src=x onerror=alert(1)>';
   await setup(page, LINK.replace('#Review', `#${encodeURIComponent(name)}`));
-  await expect(page.locator('#mihomo-import-result-cards')).toContainText(name);
-  await expect(page.locator('#mihomo-import-result-cards img')).toHaveCount(0);
+  await expect(page.locator('#mihomo-import-result-cards')).toHaveCount(0);
   await page.locator('#mihomo-import-review-btn').click();
   await expect(page.locator('#mihomo-import-candidate-summary')).toContainText(name);
   await expect(page.locator('#mihomo-import-candidate-summary img')).toHaveCount(0);

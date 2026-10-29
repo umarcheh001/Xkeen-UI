@@ -9194,6 +9194,54 @@ body.panel-page #mihomo-import-modal .xk-mi-inline-actions {
   flex-wrap: nowrap;
 }
 
+body.panel-page #mihomo-import-modal .xk-mi-groups-disclosure {
+  overflow: hidden;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-groups-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  min-height: var(--op-control-h);
+  cursor: pointer;
+  list-style: none;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-groups-summary::-webkit-details-marker {
+  display: none;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-groups-summary::before {
+  content: '›';
+  flex: 0 0 auto;
+  color: var(--op-muted);
+  font-size: 17px;
+  line-height: 1;
+  transform: translateY(-1px);
+  transition: transform 120ms ease;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-groups-disclosure[open] .xk-mi-groups-summary::before {
+  transform: rotate(90deg) translateX(-1px);
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-groups-summary > .xk-mi-section-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-groups-summary > .xk-mi-inline-actions {
+  flex: 0 0 auto;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-groups-disclosure-body {
+  display: grid;
+  gap: 8px;
+  padding-top: 8px;
+}
+
 /* HWID is a second YAML workbench: keep the form/diagnostics as the left
  * scroll region and let the preview own every free pixel of the canvas.  The
  * declarations deliberately do not use !important so the shared modal
@@ -25409,58 +25457,6 @@ body.panel-page .xk-restart-log-card.is-fullscreen .xk-jr-box {
   }
 }
 
-/* Mihomo import result cards remain a compact Operator data summary. */
-body.panel-page #mihomo-import-modal .xk-mi-result-cards {
-  border-color: var(--op-border) !important;
-  border-radius: var(--op-radius-sm) !important;
-  background: var(--op-surface-2) !important;
-  box-shadow: none !important;
-}
-
-body.panel-page #mihomo-import-modal .xk-mi-result-card {
-  border-color: var(--op-border) !important;
-  border-radius: var(--op-radius-sm) !important;
-  background: var(--op-editor) !important;
-  box-shadow: none !important;
-}
-
-body.panel-page #mihomo-import-modal .xk-mi-result-card-title {
-  color: var(--op-text) !important;
-}
-
-body.panel-page #mihomo-import-modal .xk-mi-result-badge {
-  border-color: var(--op-border-strong) !important;
-  background: var(--op-surface-2) !important;
-  color: var(--op-muted) !important;
-}
-
-body.panel-page #mihomo-import-modal :is(
-  .xk-mi-result-source,
-  .xk-mi-result-detail,
-  .xk-mi-result-notice,
-  .xk-mi-result-diagnostic
-) {
-  color: var(--op-muted) !important;
-}
-
-body.panel-page #mihomo-import-modal .xk-mi-result-notice {
-  border-left-color: var(--op-accent) !important;
-}
-
-body.panel-page #mihomo-import-modal .xk-mi-result-notice.is-warning,
-body.panel-page #mihomo-import-modal .xk-mi-result-diagnostics {
-  border-color: var(--op-warning) !important;
-  color: var(--op-warning) !important;
-}
-
-body.panel-page #mihomo-import-modal .xk-mi-result-diagnostics {
-  background: var(--op-warning-soft) !important;
-}
-
-body.panel-page #mihomo-import-modal .xk-mi-result-diagnostics-title {
-  color: var(--op-warning) !important;
-}
-
 body.panel-page #mihomo-import-modal .xk-mi-destination-option {
   border-color: var(--op-border) !important;
   border-radius: var(--op-radius-sm) !important;
@@ -25698,6 +25694,60 @@ body.panel-page #mihomo-import-modal .xk-mi-flow-step--placement .xk-mi-placemen
 }
 body.panel-page #mihomo-import-modal .xk-mi-flow-step--placement .xk-mi-placement-label {
   padding-top: 7px;
+}
+body.panel-page #mihomo-import-modal .xk-mi-connection-options {
+  display: grid;
+  gap: 7px;
+  margin-top: 11px;
+  min-width: 0;
+}
+body.panel-page #mihomo-import-modal .xk-mi-connection-options.hidden {
+  display: none;
+}
+body.panel-page #mihomo-import-modal .xk-mi-connection-options-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+body.panel-page #mihomo-import-modal .xk-mi-connection-options-head .xk-mi-placement-label {
+  padding: 0;
+  color: var(--op-text-strong);
+  font-weight: 650;
+}
+body.panel-page #mihomo-import-modal .xk-mi-connection-options-hint {
+  color: var(--op-muted);
+  font-size: 10px;
+}
+body.panel-page #mihomo-import-modal .xk-mi-connection-options-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+body.panel-page #mihomo-import-modal .xk-mi-connection-options-grid .xk-mi-field {
+  min-width: 0;
+  gap: 4px;
+}
+body.panel-page #mihomo-import-modal .xk-mi-connection-options-grid .hint-label {
+  color: var(--op-muted);
+  font-size: 11px;
+}
+body.panel-page #mihomo-import-modal .xk-mi-info {
+  display: inline-grid;
+  place-items: center;
+  width: 13px;
+  height: 13px;
+  border: 1px solid var(--op-muted);
+  border-radius: 50%;
+  font-size: 9px;
+  font-style: normal;
+  cursor: help;
+}
+@media (max-width: 620px) {
+  body.panel-page #mihomo-import-modal .xk-mi-connection-options-grid {
+    grid-template-columns: 1fr;
+  }
 }
 body.panel-page #mihomo-import-modal .xk-mi-placement-actions [aria-pressed="true"] {
   border-color: var(--op-accent) !important;

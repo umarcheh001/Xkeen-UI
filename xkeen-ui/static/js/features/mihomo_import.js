@@ -1,5 +1,5 @@
 import { getMihomoPanelApi } from './mihomo_panel.js';
-import { load as loadYaml } from 'js-yaml';
+import { dump as dumpYaml, load as loadYaml } from 'js-yaml';
 import { getMihomoYamlPatchApi } from './mihomo_yaml_patch.js';
 import {
   confirmMihomoAction,
@@ -25,7 +25,7 @@ import {
 } from './mihomo_import_state.js';
 import { createMihomoImportApi } from './mihomo_import_api.js';
 import { getMihomoConfigOperations } from './mihomo_config_operations.js';
-import { createMihomoImportPresentation, redactMihomoImportDiagnostic, limitMihomoImportItems } from './mihomo_import_result.js';
+import { createMihomoImportPresentation, redactMihomoImportDiagnostic } from './mihomo_import_result.js';
 
 let mihomoImportModuleApi = null;
 
@@ -64,8 +64,6 @@ let mihomoImportModuleApi = null;
     monacoHost: 'mihomo-import-preview-monaco',
     status: 'mihomo-import-status',
     hint: 'mihomo-import-target-hint',
-    resultCards: 'mihomo-import-result-cards',
-
     destinationBlock: 'mihomo-import-destination-block',
     destinationOptions: 'mihomo-import-destination-options',
     destinationStaticOption: 'mihomo-import-destination-static-option',
@@ -75,6 +73,8 @@ let mihomoImportModuleApi = null;
     providerName: 'mihomo-import-provider-name',
     providerInterval: 'mihomo-import-provider-interval',
     providerNote: 'mihomo-import-provider-note',
+    fingerprint: 'mihomo-import-fingerprint',
+    x25519: 'mihomo-import-x25519',
     groupsBox: 'mihomo-import-groups',
     groupsBlock: 'mihomo-import-groups-block',
     groupsAllBtn: 'mihomo-import-groups-all-btn',
@@ -125,6 +125,7 @@ let mihomoImportModuleApi = null;
   let _placementMode = 'end';
   let _replaceTarget = '';
   let _reviewOpen = false;
+  let _connectionOptionsQueued = false;
   let _baseFileContent = '';
   let _fileBaselinePromise = null;
   const _configOperations = getMihomoConfigOperations();
@@ -141,7 +142,6 @@ let mihomoImportModuleApi = null;
     setActionStatus('');
     setHint('');
     setPreview('');
-    clearMihomoImportResultCards();
     updateXrayRefreshUi([]);
     setSourceLayout(false);
     const insert = $(IDS.btnInsert);
@@ -265,8 +265,8 @@ let mihomoImportModuleApi = null;
       let content = String(output.content || '');
       if (currentName && providerName && currentName !== providerName) {
         const escaped = escapeRegExp(currentName);
-        content = content.replace(new RegExp(`^(\s*)${escaped}(\s*:)`, 'm'), `$1${providerName}$2`);
-        content = content.replace(new RegExp(`(proxy_providers/)${escaped}(\.yaml)`, 'g'), `$1${providerName}$2`);
+        content = content.replace(new RegExp(`^(\\s*)${escaped}(\\s*:)`, 'm'), `$1${providerName}$2`);
+        content = content.replace(new RegExp(`(proxy_providers/)${escaped}(\\.yaml)`, 'g'), `$1${providerName}$2`);
       }
       content = content.replace(/^([ \t]*interval:\s*)\d+(\s*(?:#.*)?)$/mi, `$1${intervalSeconds}$2`);
       workingConfig += `\n${content}`;
@@ -281,20 +281,148 @@ let mihomoImportModuleApi = null;
     return Array.isArray(selected) ? selected.slice() : [];
   }
 
-  function refreshImportResultPresentation() {
+  const CLIENT_FINGERPRINTS = new Set(['chrome', 'firefox', 'safari', 'iOS', 'android', 'edge', '360', 'qq', 'random']);
+  const X25519_MODES = new Set(['inherit', 'enable', 'disable']);
+
+  function connectionOptionsFromUi() {
+    const fingerprintValue = String($(IDS.fingerprint)?.value || 'inherit').trim();
+    const x25519Value = String($(IDS.x25519)?.value || 'inherit').trim();
+    return {
+      fingerprint: CLIENT_FINGERPRINTS.has(fingerprintValue) ? fingerprintValue : '',
+      x25519: X25519_MODES.has(x25519Value) ? x25519Value : 'inherit',
+    };
+  }
+
+  function connectionOptionsLabel(options) {
+    const value = options || connectionOptionsFromUi();
+    const parts = [];
+    if (value.fingerprint) parts.push(`фингерпринт: ${value.fingerprint}`);
+    if (value.x25519 === 'enable') parts.push('X25519MLKEM768: включить');
+    if (value.x25519 === 'disable') parts.push('X25519MLKEM768: выключить');
+    return parts.length ? parts.join(', ') : 'наследовать значения источника';
+  }
+
+  function yamlProxyWithConnectionOptions(content, options) {
+    const raw = String(content || '').trim();
+    if (!raw || (!options.fingerprint && options.x25519 === 'inherit')) return content;
+    try {
+      const parsed = loadYaml(raw);
+      if (!Array.isArray(parsed) || !parsed.length || !parsed[0] || typeof parsed[0] !== 'object') return content;
+      const proxy = { ...parsed[0] };
+      if (proxy.tls !== true && !proxy['reality-opts']) return content;
+      if (options.fingerprint) proxy['client-fingerprint'] = options.fingerprint;
+      if (options.x25519 !== 'inherit' && proxy.type === 'vless' && proxy['reality-opts'] && typeof proxy['reality-opts'] === 'object' && !Array.isArray(proxy['reality-opts'])) {
+        proxy['reality-opts'] = { ...proxy['reality-opts'], 'support-x25519mlkem768': options.x25519 === 'enable' };
+      }
+      return dumpYaml([proxy], { noRefs: true, noCompatMode: true, lineWidth: -1, sortKeys: false }).trimEnd() + '\n';
+    } catch (_) {
+      return content;
+    }
+  }
+
+  function yamlProviderWithConnectionOptions(content, options) {
+    if (!options.fingerprint && options.x25519 === 'inherit') return content;
+    try {
+      const parsed = loadYaml(String(content || ''));
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return content;
+      const key = Object.keys(parsed)[0];
+      const provider = key && parsed[key] && typeof parsed[key] === 'object' ? { ...parsed[key] } : null;
+      if (!provider) return content;
+      const override = { ...(provider.override || {}) };
+      const expressions = Array.isArray(override['override-expr']) ? override['override-expr'].slice() : [];
+      if (options.fingerprint) expressions.push(`'.["client-fingerprint"] = "${options.fingerprint}"'`);
+      if (options.x25519 !== 'inherit') expressions.push(`'(select(.type == "vless" and .["reality-opts"] != null) | .["reality-opts"]["support-x25519mlkem768"]) = ${options.x25519 === 'enable'}'`);
+      if (expressions.length) override['override-expr'] = Array.from(new Set(expressions));
+      provider.override = override;
+      parsed[key] = provider;
+      const dumped = dumpYaml(parsed, { noRefs: true, noCompatMode: true, lineWidth: -1, sortKeys: false }).trimEnd();
+      return dumped.split('\n').map((line) => `  ${line}`).join('\n') + '\n';
+    } catch (_) {
+      return content;
+    }
+  }
+
+  function effectiveDestinationOutputs(existingConfig = getEditorText() || '') {
+    const options = connectionOptionsFromUi();
+    let outputs = currentDestinationOutputs();
+    if (_selectedDestination === 'provider') {
+      outputs = providerOutputsForInsert(outputs, existingConfig);
+      return outputs.map((output) => {
+        if (!output) return output;
+        if (output.type === 'proxy-provider') return { ...output, content: yamlProviderWithConnectionOptions(output.content, options) };
+        if (output.type === 'proxy') return { ...output, content: yamlProxyWithConnectionOptions(output.content, options) };
+        return output;
+      });
+    }
+    return outputs.map((output) => output && output.type === 'proxy'
+      ? { ...output, content: yamlProxyWithConnectionOptions(output.content, options) }
+      : output);
+  }
+
+  function buildImportStatusSummary(presentation, outputs, mode, destination, intervalHours) {
+    const items = Array.isArray(outputs) ? outputs : [];
+    const model = presentation && typeof presentation === 'object' ? presentation : {};
+    const sources = uniqueStrings((Array.isArray(model.cards) ? model.cards : [])
+      .map((card) => card && card.source)
+      .filter(Boolean))
+      .slice(0, 2)
+      .join(', ');
+    const sourceSuffix = sources ? ` · ${shortenStatusUrl(sources, 48)}` : '';
+    const target = destination || (Array.isArray(model.destinations) && model.destinations[0]) || 'proxies';
+    const targetLabel = target === 'proxy-providers' ? 'proxy-providers' : 'proxies';
+    const notices = uniqueStrings((Array.isArray(model.cards) ? model.cards : [])
+      .flatMap((card) => Array.isArray(card?.notices) ? card.notices.map((notice) => notice?.text) : []))
+      .map((notice) => {
+        const nameConflict = notice.match(/^Имя «(.+?)» уже занято; предложено «(.+?)»\.?$/);
+        if (nameConflict) return `Имя занято: «${nameConflict[1]}» → «${nameConflict[2]}»`;
+        const duplicate = notice.match(/^Похожее подключение уже есть в config\.yaml: «(.+?)»\.?$/);
+        if (duplicate) return `Дубликат подключения: «${duplicate[1]}»`;
+        return notice;
+      })
+      .slice(0, 2);
+    const noticeSuffix = notices.length ? ` · ${notices.map((notice) => shortenStatusUrl(notice, 72)).join(' · ')}` : '';
+
+    if (items.some((item) => item && item.xrayBulk)) {
+      const count = items.filter((item) => item && item.xrayBulk).length;
+      return `Распознана Xray-подписка: ${count} ${pluralRu(count, ['узел', 'узла', 'узлов'])}${sourceSuffix} → ${targetLabel}${noticeSuffix}. Автообновление: каждые ${intervalHours} ч после сохранения.`;
+    }
+    if (items.some((item) => item && item.providerStaticBulk)) {
+      const count = items.filter((item) => item && item.providerStaticBulk).length;
+      return `Распознана HWID-подписка: ${count} ${pluralRu(count, ['узел', 'узла', 'узлов'])}${sourceSuffix} → ${targetLabel}${noticeSuffix}. Автообновление: каждые ${intervalHours} ч после сохранения.`;
+    }
+    if (mode === 'amnezia-premium') {
+      return `Готово: ${items.length} ${pluralRu(items.length, ['локация', 'локации', 'локаций'])} → выбранные proxy-groups.`;
+    }
+    if (items.some((item) => item && item.type === 'proxy-provider')) {
+      return `Подписка распознана: ${sourceSuffix.replace(/^ · /, '') || 'источник'} → ${targetLabel}${noticeSuffix}.`;
+    }
+    return `Готово: ${items.length} ${pluralRu(items.length, ['узел', 'узла', 'узлов'])}${sourceSuffix} → ${targetLabel}${noticeSuffix}.`;
+  }
+
+  function refreshImportStatusForDestination() {
     if (!_lastResult || !_lastResult.presentationContext) return;
     const context = _lastResult.presentationContext;
-    renderMihomoImportResultCards(createMihomoImportPresentation({
+    const errors = Array.isArray(context.errors) ? context.errors : [];
+    if (errors.length) return;
+    const outputs = effectiveDestinationOutputs();
+    const presentation = createMihomoImportPresentation({
       ...context,
-      outputs: _lastResult.outputs,
-      errors: context.errors || [],
+      outputs,
+      errors,
       phase: context.mode === 'amnezia-premium' ? 'issued' : 'result',
-    }));
+    });
+    setStatus(buildImportStatusSummary(
+      presentation,
+      outputs,
+      context.mode,
+      _selectedDestination === 'provider' ? 'proxy-providers' : 'proxies',
+      readXrayIntervalHours(),
+    ), false);
   }
 
   function refreshImportPreviewAndHint() {
     if (!_lastResult) return;
-    const outputs = _lastResult.outputs || [];
+    const outputs = effectiveDestinationOutputs();
     const sections = outputs.map((output) => {
       const section = output && output.type === 'proxy-provider' ? 'proxy-providers' : 'proxies';
       const raw = String(output && output.content || '').trimEnd();
@@ -318,7 +446,7 @@ let mihomoImportModuleApi = null;
     _lastResult.outputs = configured.slice();
     setProviderFieldDefaults(configured);
     refreshImportPreviewAndHint();
-    refreshImportResultPresentation();
+    refreshImportStatusForDestination();
   }
 
   function setDestinationUiFromResult() {
@@ -388,7 +516,7 @@ let mihomoImportModuleApi = null;
     updateGroupsUiForDestination();
     updateXrayRefreshUi(_lastResult.outputs);
     refreshImportPreviewAndHint();
-    refreshImportResultPresentation();
+    refreshImportStatusForDestination();
   }
 
   function setSourceLayout(hasResult) {
@@ -580,91 +708,6 @@ let mihomoImportModuleApi = null;
     el.textContent = value;
     appendHappDecryptorCardLink(el, value);
     el.classList.toggle('hidden', !value.trim());
-  }
-
-  function clearMihomoImportResultCards() {
-    const host = $(IDS.resultCards);
-    if (!host) return;
-    host.replaceChildren();
-    host.classList.add('hidden');
-  }
-
-  function appendResultCardText(parent, className, text) {
-    const value = String(text || '').trim();
-    if (!value) return;
-    const node = document.createElement('div');
-    node.className = className;
-    node.textContent = value;
-    parent.appendChild(node);
-  }
-
-  function renderMihomoImportResultCards(presentation) {
-    const host = $(IDS.resultCards);
-    if (!host) return;
-    host.replaceChildren();
-    const model = presentation && typeof presentation === 'object' ? presentation : null;
-    if (!model || (!Array.isArray(model.cards) && !Array.isArray(model.diagnostics))) {
-      host.classList.add('hidden');
-      return;
-    }
-
-    const head = document.createElement('div');
-    head.className = 'xk-mi-section-head';
-    const copy = document.createElement('div');
-    const title = document.createElement('div');
-    title.className = 'xk-mi-section-title';
-    title.textContent = 'Результат распознавания';
-    const subtitle = document.createElement('div');
-    subtitle.className = 'xk-mi-section-subtitle';
-    subtitle.textContent = String(model.summary || 'Результат ещё не получен.');
-    copy.append(title, subtitle);
-    head.appendChild(copy);
-    host.appendChild(head);
-
-    const list = document.createElement('div');
-    list.className = 'xk-mi-result-list';
-    const visibleCards = limitMihomoImportItems(model.cards);
-    visibleCards.items.forEach((card) => {
-      const item = document.createElement('article');
-      item.className = 'xk-mi-result-card';
-      const cardHead = document.createElement('div');
-      cardHead.className = 'xk-mi-result-card-head';
-      const cardTitle = document.createElement('div');
-      cardTitle.className = 'xk-mi-result-card-title';
-      cardTitle.textContent = String(card.title || 'Результат');
-      cardHead.appendChild(cardTitle);
-      if (card.badge) {
-        const badge = document.createElement('span');
-        badge.className = 'xk-mi-result-badge';
-        badge.textContent = String(card.badge);
-        cardHead.appendChild(badge);
-      }
-      item.appendChild(cardHead);
-      appendResultCardText(item, 'xk-mi-result-source', `${String(card.sourceLabel || 'Источник')}: ${String(card.source || 'не указан')}`);
-      (card.details || []).forEach((detail) => appendResultCardText(item, 'xk-mi-result-detail', detail));
-      (card.notices || []).forEach((notice) => {
-        const note = document.createElement('div');
-        note.className = `xk-mi-result-notice ${notice && notice.tone ? `is-${notice.tone}` : ''}`;
-        note.textContent = String(notice && notice.text || '');
-        item.appendChild(note);
-      });
-      list.appendChild(item);
-    });
-    if (list.childElementCount) host.appendChild(list);
-    if (visibleCards.hidden) appendResultCardText(host, 'modal-hint', `Скрыто карточек: ${visibleCards.hidden}. В импорт войдут все распознанные узлы.`);
-
-    if (Array.isArray(model.diagnostics) && model.diagnostics.length) {
-      const diagnostics = document.createElement('div');
-      diagnostics.className = 'xk-mi-result-diagnostics';
-      const heading = document.createElement('div');
-      heading.className = 'xk-mi-result-diagnostics-title';
-      heading.textContent = 'Не обработано';
-      diagnostics.appendChild(heading);
-      model.diagnostics.forEach((message) => appendResultCardText(diagnostics, 'xk-mi-result-diagnostic', message));
-      host.appendChild(diagnostics);
-    }
-
-    host.classList.remove('hidden');
   }
 
   function isTruthyHeader(value) {
@@ -1875,11 +1918,12 @@ let mihomoImportModuleApi = null;
       try { disposeCodeMirrorEditor(_previewCm); } catch (e) {}
       _previewCm = null;
       _previewCmFacade = null;
-      clearMihomoImportResultCards();
       setSourceLayout(false);
       syncImportActions();
       const disclosure = $('mihomo-import-managed-disclosure');
       if (disclosure) disclosure.open = false;
+      const groupsDisclosure = $(IDS.groupsBlock);
+      if (groupsDisclosure) groupsDisclosure.open = false;
     }
     try {
       if (show) {
@@ -1902,9 +1946,12 @@ let mihomoImportModuleApi = null;
       _lastResult = null;
       _parseOperation = null;
       _lastCandidate = null;
+      _connectionOptionsQueued = false;
       _placementMode = 'end';
       _replaceTarget = '';
       _baseFileRevision = '';
+      if ($(IDS.fingerprint)) $(IDS.fingerprint).value = 'inherit';
+      if ($(IDS.x25519)) $(IDS.x25519).value = 'inherit';
       setActionStatus('');
       _baseFileContent = '';
       _fileBaselinePromise = getMihomoFileRevision();
@@ -1913,7 +1960,6 @@ let mihomoImportModuleApi = null;
       setStatus('', false);
       setHint('');
       setPreview('');
-      clearMihomoImportResultCards();
       try {
         const intervalInput = $(IDS.xrayInterval);
         if (intervalInput) intervalInput.value = String(loadXrayIntervalPref());
@@ -1927,6 +1973,8 @@ let mihomoImportModuleApi = null;
 
       // Load proxy-groups list from current config.yaml
       try { refreshGroupsUiFromConfig(); } catch (e4a) {}
+      const groupsDisclosure = $(IDS.groupsBlock);
+      if (groupsDisclosure) groupsDisclosure.open = false;
 
       // Import mode (persisted)
       try { setImportMode(loadImportModePref()); } catch (e4b) {}
@@ -1955,6 +2003,7 @@ let mihomoImportModuleApi = null;
     if (el.dataset && el.dataset.xkWired === '1') return;
     el.addEventListener('click', (e) => {
       e.preventDefault();
+      if (el.closest('summary')) e.stopPropagation();
       try {
         const r = fn(e);
         if (r && typeof r.then === 'function') {
@@ -2786,6 +2835,7 @@ let mihomoImportModuleApi = null;
       candidate.outputs.slice(0, 5).map(output => output.proxy_name || output.provider_name || '').filter(Boolean).join(', '),
       `Групп: ${candidate.groups.length ? candidate.groups.join(', ') : 'не выбраны'}`,
       candidate.missingGroups.length ? `Неизвестные группы: ${candidate.missingGroups.join(', ')}` : '',
+      `Параметры узлов: ${connectionOptionsLabel(candidate.connectionOptions)}`,
       'Доступность серверов не проверялась.',
     ].filter(Boolean);
     details.textContent = detailLines.join('\n');
@@ -2857,6 +2907,20 @@ let mihomoImportModuleApi = null;
       button.setAttribute('aria-pressed', String(mode === _placementMode));
       if (mode === 'replace') button.setAttribute('aria-disabled', String(!canReplace));
     });
+    const optionsBlock = $(IDS.modal)?.querySelector('.xk-mi-connection-options');
+    const applicable = outputs.some((output) => {
+      if (output?.type === 'proxy-provider') return true;
+      if (output?.type !== 'proxy') return false;
+      try {
+        const proxy = loadYaml(output.content)?.[0];
+        return proxy?.tls === true || !!proxy?.['reality-opts'];
+      } catch (_) { return false; }
+    });
+    optionsBlock?.classList.toggle('hidden', !applicable);
+    if (!applicable) {
+      if ($(IDS.fingerprint)) $(IDS.fingerprint).value = 'inherit';
+      if ($(IDS.x25519)) $(IDS.x25519).value = 'inherit';
+    }
   }
 
   async function buildImportCandidate() {
@@ -2868,13 +2932,12 @@ let mihomoImportModuleApi = null;
     ) {
       throw new Error('Сначала нажмите «Распознать».');
     }
-    if (_selectedDestination === 'provider') applyProviderSettingsFromUi();
     const sourceEditorContent = getEditorText() || '';
     const context = importContext();
     const result = _lastResult;
     const session = _importState.sessionId;
     let content = sourceEditorContent;
-    const selectedOutputs = currentDestinationOutputs();
+    const selectedOutputs = effectiveDestinationOutputs(sourceEditorContent);
     const providerOutputs = selectedOutputs.filter((output) => output.type === 'proxy-provider');
     content = insertProvidersIntoConfig(content, providerOutputs, _placementMode);
     const groups = readSelectedGroupsFromUi();
@@ -2914,6 +2977,7 @@ let mihomoImportModuleApi = null;
       baseRevision: _baseFileRevision,
       sourceEditorContent,
       context,
+      connectionOptions: connectionOptionsFromUi(),
       baseFileContent: _baseFileContent,
       registrations: importedRegistrationIntents(selectedOutputs, groups),
       operationId: crypto.randomUUID(),
@@ -2924,6 +2988,7 @@ let mihomoImportModuleApi = null;
       candidate: content,
     });
     renderCandidateSummary(candidate);
+    refreshImportPreviewAndHint();
     return candidate;
   }
 
@@ -2951,7 +3016,7 @@ let mihomoImportModuleApi = null;
       _importState.sessionId, _importState.sourceRevision, _selectedDestination,
       _placementMode, _replaceTarget,
       readSelectedGroupsFromUi(), $(IDS.providerName)?.value, $(IDS.providerInterval)?.value,
-      $(IDS.xrayInterval)?.value]);
+      $(IDS.xrayInterval)?.value, $(IDS.fingerprint)?.value, $(IDS.x25519)?.value]);
   }
 
   async function prepareImportReview() {
@@ -2967,7 +3032,14 @@ let mihomoImportModuleApi = null;
       $('mihomo-import-review-back')?.focus();
     } catch (error) {
       setActionStatus(redactMihomoImportDiagnostic(error.message), 'error');
-    } finally { _actionBusy = false; syncImportActions(); }
+    } finally {
+      _actionBusy = false;
+      syncImportActions();
+      if (_connectionOptionsQueued && _reviewOpen) {
+        _connectionOptionsQueued = false;
+        void prepareImportReview();
+      }
+    }
   }
 
   async function checkedCandidate() {
@@ -2991,6 +3063,7 @@ let mihomoImportModuleApi = null;
     return grouped.map(group => ({ url: group.uri, groups: [...groups], interval_hours: intervalHours,
       refresh_parser: group.refreshParser,
       proxies: group.items.map(item => ({ proxy_name: String(item.proxy_name || '').trim(), proxy_yaml: String(item.content || '').trimEnd() })),
+      connection_options: connectionOptionsFromUi(),
     }));
   }
 
@@ -3251,12 +3324,6 @@ let mihomoImportModuleApi = null;
       ? `Выбрано: ${selected} из ${total}. Конфиг будет выпущен только для выбранных локаций.`
       : 'Локации ещё не загружены.';
     if (total && getImportMode() === 'amnezia-premium' && !_lastResult) {
-      renderMihomoImportResultCards(createMihomoImportPresentation({
-        mode: 'amnezia-premium',
-        amneziaLocations: _amneziaLocations,
-        selectedAmneziaLocations: readSelectedAmneziaLocations(),
-        phase: 'locations',
-      }));
     }
   }
 
@@ -3282,12 +3349,6 @@ let mihomoImportModuleApi = null;
     setParseButtonLabel('Получить выбранные');
     setPreview('');
     setHint('Выберите нужные локации, затем нажмите «Получить выбранные».');
-    renderMihomoImportResultCards(createMihomoImportPresentation({
-      mode: 'amnezia-premium',
-      amneziaLocations: _amneziaLocations,
-      selectedAmneziaLocations: readSelectedAmneziaLocations(),
-      phase: 'locations',
-    }));
     updateXrayRefreshUi([]);
     const insert = $(IDS.btnInsert);
     if (insert) insert.disabled = true;
@@ -3481,7 +3542,6 @@ let mihomoImportModuleApi = null;
             errors: [e && e.message ? e.message : String(e || 'ошибка')],
             phase: 'error',
           });
-          renderMihomoImportResultCards(presentation);
           setStatus(presentation.diagnostics.join('\n'), true);
           setHint('');
         }
@@ -3612,7 +3672,6 @@ let mihomoImportModuleApi = null;
         selectedAmneziaLocations: readSelectedAmneziaLocations(),
         phase: mode === 'amnezia-premium' ? 'locations' : 'error',
       });
-      renderMihomoImportResultCards(presentation);
       setStatus(presentation.diagnostics.join('\n') || 'Не удалось распознать данные.', true);
       setHint('');
       setPreview('');
@@ -3659,7 +3718,6 @@ let mihomoImportModuleApi = null;
       baseConfigRevision: hashStableText(existing),
       candidate: null,
     });
-    renderMihomoImportResultCards(presentation);
     try { scheduleEngineSync(); } catch (e4) {}
 
     // Build preview. Group consecutive xrayBulk proxies sharing the same
@@ -3722,7 +3780,8 @@ let mihomoImportModuleApi = null;
     updateGroupsUiForDestination();
     updateXrayRefreshUi(selectedOutputs);
     if (errors.length) {
-      setStatus(`Часть данных распознана, часть — нет. ${presentation.summary}`, true);
+      const diagnostics = presentation.diagnostics.slice(0, 2).join(' · ');
+      setStatus(`Часть данных распознана, часть — нет. ${presentation.summary}${diagnostics ? ` ${diagnostics}` : ''}`, true);
       setPreview(preview + '\n\n# Ошибки\n' + presentation.diagnostics.map((x) => '# ' + x).join('\n') + '\n');
     } else if (providerWarnings.length) {
       setStatus(
@@ -3733,23 +3792,17 @@ let mihomoImportModuleApi = null;
       toastMsg(providerWarnings[0], 'warning');
     } else if (xrayNodeCount > 0) {
       const intervalHours = readXrayIntervalHours();
-      setStatus(
-        `Распознана Xray-подписка: ${xrayNodeCount} узлов будут добавлены в proxies. Автообновление: каждые ${intervalHours} ч после сохранения.`,
-        false,
-      );
+      setStatus(buildImportStatusSummary(presentation, selectedOutputs, mode, _selectedDestination === 'provider' ? 'proxy-providers' : 'proxies', intervalHours), false);
     } else if (providerStaticNodeCount > 0) {
       const intervalHours = readXrayIntervalHours();
-      setStatus(
-        `Распознана HWID-подписка: ${providerStaticNodeCount} узлов будут добавлены в proxies. Автообновление: каждые ${intervalHours} ч после сохранения.`,
-        false,
-      );
+      setStatus(buildImportStatusSummary(presentation, selectedOutputs, mode, _selectedDestination === 'provider' ? 'proxy-providers' : 'proxies', intervalHours), false);
     } else if (mode === 'amnezia-premium') {
       setStatus(
         `Готово: ${outputs.length} ${pluralRu(outputs.length, ['локация', 'локации', 'локаций'])} будет добавлено в выбранные proxy-groups. После применения выбирайте их в селекторах Mihomo/Clash API.`,
         false,
       );
     } else {
-      setStatus('Готово. Нажмите «Проверить изменение».', false);
+      setStatus(buildImportStatusSummary(presentation, selectedOutputs, mode, _selectedDestination === 'provider' ? 'proxy-providers' : 'proxies', readXrayIntervalHours()), false);
     }
 
     const ins = $(IDS.btnInsert);
@@ -3848,6 +3901,12 @@ let mihomoImportModuleApi = null;
       _lastCandidate = null;
       await prepareImportReview();
     });
+    [$(IDS.fingerprint), $(IDS.x25519)].forEach((input) => input?.addEventListener('change', async () => {
+      if (!_lastResult) return;
+      _lastCandidate = null;
+      if (_actionBusy) { _connectionOptionsQueued = true; return; }
+      await prepareImportReview();
+    }));
     wireButton('mihomo-import-review-back', () => { _reviewOpen = false; _lastCandidate = null; setSourceLayout(true); });
     wireButton('mihomo-import-resume', () => recoverImportOperation('resume'));
     wireButton('mihomo-import-retry-apply', () => recoverImportOperation('apply'));

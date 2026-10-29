@@ -77,6 +77,7 @@ test('source/result have no preview runtime; disclosure loads CM and close reset
   await capture(page, 'source-dark', testInfo);
   await parse(page);
   await expect(page.locator('#mihomo-import-groups-block')).toBeVisible();
+  await expect(page.locator('#mihomo-import-groups-block')).not.toHaveAttribute('open', '');
   await expect(page.locator('#mihomo-import-preview-panel')).toBeHidden();
   await expect(page.locator(`${MODAL} .cm-editor, ${MODAL} .monaco-editor`)).toHaveCount(0);
   await capture(page, 'result-dark', testInfo);
@@ -93,7 +94,7 @@ test('source/result have no preview runtime; disclosure loads CM and close reset
   expect((await page.locator(`${MODAL} .modal-content`).boundingBox()).width).toBeLessThanOrEqual(720);
 });
 
-test('result cards summarize nodes and subscriptions without rendering source credentials', async ({ page }) => {
+test('status summarizes nodes and subscriptions without rendering source credentials', async ({ page }) => {
   await prepare(page);
   await page.evaluate(async (content) => {
     const { getMihomoPanelApi } = await import('/static/js/features/mihomo_panel.js');
@@ -102,12 +103,12 @@ test('result cards summarize nodes and subscriptions without rendering source cr
   await open(page);
   await page.locator('#mihomo-import-input').fill(LINK);
   await page.locator('#mihomo-import-parse-btn').click();
-  await expect(page.locator('#mihomo-import-result-cards')).toBeVisible();
-  await expect(page.locator('#mihomo-import-result-cards')).toContainText('Результат распознавания');
-  await expect(page.locator('#mihomo-import-result-cards')).toContainText('Адрес: example.com:443');
-  await expect(page.locator('#mihomo-import-result-cards')).toContainText('Имя «Stage3» уже занято');
-  await expect(page.locator('#mihomo-import-result-cards')).toContainText('Похожее подключение уже есть');
-  await expect(page.locator('#mihomo-import-result-cards')).not.toContainText('11111111-1111-1111-1111-111111111111');
+  const status = page.locator('#mihomo-import-status');
+  await expect(page.locator('#mihomo-import-result-cards')).toHaveCount(0);
+  await expect(status).toContainText('example.com:443');
+  await expect(status).toContainText('Имя занято: «Stage3»');
+  await expect(status).toContainText('Дубликат подключения: «Stage3»');
+  await expect(status).not.toContainText('11111111-1111-1111-1111-111111111111');
 
   await page.route('**/api/mihomo/parse/xray-json', (route) => route.fulfill({
     json: {
@@ -121,19 +122,18 @@ test('result cards summarize nodes and subscriptions without rendering source cr
   const subscription = 'https://alice:secret@sub.example.org/list?token=hidden-token';
   await page.locator('#mihomo-import-input').fill(subscription);
   await page.locator('#mihomo-import-parse-btn').click();
-  await expect(page.locator('#mihomo-import-result-cards')).toContainText('Xray-JSON → статические узлы');
-  await expect(page.locator('#mihomo-import-result-cards')).toContainText('Источник: sub.example.org');
-  await expect(page.locator('#mihomo-import-result-cards')).toContainText('Получено: 2 узла');
-  await expect(page.locator('#mihomo-import-result-cards')).not.toContainText('alice:secret');
-  await expect(page.locator('#mihomo-import-result-cards')).not.toContainText('hidden-token');
+  await expect(status).toContainText('Xray-подписка');
+  await expect(status).toContainText('sub.example.org');
+  await expect(status).toContainText('2 узла');
+  await expect(status).not.toContainText('alice:secret');
+  await expect(status).not.toContainText('hidden-token');
 
   await page.unroute('**/api/mihomo/parse/xray-json');
   const rejected = `${LINK}\nunknown://private-source`;
   await page.locator('#mihomo-import-input').fill(rejected);
   await page.locator('#mihomo-import-parse-btn').click();
-  await expect(page.locator('#mihomo-import-result-cards')).toContainText('Не обработано');
-  await expect(page.locator('#mihomo-import-result-cards')).toContainText('Строка 2: Неизвестная ссылка');
-  await expect(page.locator('#mihomo-import-result-cards')).not.toContainText('unknown://private-source');
+  await expect(status).toContainText('Неизвестная ссылка');
+  await expect(status).not.toContainText('unknown://private-source');
 });
 
 test('old and new workbench geometry never inflate source; expanded geometry is restored', async ({ page }) => {
@@ -364,10 +364,12 @@ test('subscription destination switches provider use links and supported static 
   await expect(page.locator('#mihomo-import-destination-block')).toBeVisible();
   await expect(page.locator('#mihomo-import-destination-provider-option input')).toBeChecked();
   await expect(page.locator('#mihomo-import-groups-title')).toHaveText('Подключить provider к группам');
+  await expect(page.locator('#mihomo-import-status')).toContainText('→ proxy-providers');
   await expect(page.locator('#mihomo-import-provider-settings')).toBeVisible();
   await page.locator('#mihomo-import-provider-name').fill('chosen-provider');
   await page.locator('#mihomo-import-provider-interval').fill('24');
   await page.locator('#mihomo-import-provider-interval').press('Enter');
+  await page.locator('#mihomo-import-groups-block > summary').click();
   await page.locator('#mihomo-import-groups input[data-group="Main"]').check();
   await expect(page.locator('#mihomo-import-groups-count')).toContainText('Выбрано групп: 1');
 
@@ -382,17 +384,22 @@ test('subscription destination switches provider use links and supported static 
     } });
   });
   await page.locator('#mihomo-import-review-btn').click();
+  await page.locator('#mihomo-import-fingerprint').selectOption('firefox');
+  await page.locator('#mihomo-import-x25519').selectOption('enable');
   await page.locator('#mihomo-import-insert-btn').click();
-  await expect.poll(() => attachBodies.length).toBe(1);
-  expect(attachBodies[0].providers).toEqual(['chosen-provider']);
-  expect(attachBodies[0].groups).toEqual(['Main']);
-  expect(attachBodies[0].content).toContain('interval: 86400');
+  await expect.poll(() => attachBodies.at(-1)?.content).toContain('support-x25519mlkem768');
+  const attached = attachBodies.at(-1);
+  expect(attached.providers).toEqual(['chosen-provider']);
+  expect(attached.groups).toEqual(['Main']);
+  expect(attached.content).toContain('interval: 86400');
+  expect(attached.content).toContain('client-fingerprint');
 
   await open(page);
   await page.locator('#mihomo-import-input').fill('https://provider.example/subscription');
   await page.locator('#mihomo-import-parse-btn').click();
   await page.locator('#mihomo-import-destination-static-option input').check();
   await expect(page.locator('#mihomo-import-groups-title')).toHaveText('Добавить в группы');
+  await expect(page.locator('#mihomo-import-status')).toContainText('→ proxies');
   await expect(page.locator('#mihomo-import-provider-settings')).toBeHidden();
   await expect(page.locator('#mihomo-import-xray-refresh-block')).toBeVisible();
   expect(probes).toBe(2);

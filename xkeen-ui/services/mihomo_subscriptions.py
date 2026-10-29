@@ -38,6 +38,8 @@ DEFAULT_REFRESH_LOOKAHEAD_SECONDS = 5 * 60
 MAX_REFRESH_LOOKAHEAD_SECONDS = 3600
 REFRESH_PARSER_XRAY_JSON = "xray-json"
 REFRESH_PARSER_MIHOMO_PROVIDER = "mihomo-provider"
+_CONNECTION_FINGERPRINTS = {"chrome", "firefox", "safari", "iOS", "android", "edge", "360", "qq", "random"}
+_CONNECTION_X25519_MODES = {"inherit", "enable", "disable"}
 
 _STATE_LOCK = threading.RLock()
 _SCHEDULER_LOCK = threading.Lock()
@@ -124,6 +126,90 @@ def _clean_string_list(value: Any) -> List[str]:
     return out
 
 
+def _clean_connection_options(value: Any) -> Dict[str, str]:
+    data = value if isinstance(value, dict) else {}
+    fingerprint = str(data.get("fingerprint") or "").strip()
+    if fingerprint not in _CONNECTION_FINGERPRINTS:
+        fingerprint = ""
+    x25519 = str(data.get("x25519") or "inherit").strip().lower()
+    if x25519 not in _CONNECTION_X25519_MODES:
+        x25519 = "inherit"
+    return {"fingerprint": fingerprint, "x25519": x25519}
+
+
+def _apply_connection_options_to_proxy_block(block: Any, options: Any) -> str:
+    """Apply imported node overrides without requiring PyYAML on the router."""
+    values = _clean_connection_options(options)
+    text = str(block or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not text or (not values["fingerprint"] and values["x25519"] == "inherit"):
+        return text
+    lines = text.split("\n")
+    item_match = re.match(r"^(\s*)-\s+", lines[0])
+    item_indent = len(item_match.group(1)) if item_match else 0
+    key_indent = item_indent + 2
+    fingerprint_idx = -1
+    reality_idx = -1
+    for idx, line in enumerate(lines):
+        if len(line) - len(line.lstrip()) != key_indent:
+            continue
+        stripped = line.strip()
+        if stripped.startswith("client-fingerprint:"):
+            fingerprint_idx = idx
+        elif stripped.startswith("reality-opts:"):
+            reality_idx = idx
+
+    has_tls = reality_idx >= 0 or any(
+        len(line) - len(line.lstrip()) == key_indent and line.strip() == "tls: true"
+        for line in lines
+    )
+    if not has_tls:
+        return text
+    is_vless = any(
+        len(line) - len(line.lstrip()) == key_indent and line.strip() == "type: vless"
+        for line in lines
+    )
+
+    if values["fingerprint"]:
+        fingerprint_line = " " * key_indent + f"client-fingerprint: {values['fingerprint']}"
+        if fingerprint_idx >= 0:
+            lines[fingerprint_idx] = fingerprint_line
+        else:
+            insert_at = len(lines)
+            while insert_at > 0 and not lines[insert_at - 1].strip():
+                insert_at -= 1
+            lines.insert(insert_at, fingerprint_line)
+
+    if values["x25519"] != "inherit" and reality_idx >= 0 and is_vless:
+        reality_child_indent = key_indent + 2
+        child_idx = -1
+        for idx in range(reality_idx + 1, len(lines)):
+            stripped = lines[idx].strip()
+            indent = len(lines[idx]) - len(lines[idx].lstrip())
+            if stripped and indent <= key_indent:
+                break
+            if indent == reality_child_indent and stripped.startswith("support-x25519mlkem768:"):
+                child_idx = idx
+                break
+        child_line = " " * reality_child_indent + f"support-x25519mlkem768: {'true' if values['x25519'] == 'enable' else 'false'}"
+        if child_idx >= 0:
+            lines[child_idx] = child_line
+        else:
+            insert_at = reality_idx + 1
+            while insert_at < len(lines):
+                stripped = lines[insert_at].strip()
+                indent = len(lines[insert_at]) - len(lines[insert_at].lstrip())
+                if stripped and indent <= key_indent:
+                    break
+                insert_at += 1
+            lines.insert(insert_at, child_line)
+
+    return "\n".join(lines).strip()
+
+
+def _apply_connection_options_to_blocks(blocks: Sequence[Any], options: Any) -> List[str]:
+    return [_apply_connection_options_to_proxy_block(block, options) for block in blocks if str(block or "").strip()]
+
+
 def _clean_refresh_parser(value: Any) -> str:
     raw = str(value or "").strip().lower().replace("_", "-")
     if raw in {"mihomo-provider", "provider", "proxy-provider", "hwid-provider"}:
@@ -166,6 +252,7 @@ def _normalise_saved_state(raw: Any) -> Dict[str, Any]:
         entry["interval_hours"] = _clamp_interval(item.get("interval_hours", item.get("intervalHours")))
         entry["groups"] = _clean_string_list(item.get("groups"))
         entry["proxy_names"] = _clean_string_list(item.get("proxy_names") or item.get("proxyNames"))
+        entry["connection_options"] = _clean_connection_options(item.get("connection_options") or item.get("connectionOptions"))
         if "managed_yaml" in item:
             entry["managed_yaml"] = str(item.get("managed_yaml") or "")
         if not entry["enabled"]:
@@ -516,6 +603,7 @@ def sync_imported_xray_subscription(
     interval_hours: Any = DEFAULT_INTERVAL_HOURS,
     tag: str | None = None,
     refresh_parser: Any = REFRESH_PARSER_XRAY_JSON,
+    connection_options: Any = None,
 ) -> Dict[str, Any]:
     """Persist a parsed subscription inserted directly into config.yaml.
 
@@ -527,7 +615,8 @@ def sync_imported_xray_subscription(
     if not clean_url:
         raise ValueError("url is required")
 
-    blocks = [str(item or "").strip() for item in proxy_yamls or [] if str(item or "").strip()]
+    options = _clean_connection_options(connection_options)
+    blocks = _apply_connection_options_to_blocks(proxy_yamls or [], options)
     if not blocks:
         raise ValueError("proxy_yamls is required")
 
@@ -568,6 +657,7 @@ def sync_imported_xray_subscription(
             "groups": _clean_string_list(groups or prev.get("groups")),
             "proxy_names": proxy_names,
             "managed_yaml": "\n\n".join(blocks),
+            "connection_options": options,
             "updated_from_import_ts": now_ts,
             "last_ok": True,
             "last_error": "",
@@ -979,6 +1069,7 @@ def _refresh_config_subscription(
         new_blocks = [block for block in new_blocks if block]
         if not new_blocks:
             raise RuntimeError("empty_proxy_yaml")
+        new_blocks = _apply_connection_options_to_blocks(new_blocks, sub.get("connection_options"))
 
         new_names = _extract_proxy_names_from_yaml("\n\n".join(new_blocks))
         groups = _clean_string_list(sub.get("groups"))
