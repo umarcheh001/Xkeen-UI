@@ -22,9 +22,9 @@ def test_building_the_app_does_not_start_the_collector():
     assert "start_collector" not in text and "PYTEST_CURRENT_TEST" not in text
 
 
-def test_init_script_gives_the_panel_a_few_seconds_before_kill_nine():
+def test_init_script_sends_term_before_the_bounded_wait_and_kill_nine():
     text = (ROOT / "xkeen-ui" / "scripts" / "panel_init.sh").read_text(encoding="utf-8")
     start = text.index("stop_service() {")
     body = text[start : text.index("status_service() {", start)]
     assert body.index('kill "$PID"') < body.index("STOP_WAIT") < body.index('kill -9 "$PID"')
-    assert '[ "$STOP_WAIT" -lt 2 ]' in body
+    # Slow and stuck process behavior is exercised by test_panel_init_shutdown.

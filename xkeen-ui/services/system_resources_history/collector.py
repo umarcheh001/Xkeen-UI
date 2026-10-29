@@ -993,21 +993,26 @@ def stop_collector() -> None:
 
 
 def flush_collector() -> bool:
-    """Write the flash copy right now, without waiting for the thread; True when written.
+    """Checkpoint RAM first, then flash; True when the flash copy was written.
 
-    For the SIGTERM handler: the init script gives the panel only a few seconds
-    before ``kill -9``, so nothing here may wait.
+    A slow flash write can outlive the bounded SIGTERM grace period. A fresh
+    tmpfs copy lets the next process restore the tail even in that case.
+    Neither failure prevents trying the other destination.
     """
     collector = _collector  # no module lock: the signal may arrive while it is held
     if collector is None:
         return False
+    try:
+        collector.save("tmp")
+    except Exception:  # noqa: BLE001 - flash may still be writable
+        log.warning("resource history: tmp save on SIGTERM failed", exc_info=True)
     try:
         collector.save("flash")
     except OSError as exc:
         if exc.errno != errno.EROFS:
             log.warning("resource history: save on SIGTERM failed", exc_info=True)
             return False
-        # a reboot: the firmware has remounted /opt read-only already; the hourly copy stays
+        # On reboot tmpfs will be lost too; the hourly flash copy stays.
         log.info("resource history: /opt is read-only (reboot), the hourly flash copy is kept")
         return False
     except Exception:  # noqa: BLE001
@@ -1017,7 +1022,7 @@ def flush_collector() -> bool:
 
 
 def install_terminate_save() -> bool:
-    """On SIGTERM save the history to flash, then die as the signal would have done.
+    """On SIGTERM save the history to RAM and flash, then die with the signal.
 
     ``atexit`` never runs on SIGTERM, and the init script stops the panel with it.
     Returns False where the signal cannot be handled (not the main thread).

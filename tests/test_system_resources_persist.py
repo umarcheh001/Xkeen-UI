@@ -193,7 +193,8 @@ class _SaveFails:
         self.error = error
 
     def save(self, kind):
-        raise self.error
+        if kind == "flash":
+            raise self.error
 
 
 def test_sigterm_save_on_read_only_opt_is_one_quiet_line(monkeypatch, caplog):

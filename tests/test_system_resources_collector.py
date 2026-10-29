@@ -1039,6 +1039,71 @@ def test_sigterm_handler_without_a_collector_still_exits(monkeypatch):
     assert killed == [signal.SIGTERM]
 
 
+@pytest.mark.parametrize('flash_errno', [28, 30])
+def test_shutdown_keeps_fresh_tmp_history_when_flash_cannot_finish(tmp_path, monkeypatch, flash_errno):
+    r = FakeRouter(); c = make(tmp_path, r)
+    r.step(c, 3)
+    c.save('flash')
+    r.step(c, 3)
+    real = collector_mod.save_history
+
+    def blocked_flash(path, *args, **kwargs):
+        if path == c._paths['flash']:
+            raise OSError(flash_errno, 'Flash unavailable')
+        return real(path, *args, **kwargs)
+
+    monkeypatch.setattr(collector_mod, 'save_history', blocked_flash)
+    monkeypatch.setattr(collector_mod, '_collector', c)
+    assert collector_mod.flush_collector() is False
+    restarted = make(tmp_path, r)
+    r.step(restarted)
+    bars = restarted.snapshot()['cards']['link']['bars']['down']['values']
+    assert bars[-4:] == [100, 100, 100, None]
+
+
+def test_shutdown_tmp_failure_still_saves_fresh_flash(tmp_path, monkeypatch):
+    r = FakeRouter(); c = make(tmp_path, r)
+    r.step(c, 6)
+    blocker = tmp_path / 'blocked-tmp'
+    blocker.write_text('not a directory')
+    c._paths['tmp'] = str(blocker / 'resource-history.json')
+    monkeypatch.setattr(collector_mod, '_collector', c)
+    assert collector_mod.flush_collector() is True
+    restarted = make(tmp_path, r)
+    r.step(restarted)
+    assert restarted.snapshot()['cards']['link']['bars']['down']['values'][-4:] == [100, 100, 100, None]
+
+
+def test_shutdown_keeps_fresh_tmp_before_waiting_for_flash(tmp_path, monkeypatch):
+    r = FakeRouter(); c = make(tmp_path, r)
+    r.step(c, 6)
+    entered, release = threading.Event(), threading.Event()
+    real = collector_mod.save_history
+
+    def slow_flash(path, *args, **kwargs):
+        if path == c._paths['flash']:
+            entered.set()
+            if not release.wait(timeout=5):
+                raise TimeoutError('Test did not release flash')
+        return real(path, *args, **kwargs)
+
+    monkeypatch.setattr(collector_mod, 'save_history', slow_flash)
+    monkeypatch.setattr(collector_mod, '_collector', c)
+    worker = threading.Thread(target=collector_mod.flush_collector)
+    worker.start()
+    try:
+        assert entered.wait(timeout=3)
+        # This real tmpfs-equivalent file must already be usable while flash
+        # is blocked, even if a hard timeout were to terminate the process now.
+        payload = json.loads(Path(c._paths['tmp']).read_text(encoding='utf-8'))
+        assert payload['store']['last_ts'] == r.now
+        assert len(payload['meta']['network_recent']) == 6
+    finally:
+        release.set()
+        worker.join(timeout=5)
+    assert not worker.is_alive()
+
+
 def test_boot_with_a_past_clock_then_ntp_jump_forward(tmp_path):
     r = FakeRouter()
     r.now = 1_000_000.0  # the router has just booted: the clock is not set yet

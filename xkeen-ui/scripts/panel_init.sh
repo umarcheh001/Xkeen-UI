@@ -297,16 +297,22 @@ stop_service() {
     if [ -n "$PID" ]; then
       echo "Останавливаю Xkeen Web UI (PID $PID)..."
       kill "$PID" 2>/dev/null || true
-      # Панель по SIGTERM успевает сохранить историю ресурсов; ждём выхода до 3 с.
+      # Журнал тоже на флешке: его запись не должна задерживать сигналы.
+      audit_boot "[stop] SIGTERM PID $PID, grace=15s" >/dev/null 2>&1 </dev/null &
+      # Сначала панель сохраняет свежую историю в tmpfs, затем на флешку.
+      # Медленная запись после установки может занимать больше прежних 3 с.
+      # Не ждём бесконечно: зависший процесс не должен блокировать обновление.
       STOP_WAIT=0
-      sleep 1
-      while kill -0 "$PID" 2>/dev/null && [ "$STOP_WAIT" -lt 2 ]; do
+      while kill -0 "$PID" 2>/dev/null && [ "$STOP_WAIT" -lt 15 ]; do
         sleep 1
         STOP_WAIT=$((STOP_WAIT + 1))
       done
       if kill -0 "$PID" 2>/dev/null; then
         echo "Принудительное завершение процесса $PID..."
         kill -9 "$PID" 2>/dev/null || true
+        audit_boot "[stop] SIGKILL PID $PID after ${STOP_WAIT}s; final history save may be incomplete" >/dev/null 2>&1 </dev/null &
+      else
+        audit_boot "[stop] PID $PID exited after ${STOP_WAIT}s" >/dev/null 2>&1 </dev/null &
       fi
     fi
     rm -f "$PID_FILE"

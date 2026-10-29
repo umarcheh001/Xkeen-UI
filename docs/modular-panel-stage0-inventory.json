@@ -38,13 +38,13 @@
         "gevent-websocket (optional)"
       ],
       "removable": false,
-      "unit_count": 610,
-      "size_bytes": 8248747,
+      "unit_count": 611,
+      "size_bytes": 8251744,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
         "backend_service": 85,
-        "backend_test": 273,
+        "backend_test": 274,
         "configuration": 10,
         "frontend_bundle": 9,
         "frontend_entrypoint": 3,
@@ -359,7 +359,7 @@
       ],
       "removable": true,
       "unit_count": 66,
-      "size_bytes": 890263,
+      "size_bytes": 893162,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 16,
@@ -6715,6 +6715,26 @@
       "kind": "backend_test",
       "path": "tests/test_panel_init_pid_identity.py",
       "size_bytes": 5219,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_panel_init_shutdown.py",
+      "size_bytes": 2997,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -23272,7 +23292,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_service",
       "path": "xkeen-ui/services/system_resources_history/collector.py",
-      "size_bytes": 49920,
+      "size_bytes": 50152,
       "depends_on": [
         "core"
       ],
@@ -23522,7 +23542,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_system_resources_collector.py",
-      "size_bytes": 50390,
+      "size_bytes": 52987,
       "depends_on": [
         "core"
       ],
@@ -23562,7 +23582,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_system_resources_persist.py",
-      "size_bytes": 8209,
+      "size_bytes": 8241,
       "depends_on": [
         "core"
       ],
@@ -23657,7 +23677,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_system_resources_wiring.py",
-      "size_bytes": 1389,
+      "size_bytes": 1427,
       "depends_on": [
         "core"
       ],
@@ -35080,7 +35100,7 @@
         },
         "tool.advanced-diagnostics": {
           "unit_count": 66,
-          "size_bytes": 890263
+          "size_bytes": 893162
         }
       },
       "next_stage": "Этапы 4, 5 и 6."
