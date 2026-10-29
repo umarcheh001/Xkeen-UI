@@ -2206,7 +2206,7 @@
           "narrow"
         ],
         "icon_inventory": {
-          "action_control_count": 24,
+          "action_control_count": 21,
           "operator_icon_control_count": 7,
           "close_control_count": 1,
           "close_icons": [
@@ -2242,37 +2242,19 @@
               "accessible_name": false
             },
             {
-              "control": "control@2203",
+              "control": "control@3546",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@2425",
+              "control": "control@3774",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@2642",
-              "icons": [],
-              "icon_only": false,
-              "accessible_name": false
-            },
-            {
-              "control": "control@3193",
-              "icons": [],
-              "icon_only": false,
-              "accessible_name": false
-            },
-            {
-              "control": "control@3348",
-              "icons": [],
-              "icon_only": false,
-              "accessible_name": false
-            },
-            {
-              "control": "control@3505",
+              "control": "control@3997",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
@@ -2308,7 +2290,7 @@
               "accessible_name": false
             },
             {
-              "control": "control@11245",
+              "control": "control@12612",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
@@ -5051,8 +5033,8 @@
       },
       {
         "index": 81,
-        "locator": "div.xk-card-desc@L4439",
-        "line": 4439,
+        "locator": "div.xk-card-desc@L4470",
+        "line": 4470,
         "kind": "presentation-geometry",
         "source": "opacity:0.75;",
         "declarations": [
@@ -5065,7 +5047,7 @@
       {
         "index": 82,
         "locator": "#mihomo-proxy-tools-no-proxies",
-        "line": 4551,
+        "line": 4582,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -5078,7 +5060,7 @@
       {
         "index": 83,
         "locator": "#mihomo-validation-summary-wrap",
-        "line": 4681,
+        "line": 4712,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -5091,7 +5073,7 @@
       {
         "index": 84,
         "locator": "#mihomo-validation-explain-wrap",
-        "line": 4686,
+        "line": 4717,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -5104,7 +5086,7 @@
       {
         "index": 85,
         "locator": "#mihomo-validation-side-panel",
-        "line": 4693,
+        "line": 4724,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -5117,7 +5099,7 @@
       {
         "index": 86,
         "locator": "#mihomo-validation-log-wrap",
-        "line": 4694,
+        "line": 4725,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -5129,8 +5111,8 @@
       },
       {
         "index": 87,
-        "locator": "p.modal-hint.xk-modal-m-0.xk-modal-mt-8@L4847",
-        "line": 4847,
+        "locator": "p.modal-hint.xk-modal-m-0.xk-modal-mt-8@L4878",
+        "line": 4878,
         "kind": "presentation-geometry",
         "source": "opacity:0.75; font-size: 0.85rem;",
         "declarations": [
@@ -5146,8 +5128,8 @@
       },
       {
         "index": 88,
-        "locator": "div.xk-modal-gap-8@L4870",
-        "line": 4870,
+        "locator": "div.xk-modal-gap-8@L4901",
+        "line": 4901,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -5164,7 +5146,7 @@
       {
         "index": 89,
         "locator": "#fm-conn-profile",
-        "line": 4871,
+        "line": 4902,
         "kind": "presentation-geometry",
         "source": "flex:1;",
         "declarations": [
@@ -5177,7 +5159,7 @@
       {
         "index": 90,
         "locator": "#fm-key-file-label",
-        "line": 4902,
+        "line": 4933,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -5190,7 +5172,7 @@
       {
         "index": 91,
         "locator": "#fm-key-file",
-        "line": 4903,
+        "line": 4934,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -5203,7 +5185,7 @@
       {
         "index": 92,
         "locator": "#fm-key-path-label",
-        "line": 4905,
+        "line": 4936,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -5216,7 +5198,7 @@
       {
         "index": 93,
         "locator": "#fm-key-path",
-        "line": 4906,
+        "line": 4937,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -5229,7 +5211,7 @@
       {
         "index": 94,
         "locator": "#fm-passphrase-label",
-        "line": 4908,
+        "line": 4939,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -5242,7 +5224,7 @@
       {
         "index": 95,
         "locator": "#fm-passphrase",
-        "line": 4909,
+        "line": 4940,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -5254,8 +5236,8 @@
       },
       {
         "index": 96,
-        "locator": "div.xk-modal-gap-8@L4912",
-        "line": 4912,
+        "locator": "div.xk-modal-gap-8@L4943",
+        "line": 4943,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -5272,7 +5254,7 @@
       {
         "index": 97,
         "locator": "#fm-hostkey-policy",
-        "line": 4913,
+        "line": 4944,
         "kind": "presentation-geometry",
         "source": "flex:1;",
         "declarations": [
@@ -5285,7 +5267,7 @@
       {
         "index": 98,
         "locator": "#fm-hostkey-row",
-        "line": 4922,
+        "line": 4953,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -5302,7 +5284,7 @@
       {
         "index": 99,
         "locator": "#fm-hostkey-fp",
-        "line": 4923,
+        "line": 4954,
         "kind": "presentation-geometry",
         "source": "padding:8px 10px; opacity:.85; flex:1;",
         "declarations": [
@@ -5322,8 +5304,8 @@
       },
       {
         "index": 100,
-        "locator": "div.xk-modal-gap-10@L4941",
-        "line": 4941,
+        "locator": "div.xk-modal-gap-10@L4972",
+        "line": 4972,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -5339,8 +5321,8 @@
       },
       {
         "index": 101,
-        "locator": "span@L4943",
-        "line": 4943,
+        "locator": "span@L4974",
+        "line": 4974,
         "kind": "presentation-geometry",
         "source": "opacity:.85;",
         "declarations": [
@@ -5353,7 +5335,7 @@
       {
         "index": 102,
         "locator": "#fm-connect-warn",
-        "line": 4947,
+        "line": 4978,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -5365,8 +5347,8 @@
       },
       {
         "index": 103,
-        "locator": "div.modal-actions@L4949",
-        "line": 4949,
+        "locator": "div.modal-actions@L4980",
+        "line": 4980,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -5379,7 +5361,7 @@
       {
         "index": 104,
         "locator": "#fm-knownhosts-path",
-        "line": 4965,
+        "line": 4996,
         "kind": "presentation-geometry",
         "source": "padding:8px 10px; opacity:.85;",
         "declarations": [
@@ -5395,8 +5377,8 @@
       },
       {
         "index": 105,
-        "locator": "div.form-row.xk-modal-gap-8.xk-modal-m-0@L4967",
-        "line": 4967,
+        "locator": "div.form-row.xk-modal-gap-8.xk-modal-m-0@L4998",
+        "line": 4998,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center; flex-wrap:wrap;",
         "declarations": [
@@ -5416,8 +5398,8 @@
       },
       {
         "index": 106,
-        "locator": "label@L4968",
-        "line": 4968,
+        "locator": "label@L4999",
+        "line": 4999,
         "kind": "presentation-geometry",
         "source": "min-width:170px;",
         "declarations": [
@@ -5430,7 +5412,7 @@
       {
         "index": 107,
         "locator": "#fm-knownhosts-remove-host",
-        "line": 4969,
+        "line": 5000,
         "kind": "presentation-geometry",
         "source": "flex:1; min-width:260px;",
         "declarations": [
@@ -5446,8 +5428,8 @@
       },
       {
         "index": 108,
-        "locator": "div.xk-modal-gap-8.xk-modal-mb-10@L4973",
-        "line": 4973,
+        "locator": "div.xk-modal-gap-8.xk-modal-mb-10@L5004",
+        "line": 5004,
         "kind": "presentation-geometry",
         "source": "display:flex; justify-content:flex-end; flex-wrap:wrap;",
         "declarations": [
@@ -5468,7 +5450,7 @@
       {
         "index": 109,
         "locator": "#fm-knownhosts-hashed-hint",
-        "line": 4978,
+        "line": 5009,
         "kind": "mixed-state-and-presentation",
         "source": "display:none; opacity:.75;",
         "declarations": [
@@ -5485,7 +5467,7 @@
       {
         "index": 110,
         "locator": "#fm-knownhosts-body",
-        "line": 4979,
+        "line": 5010,
         "kind": "presentation-geometry",
         "source": "max-height:380px; overflow:auto;",
         "declarations": [
@@ -5501,8 +5483,8 @@
       },
       {
         "index": 111,
-        "locator": "div.status.xk-modal-mt-10@L4980",
-        "line": 4980,
+        "locator": "div.status.xk-modal-mt-10@L5011",
+        "line": 5011,
         "kind": "presentation-geometry",
         "source": "opacity:.75;",
         "declarations": [
@@ -5514,8 +5496,8 @@
       },
       {
         "index": 112,
-        "locator": "div.modal-actions@L4982",
-        "line": 4982,
+        "locator": "div.modal-actions@L5013",
+        "line": 5013,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -5528,7 +5510,7 @@
       {
         "index": 113,
         "locator": "#fm-create-dest",
-        "line": 5001,
+        "line": 5032,
         "kind": "presentation-geometry",
         "source": "padding:8px 10px;",
         "declarations": [
@@ -5540,8 +5522,8 @@
       },
       {
         "index": 114,
-        "locator": "label.xk-modal-gap-8@L5004",
-        "line": 5004,
+        "locator": "label.xk-modal-gap-8@L5035",
+        "line": 5035,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -5558,7 +5540,7 @@
       {
         "index": 115,
         "locator": "#fm-create-createonly-row",
-        "line": 5010,
+        "line": 5041,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -5574,8 +5556,8 @@
       },
       {
         "index": 116,
-        "locator": "div.modal-actions@L5017",
-        "line": 5017,
+        "locator": "div.modal-actions@L5048",
+        "line": 5048,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -5588,7 +5570,7 @@
       {
         "index": 117,
         "locator": "#fm-rename-src",
-        "line": 5038,
+        "line": 5069,
         "kind": "presentation-geometry",
         "source": "padding:8px 10px;",
         "declarations": [
@@ -5600,8 +5582,8 @@
       },
       {
         "index": 118,
-        "locator": "div.status.xk-modal-mt-10@L5040",
-        "line": 5040,
+        "locator": "div.status.xk-modal-mt-10@L5071",
+        "line": 5071,
         "kind": "presentation-geometry",
         "source": "opacity:.8;",
         "declarations": [
@@ -5613,8 +5595,8 @@
       },
       {
         "index": 119,
-        "locator": "div.modal-actions@L5043",
-        "line": 5043,
+        "locator": "div.modal-actions@L5074",
+        "line": 5074,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -5626,8 +5608,8 @@
       },
       {
         "index": 120,
-        "locator": "div.fm-form-grid@L5058",
-        "line": 5058,
+        "locator": "div.fm-form-grid@L5089",
+        "line": 5089,
         "kind": "presentation-geometry",
         "source": "grid-template-columns: 160px 1fr;",
         "declarations": [
@@ -5640,7 +5622,7 @@
       {
         "index": 121,
         "locator": "#fm-archive-src",
-        "line": 5060,
+        "line": 5091,
         "kind": "presentation-geometry",
         "source": "padding:8px 10px;",
         "declarations": [
@@ -5653,7 +5635,7 @@
       {
         "index": 122,
         "locator": "#fm-archive-list",
-        "line": 5063,
+        "line": 5094,
         "kind": "presentation-geometry",
         "source": "max-height:180px;",
         "declarations": [
@@ -5665,8 +5647,8 @@
       },
       {
         "index": 123,
-        "locator": "label.xk-modal-gap-8@L5075",
-        "line": 5075,
+        "locator": "label.xk-modal-gap-8@L5106",
+        "line": 5106,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -5682,8 +5664,8 @@
       },
       {
         "index": 124,
-        "locator": "div.modal-actions@L5082",
-        "line": 5082,
+        "locator": "div.modal-actions@L5113",
+        "line": 5113,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -5695,8 +5677,8 @@
       },
       {
         "index": 125,
-        "locator": "div.fm-form-grid@L5097",
-        "line": 5097,
+        "locator": "div.fm-form-grid@L5128",
+        "line": 5128,
         "kind": "presentation-geometry",
         "source": "grid-template-columns: 160px 1fr;",
         "declarations": [
@@ -5709,7 +5691,7 @@
       {
         "index": 126,
         "locator": "#fm-extract-archive",
-        "line": 5099,
+        "line": 5130,
         "kind": "presentation-geometry",
         "source": "padding:8px 10px;",
         "declarations": [
@@ -5721,8 +5703,8 @@
       },
       {
         "index": 127,
-        "locator": "div.xk-modal-gap-8@L5105",
-        "line": 5105,
+        "locator": "div.xk-modal-gap-8@L5136",
+        "line": 5136,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center; flex-wrap:wrap;",
         "declarations": [
@@ -5743,7 +5725,7 @@
       {
         "index": 128,
         "locator": "#fm-extract-dest-here-btn",
-        "line": 5106,
+        "line": 5137,
         "kind": "presentation-geometry",
         "source": "padding:6px 10px; font-size:12px;",
         "declarations": [
@@ -5760,7 +5742,7 @@
       {
         "index": 129,
         "locator": "#fm-extract-dest-other-btn",
-        "line": 5107,
+        "line": 5138,
         "kind": "presentation-geometry",
         "source": "padding:6px 10px; font-size:12px;",
         "declarations": [
@@ -5777,7 +5759,7 @@
       {
         "index": 130,
         "locator": "#fm-extract-dest-pick-btn",
-        "line": 5108,
+        "line": 5139,
         "kind": "presentation-geometry",
         "source": "padding:6px 10px; font-size:12px;",
         "declarations": [
@@ -5793,8 +5775,8 @@
       },
       {
         "index": 131,
-        "locator": "span@L5109",
-        "line": 5109,
+        "locator": "span@L5140",
+        "line": 5140,
         "kind": "presentation-geometry",
         "source": "opacity:.7; font-size:12px;",
         "declarations": [
@@ -5810,8 +5792,8 @@
       },
       {
         "index": 132,
-        "locator": "label.xk-modal-gap-8@L5113",
-        "line": 5113,
+        "locator": "label.xk-modal-gap-8@L5144",
+        "line": 5144,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -5827,8 +5809,8 @@
       },
       {
         "index": 133,
-        "locator": "label.xk-modal-gap-8@L5119",
-        "line": 5119,
+        "locator": "label.xk-modal-gap-8@L5150",
+        "line": 5150,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -5844,8 +5826,8 @@
       },
       {
         "index": 134,
-        "locator": "label.xk-modal-gap-8@L5125",
-        "line": 5125,
+        "locator": "label.xk-modal-gap-8@L5156",
+        "line": 5156,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -5861,8 +5843,8 @@
       },
       {
         "index": 135,
-        "locator": "label.xk-modal-gap-8@L5131",
-        "line": 5131,
+        "locator": "label.xk-modal-gap-8@L5162",
+        "line": 5162,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -5878,8 +5860,8 @@
       },
       {
         "index": 136,
-        "locator": "div.status.xk-modal-mt-10@L5136",
-        "line": 5136,
+        "locator": "div.status.xk-modal-mt-10@L5167",
+        "line": 5167,
         "kind": "presentation-geometry",
         "source": "opacity:.75;",
         "declarations": [
@@ -5891,8 +5873,8 @@
       },
       {
         "index": 137,
-        "locator": "div.modal-actions@L5139",
-        "line": 5139,
+        "locator": "div.modal-actions@L5170",
+        "line": 5170,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -5904,8 +5886,8 @@
       },
       {
         "index": 138,
-        "locator": "div.xk-modal-gap-8.xk-modal-mb-10@L5154",
-        "line": 5154,
+        "locator": "div.xk-modal-gap-8.xk-modal-mb-10@L5185",
+        "line": 5185,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center; flex-wrap:wrap;",
         "declarations": [
@@ -5926,7 +5908,7 @@
       {
         "index": 139,
         "locator": "#fm-folder-picker-up-btn",
-        "line": 5155,
+        "line": 5186,
         "kind": "presentation-geometry",
         "source": "padding:6px 10px; font-size:12px;",
         "declarations": [
@@ -5943,7 +5925,7 @@
       {
         "index": 140,
         "locator": "#fm-folder-picker-home-btn",
-        "line": 5156,
+        "line": 5187,
         "kind": "presentation-geometry",
         "source": "padding:6px 10px; font-size:12px;",
         "declarations": [
@@ -5960,7 +5942,7 @@
       {
         "index": 141,
         "locator": "#fm-folder-picker-path",
-        "line": 5157,
+        "line": 5188,
         "kind": "presentation-geometry",
         "source": "flex:1; min-width:220px;",
         "declarations": [
@@ -5977,7 +5959,7 @@
       {
         "index": 142,
         "locator": "#fm-folder-picker-status",
-        "line": 5159,
+        "line": 5190,
         "kind": "presentation-geometry",
         "source": "padding:6px 10px; opacity:.85;",
         "declarations": [
@@ -5994,7 +5976,7 @@
       {
         "index": 143,
         "locator": "#fm-folder-picker-list",
-        "line": 5160,
+        "line": 5191,
         "kind": "presentation-geometry",
         "source": "max-height:420px; overflow:auto; padding:0;",
         "declarations": [
@@ -6014,8 +5996,8 @@
       },
       {
         "index": 144,
-        "locator": "div.modal-actions@L5163",
-        "line": 5163,
+        "locator": "div.modal-actions@L5194",
+        "line": 5194,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -6027,8 +6009,8 @@
       },
       {
         "index": 145,
-        "locator": "div.fm-form-grid@L5178",
-        "line": 5178,
+        "locator": "div.fm-form-grid@L5209",
+        "line": 5209,
         "kind": "presentation-geometry",
         "source": "grid-template-columns: 120px 1fr;",
         "declarations": [
@@ -6041,7 +6023,7 @@
       {
         "index": 146,
         "locator": "#fm-archive-list-path",
-        "line": 5180,
+        "line": 5211,
         "kind": "presentation-geometry",
         "source": "padding:8px 10px;",
         "declarations": [
@@ -6053,8 +6035,8 @@
       },
       {
         "index": 147,
-        "locator": "div.xk-modal-gap-8.xk-modal-m-0.xk-modal-mb-6@L5184",
-        "line": 5184,
+        "locator": "div.xk-modal-gap-8.xk-modal-m-0.xk-modal-mb-6@L5215",
+        "line": 5215,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -6071,7 +6053,7 @@
       {
         "index": 148,
         "locator": "#fm-archive-list-filter",
-        "line": 5185,
+        "line": 5216,
         "kind": "presentation-geometry",
         "source": "flex:1; min-width:200px;",
         "declarations": [
@@ -6088,7 +6070,7 @@
       {
         "index": 149,
         "locator": "#fm-archive-list-body",
-        "line": 5189,
+        "line": 5220,
         "kind": "presentation-geometry",
         "source": "max-height:420px; overflow:auto; padding:0;",
         "declarations": [
@@ -6109,7 +6091,7 @@
       {
         "index": 150,
         "locator": "#fm-archive-list-meta",
-        "line": 5193,
+        "line": 5224,
         "kind": "presentation-geometry",
         "source": "padding:6px 10px; opacity:.8;",
         "declarations": [
@@ -6125,8 +6107,8 @@
       },
       {
         "index": 151,
-        "locator": "div.modal-actions.xk-modal-gap-10@L5197",
-        "line": 5197,
+        "locator": "div.modal-actions.xk-modal-gap-10@L5228",
+        "line": 5228,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -6138,8 +6120,8 @@
       },
       {
         "index": 152,
-        "locator": "div.status.xk-modal-m-0@L5219",
-        "line": 5219,
+        "locator": "div.status.xk-modal-m-0@L5250",
+        "line": 5250,
         "kind": "presentation-geometry",
         "source": "padding:8px 10px;",
         "declarations": [
@@ -6151,8 +6133,8 @@
       },
       {
         "index": 153,
-        "locator": "div.modal-actions@L5223",
-        "line": 5223,
+        "locator": "div.modal-actions@L5254",
+        "line": 5254,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -6164,8 +6146,8 @@
       },
       {
         "index": 154,
-        "locator": "div.xk-modal-gap-2@L5234",
-        "line": 5234,
+        "locator": "div.xk-modal-gap-2@L5265",
+        "line": 5265,
         "kind": "presentation-geometry",
         "source": "display:flex; flex-direction:column;",
         "declarations": [
@@ -6182,7 +6164,7 @@
       {
         "index": 155,
         "locator": "#fm-props-modal-meta",
-        "line": 5236,
+        "line": 5267,
         "kind": "presentation-geometry",
         "source": "padding:0; background:transparent; border:none; opacity:.75; font-size:0.82rem;",
         "declarations": [
@@ -6210,8 +6192,8 @@
       },
       {
         "index": 156,
-        "locator": "div.modal-actions@L5243",
-        "line": 5243,
+        "locator": "div.modal-actions@L5274",
+        "line": 5274,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -6223,8 +6205,8 @@
       },
       {
         "index": 157,
-        "locator": "div.xk-modal-gap-2@L5253",
-        "line": 5253,
+        "locator": "div.xk-modal-gap-2@L5284",
+        "line": 5284,
         "kind": "presentation-geometry",
         "source": "display:flex; flex-direction:column;",
         "declarations": [
@@ -6241,7 +6223,7 @@
       {
         "index": 158,
         "locator": "#fm-hash-meta",
-        "line": 5255,
+        "line": 5286,
         "kind": "presentation-geometry",
         "source": "padding:0; background:transparent; border:none; opacity:.75; font-size:0.82rem;",
         "declarations": [
@@ -6269,8 +6251,8 @@
       },
       {
         "index": 159,
-        "locator": "div.fm-form-grid@L5260",
-        "line": 5260,
+        "locator": "div.fm-form-grid@L5291",
+        "line": 5291,
         "kind": "presentation-geometry",
         "source": "grid-template-columns: 120px 1fr auto; align-items:center;",
         "declarations": [
@@ -6286,8 +6268,8 @@
       },
       {
         "index": 160,
-        "locator": "div.modal-actions@L5275",
-        "line": 5275,
+        "locator": "div.modal-actions@L5306",
+        "line": 5306,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -6299,8 +6281,8 @@
       },
       {
         "index": 161,
-        "locator": "div.fm-form-grid@L5289",
-        "line": 5289,
+        "locator": "div.fm-form-grid@L5320",
+        "line": 5320,
         "kind": "presentation-geometry",
         "source": "grid-template-columns: 160px 1fr;",
         "declarations": [
@@ -6313,7 +6295,7 @@
       {
         "index": 162,
         "locator": "#fm-chmod-src",
-        "line": 5291,
+        "line": 5322,
         "kind": "presentation-geometry",
         "source": "padding:8px 10px;",
         "declarations": [
@@ -6326,7 +6308,7 @@
       {
         "index": 163,
         "locator": "#fm-chmod-list",
-        "line": 5294,
+        "line": 5325,
         "kind": "presentation-geometry",
         "source": "max-height:160px;",
         "declarations": [
@@ -6338,8 +6320,8 @@
       },
       {
         "index": 164,
-        "locator": "div.status.xk-modal-m-0@L5300",
-        "line": 5300,
+        "locator": "div.status.xk-modal-m-0@L5331",
+        "line": 5331,
         "kind": "presentation-geometry",
         "source": "opacity:.8;",
         "declarations": [
@@ -6351,8 +6333,8 @@
       },
       {
         "index": 165,
-        "locator": "div.modal-actions@L5327",
-        "line": 5327,
+        "locator": "div.modal-actions@L5358",
+        "line": 5358,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -6364,8 +6346,8 @@
       },
       {
         "index": 166,
-        "locator": "div.fm-form-grid@L5342",
-        "line": 5342,
+        "locator": "div.fm-form-grid@L5373",
+        "line": 5373,
         "kind": "presentation-geometry",
         "source": "grid-template-columns: 160px 1fr;",
         "declarations": [
@@ -6378,7 +6360,7 @@
       {
         "index": 167,
         "locator": "#fm-chown-src",
-        "line": 5344,
+        "line": 5375,
         "kind": "presentation-geometry",
         "source": "padding:8px 10px;",
         "declarations": [
@@ -6391,7 +6373,7 @@
       {
         "index": 168,
         "locator": "#fm-chown-list",
-        "line": 5347,
+        "line": 5378,
         "kind": "presentation-geometry",
         "source": "max-height:160px;",
         "declarations": [
@@ -6403,8 +6385,8 @@
       },
       {
         "index": 169,
-        "locator": "div.status.xk-modal-m-0@L5356",
-        "line": 5356,
+        "locator": "div.status.xk-modal-m-0@L5387",
+        "line": 5387,
         "kind": "presentation-geometry",
         "source": "opacity:.8;",
         "declarations": [
@@ -6416,8 +6398,8 @@
       },
       {
         "index": 170,
-        "locator": "div.modal-actions@L5360",
-        "line": 5360,
+        "locator": "div.modal-actions@L5391",
+        "line": 5391,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -6429,8 +6411,8 @@
       },
       {
         "index": 171,
-        "locator": "div.status.xk-modal-mt-10@L5377",
-        "line": 5377,
+        "locator": "div.status.xk-modal-mt-10@L5408",
+        "line": 5408,
         "kind": "presentation-geometry",
         "source": "opacity:.8;",
         "declarations": [
@@ -6442,8 +6424,8 @@
       },
       {
         "index": 172,
-        "locator": "div.modal-actions@L5379",
-        "line": 5379,
+        "locator": "div.modal-actions@L5410",
+        "line": 5410,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -6455,8 +6437,8 @@
       },
       {
         "index": 173,
-        "locator": "div.modal-actions@L5412",
-        "line": 5412,
+        "locator": "div.modal-actions@L5443",
+        "line": 5443,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -6469,7 +6451,7 @@
       {
         "index": 174,
         "locator": "#fm-bookmarks-error",
-        "line": 5431,
+        "line": 5462,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -6482,7 +6464,7 @@
       {
         "index": 175,
         "locator": "#fm-download-multi-desc",
-        "line": 5455,
+        "line": 5486,
         "kind": "presentation-geometry",
         "source": "opacity:.9;",
         "declarations": [
@@ -6494,8 +6476,8 @@
       },
       {
         "index": 176,
-        "locator": "div.xk-modal-gap-10@L5457",
-        "line": 5457,
+        "locator": "div.xk-modal-gap-10@L5488",
+        "line": 5488,
         "kind": "presentation-geometry",
         "source": "display:flex; flex-direction:column;",
         "declarations": [
@@ -6511,8 +6493,8 @@
       },
       {
         "index": 177,
-        "locator": "label.xk-modal-gap-10@L5458",
-        "line": 5458,
+        "locator": "label.xk-modal-gap-10@L5489",
+        "line": 5489,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:flex-start;",
         "declarations": [
@@ -6528,8 +6510,8 @@
       },
       {
         "index": 178,
-        "locator": "div@L5461",
-        "line": 5461,
+        "locator": "div@L5492",
+        "line": 5492,
         "kind": "presentation-geometry",
         "source": "font-weight:600;",
         "declarations": [
@@ -6541,8 +6523,8 @@
       },
       {
         "index": 179,
-        "locator": "div@L5462",
-        "line": 5462,
+        "locator": "div@L5493",
+        "line": 5493,
         "kind": "presentation-geometry",
         "source": "font-size:12px; opacity:.8;",
         "declarations": [
@@ -6558,8 +6540,8 @@
       },
       {
         "index": 180,
-        "locator": "label.xk-modal-gap-10@L5466",
-        "line": 5466,
+        "locator": "label.xk-modal-gap-10@L5497",
+        "line": 5497,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:flex-start;",
         "declarations": [
@@ -6575,8 +6557,8 @@
       },
       {
         "index": 181,
-        "locator": "div@L5469",
-        "line": 5469,
+        "locator": "div@L5500",
+        "line": 5500,
         "kind": "presentation-geometry",
         "source": "font-weight:600;",
         "declarations": [
@@ -6589,7 +6571,7 @@
       {
         "index": 182,
         "locator": "#fm-download-multi-queue-hint",
-        "line": 5470,
+        "line": 5501,
         "kind": "presentation-geometry",
         "source": "font-size:12px; opacity:.8;",
         "declarations": [
@@ -6605,8 +6587,8 @@
       },
       {
         "index": 183,
-        "locator": "label.xk-modal-gap-8.xk-modal-mt-12@L5475",
-        "line": 5475,
+        "locator": "label.xk-modal-gap-8.xk-modal-mt-12@L5506",
+        "line": 5506,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -6622,8 +6604,8 @@
       },
       {
         "index": 184,
-        "locator": "span@L5477",
-        "line": 5477,
+        "locator": "span@L5508",
+        "line": 5508,
         "kind": "presentation-geometry",
         "source": "font-size:12px; opacity:.9;",
         "declarations": [
@@ -6639,8 +6621,8 @@
       },
       {
         "index": 185,
-        "locator": "div.modal-actions.xk-modal-gap-10@L5480",
-        "line": 5480,
+        "locator": "div.modal-actions.xk-modal-gap-10@L5511",
+        "line": 5511,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -6652,8 +6634,8 @@
       },
       {
         "index": 186,
-        "locator": "div.modal-actions@L5501",
-        "line": 5501,
+        "locator": "div.modal-actions@L5532",
+        "line": 5532,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -6665,138 +6647,7 @@
       },
       {
         "index": 187,
-        "locator": "div.xk-modal-gap-8.xk-modal-mb-8@L5516",
-        "line": 5516,
-        "kind": "presentation-geometry",
-        "source": "display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap;",
-        "declarations": [
-          {
-            "property": "display",
-            "value": "flex"
-          },
-          {
-            "property": "align-items",
-            "value": "center"
-          },
-          {
-            "property": "justify-content",
-            "value": "space-between"
-          },
-          {
-            "property": "flex-wrap",
-            "value": "wrap"
-          }
-        ]
-      },
-      {
-        "index": 188,
-        "locator": "div.xk-modal-gap-8@L5517",
-        "line": 5517,
-        "kind": "presentation-geometry",
-        "source": "display:flex; align-items:center; flex-wrap:wrap;",
-        "declarations": [
-          {
-            "property": "display",
-            "value": "flex"
-          },
-          {
-            "property": "align-items",
-            "value": "center"
-          },
-          {
-            "property": "flex-wrap",
-            "value": "wrap"
-          }
-        ]
-      },
-      {
-        "index": 189,
-        "locator": "label.xk-modal-gap-6@L5518",
-        "line": 5518,
-        "kind": "presentation-geometry",
-        "source": "display:flex; align-items:center; opacity:.9;",
-        "declarations": [
-          {
-            "property": "display",
-            "value": "flex"
-          },
-          {
-            "property": "align-items",
-            "value": "center"
-          },
-          {
-            "property": "opacity",
-            "value": ".9"
-          }
-        ]
-      },
-      {
-        "index": 190,
-        "locator": "span@L5519",
-        "line": 5519,
-        "kind": "presentation-geometry",
-        "source": "font-size:12px;",
-        "declarations": [
-          {
-            "property": "font-size",
-            "value": "12px"
-          }
-        ]
-      },
-      {
-        "index": 191,
-        "locator": "#fm-ops-filter",
-        "line": 5520,
-        "kind": "presentation-geometry",
-        "source": "height:32px;",
-        "declarations": [
-          {
-            "property": "height",
-            "value": "32px"
-          }
-        ]
-      },
-      {
-        "index": 192,
-        "locator": "div.xk-modal-gap-8@L5528",
-        "line": 5528,
-        "kind": "presentation-geometry",
-        "source": "display:flex; justify-content:flex-end; flex-wrap:wrap;",
-        "declarations": [
-          {
-            "property": "display",
-            "value": "flex"
-          },
-          {
-            "property": "justify-content",
-            "value": "flex-end"
-          },
-          {
-            "property": "flex-wrap",
-            "value": "wrap"
-          }
-        ]
-      },
-      {
-        "index": 193,
-        "locator": "#fm-ops-summary",
-        "line": 5533,
-        "kind": "presentation-geometry",
-        "source": "font-size:12px; opacity:.85;",
-        "declarations": [
-          {
-            "property": "font-size",
-            "value": "12px"
-          },
-          {
-            "property": "opacity",
-            "value": ".85"
-          }
-        ]
-      },
-      {
-        "index": 194,
-        "locator": "div.xk-modal-gap-10.xk-modal-mb-10@L5547",
+        "locator": "div.xk-modal-gap-8.xk-modal-mb-8@L5547",
         "line": 5547,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap;",
@@ -6820,7 +6671,7 @@
         ]
       },
       {
-        "index": 195,
+        "index": 188,
         "locator": "div.xk-modal-gap-8@L5548",
         "line": 5548,
         "kind": "presentation-geometry",
@@ -6841,9 +6692,140 @@
         ]
       },
       {
+        "index": 189,
+        "locator": "label.xk-modal-gap-6@L5549",
+        "line": 5549,
+        "kind": "presentation-geometry",
+        "source": "display:flex; align-items:center; opacity:.9;",
+        "declarations": [
+          {
+            "property": "display",
+            "value": "flex"
+          },
+          {
+            "property": "align-items",
+            "value": "center"
+          },
+          {
+            "property": "opacity",
+            "value": ".9"
+          }
+        ]
+      },
+      {
+        "index": 190,
+        "locator": "span@L5550",
+        "line": 5550,
+        "kind": "presentation-geometry",
+        "source": "font-size:12px;",
+        "declarations": [
+          {
+            "property": "font-size",
+            "value": "12px"
+          }
+        ]
+      },
+      {
+        "index": 191,
+        "locator": "#fm-ops-filter",
+        "line": 5551,
+        "kind": "presentation-geometry",
+        "source": "height:32px;",
+        "declarations": [
+          {
+            "property": "height",
+            "value": "32px"
+          }
+        ]
+      },
+      {
+        "index": 192,
+        "locator": "div.xk-modal-gap-8@L5559",
+        "line": 5559,
+        "kind": "presentation-geometry",
+        "source": "display:flex; justify-content:flex-end; flex-wrap:wrap;",
+        "declarations": [
+          {
+            "property": "display",
+            "value": "flex"
+          },
+          {
+            "property": "justify-content",
+            "value": "flex-end"
+          },
+          {
+            "property": "flex-wrap",
+            "value": "wrap"
+          }
+        ]
+      },
+      {
+        "index": 193,
+        "locator": "#fm-ops-summary",
+        "line": 5564,
+        "kind": "presentation-geometry",
+        "source": "font-size:12px; opacity:.85;",
+        "declarations": [
+          {
+            "property": "font-size",
+            "value": "12px"
+          },
+          {
+            "property": "opacity",
+            "value": ".85"
+          }
+        ]
+      },
+      {
+        "index": 194,
+        "locator": "div.xk-modal-gap-10.xk-modal-mb-10@L5578",
+        "line": 5578,
+        "kind": "presentation-geometry",
+        "source": "display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap;",
+        "declarations": [
+          {
+            "property": "display",
+            "value": "flex"
+          },
+          {
+            "property": "align-items",
+            "value": "center"
+          },
+          {
+            "property": "justify-content",
+            "value": "space-between"
+          },
+          {
+            "property": "flex-wrap",
+            "value": "wrap"
+          }
+        ]
+      },
+      {
+        "index": 195,
+        "locator": "div.xk-modal-gap-8@L5579",
+        "line": 5579,
+        "kind": "presentation-geometry",
+        "source": "display:flex; align-items:center; flex-wrap:wrap;",
+        "declarations": [
+          {
+            "property": "display",
+            "value": "flex"
+          },
+          {
+            "property": "align-items",
+            "value": "center"
+          },
+          {
+            "property": "flex-wrap",
+            "value": "wrap"
+          }
+        ]
+      },
+      {
         "index": 196,
         "locator": "#fm-volumes-spinner",
-        "line": 5550,
+        "line": 5581,
         "kind": "presentation-geometry",
         "source": "opacity:.85;",
         "declarations": [
@@ -6856,7 +6838,7 @@
       {
         "index": 197,
         "locator": "#fm-volumes-summary",
-        "line": 5552,
+        "line": 5583,
         "kind": "presentation-geometry",
         "source": "font-size:12px; opacity:.85;",
         "declarations": [
@@ -6872,8 +6854,8 @@
       },
       {
         "index": 198,
-        "locator": "div.status.xk-modal-mt-10@L5556",
-        "line": 5556,
+        "locator": "div.status.xk-modal-mt-10@L5587",
+        "line": 5587,
         "kind": "presentation-geometry",
         "source": "opacity:.75;",
         "declarations": [
@@ -6885,8 +6867,8 @@
       },
       {
         "index": 199,
-        "locator": "div.modal-actions@L5621",
-        "line": 5621,
+        "locator": "div.modal-actions@L5652",
+        "line": 5652,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -6898,8 +6880,8 @@
       },
       {
         "index": 200,
-        "locator": "div.xk-editor-workbench-title.xk-modal-gap-2@L5631",
-        "line": 5631,
+        "locator": "div.xk-editor-workbench-title.xk-modal-gap-2@L5662",
+        "line": 5662,
         "kind": "presentation-geometry",
         "source": "display:flex; flex-direction:column;",
         "declarations": [
@@ -6916,7 +6898,7 @@
       {
         "index": 201,
         "locator": "#fm-editor-subtitle",
-        "line": 5633,
+        "line": 5664,
         "kind": "presentation-geometry",
         "source": "font-size: 0.82rem; opacity:0.75;",
         "declarations": [
@@ -6932,8 +6914,8 @@
       },
       {
         "index": 202,
-        "locator": "div.xk-editor-workbench-header-tools.xk-modal-gap-10@L5635",
-        "line": 5635,
+        "locator": "div.xk-editor-workbench-header-tools.xk-modal-gap-10@L5666",
+        "line": 5666,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -6950,7 +6932,7 @@
       {
         "index": 203,
         "locator": "#fm-editor-warning",
-        "line": 5647,
+        "line": 5678,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -6963,7 +6945,7 @@
       {
         "index": 204,
         "locator": "#fm-editor-error",
-        "line": 5648,
+        "line": 5679,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -6975,8 +6957,8 @@
       },
       {
         "index": 205,
-        "locator": "div.xk-editor-workbench-action-group.xk-modal-gap-8@L5653",
-        "line": 5653,
+        "locator": "div.xk-editor-workbench-action-group.xk-modal-gap-8@L5684",
+        "line": 5684,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -6992,8 +6974,8 @@
       },
       {
         "index": 206,
-        "locator": "div.xk-editor-workbench-action-group.xk-modal-gap-8@L5656",
-        "line": 5656,
+        "locator": "div.xk-editor-workbench-action-group.xk-modal-gap-8@L5687",
+        "line": 5687,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -7010,8 +6992,8 @@
     ]
   },
   "dom_contract": {
-    "id_count": 1319,
-    "unique_id_count": 1319,
+    "id_count": 1320,
+    "unique_id_count": 1320,
     "duplicate_ids": [],
     "ids": [
       "backups-clear-snapshots-btn",
@@ -7658,6 +7640,7 @@
       "mihomo-import-destination-subtitle",
       "mihomo-import-destination-title",
       "mihomo-import-engine-select",
+      "mihomo-import-flow-result-caption",
       "mihomo-import-groups",
       "mihomo-import-groups-all-btn",
       "mihomo-import-groups-block",
@@ -8334,7 +8317,7 @@
       "xray-snapshot-status",
       "xray-snapshot-title"
     ],
-    "data_attribute_count": 658,
+    "data_attribute_count": 655,
     "data_attributes": [
       {
         "locator": "header.panel-header.panel-header-shell@L96",
@@ -11122,49 +11105,34 @@
         "value": "mihomo-import"
       },
       {
-        "locator": "button.btn-secondary.btn-compact@L4334",
+        "locator": "button.btn-secondary.btn-compact@L4357",
         "name": "data-mi-placement",
         "value": "start"
       },
       {
-        "locator": "button.btn-secondary.btn-compact@L4334",
+        "locator": "button.btn-secondary.btn-compact@L4357",
         "name": "data-tooltip",
         "value": "Добавить импортируемые узлы перед существующими в секции config.yaml."
       },
       {
-        "locator": "button.btn-secondary.btn-compact@L4335",
+        "locator": "button.btn-secondary.btn-compact@L4358",
         "name": "data-mi-placement",
         "value": "end"
       },
       {
-        "locator": "button.btn-secondary.btn-compact@L4335",
+        "locator": "button.btn-secondary.btn-compact@L4358",
         "name": "data-tooltip",
         "value": "Добавить импортируемые узлы после существующих в секции config.yaml."
       },
       {
-        "locator": "button.btn-secondary.btn-compact@L4336",
+        "locator": "button.btn-secondary.btn-compact@L4359",
         "name": "data-mi-placement",
         "value": "replace"
       },
       {
-        "locator": "button.btn-secondary.btn-compact@L4336",
+        "locator": "button.btn-secondary.btn-compact@L4359",
         "name": "data-tooltip",
         "value": "Заменить выбранный существующий узел. Доступно для одного статического узла."
-      },
-      {
-        "locator": "details@L4343",
-        "name": "data-mi-review-view",
-        "value": "import"
-      },
-      {
-        "locator": "details@L4344",
-        "name": "data-mi-review-view",
-        "value": "file"
-      },
-      {
-        "locator": "details@L4345",
-        "name": "data-mi-review-view",
-        "value": "yaml"
       },
       {
         "locator": "#mihomo-import-groups-all-btn",
@@ -11212,7 +11180,7 @@
         "value": "master-detail"
       },
       {
-        "locator": "div.modal-content.xk-pt-modal.xk-modal-width@L4505",
+        "locator": "div.modal-content.xk-pt-modal.xk-modal-width@L4536",
         "name": "data-modal-key",
         "value": "mihomo-proxy-tools"
       },
@@ -11257,7 +11225,7 @@
         "value": "master-detail"
       },
       {
-        "locator": "button.modal-close@L4663",
+        "locator": "button.modal-close@L4694",
         "name": "data-dismiss",
         "value": "mihomo-validation"
       },
@@ -11267,12 +11235,12 @@
         "value": "0"
       },
       {
-        "locator": "button.btn-primary@L4706",
+        "locator": "button.btn-primary@L4737",
         "name": "data-dismiss",
         "value": "mihomo-validation"
       },
       {
-        "locator": "button.btn-primary@L4706",
+        "locator": "button.btn-primary@L4737",
         "name": "data-operator-dismiss-duplicate",
         "value": "true"
       },
@@ -11282,7 +11250,7 @@
         "value": "editor-workbench"
       },
       {
-        "locator": "div.modal-content.xk-hw-modal.xk-modal-width@L4714",
+        "locator": "div.modal-content.xk-hw-modal.xk-modal-width@L4745",
         "name": "data-modal-key",
         "value": "mihomo-hwid"
       },
@@ -11457,7 +11425,7 @@
         "value": "confirm-compact-form"
       },
       {
-        "locator": "div.status.xk-modal-mt-10@L5377",
+        "locator": "div.status.xk-modal-mt-10@L5408",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
@@ -11537,42 +11505,42 @@
         "value": "drawer-help"
       },
       {
-        "locator": "li@L5593",
+        "locator": "li@L5624",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "li@L5594",
+        "locator": "li@L5625",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "li@L5596",
+        "locator": "li@L5627",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "li@L5597",
+        "locator": "li@L5628",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "li@L5598",
+        "locator": "li@L5629",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "li@L5613",
+        "locator": "li@L5644",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "li@L5614",
+        "locator": "li@L5645",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "li@L5615",
+        "locator": "li@L5646",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
@@ -11821,7 +11789,7 @@
       "#outbounds-file-code",
       ".xk-mihomo-topbar .xk-routing-active-inline"
     ],
-    "js_referenced_template_id_count": 1242,
+    "js_referenced_template_id_count": 1243,
     "js_referenced_template_ids": {
       "backups-clear-snapshots-btn": [
         "xkeen-ui/static/js/features/backups.js"
@@ -13675,6 +13643,9 @@
         "xkeen-ui/static/js/features/mihomo_import.js"
       ],
       "mihomo-import-engine-select": [
+        "xkeen-ui/static/js/features/mihomo_import.js"
+      ],
+      "mihomo-import-flow-result-caption": [
         "xkeen-ui/static/js/features/mihomo_import.js"
       ],
       "mihomo-import-groups": [

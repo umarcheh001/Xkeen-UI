@@ -25555,7 +25555,7 @@ body.panel-page #mihomo-import-modal .xk-mi-summary-metric {
   gap: 5px;
   padding: 4px 8px;
   border: 1px solid var(--op-border);
-  border-radius: 999px;
+  border-radius: var(--op-radius-sm, 6px);
   background: var(--op-editor);
   white-space: nowrap;
 }
