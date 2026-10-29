@@ -57,22 +57,15 @@ test('review lets a single node move to the start or replace a chosen existing n
   await start.click();
   await expect(start).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#mihomo-import-candidate-summary')).toContainText('в начале');
-  const yaml = page.locator('[data-mi-review-view="yaml"]');
-  await yaml.locator('summary').click();
-  const prepended = await yaml.locator('pre').innerText();
-  expect(prepended.indexOf('name: Review')).toBeLessThan(prepended.indexOf('name: Existing'));
 
   await replace.click();
   await expect(replace).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#mihomo-import-replace-target')).toHaveValue('Existing');
   await expect(page.locator('#mihomo-import-candidate-summary')).toContainText('Заменяемый узел: Existing');
-  await yaml.locator('summary').click();
-  const replaced = await yaml.locator('pre').innerText();
-  expect(replaced).toContain('name: Review');
-  expect(replaced).not.toContain('name: Existing');
-  expect(replaced).toContain('proxies: [DIRECT, "Review"]');
   await page.locator('#mihomo-import-save-btn').click();
-  expect(committed.content.trimEnd()).toBe(replaced.trimEnd());
+  expect(committed.content).toContain('name: Review');
+  expect(committed.content).not.toContain('name: Existing');
+  expect(committed.content).toContain('proxies: [DIRECT, "Review"]');
 });
 
 test('replacement requires one imported static node', async ({ page }) => {
@@ -82,31 +75,15 @@ test('replacement requires one imported static node', async ({ page }) => {
   await expect(page.locator('[data-mi-placement="end"]')).toHaveAttribute('aria-pressed', 'true');
 });
 
-test('review separates imported fragments from file diff and keeps YAML inside the dialog', async ({ page }) => {
+test('YAML preview stays on the source step and review contains no technical diff', async ({ page }) => {
   await setup(page);
-  await editor(page, CONFIG + '# editor-only change\n');
+  await page.locator('#mihomo-import-preview-toggle').click();
+  await expect(page.locator('#mihomo-import-preview-panel')).toBeVisible();
+  await expect(page.locator('#mihomo-import-preview')).not.toHaveValue('');
   await page.locator('#mihomo-import-review-btn').click();
   const dialog = page.locator('#mihomo-import-modal');
-  const imported = dialog.locator('[data-mi-review-view="import"]');
-  const file = dialog.locator('[data-mi-review-view="file"]');
-  const yaml = dialog.locator('[data-mi-review-view="yaml"]');
-
-  await imported.locator('summary').click();
-  await expect(imported.locator('pre')).toContainText('Добавляемые фрагменты');
-  await expect(imported.locator('pre')).not.toContainText('editor-only change');
-  await file.locator('summary').click();
-  await expect(imported).not.toHaveAttribute('open');
-  await expect(file.locator('pre')).toContainText('editor-only change');
-  await yaml.locator('summary').click();
-  await expect(file).not.toHaveAttribute('open');
-  await expect(yaml.locator('.xk-mi-yaml-key').first()).toBeVisible();
-  const sizes = await dialog.evaluate((modal) => ({
-    scroll: modal.querySelector('.modal-content').scrollWidth,
-    width: modal.querySelector('.modal-content').clientWidth,
-  }));
-  expect(sizes.scroll).toBeLessThanOrEqual(sizes.width + 1);
-  await dialog.click({ position: { x: 4, y: 4 } });
-  await expect(dialog).toBeVisible();
+  await expect(dialog.locator('[data-mi-review-view]')).toHaveCount(0);
+  await expect(dialog.locator('.xk-mi-technical-disclosure')).toHaveCount(0);
 });
 
 test('editor edit after review requires renewed confirmation without writing', async ({ page }) => {

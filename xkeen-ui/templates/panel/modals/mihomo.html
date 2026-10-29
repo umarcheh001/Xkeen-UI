@@ -180,26 +180,57 @@ rule-set:github@domain
             <button type="button" id="mihomo-import-retry-registration" class="btn-secondary btn-compact">Повторить регистрацию автообновления</button>
           </div>
           <section id="mihomo-import-review" class="xk-mi-review hidden" aria-label="Проверка изменений">
-            <p class="modal-hint">Источник → Результат и группы → <strong>Проверка изменений</strong></p>
+            <p class="modal-hint xk-mi-review-breadcrumb">Источник → Результат и группы → <strong>Проверка изменений</strong></p>
             <section id="mihomo-import-candidate-summary" class="xk-mi-candidate-summary" aria-label="Итог изменений"></section>
             <section id="mihomo-import-review-warning" class="xk-mi-candidate-summary xk-mi-review-warning hidden"></section>
-            <div class="xk-mi-placement" role="group" aria-label="Размещение узлов">
-              <span class="xk-mi-placement-label">Размещение узлов</span>
-              <div class="xk-mi-placement-actions">
-                <button type="button" class="btn-secondary btn-compact" data-mi-placement="start" aria-pressed="false" data-tooltip="Добавить импортируемые узлы перед существующими в секции config.yaml.">В начало</button>
-                <button type="button" class="btn-secondary btn-compact" data-mi-placement="end" aria-pressed="true" data-tooltip="Добавить импортируемые узлы после существующих в секции config.yaml.">В конец</button>
-                <button type="button" class="btn-secondary btn-compact" data-mi-placement="replace" aria-pressed="false" data-tooltip="Заменить выбранный существующий узел. Доступно для одного статического узла.">Заменить</button>
+            <section class="xk-mi-flow-panel" aria-label="Последовательность завершения">
+              <div class="xk-mi-flow-panel-head">
+                <h3>Последовательность завершения</h3>
+                <span>3 шага</span>
               </div>
-              <label class="xk-mi-replace-field hidden">Заменить узел
-                <select id="mihomo-import-replace-target" class="xray-log-select xk-mi-control"></select>
-              </label>
-            </div>
-            <div class="xk-mi-review-tools">
-              <details data-mi-review-view="import"><summary class="btn-secondary btn-compact">Изменения импорта</summary><pre tabindex="0"></pre></details>
-              <details data-mi-review-view="file"><summary class="btn-secondary btn-compact">Все изменения файла</summary><pre tabindex="0"></pre></details>
-              <details data-mi-review-view="yaml"><summary class="btn-secondary btn-compact">Итоговый YAML</summary><pre tabindex="0"></pre></details>
-            </div>
-            <p class="modal-hint">«В черновик» изменит только редактор. «Сохранить» запишет файл без перезапуска. «Сохранить и применить» также перезапустит ядро.</p>
+              <div class="xk-mi-flow" aria-label="Последовательность проверки">
+              <div class="xk-mi-flow-step xk-mi-flow-step--result">
+                <div class="xk-mi-flow-marker" aria-hidden="true">1</div>
+                <div class="xk-mi-flow-content">
+                  <div class="xk-mi-flow-heading">
+                    <h3>Результат подготовлен</h3>
+                    <span>candidate</span>
+                  </div>
+                  <p id="mihomo-import-flow-result-caption" class="modal-hint xk-mi-flow-caption">Результат распознан и добавлен в candidate. Файл на роутере пока не меняется.</p>
+                </div>
+              </div>
+              <div class="xk-mi-flow-step xk-mi-flow-step--placement">
+                <div class="xk-mi-flow-marker" aria-hidden="true">2</div>
+                <div class="xk-mi-flow-content">
+                  <div class="xk-mi-flow-heading">
+                    <h3>Проверьте размещение</h3>
+                    <span>секция proxies</span>
+                  </div>
+                  <div class="xk-mi-placement" role="group" aria-label="Размещение узлов">
+                    <span class="xk-mi-placement-label">Новые узлы будут добавлены</span>
+                    <div class="xk-mi-placement-actions">
+                      <button type="button" class="btn-secondary btn-compact" data-mi-placement="start" aria-pressed="false" data-tooltip="Добавить импортируемые узлы перед существующими в секции config.yaml.">В начало</button>
+                      <button type="button" class="btn-secondary btn-compact" data-mi-placement="end" aria-pressed="true" data-tooltip="Добавить импортируемые узлы после существующих в секции config.yaml.">В конец</button>
+                      <button type="button" class="btn-secondary btn-compact" data-mi-placement="replace" aria-pressed="false" data-tooltip="Заменить выбранный существующий узел. Доступно для одного статического узла.">Заменить</button>
+                    </div>
+                    <label class="xk-mi-replace-field hidden">Заменить узел
+                      <select id="mihomo-import-replace-target" class="xray-log-select xk-mi-control"></select>
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <div class="xk-mi-flow-step xk-mi-flow-step--technical">
+                <div class="xk-mi-flow-marker" aria-hidden="true">3</div>
+                <div class="xk-mi-flow-content">
+                  <div class="xk-mi-flow-heading">
+                    <h3>Выберите результат</h3>
+                    <span>проверка перед записью</span>
+                  </div>
+                  <p class="modal-hint xk-mi-flow-caption">Черновик оставит изменения в редакторе. Сохранение запишет файл. Применение дополнительно перезапустит ядро.</p>
+                </div>
+              </div>
+              </div>
+            </section>
           </section>
           <div class="xk-mi-grid">
             <section class="xk-mi-panel xk-mi-panel--controls">

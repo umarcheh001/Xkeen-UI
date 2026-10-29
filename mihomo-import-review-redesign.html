@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mihomo · варианты экрана проверки</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b0d11;
+      --backdrop: rgba(8, 10, 14, .86);
+      --surface: #13171d;
+      --surface-2: #191e26;
+      --surface-3: #202630;
+      --surface-code: #0d1015;
+      --border: #303844;
+      --border-soft: #272e38;
+      --text: #eef1f6;
+      --muted: #9ca5b3;
+      --subtle: #707a89;
+      --accent: #7678ed;
+      --accent-strong: #8b8ef6;
+      --accent-soft: rgba(118, 120, 237, .15);
+      --green: #75d0a1;
+      --amber: #e3b468;
+      --red: #ec8585;
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --shadow: 0 26px 70px rgba(0, 0, 0, .45);
+    }
+
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      min-width: 320px;
+      background:
+        linear-gradient(var(--backdrop), var(--backdrop)),
+        radial-gradient(circle at 15% 10%, #1d2430 0, transparent 32%),
+        var(--bg);
+      color: var(--text);
+      font: 13px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+
+    button, select { font: inherit; }
+    button { color: inherit; }
+    button:focus-visible, select:focus-visible, summary:focus-visible {
+      outline: 2px solid var(--accent-strong);
+      outline-offset: 2px;
+    }
+
+    .topbar {
+      width: min(900px, calc(100% - 32px));
+      margin: 24px auto 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: 16px;
+    }
+
+    .eyebrow {
+      color: var(--accent-strong);
+      text-transform: uppercase;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .08em;
+    }
+
+    h1 { margin: 4px 0 0; font-size: 20px; line-height: 1.2; }
+    .topbar p { margin: 6px 0 0; color: var(--muted); max-width: 680px; }
+
+    .variant-switcher {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--surface);
+      flex: 0 0 auto;
+    }
+
+    .variant-switcher button {
+      border: 0;
+      border-radius: 4px;
+      padding: 8px 11px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .variant-switcher button[aria-pressed="true"] {
+      background: var(--accent-soft);
+      color: var(--text);
+      box-shadow: inset 0 0 0 1px rgba(139, 142, 246, .55);
+    }
+
+    .stage { width: min(900px, calc(100% - 32px)); margin: 0 auto 32px; }
+    .modal {
+      min-height: 620px;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      min-height: 58px;
+      padding: 0 18px 0 20px;
+      border-bottom: 1px solid var(--border-soft);
+    }
+
+    .title-wrap { min-width: 0; }
+    .title-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .modal-title { font-size: 15px; font-weight: 700; }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 8px;
+      border: 1px solid rgba(117, 208, 161, .36);
+      border-radius: 999px;
+      color: var(--green);
+      background: rgba(117, 208, 161, .08);
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .status-pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .modal-close {
+      width: 34px;
+      height: 34px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface-2);
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 18px;
+      line-height: 1;
+    }
+    .modal-close:hover { color: var(--text); background: var(--surface-3); }
+
+    .modal-body { min-height: 0; padding: 18px 20px 20px; overflow: auto; }
+    .breadcrumb { margin: 0 0 16px; color: var(--muted); font-size: 12px; }
+    .breadcrumb strong { color: var(--text); }
+
+    .summary {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 12px;
+      align-items: start;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--green);
+      border-radius: var(--radius-md);
+      background: var(--surface-2);
+    }
+    .summary-icon {
+      display: grid;
+      place-items: center;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: rgba(117, 208, 161, .12);
+      color: var(--green);
+      font-weight: 800;
+    }
+    .summary h2 { margin: 0; font-size: 13px; }
+    .summary p { margin: 4px 0 0; color: var(--muted); }
+    .summary strong { color: var(--text); }
+    .summary-metrics { display: flex; gap: 8px; flex-wrap: wrap; justify-content: end; }
+    .metric { display: inline-flex; align-items: baseline; gap: 5px; padding: 4px 8px; border: 1px solid var(--border-soft); border-radius: 999px; background: var(--surface-code); white-space: nowrap; }
+    .metric b { color: var(--text); font-size: 12px; line-height: 1.1; }
+    .metric span { color: var(--subtle); font-size: 10px; }
+
+    .layout-focus { display: grid; grid-template-columns: minmax(250px, .86fr) minmax(0, 1.4fr); gap: 14px; margin-top: 14px; }
+    .layout-flow { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin-top: 14px; }
+    .layout-dense { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin-top: 14px; }
+
+    .panel {
+      min-width: 0;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--surface-2);
+    }
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border-soft);
+    }
+    .panel-head h3 { margin: 0; font-size: 12px; }
+    .panel-head span { color: var(--subtle); font-size: 11px; }
+    .panel-body { padding: 13px 14px; }
+
+    .result-list { display: grid; gap: 10px; }
+    .result-row { display: grid; grid-template-columns: 20px 1fr; gap: 9px; align-items: start; }
+    .result-row .check { color: var(--green); font-weight: 800; }
+    .result-row b { display: block; font-size: 12px; }
+    .result-row span { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; }
+    .tag-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+    .tag { padding: 4px 7px; border: 1px solid var(--border); border-radius: 4px; color: var(--muted); background: var(--surface-code); font-size: 11px; }
+    .tag.accent { border-color: rgba(139, 142, 246, .5); color: var(--accent-strong); background: var(--accent-soft); }
+
+    .placement { margin-top: 14px; }
+    .placement-label { margin: 0 0 7px; color: var(--muted); font-size: 11px; }
+    .segmented { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+    .segmented button {
+      min-height: 34px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface-code);
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 11px;
+    }
+    .segmented button[aria-pressed="true"] { border-color: var(--accent-strong); background: var(--accent-soft); color: var(--text); }
+    .segmented button:disabled { opacity: .45; cursor: not-allowed; }
+
+    .diff-panel { min-height: 0; }
+    .diff-toggle {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      cursor: pointer;
+      text-align: left;
+    }
+    .diff-toggle .chevron { color: var(--muted); transition: transform .18s ease; }
+    .diff-panel[data-open="true"] .chevron { transform: rotate(180deg); }
+    .diff-meta { color: var(--muted); font-size: 11px; }
+    .diff-code { display: none; margin: 0; padding: 13px 14px 15px; overflow: auto; border-top: 1px solid var(--border-soft); color: #d9dee9; background: var(--surface-code); font: 11px/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .diff-panel[data-open="true"] .diff-code { display: block; }
+    .preflight { display: grid; gap: 10px; padding: 14px; }
+    .preflight-row { display: grid; grid-template-columns: 20px 1fr; gap: 8px; color: var(--muted); font-size: 11px; }
+    .preflight-row > span:first-child { color: var(--green); font-weight: 800; }
+    .preflight-row b { display: block; color: var(--text); font-size: 12px; }
+    .preflight-row small { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; }
+    .diff-panel .diff-toggle-row { border-top: 1px solid var(--border-soft); }
+    .plus { color: var(--green); }
+    .key { color: #9cc7ff; }
+    .value { color: #bce5bd; }
+    .comment { color: var(--subtle); }
+
+    .notice { display: flex; gap: 9px; align-items: flex-start; padding: 10px 12px; border: 1px solid rgba(227, 180, 104, .35); border-radius: var(--radius-sm); color: var(--amber); background: rgba(227, 180, 104, .07); font-size: 11px; }
+    .notice b { color: #f0ca8b; }
+
+    .flow-line { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 12px; position: relative; }
+    .flow-line:not(:last-child)::after { content: ""; position: absolute; left: 13px; top: 29px; bottom: -12px; width: 1px; background: var(--border); }
+    .flow-marker { position: relative; z-index: 1; display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--border); border-radius: 50%; color: var(--muted); background: var(--surface-3); font-size: 11px; font-weight: 700; }
+    .flow-line.is-current .flow-marker { border-color: var(--accent-strong); color: var(--text); background: var(--accent-soft); }
+    .flow-copy { padding-bottom: 12px; }
+    .flow-copy h3 { margin: 2px 0 3px; font-size: 12px; }
+    .flow-copy p { margin: 0; color: var(--muted); font-size: 11px; }
+    .flow-copy .inline { margin-top: 8px; }
+    .inline { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+
+    .dense-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .dense-grid .panel { height: 100%; }
+    .mini-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; color: var(--muted); font-size: 11px; }
+    .mini-list li { display: flex; gap: 8px; }
+    .mini-list li::before { content: "✓"; color: var(--green); font-weight: 800; }
+
+    .modal-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 10px 12px 10px 16px;
+      border-top: 1px solid var(--border);
+      background: rgba(16, 19, 24, .9);
+    }
+    .footer-note { min-width: 0; color: var(--muted); font-size: 11px; }
+    .footer-note b { color: var(--text); }
+    .footer-actions { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; justify-content: end; }
+    .btn {
+      min-height: 34px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 0 12px;
+      background: var(--surface-2);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .btn:hover { background: var(--surface-3); }
+    .btn-primary { border-color: var(--accent); background: var(--accent); color: white; }
+    .btn-primary:hover { background: var(--accent-strong); }
+    .btn-quiet { color: var(--muted); }
+    .btn-icon { padding: 0 10px; font-size: 15px; }
+
+    .toast { position: fixed; right: 18px; bottom: 18px; max-width: min(360px, calc(100vw - 36px)); padding: 11px 13px; border: 1px solid rgba(117, 208, 161, .42); border-radius: var(--radius-sm); color: var(--text); background: #17251f; box-shadow: var(--shadow); opacity: 0; transform: translateY(8px); pointer-events: none; transition: .18s ease; }
+    .toast.is-visible { opacity: 1; transform: translateY(0); }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+    @media (max-width: 820px) {
+      .topbar { align-items: stretch; flex-direction: column; }
+      .variant-switcher { align-self: start; }
+      .layout-focus { grid-template-columns: 1fr; }
+      .summary { grid-template-columns: auto 1fr; }
+      .summary-metrics { grid-column: 2; justify-content: start; }
+      .dense-grid { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 560px) {
+      .topbar, .stage { width: min(100% - 20px, 900px); }
+      .topbar { margin-top: 14px; }
+      .variant-switcher { width: 100%; }
+      .variant-switcher button { flex: 1; padding-inline: 7px; }
+      .modal { min-height: 0; border-radius: 9px; }
+      .modal-header { padding-inline: 14px; }
+      .modal-body { padding: 14px; }
+      .summary { grid-template-columns: 1fr; }
+      .summary-metrics { grid-column: auto; }
+      .segmented { grid-template-columns: 1fr; }
+      .modal-footer { align-items: stretch; flex-direction: column; padding: 12px 14px 14px; }
+      .footer-actions { justify-content: stretch; }
+      .footer-actions .btn { flex: 1 1 100%; }
+      .footer-actions .btn-icon { flex: 0 0 auto; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <div class="eyebrow">Mihomo · финальный шаг импорта</div>
+      <h1>Варианты экрана «Проверка изменений»</h1>
+      <p>Три компоновки для одного и того же сценария: сначала понять результат, затем выбрать размещение и способ завершения.</p>
+    </div>
+    <nav class="variant-switcher" aria-label="Вариант компоновки">
+      <button type="button" data-variant="focus" aria-pressed="false">1 · Фокус</button>
+      <button type="button" data-variant="flow" aria-pressed="true">2 · Поток</button>
+      <button type="button" data-variant="dense" aria-pressed="false">3 · Компактный</button>
+    </nav>
+  </header>
+
+  <main class="stage">
+    <section class="modal" aria-label="Проверка изменений">
+      <header class="modal-header">
+        <div class="title-wrap">
+          <div class="title-line">
+            <span class="modal-title">Проверка изменений</span>
+            <span class="status-pill">Готово к сохранению</span>
+          </div>
+        </div>
+        <button class="modal-close" type="button" aria-label="Закрыть">×</button>
+      </header>
+
+      <div class="modal-body">
+        <p class="breadcrumb">Источник <span aria-hidden="true">→</span> Результат и группы <span aria-hidden="true">→</span> <strong>Проверка изменений</strong></p>
+
+        <section class="summary" aria-label="Итог импорта">
+          <div class="summary-icon" aria-hidden="true">✓</div>
+          <div>
+            <h2>Будет добавлено</h2>
+            <p><strong>18 элементов</strong> → <strong>proxies</strong></p>
+            <p>Размещение: <strong class="placement-value">в конец секции</strong></p>
+            <p>Группы: <strong>не выбраны</strong></p>
+          </div>
+          <div class="summary-metrics" aria-label="Сводка количества">
+            <div class="metric"><b>18</b><span>узлов</span></div>
+            <div class="metric"><b>0</b><span>групп</span></div>
+          </div>
+        </section>
+
+        <div id="variant-focus" class="layout-focus" data-layout="focus" hidden>
+          <section class="panel">
+            <div class="panel-head"><h3>Что изменится</h3><span>candidate</span></div>
+            <div class="panel-body">
+              <div class="result-list">
+                <div class="result-row"><span class="check">+</span><div><b>18 прокси</b><span>Новые записи в секции <code>proxies</code></span></div></div>
+                <div class="result-row"><span class="check">✓</span><div><b>Группы не изменятся</b><span>Новые узлы останутся только в секции proxies</span></div></div>
+                <div class="result-row"><span class="check">✓</span><div><b>Итог подготовлен</b><span>Текущий файл ещё не изменён</span></div></div>
+              </div>
+              <div class="tag-row"><span class="tag accent">VLESS</span><span class="tag">Германия</span><span class="tag">Нидерланды</span></div>
+              <div class="placement">
+                <p class="placement-label">Размещение узлов</p>
+                <div class="segmented" role="group" aria-label="Размещение узлов">
+                  <button type="button" data-placement="start" aria-pressed="false">В начало</button>
+                  <button type="button" data-placement="end" aria-pressed="true">В конец</button>
+                  <button type="button" data-placement="replace" aria-pressed="false" disabled>Заменить</button>
+                </div>
+              </div>
+            </div>
+          </section>
+          <section class="panel diff-panel" data-open="false">
+            <div class="panel-head"><h3>Перед записью</h3><span>без изменений на роутере</span></div>
+            <div class="preflight">
+              <div class="preflight-row"><span>✓</span><div><b>Файл не изменён</b><small>Конфиг будет записан только после выбора действия.</small></div></div>
+              <div class="preflight-row"><span>✓</span><div><b>Backup при сохранении</b><small>Резервная копия создаётся перед записью файла.</small></div></div>
+              <div class="preflight-row"><span>!</span><div><b>Серверы не проверялись</b><small>Доступность узлов станет известна после применения.</small></div></div>
+            </div>
+            <div class="panel-head diff-toggle-row">
+              <button class="diff-toggle" type="button" aria-expanded="false">
+                <span><strong>Изменения YAML</strong> <span class="diff-meta">· 20 строк</span></span>
+                <span class="chevron" aria-hidden="true">⌄</span>
+              </button>
+            </div>
+            <pre class="diff-code" aria-label="Предпросмотр изменений"><span class="plus">+ </span><span class="key">- name</span>: <span class="value">Germany-01</span>
+<span class="plus">+ </span><span class="key">  type</span>: <span class="value">vless</span>
+<span class="plus">+ </span><span class="key">  server</span>: <span class="value">de.example.net</span>
+<span class="plus">+ </span><span class="key">- name</span>: <span class="value">Netherlands-02</span>
+<span class="plus">+ </span><span class="key">  type</span>: <span class="value">vless</span>
+<span class="plus">+ </span><span class="key">  server</span>: <span class="value">nl.example.net</span>
+<span class="comment">  … ещё 16 узлов; группы не изменяются</span></pre>
+          </section>
+        </div>
+
+        <div id="variant-flow" class="layout-flow" data-layout="flow">
+          <section class="panel">
+            <div class="panel-head"><h3>Последовательность завершения</h3><span>3 шага</span></div>
+            <div class="panel-body">
+              <div class="flow-line"><div class="flow-marker">1</div><div class="flow-copy"><h3>Результат подготовлен</h3><p>18 узлов распознаны и добавлены в candidate. Файл на роутере пока не меняется.</p></div></div>
+              <div class="flow-line is-current"><div class="flow-marker">2</div><div class="flow-copy"><h3>Проверьте размещение</h3><p>Новые узлы будут добавлены <strong class="placement-value">в конец секции</strong>.</p><div class="inline segmented" role="group" aria-label="Размещение узлов"><button type="button" data-placement="start" aria-pressed="false">В начало</button><button type="button" data-placement="end" aria-pressed="true">В конец</button><button type="button" data-placement="replace" aria-pressed="false" disabled>Заменить</button></div></div></div>
+              <div class="flow-line"><div class="flow-marker">3</div><div class="flow-copy"><h3>Выберите результат</h3><p>Черновик оставит изменения в редакторе. Сохранение запишет файл. Применение дополнительно перезапустит ядро.</p></div></div>
+            </div>
+          </section>
+        </div>
+
+        <div id="variant-dense" class="layout-dense" data-layout="dense" hidden>
+          <div class="dense-grid">
+            <section class="panel"><div class="panel-head"><h3>Итог импорта</h3><span>готово</span></div><div class="panel-body"><ul class="mini-list"><li>18 узлов → <code>proxies</code></li><li>Группы не изменятся</li><li>Backup будет создан перед записью</li><li>Ядро перезапустится только для применения</li></ul></div></section>
+            <section class="panel"><div class="panel-head"><h3>Размещение</h3><span class="placement-value">в конец</span></div><div class="panel-body"><div class="segmented" role="group" aria-label="Размещение узлов"><button type="button" data-placement="start" aria-pressed="false">В начало</button><button type="button" data-placement="end" aria-pressed="true">В конец</button><button type="button" data-placement="replace" aria-pressed="false" disabled>Заменить</button></div></div></section>
+          </div>
+          <div class="notice"><span aria-hidden="true">!</span><span><b>Сохранение затронет весь итоговый config.yaml.</b> В редакторе есть только эти несохранённые изменения.</span></div>
+          <section class="panel diff-panel" data-open="false"><div class="panel-head"><button class="diff-toggle" type="button" aria-expanded="false"><span><strong>Показать diff</strong> <span class="diff-meta">· 18 узлов</span></span><span class="chevron" aria-hidden="true">⌄</span></button></div><pre class="diff-code"><span class="plus">+ </span><span class="key">proxies</span>: <span class="value">Germany-01, Netherlands-02, …</span>
+<span class="comment">  proxy-groups: без изменений</span></pre></section>
+        </div>
+      </div>
+
+      <footer class="modal-footer">
+        <div class="footer-note"><b>До подтверждения конфиг на роутере не меняется.</b><br><span id="action-status">Выберите действие справа.</span></div>
+        <div class="footer-actions">
+          <button class="btn btn-quiet btn-icon" type="button" aria-label="Назад">←</button>
+          <button class="btn" type="button" data-action="draft">＋ В черновик</button>
+          <button class="btn" type="button" data-action="save">▣ Сохранить</button>
+          <button class="btn btn-primary" type="button" data-action="apply">▷ Сохранить и применить</button>
+        </div>
+      </footer>
+    </section>
+  </main>
+
+  <div class="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    const layouts = {
+      focus: document.querySelector('#variant-focus'),
+      flow: document.querySelector('#variant-flow'),
+      dense: document.querySelector('#variant-dense'),
+    };
+    const placementText = { start: 'в начало секции', end: 'в конец секции', replace: 'с заменой узла' };
+    const toast = document.querySelector('.toast');
+    let toastTimer;
+
+    function showToast(message) {
+      toast.textContent = message;
+      toast.classList.add('is-visible');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('is-visible'), 2600);
+    }
+
+    document.querySelectorAll('[data-variant]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const selected = button.dataset.variant;
+        document.querySelectorAll('[data-variant]').forEach((item) => item.setAttribute('aria-pressed', String(item === button)));
+        Object.entries(layouts).forEach(([name, layout]) => { layout.hidden = name !== selected; });
+        showToast(`Вариант «${button.textContent.replace(/^\d+\s·\s/, '')}» включён`);
+      });
+    });
+
+    document.querySelectorAll('.diff-toggle').forEach((button) => {
+      button.addEventListener('click', () => {
+        const panel = button.closest('.diff-panel');
+        const open = panel.dataset.open !== 'true';
+        panel.dataset.open = String(open);
+        button.setAttribute('aria-expanded', String(open));
+      });
+    });
+
+    document.querySelectorAll('[data-placement]').forEach((button) => {
+      button.addEventListener('click', () => {
+        if (button.disabled) return;
+        const value = button.dataset.placement;
+        document.querySelectorAll('[data-placement]').forEach((item) => item.setAttribute('aria-pressed', String(item.dataset.placement === value)));
+        document.querySelectorAll('.placement-value').forEach((item) => { item.textContent = placementText[value]; });
+      });
+    });
+
+    document.querySelectorAll('[data-action]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const labels = { draft: 'Изменения подготовлены в черновике.', save: 'Проверка пройдена. Файл сохранён без перезапуска.', apply: 'Проверка пройдена. Сохранение и применение запущены.' };
+        document.querySelector('#action-status').textContent = labels[button.dataset.action];
+        showToast(labels[button.dataset.action]);
+      });
+    });
+  </script>
+</body>
+</html>

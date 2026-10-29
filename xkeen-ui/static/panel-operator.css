@@ -25517,9 +25517,12 @@ body.panel-page #mihomo-import-modal[data-mi-layout="review"] .xk-mi-body {
   gap: 14px;
 }
 body.panel-page #mihomo-import-modal[data-mi-layout="review"] .xk-mi-modal {
-  width: min(720px, calc(100vw - 24px));
+  width: min(900px, calc(100vw - 24px));
   min-width: 0;
   overflow-x: hidden;
+}
+body.panel-page #mihomo-import-modal .xk-mi-review-breadcrumb {
+  margin: 0;
 }
 body.panel-page #mihomo-import-modal .xk-mi-review .xk-mi-candidate-summary {
   margin: 0;
@@ -25529,8 +25532,147 @@ body.panel-page #mihomo-import-modal .xk-mi-review .xk-mi-candidate-summary {
   border-radius: var(--op-radius-md, 8px);
   line-height: 1.7;
 }
+body.panel-page #mihomo-import-modal .xk-mi-review > .xk-mi-candidate-summary {
+  display: flex;
+  align-items: start;
+  gap: 14px;
+  border-left: 3px solid var(--op-success);
+}
+body.panel-page #mihomo-import-modal .xk-mi-summary-content {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+body.panel-page #mihomo-import-modal .xk-mi-summary-metrics {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+}
+body.panel-page #mihomo-import-modal .xk-mi-summary-metric {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 4px 8px;
+  border: 1px solid var(--op-border);
+  border-radius: 999px;
+  background: var(--op-editor);
+  white-space: nowrap;
+}
+body.panel-page #mihomo-import-modal .xk-mi-summary-metric strong {
+  display: inline;
+  color: var(--op-text-strong);
+  font-size: 12px;
+  line-height: 1.1;
+}
+body.panel-page #mihomo-import-modal .xk-mi-summary-metric span {
+  display: inline;
+  margin-top: 0;
+  color: var(--op-muted);
+  font-size: 10px;
+}
 body.panel-page #mihomo-import-modal .xk-mi-review-warning {
   border-left: 3px solid var(--op-accent) !important;
+}
+/* Review is a short three-step flow: result, placement, then the commit choice. */
+body.panel-page #mihomo-import-modal .xk-mi-flow-panel {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-radius-md, 8px);
+  background: var(--op-surface-2);
+}
+body.panel-page #mihomo-import-modal .xk-mi-flow-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 42px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--op-border);
+}
+body.panel-page #mihomo-import-modal .xk-mi-flow-panel-head h3 {
+  margin: 0;
+  color: var(--op-text-strong);
+  font-size: 12px;
+  font-weight: 650;
+}
+body.panel-page #mihomo-import-modal .xk-mi-flow-panel-head span {
+  color: var(--op-muted);
+  font-size: 11px;
+}
+body.panel-page #mihomo-import-modal .xk-mi-flow {
+  display: grid;
+  gap: 0;
+  padding: 14px;
+  min-width: 0;
+}
+body.panel-page #mihomo-import-modal .xk-mi-flow-step {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 12px;
+  min-width: 0;
+  position: relative;
+  padding-bottom: 14px;
+}
+body.panel-page #mihomo-import-modal .xk-mi-flow-step:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 29px;
+  bottom: 0;
+  left: 13px;
+  width: 1px;
+  background: var(--op-border);
+}
+body.panel-page #mihomo-import-modal .xk-mi-flow-marker {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--op-border);
+  border-radius: 50%;
+  color: var(--op-muted);
+  background: var(--op-surface-3, var(--op-surface-2));
+  font-size: 11px;
+  font-weight: 700;
+}
+body.panel-page #mihomo-import-modal .xk-mi-flow-step--placement .xk-mi-flow-marker {
+  border-color: var(--op-accent);
+  color: var(--op-text-strong);
+  background: var(--op-accent-soft);
+}
+body.panel-page #mihomo-import-modal .xk-mi-flow-content {
+  min-width: 0;
+}
+body.panel-page #mihomo-import-modal .xk-mi-flow-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 28px;
+}
+body.panel-page #mihomo-import-modal .xk-mi-flow-heading h3 {
+  margin: 0;
+  color: var(--op-text-strong);
+  font-size: 13px;
+  font-weight: 650;
+}
+body.panel-page #mihomo-import-modal .xk-mi-flow-heading span {
+  color: var(--op-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+body.panel-page #mihomo-import-modal .xk-mi-flow-caption {
+  margin: 3px 0 8px;
+}
+body.panel-page #mihomo-import-modal .xk-mi-flow .xk-mi-candidate-summary {
+  padding: 12px;
+  line-height: 1.55;
+}
+body.panel-page #mihomo-import-modal .xk-mi-flow .xk-mi-review-warning {
+  margin-top: 8px;
 }
 body.panel-page #mihomo-import-modal .xk-mi-placement {
   display: flex;
@@ -25548,6 +25690,14 @@ body.panel-page #mihomo-import-modal .xk-mi-placement-actions {
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
+}
+body.panel-page #mihomo-import-modal .xk-mi-flow-step--placement .xk-mi-placement {
+  align-items: flex-start;
+  gap: 8px 12px;
+  margin-top: 2px;
+}
+body.panel-page #mihomo-import-modal .xk-mi-flow-step--placement .xk-mi-placement-label {
+  padding-top: 7px;
 }
 body.panel-page #mihomo-import-modal .xk-mi-placement-actions [aria-pressed="true"] {
   border-color: var(--op-accent) !important;
@@ -25615,18 +25765,6 @@ body.panel-page #mihomo-import-modal .xk-mi-review-tools pre {
   border-radius: var(--op-radius-md, 8px);
   font-size: 12px;
 }
-body.panel-page #mihomo-import-modal .xk-mi-review .xk-mi-yaml-key {
-  color: #93c5fd;
-  font-weight: 600;
-}
-body.panel-page #mihomo-import-modal .xk-mi-review .xk-mi-yaml-value {
-  color: #86efac;
-}
-body.panel-page #mihomo-import-modal .xk-mi-review .xk-mi-yaml-comment {
-  color: var(--op-muted);
-  font-style: italic;
-}
-
 /* Mihomo traffic uses the router diagnostics dashboard's surface and status language. */
 body.panel-page .xk-mihomo-traffic-dashboard {
   min-width: 0;

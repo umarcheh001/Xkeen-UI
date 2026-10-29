@@ -2773,27 +2773,51 @@ let mihomoImportModuleApi = null;
       host.classList.add('hidden');
       return;
     }
+    const summaryContent = document.createElement('div');
+    summaryContent.className = 'xk-mi-summary-content';
     const title = document.createElement('div');
     title.className = 'xk-mi-candidate-title';
     title.textContent = candidate.placement === 'replace' ? 'Будет заменено' : 'Будет добавлено';
     const details = document.createElement('div');
     details.className = 'xk-mi-candidate-details';
-    details.textContent = [
+    const detailLines = [
       `${candidate.outputs.length} ${pluralRu(candidate.outputs.length, ['элемент', 'элемента', 'элементов'])} → ${candidate.destinations.join(' + ') || 'config.yaml'}`,
       candidate.placement === 'replace' ? `Заменяемый узел: ${candidate.replaceName}` : `Размещение: ${candidate.placement === 'start' ? 'в начале' : 'в конце'} секции`,
       candidate.outputs.slice(0, 5).map(output => output.proxy_name || output.provider_name || '').filter(Boolean).join(', '),
       `Групп: ${candidate.groups.length ? candidate.groups.join(', ') : 'не выбраны'}`,
       candidate.missingGroups.length ? `Неизвестные группы: ${candidate.missingGroups.join(', ')}` : '',
       'Доступность серверов не проверялась.',
-    ].filter(Boolean).join('\n');
-    host.append(title, details);
+    ].filter(Boolean);
+    details.textContent = detailLines.join('\n');
+    summaryContent.append(title, details);
+    const metrics = document.createElement('div');
+    metrics.className = 'xk-mi-summary-metrics';
+    metrics.append(
+      createSummaryMetric(candidate.outputs.length, 'узлов'),
+      createSummaryMetric(candidate.groups.length, pluralRu(candidate.groups.length, ['группа', 'группы', 'групп'])),
+    );
+    host.append(summaryContent, metrics);
     host.classList.remove('hidden');
+    const flowCaption = $('mihomo-import-flow-result-caption');
+    if (flowCaption) flowCaption.textContent = candidate.outputs.length === 1
+      ? '1 узел распознан и добавлен в candidate. Файл на роутере пока не меняется.'
+      : `${candidate.outputs.length} ${pluralRu(candidate.outputs.length, ['узел', 'узла', 'узлов'])} распознано и добавлено в candidate. Файл на роутере пока не меняется.`;
     const warning = $('mihomo-import-review-warning');
     if (warning) {
       warning.textContent = candidate.editorDirty ? 'В редакторе есть несохранённые правки. При сохранении они войдут в config.yaml вместе с новым узлом. Перед записью проверим весь конфиг и создадим резервную копию.' : '';
       warning.classList.toggle('hidden', !candidate.editorDirty);
     }
-    document.querySelectorAll('[data-mi-review-view]').forEach(details => { details.open = false; details.querySelector('pre').textContent = ''; });
+  }
+
+  function createSummaryMetric(value, label) {
+    const metric = document.createElement('div');
+    metric.className = 'xk-mi-summary-metric';
+    const number = document.createElement('strong');
+    number.textContent = String(value);
+    const caption = document.createElement('span');
+    caption.textContent = label;
+    metric.append(number, caption);
+    return metric;
   }
 
   function setActionStatus(message, kind = 'info', busy = false) {
@@ -3108,74 +3132,6 @@ let mihomoImportModuleApi = null;
     _configOperations.remember({ ..._configOperations.operation, pendingApply: null, jobId: data.restart_job_id, state: 'applying' });
     await _configOperations.monitor();
   }
-
-  function showReviewTechnicalView(details) {
-    if (!details.open || !_lastCandidate) return;
-    details.parentElement.querySelectorAll('details').forEach((other) => {
-      if (other !== details) other.open = false;
-    });
-    const candidate = _lastCandidate;
-    const kind = details.dataset.miReviewView;
-    const limit = 240;
-    let lines;
-    if (kind === 'yaml') lines = candidate.content.split('\n');
-    else if (kind === 'import') {
-      lines = [candidate.placement === 'replace' ? '@@ Заменяемый узел @@' : '@@ Добавляемые фрагменты @@'];
-      (candidate.outputs || []).forEach((output) => {
-        const fragment = String(output.content || output.proxy_yaml || '').trimEnd();
-        if (!fragment) return;
-        lines.push(...fragment.split('\n').map((line) => `+ ${line}`));
-      });
-      if (lines.length === 1) lines = ['Импортируемых изменений нет.'];
-    }
-    else {
-      const before = (kind === 'file' ? candidate.baseFileContent : candidate.sourceEditorContent).split('\n');
-      const after = candidate.content.split('\n');
-      let start = 0;
-      while (start < before.length && start < after.length && before[start] === after[start]) start++;
-      let end = 0;
-      while (end < before.length - start && end < after.length - start && before[before.length - 1 - end] === after[after.length - 1 - end]) end++;
-      lines = [`@@ строка ${start + 1} @@`, ...before.slice(start, before.length - end).map(line => `- ${line}`),
-        ...after.slice(start, after.length - end).map(line => `+ ${line}`)];
-      if (lines.length === 1) lines = ['Изменений нет.'];
-    }
-    const output = lines.slice(0, limit).join('\n')
-      + (lines.length > limit ? `\n… Скрыто строк: ${lines.length - limit}. Сохраняется полный конфиг.` : '');
-    const pre = details.querySelector('pre');
-    if (kind === 'yaml') renderReviewYaml(pre, output);
-    else pre.textContent = output;
-  }
-
-  function renderReviewYaml(pre, source) {
-    pre.replaceChildren();
-    String(source || '').split('\n').forEach((line, index) => {
-      if (index) pre.append(document.createTextNode('\n'));
-      if (line.trimStart().startsWith('#')) {
-        appendReviewToken(pre, 'xk-mi-yaml-comment', line);
-        return;
-      }
-      const match = line.match(/^(\s*(?:-\s*)?)([\w.-]+)(\s*:)(.*)$/);
-      if (!match) {
-        pre.append(document.createTextNode(line));
-        return;
-      }
-      pre.append(document.createTextNode(match[1]));
-      appendReviewToken(pre, 'xk-mi-yaml-key', match[2]);
-      pre.append(document.createTextNode(match[3]));
-      const value = match[4];
-      if (/^\s*(?:true|false|null|~|-?\d+(?:\.\d+)?|"[^"]*"|'[^']*')\s*$/i.test(value)) {
-        appendReviewToken(pre, 'xk-mi-yaml-value', value);
-      } else pre.append(document.createTextNode(value));
-    });
-  }
-
-  function appendReviewToken(pre, className, text) {
-    const token = document.createElement('span');
-    token.className = className;
-    token.textContent = text;
-    pre.append(token);
-  }
-
 
   function escapeRegExp(s) {
     return String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -3897,7 +3853,6 @@ let mihomoImportModuleApi = null;
     wireButton('mihomo-import-retry-apply', () => recoverImportOperation('apply'));
     wireButton('mihomo-import-retry-registration', () => recoverImportOperation('registration'));
     _configOperations.subscribe(() => renderOperationStatus());
-    modal.querySelectorAll('[data-mi-review-view]').forEach(details => details.addEventListener('toggle', () => showReviewTechnicalView(details)));
     wireButton(IDS.btnParse, () => parseInput());
     wireButton(IDS.btnInsert, () => insertIntoEditor());
     wireButton(IDS.btnSave, () => commitCandidate(false));
