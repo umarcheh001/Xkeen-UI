@@ -9199,47 +9199,157 @@ body.panel-page #mihomo-import-modal .xk-mi-groups-disclosure {
 }
 
 body.panel-page #mihomo-import-modal .xk-mi-groups-summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  min-width: 0;
-  min-height: var(--op-control-h);
   cursor: pointer;
-  list-style: none;
-}
-
-body.panel-page #mihomo-import-modal .xk-mi-groups-summary::-webkit-details-marker {
-  display: none;
-}
-
-body.panel-page #mihomo-import-modal .xk-mi-groups-summary::before {
-  content: '›';
-  flex: 0 0 auto;
-  color: var(--op-muted);
-  font-size: 17px;
-  line-height: 1;
-  transform: translateY(-1px);
-  transition: transform 120ms ease;
-}
-
-body.panel-page #mihomo-import-modal .xk-mi-groups-disclosure[open] .xk-mi-groups-summary::before {
-  transform: rotate(90deg) translateX(-1px);
-}
-
-body.panel-page #mihomo-import-modal .xk-mi-groups-summary > .xk-mi-section-title {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-body.panel-page #mihomo-import-modal .xk-mi-groups-summary > .xk-mi-inline-actions {
-  flex: 0 0 auto;
+  color: var(--op-text);
+  min-height: var(--op-control-h);
 }
 
 body.panel-page #mihomo-import-modal .xk-mi-groups-disclosure-body {
   display: grid;
   gap: 8px;
   padding-top: 8px;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-groups-controls {
+  align-items: center;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-custom-select {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-custom-select:has(.xk-mi-custom-select-menu:not([hidden])) {
+  z-index: 50;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-custom-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  min-height: var(--op-control-h);
+  padding: 0 9px;
+  border: 1px solid var(--op-border-strong);
+  border-radius: var(--op-control-radius);
+  background: var(--op-surface);
+  color: var(--op-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-custom-select-trigger:hover,
+body.panel-page #mihomo-import-modal .xk-mi-custom-select-trigger[aria-expanded="true"] {
+  border-color: var(--op-accent-border);
+  background: var(--op-accent-soft);
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-custom-select-trigger:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--op-accent) 65%, transparent);
+  outline-offset: 1px;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-custom-select-trigger > .xk-mi-custom-select-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-custom-select-trigger > .xk-action-icon {
+  flex: 0 0 auto;
+  width: 13px;
+  height: 13px;
+  color: var(--op-muted);
+  transition: transform 140ms ease;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-custom-select-trigger[aria-expanded="true"] > .xk-action-icon {
+  transform: rotate(180deg);
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-custom-select-menu {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 5px);
+  right: 0;
+  left: 0;
+  display: grid;
+  gap: 3px;
+  max-height: min(260px, 36vh);
+  padding: 5px;
+  overflow-y: auto;
+  border: 1px solid var(--op-border-strong);
+  border-radius: var(--op-control-radius);
+  background: var(--op-surface-2);
+  box-shadow: var(--op-shadow-float);
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-custom-select-menu[hidden] {
+  display: none !important;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-custom-select-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 14px;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  min-height: 31px;
+  padding: 5px 7px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--op-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-custom-select-option:hover,
+body.panel-page #mihomo-import-modal .xk-mi-custom-select-option:focus-visible,
+body.panel-page #mihomo-import-modal .xk-mi-custom-select-option.is-current {
+  background: var(--op-accent-soft);
+  color: var(--op-text-strong);
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-custom-select-option > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-custom-select-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  color: var(--op-accent);
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-custom-select-check[hidden] {
+  visibility: hidden;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-custom-select-check .xk-action-icon {
+  width: 13px;
+  height: 13px;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-native-select {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* HWID is a second YAML workbench: keep the form/diagnostics as the left

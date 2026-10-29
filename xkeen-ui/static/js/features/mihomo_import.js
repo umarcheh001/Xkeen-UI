@@ -610,6 +610,112 @@ let mihomoImportModuleApi = null;
     return document.getElementById(id);
   }
 
+  function syncMihomoImportCustomSelect(wrapper) {
+    if (!wrapper) return;
+    const select = $(wrapper.dataset.miSelectFor);
+    const trigger = wrapper.querySelector('.xk-mi-custom-select-trigger');
+    const value = wrapper.querySelector('.xk-mi-custom-select-value');
+    if (!select || !trigger || !value) return;
+    const selected = select.options[select.selectedIndex] || select.options[0];
+    value.textContent = selected?.textContent || select.value || '';
+    trigger.disabled = !!select.disabled;
+    wrapper.querySelectorAll('[role="option"]').forEach((option) => {
+      const current = option.dataset.miSelectValue === String(select.value);
+      option.classList.toggle('is-current', current);
+      option.setAttribute('aria-selected', String(current));
+      option.querySelector('.xk-mi-custom-select-check')?.toggleAttribute('hidden', !current);
+    });
+  }
+
+  function syncMihomoImportCustomSelects() {
+    document.querySelectorAll('#mihomo-import-modal .xk-mi-custom-select').forEach(syncMihomoImportCustomSelect);
+  }
+
+  function closeMihomoImportCustomSelects(except = null) {
+    document.querySelectorAll('#mihomo-import-modal .xk-mi-custom-select').forEach((wrapper) => {
+      if (wrapper === except) return;
+      const trigger = wrapper.querySelector('.xk-mi-custom-select-trigger');
+      const menu = wrapper.querySelector('.xk-mi-custom-select-menu');
+      if (!menu || menu.hidden) return;
+      menu.hidden = true;
+      trigger?.setAttribute('aria-expanded', 'false');
+    });
+  }
+
+  function openMihomoImportCustomSelect(wrapper, open) {
+    const trigger = wrapper?.querySelector('.xk-mi-custom-select-trigger');
+    const menu = wrapper?.querySelector('.xk-mi-custom-select-menu');
+    if (!wrapper || !trigger || !menu || trigger.disabled) return;
+    closeMihomoImportCustomSelects(open ? wrapper : null);
+    menu.hidden = !open;
+    trigger.setAttribute('aria-expanded', String(open));
+    if (open) menu.querySelector('[aria-selected="true"]')?.focus();
+  }
+
+  function initMihomoImportCustomSelects(modal) {
+    modal.querySelectorAll('.xk-mi-custom-select').forEach((wrapper) => {
+      if (wrapper.dataset.miSelectBound === '1') return;
+      const select = $(wrapper.dataset.miSelectFor);
+      const trigger = wrapper.querySelector('.xk-mi-custom-select-trigger');
+      const menu = wrapper.querySelector('.xk-mi-custom-select-menu');
+      if (!select || !trigger || !menu) return;
+      menu.replaceChildren(...Array.from(select.options).map((option) => {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'xk-mi-custom-select-option';
+        item.setAttribute('role', 'option');
+        item.dataset.miSelectValue = option.value;
+        const label = document.createElement('span');
+        label.textContent = option.textContent;
+        const check = document.createElement('span');
+        check.className = 'xk-mi-custom-select-check';
+        check.setAttribute('aria-hidden', 'true');
+        check.innerHTML = iconHtml('check');
+        item.append(label, check);
+        item.addEventListener('click', () => {
+          select.value = option.value;
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+          syncMihomoImportCustomSelect(wrapper);
+          openMihomoImportCustomSelect(wrapper, false);
+          trigger.focus();
+        });
+        return item;
+      }));
+      trigger.addEventListener('click', () => openMihomoImportCustomSelect(wrapper, menu.hidden));
+      trigger.addEventListener('keydown', (event) => {
+        if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key)) {
+          event.preventDefault();
+          openMihomoImportCustomSelect(wrapper, true);
+        }
+      });
+      menu.addEventListener('keydown', (event) => {
+        const options = Array.from(menu.querySelectorAll('[role="option"]'));
+        const currentIndex = Math.max(0, options.indexOf(document.activeElement));
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          openMihomoImportCustomSelect(wrapper, false);
+          trigger.focus();
+        } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          event.preventDefault();
+          const delta = event.key === 'ArrowDown' ? 1 : -1;
+          options[(currentIndex + delta + options.length) % options.length]?.focus();
+        }
+      });
+      select.addEventListener('change', () => syncMihomoImportCustomSelect(wrapper));
+      wrapper.dataset.miSelectBound = '1';
+    });
+    if (modal.dataset.miCustomSelectDocumentBound !== '1') {
+      document.addEventListener('click', (event) => {
+        if (!event.target.closest('#mihomo-import-modal .xk-mi-custom-select')) closeMihomoImportCustomSelects();
+      });
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') closeMihomoImportCustomSelects();
+      });
+      modal.dataset.miCustomSelectDocumentBound = '1';
+    }
+    syncMihomoImportCustomSelects();
+  }
+
   function boolOpt(value) {
     return value === true || value === 1 || String(value || '').trim().toLowerCase() === 'true';
   }
@@ -1952,6 +2058,7 @@ let mihomoImportModuleApi = null;
       _baseFileRevision = '';
       if ($(IDS.fingerprint)) $(IDS.fingerprint).value = 'inherit';
       if ($(IDS.x25519)) $(IDS.x25519).value = 'inherit';
+      syncMihomoImportCustomSelects();
       setActionStatus('');
       _baseFileContent = '';
       _fileBaselinePromise = getMihomoFileRevision();
@@ -2921,6 +3028,7 @@ let mihomoImportModuleApi = null;
       if ($(IDS.fingerprint)) $(IDS.fingerprint).value = 'inherit';
       if ($(IDS.x25519)) $(IDS.x25519).value = 'inherit';
     }
+    syncMihomoImportCustomSelects();
   }
 
   async function buildImportCandidate() {
@@ -3840,6 +3948,7 @@ let mihomoImportModuleApi = null;
     if (_inited || (modal.dataset && modal.dataset.xkMihomoImportInited === '1')) return;
     _inited = true;
     if (modal.dataset) modal.dataset.xkMihomoImportInited = '1';
+    initMihomoImportCustomSelects(modal);
 
     wireButton(IDS.btnOpen, () => showModal(true));
     wireButton(IDS.btnClose, () => showModal(false));

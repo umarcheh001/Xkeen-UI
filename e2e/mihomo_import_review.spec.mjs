@@ -52,7 +52,12 @@ test('review applies fingerprint and ML-KEM choices to imported Reality nodes', 
   const realityLink = LINK.replace('?type=tcp#Review', '?type=tcp&security=reality&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&sid=1234#Review');
   await setup(page, realityLink);
   await page.locator('#mihomo-import-review-btn').click();
-  await expect(page.locator('#mihomo-import-fingerprint')).toBeVisible();
+  await expect(page.locator('#mihomo-import-fingerprint-trigger')).toContainText('Наследовать от источника');
+  await page.locator('#mihomo-import-fingerprint-trigger').click();
+  await expect(page.locator('#mihomo-import-fingerprint-menu')).toBeVisible();
+  await page.locator('#mihomo-import-fingerprint-menu [data-mi-select-value="firefox"]').click();
+  await expect(page.locator('#mihomo-import-fingerprint-trigger')).toContainText('firefox');
+  await expect(page.locator('#mihomo-import-fingerprint-menu [data-mi-select-value="firefox"]')).toHaveAttribute('aria-selected', 'true');
   await page.locator('#mihomo-import-fingerprint').selectOption('firefox');
   await page.locator('#mihomo-import-x25519').selectOption('enable');
   await expect(page.locator('#mihomo-import-candidate-summary')).toContainText('фингерпринт: firefox');

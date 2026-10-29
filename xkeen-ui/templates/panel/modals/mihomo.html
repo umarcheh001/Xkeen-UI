@@ -225,7 +225,12 @@ rule-set:github@domain
                     <div class="xk-mi-connection-options-grid">
                       <label class="xk-mi-field">
                         <span class="hint-label">Фингерпринт клиента</span>
-                        <select id="mihomo-import-fingerprint" class="xray-log-select xk-mi-control">
+                        <div class="xk-mi-custom-select" data-mi-select-for="mihomo-import-fingerprint">
+                          <button type="button" class="xk-mi-custom-select-trigger" id="mihomo-import-fingerprint-trigger" aria-haspopup="listbox" aria-expanded="false" aria-controls="mihomo-import-fingerprint-menu">
+                            <span class="xk-mi-custom-select-value"></span>{{ op_icon('chevron-down') }}
+                          </button>
+                          <div id="mihomo-import-fingerprint-menu" class="xk-mi-custom-select-menu" role="listbox" hidden></div>
+                          <select id="mihomo-import-fingerprint" class="xray-log-select xk-mi-control xk-mi-native-select" tabindex="-1" aria-hidden="true">
                           <option value="inherit">Наследовать от источника</option>
                           <option value="chrome">chrome</option>
                           <option value="firefox">firefox</option>
@@ -236,15 +241,22 @@ rule-set:github@domain
                           <option value="360">360</option>
                           <option value="qq">qq</option>
                           <option value="random">random</option>
-                        </select>
+                          </select>
+                        </div>
                       </label>
                       <label class="xk-mi-field">
                         <span class="hint-label">X25519MLKEM768 <span class="xk-mi-info" data-tooltip="Работает только для VLESS Reality и требует Mihomo v1.19.29 или новее." aria-label="Подробнее о X25519MLKEM768">i</span></span>
-                        <select id="mihomo-import-x25519" class="xray-log-select xk-mi-control">
+                        <div class="xk-mi-custom-select" data-mi-select-for="mihomo-import-x25519">
+                          <button type="button" class="xk-mi-custom-select-trigger" id="mihomo-import-x25519-trigger" aria-haspopup="listbox" aria-expanded="false" aria-controls="mihomo-import-x25519-menu">
+                            <span class="xk-mi-custom-select-value"></span>{{ op_icon('chevron-down') }}
+                          </button>
+                          <div id="mihomo-import-x25519-menu" class="xk-mi-custom-select-menu" role="listbox" hidden></div>
+                          <select id="mihomo-import-x25519" class="xray-log-select xk-mi-control xk-mi-native-select" tabindex="-1" aria-hidden="true">
                           <option value="inherit">Наследовать от источника</option>
                           <option value="enable">Включить принудительно</option>
                           <option value="disable">Выключить принудительно</option>
-                        </select>
+                          </select>
+                        </div>
                       </label>
                     </div>
                   </div>
@@ -343,13 +355,15 @@ https://..."></textarea>
               <details id="mihomo-import-groups-block" class="xk-mi-groups-card xk-mi-groups-disclosure hidden">
                 <summary class="xk-mi-groups-summary">
                   <span id="mihomo-import-groups-title" class="xk-mi-section-title">Добавить в группы</span>
-                  <span class="xk-mi-inline-actions">
-                    <button type="button" id="mihomo-import-groups-all-btn" class="btn-compact" data-tooltip="Выбрать все группы">Все</button>
-                    <button type="button" id="mihomo-import-groups-none-btn" class="btn-compact" data-tooltip="Снять выбор со всех групп">Снять</button>
-                  </span>
                 </summary>
                 <div class="xk-mi-groups-disclosure-body">
-                  <div id="mihomo-import-groups-subtitle" class="xk-mi-section-subtitle">Выбор из текущего <code>config.yaml</code> для статических <code>proxies</code>.</div>
+                  <div class="xk-mi-section-head xk-mi-groups-controls">
+                    <div id="mihomo-import-groups-subtitle" class="xk-mi-section-subtitle">Выбор из текущего <code>config.yaml</code> для статических <code>proxies</code>.</div>
+                    <span class="xk-mi-inline-actions">
+                      <button type="button" id="mihomo-import-groups-all-btn" class="btn-compact" data-tooltip="Выбрать все группы">Все</button>
+                      <button type="button" id="mihomo-import-groups-none-btn" class="btn-compact" data-tooltip="Снять выбор со всех групп">Снять</button>
+                    </span>
+                  </div>
                   <div id="mihomo-import-groups" class="xk-mi-groups-shell">
                     <div class="xk-card-desc" style="opacity:0.75;">Группы будут подхвачены из текущего <code>config.yaml</code>.</div>
                   </div>

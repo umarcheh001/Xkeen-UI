@@ -78,6 +78,11 @@ test('source/result have no preview runtime; disclosure loads CM and close reset
   await parse(page);
   await expect(page.locator('#mihomo-import-groups-block')).toBeVisible();
   await expect(page.locator('#mihomo-import-groups-block')).not.toHaveAttribute('open', '');
+  await expect(page.locator('#mihomo-import-groups-all-btn')).toBeHidden();
+  await page.locator('#mihomo-import-groups-block > summary').click();
+  await expect(page.locator('#mihomo-import-groups-all-btn')).toBeVisible();
+  await page.locator('#mihomo-import-groups-block > summary').click();
+  await expect(page.locator('#mihomo-import-groups-all-btn')).toBeHidden();
   await expect(page.locator('#mihomo-import-preview-panel')).toBeHidden();
   await expect(page.locator(`${MODAL} .cm-editor, ${MODAL} .monaco-editor`)).toHaveCount(0);
   await capture(page, 'result-dark', testInfo);
