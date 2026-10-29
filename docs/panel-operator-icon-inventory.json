@@ -502,12 +502,12 @@
         {
           "location": "xkeen-ui/templates/panel.html:L4374",
           "control_type": "icon-only",
-          "accessible_label": "Раскрыть"
+          "accessible_label": "Фингерпринт клиента"
         },
         {
           "location": "xkeen-ui/templates/panel.html:L4395",
           "control_type": "icon-only",
-          "accessible_label": "Раскрыть"
+          "accessible_label": "X25519MLKEM768"
         },
         {
           "location": "xkeen-ui/templates/panel.html:L467",
