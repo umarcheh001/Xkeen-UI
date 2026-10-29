@@ -106,12 +106,21 @@ function paintStack(ctx, colors, geo, column, style) {
     return;
   }
   const lit = litCount(col.avg, geo.scaleMax, segments);
+  const extent = Math.max(0, Math.min(1, (col.avg || 0) / geo.scaleMax)) * segments * segH;
   for (let k = 0; k < segments; k += 1) {
     const color = style.colorOf(col.zone, k);
     ctx.fillStyle = color;
-    ctx.globalAlpha = k < lit ? 1 : UNLIT_ALPHA;
+    ctx.globalAlpha = !style.fractional && k < lit ? 1 : UNLIT_ALPHA;
     const [rx, ry, rw, rh] = segRect(k);
     ctx.fillRect(rx, ry, rw, rh);
+    if (style.fractional) {
+      const top = dir < 0 ? Math.max(ry, baseY - extent) : ry;
+      const bottom = dir < 0 ? ry + rh : Math.min(ry + rh, baseY + extent);
+      if (bottom > top) {
+        ctx.globalAlpha = 1;
+        ctx.fillRect(rx, top, rw, bottom - top);
+      }
+    }
   }
   ctx.globalAlpha = 1;
   if (style.peak && col.max != null && col.max > 0) {
@@ -119,7 +128,12 @@ function paintStack(ctx, colors, geo, column, style) {
     const [rx, ry, rw, rh] = segRect(peakSeg);
     ctx.fillStyle = style.peakColor(col.peak_zone ?? col.zone);
     const dashH = Math.min(2, rh);
-    ctx.fillRect(rx, dir < 0 ? ry : ry + rh - dashH, rw, dashH);
+    const peakExtent = Math.max(0, Math.min(1, col.max / geo.scaleMax)) * segments * segH;
+    const peakY = dir < 0 ? baseY - peakExtent : baseY + peakExtent - dashH;
+    const sideMin = dir < 0 ? baseY - segments * segH : baseY;
+    const sideMax = dir < 0 ? baseY : baseY + segments * segH;
+    const clippedPeakY = Math.max(sideMin, Math.min(sideMax - dashH, peakY));
+    ctx.fillRect(rx, style.fractional ? clippedPeakY : (dir < 0 ? ry : ry + rh - dashH), rw, dashH);
   }
 }
 
@@ -208,7 +222,8 @@ export function drawMirrorChart(canvas, up, down, opts = {}) {
     scaleMax = scaleMax || 1;
   }
   const style = {
-    peak: true,
+    fractional: true,
+    peak: opts.peak !== false,
     colorOf: (zone) => (opts.neutral ? colors.accent : zoneColor(colors, zone)),
     peakColor: (zone) => (opts.neutral ? colors.accent : zoneColor(colors, zone)),
   };
@@ -236,7 +251,7 @@ export function drawMiniIndicator(canvas, series, opts = {}) {
 }
 
 export function drawMiniMirror(canvas, up, down, opts = {}) {
-  return drawMirrorChart(canvas, up, down, { segmentsPerSide: 4, percent: true, ...opts });
+  return drawMirrorChart(canvas, up, down, { segmentsPerSide: 4, percent: true, peak: false, ...opts });
 }
 
 // cells: 0 in service (green), 1 warning (orange), 2 failure (red), null no data (grey).

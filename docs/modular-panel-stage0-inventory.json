@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 610,
-      "size_bytes": 8247487,
+      "size_bytes": 8248747,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -359,7 +359,7 @@
       ],
       "removable": true,
       "unit_count": 66,
-      "size_bytes": 878310,
+      "size_bytes": 890263,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 16,
@@ -12939,7 +12939,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/router_resource_dashboard.spec.mjs",
-      "size_bytes": 97458,
+      "size_bytes": 98718,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -23272,7 +23272,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_service",
       "path": "xkeen-ui/services/system_resources_history/collector.py",
-      "size_bytes": 47020,
+      "size_bytes": 49920,
       "depends_on": [
         "core"
       ],
@@ -23522,7 +23522,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_system_resources_collector.py",
-      "size_bytes": 45130,
+      "size_bytes": 50390,
       "depends_on": [
         "core"
       ],
@@ -24038,7 +24038,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor/canvas_charts.js",
-      "size_bytes": 13048,
+      "size_bytes": 13904,
       "depends_on": [
         "core"
       ],
@@ -24090,7 +24090,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor/chart_data.js",
-      "size_bytes": 19110,
+      "size_bytes": 19367,
       "depends_on": [
         "core"
       ],
@@ -24116,7 +24116,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor/chart_view.js",
-      "size_bytes": 20470,
+      "size_bytes": 20974,
       "depends_on": [
         "core"
       ],
@@ -24142,7 +24142,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor/dashboard.js",
-      "size_bytes": 16694,
+      "size_bytes": 16897,
       "depends_on": [
         "core"
       ],
@@ -24454,7 +24454,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor/view.js",
-      "size_bytes": 33993,
+      "size_bytes": 34227,
       "depends_on": [
         "core"
       ],
@@ -24610,7 +24610,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_test",
       "path": "e2e/resource_monitor_charts.spec.mjs",
-      "size_bytes": 7666,
+      "size_bytes": 9405,
       "depends_on": [
         "core"
       ],
@@ -35080,7 +35080,7 @@
         },
         "tool.advanced-diagnostics": {
           "unit_count": 66,
-          "size_bytes": 878310
+          "size_bytes": 890263
         }
       },
       "next_stage": "Этапы 4, 5 и 6."

@@ -153,6 +153,8 @@ export function createChartView(host, callbacks = {}) {
       const out = [
         item("↑ Отдача сейчас", esc(s.upNow ?? "—")), item("пик", esc(s.upPeak ?? "—")),
         item("↓ Приём сейчас", esc(s.downNow ?? "—")), item("пик", esc(s.downPeak ?? "—")),
+        item(`Среднее последнего столбца (${stepWords(history.step_s)}) ↑`, esc(s.upMean ?? "—")),
+        item("↓", esc(s.downMean ?? "—")),
       ];
       if (s.tariffed) out.push(`<span>Канал забит <b class="${s.red > 0 ? "z2" : "zero"}">${minutesText(s.red)}</b></span>`);
       return out.join("");
@@ -310,7 +312,7 @@ export function createChartView(host, callbacks = {}) {
       model = grid7Model(history, metric, input.linkId);
       height = model.rows.length * ROW_H;
     } else if (metric === "net") {
-      model = mirrorModel(history, input.linkId);
+      model = mirrorModel(history, input.linkId, input.snapshot);
       height = phone ? 190 : 240;
     } else {
       model = levelModel(history, metric === "all" ? "cpu" : metric);
@@ -364,7 +366,7 @@ export function createChartView(host, callbacks = {}) {
         ? [`link_up:${id}`, `link_down:${id}`, `rate_up:${id}`, `rate_down:${id}`]
         : [metric === "all" ? "cpu" : metric];
       history = foldHistory(cur.input.history, 2, shown);
-      model = model.kind === "mirror" ? mirrorModel(history, linkId) : levelModel(history, metric === "all" ? "cpu" : metric);
+      model = model.kind === "mirror" ? mirrorModel(history, linkId, cur.input.snapshot) : levelModel(history, metric === "all" ? "cpu" : metric);
       if (columnCount(history) !== handle.count) {
         render(cur.input);
         return;
@@ -393,6 +395,14 @@ export function createChartView(host, callbacks = {}) {
   return {
     render,
     updateLast,
+    updateSnapshot(snapshot) {
+      if (!cur.input) return;
+      cur.input.snapshot = snapshot;
+      if (cur.model?.kind === "mirror") {
+        cur.model = mirrorModel(cur.history, cur.input.linkId, snapshot);
+        setHtml(summaryEl, summaryHtml(cur.model, cur.history));
+      }
+    },
     formHost: $(".xkc-form"),
     showError(text) {
       errorBox.hidden = !text;

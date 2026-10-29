@@ -1005,6 +1005,27 @@ test('only last column redrawn on tick', async ({ page }) => {
   expect(api.history).toEqual(['1h']);
 });
 
+test('phone network current value survives an open-column update', async ({ page }) => {
+  const sum = summary();
+  const view = await openDashboard(page, { sum, clock: true, width: 390 });
+  await view.locator('.xkc-tabs [data-metric="net"]').click();
+  await expect(view.locator('.xkc-summary')).toContainText('↑ Отдача сейчас 2 %');
+  sum.values['link_up:ISP'] = 7;
+  await page.clock.runFor(5200);
+  await expect(view.locator('.xkc-summary')).toContainText('↑ Отдача сейчас 7 %', { timeout: 1500 });
+});
+
+test('network current values become unavailable after a failed summary fetch', async ({ page }) => {
+  const view = await openDashboard(page, { clock: true });
+  await view.locator('.xkc-tabs [data-metric="net"]').click();
+  await expect(view.locator('.xkc-summary')).toContainText('↑ Отдача сейчас 2 %');
+  await page.unroute('**/api/system/summary');
+  await page.route('**/api/system/summary', route => route.fulfill({ status: 503, json: { ok: false } }));
+  await page.clock.runFor(5200);
+  await expect(view.locator('.xkc-summary')).toContainText('↑ Отдача сейчас —');
+  await expect(view.locator('.xkc-summary')).toContainText('Среднее последнего столбца');
+});
+
 test('initial fetch failure shows a message with a retry button', async ({ page }) => {
   let healthy = false;
   const view = await openDashboard(page, { sum: null, hist: range => (healthy ? history(range) : null) });

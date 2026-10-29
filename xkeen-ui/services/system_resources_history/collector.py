@@ -25,6 +25,7 @@ import math
 import os
 import threading
 import time
+from collections import deque
 from pathlib import Path
 from typing import Any, Callable, Literal
 
@@ -139,6 +140,7 @@ class Collector:
         }
         self._n = 0
         self._values: dict[str, float | None] = {}
+        self._network_recent: deque = deque(maxlen=40)
         self._zones: dict[str, int | None] = {}
         self._cpu_prev: dict = {}
         self._cores = 1
@@ -202,6 +204,8 @@ class Collector:
                 and isinstance(anchor_uptime, (int, float)) and math.isfinite(anchor_uptime)
                 and self._uptime_s >= anchor_uptime
             )
+            if saved_at <= now or same_clock_boot:
+                self._restore_network_recent(meta.get("network_recent"), saved_at)
             # Flash is written every hour counted from the copy on flash, not from this
             # start: a panel restarted more often than that must still reach the flash.
             on_flash = load_history([self._paths["flash"]], None)
@@ -230,6 +234,37 @@ class Collector:
         self._tariffs = get_diagnostics_tariffs(ui_state_dir)
 
     # -- small helpers ------------------------------------------------------
+    def _restore_network_recent(self, raw: Any, saved_at: float) -> None:
+        """Optional metadata must never invalidate the main persisted history."""
+        if not isinstance(raw, list):
+            return
+
+        def finite_number(value: Any) -> bool:
+            if not isinstance(value, (int, float)) or isinstance(value, bool):
+                return False
+            try:
+                return math.isfinite(value)
+            except OverflowError:  # JSON integers need not fit in a float
+                return False
+
+        slots: dict[int, tuple[float, dict]] = {}
+        for item in raw[-40:]:
+            if not isinstance(item, list) or len(item) != 2:
+                continue
+            at, values = item
+            if (not finite_number(at) or not saved_at - 40 * STEP_S < at <= saved_at
+                    or not isinstance(values, dict)):
+                continue
+            clean = {
+                key: value for key, value in values.items()
+                if key.startswith(("rate_up:", "rate_down:", "link_up:", "link_down:"))
+                and (value is None or (finite_number(value) and value >= 0))
+            }
+            slot = int(at // STEP_S)
+            if slot not in slots or at >= slots[slot][0]:
+                slots[slot] = (at, clean)
+        self._network_recent.extend(slots[slot] for slot in sorted(slots))
+
     def _read(self, path: str) -> str | None:
         try:
             return self._reader(Path(path))
@@ -284,6 +319,13 @@ class Collector:
                 self._guarded("30 s apply", self._apply_mid, now, mid)
             values = self._sample_fast(now)
             self._store_and_judge(now, values)
+            slot = int(now // STEP_S) * STEP_S
+            previous_slot = int(self._network_recent[-1][0] // STEP_S) * STEP_S if self._network_recent else None
+            if previous_slot is not None and slot < previous_slot:
+                self._network_recent.clear()
+            elif previous_slot is not None and slot == previous_slot:
+                self._network_recent.pop()
+            self._network_recent.append((now, {k: v for k, v in values.items() if k.startswith(('rate_', 'link_'))}))
         self._save_if_due(now)
 
     def _correct_cold_clock(self, now: float, uptime: float | None) -> None:
@@ -296,6 +338,9 @@ class Collector:
             return
         since = self._store.history_since
         self._store.rebase_time(seconds)
+        self._network_recent = deque(
+            ((at + seconds, values) for at, values in self._network_recent), maxlen=40
+        )
         self._top.rebase_time(seconds, since=since)
         self._tracker.rebase_time(seconds)
         if self._boot_event is not None:
@@ -603,7 +648,10 @@ class Collector:
             # stand-in times and the boot not yet placed in real time would be wrong for good
             pending = self._boot_event if self._events_on_uptime else None
             events = [dict(e) for e in self._tracker.events(0) if e["at"] >= STAND_IN_BELOW and e is not pending]
-            meta: dict = {"top": self._top.to_dict()}
+            meta: dict = {
+                "top": self._top.to_dict(),
+                "network_recent": [[at, dict(values)] for at, values in self._network_recent],
+            }
             if self._internet_seen_online and self._boot_id:
                 meta["internet_ready_boot_id"] = self._boot_id
             if self._cold_clock and self._boot_id:
@@ -688,6 +736,13 @@ class Collector:
     def _bars(self, data: dict, metric: str) -> dict:
         values = list(data["metrics"].get(metric, {}).get("avg") or [None] * CARD_SPEC[2])
         return {"values": values, "zones": [self._zone_of(metric, v, {}) for v in values]}
+
+    def _network_bars(self, metric: str, now: float) -> dict:
+        latest = self._network_recent[-1][0] if self._network_recent else now
+        end = int((latest if 0 <= now - latest < STEP_S else now) // STEP_S) * STEP_S
+        samples = {int(at // STEP_S) * STEP_S: values for at, values in self._network_recent}
+        values = [samples.get(end - offset * STEP_S, {}).get(metric) for offset in range(39, -1, -1)]
+        return {'values': values, 'zones': [self._zone_of(metric, v, {}) for v in values]}
 
     def _problem_age(self, now: float, etype: str, key: str | None = None) -> int | None:
         """Whole minutes the open problem of this type has lasted, or ``None``."""
@@ -813,7 +868,7 @@ class Collector:
             "id": pid, "label": link["label"], "has_tariff": has_tariff, "tariff": link["tariff"] if has_tariff else None,
             "up_percent": up_pct, "down_percent": down_pct, "up_mbps": up_mbps, "down_mbps": down_mbps,
             "zone": max(zones) if zones else None, "text": text,
-            "bars": {"up": self._bars(data, f"{suffix}_up:{pid}"), "down": self._bars(data, f"{suffix}_down:{pid}")},
+            "bars": {"up": self._network_bars(f"{suffix}_up:{pid}", now), "down": self._network_bars(f"{suffix}_down:{pid}", now), "step_s": STEP_S},
             "secondary": secondary,
         }
 

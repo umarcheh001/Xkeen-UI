@@ -30,6 +30,39 @@ async function inPage(page, body, arg) {
 
 const near = (a, b, tol = 8) => a.slice(0, 3).every((v, i) => Math.abs(v - b[i]) <= tol);
 
+test('network mirror fills fractional segments without inflating small loads', async ({ page }) => {
+  const r = await inPage(page, `
+    const canvas = make(300, 202);
+    const s = { avg: [4], max: [4], zone: [0], peak_zone: [0] };
+    charts.drawMiniMirror(canvas, s, s);
+    return { upInside: px(canvas, 50, 98), upOutside: px(canvas, 50, 85),
+      downInside: px(canvas, 50, 103), downOutside: px(canvas, 50, 115) };
+  `);
+  expect(r.upInside[3]).toBe(255);
+  expect(r.downInside[3]).toBe(255);
+  expect(r.upOutside[3]).toBeLessThan(120);
+  expect(r.downOutside[3]).toBeLessThan(120);
+});
+
+test('network fill handles zero, tiny, partial, full and missing values and exact peaks', async ({ page }) => {
+  const r = await inPage(page, `
+    const values = [0, 0.1, 4, 25, 80, 100, 150, null];
+    const canvas = make(800, 202);
+    const s = { avg: values, max: values, zone: values.map(v => v == null ? null : 0) };
+    charts.drawMiniMirror(canvas, s, s);
+    const outside = values.map((v, i) => v == null || v >= 100 ? null : px(canvas, i * 100 + 50, Math.min(97, 101 - v - 4))[3]);
+    const peak = make(100, 202);
+    charts.drawMirrorChart(peak, { avg: [4], max: [37], zone: [0], peak_zone: [2] }, { avg: [4], max: [37], zone: [0], peak_zone: [2] }, { percent: true });
+    return { outside, full: [px(canvas, 550, 10)[3], px(canvas, 650, 10)[3]],
+      missing: px(canvas, 750, 98)[3], upPeak: px(peak, 50, 64), downPeak: px(peak, 50, 136), red: css('--op-danger') };
+  `);
+  for (const alpha of r.outside.filter(a => a !== null)) expect(alpha).toBeLessThan(120);
+  expect(r.full).toEqual([255, 255]);
+  expect(r.missing).toBe(0);
+  expect(near(r.upPeak, r.red)).toBe(true);
+  expect(near(r.downPeak, r.red)).toBe(true);
+});
+
 test('level chart colours segments by zone, dims unlit ones and hit-tests columns', async ({ page }) => {
   const r = await inPage(page, `
     const canvas = make(300, 100);

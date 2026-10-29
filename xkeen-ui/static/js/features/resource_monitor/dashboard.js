@@ -32,6 +32,7 @@ const state = {
   rememberedMetric: "cpu",
   highlight: null,
   summary: null,
+  summaryStale: true,
   hardware: null,
   history: null,
   stale: false,
@@ -211,7 +212,7 @@ function onCardClick(metric) {
 function renderChart() {
   // while the history of a newly chosen range is on its way the old one stays as it was
   if (!chart || !state.history || state.history.range !== state.range) return;
-  chart.render({ history: state.history, range: state.range, metric: state.metric, linkId: state.linkId, highlight: state.highlight, stale: state.stale });
+  chart.render({ history: state.history, snapshot: state.summaryStale ? null : state.summary, range: state.range, metric: state.metric, linkId: state.linkId, highlight: state.highlight, stale: state.stale });
 }
 
 function syncExport() {
@@ -239,12 +240,14 @@ function paintFreshness() {
 
 function applySummary(summary) {
   state.summary = summary;
+  state.summaryStale = false;
   state.okAt = Date.now();
   view.renderSummary(summary);
   view.renderConnection(summary.router);
   tools?.update();
   paintFreshness();
   syncExport();
+  chart?.updateSnapshot(summary);
 }
 
 function applyHistory(data) {
@@ -270,6 +273,8 @@ async function loadSummary() {
     applySummary(summary);
     return summary;
   } catch (error) {
+    state.summaryStale = true;
+    chart?.updateSnapshot(null);
     return null;
   }
 }

@@ -151,7 +151,7 @@ function secondaryLine(link) {
   return items.length ? `<div class="xkm-sec">${items.join(" · ")}</div>` : "";
 }
 
-const sparkCanvas = (kind) => `<canvas class="xkm-spark" data-kind="${kind}" style="width:100%;height:34px"></canvas>`;
+const sparkCanvas = (kind) => `<canvas class="xkm-spark" data-kind="${kind}"${kind === "mirror" ? ' aria-label="Загрузка канала за последние 3 минуты 20 секунд, шаг 5 секунд" title="Последние 3 минуты 20 секунд · шаг 5 секунд"' : ''} style="width:100%;height:34px"></canvas>`;
 
 // ---- status line ---------------------------------------------------------
 

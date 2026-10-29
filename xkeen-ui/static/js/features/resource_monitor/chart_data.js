@@ -205,7 +205,7 @@ function levelSummary(series, history, fmt) {
 
 // ---- mirror chart (network) -----------------------------------------------
 
-export function mirrorModel(history, linkId) {
+export function mirrorModel(history, linkId, snapshot = null) {
   const link = linkOf(history, linkId);
   const id = link?.id;
   const tariffed = hasTariff(link);
@@ -259,11 +259,17 @@ export function mirrorModel(history, linkId) {
       const zones = [...up.zone, ...down.zone];
       const f = tariffed ? pct : mbit;
       const best = (s) => worst(s.max);
+      const current = (direction) => {
+        const value = snapshot?.values?.[`${tariffed ? 'link' : 'rate'}_${direction}:${id}`];
+        return finite(value) ? f(value) : null;
+      };
       return {
         kind: "mirror",
         tariffed,
-        upNow: lastValue(up.avg) == null ? null : f(lastValue(up.avg)),
-        downNow: lastValue(down.avg) == null ? null : f(lastValue(down.avg)),
+        upNow: current('up'),
+        downNow: current('down'),
+        upMean: finite(up.avg.at(-1)) ? f(up.avg.at(-1)) : null,
+        downMean: finite(down.avg.at(-1)) ? f(down.avg.at(-1)) : null,
         upPeak: best(up) == null ? null : f(best(up)),
         downPeak: best(down) == null ? null : f(best(down)),
         red: tariffed ? zoneMinutes(up.zone.map((z, i) => Math.max(z ?? -1, down.zone[i] ?? -1)), 2, history.step_s) : 0,

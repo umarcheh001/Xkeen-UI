@@ -149,6 +149,152 @@ def tariffs(tmp_path, data: dict) -> None:
     patch_settings({"diagnostics": {"tariffs": data}}, str(tmp_path / "state"))
 
 
+def test_network_card_has_40_individual_five_second_samples(tmp_path):
+    r = FakeRouter()
+    c = make(tmp_path, r)
+    tariffs(tmp_path, {ISP: {'up_mbps': 500, 'down_mbps': 500}})
+    c.refresh_tariffs()
+    r.step(c, 42)
+    r.rate['eth3'] = (20, 0)
+    r.step(c)
+    r.rate['eth3'] = (0, 0)
+    r.step(c)
+    bars = c.snapshot()['cards']['link']['bars']
+    assert len(bars['down']['values']) == 40
+    assert bars['down']['values'][-3:] == pytest.approx([20, 4, 0])
+    assert bars['step_s'] == 5
+    assert len(c.snapshot()['cards']['cpu']['bars']['values']) == 40
+
+
+def test_network_card_keeps_gaps_and_clears_backwards_clock(tmp_path):
+    r = FakeRouter(); c = make(tmp_path, r)
+    r.step(c, 4)
+    r.now += 10
+    r.step(c)
+    values = c.snapshot()['cards']['link']['bars']['down']['values']
+    assert values[-3:-1] == [None, None]
+    r.now -= 600
+    r.step(c)
+    values = c.snapshot()['cards']['link']['bars']['down']['values']
+    assert all(v is None for v in values[:-1])
+
+
+def test_network_card_duplicate_time_slot_keeps_earlier_samples(tmp_path):
+    r = FakeRouter(); c = make(tmp_path, r)
+    r.step(c, 4)
+    c.tick()
+    values = c.snapshot()['cards']['link']['bars']['down']['values']
+    assert values[-3:-1] == [100, 100]
+
+
+def test_network_card_keeps_latest_sample_when_http_poll_crosses_slot_boundary(tmp_path):
+    r = FakeRouter(); r.now += 4.5
+    c = make(tmp_path, r)
+    r.step(c, 4)
+    r.now += 1
+    assert c.snapshot()['cards']['link']['bars']['down']['values'][-1] == 100
+
+
+@pytest.mark.parametrize('kind', ['tmp', 'flash'])
+def test_network_card_restores_samples_but_not_restart_gap_or_first_rate(tmp_path, kind):
+    r = FakeRouter(); c = make(tmp_path, r)
+    r.step(c, 4)
+    r.rate['eth3'] = (20, 0)
+    r.step(c)
+    c.save(kind)
+    r.now += 10
+    r.uptime += 10
+    restarted = make(tmp_path, r)
+    r.step(restarted)
+    values = restarted.snapshot()['cards']['link']['bars']['down']['values']
+    assert values[-6:] == [100, 100, 20, None, None, None]
+    r.step(restarted)
+    assert restarted.snapshot()['cards']['link']['bars']['down']['values'][-1] == 20
+
+
+def test_network_card_old_copy_does_not_fill_recent_window(tmp_path):
+    r = FakeRouter(); c = make(tmp_path, r)
+    r.step(c, 4)
+    c.save('tmp')
+    r.now += 300
+    restarted = make(tmp_path, r)
+    r.step(restarted)
+    assert restarted.snapshot()['cards']['link']['bars']['down']['values'] == [None] * 40
+
+
+def test_network_card_malformed_metadata_keeps_valid_history(tmp_path):
+    r = FakeRouter(); c = make(tmp_path, r)
+    r.step(c, 4)
+    c.save('tmp')
+    path = tmp_path / 'tmp' / 'resource-history.json'
+    payload = json.loads(path.read_text(encoding='utf-8'))
+    payload['meta']['network_recent'] = [
+        None, [True, {}], ['bad', {}], [r.now, []],
+        [r.now + 5, {f'rate_down:{ISP}': 999}],
+        [r.now, {f'rate_down:{ISP}': 20, f'rate_up:{ISP}': True,
+                 'cpu': 999, f'link_down:{ISP}': -5}],
+    ]
+    path.write_text(json.dumps(payload), encoding='utf-8')
+    restarted = make(tmp_path, r)
+    r.step(restarted)
+    bars = restarted.snapshot()['cards']['link']['bars']
+    assert bars['down']['values'][-2:] == [20, None]
+    assert bars['up']['values'][-2:] == [None, None]
+    assert any(v is not None for v in series(restarted, 'cpu'))
+
+
+@pytest.mark.parametrize('raw', [None, {}, 'broken'])
+def test_network_card_legacy_or_invalid_metadata_keeps_main_history(tmp_path, raw):
+    r = FakeRouter(); c = make(tmp_path, r)
+    r.step(c, 4)
+    c.save('tmp')
+    path = tmp_path / 'tmp' / 'resource-history.json'
+    payload = json.loads(path.read_text(encoding='utf-8'))
+    payload['meta']['network_recent'] = raw
+    path.write_text(json.dumps(payload), encoding='utf-8')
+    restarted = make(tmp_path, r)
+    r.step(restarted)
+    assert restarted.snapshot()['cards']['link']['bars']['down']['values'] == [None] * 40
+    assert any(v is not None for v in series(restarted, 'cpu'))
+
+
+@pytest.mark.parametrize('correction', [-600, 600])
+def test_network_card_restart_rebases_cold_boot_samples_with_ntp(tmp_path, correction):
+    r = FakeRouter()
+    r.uptime = 40
+    r.files['/proc/sys/kernel/random/boot_id'] = 'cold-network-boot'
+    c = make(tmp_path, r)
+    for _ in range(4):
+        r.uptime += 5
+        r.step(c)
+    c.save('flash')
+    r.now += correction + 10
+    r.uptime += 10
+    restarted = make(tmp_path, r)
+    r.uptime += 5
+    r.step(restarted)
+    assert restarted.snapshot()['cards']['link']['bars']['down']['values'][-6:] == [
+        100, 100, 100, None, None, None,
+    ]
+
+
+@pytest.mark.parametrize('sample', [
+    [10**400, {}], [T0 + 20, {f'rate_down:{ISP}': 10**400}],
+])
+def test_network_card_oversized_json_number_does_not_break_start(tmp_path, sample):
+    r = FakeRouter(); c = make(tmp_path, r)
+    r.step(c, 4)
+    c.save('tmp')
+    path = tmp_path / 'tmp' / 'resource-history.json'
+    payload = json.loads(path.read_text(encoding='utf-8'))
+    payload['meta']['network_recent'] = [sample]
+    path.write_text(json.dumps(payload), encoding='utf-8')
+    restarted = make(tmp_path, r)
+    r.step(restarted)
+    assert restarted.snapshot()['cards']['link']['bars']['down']['values'] == [None] * 40
+    assert any(v is not None for v in series(restarted, 'cpu'))
+
+
 def series(c: Collector, metric: str, range_id: str = "15m"):
     cols = c.history(range_id)["metrics"][metric]
     return cols["avg"]
