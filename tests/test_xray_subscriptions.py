@@ -346,7 +346,7 @@ def test_preview_subscription_accepts_happ_landing_when_helper_returns_links(mon
     assert preview["ok"] is True
     assert preview["count"] == 1
     assert preview["fetch_mode"] == "happ-helper"
-    assert any("помощник Happ" in line for line in preview["warnings"])
+    assert any("утилиту ссылок подписок" in line for line in preview["warnings"])
 
 
 def test_fetch_subscription_body_for_xray_retries_raw_happ_with_happ_hwid_after_direct_error(monkeypatch):
@@ -382,8 +382,8 @@ def test_fetch_subscription_body_for_xray_retries_raw_happ_with_happ_hwid_after_
     assert _vless("Recovered") in body
     assert headers["x-xkeen-happ-resolved"] == "decryptor"
     assert meta["fetch_mode"] == "happ_hwid"
-    assert "Подписка получена по ссылке Happ." in meta["warnings"]
-    assert any("Happ User-Agent" in line for line in meta["warnings"])
+    assert "Подписка получена по зашифрованной ссылке." in meta["warnings"]
+    assert any("User-Agent мобильного клиента" in line for line in meta["warnings"])
     assert calls == [
         {},
         {"x-hwid": "hwid-demo", "User-Agent": "Xray"},
@@ -411,7 +411,7 @@ def test_fetch_subscription_body_for_xray_retries_direct_url_with_happ_user_agen
     assert _vless("Recovered Direct") in body
     assert headers["content-type"] == "text/plain; charset=utf-8"
     assert meta["fetch_mode"] == "happ_ua"
-    assert any("Happ User-Agent" in line for line in meta["warnings"])
+    assert any("User-Agent мобильного клиента" in line for line in meta["warnings"])
     assert calls == [{}, {"User-Agent": "Happ/3.18.3/Android/17771400994551771562"}]
 
 
@@ -560,7 +560,7 @@ def test_preview_subscription_rejects_html_install_landing_page(monkeypatch):
         ),
     )
 
-    with pytest.raises(ValueError, match="Happ/INCY"):
+    with pytest.raises(ValueError, match="установки приложения"):
         subs.preview_subscription({"url": "https://example.com/sub"})
 
 
@@ -753,9 +753,9 @@ def test_refresh_subscription_reports_html_install_landing_page(tmp_path: Path, 
     )
 
     assert result["ok"] is False
-    assert "Happ/INCY" in result["error"]
+    assert "установки приложения" in result["error"]
     state = subs.load_subscription_state(str(ui_state_dir))
-    assert "Happ/INCY" in state["subscriptions"][0]["last_error"]
+    assert "установки приложения" in state["subscriptions"][0]["last_error"]
 
 
 def test_refresh_subscription_does_not_restart_when_provider_reorders_nodes(tmp_path: Path, monkeypatch):

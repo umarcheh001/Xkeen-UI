@@ -199,7 +199,7 @@ def create_xray_subscriptions_blueprint(
                 422,
                 ok=False,
                 code="subscription_placeholder",
-                hint="Проверьте данные устройства/HWID и повторите импорт исходной Happ-ссылки.",
+                hint="Проверьте данные устройства/HWID и повторите импорт исходной ссылки.",
             )
         except Exception as exc:
             return exception_response(

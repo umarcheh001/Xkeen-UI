@@ -162,7 +162,7 @@ def build_mihomo_node_draft(
             if clean_mode == "proxy" and is_url:
                 raise ValueError("Для ссылки подписки выберите тип «Подписка» или «Авто».")
             if clean_mode == "subscription" and not is_url:
-                raise ValueError("В режиме подписки ожидается HTTP(S) или Happ-ссылка.")
+                raise ValueError("В режиме подписки ожидается HTTP(S)-адрес или зашифрованная ссылка.")
 
             if is_url and clean_mode != "proxy":
                 parsed_subscription = (
@@ -179,7 +179,7 @@ def build_mihomo_node_draft(
                     skipped_count += max(0, int(skipped or 0))
                     return
                 if entry.lower().startswith("happ://"):
-                    raise ValueError("Happ-ссылка не содержит распознаваемой Xray-подписки.")
+                    raise ValueError("Зашифрованная ссылка не содержит распознаваемой Xray-подписки.")
                 provider_name = _unique_provider_name(entry, config)
                 provider_target = provider_url_factory(entry) if provider_url_factory else entry
                 if isinstance(provider_target, tuple):

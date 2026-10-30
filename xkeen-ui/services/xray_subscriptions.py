@@ -1680,10 +1680,10 @@ def _subscription_happ_resolution_warnings(headers: Dict[str, str] | None) -> Li
         return []
     # The resolved address is what the Happ link hides, so it is never repeated in warnings.
     if via == "decryptor-remote":
-        return [f"Ссылка Happ расшифрована внешним сервисом из {happ_links.HAPP_DECRYPTOR_REMOTE_URL_ENV}."]
+        return [f"Ссылка подписки расшифрована внешним сервисом из {happ_links.HAPP_DECRYPTOR_REMOTE_URL_ENV}."]
     if via == "decryptor":
-        return ["Подписка получена по ссылке Happ."]
-    return ["Подписка получена через помощник Happ."]
+        return ["Подписка получена по зашифрованной ссылке."]
+    return ["Подписка получена через утилиту ссылок подписок."]
 
 
 _HWID_PLACEHOLDER_LINK_RE = re.compile(r"://[^\s#]*@?0\.0\.0\.0:1(?=$|[/?#])", re.IGNORECASE)
@@ -1872,12 +1872,12 @@ def _subscription_html_landing_message(body: str, headers: Dict[str, str] | None
     if decryptor_message:
         helper_hint = " " + decryptor_message
     elif helper_error == "happ_helper_not_configured":
-        helper_hint = f" Настройте {happ_links.HAPP_HELPER_CMD_ENV}, чтобы панель могла обработать Happ landing page."
+        helper_hint = f" Настройте {happ_links.HAPP_HELPER_CMD_ENV}, чтобы панель могла обработать страницу установки приложения."
     elif helper_error.startswith("happ_helper_"):
-        helper_hint = " Happ helper не смог расшифровать deep-link этой подписки."
+        helper_hint = " Утилита ссылок подписок не смогла расшифровать ссылку этой подписки."
     if _SUBSCRIPTION_CLIENT_INSTALL_RE.search(text):
         return (
-            "URL возвращает HTML-страницу установки Happ/INCY, а не прямую подписку "
+            "URL возвращает HTML-страницу установки приложения, а не прямую подписку "
             "Xray/Mihomo."
             + helper_hint
         )
@@ -1891,26 +1891,26 @@ def _happ_helper_error_message(reason: Any) -> str:
         return decryptor_message
     if code == "happ_helper_not_configured":
         return (
-            "Для Happ landing page нужен настроенный transport helper. "
+            "Для страницы установки приложения нужна настроенная утилита ссылок подписок. "
             f"Укажите {happ_links.HAPP_HELPER_CMD_ENV}."
         )
     if code == "happ_helper_timeout":
-        return "Happ helper не ответил вовремя."
+        return "Утилита ссылок подписок не ответила вовремя."
     if code == "happ_payload_decrypt_failed":
         return (
-            "Сервер Happ вернул зашифрованную подписку, но панель не смогла проверить её AES-GCM тег. "
+            "Сервер подписки вернул зашифрованную подписку, но панель не смогла проверить её AES-GCM тег. "
             "Проверьте, что URL содержит актуальный параметр key и что ответ не был изменён по пути."
         )
     if code.startswith("happ_helper_missing:"):
-        return "Не найден исполняемый файл Happ helper."
+        return "Не найден исполняемый файл утилиты ссылок подписок."
     if code.startswith("happ_helper_failed:"):
         detail = _compact_happ_error_detail(code, "happ_helper_failed:")
-        return "Happ helper завершился с ошибкой." + (f" Детали: {detail}" if detail else "")
+        return "Утилита ссылок подписок завершилась с ошибкой." + (f" Детали: {detail}" if detail else "")
     if code == "happ_helper_empty":
-        return "Happ helper не вернул расшифрованный результат."
+        return "Утилита ссылок подписок не вернула расшифрованный результат."
     if code == "happ_helper_unparsed_output":
-        return "Панель не смогла разобрать вывод Happ helper."
-    return "Не удалось обработать Happ deep-link."
+        return "Панель не смогла разобрать вывод утилиты ссылок подписок."
+    return "Не удалось обработать зашифрованную ссылку."
 
 
 def _compact_happ_error_detail(code: str, prefix: str) -> str:
@@ -1974,7 +1974,7 @@ def _subscription_request_variants() -> List[Tuple[str, Dict[str, str], str]]:
                 (
                     "happ_hwid",
                     {str(k): str(v) for k, v in happ_headers.items() if str(k or "").strip()},
-                    "Подписка была скачана с HWID-заголовками устройства и Happ User-Agent.",
+                    "Подписка была скачана с HWID-заголовками устройства и User-Agent мобильного клиента.",
                 )
             )
         else:
@@ -1982,7 +1982,7 @@ def _subscription_request_variants() -> List[Tuple[str, Dict[str, str], str]]:
                 (
                     "happ_ua",
                     {str(k): str(v) for k, v in happ_headers.items() if str(k or "").strip()},
-                    "Подписка была скачана с Happ User-Agent.",
+                    "Подписка была скачана с User-Agent мобильного клиента.",
                 )
             )
     return variants

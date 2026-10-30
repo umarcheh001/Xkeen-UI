@@ -5474,7 +5474,7 @@ let outboundsModuleApi = null;
             throw new Error('bad-protocol');
           }
         } catch (e) {
-          errors.url = 'Укажи корректный HTTP(S)-адрес или ссылку Happ (happ://crypt...).';
+          errors.url = 'Укажи корректный HTTP(S)-адрес или зашифрованную ссылку (happ://crypt...).';
         }
       }
 
@@ -5990,7 +5990,7 @@ let outboundsModuleApi = null;
                     <div class="xk-sub-wide xk-sub-url-row">
                       <label class="xk-sub-url-field">
                         <span class="xk-pool-fieldlabel">URL подписки <span class="xk-op-required" aria-hidden="true">*</span></span>
-                        <input id="outbounds-subscriptions-url" class="xray-log-filter" type="text" inputmode="url" required aria-required="true" aria-describedby="outbounds-subscriptions-url-note" placeholder="https://... (в том числе коннектор) или happ://crypt..." title="URL подписки" data-tooltip="HTTP(S)-адрес подписки, адрес мобильного коннектора или ссылка Happ (happ://crypt…). Поддерживаются share-ссылки, base64 и JSON-списки outbounds Xray; вложенную ссылку Happ панель расшифрует сама.">
+                        <input id="outbounds-subscriptions-url" class="xray-log-filter" type="text" inputmode="url" required aria-required="true" aria-describedby="outbounds-subscriptions-url-note" placeholder="https://... (в том числе коннектор) или happ://crypt..." title="URL подписки" data-tooltip="HTTP(S)-адрес подписки, адрес мобильного коннектора или зашифрованная ссылка (happ://crypt…). Поддерживаются share-ссылки, base64 и JSON-списки outbounds Xray; вложенную зашифрованную ссылку панель расшифрует сама.">
                         <span id="outbounds-subscriptions-url-note" class="xk-sub-field-note" hidden></span>
                       </label>
                       <div class="xk-sub-url-action">
@@ -6197,7 +6197,7 @@ let outboundsModuleApi = null;
 Платформа: iOS
 Версия OS: 17.6.1
 Модель: iPhone15,2</code></pre>
-                <p class="xk-sub-request-profile-help-note"><strong>Формат User-Agent зависит от провайдера.</strong> Примеры показывают один из возможных форматов Happ и не являются универсальными пресетами.</p>
+                <p class="xk-sub-request-profile-help-note"><strong>Формат User-Agent зависит от провайдера.</strong> Примеры показывают один из возможных форматов мобильного клиента и не являются универсальными пресетами.</p>
               </section>
               <section>
                 <h3>Как проверить</h3>

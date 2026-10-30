@@ -3732,7 +3732,7 @@ let mihomoImportModuleApi = null;
       for (const [lineIndex, line] of lines.entries()) {
         try {
           if (mode === 'subscription' && !isBackendSubscriptionLink(line)) {
-            throw new Error('Ожидается HTTPS‑подписка или Happ deep-link (happ://crypt...)');
+            throw new Error('Ожидается HTTPS‑подписка или зашифрованная ссылка (happ://crypt...)');
           }
           if (mode === 'proxy' && /^https?:\/\//i.test(line)) {
             throw new Error('Это похоже на подписку. Выбери «HTTPS subscription» или «Auto».');

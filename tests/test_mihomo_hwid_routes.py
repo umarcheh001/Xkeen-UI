@@ -747,7 +747,7 @@ def test_regular_provider_probe_rejects_html_install_page_from_adapter(monkeypat
     payload = response.get_json()
     assert payload["ok"] is False
     assert payload["error"]["code"] == "LANDING_PAGE_HTML"
-    assert "Happ/INCY" in payload["error"]["hint"]
+    assert "установки приложения" in payload["error"]["hint"]
 
 
 def test_regular_provider_probe_prefers_hwid_adapter_when_hwid_payload_has_more_nodes(monkeypatch, client):

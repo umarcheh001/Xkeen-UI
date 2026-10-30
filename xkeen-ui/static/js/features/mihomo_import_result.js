@@ -204,7 +204,7 @@ function subscriptionCard(kind, items, mode, errors) {
   const type = kind === 'xray-subscription'
     ? 'Xray-JSON → статические узлы'
     : (kind === 'hwid-subscription'
-      ? 'Happ / HWID → статические узлы'
+      ? 'Зашифрованная ссылка / HWID → статические узлы'
       : (kind === 'provider-static-subscription' ? 'Подписка → статические узлы' : 'Mihomo provider'));
   const destination = kind === 'provider-subscription' ? 'proxy-providers' : 'proxies';
   const notices = [];

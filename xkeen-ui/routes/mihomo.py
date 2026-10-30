@@ -266,15 +266,15 @@ def _subscription_landing_page_probe_error(result: Dict[str, Any], *, mode: str)
     ).lower()
     hint = (
         "Для импорта в XKeen нужен прямой URL, который отдает proxy-provider YAML, "
-        "список URI-узлов или Xray JSON. Этот адрес похож на лендинг для Happ/INCY."
+        "список URI-узлов или Xray JSON. Этот адрес похож на страницу установки приложения."
     )
     decryptor_message = happ_links.decryptor_failure_message(failure_text)
     if decryptor_message:
         hint += " " + decryptor_message
     elif "happ_helper_not_configured" in failure_text:
-        hint += " Настройте XKEEN_HAPP_HELPER_CMD, чтобы панель могла обработать Happ landing page."
+        hint += " Настройте XKEEN_HAPP_HELPER_CMD, чтобы панель могла обработать страницу установки приложения."
     elif "happ_helper_" in failure_text:
-        hint += " Happ helper не смог расшифровать deep-link этой подписки."
+        hint += " Утилита ссылок подписок не смогла расшифровать ссылку этой подписки."
     payload["error"] = {
         "code": "LANDING_PAGE_HTML",
         "message": "URL возвращает HTML-страницу установки, а не прямую подписку.",
@@ -909,7 +909,7 @@ def create_mihomo_blueprint(
                     str(exc),
                     status=422,
                     code="subscription_placeholder",
-                    hint="Проверьте данные устройства/HWID и повторите импорт исходной Happ-ссылки.",
+                    hint="Проверьте данные устройства/HWID и повторите импорт исходной ссылки.",
                 )
             except Exception as exc:
                 reason = _subscription_fetch_failure_reason(exc)
@@ -922,16 +922,16 @@ def create_mihomo_blueprint(
             provider_proxies = _mihomo_provider_payload_proxy_blocks(payload)
             if not summary.get("has_nodes") or not provider_proxies:
                 return _mihomo_error(
-                    "В расшифрованной Happ-подписке не найдено поддерживаемых узлов Mihomo.",
+                    "В расшифрованной подписке не найдено поддерживаемых узлов Mihomo.",
                     status=422,
                     code="no_supported_proxies",
                     hint="Если провайдер вернул заглушку, проверьте клиент/HWID. Иначе проверьте форматы узлов подписки.",
                 )
             profile = {
-                "profile_title": "Happ",
-                "profile_title_raw": "Happ",
+                "profile_title": "Подписка",
+                "profile_title_raw": "Подписка",
                 "profile_title_encoding": "plain",
-                "suggested_name": "Happ",
+                "suggested_name": "Подписка",
             }
             return jsonify(
                 {
@@ -3783,7 +3783,7 @@ def create_mihomo_blueprint(
                     str(e),
                     status=422,
                     code="subscription_placeholder",
-                    hint="Проверьте данные устройства/HWID и повторите импорт исходной Happ-ссылки.",
+                    hint="Проверьте данные устройства/HWID и повторите импорт исходной ссылки.",
                 )
             except RuntimeError as e:
                 reason = str(e or "")
@@ -3832,8 +3832,8 @@ def create_mihomo_blueprint(
             ) and happ_links.extract_happ_links(text):
                 helper_error = str((_headers or {}).get(happ_links.HAPP_ERROR_HEADER) or "").strip()
                 hint = (
-                    "Эта ссылка ведет на Happ-страницу установки, а не на прямой Xray JSON URL. "
-                    "Для такого формата панели нужен настроенный Happ helper-дешифратор."
+                    "Эта ссылка ведет на страницу установки приложения, а не на прямой Xray JSON URL. "
+                    "Для такого формата панели нужна настроенная утилита ссылок подписок."
                 )
                 decryptor_message = happ_links.decryptor_failure_message(helper_error)
                 if decryptor_message:
@@ -3841,9 +3841,9 @@ def create_mihomo_blueprint(
                 elif helper_error == "happ_helper_not_configured":
                     hint += f" Настройте {happ_links.HAPP_HELPER_CMD_ENV}."
                 elif helper_error.startswith("happ_helper_"):
-                    hint += " Текущий Happ helper не смог расшифровать deep-link."
+                    hint += " Утилита ссылок подписок не смогла расшифровать ссылку."
                 return _mihomo_error(
-                    "URL возвращает Happ landing page, а не прямую Xray-JSON подписку.",
+                    "URL возвращает страницу установки приложения, а не прямую Xray-JSON подписку.",
                     status=422,
                     code="happ_landing_page",
                     hint=hint,
@@ -3863,7 +3863,7 @@ def create_mihomo_blueprint(
                 ),
                 status=422,
                 code="subscription_placeholder",
-                hint="Проверьте данные устройства/HWID и повторите импорт исходной Happ-ссылки.",
+                hint="Проверьте данные устройства/HWID и повторите импорт исходной ссылки.",
             )
         except ValueError:
             return _mihomo_error(

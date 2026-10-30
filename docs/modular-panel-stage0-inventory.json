@@ -38,13 +38,13 @@
         "gevent-websocket (optional)"
       ],
       "removable": false,
-      "unit_count": 613,
-      "size_bytes": 8267169,
+      "unit_count": 614,
+      "size_bytes": 8268795,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
         "backend_service": 85,
-        "backend_test": 276,
+        "backend_test": 277,
         "configuration": 10,
         "frontend_bundle": 9,
         "frontend_entrypoint": 3,
@@ -88,7 +88,7 @@
       ],
       "removable": true,
       "unit_count": 147,
-      "size_bytes": 3960558,
+      "size_bytes": 3961331,
       "kind_counts": {
         "backend_route": 13,
         "backend_service": 20,
@@ -132,7 +132,7 @@
       ],
       "removable": true,
       "unit_count": 146,
-      "size_bytes": 3372480,
+      "size_bytes": 3372842,
       "kind_counts": {
         "app_runtime": 4,
         "backend_route": 2,
@@ -320,7 +320,7 @@
       ],
       "removable": true,
       "unit_count": 22,
-      "size_bytes": 318355,
+      "size_bytes": 318385,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 6,
@@ -359,7 +359,7 @@
       ],
       "removable": true,
       "unit_count": 67,
-      "size_bytes": 914547,
+      "size_bytes": 914740,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 17,
@@ -4633,7 +4633,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_frontend_runtime_hotfixes.py",
-      "size_bytes": 143477,
+      "size_bytes": 143524,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -6509,6 +6509,26 @@
       "kind": "backend_test",
       "path": "tests/test_monaco_github_themes.py",
       "size_bytes": 2206,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_neutral_link_naming.py",
+      "size_bytes": 1530,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -9465,7 +9485,7 @@
       "module_id": "core",
       "kind": "configuration",
       "path": "xkeen-ui/install.sh",
-      "size_bytes": 74786,
+      "size_bytes": 74804,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -14438,7 +14458,7 @@
       "module_id": "core",
       "kind": "template",
       "path": "xkeen-ui/templates/panel/modals/happ.html",
-      "size_bytes": 8668,
+      "size_bytes": 8699,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -14806,7 +14826,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/mihomo.py",
-      "size_bytes": 189441,
+      "size_bytes": 189653,
       "depends_on": [
         "core",
         "tool.editor",
@@ -15796,7 +15816,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_service",
       "path": "xkeen-ui/services/mihomo_node_import.py",
-      "size_bytes": 17173,
+      "size_bytes": 17228,
       "depends_on": [
         "core",
         "tool.editor"
@@ -17766,7 +17786,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/mihomo_import.js",
-      "size_bytes": 180410,
+      "size_bytes": 180435,
       "depends_on": [
         "core",
         "tool.editor",
@@ -17821,7 +17841,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/mihomo_import_result.js",
-      "size_bytes": 14652,
+      "size_bytes": 14687,
       "depends_on": [
         "core",
         "tool.editor"
@@ -18504,7 +18524,7 @@
       "module_id": "engine.mihomo",
       "kind": "template",
       "path": "xkeen-ui/templates/panel/modals/mihomo.html",
-      "size_bytes": 51851,
+      "size_bytes": 51886,
       "depends_on": [
         "core",
         "tool.editor"
@@ -19112,7 +19132,7 @@
       "module_id": "engine.xray",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/xray_subscriptions.py",
-      "size_bytes": 21886,
+      "size_bytes": 21881,
       "depends_on": [
         "core",
         "tool.editor"
@@ -19624,7 +19644,7 @@
       "module_id": "engine.xray",
       "kind": "backend_service",
       "path": "xkeen-ui/services/xray_subscriptions.py",
-      "size_bytes": 336924,
+      "size_bytes": 337408,
       "depends_on": [
         "core",
         "tool.editor",
@@ -20624,7 +20644,7 @@
       "module_id": "engine.xray",
       "kind": "backend_test",
       "path": "tests/test_xray_subscriptions.py",
-      "size_bytes": 256704,
+      "size_bytes": 256901,
       "depends_on": [
         "core",
         "tool.editor"
@@ -21001,7 +21021,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/outbounds.js",
-      "size_bytes": 474514,
+      "size_bytes": 474611,
       "depends_on": [
         "core",
         "tool.editor",
@@ -22760,7 +22780,7 @@
       "module_id": "integration.happ",
       "kind": "backend_test",
       "path": "tests/test_mihomo_hwid_routes.py",
-      "size_bytes": 32009,
+      "size_bytes": 32039,
       "depends_on": [
         "core"
       ],
@@ -23811,7 +23831,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/devtools/env.js",
-      "size_bytes": 80395,
+      "size_bytes": 80588,
       "depends_on": [
         "core"
       ],
@@ -35173,7 +35193,7 @@
         },
         "tool.advanced-diagnostics": {
           "unit_count": 67,
-          "size_bytes": 914547
+          "size_bytes": 914740
         }
       },
       "next_stage": "Этапы 4, 5 и 6."

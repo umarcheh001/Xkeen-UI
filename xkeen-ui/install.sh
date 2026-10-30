@@ -1716,9 +1716,9 @@ if profile_has_module engine.xray && [ "${GEODAT_OPTION:-1}" = "1" ]; then
   fi
 fi
 
-# --- Optional: декриптор ссылок Happ (happ://crypt…) ---
+# --- Optional: утилита ссылок подписок (happ://crypt…) ---
 # Запускается копия из $UI_DIR: движок и ключи ложатся в $UI_DIR/bin рядом с панелью.
-# Ключи Happ скачиваются только после явного «да» — без терминала шаг пропускается.
+# Ключи утилиты скачиваются только после явного «да» — без терминала шаг пропускается.
 if profile_has_module integration.happ && [ -f "$UI_DIR/scripts/install_happ_decryptor.py" ]; then
   "$PYTHON_BIN" "$UI_DIR/scripts/install_happ_decryptor.py" || true
 fi

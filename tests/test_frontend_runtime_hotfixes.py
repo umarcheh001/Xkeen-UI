@@ -59,13 +59,13 @@ def test_happ_deep_links_reach_backend_import_paths():
     assert r"/^happ:\/\/crypt[0-9]*\//i.test(text)" in mihomo_import
     assert r"raw.match(/^(happ:\/\/crypt[0-9]*\/)/i)" in mihomo_import
     assert "if (isBackendSubscriptionLink(line) && mode !== 'proxy')" in mihomo_import
-    assert "Ожидается HTTPS‑подписка или Happ deep-link" in mihomo_import
+    assert "Ожидается HTTPS‑подписка или зашифрованная ссылка" in mihomo_import
     assert "Xray-подписка: ${group.length} узлов из ${formatPreviewSourceUri(startUri)}" in mihomo_import
 
     assert "const isHappDeepLink = protocol === 'happ:'" in outbounds
     assert r"/^happ:\/\/crypt[0-9]*\//i.test(state.url)" in outbounds
     assert 'type="text" inputmode="url"' in outbounds
-    assert "HTTP(S)-адрес или ссылку Happ" in outbounds
+    assert "HTTP(S)-адрес или зашифрованную ссылку" in outbounds
     assert "адрес мобильного коннектора" in outbounds
 
 
