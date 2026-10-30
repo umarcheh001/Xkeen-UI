@@ -87,16 +87,15 @@ a, .xkm-a { color: var(--op-accent-hover, var(--op-accent)); cursor: pointer; te
 .xkm-conn-meta { display: flex; flex-wrap: wrap; gap: 6px 22px; padding: 6px 14px 14px; color: var(--op-muted); font-size: 12px; }
 .xkm-conn-meta b { color: var(--op-text); font-weight: 600; }
 
-/* many sensors: tiles three in a row, the ports keep room for "нет кабеля" */
+/* the same sections on every model: tile status lines fit one row, the ports keep room for "нет кабеля" */
 .hw-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1.25fr); }
-.hw-grid[data-temps="few"] { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1.2fr) minmax(0, 1.35fr); }
 .hw-grid[data-temps="none"] { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
 .hw-sec { display: grid; align-content: start; gap: 14px; min-width: 0; padding: 14px; }
 .hw-sec + .hw-sec { border-left: 1px solid var(--op-border); }
 .hw-sh { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
 .hw-sh b { color: var(--op-data-muted, var(--op-muted)); font-size: 12.5px; font-weight: 650; }
 .hw-sh span { color: var(--op-faint); font-size: 11.5px; }
-.hw-temps { display: grid; grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr)); gap: 14px; }
+.hw-temps { display: grid; grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr)); gap: 6px; }
 .hw-t { position: relative; display: grid; align-content: start; gap: 3px; min-width: 0; padding: 10px 12px; border: 1px solid var(--op-border); border-radius: var(--op-radius, 8px); background: var(--op-surface); }
 .hw-t:focus-visible { outline: 2px solid var(--op-accent-border); outline-offset: 1px; }
 .hw-t.z1 { border-color: var(--op-warning-border); }
@@ -134,8 +133,9 @@ a, .xkm-a { color: var(--op-accent-hover, var(--op-accent)); cursor: pointer; te
 .hw-alert b { color: var(--op-warning-strong); }
 .hw-alert.z2 { background: var(--op-danger-soft); }
 .hw-alert.z2 b { color: var(--op-danger); }
-.hw-res { display: grid; gap: 12px; }
-.hw-res.two { grid-template-columns: 1fr 1fr; gap: 14px; }
+/* RAM across the block, the three amount-of-total cells in a row under it */
+.hw-res { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 14px; }
+.hw-res > .hw-m { grid-column: 1 / -1; min-width: 0; }
 .hw-m .n, .hw-kv span { color: var(--op-muted); font-size: 12px; }
 .hw-stack { display: flex; height: 10px; margin: 6px 0; overflow: hidden; border-radius: 5px; background: var(--op-surface-3); }
 .hw-stack i { display: block; height: 100%; }
@@ -143,19 +143,19 @@ a, .xkm-a { color: var(--op-accent-hover, var(--op-accent)); cursor: pointer; te
 /* the cache is part of the free memory: hatched over the free track */
 .hw-stack .c, .hw-leg .c { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--op-accent) 45%, var(--op-surface-3)) 0 3px, var(--op-surface-3) 3px 6px); }
 .hw-stack .f, .hw-leg .f { background: var(--op-surface-3); }
-.hw-leg { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; }
-.hw-memnote { display: block; margin-top: 6px; color: var(--op-faint); font-size: 11.5px; line-height: 1.4; }
+.hw-leg { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 11.5px; }
+.hw-leg [title] { cursor: help; }
 .hw-leg i { display: inline-block; width: 9px; height: 9px; margin-right: 5px; border: 1px solid var(--op-border); border-radius: 2px; vertical-align: -1px; }
 .hw-kv { display: grid; align-content: start; gap: 3px; min-width: 0; }
 .hw-kv b { color: var(--op-text-strong); font-size: 15px; font-weight: 650; }
 .hw-kv b small { color: var(--op-muted); font-size: 12px; font-weight: 500; }
 .hw-kv em { font-size: 11.5px; font-style: normal; }
-.hw-kv em.o { color: var(--op-warning-strong); }
+.hw-kv em.o { color: var(--op-warning-strong); cursor: help; }
 .hw-meter { height: 5px; overflow: hidden; border-radius: 3px; background: var(--op-surface-3); }
 .hw-meter i { display: block; height: 100%; border-radius: 3px; background: var(--op-success); }
 .hw-meter.o i { background: var(--op-warning); }
 .hw-meter.r i { background: var(--op-danger); }
-.hw-ports { display: grid; grid-template-columns: repeat(var(--np, 5), minmax(0, 1fr)); gap: 14px; }
+.hw-ports { display: grid; grid-template-columns: repeat(var(--np, 5), minmax(0, 1fr)); gap: 6px; }
 .hw-port { display: grid; justify-items: center; align-content: start; gap: 3px; min-width: 0; padding: 10px 4px; border: 1px solid var(--op-border); border-radius: var(--op-radius, 8px); background: var(--op-surface); text-align: center; }
 .hw-port.wan { border-color: var(--op-accent-border); }
 .hw-port .jack { position: relative; width: 30px; height: 22px; border: 2px solid var(--op-border-strong); border-radius: 3px; background: var(--op-surface-3); }
@@ -174,7 +174,7 @@ a, .xkm-a { color: var(--op-accent-hover, var(--op-accent)); cursor: pointer; te
 .xkm-lazy:empty { display: none; }
 
 @media (max-width: 1100px) {
-  .hw-grid, .hw-grid[data-temps="few"], .hw-grid[data-temps="none"] { grid-template-columns: 1fr 1fr; }
+  .hw-grid, .hw-grid[data-temps="none"] { grid-template-columns: 1fr 1fr; }
   .hw-grid[data-temps="many"] > .hw-sec:first-child { grid-column: 1 / -1; border-bottom: 1px solid var(--op-border); }
   .hw-grid[data-temps="many"] > .hw-sec:nth-child(2) { border-left: 0; }
 }
@@ -189,12 +189,12 @@ a, .xkm-a { color: var(--op-accent-hover, var(--op-accent)); cursor: pointer; te
   .xkm-chain { flex-wrap: wrap; gap: 8px; }
   .xkm-link { display: none; }
   .xkm-node { flex: 1 1 calc(50% - 8px); }
-  .hw-grid, .hw-grid[data-temps="few"], .hw-grid[data-temps="none"] { grid-template-columns: 1fr; }
+  .hw-grid, .hw-grid[data-temps="none"] { grid-template-columns: 1fr; }
   .hw-sec + .hw-sec { border-top: 1px solid var(--op-border); border-left: 0; }
   .hw-grid[data-temps="many"] > .hw-sec:first-child { border-bottom: 0; }
   .hw-temps { grid-template-columns: 1fr 1fr; }
   .hw-ports { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .hw-res.two { grid-template-columns: 1fr; }
+  .hw-res { grid-template-columns: 1fr; }
   .hw-t[data-edge] .hw-pop { left: 0; right: auto; }
   .hw-t[data-pedge="end"] .hw-pop { left: auto; right: 0; }
 }

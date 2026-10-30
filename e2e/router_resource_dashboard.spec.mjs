@@ -448,6 +448,24 @@ test('window header has refresh, a menu with the JSON snapshot and no intervals 
   await expect(modal.locator('#xk-resource-export')).toBeHidden();
 });
 
+const TILE_GAP = 6;
+
+// RAM across the whole block, the swap, flash and connections cells in one row under it.
+async function expectMemoryOverCells(view) {
+  const items = view.locator('.hw-res > *');
+  await expect(items).toHaveCount(4);
+  const ram = await rect(items.nth(0));
+  const cells = [await rect(items.nth(1)), await rect(items.nth(2)), await rect(items.nth(3))];
+  for (const cell of cells) {
+    expect(Math.abs(cell.top - cells[0].top)).toBeLessThanOrEqual(1);
+    expect(cell.top).toBeGreaterThanOrEqual(ram.bottom);
+  }
+  expect(cells[0].right).toBeLessThanOrEqual(cells[1].left);
+  expect(cells[1].right).toBeLessThanOrEqual(cells[2].left);
+  expect(Math.abs(cells[0].left - ram.left)).toBeLessThanOrEqual(1);
+  expect(Math.abs(cells[2].right - ram.right)).toBeLessThanOrEqual(1);
+}
+
 test('hardware layout NC-1812', async ({ page }) => {
   const view = await openDashboard(page);
   const tiles = view.locator('.hw-t');
@@ -463,15 +481,15 @@ test('hardware layout NC-1812', async ({ page }) => {
   expect(new Set(tops.slice(3)).size).toBe(1);
   expect(tops[3]).toBeGreaterThan(tops[0]);
   expect(Math.abs(lefts[0] - lefts[3])).toBeLessThanOrEqual(1);
-  // tiles fill the section: gap between tiles equals the inset from the section edge
+  // tiles fill the section edge to edge with a tighter gap between them
   const section = await rect(view.locator('.hw-sec').first());
   const first = await rect(tiles.nth(0));
   const second = await rect(tiles.nth(1));
   const third = await rect(tiles.nth(2));
   const inset = first.left - section.left;
-  expect(Math.abs(second.left - first.right - inset)).toBeLessThanOrEqual(1);
+  expect(Math.abs(second.left - first.right - TILE_GAP)).toBeLessThanOrEqual(1);
   expect(Math.abs(section.right - third.right - inset)).toBeLessThanOrEqual(1);
-  // ports: five sockets, gap between them equals the inset from the section edge
+  // ports: five sockets, the same gap as between the temperature tiles
   const portsSection = view.locator('.hw-sec').nth(2);
   const ps = await rect(portsSection);
   const sockets = portsSection.locator('.hw-port');
@@ -479,14 +497,32 @@ test('hardware layout NC-1812', async ({ page }) => {
   const a = await rect(sockets.nth(0));
   const b = await rect(sockets.nth(1));
   const last = await rect(sockets.nth(4));
-  expect(Math.abs(b.left - a.right - (a.left - ps.left))).toBeLessThanOrEqual(1);
+  expect(Math.abs(b.left - a.right - TILE_GAP)).toBeLessThanOrEqual(1);
   expect(Math.abs(ps.right - last.right - (a.left - ps.left))).toBeLessThanOrEqual(1);
   await expect(sockets.nth(0)).toContainText('WAN');
   await expect(sockets.nth(0)).toContainText('1 Гбит/с');
   await expect(sockets.nth(2)).toContainText('нет кабеля');
-  await expect(view.locator('.hw-res')).not.toHaveClass(/two/);
+  await expectMemoryOverCells(view);
   // "свободно" counts the cache, as the router's own UI does: 290 + 245 MB
   await expect(view.locator('.hw-leg')).toHaveText(/программы 456\sМБ\s*свободно 535\sМБ\s*из них кэш 245\sМБ/);
+});
+
+test('hardware: the three sections are as wide on every model', async ({ page }) => {
+  const widths = async (kind) => {
+    const view = await openDashboard(page, { hw: hardware(kind) });
+    return view.locator('.hw-grid').evaluate(grid => [...grid.querySelectorAll('.hw-sec')].map(sec => Math.round(sec.getBoundingClientRect().width)));
+  };
+  const many = await widths('nc1812');
+  const few = await widths('kn1811');
+  expect(few).toEqual(many);
+});
+
+test('hardware: the wide window keeps sensor status lines on one row on both models', async ({ page }) => {
+  for (const kind of ['nc1812', 'kn1811']) {
+    const view = await openDashboard(page, { width: 1920, hw: hardware(kind) });
+    const lines = await view.locator('.hw-t .s').evaluateAll(all => all.map(e => e.getBoundingClientRect().height));
+    for (const height of lines) expect(height, kind).toBeLessThanOrEqual(20);
+  }
 });
 
 test('hardware: many sensors keep the temperature tiles compact, port labels are never cut', async ({ page }) => {
@@ -510,14 +546,7 @@ test('hardware layout KN-1811', async ({ page }) => {
   const tops = [];
   for (let i = 0; i < 3; i += 1) tops.push(Math.round((await rect(view.locator('.hw-t').nth(i))).top));
   expect(new Set(tops).size).toBe(1);
-  await expect(view.locator('.hw-res')).toHaveClass(/two/);
-  const items = view.locator('.hw-res > *');
-  await expect(items).toHaveCount(4);
-  const p0 = await rect(items.nth(0));
-  const p1 = await rect(items.nth(1));
-  const p2 = await rect(items.nth(2));
-  expect(Math.abs(p0.top - p1.top)).toBeLessThanOrEqual(1);
-  expect(p2.top).toBeGreaterThan(p0.top);
+  await expectMemoryOverCells(view);
   const bottoms = [];
   for (let i = 0; i < 3; i += 1) bottoms.push((await rect(view.locator('.hw-sec').nth(i))).bottom);
   for (const bottom of bottoms) expect(Math.abs(bottom - bottoms[0])).toBeLessThanOrEqual(2);
@@ -573,7 +602,7 @@ test('no sensors hides temperature section', async ({ page }) => {
   await expect(view.locator('.hw-t')).toHaveCount(0);
   await expect(view.locator('.hw-sec')).toHaveCount(2);
   await expect(view.locator('.hw-grid')).not.toContainText('Температура');
-  await expect(view.locator('.hw-res')).toHaveClass(/two/);
+  await expectMemoryOverCells(view);
   await expect(view.locator('.xkm-panel', { hasText: 'Состояние железа' })).toContainText('датчиков температуры у этой модели нет');
 });
 
@@ -740,9 +769,37 @@ test('memory block colours meters and the zram warning from server zones only', 
     conntrack: { available: true, count: 1048, max: 32768, percent: 3.2, available_entries: 31720, zone: 1 },
   });
   const view = await openDashboard(page, { hw });
-  await expect(view.locator('.hw-kv em.o')).toHaveText('роутеру не хватает памяти');
+  const warning = view.locator('.hw-kv em.o');
+  await expect(warning).toHaveText('мало памяти');
+  await expect(warning).toHaveAttribute('title', 'Роутеру не хватает памяти');
   await expect(view.locator('.hw-meter.r')).toHaveCount(1);
-  await expect(view.locator('.hw-meter.o')).toHaveCount(1);
+  // conntrack by its zone, the swap by the pressure flag
+  await expect(view.locator('.hw-meter.o')).toHaveCount(2);
+});
+
+test('memory block reads as amount of total, the swap included', async ({ page }) => {
+  const hw = hardware('kn1811', { zram: { size_bytes: 512 * MB, used_bytes: 0, pressure: false } });
+  const view = await openDashboard(page, { hw });
+  const cells = view.locator('.hw-res > .hw-kv');
+  await expect(cells.nth(0).locator('span')).toHaveText('Подкачка (zram)');
+  await expect(cells.nth(0).locator('b')).toHaveText(/^0\sМБ из 512\sМБ$/);
+  await expect(cells.nth(0).locator('.hw-meter')).toHaveCount(1);
+  await expect(cells.nth(0).locator('em')).toHaveCount(0);
+  await expect(cells.nth(2).locator('span')).toHaveText('Соединения');
+  await expect(view.locator('.hw-sec[data-section="memory"]')).not.toContainText('Кэш освобождается');
+  await expect(view.locator('.hw-leg span').nth(2)).toHaveAttribute('title', 'Кэш освобождается сам, когда память нужна программам.');
+});
+
+test('the swap meter shows the used share, a router without zram keeps the word', async ({ page }) => {
+  const used = await openDashboard(page, { hw: hardware('kn1811', { zram: { size_bytes: 512 * MB, used_bytes: 40 * MB, pressure: false } }) });
+  const cell = used.locator('.hw-res > .hw-kv').first();
+  await expect(cell.locator('b')).toHaveText(/^40\sМБ из 512\sМБ$/);
+  await expect(cell.locator('.hw-meter i')).toHaveAttribute('style', /width:\s*7\.8%/);
+  await expect(cell.locator('.hw-meter')).not.toHaveClass(/\b[or]\b/);
+  const off = await openDashboard(page, { hw: hardware('kn1811', { zram: null }) });
+  const none = off.locator('.hw-res > .hw-kv').first();
+  await expect(none.locator('b')).toHaveText('выключена');
+  await expect(none.locator('.hw-meter')).toHaveCount(0);
 });
 
 // ---- the big chart: ranges, metrics, network mirror, tariff, polling ----------------------

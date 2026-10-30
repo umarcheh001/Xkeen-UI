@@ -373,20 +373,21 @@ function temperatureSection(hw) {
   return `<div class="hw-sec" data-section="temperature"><div class="hw-sh"><b>Температура</b>${hint ? `<span>${esc(hint)}</span>` : ""}</div>${alert}<div class="hw-temps" style="--cols:${cols}">${groups.map((g, i) => tempTile(g, g.id === throttleHost ? hw.throttle : null, ` data-edge="${i % cols === cols - 1 && cols > 1 ? "end" : "start"}" data-pedge="${i % 2 ? "end" : "start"}"`, lone && g.kind === "chip")).join("")}</div></div>`;
 }
 
-function memorySection(hw, two) {
+function memorySection(hw) {
   const mem = hw.memory || {};
   const total = mem.total_bytes || 0;
   const share = (bytes) => (total ? Math.max(0, Math.min(100, ((bytes || 0) / total) * 100)).toFixed(1) : "0");
   const ram = total
-    ? `<div class="hw-m"><span class="n">Оперативная память · ${megabytes(total)}</span><div class="hw-stack"><i class="p" style="width:${share(mem.programs_bytes)}%"></i><i class="c" style="width:${share(mem.cache_bytes)}%"></i><i class="f" style="width:${share(mem.free_bytes)}%"></i></div><div class="hw-leg"><span><i class="p"></i>программы ${megabytes(mem.programs_bytes)}</span><span><i class="f"></i>свободно ${megabytes((mem.cache_bytes || 0) + (mem.free_bytes || 0))}</span><span><i class="c"></i>из них кэш ${megabytes(mem.cache_bytes)}</span></div><small class="hw-memnote">Кэш освобождается сам, когда память нужна программам.</small></div>`
+    ? `<div class="hw-m"><span class="n">Оперативная память · ${megabytes(total)}</span><div class="hw-stack"><i class="p" style="width:${share(mem.programs_bytes)}%"></i><i class="c" style="width:${share(mem.cache_bytes)}%"></i><i class="f" style="width:${share(mem.free_bytes)}%"></i></div><div class="hw-leg"><span><i class="p"></i>программы ${megabytes(mem.programs_bytes)}</span><span><i class="f"></i>свободно ${megabytes((mem.cache_bytes || 0) + (mem.free_bytes || 0))}</span><span title="Кэш освобождается сам, когда память нужна программам."><i class="c"></i>из них кэш ${megabytes(mem.cache_bytes)}</span></div></div>`
     : '<div class="hw-m"><span class="n">Оперативная память</span><b>нет данных</b></div>';
   const zram = hw.zram;
   let zramHtml;
-  if (!zram) zramHtml = '<div class="hw-kv"><span>Сжатая подкачка в памяти (zram)</span><b>выключена</b></div>';
+  if (!zram) zramHtml = '<div class="hw-kv"><span>Подкачка (zram)</span><b>выключена</b></div>';
   else {
     const used = zram.used_bytes || 0;
     const heavy = zram.pressure === true;
-    zramHtml = `<div class="hw-kv"><span>Сжатая подкачка в памяти (zram)</span><b>до ${bigBytes(zram.size_bytes)} <small>· ${used > 0 ? `используется ${megabytes(used)}` : "включена, не используется"}</small></b>${heavy ? '<em class="o">роутеру не хватает памяти</em>' : ""}</div>`;
+    const percent = zram.size_bytes ? Math.max(0, Math.min(100, (used / zram.size_bytes) * 100)) : 0;
+    zramHtml = `<div class="hw-kv"><span>Подкачка (zram)</span><b>${bigBytes(used)} <small>из ${bigBytes(zram.size_bytes)}</small></b><div class="hw-meter ${heavy ? "o" : ""}"><i style="width:${percent.toFixed(1)}%"></i></div>${heavy ? '<em class="o" title="Роутеру не хватает памяти">мало памяти</em>' : ""}</div>`;
   }
   const st = hw.storage;
   const flash = st
@@ -394,9 +395,9 @@ function memorySection(hw, two) {
     : '<div class="hw-kv"><span>Флешка Entware</span><b>нет данных</b></div>';
   const ct = hw.conntrack;
   const conn = ct?.available
-    ? `<div class="hw-kv"><span>Открытые соединения</span><b>${num(ct.count)} <small>из ${num(ct.max)}</small></b><div class="hw-meter ${METER_CLASS[ct.zone] || ""}"><i style="width:${Math.max(0, Math.min(100, ct.percent || 0))}%"></i></div></div>`
-    : '<div class="hw-kv"><span>Открытые соединения</span><b>нет данных</b></div>';
-  return `<div class="hw-sec" data-section="memory"><div class="hw-sh"><b>Память и хранилище</b></div><div class="hw-res${two ? " two" : ""}">${ram}${zramHtml}${flash}${conn}</div></div>`;
+    ? `<div class="hw-kv"><span>Соединения</span><b>${num(ct.count)} <small>из ${num(ct.max)}</small></b><div class="hw-meter ${METER_CLASS[ct.zone] || ""}"><i style="width:${Math.max(0, Math.min(100, ct.percent || 0))}%"></i></div></div>`
+    : '<div class="hw-kv"><span>Соединения</span><b>нет данных</b></div>';
+  return `<div class="hw-sec" data-section="memory"><div class="hw-sh"><b>Память и хранилище</b></div><div class="hw-res">${ram}${zramHtml}${flash}${conn}</div></div>`;
 }
 
 function portsSection(hw) {
@@ -418,7 +419,7 @@ function hardwareHtml(hw) {
   const model = hw.identity?.model || "";
   const hint = [model, count ? "" : "датчиков температуры у этой модели нет"].filter(Boolean).join(" · ");
   return `<div class="xkm-panel-h"><h3>Состояние железа</h3><span class="xkm-hint">${esc(hint)}</span></div>
-    <div class="hw-grid" data-temps="${mode}">${count ? temperatureSection(hw) : ""}${memorySection(hw, count <= 3)}${portsSection(hw)}</div>`;
+    <div class="hw-grid" data-temps="${mode}">${count ? temperatureSection(hw) : ""}${memorySection(hw)}${portsSection(hw)}</div>`;
 }
 
 // ---- mount ---------------------------------------------------------------
