@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 612,
-      "size_bytes": 8262171,
+      "size_bytes": 8262606,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -132,7 +132,7 @@
       ],
       "removable": true,
       "unit_count": 146,
-      "size_bytes": 3372315,
+      "size_bytes": 3372480,
       "kind_counts": {
         "app_runtime": 4,
         "backend_route": 2,
@@ -13081,7 +13081,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/smoke.spec.mjs",
-      "size_bytes": 22927,
+      "size_bytes": 23362,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -18377,7 +18377,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_test",
       "path": "e2e/mihomo_operator_header.spec.mjs",
-      "size_bytes": 15460,
+      "size_bytes": 15625,
       "depends_on": [
         "core",
         "tool.editor"

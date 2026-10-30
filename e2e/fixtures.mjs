@@ -148,6 +148,18 @@ export const test = base.extend({
     if (testInfo.status !== testInfo.expectedStatus) {
       const toasts = await page.locator('#toast-container .toast').allInnerTexts().catch(() => []);
       for (const text of toasts) note(`toast on screen: ${text.replace(/\s+/g, ' ').trim().slice(0, 300)}`);
+      // Rare failures leave no failed request behind; the page state is then the only lead.
+      const state = await page.evaluate(() => {
+        const view = document.querySelector('.view-section:not([hidden])[style*="block"]') || document.querySelector('.view-section.active');
+        return JSON.stringify({
+          modals: [...document.querySelectorAll('.modal:not(.hidden)')].map((node) => node.id),
+          focus: document.activeElement?.id || document.activeElement?.tagName,
+          view: view?.id,
+          viewScroll: view ? [view.scrollTop, view.scrollHeight, view.clientHeight] : null,
+          pageScroll: [window.scrollY, document.documentElement.scrollHeight, window.innerHeight],
+        });
+      }).catch(() => '');
+      if (state) note(`page state: ${state}`);
       if (trouble.length) {
         const report = trouble.join('\n');
         console.log(`[panel diagnostics] ${testInfo.title}\n${report}`);

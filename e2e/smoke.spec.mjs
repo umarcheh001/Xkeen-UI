@@ -280,7 +280,17 @@ test('mihomo bulk import presents a guided operator flow without legacy blue chr
 });
 
 
+// The server is shared by every file of a worker, and other specs leave proxies in its config.
+async function stubConfigWithoutProxies(page) {
+  await page.route('**/api/mihomo-config', (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    return route.fulfill({ json: { ok: true, content: 'proxies: []\n' } });
+  });
+}
+
+
 test('routing Mihomo proxy tools use a compact operator empty state', async ({ page }) => {
+  await stubConfigWithoutProxies(page);
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
   await expect(page.locator('#view-mihomo')).toBeVisible();
@@ -361,6 +371,7 @@ test('CM6 search panel stays below the Mihomo proxy tools modal', async ({ page 
 
 
 test('routing Mihomo proxy tools keep a scrollable resize-safe workbench and aligned action labels', async ({ page }) => {
+  await stubConfigWithoutProxies(page);
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
   await expect(page.locator('#view-mihomo')).toBeVisible();

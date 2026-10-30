@@ -132,6 +132,8 @@ test('Mihomo header preserves controls, service state and navigation in both the
       }));
       await page.screenshot({ path: `.tmp/mihomo-header-${theme}-${width}.png` });
       if (width === 1668) {
+        // A click above may have scrolled the page; the sticky header then stays while the content moves.
+        await page.evaluate(() => window.scrollTo(0, 0));
         const header = await page.locator('.panel-header-shell').boundingBox();
         const workspaceHead = await page.locator('.xk-mihomo-workspace-head').boundingBox();
         const toolbar = await page.locator('.xk-mihomo-groups-toolbar').boundingBox();
