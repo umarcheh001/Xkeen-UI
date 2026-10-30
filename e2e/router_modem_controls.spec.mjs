@@ -61,7 +61,7 @@ for (const width of [1440, 390]) {
 
     const { view, beeline, tele2 } = await openModems(page);
 
-    await expect(view.locator('.xkt-note')).toContainText('Перезапуск из панели отключён');
+    await expect(view.locator('#xkt-panel-modems .xkt-note')).toContainText('Перезапуск из панели отключён');
     await expect(view.getByRole('button', { name: 'Перезапустить модем' })).toHaveCount(0);
     await expect(beeline.locator('.xkt-probe-status')).toBeEmpty();
     await tele2.getByRole('button', { name: 'Проверить управление' }).click();

@@ -1469,7 +1469,7 @@ test('modems render carriers', async ({ page }) => {
   expect(html).not.toContain('356938035');
   // no restart button
   await expect(view.getByRole('button', { name: /Перезапустить/ })).toHaveCount(0);
-  await expect(view.locator('.xkt-note')).toContainText('Перезапуск из панели отключён');
+  await expect(view.locator('#xkt-panel-modems .xkt-note')).toContainText('Перезапуск из панели отключён');
 });
 
 test('aggregation label uses the Russian plural', () => {

@@ -190,6 +190,8 @@ test.describe('Operator Console I5 accessibility and responsive contract', () =>
     });
     await openPanel(page, 'dark');
     await freezeAnimations(page);
+    // Эталоны снимают саму вкладку, а закреплённая шапка при снимке элемента наезжает на её верх.
+    await page.evaluate(() => document.body.classList.remove('xk-header-sticky'));
     for (const view of TOP_LEVEL_VIEWS) {
       await selectPanelView(page, view);
       await expect(page.locator(`#view-${view}`)).toBeVisible();
