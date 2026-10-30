@@ -43,6 +43,44 @@ test('review precedes commit, warns about editor changes, and goes back without 
   expect(commits).toBe(0);
 });
 
+for (const viewport of [{ width: 1000, height: 820 }, { width: 640, height: 480 }]) test(`review dropdowns remain inside clipping ancestors at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+  await page.setViewportSize(viewport);
+  await setup(page, LINK.replace('?type=tcp#Review', '?type=tcp&security=reality&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&sid=1234#Review'));
+  await page.locator('#mihomo-import-review-btn').click();
+  await page.locator('#mihomo-import-fingerprint').selectOption('random');
+  for (const key of ['fingerprint', 'x25519']) {
+    await page.locator(`#mihomo-import-${key}-trigger`).click();
+    expect(await page.locator(`#mihomo-import-${key}-menu`).evaluate(menu => {
+      const item = menu.querySelector('[aria-selected="true"]').getBoundingClientRect();
+      const container = menu.getBoundingClientRect();
+      return item.top >= container.top && item.bottom <= container.bottom;
+    })).toBe(true);
+    const clipped = await page.locator(`#mihomo-import-${key}-menu`).evaluate(menu => {
+      const box = menu.getBoundingClientRect();
+      for (let p = menu.parentElement; p; p = p.parentElement) {
+        if (!/(hidden|auto|scroll|clip)/.test(getComputedStyle(p).overflowY)) continue;
+        const bounds = p.getBoundingClientRect();
+        if (box.top < bounds.top - 1 || box.bottom > bounds.bottom + 1) return true;
+      }
+      return box.top < 0 || box.bottom > innerHeight;
+    });
+    expect(clipped).toBe(false);
+    await page.locator(`#mihomo-import-${key}-menu [role="option"]`).last().focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator(`#mihomo-import-${key}-menu`)).toBeHidden();
+    await page.locator(`#mihomo-import-${key}-menu`).evaluate(menu => { menu.scrollTop = 0; });
+    await page.locator(`#mihomo-import-${key}-trigger`).click();
+    const selectedVisible = await page.locator(`#mihomo-import-${key}-menu`).evaluate(menu => {
+      const item = menu.querySelector('[aria-selected="true"]');
+      const box = item.getBoundingClientRect();
+      const container = menu.getBoundingClientRect();
+      return box.top >= container.top && box.bottom <= container.bottom;
+    });
+    expect(selectedVisible).toBe(true);
+    await page.keyboard.press('Escape');
+  }
+});
+
 test('review applies fingerprint and ML-KEM choices to imported Reality nodes', async ({ page }) => {
   let committed;
   await page.route('**/api/mihomo/import/commit', route => {

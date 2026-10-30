@@ -149,6 +149,55 @@ def tariffs(tmp_path, data: dict) -> None:
     patch_settings({"diagnostics": {"tariffs": data}}, str(tmp_path / "state"))
 
 
+def test_event_preferences_survive_restart_and_keep_live_condition(tmp_path):
+    router = FakeRouter()
+    collector = make(tmp_path, router)
+    first = collector._tracker.emit('port_slow', router.now, key='4')
+    collector.acknowledge_event(first['id'])
+    collector.exclude_event(first['id'])
+    collector.save('flash')
+    restored = make(tmp_path, router)
+    assert restored.events(0)[0]['acknowledged'] is True
+    restored._tracker.close('port_slow', router.now + 1, '4')
+    restored._tracker.emit('port_slow', router.now + 2, key='4')
+    assert len(restored.events(0)) == 1
+    assert any(e['type'] == 'port_slow' for e in restored.active_events())
+    restored.remove_event_exception('port_slow', '4')
+    restored._tracker.close('port_slow', router.now + 3, '4')
+    restored._tracker.emit('port_slow', router.now + 4, key='4')
+    assert len(restored.events(0)) == 2
+
+
+def test_suppressed_active_survives_restart_without_recording_recurrence(tmp_path):
+    router = FakeRouter()
+    collector = make(tmp_path, router)
+    event = collector._tracker.emit('overheat', router.now, key='temp:cpu')
+    collector.exclude_event(event['id'])
+    collector._tracker.close('overheat', router.now + 1, 'temp:cpu')
+    collector._tracker.emit('overheat', router.now + 2, key='temp:cpu')
+    collector.save('flash')
+    restored = make(tmp_path, router)
+    assert [e['id'] for e in restored.events(0)] == [event['id']]
+    assert [(e['type'], e['key']) for e in restored.active_events()] == [('overheat', 'temp:cpu')]
+    assert any(e['type'] == 'overheat' for e in restored.snapshot()['status']['problems'])
+    restored._tracker.close('overheat', router.now + 3, 'temp:cpu')
+    assert restored.active_events() == []
+
+
+def test_unavailable_event_preferences_can_be_reloaded(tmp_path):
+    state = tmp_path / 'state'
+    state.mkdir()
+    path = state / 'resource-event-preferences.json'
+    path.write_text('{bad', encoding='utf-8')
+    collector = make(tmp_path, FakeRouter())
+    assert not collector.event_preferences_available()
+    path.write_text('{"acknowledged":[],"exclusions":[{"type":"port_slow","key":"4"}]}', encoding='utf-8')
+    assert collector.event_preferences_available()
+    collector._tracker.emit('port_slow', T0, key='4')
+    assert collector.events(0) == []
+    assert len(collector.active_events()) == 1
+
+
 def test_network_card_has_40_individual_five_second_samples(tmp_path):
     r = FakeRouter()
     c = make(tmp_path, r)

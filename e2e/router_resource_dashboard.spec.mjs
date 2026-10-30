@@ -179,7 +179,7 @@ async function openDashboard(page, { sum = summary(), hw = hardware(), width = 1
     const body = key in tools ? tools[key] : fallback;
     route.fulfill(body ? { json: body } : { status: 503, json: { ok: false } });
   };
-  await page.route('**/api/system/events*', serve('events', { ok: true, events: [], active: [] }));
+  await page.route('**/api/system/events*', route => route.request().method() === 'GET' ? serve('events', { ok: true, events: [], active: [] })(route) : route.fallback());
   await page.route('**/api/system/router/clients*', serve('clients', { available: false, count: 0, items: [], top: [] }));
   await page.route('**/api/system/router/channel-check*', serve('channel', { available: false, state: 'unavailable', error: 'нет ping' }));
   await page.route('**/api/system/router/lte', serve('lte', { available: false, count: 0, items: [] }));
@@ -230,6 +230,36 @@ const rect = (locator) => locator.evaluate(el => {
 });
 
 const INITRC_TITLE = 'При перезагрузке роутера теряется часть истории';
+
+test('event actions acknowledge and exclude only problems, and exceptions can be restored', async ({ page }) => {
+  page.on('dialog', dialog => dialog.accept());
+  const now = Math.floor(Date.now() / 1000);
+  const problem = { id: 'port-1', type: 'port_slow', key: '4', at: now - 20, until: null, severity: 'warning', title: 'Порт 4 работает на 100 Мбит/с' };
+  const info = { id: 'boot-1', type: 'router_rebooted', key: '', at: now - 30, until: now - 30, severity: 'info', title: 'Роутер перезагружен' };
+  const data = { ok: true, events: [problem, info], active: [problem], exceptions: [] };
+  await page.route('**/api/system/events/action', async route => {
+    await new Promise(resolve => setTimeout(resolve, 400));
+    const body = route.request().postDataJSON();
+    if (body.action === 'acknowledge') problem.acknowledged = true;
+    if (body.action === 'exclude') { problem.acknowledged = true; data.exceptions.push({ type: 'port_slow', key: '4' }); }
+    if (body.action === 'restore') data.exceptions = [];
+    return route.fulfill({ json: { ok: true } });
+  });
+  const view = await openDashboard(page, { tools: { events: data } });
+  await view.locator('[data-tab="events"]').click();
+  const warning = view.locator('.xkt-ev[data-type="port_slow"]');
+  const informational = view.locator('.xkt-ev[data-type="router_rebooted"]');
+  await expect(informational.locator('button')).toHaveCount(0);
+  await warning.getByRole('button', { name: 'Прочитано' }).click();
+  await expect(warning.getByRole('button', { name: 'Не предупреждать повторно' })).toBeDisabled();
+  await expect(warning).toContainText('Прочитано');
+  await warning.getByRole('button', { name: 'Не предупреждать повторно' }).click();
+  await expect(view.getByRole('button', { name: /Исключения/ })).toBeVisible();
+  await view.getByRole('button', { name: /Исключения/ }).click();
+  await expect(view.locator('[data-role="exceptions"]')).toContainText('порт 4');
+  await view.getByRole('button', { name: 'Снова предупреждать' }).click();
+  await expect(view.locator('[data-role="exceptions"]')).not.toContainText('порт 4');
+});
 const INITRC_SUCCESS = 'Готово: сценарий остановки служб прописан';
 const initrcHint = view => view.locator('.xkm-initrc');
 async function reopenInitrcDashboard(page) {

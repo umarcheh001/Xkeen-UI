@@ -36,6 +36,7 @@ from . import hardware as hw
 from . import sensors
 from . import top_procs
 from .persist import load_history, save_history
+from .event_preferences import EventPreferences
 from .problems import REBOOT_UPTIME_S, ProblemTracker
 from .store import BACK_JUMP_RESET_S, RANGES, HistoryStore
 from .zones import USUAL_MIN_POINTS, chart_bands, hotter_than_usual, red_from, temp_bands, zone, zram_pressure
@@ -215,6 +216,11 @@ class Collector:
         for name in BASE_METRICS:
             self._store.add_metric(name)
         self._tracker = ProblemTracker(self._clock, events=events)
+        self._event_preferences = EventPreferences(ui_state_dir)
+        for event_type, key in self._event_preferences.exclusions:
+            self._tracker.suppress(event_type, key)
+        if restored is not None and not (persisted_uptime is not None and self._uptime_s is not None and self._uptime_s < persisted_uptime):
+            self._tracker.restore_transient_active(meta.get('suppressed_active'))
         self._failover_pending: tuple[str, float] | None = None
         self._boot_event: dict | None = None
         self._cold_clock = same_clock_boot or (
@@ -651,6 +657,7 @@ class Collector:
             meta: dict = {
                 "top": self._top.to_dict(),
                 "network_recent": [[at, dict(values)] for at, values in self._network_recent],
+                "suppressed_active": [e for e in self._tracker.transient_active() if e['at'] >= STAND_IN_BELOW],
             }
             if self._internet_seen_online and self._boot_id:
                 meta["internet_ready_boot_id"] = self._boot_id
@@ -928,7 +935,46 @@ class Collector:
 
     def events(self, since: float) -> list[dict]:
         with self._lock:
-            return [dict(e) for e in self._tracker.events(since)]
+            return [dict(e, acknowledged=self._event_preferences.is_acknowledged(e['id'])) for e in self._tracker.events(since)]
+
+    def event_exceptions(self) -> list[dict]:
+        with self._lock:
+            return [{'type': t, 'key': k} for t, k in sorted(self._event_preferences.exclusions)]
+
+    def event_preferences_available(self) -> bool:
+        with self._lock:
+            if self._event_preferences.read_error:
+                loaded = EventPreferences(self.ui_state_dir)
+                if not loaded.read_error:
+                    for event_type, key in self._event_preferences.exclusions:
+                        self._tracker.unsuppress(event_type, key)
+                    self._event_preferences = loaded
+                    for event_type, key in loaded.exclusions:
+                        self._tracker.suppress(event_type, key)
+            return not self._event_preferences.read_error
+
+    def _actionable_event(self, event_id: str) -> dict:
+        event = next((e for e in self._tracker.events(0) if e['id'] == event_id), None)
+        if not event or event.get('severity') not in ('problem', 'warning'):
+            raise ValueError('Событие не найдено')
+        return event
+
+    def acknowledge_event(self, event_id: str) -> None:
+        with self._lock:
+            self._actionable_event(event_id)
+            self._event_preferences.acknowledge(event_id)
+
+    def exclude_event(self, event_id: str) -> None:
+        with self._lock:
+            event = self._actionable_event(event_id)
+            event_type, key = event['type'], event.get('key') or ''
+            self._event_preferences.suppress_and_acknowledge(event_type, key, event_id)
+            self._tracker.suppress(event_type, key)
+
+    def remove_event_exception(self, event_type: str, key: str) -> None:
+        with self._lock:
+            self._event_preferences.unsuppress(event_type, key)
+            self._tracker.unsuppress(event_type, key)
 
     def active_events(self) -> list[dict]:
         with self._lock:

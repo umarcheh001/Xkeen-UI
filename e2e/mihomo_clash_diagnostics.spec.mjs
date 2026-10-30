@@ -199,8 +199,24 @@ async function openDiagnostics(page, viewport, analytics = trafficPayload()) {
 }
 
 
+test('traffic chart remembers selected lines after reload', async ({ page }) => {
+  await openDiagnostics(page, { width: 1440, height: 900 });
+  const button = key => page.locator(`[data-mihomo-traffic-series="${key}"]`);
+  await expect(button('download')).toHaveAttribute('aria-pressed', 'true');
+  await button('download').click();
+  await button('unmatched').click();
+  await page.reload();
+  await selectPanelView(page, 'mihomo');
+  await page.locator('#mihomo-clash-tab-diagnostics').click();
+  await expect(button('download')).toHaveAttribute('aria-pressed', 'false');
+  await expect(button('unmatched')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#mihomo-clash-traffic-chart path.download')).toHaveCount(0);
+  await expect(page.locator('#mihomo-clash-traffic-chart path.unmatched')).toHaveCount(1);
+  await expect(page.locator('#mihomo-clash-traffic-chart-stats [data-series="download"]')).toHaveCount(0);
+});
+
 for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
-  test(`diagnostics traces and stays within ${viewport.width}px viewport`, async ({ page }) => {
+  test(`diagnostics traces and stays within ${viewport.width}px viewport`, async ({ page }, testInfo) => {
     await openDiagnostics(page, viewport);
     await expect(page.locator('#mihomo-clash-panel-diagnostics')).toBeVisible();
     await expect(page.locator('#mihomo-clash-traffic-summary')).toContainText('Через Mihomo');
@@ -208,10 +224,10 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
     await expect(page.locator('#mihomo-clash-traffic-devices .xk-mihomo-traffic-device')).toHaveCount(2);
     await expect(page.locator('#mihomo-clash-traffic-devices')).toContainText('vpn-a');
     await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
-    await page.screenshot({ path: `C:/Users/umar/.codex/visualizations/2026/10/28/01a18204-0351-7571-be5b-5b23a52b066e/mihomo-traffic-compact-final-${viewport.width}.png` });
+    await page.screenshot({ path: testInfo.outputPath(`mihomo-traffic-compact-final-${viewport.width}.png`) });
     if (viewport.width < 521) {
       await page.locator('.xk-mihomo-traffic-quality').scrollIntoViewIfNeeded();
-      await page.screenshot({ path: 'C:/Users/umar/.codex/visualizations/2026/10/28/01a18204-0351-7571-be5b-5b23a52b066e/mihomo-traffic-compact-mobile-quality.png' });
+      await page.screenshot({ path: testInfo.outputPath('mihomo-traffic-compact-mobile-quality.png') });
     }
     if (viewport.width < 521) {
       const summaryColumns = await page.locator('#mihomo-clash-traffic-summary').evaluate((element) => (

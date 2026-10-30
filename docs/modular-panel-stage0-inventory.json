@@ -38,13 +38,13 @@
         "gevent-websocket (optional)"
       ],
       "removable": false,
-      "unit_count": 611,
-      "size_bytes": 8257269,
+      "unit_count": 612,
+      "size_bytes": 8261877,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
         "backend_service": 85,
-        "backend_test": 274,
+        "backend_test": 275,
         "configuration": 10,
         "frontend_bundle": 9,
         "frontend_entrypoint": 3,
@@ -132,7 +132,7 @@
       ],
       "removable": true,
       "unit_count": 146,
-      "size_bytes": 3366866,
+      "size_bytes": 3372315,
       "kind_counts": {
         "app_runtime": 4,
         "backend_route": 2,
@@ -358,11 +358,11 @@
         "ndmc (router diagnostics optional)"
       ],
       "removable": true,
-      "unit_count": 66,
-      "size_bytes": 893162,
+      "unit_count": 67,
+      "size_bytes": 914547,
       "kind_counts": {
         "backend_route": 1,
-        "backend_service": 16,
+        "backend_service": 17,
         "backend_test": 13,
         "frontend_entrypoint": 1,
         "frontend_feature": 28,
@@ -370,7 +370,7 @@
         "frontend_test": 3,
         "template": 2
       },
-      "route_count": 15,
+      "route_count": 16,
       "background_task_count": 0,
       "ui_surface_count": 2,
       "representative_paths": [
@@ -384,8 +384,8 @@
         "xkeen-ui/services/system_resources.py",
         "xkeen-ui/services/system_resources_history/__init__.py",
         "xkeen-ui/services/system_resources_history/collector.py",
-        "xkeen-ui/services/system_resources_history/hardware.py",
-        "xkeen-ui/services/system_resources_history/persist.py"
+        "xkeen-ui/services/system_resources_history/event_preferences.py",
+        "xkeen-ui/services/system_resources_history/hardware.py"
       ]
     }
   ],
@@ -7747,6 +7747,28 @@
     {
       "module_id": "core",
       "kind": "backend_test",
+      "path": "tests/test_resource_event_preferences.py",
+      "size_bytes": 2285,
+      "depends_on": [
+        "tool.advanced-diagnostics"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
       "path": "tests/test_response_gzip_on_the_fly.py",
       "size_bytes": 6870,
       "depends_on": [],
@@ -12959,7 +12981,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/router_resource_dashboard.spec.mjs",
-      "size_bytes": 98718,
+      "size_bytes": 101041,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -17365,7 +17387,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/mihomo_clash/diagnostics.js",
-      "size_bytes": 39641,
+      "size_bytes": 40353,
       "depends_on": [
         "core",
         "tool.editor"
@@ -17722,7 +17744,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/mihomo_import.js",
-      "size_bytes": 178962,
+      "size_bytes": 180410,
       "depends_on": [
         "core",
         "tool.editor",
@@ -18103,7 +18125,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_test",
       "path": "e2e/mihomo_clash_diagnostics.spec.mjs",
-      "size_bytes": 30361,
+      "size_bytes": 31190,
       "depends_on": [
         "core",
         "tool.editor"
@@ -18313,7 +18335,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_test",
       "path": "e2e/mihomo_import_review.spec.mjs",
-      "size_bytes": 20593,
+      "size_bytes": 22873,
       "depends_on": [
         "core",
         "tool.editor"
@@ -18460,7 +18482,7 @@
       "module_id": "engine.mihomo",
       "kind": "template",
       "path": "xkeen-ui/templates/panel/modals/mihomo.html",
-      "size_bytes": 51671,
+      "size_bytes": 51851,
       "depends_on": [
         "core",
         "tool.editor"
@@ -22910,7 +22932,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/system_resources.py",
-      "size_bytes": 14065,
+      "size_bytes": 15357,
       "depends_on": [
         "core"
       ],
@@ -22977,6 +22999,11 @@
           "method": "GET",
           "path": "/api/system/summary",
           "decorator": "bp.get"
+        },
+        {
+          "method": "POST",
+          "path": "/api/system/events/action",
+          "decorator": "bp.post"
         },
         {
           "method": "POST",
@@ -23292,7 +23319,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_service",
       "path": "xkeen-ui/services/system_resources_history/collector.py",
-      "size_bytes": 50152,
+      "size_bytes": 52617,
       "depends_on": [
         "core"
       ],
@@ -23301,6 +23328,25 @@
         "daemon_thread",
         "threading.Thread"
       ],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "ndmc (router diagnostics optional)"
+      ],
+      "environment_variables": [],
+      "removable": true
+    },
+    {
+      "module_id": "tool.advanced-diagnostics",
+      "kind": "backend_service",
+      "path": "xkeen-ui/services/system_resources_history/event_preferences.py",
+      "size_bytes": 3886,
+      "depends_on": [
+        "core"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
       "registers_routes": false,
       "routes": [],
       "frontend_bundle": [],
@@ -23352,7 +23398,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_service",
       "path": "xkeen-ui/services/system_resources_history/problems.py",
-      "size_bytes": 10488,
+      "size_bytes": 12232,
       "depends_on": [
         "core"
       ],
@@ -23523,7 +23569,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_system_resources_api.py",
-      "size_bytes": 22685,
+      "size_bytes": 23793,
       "depends_on": [
         "core"
       ],
@@ -23542,7 +23588,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_system_resources_collector.py",
-      "size_bytes": 52987,
+      "size_bytes": 55327,
       "depends_on": [
         "core"
       ],
@@ -23601,7 +23647,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_system_resources_problems.py",
-      "size_bytes": 12269,
+      "size_bytes": 14011,
       "depends_on": [
         "core"
       ],
@@ -24240,7 +24286,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor/tool_events.js",
-      "size_bytes": 5811,
+      "size_bytes": 12171,
       "depends_on": [
         "core"
       ],
@@ -24396,7 +24442,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor/tools_css.js",
-      "size_bytes": 16421,
+      "size_bytes": 16869,
       "depends_on": [
         "core"
       ],
@@ -29058,7 +29104,7 @@
     }
   ],
   "routes": {
-    "endpoint_count": 347,
+    "endpoint_count": 348,
     "files_with_routes": 51,
     "endpoint_files": [
       {
@@ -30681,6 +30727,11 @@
             "method": "GET",
             "path": "/api/system/summary",
             "decorator": "bp.get"
+          },
+          {
+            "method": "POST",
+            "path": "/api/system/events/action",
+            "decorator": "bp.post"
           },
           {
             "method": "POST",
@@ -33821,7 +33872,7 @@
       {
         "from": "core",
         "to": "tool.advanced-diagnostics",
-        "unit_count": 13,
+        "unit_count": 14,
         "examples": [
           "xkeen-ui/run_server.py",
           "xkeen-ui/routes/__init__.py",
@@ -34073,7 +34124,7 @@
       {
         "from": "tool.advanced-diagnostics",
         "to": "core",
-        "unit_count": 66,
+        "unit_count": 67,
         "examples": [
           "xkeen-ui/routes/system_resources.py",
           "xkeen-ui/services/devtools/__init__.py",
@@ -34509,7 +34560,7 @@
       {
         "from": "tool.advanced-diagnostics",
         "to": "core",
-        "unit_count": 50,
+        "unit_count": 51,
         "examples": [
           "xkeen-ui/routes/system_resources.py",
           "xkeen-ui/services/devtools/__init__.py",
@@ -34816,7 +34867,7 @@
       {
         "from": "core",
         "to": "tool.advanced-diagnostics",
-        "unit_count": 13,
+        "unit_count": 14,
         "examples": [
           "xkeen-ui/run_server.py",
           "xkeen-ui/routes/__init__.py",
@@ -35099,8 +35150,8 @@
           "size_bytes": 1008333
         },
         "tool.advanced-diagnostics": {
-          "unit_count": 66,
-          "size_bytes": 893162
+          "unit_count": 67,
+          "size_bytes": 914547
         }
       },
       "next_stage": "Этапы 4, 5 и 6."

@@ -17,6 +17,7 @@ let trafficTimer = 0;
 let trafficRequest = null;
 let trafficFilters = { device: '', route: '' };
 const trafficVisibleSeries = new Set(['mihomo', 'outside', 'download', 'upload']);
+const TRAFFIC_SERIES_STORAGE_KEY = 'xkeen.mihomo.traffic.visible-series.v1';
 const TRAFFIC_SERIES = Object.freeze({
   mihomo: { field: 'mihomo_bytes', label: 'Через Mihomo', tone: 'mihomo' },
   outside: { field: 'outside_bytes', label: 'Оценочный остаток', tone: 'outside' },
@@ -26,6 +27,23 @@ const TRAFFIC_SERIES = Object.freeze({
 });
 
 function byId(id) { return document.getElementById(id); }
+
+function restoreTrafficSeries() {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(TRAFFIC_SERIES_STORAGE_KEY));
+    if (!Array.isArray(saved)) return;
+    const keys = saved.filter(key => typeof key === 'string' && Object.hasOwn(TRAFFIC_SERIES, key));
+    if (!keys.length) return;
+    trafficVisibleSeries.clear();
+    keys.forEach(key => trafficVisibleSeries.add(key));
+  } catch (error) {}
+}
+
+function saveTrafficSeries() {
+  try {
+    window.localStorage.setItem(TRAFFIC_SERIES_STORAGE_KEY, JSON.stringify([...trafficVisibleSeries]));
+  } catch (error) {}
+}
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -776,6 +794,7 @@ export function initMihomoClashDiagnostics() {
   root = byId('mihomo-clash-diagnostics');
   workspaceRoot = byId('view-mihomo') || root;
   if (!root) return false;
+  restoreTrafficSeries();
   byId('mihomo-clash-diagnostics-tabs')?.addEventListener('click', (event) => {
     const view = event.target.closest('[data-mihomo-diagnostics-view]')?.dataset.mihomoDiagnosticsView;
     if (view) switchView(view);
@@ -788,6 +807,7 @@ export function initMihomoClashDiagnostics() {
       if (key) {
         if (trafficVisibleSeries.has(key)) trafficVisibleSeries.delete(key);
         else trafficVisibleSeries.add(key);
+        saveTrafficSeries();
         renderTrafficChart(trafficPayload);
       }
     }

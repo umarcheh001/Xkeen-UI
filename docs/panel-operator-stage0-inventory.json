@@ -2242,19 +2242,19 @@
               "accessible_name": false
             },
             {
-              "control": "control@3546",
+              "control": "control@3570",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@3774",
+              "control": "control@3798",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@3997",
+              "control": "control@4021",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
@@ -2294,7 +2294,7 @@
               "accessible_name": false
             },
             {
-              "control": "control@14575",
+              "control": "control@14599",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
@@ -2312,7 +2312,7 @@
               "accessible_name": false
             },
             {
-              "control": "control@16200",
+              "control": "control@16224",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
@@ -11204,17 +11204,17 @@
       {
         "locator": "#mihomo-import-insert-btn",
         "name": "data-tooltip",
-        "value": "Подготовить candidate в главном редакторе без сохранения файла."
+        "value": "Открыть подготовленный конфиг в главном редакторе без сохранения файла."
       },
       {
         "locator": "#mihomo-import-save-btn",
         "name": "data-tooltip",
-        "value": "Проверить candidate, создать backup и сохранить без перезапуска."
+        "value": "Проверить подготовленный конфиг, создать резервную копию и сохранить без перезапуска."
       },
       {
         "locator": "#mihomo-import-apply-btn",
         "name": "data-tooltip",
-        "value": "Проверить, сохранить и применить candidate через restart job."
+        "value": "Проверить и сохранить подготовленный конфиг, затем перезапустить ядро."
       },
       {
         "locator": "#mihomo-proxy-tools-modal",

@@ -448,6 +448,21 @@ def test_resources_carry_the_zones_for_the_header_colours(tmp_path, monkeypatch,
 
 
 # -- the tariff reaches the running collector at once -------------------------
+
+def test_event_actions_validate_and_persist(tmp_path, monkeypatch):
+    router = FakeRouter()
+    collector = make(tmp_path, router)
+    event = collector._tracker.emit('port_slow', router.now, key='4')
+    info = collector._tracker.emit('router_rebooted', router.now)
+    client = _app_with(collector, monkeypatch).test_client()
+    assert client.post('/api/system/events/action', json={'action': 'acknowledge', 'id': info['id']}).status_code == 400
+    assert client.post('/api/system/events/action', json={'action': 'acknowledge', 'id': event['id']}).status_code == 200
+    assert client.post('/api/system/events/action', json={'action': 'exclude', 'id': event['id']}).status_code == 200
+    data = client.get('/api/system/events').get_json()
+    assert next(e for e in data['events'] if e['id'] == event['id'])['acknowledged']
+    assert data['exceptions'] == [{'type': 'port_slow', 'key': '4'}]
+    assert client.post('/api/system/events/action', json={'action': 'restore', 'type': 'port_slow', 'key': '4'}).status_code == 200
+    assert client.get('/api/system/events').get_json()['exceptions'] == []
 class _Spy:
     def __init__(self):
         self.calls = 0

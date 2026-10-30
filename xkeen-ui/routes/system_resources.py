@@ -242,9 +242,34 @@ def create_system_resources_blueprint(*, include_summary: bool = True) -> Bluepr
             since = 0.0
         if not math.isfinite(since):
             since = 0.0
+        available = collector.event_preferences_available()
         return _no_store_json(
-            {"ok": True, "events": collector.events(since), "active": collector.active_events()}
+            {"ok": True, "events": collector.events(since), "active": collector.active_events(), "exceptions": collector.event_exceptions(), "preferences_available": available}
         )
+
+    @bp.post("/api/system/events/action")
+    def api_system_events_action():
+        collector = get_collector()
+        if collector is None:
+            return _history_unavailable()
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return _no_store_json({"ok": False, "error": "Некорректный запрос"}, 400)
+        try:
+            action = data.get('action')
+            if action == 'acknowledge':
+                collector.acknowledge_event(data.get('id'))
+            elif action == 'exclude':
+                collector.exclude_event(data.get('id'))
+            elif action == 'restore':
+                collector.remove_event_exception(data.get('type'), data.get('key'))
+            else:
+                raise ValueError('Неизвестное действие')
+        except ValueError as exc:
+            return _no_store_json({"ok": False, "error": str(exc)}, 400)
+        except OSError:
+            return _no_store_json({"ok": False, "error": "Не удалось сохранить настройки событий"}, 500)
+        return _no_store_json({"ok": True})
 
     @bp.get("/api/system/summary")
     def api_system_summary():

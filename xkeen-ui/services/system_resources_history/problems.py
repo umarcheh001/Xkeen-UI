@@ -63,6 +63,7 @@ class ProblemTracker:
         self._clock = clock
         self._events: list[dict] = []
         self._open: dict[str, dict] = {}  # "type|key" -> open event
+        self._suppressed: set[tuple[str, str]] = set()
         self._red_since: dict[str, float] = {}
         self._clear_since: dict[str, float] = {}
         self._last_seen: dict[str, float] = {}  # slot -> last time its metric reported
@@ -80,6 +81,12 @@ class ProblemTracker:
                 self._open[f"{ev['type']}|{ev.get('key') or ''}"] = ev
 
     # -- events -----------------------------------------------------------
+    def suppress(self, event_type: str, key: str) -> None:
+        self._suppressed.add((event_type, key))
+
+    def unsuppress(self, event_type: str, key: str) -> None:
+        self._suppressed.discard((event_type, key))
+
     def _prune(self, now: float) -> None:
         limit = now - RETENTION_S
         kept = [e for e in self._events if e.get("until") is None or e["until"] >= limit]
@@ -95,7 +102,8 @@ class ProblemTracker:
             kept = [e for e in kept if e["id"] not in dropped]
         if len(kept) != len(self._events):
             alive = {e["id"] for e in kept}
-            self._open = {k: e for k, e in self._open.items() if e["id"] in alive}
+            previous = {e["id"] for e in self._events}
+            self._open = {k: e for k, e in self._open.items() if e["id"] in alive or e["id"] not in previous}
             self._events = kept
 
     def _open_event(self, etype: str, at: float, detail: str, title: str | None, key: str | None) -> dict:
@@ -122,7 +130,9 @@ class ProblemTracker:
             "detail": detail,
             "key": key or "",
         }
-        self._events.append(ev)
+        suppressed = (etype, key or "") in self._suppressed or (etype, "") in self._suppressed
+        if not suppressed:
+            self._events.append(ev)
         if etype not in _POINT:
             self._open[slot] = ev
         self._prune(at)
@@ -181,7 +191,27 @@ class ProblemTracker:
         return changed
 
     def active(self) -> list[dict]:
-        return [e for e in self._events if e.get("until") is None]
+        return list(self._open.values())
+
+    def transient_active(self) -> list[dict]:
+        recorded = {id(event) for event in self._events}
+        return [dict(event) for event in self._open.values() if id(event) not in recorded]
+
+    def restore_transient_active(self, records: object) -> None:
+        if not isinstance(records, list):
+            return
+        for event in records:
+            if not isinstance(event, dict):
+                continue
+            etype, key, at = event.get('type'), event.get('key'), event.get('at')
+            if (not isinstance(etype, str) or etype not in _TYPES or etype in _POINT
+                    or not isinstance(key, str) or not _is_number(at)
+                    or not isinstance(event.get('id'), str) or event.get('until') is not None
+                    or ((etype, key) not in self._suppressed and (etype, '') not in self._suppressed)):
+                continue
+            slot = f'{etype}|{key}'
+            if slot not in self._open:
+                self._open[slot] = dict(event, severity=_TYPES[etype][0], key=key, until=None)
 
     def events(self, since: float) -> list[dict]:
         return [e for e in self._events if e["at"] >= since or e.get("until") is None]
@@ -199,7 +229,8 @@ class ProblemTracker:
 
     def rebase_time(self, seconds: float) -> None:
         """Correct a new boot's calendar times without restarting its stopwatches."""
-        for event in self._events:
+        recorded = {id(event) for event in self._events}
+        for event in self._events + [e for e in self._open.values() if id(e) not in recorded]:
             event["at"] += seconds
             if event.get("until") is not None:
                 event["until"] += seconds
@@ -209,7 +240,8 @@ class ProblemTracker:
 
     def shift_stand_in(self, below: float, by: float) -> None:
         """Times under ``below`` were taken on a stand-in clock (uptime): move them by ``by``."""
-        for ev in self._events:
+        recorded = {id(event) for event in self._events}
+        for ev in self._events + [e for e in self._open.values() if id(e) not in recorded]:
             if ev["at"] < below:
                 ev["at"] += by
             if ev.get("until") is not None and ev["until"] < below:

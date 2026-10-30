@@ -63,6 +63,51 @@ def _tr():
     return ProblemTracker(lambda: T0)
 
 
+def test_suppressed_recurrence_keeps_live_problem_but_does_not_add_history():
+    tracker = _tr()
+    first = tracker.emit("port_slow", T0, key="4")
+    tracker.suppress("port_slow", "4")
+    tracker.close("port_slow", T0 + 10, "4")
+    tracker.emit("port_slow", T0 + 20, key="4")
+    assert [event["id"] for event in tracker.events(0)] == [first["id"]]
+    assert [(event["type"], event["key"]) for event in tracker.active()] == [("port_slow", "4")]
+    tracker.emit("port_slow", T0 + 20, key="3")
+    assert len(tracker.events(0)) == 2
+    tracker.unsuppress("port_slow", "4")
+    tracker.close("port_slow", T0 + 30, "4")
+    tracker.emit("port_slow", T0 + 40, key="4")
+    assert len(tracker.events(0)) == 3
+
+
+def test_suppressed_active_survives_history_pruning():
+    tracker = _tr()
+    tracker.suppress("port_slow", "4")
+    tracker.emit("port_slow", T0, key="4")
+    tracker.emit("router_rebooted", T0)
+    tracker.emit("router_rebooted", T0 + RETENTION_S + 10)
+    assert any(event["type"] == "port_slow" for event in tracker.active())
+
+
+def test_exception_without_source_covers_all_sources_of_type():
+    tracker = _tr()
+    tracker.suppress("overheat", "")
+    tracker.emit("overheat", T0, key="temp:cpu")
+    tracker.emit("overheat", T0, key="temp:wifi")
+    tracker.emit("port_slow", T0, key="4")
+    assert [e['type'] for e in tracker.events(0)] == ['port_slow']
+    assert len(tracker.active()) == 3
+
+
+def test_suppressed_active_is_rebased_when_clock_changes():
+    tracker = _tr()
+    tracker.suppress('port_slow', '4')
+    tracker.emit('port_slow', 10, key='4')
+    tracker.shift_stand_in(100, T0)
+    assert tracker.active()[0]['at'] == T0 + 10
+    tracker.rebase_time(100)
+    assert tracker.active()[0]['at'] == T0 + 110
+
+
 def _run(tr, seconds, zones, start=T0, step=5, details=None):
     out = []
     t = start

@@ -649,7 +649,32 @@ let mihomoImportModuleApi = null;
     closeMihomoImportCustomSelects(open ? wrapper : null);
     menu.hidden = !open;
     trigger.setAttribute('aria-expanded', String(open));
-    if (open) menu.querySelector('[aria-selected="true"]')?.focus();
+    if (open) {
+      const triggerBox = trigger.getBoundingClientRect();
+      let top = 0;
+      let bottom = window.innerHeight;
+      for (let parent = wrapper.parentElement; parent; parent = parent.parentElement) {
+        if (!/(hidden|auto|scroll|clip)/.test(getComputedStyle(parent).overflowY)) continue;
+        const box = parent.getBoundingClientRect();
+        top = Math.max(top, box.top + parent.clientTop);
+        bottom = Math.min(bottom, box.top + parent.clientTop + parent.clientHeight);
+      }
+      const below = Math.max(0, bottom - triggerBox.bottom - 6);
+      const above = Math.max(0, triggerBox.top - top - 6);
+      const desired = Math.min(260, window.innerHeight * 0.36);
+      const upwards = below < Math.min(desired, menu.scrollHeight) && above > below;
+      menu.style.top = upwards ? 'auto' : 'calc(100% + 5px)';
+      menu.style.bottom = upwards ? 'calc(100% + 5px)' : 'auto';
+      menu.style.maxHeight = `${Math.min(desired, upwards ? above : below)}px`;
+      const selected = menu.querySelector('[aria-selected="true"]');
+      selected?.focus({ preventScroll: true });
+      if (selected) {
+        const itemBox = selected.getBoundingClientRect();
+        const menuBox = menu.getBoundingClientRect();
+        if (itemBox.bottom > menuBox.bottom) menu.scrollTop += itemBox.bottom - menuBox.bottom + 5;
+        else if (itemBox.top < menuBox.top) menu.scrollTop -= menuBox.top - itemBox.top + 5;
+      }
+    }
   }
 
   function initMihomoImportCustomSelects(modal) {
@@ -2957,8 +2982,8 @@ let mihomoImportModuleApi = null;
     host.classList.remove('hidden');
     const flowCaption = $('mihomo-import-flow-result-caption');
     if (flowCaption) flowCaption.textContent = candidate.outputs.length === 1
-      ? '1 узел распознан и добавлен в candidate. Файл на роутере пока не меняется.'
-      : `${candidate.outputs.length} ${pluralRu(candidate.outputs.length, ['узел', 'узла', 'узлов'])} распознано и добавлено в candidate. Файл на роутере пока не меняется.`;
+      ? '1 узел распознан и добавлен в подготовленный конфиг. Файл на роутере пока не меняется.'
+      : `${candidate.outputs.length} ${pluralRu(candidate.outputs.length, ['узел', 'узла', 'узлов'])} распознано и добавлено в подготовленный конфиг. Файл на роутере пока не меняется.`;
     const warning = $('mihomo-import-review-warning');
     if (warning) {
       warning.textContent = candidate.editorDirty ? 'В редакторе есть несохранённые правки. При сохранении они войдут в config.yaml вместе с новым узлом. Перед записью проверим весь конфиг и создадим резервную копию.' : '';

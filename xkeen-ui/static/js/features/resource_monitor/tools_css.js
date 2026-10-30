@@ -163,6 +163,10 @@ export const TOOLS_CSS = `
 .xkt-ev-m { display: flex; flex-direction: column; min-width: 0; }
 .xkt-ev-m b { color: var(--op-text-strong); font-weight: 650; }
 .xkt-ev-m small { color: var(--op-muted); font-size: 12px; }
+.xkt-event-actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-top:8px; }
+.xkt-exceptions { margin:0 14px 14px; padding:14px; border:1px solid var(--op-border); border-radius:8px; background:var(--op-surface-2); }
+.xkt-exceptions p { color:var(--op-muted); font-size:12px; }
+.xkt-exception { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 0; border-top:1px solid var(--op-border); }
 .xkt-ev-l { color: var(--op-muted); font-size: 12px; white-space: nowrap; }
 
 @media (max-width: 1100px) {

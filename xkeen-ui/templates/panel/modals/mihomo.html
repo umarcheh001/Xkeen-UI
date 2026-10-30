@@ -194,9 +194,9 @@ rule-set:github@domain
                 <div class="xk-mi-flow-content">
                   <div class="xk-mi-flow-heading">
                     <h3>Результат подготовлен</h3>
-                    <span>candidate</span>
+                    <span>подготовленный конфиг</span>
                   </div>
-                  <p id="mihomo-import-flow-result-caption" class="modal-hint xk-mi-flow-caption">Результат распознан и добавлен в candidate. Файл на роутере пока не меняется.</p>
+                  <p id="mihomo-import-flow-result-caption" class="modal-hint xk-mi-flow-caption">Результат распознан и добавлен в подготовленный конфиг. Файл на роутере пока не меняется.</p>
                 </div>
               </div>
               <div class="xk-mi-flow-step xk-mi-flow-step--placement">
@@ -421,9 +421,9 @@ https://..."></textarea>
             <button type="button" id="mihomo-import-review-btn" class="btn-primary btn-compact hidden">{{ op_icon('check') }}<span class="xk-action-label">Проверить изменение</span></button>
             <button type="button" id="mihomo-import-parse-btn" class="btn-primary btn-compact xk-mi-primary-action" data-tooltip="Распознать источник без сохранения и перезапуска.">{{ op_icon('format') }}<span class="xk-action-label">Распознать</span></button>
             <button type="button" id="mihomo-import-parse-static-btn" class="btn-secondary btn-compact xk-mi-primary-action" data-tooltip="Использовать поддерживаемый static flow для подписки.">{{ op_icon('download') }}<span class="xk-action-label">Статические узлы</span></button>
-            <button type="button" id="mihomo-import-insert-btn" class="btn-secondary btn-compact xk-mi-primary-action" data-tooltip="Подготовить candidate в главном редакторе без сохранения файла." disabled>{{ op_icon('add-node') }}<span class="xk-action-label">В черновик</span></button>
-            <button type="button" id="mihomo-import-save-btn" class="btn-secondary btn-compact xk-mi-primary-action hidden" data-tooltip="Проверить candidate, создать backup и сохранить без перезапуска." disabled>{{ op_icon('save') }}<span class="xk-action-label">Сохранить</span></button>
-            <button type="button" id="mihomo-import-apply-btn" class="btn-primary btn-compact xk-mi-primary-action hidden" data-tooltip="Проверить, сохранить и применить candidate через restart job." disabled>{{ op_icon('play') }}<span class="xk-action-label">Сохранить и применить</span></button>
+            <button type="button" id="mihomo-import-insert-btn" class="btn-secondary btn-compact xk-mi-primary-action" data-tooltip="Открыть подготовленный конфиг в главном редакторе без сохранения файла." disabled>{{ op_icon('add-node') }}<span class="xk-action-label">В черновик</span></button>
+            <button type="button" id="mihomo-import-save-btn" class="btn-secondary btn-compact xk-mi-primary-action hidden" data-tooltip="Проверить подготовленный конфиг, создать резервную копию и сохранить без перезапуска." disabled>{{ op_icon('save') }}<span class="xk-action-label">Сохранить</span></button>
+            <button type="button" id="mihomo-import-apply-btn" class="btn-primary btn-compact xk-mi-primary-action hidden" data-tooltip="Проверить и сохранить подготовленный конфиг, затем перезапустить ядро." disabled>{{ op_icon('play') }}<span class="xk-action-label">Сохранить и применить</span></button>
           </div>
           <button type="button" id="mihomo-import-cancel-btn" class="btn-secondary btn-compact">Отмена</button>
         </div>
