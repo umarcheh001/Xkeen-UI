@@ -26,6 +26,7 @@
     "test:py:changed": "node scripts/run_python.mjs scripts/run_changed_tests.py",
     "e2e:install": "playwright install chromium",
     "e2e": "playwright test",
+    "e2e:gate": "node scripts/run_python.mjs scripts/e2e_gate.py run",
     "e2e:serial": "playwright test --workers=1",
     "e2e:headed": "playwright test --headed",
     "e2e:smoke": "playwright test e2e/smoke.spec.mjs",

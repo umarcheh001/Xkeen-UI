@@ -38,13 +38,13 @@
         "gevent-websocket (optional)"
       ],
       "removable": false,
-      "unit_count": 612,
-      "size_bytes": 8262606,
+      "unit_count": 613,
+      "size_bytes": 8267169,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
         "backend_service": 85,
-        "backend_test": 275,
+        "backend_test": 276,
         "configuration": 10,
         "frontend_bundle": 9,
         "frontend_entrypoint": 3,
@@ -4291,6 +4291,28 @@
         "gevent-websocket (optional)"
       ],
       "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_e2e_gate.py",
+      "size_bytes": 4492,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [
+        "XKEEN_SKIP_E2E_GATE"
+      ],
       "removable": false
     },
     {
@@ -9340,7 +9362,7 @@
       "module_id": "core",
       "kind": "configuration",
       "path": "package.json",
-      "size_bytes": 3409,
+      "size_bytes": 3480,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],

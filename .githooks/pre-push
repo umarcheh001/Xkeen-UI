@@ -1,0 +1,33 @@
+#!/bin/sh
+# Перед пушем тега выпуска проверяет, что на его коммите прошёл весь e2e:
+# в CI браузерных тестов нет, и зелёный CI этого не показывает.
+#
+# Включить один раз:  git config core.hooksPath .githooks
+# Отметка ставится:   npm run e2e:gate
+# Пропустить разово:  XKEEN_SKIP_E2E_GATE=1 git push ...
+
+[ "${XKEEN_SKIP_E2E_GATE:-}" = "1" ] && exit 0
+
+# $0 — путь к pre-push: git передаёт его с «/», в тестах на Windows бывает «\».
+case $0 in
+  */*) hooks_dir=${0%/*} ;;
+  *\\*) hooks_dir=${0%\\*} ;;
+  *) hooks_dir=. ;;
+esac
+script="$hooks_dir/../scripts/e2e_gate.py"
+[ -f "$script" ] || exit 0
+
+py=""
+for candidate in python3 python; do
+  # --version отсеивает заглушку Microsoft Store, которая есть в PATH, но не запускается.
+  if command -v "$candidate" >/dev/null 2>&1 && "$candidate" --version >/dev/null 2>&1; then
+    py=$candidate
+    break
+  fi
+done
+if [ -z "$py" ]; then
+  echo "[проверка e2e] пропущено: не найден Python"
+  exit 0
+fi
+
+exec "$py" "$script" check-push
