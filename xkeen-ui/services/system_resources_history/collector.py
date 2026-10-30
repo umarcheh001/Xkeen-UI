@@ -35,7 +35,7 @@ from services.ui_settings import get_diagnostics_tariffs
 from . import hardware as hw
 from . import sensors
 from . import top_procs
-from .persist import load_history, save_history
+from .persist import drop_stale_temp_copies, load_history, save_history
 from .event_preferences import EventPreferences
 from .problems import REBOOT_UPTIME_S, ProblemTracker
 from .store import BACK_JUMP_RESET_S, RANGES, HistoryStore
@@ -180,6 +180,8 @@ class Collector:
         self._last_save = {"tmp": now, "flash": now}
         self._gap_s = 0.0
         self._uptime_s = self._read_uptime()
+        for path in self._paths.values():
+            drop_stale_temp_copies(path)
         restored = load_history([self._paths["tmp"], self._paths["flash"]], None)
         persisted_uptime = None
         same_clock_boot = False

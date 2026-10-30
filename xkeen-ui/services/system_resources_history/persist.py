@@ -10,8 +10,11 @@ empty, vanished ones are dropped.
 
 from __future__ import annotations
 
+import glob
 import json
 import math
+import os
+import time
 from typing import Any
 
 from services.io.atomic import _atomic_write_json
@@ -20,6 +23,7 @@ from .store import FORMAT_VERSION as _STORE_FORMAT_VERSION
 from .store import TIERS, HistoryStore
 
 FORMAT_VERSION = 1
+TEMP_COPY_MAX_AGE_S = 900
 
 
 def _round(value: Any) -> Any:
@@ -53,6 +57,21 @@ def save_history(
     if meta:
         payload["meta"] = dict(meta)
     _atomic_write_json(path, payload, indent=None)
+
+
+def drop_stale_temp_copies(path: str, *, now: float | None = None) -> None:
+    """Remove ``<path>.*.tmp`` left by a save that was killed halfway.
+
+    A fresh copy is kept: the panel being replaced may still be writing it.
+    Never raises.
+    """
+    moment = time.time() if now is None else now
+    for leftover in glob.glob(glob.escape(path) + ".*.tmp"):
+        try:
+            if moment - os.path.getmtime(leftover) >= TEMP_COPY_MAX_AGE_S:
+                os.unlink(leftover)
+        except OSError:
+            pass
 
 
 def _is_number(value: Any) -> bool:

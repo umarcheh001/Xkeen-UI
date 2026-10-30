@@ -1654,6 +1654,7 @@ provision_command_wrappers
 
 # Байткод прежних версий в каталоге панели: панель держит его в PYTHONPYCACHEPREFIX.
 provision_drop_tree_bytecode "$UI_DIR" "$PYTHONPYCACHEPREFIX" || true
+provision_drop_libs_bytecode /opt/lib "$PYTHONPYCACHEPREFIX" || true
 
 # Убираем legacy шаблоны из /opt/etc/xray/templates (если они были установлены ранее).
 # Эта уборка не влияет на работоспособность новой панели.

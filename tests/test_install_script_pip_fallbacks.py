@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 
@@ -80,3 +81,11 @@ def test_install_script_jsonc_migration_leaves_unpaired_user_files_in_configs():
     assert 'if [ ! -f "$main_json" ]; then' in text
     assert 'SKIPPED=$((SKIPPED + 1))' in text
     assert 'skipped=$SKIPPED jsonc_dir=$JSONC_DIR' in text
+
+
+def test_pip_installs_keep_no_download_cache_on_the_router():
+    text = _installer_and_shared_script()
+    calls = re.findall(r'if "\$PYTHON_BIN" -m pip install \\\n((?:.*\\\n)*)', text)
+
+    assert len(calls) == 2
+    assert all("--no-cache-dir" in call for call in calls)

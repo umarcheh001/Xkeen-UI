@@ -4,6 +4,8 @@ import copy
 import json
 import math
 import threading
+import os
+import time
 from pathlib import Path
 
 import pytest
@@ -1461,3 +1463,17 @@ def test_reboot_event_is_the_router_start_not_the_panel_start(tmp_path):
     c = make(tmp_path, r)
     (boot,) = [e for e in c.events(0) if e["type"] == "router_rebooted"]
     assert boot["at"] == boot["until"] == pytest.approx(T0 - 39.0)
+
+
+def test_start_drops_temp_copies_left_by_a_killed_save(tmp_path):
+    (tmp_path / "state").mkdir(exist_ok=True)
+    (tmp_path / "tmp").mkdir(exist_ok=True)
+    old = time.time() - 3600
+    leftovers = [tmp_path / "state" / "resource-history.json.js5x9vsk.tmp", tmp_path / "tmp" / "resource-history.json.e_u8bbqy.tmp"]
+    for path in leftovers:
+        path.write_text("{}", encoding="utf-8")
+        os.utime(path, (old, old))
+
+    make(tmp_path, FakeRouter())
+
+    assert [path.name for path in leftovers if path.exists()] == []

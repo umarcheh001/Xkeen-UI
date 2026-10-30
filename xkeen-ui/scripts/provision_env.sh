@@ -206,6 +206,16 @@ provision_drop_tree_bytecode() {
   find "$_pb_ui" -type d -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
 }
 
+provision_drop_libs_bytecode() {
+  # Библиотеки, поставленные pip до 2.9 или вручную, держат __pycache__ рядом с
+  # собой, а панель читает байткод из PYTHONPYCACHEPREFIX. Файлы .pyc вне
+  # __pycache__ не трогаем: в пакетах Entware это сам код без исходников.
+  # $1 — каталог с python3.*, $2 — каталог кэша байткода панели.
+  for _pl_dir in "${1%/}"/python3*/site-packages; do
+    provision_drop_tree_bytecode "$_pl_dir" "$2" || true
+  done
+}
+
 provision_drop_idle_mihomo_traffic() {
   # Сборки с 23.09 по 01.10.2026 запускали учёт трафика Mihomo при любом наборе
   # модулей и копили базу в каталоге панели, даже если Mihomo не ставился. Без
@@ -1228,6 +1238,7 @@ pip_install_with_fallback() {
 
     if "$PYTHON_BIN" -m pip install \
       --upgrade \
+      --no-cache-dir \
       --index-url "$INDEX_URL" \
       $PIP_TRUSTED_HOST_ARGS \
       --default-timeout "${XKEEN_PIP_TIMEOUT:-60}" \
@@ -1247,6 +1258,7 @@ pip_install_with_fallback() {
         rm -f "$PIP_LOG" 2>/dev/null || true
         if "$PYTHON_BIN" -m pip install \
           --upgrade \
+          --no-cache-dir \
           --index-url "$INDEX_URL" \
           $PIP_TRUSTED_HOST_ARGS \
           --default-timeout "${XKEEN_PIP_TIMEOUT:-60}" \
@@ -1814,6 +1826,7 @@ provision_cmd_apply() {
   provision_command_wrappers
   cleanup_legacy_xray_templates "${XKEEN_UI_LEGACY_XRAY_TEMPLATES_DIR:-/opt/etc/xray/templates}" || true
   provision_drop_tree_bytecode "$UI_DIR" "${XKEEN_UI_PYTHONPYCACHEPREFIX:-/tmp/xkeen-ui-pycache}" || true
+  provision_drop_libs_bytecode /opt/lib "${XKEEN_UI_PYTHONPYCACHEPREFIX:-/tmp/xkeen-ui-pycache}" || true
 
   # Шаблоны берутся из каталога панели: новые файлы уже разложены.
   if provision_has_module engine.mihomo && [ -d "$UI_DIR/opt/etc/mihomo/templates" ]; then

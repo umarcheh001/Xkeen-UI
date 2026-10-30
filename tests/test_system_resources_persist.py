@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "xkeen-ui"))
@@ -218,3 +220,30 @@ def test_sigterm_save_failure_of_another_kind_keeps_the_traceback(monkeypatch, c
     with caplog.at_level("INFO", logger=collector_mod.log.name):
         assert collector_mod.flush_collector() is False
     assert caplog.records[0].exc_info is not None
+
+
+def _temp_copy(folder, name, age, now):
+    path = folder / name
+    path.write_text("{}", encoding="utf-8")
+    os.utime(path, (now - age, now - age))
+    return path
+
+
+def test_stale_temp_copies_of_a_killed_save_are_dropped(tmp_path):
+    now = time.time()
+    target = tmp_path / "resource-history.json"
+    target.write_text("{}", encoding="utf-8")
+    stale = _temp_copy(tmp_path, "resource-history.json.js5x9vsk.tmp", 3600, now)
+    fresh = _temp_copy(tmp_path, "resource-history.json.e_u8bbqy.tmp", 60, now)
+    other = _temp_copy(tmp_path, "settings.json.abcdefgh.tmp", 3600, now)
+
+    persist.drop_stale_temp_copies(str(target), now=now)
+
+    assert not stale.exists()
+    assert fresh.exists()  # a save of the panel being replaced may still be running
+    assert other.exists()
+    assert target.exists()
+
+
+def test_dropping_temp_copies_never_raises(tmp_path):
+    persist.drop_stale_temp_copies(str(tmp_path / "missing" / "h.json"), now=time.time())

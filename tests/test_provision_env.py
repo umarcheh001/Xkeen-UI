@@ -345,6 +345,62 @@ def test_install_and_panel_update_both_drop_tree_bytecode():
     assert re.search(r"^provision_drop_tree_bytecode\b", installer, re.MULTILINE)
 
 
+# --- байткод в библиотеках Python ----------------------------------------------------------
+
+
+def _libs_with_bytecode(tmp_path: Path) -> Path:
+    site = tmp_path / "lib" / "python3.13" / "site-packages"
+    for package in ("pip", "pip/_internal"):
+        (site / package / "__pycache__").mkdir(parents=True)
+        (site / package / "__pycache__" / "mod.cpython-313.pyc").write_bytes(b"old")
+        (site / package / "mod.py").write_text("x = 1\n", encoding="utf-8")
+    # пакеты Entware кладут .pyc без исходника: это сам код библиотеки, а не кэш
+    (site / "yaml").mkdir()
+    (site / "yaml" / "__init__.pyc").write_bytes(b"code")
+    (tmp_path / "lib" / "python3.13" / "__pycache__").mkdir()
+    (tmp_path / "lib" / "python3.13" / "__pycache__" / "os.cpython-313.pyc").write_bytes(b"std")
+    return tmp_path / "lib"
+
+
+def test_bytecode_of_python_libraries_is_removed_and_their_code_is_kept(tmp_path):
+    lib = _libs_with_bytecode(tmp_path)
+    cache = tmp_path / "tmp" / "xkeen-ui-pycache"
+
+    proc = _run(tmp_path, f'provision_drop_libs_bytecode "{lib.as_posix()}" "{cache.as_posix()}"')
+
+    assert proc.returncode == 0, proc.stderr
+    site = lib / "python3.13" / "site-packages"
+    assert not list(site.rglob("__pycache__"))
+    assert (site / "yaml" / "__init__.pyc").read_bytes() == b"code"
+    assert (site / "pip" / "mod.py").is_file()
+    assert (lib / "python3.13" / "__pycache__" / "os.cpython-313.pyc").is_file()
+
+
+def test_bytecode_of_python_libraries_is_kept_without_a_cache_prefix(tmp_path):
+    lib = _libs_with_bytecode(tmp_path)
+
+    proc = _run(tmp_path, f'provision_drop_libs_bytecode "{lib.as_posix()}" ""')
+
+    assert proc.returncode == 0, proc.stderr
+    assert len(list((lib / "python3.13" / "site-packages").rglob("__pycache__"))) == 2
+
+
+def test_missing_python_libraries_are_not_an_error(tmp_path):
+    proc = _run(tmp_path, f'provision_drop_libs_bytecode "{(tmp_path / "nope").as_posix()}" "/tmp/cache"')
+
+    assert proc.returncode == 0, proc.stderr
+
+
+def test_install_and_panel_update_both_drop_library_bytecode():
+    installer = INSTALLER.read_text(encoding="utf-8")
+    library = LIB.read_text(encoding="utf-8")
+    apply_body = library.split("provision_cmd_apply() {", 1)[1].split("\n}\n", 1)[0]
+
+    assert "provision_drop_libs_bytecode() {" in library
+    assert "provision_drop_libs_bytecode" in apply_body
+    assert re.search(r"^provision_drop_libs_bytecode\b", installer, re.MULTILINE)
+
+
 # --- база учёта трафика Mihomo ----------------------------------------------------------
 
 
