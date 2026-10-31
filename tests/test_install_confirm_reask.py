@@ -3,11 +3,9 @@
 Вопросы «Установить? [Y/n]» принимали за «да» всё, что не похоже на «нет»:
 опечатку, букву в другой раскладке, случайный символ. Человек, нажавший «и»,
 получал дополнение, которого не выбирал, и нигде об этом не узнавал. Теперь
-установщик переспрашивает, а если ответа так и не понял — говорит, что выбрал.
+установщик переспрашивает до получения явного ответа.
 
-Вопрос бывает с «да» и с «нет» по умолчанию: расшифровку подписок ставят
-только явным «да», а уже стоящий просмотрщик DAT той же версии, что в релизе,
-по умолчанию не переустанавливают.
+Интерактивный вопрос требует явного ответа, в том числе после ошибок и Enter.
 """
 
 from __future__ import annotations
@@ -31,7 +29,7 @@ def _confirm_function() -> str:
     return body.replace(" < /dev/tty", "")
 
 
-def _ask(tmp_path: Path, answers: str, default: str = "y") -> tuple[str, str, str]:
+def _ask(tmp_path: Path, answers: str, default: str = "y", expect_failure: bool = False) -> tuple[str, str, str]:
     script = tmp_path / "ask.sh"
     # Файлом, а не через `sh -c`: длинный сценарий с кириллицей на Windows до
     # оболочки не доходит.
@@ -52,6 +50,9 @@ def _ask(tmp_path: Path, answers: str, default: str = "y") -> tuple[str, str, st
         ["sh", script.as_posix()], input=answers.encode("utf-8"), capture_output=True, check=False
     )
     out = proc.stdout.decode("utf-8", "replace")
+    if expect_failure:
+        assert proc.returncode != 0
+        return "", "", out
     assert proc.returncode == 0, out + proc.stderr.decode("utf-8", "replace")
     tail = out.rsplit("answer=[", 1)[1]
     answer = tail.split("]", 1)[0]
@@ -63,10 +64,9 @@ def _ask(tmp_path: Path, answers: str, default: str = "y") -> tuple[str, str, st
     "answer, yes",
     [
         ("y", "1"), ("Y", "1"), ("yes", "1"), ("YES", "1"), ("yEs", "1"),
-        ("да", "1"), ("Да", "1"), ("ДА", "1"),
+        ("да", "1"), ("Да", "1"), ("ДА", "1"), ("д", "1"), ("Д", "1"),
         ("n", "0"), ("N", "0"), ("no", "0"), ("No", "0"),
-        ("нет", "0"), ("Нет", "0"), ("НЕТ", "0"),
-        ("", "1"),
+        ("нет", "0"), ("Нет", "0"), ("НЕТ", "0"), ("н", "0"), ("Н", "0"),
     ],
 )
 def test_a_clear_answer_is_taken_at_once(tmp_path, answer, yes):
@@ -77,9 +77,9 @@ def test_a_clear_answer_is_taken_at_once(tmp_path, answer, yes):
     assert out.count("Установить?") == 1
 
 
-@pytest.mark.parametrize("answer", ["н", "Н", "д", "Д", "т"])
+@pytest.mark.parametrize("answer", ["т"])
 def test_a_single_cyrillic_letter_is_asked_again_with_a_layout_hint(tmp_path, answer):
-    """14.10.2026: на русской раскладке клавиша Y печатает «н», и «да» читалось как «нет»."""
+    """Нераспознанная кириллица вызывает подсказку о раскладке."""
     got, yes, out = _ask(tmp_path, answer + "\ny\n", default="n")
 
     assert got == "y"
@@ -98,27 +98,22 @@ def test_a_latin_slip_gets_no_layout_hint(tmp_path):
 @pytest.mark.parametrize(
     "default, answer, yes",
     [
-        ("y", "", "1"),
         ("y", "n", "0"),
         ("y", "ДА", "1"),
-        ("n", "", "0"),
         ("n", "y", "1"),
         ("n", "Да", "1"),
         ("n", "нет", "0"),
     ],
 )
-def test_enter_takes_the_offered_choice_and_a_clear_answer_overrides_it(tmp_path, default, answer, yes):
+def test_a_clear_answer_is_independent_of_the_previous_default(tmp_path, default, answer, yes):
     _got, got_yes, _out = _ask(tmp_path, answer + "\n", default=default)
 
     assert got_yes == yes
 
 
-def test_the_prompt_shows_which_choice_is_the_default(tmp_path):
-    _got, _yes, out_yes = _ask(tmp_path, "\n", default="y")
-    _got, _yes, out_no = _ask(tmp_path, "\n", default="n")
-
-    assert "[Y/n]" in out_yes
-    assert "[y/N]" in out_no
+def test_the_prompt_does_not_offer_an_implicit_choice(tmp_path):
+    _got, _yes, out = _ask(tmp_path, "n\n")
+    assert "[y/n]" in out
 
 
 def test_an_answer_that_is_neither_yes_nor_no_is_asked_again(tmp_path):
@@ -130,38 +125,22 @@ def test_an_answer_that_is_neither_yes_nor_no_is_asked_again(tmp_path):
     assert "y" in out.split("Установить?")[1] and "n" in out.split("Установить?")[1]
 
 
-def test_enter_after_a_slip_still_means_the_offered_choice(tmp_path):
-    got, yes, out = _ask(tmp_path, "и\n\n", default="n")
-
-    assert got == ""
-    assert yes == "0"
-    assert out.count("Установить?") == 2
-    assert "просто Enter — нет" in out
-
-
-def test_after_several_slips_the_installer_says_what_it_chose(tmp_path):
-    got, yes, out = _ask(tmp_path, "и\nи\nи\nи\nи\n")
-
-    # Бесконечно спрашивать нельзя: выбирается предложенный вариант, но не молча.
-    assert got == ""
-    assert yes == "1"
-    assert out.count("Установить?") == 3
-    assert "по умолчанию: да" in out
-
-
-def test_after_several_slips_a_no_default_stays_no(tmp_path):
-    _got, yes, out = _ask(tmp_path, "и\nи\nи\n", default="n")
-
-    assert yes == "0"
-    assert "по умолчанию: нет" in out
-
-
 def test_a_closed_terminal_does_not_hang_the_question(tmp_path):
-    got, yes, out = _ask(tmp_path, "", default="n")
-
-    assert got == ""
-    assert yes == "0"
+    _got, _yes, out = _ask(tmp_path, "", default="n", expect_failure=True)
     assert out.count("Установить?") == 1
+
+
+@pytest.mark.parametrize("default", ["y", "n"])
+def test_enter_requires_an_explicit_answer(tmp_path, default):
+    got, yes, out = _ask(tmp_path, "\n\nn\n", default=default)
+    assert (got, yes) == ("n", "0")
+    assert out.count("Установить?") == 3
+
+
+def test_repeated_invalid_answers_do_not_select_a_default(tmp_path):
+    got, yes, out = _ask(tmp_path, "q\nq\nq\nq\ny\n", default="n")
+    assert (got, yes) == ("y", "1")
+    assert out.count("Установить?") == 5
 
 
 def _geodat_choice(tmp_path: Path, verdict: str) -> str:

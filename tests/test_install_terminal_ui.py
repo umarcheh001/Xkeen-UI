@@ -123,10 +123,10 @@ def test_installer_exposes_optional_component_choices_without_child_prompt_noise
     assert 'if profile_has_module engine.xray && [ "${GEODAT_OPTION:-1}" = "1" ]; then' in text
     assert 'choose_happ_option() {' in text
     assert 'Расшифровка подписок' in text
-    assert 'Компоненты загрузятся с GitHub.' in text
+    assert 'Она загружается отдельно.' in text
     happ = text[text.index('choose_happ_option() {'):text.index('\n}\n', text.index('choose_happ_option() {'))]
     # Расшифровку подписок ставят только явным «да»: Enter и установка без терминала — «нет».
-    assert 'ui_confirm n "Установить?"' in happ
+    assert 'ui_confirm n "Установить дополнительную утилиту?"' in happ
     assert 'HAPP_OPTION="0"\n  if [ -t 0 ]' in happ
     assert 'HAPP_OPTION="$UI_CONFIRM_YES"' in happ
     assert 'export XKEEN_HAPP_DECRYPTOR_INSTALL' in text
@@ -314,7 +314,7 @@ def test_custom_profile_keeps_progress_paused_until_modules_are_entered():
     try:
         proc = subprocess.run(
             [script_bin, "-qec", f"sh -c {shlex.quote(script)}", "/dev/null"],
-            input="4\ncore,tool.files\n",
+            input="4\n1\n\n1\n",
             capture_output=True,
             text=True,
             check=False,
@@ -325,10 +325,10 @@ def test_custom_profile_keeps_progress_paused_until_modules_are_entered():
     output = proc.stdout.replace("\r\n", "\n")
     assert proc.returncode == 0, proc.stderr
     assert "4) Custom" in output
-    assert "ID через запятую:" in output
-    assert "hold\nclear\ninfo:Модули:" in output
+    assert "Выбор модулей панели" in output
+    assert "hold\nclear\n" in output
     assert "draw\nrelease\nline:  Профиль:     custom" in output
-    assert "chosen:custom modules:core,tool.files" in output
+    assert "chosen:custom modules:core,engine.xray,tool.editor" in output
 
 
 def test_legacy_template_cleanup_uses_requested_directory_and_ignores_nonempty_dirs(tmp_path):

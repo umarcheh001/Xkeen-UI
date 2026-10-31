@@ -384,8 +384,7 @@ ui_step_warn() {
 # Ответ, не похожий ни на «да», ни на «нет» (опечатка, буква в другой
 # раскладке), согласием не считается: вопрос задаётся снова.
 #
-# Понимаются y/yes/да и n/no/нет в любом регистре. Одиночные «д» и «н» — нет:
-# на русской раскладке «н» стоит на клавише Y, и нажатие «да» читалось как «нет».
+# Понимаются y/yes/да/д и n/no/нет/н в любом регистре.
 ui_confirm_kind() {
   # Печатает yes, no, empty или other.
   _ui_kind_latin="$(printf '%s' "$1" | tr 'A-Z' 'a-z')"
@@ -393,32 +392,25 @@ ui_confirm_kind() {
     '') echo empty ;;
     y|yes) echo yes ;;
     n|no) echo no ;;
-    да|дА|Да|ДА) echo yes ;;
-    нет|неТ|нЕт|нЕТ|Нет|НеТ|НЕт|НЕТ) echo no ;;
+    да|дА|Да|ДА|д|Д) echo yes ;;
+    нет|неТ|нЕт|нЕТ|Нет|НеТ|НЕт|НЕТ|н|Н) echo no ;;
     *) echo other ;;
   esac
 }
 
 ui_confirm() {
-  # $1 — вариант по умолчанию (y или n), $2 — вопрос. Итог — в UI_CONFIRM_YES
-  # (1 или 0), сам ответ — в UI_CONFIRM_ANSWER.
-  _ui_default="$1"
+  # $1 сохранён для совместимости вызовов; $2 — вопрос. Нужен явный ответ.
   _ui_prompt="$2"
-  if [ "$_ui_default" = "y" ]; then
-    _ui_y="Y"; _ui_n="n"; _ui_default_word="да"
-  else
-    _ui_y="y"; _ui_n="N"; _ui_default_word="нет"
-  fi
+  _ui_y="y"; _ui_n="n"
   UI_CONFIRM_ANSWER=""
-  _ui_slips=0
 
   while :; do
     printf '      %s [%b%s%b/%b%s%b]: ' \
       "$_ui_prompt" "$UI_GREEN" "$_ui_y" "$UI_RESET" "$UI_YELLOW" "$_ui_n" "$UI_RESET" >&3 2>/dev/null || true
-    IFS= read -r UI_CONFIRM_ANSWER < /dev/tty || UI_CONFIRM_ANSWER=""
+    IFS= read -r UI_CONFIRM_ANSWER < /dev/tty || return 1
     _ui_kind="$(ui_confirm_kind "$UI_CONFIRM_ANSWER")"
     _ui_understood=1
-    [ "$_ui_kind" = "other" ] && _ui_understood=0
+    case "$_ui_kind" in yes|no) ;; *) _ui_understood=0 ;; esac
     if [ -n "$UI_RESET" ]; then
       # read already moved to the next line after Enter. Move back, clear that
       # prompt row and write the result in its semantic colour.
@@ -431,13 +423,6 @@ ui_confirm() {
         no)
           printf '%b%s%b' "$UI_YELLOW" "$UI_CONFIRM_ANSWER" "$UI_RESET" >&3 2>/dev/null || true
           ;;
-        empty)
-          if [ "$_ui_default" = "y" ]; then
-            printf '%bY%b' "$UI_GREEN" "$UI_RESET" >&3 2>/dev/null || true
-          else
-            printf '%bN%b' "$UI_YELLOW" "$UI_RESET" >&3 2>/dev/null || true
-          fi
-          ;;
         *)
           printf '%b%s%b' "$UI_YELLOW" "$UI_CONFIRM_ANSWER" "$UI_RESET" >&3 2>/dev/null || true
           ;;
@@ -446,28 +431,19 @@ ui_confirm() {
     printf '\n' >&3 2>/dev/null || true
     [ "$_ui_understood" -eq 1 ] && break
 
-    _ui_slips=$((_ui_slips + 1))
-    if [ "$_ui_slips" -ge 3 ]; then
-      # Спрашивать без конца нельзя, но и молча выбирать за человека — тоже.
-      UI_CONFIRM_ANSWER=""
-      printf '      %bОтвет не распознан — оставляю вариант по умолчанию: %s.%b\n' \
-        "$UI_YELLOW" "$_ui_default_word" "$UI_RESET" >&3 2>/dev/null || true
-      break
-    fi
     # Буквы не латиницей — скорее всего, не та раскладка: «н» и «т» на месте y и n.
     if printf '%s' "$UI_CONFIRM_ANSWER" | LC_ALL=C grep -q '[^ -~]'; then
-      printf '      %bПохоже, включена русская раскладка. Введите y или n, либо «да» или «нет»; просто Enter — %s.%b\n' \
-        "$UI_YELLOW" "$_ui_default_word" "$UI_RESET" >&3 2>/dev/null || true
+      printf '      %bПохоже, включена русская раскладка. Введите y или n, либо «да» или «нет».%b\n' \
+        "$UI_YELLOW" "$UI_RESET" >&3 2>/dev/null || true
     else
-      printf '      %bНе понял ответ. Введите y (да) или n (нет); просто Enter — %s.%b\n' \
-        "$UI_YELLOW" "$_ui_default_word" "$UI_RESET" >&3 2>/dev/null || true
+      printf '      %bНе понял ответ. Введите y (да) или n (нет).%b\n' \
+        "$UI_YELLOW" "$UI_RESET" >&3 2>/dev/null || true
     fi
   done
 
   case "$(ui_confirm_kind "$UI_CONFIRM_ANSWER")" in
     yes) UI_CONFIRM_YES=1 ;;
     no) UI_CONFIRM_YES=0 ;;
-    *) if [ "$_ui_default" = "y" ]; then UI_CONFIRM_YES=1; else UI_CONFIRM_YES=0; fi ;;
   esac
 }
 
@@ -508,7 +484,7 @@ choose_geodat_option() {
     else
       _geodat_default="y"
     fi
-    ui_confirm "$_geodat_default" "Установить xk-geodat?"
+    ui_confirm "$_geodat_default" "Установить xk-geodat?" || fail_install "Ввод ответа прерван."
     GEODAT_OPTION="$UI_CONFIRM_YES"
   fi
   XKEEN_GEODAT_INSTALL="$GEODAT_OPTION"
@@ -537,10 +513,10 @@ choose_happ_option() {
   # без терминала его не включают.
   HAPP_OPTION="0"
   if [ -t 0 ] && [ -r /dev/tty ]; then
-    printf '  %bДополнение%b   Расшифровка подписок\n' "$UI_BOLD" "$UI_RESET" >&3 2>/dev/null || true
-    ui_info "Импорт подписок с зашифрованными ссылками."
-    ui_info "Компоненты загрузятся с GitHub."
-    ui_confirm n "Установить?"
+    printf '  %bДополнительная поддержка ссылок%b\n' "$UI_BOLD" "$UI_RESET" >&3 2>/dev/null || true
+    ui_info "Для некоторых защищённых ссылок подписок нужна дополнительная утилита."
+    ui_info "Она загружается отдельно."
+    ui_confirm n "Установить дополнительную утилиту?" || fail_install "Ввод ответа прерван."
     HAPP_OPTION="$UI_CONFIRM_YES"
   fi
   XKEEN_HAPP_DECRYPTOR_INSTALL="$HAPP_OPTION"
@@ -633,9 +609,9 @@ PY
         ui_input_begin
         PROFILE_INPUT_ACTIVE=1
       fi
-      ui_info "Модули: core, engine.xray, engine.mihomo, tool.editor, tool.terminal, tool.files, tool.backups, integration.happ, tool.advanced-diagnostics"
-      printf '      ID через запятую: ' >&3 2>/dev/null || true
-      IFS= read -r XKEEN_UI_INSTALL_MODULES < /dev/tty || XKEEN_UI_INSTALL_MODULES=""
+      [ -f "$SRC_DIR/scripts/install_custom_menu.py" ] || fail_install "В архиве нет меню выбора модулей."
+      XKEEN_UI_INSTALL_MODULES="$("$PYTHON_BIN" "$SRC_DIR/scripts/install_custom_menu.py")" \
+        || fail_install "Выбор модулей прерван."
     fi
     [ -n "${XKEEN_UI_INSTALL_MODULES:-}" ] || fail_install "Для Custom задайте XKEEN_UI_INSTALL_MODULES."
   fi
@@ -758,8 +734,6 @@ fi
 ui_header
 printf '  %bРежим:%b       %s\n' "$UI_DIM" "$UI_RESET" "$INSTALL_MODE" >&3 2>/dev/null || true
 printf '  %bАрхитектура:%b %s\n' "$UI_DIM" "$UI_RESET" "$(uname -m 2>/dev/null || echo unknown)" >&3 2>/dev/null || true
-choose_geodat_option
-choose_happ_option
 printf '\n' >&3 2>/dev/null || true
 ui_stage "01/05" "Проверка окружения"
 ui_stage_plan 2
@@ -920,6 +894,14 @@ provision_python_libs_install || fail_install "${PROVISION_ERROR:-Не удал�
 # wget-ssl — чтобы opkg мог ходить к источникам по https; панель работает и без него.
 provision_wget_ssl || true
 choose_panel_profile
+[ ! -t 0 ] || ui_input_begin
+if profile_has_module engine.xray; then
+  choose_geodat_option
+fi
+if profile_has_module integration.happ; then
+  choose_happ_option
+fi
+[ ! -t 0 ] || ui_input_end
 
 
 # --- lftp (для файлового менеджера) ---
