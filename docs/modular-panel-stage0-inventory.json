@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 615,
-      "size_bytes": 8293076,
+      "size_bytes": 8293075,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -14078,7 +14078,7 @@
       "module_id": "core",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/panel-operator.css",
-      "size_bytes": 824562,
+      "size_bytes": 824561,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
