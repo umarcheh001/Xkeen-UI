@@ -115,6 +115,7 @@ UI_TICKER_FILE=""
 UI_STATE_FILE=""
 UI_STICKY=0
 UI_SPIN_N=0
+UI_INPUT_DEPTH=0
 : "${UI_PROGRESS_TTY:=0}"
 
 ui_now() {
@@ -206,6 +207,7 @@ ui_state_write() {
 # второй строке блока: установщик печатал свою строку поверх шкалы, а после
 # разморозки тикер дорисовывал хвост старого кадра уже поверх новых строк.
 ui_sticky_draw() {
+  [ "${UI_INPUT_DEPTH:-0}" -eq 0 ] || return 0
   [ "$UI_PROGRESS_TTY" -eq 1 ] || return 0
   [ -n "$UI_STATE_FILE" ] && [ -f "$UI_STATE_FILE" ] || return 0
   { read -r _ui_nums; read -r _ui_label; } < "$UI_STATE_FILE" 2>/dev/null || return 0
@@ -233,6 +235,7 @@ ui_sticky_draw() {
 # Пока тикер жив, блок гасится всегда, а не только когда его рисовал сам
 # установщик: кадр мог напечатать тикер, и установщик об этом не знает.
 ui_sticky_clear() {
+  [ "${UI_INPUT_DEPTH:-0}" -eq 0 ] || return 0
   [ "$UI_STICKY" -eq 1 ] || [ -n "$UI_TICKER" ] || return 0
   printf '\r\033[K\n\033[K\033[1A\r' >&"$INSTALL_UI_FD" 2>/dev/null || true
   UI_STICKY=0
@@ -258,10 +261,12 @@ ui_ticker_loop() {
 }
 
 ui_hold() {
+  [ "${UI_INPUT_DEPTH:-0}" -eq 0 ] || return 0
   [ -n "$UI_TICKER" ] && kill -STOP "$UI_TICKER" 2>/dev/null || true
 }
 
 ui_release() {
+  [ "${UI_INPUT_DEPTH:-0}" -eq 0 ] || return 0
   [ -n "$UI_TICKER" ] && kill -CONT "$UI_TICKER" 2>/dev/null || true
 }
 
@@ -277,11 +282,17 @@ ui_line() {
 # Prompts must temporarily own the terminal: the progress ticker otherwise
 # redraws its sticky block over the user's menu and typed answer.
 ui_input_begin() {
-  ui_hold
-  ui_sticky_clear
+  if [ "${UI_INPUT_DEPTH:-0}" -eq 0 ]; then
+    ui_hold
+    ui_sticky_clear
+  fi
+  UI_INPUT_DEPTH=$((UI_INPUT_DEPTH + 1))
 }
 
 ui_input_end() {
+  [ "${UI_INPUT_DEPTH:-0}" -gt 0 ] || return 0
+  UI_INPUT_DEPTH=$((UI_INPUT_DEPTH - 1))
+  [ "$UI_INPUT_DEPTH" -eq 0 ] || return 0
   ui_sticky_draw
   ui_release
 }

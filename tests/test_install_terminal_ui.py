@@ -276,6 +276,44 @@ def test_profile_menu_pauses_progress_and_accepts_numbered_choice():
     assert "hold\nclear\ndraw\nrelease\n" in output
 
 
+def test_prompt_mode_does_not_resume_ticker_when_info_is_printed():
+    """Status text inside a prompt must not restart the progress ticker."""
+
+    script = "\n".join(
+        (
+            "set -eu",
+            "exec 3>&1",
+            'UI_PROGRESS_TTY=1',
+            'UI_TICKER=123',
+            'UI_INPUT_DEPTH=0',
+            'kill() { printf "%s %s\\n" "$1" "$2"; }',
+            'ui_sticky_clear() { printf "clear\\n"; }',
+            'ui_sticky_draw() { printf "draw\\n"; }',
+            _function("ui_hold"),
+            _function("ui_release"),
+            _function("ui_input_begin"),
+            _function("ui_input_end"),
+            _function("ui_info"),
+            "ui_input_begin",
+            'ui_info "Описание вопроса"',
+            "ui_input_end",
+        )
+    )
+    proc = subprocess.run([_shell(), "-c", script], capture_output=True, text=True, encoding="utf-8", check=False)
+
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.splitlines() == [
+        "-STOP 123",
+        "clear",
+        "clear",
+        "      Описание вопроса",
+        "draw",
+        "draw",
+        "-CONT 123",
+    ]
+    assert '[ "${UI_INPUT_DEPTH:-0}" -eq 0 ] || return 0' in _function("ui_sticky_clear")
+
+
 def test_custom_profile_keeps_progress_paused_until_modules_are_entered():
     """Custom module input must stay above the ticker after choosing profile 4."""
 
