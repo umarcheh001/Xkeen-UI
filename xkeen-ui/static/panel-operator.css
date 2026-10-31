@@ -9752,7 +9752,7 @@ body.panel-page #mihomo-hwid-modal .xk-hw-primary-btn:not([disabled]):is(:hover,
 body.panel-page #mihomo-hwid-modal .xk-hw-body {
   min-height: 0;
   gap: 0;
-  padding: 12px !important;
+  padding: 16px 18px !important;
   overflow: auto !important;
   overscroll-behavior: contain;
 }
@@ -9826,7 +9826,7 @@ body.panel-page #mihomo-hwid-modal .xk-hw-shell {
   flex: 1 1 auto;
   flex-direction: column;
   min-height: 0;
-  padding-top: 10px;
+  padding-top: 16px;
 }
 body.panel-page #mihomo-hwid-modal .xk-hw-grid {
   flex: 1 1 auto;
@@ -9836,7 +9836,7 @@ body.panel-page #mihomo-hwid-modal .xk-hw-grid {
 }
 body.panel-page #mihomo-hwid-modal .xk-hw-panel {
   min-height: 0;
-  padding: 0 10px 10px;
+  padding: 4px 14px 14px;
   gap: 9px;
 }
 body.panel-page #mihomo-hwid-modal .xk-hw-panel-head {
@@ -9856,10 +9856,20 @@ body.panel-page #mihomo-hwid-modal .xk-hw-kicker {
   text-transform: uppercase;
 }
 body.panel-page #mihomo-hwid-modal .xk-hw-panel--controls {
-  padding-left: 0;
+  padding-left: 14px;
 }
 body.panel-page #mihomo-hwid-modal .xk-hw-panel--preview {
-  padding-right: 0;
+  padding-right: 14px;
+}
+body.panel-page #mihomo-hwid-modal :is(.xk-hw-status, .xk-hw-meta, .xk-hw-tip) {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+body.panel-page #mihomo-hwid-modal .xk-hw-open-node-btn:not(.hidden) {
+  align-self: flex-start;
+  min-height: var(--op-control-h);
 }
 
 @media (max-width: 820px) {
@@ -9872,6 +9882,9 @@ body.panel-page #mihomo-hwid-modal .xk-hw-panel--preview {
   }
   body.panel-page #mihomo-hwid-modal .xk-hw-lead {
     grid-template-columns: 30px minmax(0, 1fr);
+  }
+  body.panel-page #mihomo-hwid-modal .xk-hw-body {
+    padding: 12px !important;
   }
   body.panel-page #mihomo-hwid-modal .xk-hw-chiprow {
     grid-column: 2;

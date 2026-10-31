@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import email.message
 import json
 import urllib.error
 
@@ -8,6 +9,49 @@ import pytest
 import yaml
 
 from services import mihomo_hwid_sub as hwid
+
+
+def test_hwid_probe_explains_happ_redirect_without_exposing_link(monkeypatch):
+    headers = email.message.Message()
+    headers["Location"] = "happ://crypt4/private-token"
+
+    def fake_probe_once(url, **_kwargs):
+        raise urllib.error.HTTPError(
+            "happ://crypt4/private-token",
+            308,
+            "Permanent Redirect - happ://crypt4/private-token",
+            headers,
+            None,
+        )
+
+    monkeypatch.setattr(hwid, "_probe_once", fake_probe_once)
+    result = hwid.probe_subscription("https://provider.example/sub", headers={})
+
+    assert result["error"]["code"] == "HAPP_REDIRECT"
+    assert "модале «Узел»" in result["error"]["hint"]
+    assert "private-token" not in str(result)
+
+
+def test_hwid_probe_keeps_other_http_errors_readable(monkeypatch):
+    def fake_probe_once(url, **_kwargs):
+        raise urllib.error.HTTPError(url, 403, "Forbidden: long provider detail", {}, None)
+
+    monkeypatch.setattr(hwid, "_probe_once", fake_probe_once)
+    result = hwid.probe_subscription("https://provider.example/sub", headers={})
+
+    assert result["error"]["code"] == "HTTP_ERROR"
+    assert result["error"]["message"] == "Сервер подписки ответил HTTP 403."
+
+
+def test_hwid_probe_explains_happ_redirect_from_url_error(monkeypatch):
+    def fake_probe_once(_url, **_kwargs):
+        raise urllib.error.URLError("happ_redirect")
+
+    monkeypatch.setattr(hwid, "_probe_once", fake_probe_once)
+    result = hwid.probe_subscription("https://provider.example/sub", headers={})
+
+    assert result["error"]["code"] == "HAPP_REDIRECT"
+    assert result["error"]["retryable"] is False
 
 
 def test_hwid_probe_blocks_private_hosts_by_default(monkeypatch):

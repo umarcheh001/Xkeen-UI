@@ -112,3 +112,57 @@ test('HWID device profile is compact, editable, and resets to Mihomo panel defau
   expect(mobileFlow.noHorizontalOverflow).toBe(true);
   expect(mobileFlow.previewStartsAfterControls).toBe(true);
 });
+
+
+test('HWID HAPP redirect stays inside the form and opens the node importer', async ({ page }) => {
+  await page.route('**/api/mihomo/hwid/probe', (route) => route.fulfill({
+    status: 400,
+    json: {
+      ok: false,
+      error: {
+        code: 'HAPP_REDIRECT',
+        message: 'Ссылка ведёт на зашифрованную HAPP-подписку.',
+        hint: 'Откройте эту ссылку в модале «Узел», чтобы импортировать подписку.',
+      },
+    },
+  }));
+  await page.goto('/');
+  await selectPanelView(page, 'mihomo');
+  await page.locator('[aria-controls="xk-mihomo-parameters-menu"]').click();
+  await page.locator('#mihomo-clash-tab-config').click();
+  await page.locator('.xk-mihomo-menu summary').click();
+  await page.locator('#mihomo-hwid-sub-btn').click();
+
+  const layout = await page.locator('#mihomo-hwid-modal').evaluate((modal) => {
+    const body = modal.querySelector('.xk-hw-body').getBoundingClientRect();
+    const lead = modal.querySelector('.xk-hw-lead').getBoundingClientRect();
+    const controls = modal.querySelector('.xk-hw-panel--controls').getBoundingClientRect();
+    const heading = modal.querySelector('.xk-hw-panel--controls .xk-hw-panel-head').getBoundingClientRect();
+    return { leftInset: heading.left - controls.left, outerInset: controls.left - body.left, topGap: heading.top - lead.bottom };
+  });
+  expect(layout.leftInset).toBeGreaterThanOrEqual(12);
+  expect(layout.outerInset).toBeGreaterThanOrEqual(0);
+  expect(layout.topGap).toBeGreaterThanOrEqual(12);
+
+  const source = 'https://provider.example/sub/happ';
+  await page.locator('#mihomo-hwid-url').fill(source);
+  await page.locator('#mihomo-hwid-probe-btn').click();
+  await expect(page.locator('#mihomo-hwid-status')).toContainText('зашифрованную HAPP-подписку');
+  await expect(page.locator('#mihomo-hwid-open-node-btn')).toBeVisible();
+
+  await page.locator('#mihomo-hwid-status').evaluate((node) => {
+    node.textContent = 'Ошибка: ' + 'happ://crypt4/' + 'A'.repeat(250);
+  });
+  const overflow = await page.locator('#mihomo-hwid-status').evaluate((node) =>
+    node.scrollWidth > node.clientWidth + 1);
+  expect(overflow).toBe(false);
+  await page.setViewportSize({ width: 390, height: 900 });
+  const mobileOverflow = await page.locator('#mihomo-hwid-status').evaluate((node) =>
+    node.scrollWidth > node.clientWidth + 1);
+  expect(mobileOverflow).toBe(false);
+
+  await page.locator('#mihomo-hwid-open-node-btn').click();
+  await expect(page.locator('#mihomo-hwid-modal')).toBeHidden();
+  await expect(page.locator('#mihomo-import-modal')).toBeVisible();
+  await expect(page.locator('#mihomo-import-input')).toHaveValue(source);
+});

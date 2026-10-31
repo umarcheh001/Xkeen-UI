@@ -39,6 +39,7 @@ let mihomoHwidSubModuleApi = null;
     engineSelect: 'mihomo-hwid-engine-select',
 
     status: 'mihomo-hwid-status',
+    btnOpenNode: 'mihomo-hwid-open-node-btn',
     meta: 'mihomo-hwid-meta',
     tip: 'mihomo-hwid-tip',
     diag: 'mihomo-hwid-diag',
@@ -250,11 +251,16 @@ let mihomoHwidSubModuleApi = null;
   function setStatus(msg, isErr) {
     const el = $(IDS.status);
     if (!el) return;
+    toggleBlock($(IDS.btnOpenNode), false);
     const s = String(msg || '').trim();
     el.textContent = s;
     el.classList.toggle('error', !!isErr && !!s);
     el.classList.toggle('success', !!s && !isErr);
     toggleBlock(el, !!s);
+  }
+
+  function showOpenNodeAction(show) {
+    toggleBlock($(IDS.btnOpenNode), !!show);
   }
 
   function setMeta(msg) {
@@ -1490,11 +1496,13 @@ let mihomoHwidSubModuleApi = null;
 
       if (!r.ok || !res || !res.ok) {
         const errObj = (res && res.error) ? res.error : null;
+        const isHappRedirect = !!(errObj && errObj.code === 'HAPP_REDIRECT');
         const msg = (errObj && errObj.message) ? String(errObj.message) : (res && res.error ? String(res.error) : 'Не удалось проверить подписку.');
         const hint = (errObj && errObj.hint) ? String(errObj.hint) : '';
-        if (shouldHandoffToImport(msg, hint) && await handoffToImportModal(url)) return;
+        if (!isHappRedirect && shouldHandoffToImport(msg, hint) && await handoffToImportModal(url)) return;
         setStatus(msg, true);
         if (hint) setMeta(hint);
+        showOpenNodeAction(isHappRedirect);
         try {
           const providerTips = hwidProviderHeaderTips(res && res.hwid_response_headers);
           if (providerTips.length) setTip(providerTips.join(' '));
@@ -1671,11 +1679,13 @@ let mihomoHwidSubModuleApi = null;
         // Two possible shapes: {error:...} or {stage:'probe', probe:{...}}
         let errObj = (res && res.error) ? res.error : null;
         if (!errObj && res && res.stage === 'probe' && res.probe && res.probe.error) errObj = res.probe.error;
+        const isHappRedirect = !!(errObj && errObj.code === 'HAPP_REDIRECT');
         const msg = (errObj && errObj.message) ? String(errObj.message) : (res && res.error ? String(res.error) : 'Не удалось применить изменения.');
         const hint = (errObj && errObj.hint) ? String(errObj.hint) : '';
-        if (shouldHandoffToImport(msg, hint) && await handoffToImportModal(url)) return;
+        if (!isHappRedirect && shouldHandoffToImport(msg, hint) && await handoffToImportModal(url)) return;
         setStatus(msg, true);
         if (hint) setMeta(hint);
+        showOpenNodeAction(isHappRedirect);
         return;
       }
 
@@ -1784,6 +1794,7 @@ let mihomoHwidSubModuleApi = null;
     wireButton(IDS.btnCancel, () => showModal(false));
 
     wireButton(IDS.btnProbe, () => doProbe());
+    wireButton(IDS.btnOpenNode, () => handoffToImportModal($(IDS.url)?.value));
     wireButton(IDS.btnInsert, () => doInsert());
     wireButton(IDS.btnResetDevice, () => resetDeviceProfile());
 

@@ -2115,7 +2115,7 @@ def create_mihomo_blueprint(
             status = 400
         elif code in {"TIMEOUT", "TLS_HANDSHAKE_TIMEOUT"}:
             status = 504
-        elif code == "URL_BLOCKED":
+        elif code in {"URL_BLOCKED", "HAPP_REDIRECT"}:
             status = 400
         return jsonify(result), status
 
@@ -2172,7 +2172,7 @@ def create_mihomo_blueprint(
                 status = 400
             elif code in {"TIMEOUT", "TLS_HANDSHAKE_TIMEOUT"}:
                 status = 504
-            elif code == "URL_BLOCKED":
+            elif code in {"URL_BLOCKED", "HAPP_REDIRECT"}:
                 status = 400
             return jsonify({"ok": False, "stage": "probe", "probe": probe}), status
 

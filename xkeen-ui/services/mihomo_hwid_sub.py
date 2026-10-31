@@ -1344,6 +1344,8 @@ def _probe_once(
 
     class SafeRedirect(urllib.request.HTTPRedirectHandler):
         def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: D401,N803
+            if str(newurl).lower().startswith("happ://crypt"):
+                raise urllib.error.URLError("happ_redirect")
             ok, reason = is_url_allowed(newurl, policy)
             if not ok:
                 raise urllib.error.URLError("url_blocked:" + reason)
@@ -1535,9 +1537,13 @@ def probe_subscription(
             hwid_response_headers = _extract_hwid_response_headers(
                 getattr(e, "headers", None)
             )
+            location = str(
+                (getattr(e, "headers", None) or {}).get("Location") or ""
+            ).strip()
+            happ_redirect = location.lower().startswith("happ://crypt")
             last_meta = _ProbeMeta(
                 url=u,
-                resolved_url=getattr(e, "url", None),
+                resolved_url=None if happ_redirect else getattr(e, "url", None),
                 method=m,
                 http_status=getattr(e, "code", None),
                 content_type=(getattr(e, "headers", None) or {}).get("Content-Type"),
@@ -1561,7 +1567,7 @@ def probe_subscription(
                 "ok": False,
                 "probe": {
                     "url": u,
-                    "resolved_url": getattr(e, "url", None),
+                    "resolved_url": None if happ_redirect else getattr(e, "url", None),
                     "method": m,
                     "http_status": getattr(e, "code", None),
                     "content_type": None,
@@ -1580,14 +1586,50 @@ def probe_subscription(
                 "hwid_response_headers": hwid_response_headers,
                 "warnings": _hwid_response_warnings(hwid_response_headers),
                 "error": _make_error(
-                    "HTTP_ERROR",
-                    f"HTTP {getattr(e, 'code', '')}: {getattr(e, 'reason', '')}".strip(),
-                    "Проверьте ссылку/доступность подписки.",
-                    retryable=True,
+                    "HAPP_REDIRECT" if happ_redirect else "HTTP_ERROR",
+                    (
+                        "Ссылка ведёт на зашифрованную HAPP-подписку."
+                        if happ_redirect
+                        else f"Сервер подписки ответил HTTP {getattr(e, 'code', '')}."
+                    ),
+                    (
+                        "Откройте эту ссылку в модале «Узел», чтобы импортировать подписку."
+                        if happ_redirect
+                        else "Проверьте ссылку и доступность подписки."
+                    ),
+                    retryable=not happ_redirect,
                 ),
             }
         except urllib.error.URLError as e:
             msg = str(getattr(e, "reason", e))
+            if msg == "happ_redirect":
+                return {
+                    "ok": False,
+                    "probe": {
+                        "url": u,
+                        "resolved_url": None,
+                        "method": m,
+                        "http_status": None,
+                        "content_type": None,
+                        "content_length": None,
+                        "timing_ms": 0,
+                    },
+                    "profile": {
+                        "profile_title": None,
+                        "profile_title_raw": None,
+                        "profile_title_encoding": None,
+                        "suggested_name": None,
+                    },
+                    "headers_used": hdrs,
+                    "hwid_response_headers": {},
+                    "warnings": [],
+                    "error": _make_error(
+                        "HAPP_REDIRECT",
+                        "Ссылка ведёт на зашифрованную HAPP-подписку.",
+                        "Откройте эту ссылку в модале «Узел», чтобы импортировать подписку.",
+                        retryable=False,
+                    ),
+                }
             if msg.startswith("url_blocked:"):
                 reason = msg.split(":", 1)[1]
                 return {

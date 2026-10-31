@@ -45,6 +45,25 @@ def test_hwid_probe_route_blocks_private_url_before_probe(monkeypatch, client):
     assert calls == []
 
 
+def test_hwid_probe_route_reports_happ_redirect_as_input_error(monkeypatch, client):
+    monkeypatch.setattr(
+        mihomo,
+        "_mh_hwid_probe_subscription_safe",
+        lambda *_args, **_kwargs: {
+            "ok": False,
+            "error": {
+                "code": "HAPP_REDIRECT",
+                "message": "Ссылка ведёт на зашифрованную HAPP-подписку.",
+            },
+        },
+    )
+
+    response = client.post("/api/mihomo/hwid/probe", json={"url": "https://provider.example/sub"})
+
+    assert response.status_code == 400
+    assert response.get_json()["error"]["code"] == "HAPP_REDIRECT"
+
+
 def test_hwid_device_route_returns_diagnostics(monkeypatch, client):
     monkeypatch.setattr(
         mihomo,
