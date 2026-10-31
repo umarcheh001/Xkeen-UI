@@ -2440,6 +2440,14 @@ body.panel-page #view-mihomo #xk-mihomo-parameters-menu .xk-mihomo-toolbar-field
   min-width: 0;
   width: 100%;
 }
+body.panel-page #view-mihomo #xk-mihomo-parameters-menu #mihomo-clash-mode-switch {
+  position: relative;
+}
+body.panel-page #view-mihomo #xk-mihomo-parameters-menu #mihomo-clash-mode-menu {
+  left: auto;
+  right: 0;
+  max-width: min(304px, calc(100vw - 40px));
+}
 body.panel-page #view-mihomo #xk-mihomo-parameters-menu .xk-mihomo-toolbar-field :is(.xk-mihomo-mode-trigger, select) {
   width: 100%;
   max-width: none;
@@ -24131,13 +24139,21 @@ body.panel-page #view-mihomo .xk-mihomo-workspace-head > .xk-mihomo-groups-toolb
 body.panel-page #view-mihomo .xk-mihomo-workspace-head > .xk-mihomo-groups-toolbar .xk-mihomo-groups-menu {
   margin-left: 0;
 }
+body.panel-page #view-mihomo .xk-mihomo-workspace-head > .xk-mihomo-groups-toolbar :is(.xk-mihomo-groups-menu-trigger, #mihomo-clash-groups-collapse, #mihomo-clash-test-visible) {
+  height: 28px;
+  min-height: 28px;
+  font-size: 12px !important;
+}
+body.panel-page #view-mihomo .xk-mihomo-workspace-head :is(.xk-mihomo-groups-menu-trigger, #mihomo-clash-groups-collapse) {
+  width: 28px;
+  min-width: 28px;
+  padding: 0 !important;
+}
+body.panel-page #view-mihomo .xk-mihomo-workspace-head #mihomo-clash-test-visible {
+  padding: 0 8px;
+}
 body.panel-page #view-mihomo .xk-mihomo-workspace-head #mihomo-clash-groups-collapse {
-  width: var(--op-control-h);
-  min-width: var(--op-control-h);
-  height: var(--op-control-h);
-  min-height: var(--op-control-h);
   margin-left: 0;
-  padding: 0;
 }
 
 @media (max-width: 820px) {
@@ -24164,11 +24180,13 @@ body.panel-page #view-mihomo .xk-mihomo-workspace-head #mihomo-clash-groups-coll
 }
 
 @media (max-width: 720px) {
-  body.panel-page #view-mihomo .xk-mihomo-workspace-head #mihomo-clash-groups-collapse {
-    width: var(--op-touch-target);
-    min-width: var(--op-touch-target);
-    height: var(--op-touch-target);
-    min-height: var(--op-touch-target);
+  body.panel-page #view-mihomo .xk-mihomo-workspace-head > .xk-mihomo-groups-toolbar :is(.xk-mihomo-groups-menu-trigger, #mihomo-clash-groups-collapse, #mihomo-clash-test-visible) {
+    height: 40px;
+    min-height: 40px;
+  }
+  body.panel-page #view-mihomo .xk-mihomo-workspace-head :is(.xk-mihomo-groups-menu-trigger, #mihomo-clash-groups-collapse) {
+    width: 40px;
+    min-width: 40px;
   }
 }
 

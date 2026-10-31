@@ -55,6 +55,13 @@ test('Mihomo header preserves controls, service state and navigation in both the
   await page.locator('#mihomo-clash-groups-filter').fill('');
   await page.locator('#mihomo-clash-status-mode').click();
   await expect(page.locator('#mihomo-clash-mode-menu')).toBeVisible();
+  const modeTrigger = await page.locator('#mihomo-clash-status-mode').boundingBox();
+  const modeMenu = await page.locator('#mihomo-clash-mode-menu').boundingBox();
+  const parametersMenu = await page.locator('#xk-mihomo-parameters-menu').boundingBox();
+  expect(modeMenu.y).toBeGreaterThanOrEqual(modeTrigger.y + modeTrigger.height);
+  expect(modeMenu.y - modeTrigger.y - modeTrigger.height).toBeLessThan(12);
+  expect(modeMenu.x).toBeGreaterThanOrEqual(parametersMenu.x);
+  expect(modeMenu.x + modeMenu.width).toBeLessThanOrEqual(parametersMenu.x + parametersMenu.width);
   await page.keyboard.press('Escape');
 
   await page.keyboard.press('Escape');
@@ -128,8 +135,11 @@ test('Mihomo header preserves controls, service state and navigation in both the
       await expect(page.locator('#mihomo-clash-groups-collapse > span')).toBeHidden();
       const menuRect = await parameters.boundingBox();
       const collapseRect = await page.locator('#mihomo-clash-groups-collapse').boundingBox();
+      const testVisibleRect = await page.locator('#mihomo-clash-test-visible').boundingBox();
       expect(Math.abs(menuRect.width - collapseRect.width)).toBeLessThanOrEqual(1);
       expect(Math.abs(menuRect.height - collapseRect.height)).toBeLessThanOrEqual(1);
+      expect(menuRect.width).toBeLessThanOrEqual(width <= 720 ? 40 : 28);
+      expect(testVisibleRect.height).toBeLessThanOrEqual(width <= 720 ? 40 : 28);
       const tab = page.locator('#mihomo-clash-tab-control');
       expect(await tab.evaluate(el => getComputedStyle(el).borderBottomColor)).toBe(await tab.evaluate(el => {
         const probe = document.createElement('span'); probe.style.color = 'var(--op-accent)'; el.append(probe);
@@ -177,6 +187,17 @@ test('Mihomo header preserves controls, service state and navigation in both the
         const box = await page.locator(`#${id}`).boundingBox();
         expect(box.x).toBeGreaterThanOrEqual(0);
         expect(box.x + box.width).toBeLessThanOrEqual(width);
+        if (id === 'mihomo-clash-mode-menu') {
+          const triggerBox = await page.locator('#mihomo-clash-status-mode').boundingBox();
+          const parentBox = await page.locator('#xk-mihomo-parameters-menu').boundingBox();
+          expect(box.y - triggerBox.y - triggerBox.height).toBeGreaterThanOrEqual(0);
+          expect(box.y - triggerBox.y - triggerBox.height).toBeLessThan(12);
+          expect(box.x).toBeGreaterThanOrEqual(parentBox.x);
+          expect(box.x + box.width).toBeLessThanOrEqual(parentBox.x + parentBox.width);
+          if (theme === 'dark' && width === 1668) {
+            await page.screenshot({ path: '.tmp/mihomo-mode-menu-open-dark.png' });
+          }
+        }
         // Check the contents too: the old theme button's label escaped its 30px slot.
         for (const child of await page.locator(`#${id}`).locator('button:visible, a:visible, .theme-toggle-text:visible, .dt-switch:visible').all()) {
           const rect = await child.boundingBox();
