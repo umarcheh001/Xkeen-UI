@@ -1,6 +1,6 @@
 import { test, expect, selectPanelView } from './fixtures.mjs';
 import {
-  statusPayload, groupsPayload, globalGroupPayload, egressPayload, setHiddenGroupsVisible,
+  statusPayload, groupsPayload, globalGroupPayload, egressPayload, setHiddenGroupsVisible, openMihomoGroupsMenu,
 } from './mihomo_clash_groups_support.mjs';
 
 // Mihomo groups: snapshots, the egress card, DNS diagnostics, choosing in a group
@@ -541,9 +541,11 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
   await expect(page.locator('[data-group-name="HIDDEN"] .xk-mihomo-group-icon--default')).toHaveCount(1);
   await expect(page.locator('[data-group-name="HIDDEN"] .xk-mihomo-group-icon--default use')).toHaveAttribute('href', /#xk-dns$/);
   await expect(page.locator('[data-group-name="HIDDEN"] .xk-mihomo-group-head')).toHaveAttribute('aria-expanded', 'false');
+  await openMihomoGroupsMenu(page);
   await page.locator('#mihomo-clash-groups-filter').fill('node-b');
   await expect(page.locator('.xk-mihomo-node-row')).toHaveCount(1);
   await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head')).toHaveAttribute('aria-expanded', 'true');
+  await page.keyboard.press('Escape');
 
   await page.locator('[data-mihomo-group-select][data-node="node-b"]').click();
   await expect(page.locator('#confirm-modal-title')).toContainText('Переключить группу');
@@ -561,7 +563,9 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
     { scope: 'provider-proxy', name: 'node-b', provider: 'provider-one', preset: 'auto' },
   );
 
+  await openMihomoGroupsMenu(page);
   await page.locator('#mihomo-clash-groups-filter').fill('');
+  await page.keyboard.press('Escape');
   await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head')).toHaveAttribute('aria-expanded', 'true');
   holdProbes();
   await page.locator('[data-mihomo-delay-visible]').click();
@@ -747,6 +751,7 @@ test('Mihomo GLOBAL selector follows runtime mode and reconciles selection local
   await expect(page.locator('[data-group-name="AUTO"]')).toBeVisible();
   await expect(page.locator('[data-group-name="GLOBAL"]')).toHaveCount(0);
 
+  await openMihomoGroupsMenu(page);
   await page.locator('#mihomo-clash-status-mode').click();
   await page.locator('[data-mihomo-runtime-mode="global"]').click();
   await expect(page.locator('#confirm-modal-title')).toContainText('Включить режим');
@@ -766,6 +771,7 @@ test('Mihomo GLOBAL selector follows runtime mode and reconciles selection local
   await expect(page.locator('[data-group-name="GLOBAL"] [data-node-name="DIRECT"]')).toHaveClass(/is-current/);
   expect(groupGets).toBe(groupGetsBeforeSelection);
 
+  await openMihomoGroupsMenu(page);
   await page.locator('#mihomo-clash-status-mode').click();
   await page.locator('[data-mihomo-runtime-mode="rule"]').click();
 

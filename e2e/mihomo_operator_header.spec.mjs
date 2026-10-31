@@ -50,7 +50,6 @@ test('Mihomo header preserves controls, service state and navigation in both the
   await page.locator('#mihomo-clash-show-hidden').check();
   await expect(page.locator('#mihomo-clash-groups-list')).toContainText('HIDDEN');
   await page.locator('#mihomo-clash-show-hidden').uncheck();
-  await page.keyboard.press('Escape');
   await page.locator('#mihomo-clash-groups-filter').fill('does-not-exist');
   await expect(page.locator('#mihomo-clash-groups-list')).not.toContainText('Заблок. сервисы');
   await page.locator('#mihomo-clash-groups-filter').fill('');
@@ -58,12 +57,15 @@ test('Mihomo header preserves controls, service state and navigation in both the
   await expect(page.locator('#mihomo-clash-mode-menu')).toBeVisible();
   await page.keyboard.press('Escape');
 
+  await page.keyboard.press('Escape');
   // Status stays in Parameters on non-control subviews; the editor has no toolbar.
   await page.locator('#mihomo-clash-tab-rules').click();
-  await expect(page.locator('#mihomo-clash-status-mode')).toBeVisible();
+  await expect(page.locator('#mihomo-clash-status-mode')).toBeHidden();
   await page.locator('[aria-controls="xk-mihomo-parameters-menu"]').click();
   await expect(page.locator('#mihomo-clash-status-strip')).toBeVisible();
+  await expect(page.locator('#mihomo-clash-status-mode')).toBeVisible();
   await page.keyboard.press('Escape');
+  await page.locator('[aria-controls="xk-mihomo-parameters-menu"]').click();
   await page.locator('#mihomo-clash-tab-config').click();
   await expect(page.locator('#mihomo-clash-runtime')).toBeHidden();
   await expect(page.locator('#mihomo-clash-tab-config')).toBeHidden();
@@ -114,17 +116,20 @@ test('Mihomo header preserves controls, service state and navigation in both the
       await page.keyboard.press('Escape');
       await expect(page.locator('#mihomo-clash-test-visible')).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-      // The approved header has inline controls: icons and labels must not stack.
+      // The approved header keeps the group controls behind one compact menu.
       const parameters = page.locator('[aria-controls="xk-mihomo-parameters-menu"]');
       const iconBox = await parameters.locator('svg').first().boundingBox();
-      const labelBox = await parameters.locator('.xk-action-label').boundingBox();
-      expect(Math.abs(iconBox.y + iconBox.height / 2 - labelBox.y - labelBox.height / 2)).toBeLessThan(3);
-      await expect(parameters.locator('.xk-disclosure-chevron use')).toHaveAttribute('href', /#xk-chevron-down$/);
-      const modeChevron = await page.locator('#mihomo-clash-status-mode > svg').boundingBox();
-      const orderChevron = await page.locator('.xk-mihomo-select-field:has(#mihomo-clash-groups-sort) > svg').boundingBox();
-      const paramsChevron = await parameters.locator('.xk-disclosure-chevron').boundingBox();
-      expect([orderChevron.width, paramsChevron.width]).toEqual([modeChevron.width, modeChevron.width]);
+      expect(iconBox.width).toBeGreaterThan(0);
+      await expect(parameters).toHaveAttribute('aria-label', 'Настройки групп Mihomo');
+      await expect(page.locator('.xk-mihomo-groups-toolbar > .xk-mihomo-toolbar-field')).toHaveCount(0);
+      await expect(page.locator('.xk-mihomo-groups-toolbar > .xk-mihomo-groups-search')).toHaveCount(0);
+      await expect(page.locator('#mihomo-clash-groups-count')).toHaveCount(0);
+      expect(await page.locator('.xk-mihomo-groups-toolbar').evaluate(el => el.parentElement?.classList.contains('xk-mihomo-workspace-head'))).toBe(true);
       await expect(page.locator('#mihomo-clash-groups-collapse > span')).toBeHidden();
+      const menuRect = await parameters.boundingBox();
+      const collapseRect = await page.locator('#mihomo-clash-groups-collapse').boundingBox();
+      expect(Math.abs(menuRect.width - collapseRect.width)).toBeLessThanOrEqual(1);
+      expect(Math.abs(menuRect.height - collapseRect.height)).toBeLessThanOrEqual(1);
       const tab = page.locator('#mihomo-clash-tab-control');
       expect(await tab.evaluate(el => getComputedStyle(el).borderBottomColor)).toBe(await tab.evaluate(el => {
         const probe = document.createElement('span'); probe.style.color = 'var(--op-accent)'; el.append(probe);
@@ -141,20 +146,15 @@ test('Mihomo header preserves controls, service state and navigation in both the
         expect(Math.abs(workspaceHead.x - header.x)).toBeLessThanOrEqual(1);
         expect(Math.abs(workspaceHead.width - header.width)).toBeLessThanOrEqual(1);
         expect(toolbar.y + toolbar.height - header.y).toBeLessThanOrEqual(215);
-        const order = await page.locator('.xk-mihomo-toolbar-field').nth(1).boundingBox();
-        const search = await page.locator('.xk-mihomo-groups-search').boundingBox();
-        expect(order.y).toBe(search.y);
-        expect(Math.abs(search.x - header.x - 457)).toBeLessThan(4);
         const logs = await page.locator('#mihomo-clash-tab-logs').boundingBox();
         const egress = await page.locator('#mihomo-clash-egress-toggle').boundingBox();
         const dns = await page.locator('#mihomo-clash-dns-toggle').boundingBox();
         const settings = await parameters.boundingBox();
-        const config = await page.locator('#mihomo-clash-tab-config').boundingBox();
         expect(egress.x).toBeGreaterThan(logs.x + logs.width);
         expect(dns.x).toBeGreaterThan(egress.x + egress.width);
         expect(Math.abs(egress.y + egress.height / 2 - logs.y - logs.height / 2)).toBeLessThan(2);
-        expect(config.x).toBeGreaterThan(settings.x + settings.width);
-        expect(config.y).toBe(settings.y);
+        expect(settings.x).toBeGreaterThanOrEqual(header.x);
+        expect(settings.x + settings.width).toBeLessThanOrEqual(header.x + header.width);
         await page.screenshot({ path: `.tmp/mihomo-header-implemented-${theme}.png`, clip: {
           x: 0, y: 0, width, height: Math.ceil(toolbar.y + toolbar.height + 8),
         } });
@@ -167,7 +167,13 @@ test('Mihomo header preserves controls, service state and navigation in both the
         expect(overlap).toBe(false);
       }
       for (const id of ['xk-mihomo-parameters-menu', 'xk-mihomo-sections-menu', 'xk-mihomo-panel-menu', 'xk-mihomo-service-menu', 'mihomo-clash-mode-menu']) {
-        await page.locator(id === 'mihomo-clash-mode-menu' ? '#mihomo-clash-status-mode' : `[aria-controls="${id}"]`).click();
+        if (id === 'mihomo-clash-mode-menu') {
+          await page.locator('[aria-controls="xk-mihomo-parameters-menu"]').click();
+          await expect(page.locator('#xk-mihomo-parameters-menu')).toBeVisible();
+          await page.locator('#mihomo-clash-status-mode').click();
+        } else {
+          await page.locator(`[aria-controls="${id}"]`).click();
+        }
         const box = await page.locator(`#${id}`).boundingBox();
         expect(box.x).toBeGreaterThanOrEqual(0);
         expect(box.x + box.width).toBeLessThanOrEqual(width);

@@ -1,6 +1,6 @@
 import { test, expect, selectPanelView } from './fixtures.mjs';
 import {
-  statusPayload, groupsPayload, setHiddenGroupsVisible,
+  statusPayload, groupsPayload, setHiddenGroupsVisible, openMihomoGroupsMenu,
 } from './mihomo_clash_groups_support.mjs';
 
 // Mihomo groups: how fresh a latency is, delay probes, country flags, sorting,
@@ -521,7 +521,9 @@ test('automatic fixed group shows lock, unfix action and sorting', async ({ page
   await page.locator('#confirm-modal-ok-btn').click();
   await expect(page.locator('[data-group-name="HIDDEN"] [data-mihomo-group-unfix]')).toHaveCount(0);
 
+  await openMihomoGroupsMenu(page);
   await page.locator('#mihomo-clash-groups-sort').selectOption('name');
+  await page.keyboard.press('Escape');
   await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head').click();
   await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-node-row').first()).toHaveAttribute('data-node-name', 'node-a');
 });
@@ -561,6 +563,7 @@ test('sorting keeps service nodes in config slots and workspace settings persist
 
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
+  await openMihomoGroupsMenu(page);
   await expect(page.locator('#mihomo-clash-groups-sort')).toHaveValue('name');
   await expect(page.locator('#mihomo-clash-latency-preset')).toHaveValue('cloudflare');
   await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head')).toHaveAttribute('aria-expanded', 'true');
@@ -568,7 +571,6 @@ test('sorting keeps service nodes in config slots and workspace settings persist
     (nodes) => nodes.map((node) => node.dataset.nodeName),
   )).toEqual(['z-node', 'DIRECT', 'a-node', 'b-node']);
   await page.locator('#mihomo-clash-groups-sort').selectOption('delay');
-  await page.locator('[aria-controls="xk-mihomo-parameters-menu"]').click();
   await page.locator('#mihomo-clash-latency-preset').selectOption('google');
   await expect.poll(() => patches.some((patch) => patch.mihomo?.proxySortOrder === 'delay')).toBe(true);
   await expect.poll(() => patches.some((patch) => patch.mihomo?.latencyPreset === 'google')).toBe(true);
@@ -767,6 +769,7 @@ test('Mihomo group disclosures keep the workspace compact and keyboard accessibl
   await page.locator('#mihomo-clash-groups-collapse').click();
   await expect(page.locator('.xk-mihomo-group-head[aria-expanded="true"]')).toHaveCount(2);
 
+  await page.locator('[aria-controls="xk-mihomo-parameters-menu"]').click();
   await page.locator('#mihomo-clash-tab-config').click();
   await expect(page.locator('#mihomo-clash-panel-config')).toBeVisible();
   await expect(page.locator('#mihomo-clash-runtime')).toBeHidden();

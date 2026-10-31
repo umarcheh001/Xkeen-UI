@@ -470,12 +470,7 @@
           "accessible_label": "Раскрыть"
         },
         {
-          "location": "xkeen-ui/static/js/pages/panel.mihomo_header.js:L132",
-          "control_type": "runtime-action",
-          "accessible_label": "Раскрыть"
-        },
-        {
-          "location": "xkeen-ui/static/js/pages/panel.mihomo_header.js:L160",
+          "location": "xkeen-ui/static/js/pages/panel.mihomo_header.js:L162",
           "control_type": "runtime-action",
           "accessible_label": "Раскрыть"
         },
@@ -2273,6 +2268,11 @@
           "accessible_label": "Дополнительные действия"
         },
         {
+          "location": "xkeen-ui/static/js/pages/panel.mihomo_header.js:L131",
+          "control_type": "runtime-action",
+          "accessible_label": "Дополнительные действия"
+        },
+        {
           "location": "xkeen-ui/static/js/terminal/modules/output_prefs.js:L84",
           "control_type": "runtime-action",
           "accessible_label": "Дополнительные действия"
@@ -3339,11 +3339,6 @@
           "accessible_label": "Настройки"
         },
         {
-          "location": "xkeen-ui/static/js/pages/panel.mihomo_header.js:L131",
-          "control_type": "runtime-action",
-          "accessible_label": "Настройки"
-        },
-        {
           "location": "xkeen-ui/static/js/pages/panel.mihomo_header.js:L82",
           "control_type": "runtime-action",
           "accessible_label": "Настройки"
@@ -3396,7 +3391,7 @@
           "accessible_label": "statistics"
         },
         {
-          "location": "xkeen-ui/static/js/pages/panel.mihomo_header.js:L139",
+          "location": "xkeen-ui/static/js/pages/panel.mihomo_header.js:L141",
           "control_type": "runtime-action",
           "accessible_label": "statistics"
         }

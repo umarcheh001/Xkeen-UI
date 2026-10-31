@@ -1,4 +1,5 @@
 import { test, expect, selectPanelView } from './fixtures.mjs';
+import { openMihomoGroupsMenu } from './mihomo_clash_groups_support.mjs';
 
 
 const VIEWPORTS = [
@@ -53,6 +54,7 @@ test('compact runtime mode switch confirms overrides and stays in the status str
 
   await openMihomo(page, 'dark', VIEWPORTS[4]);
   const trigger = page.locator('#mihomo-clash-status-mode');
+  await openMihomoGroupsMenu(page);
   await expect(trigger).toBeVisible();
   await expect(page.locator('#mihomo-clash-status-mode-value')).toHaveText('По правилам');
   await expect(trigger).toHaveAttribute('data-tooltip', /config\.yaml не изменяется/);
@@ -65,6 +67,7 @@ test('compact runtime mode switch confirms overrides and stays in the status str
   });
   expect(toolbarButtonHeights.mode).toBe(toolbarButtonHeights.egress);
 
+  await openMihomoGroupsMenu(page);
   await trigger.click();
   await expect(page.locator('#mihomo-clash-mode-menu')).toBeVisible();
   await page.locator('[data-mihomo-runtime-mode="direct"]').click();
@@ -81,6 +84,7 @@ test('compact runtime mode switch confirms overrides and stays in the status str
   expect(metrics.overflow).toBeLessThanOrEqual(1);
   expect(metrics.modeSwitches).toBe(1);
 
+  await openMihomoGroupsMenu(page);
   await trigger.click();
   await page.locator('[data-mihomo-runtime-mode="rule"]').click();
   await expect(page.locator('#mihomo-clash-status-mode-value')).toHaveText('По правилам');
@@ -180,6 +184,7 @@ test('500-connection fallback stays bounded, responsive and idle when hidden', a
   if (desktopMetrics.heap) expect(desktopMetrics.heap).toBeLessThan(256 * 1024 * 1024);
 
   const beforeHidden = runtime.requests();
+  await page.locator('[aria-controls="xk-mihomo-parameters-menu"]').click();
   await page.locator('#mihomo-clash-tab-config').click();
   await page.waitForTimeout(2300);
   expect(runtime.requests()).toBe(beforeHidden);

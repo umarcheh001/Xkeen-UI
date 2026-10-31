@@ -117,19 +117,21 @@ export function initPanelOperatorHeader() {
     }
     const config = byId('mihomo-clash-tab-config');
     const tabs = mihomoView.querySelector('.xk-mihomo-workspace-tabs');
+    const workspaceHead = mihomoView.querySelector('.xk-mihomo-workspace-head');
     const diagnosticsTabs = byId('mihomo-clash-diagnostics-tabs');
     tabs?.after(titleActions);
     // Config remains a workspace tab, now owned across the shared toolbar.
     if (tabs && config) tabs.setAttribute('aria-owns', config.id);
     const toolbar = mihomoView.querySelector('.xk-mihomo-groups-toolbar');
-    const runtime = byId('mihomo-clash-runtime');
     const controlContent = byId('mihomo-clash-control-content');
       const mode = byId('mihomo-clash-mode-switch');
       const strip = byId('mihomo-clash-status-strip');
     const params = disclosure('Параметры', 'xk-mihomo-parameters-menu');
-    params.container.classList.add('xk-mihomo-parameters');
-    setIcon(params.trigger, 'settings', { label: 'Параметры' });
-    params.trigger.insertAdjacentHTML('beforeend', iconHtml('chevron-down', 'xk-disclosure-chevron'));
+    params.container.classList.add('xk-mihomo-parameters', 'xk-mihomo-groups-menu');
+    setIcon(params.trigger, 'more');
+    params.trigger.classList.add('btn-icon', 'xk-mihomo-groups-menu-trigger');
+    params.trigger.setAttribute('aria-label', 'Настройки групп Mihomo');
+    params.trigger.setAttribute('data-tooltip', 'Настройки групп Mihomo');
     const summary = byId('mihomo-clash-connections-summary');
     const summaryToggle = create('button', 'btn-secondary');
     summaryToggle.id = 'mihomo-clash-connections-summary-toggle';
@@ -160,8 +162,8 @@ export function initPanelOperatorHeader() {
       field.insertAdjacentHTML('beforeend', iconHtml('chevron-down', 'xk-disclosure-chevron'));
     }
     if (toolbar) {
-      // Keep configuration reachable when the runtime/control panel is hidden.
-      runtime?.before(toolbar);
+      // Keep the frequent actions in the same compact row as the workspace tabs.
+      workspaceHead?.append(toolbar);
       const sort = byId('mihomo-clash-groups-sort');
       const configOrder = sort?.querySelector('option[value="config"]');
       if (configOrder) configOrder.textContent = 'Из конфигурации';
@@ -173,24 +175,63 @@ export function initPanelOperatorHeader() {
       if (mode) modeField.append(mode);
       toolbar.prepend(modeField, order);
       wrapSelect(sort);
-      const latencyPreset = byId('mihomo-clash-latency-preset');
-      for (const node of [latencyPreset, toolbar.querySelector('.xk-mihomo-groups-hidden-toggle'), toolbar.querySelector('.xk-mihomo-groups-disconnect-toggle')]) {
-        if (node) params.content.append(node);
-      }
-      wrapSelect(latencyPreset);
-      if (strip) params.content.append(strip);
+      const menuTitle = (label, controlOnly = false) => {
+        const title = create('div', 'xk-mihomo-menu-title', label);
+        if (controlOnly) title.classList.add('xk-mihomo-menu-control-only');
+        params.content.append(title);
+      };
+      const menuSeparator = (controlOnly = false) => {
+        const separator = create('div', 'xk-mihomo-menu-sep');
+        if (controlOnly) separator.classList.add('xk-mihomo-menu-control-only');
+        params.content.append(separator);
+      };
+      menuTitle('Поиск', true);
       const search = toolbar.querySelector('.xk-mihomo-groups-search');
+      if (search) {
+        search.classList.add('xk-mihomo-menu-control-only');
+        params.content.append(search);
+      }
+      menuSeparator();
+      menuTitle('Вид');
+      const latencyPreset = byId('mihomo-clash-latency-preset');
+      const hiddenToggle = toolbar.querySelector('.xk-mihomo-groups-hidden-toggle');
+      const disconnectToggle = toolbar.querySelector('.xk-mihomo-groups-disconnect-toggle');
+      order.classList.add('xk-mihomo-menu-control-only');
+      params.content.append(modeField, order);
+      if (hiddenToggle) {
+        hiddenToggle.classList.add('xk-mihomo-menu-control-only');
+        params.content.append(hiddenToggle);
+      }
+      menuSeparator(true);
+      menuTitle('Проверка', true);
+      if (latencyPreset) {
+        wrapSelect(latencyPreset);
+        latencyPreset.parentElement.classList.add('xk-mihomo-menu-control-only');
+        params.content.append(latencyPreset.parentElement);
+      }
+      if (disconnectToggle) {
+        disconnectToggle.classList.add('xk-mihomo-menu-control-only');
+        params.content.append(disconnectToggle);
+      }
+      menuSeparator();
+      menuTitle('Действия');
+      if (config) {
+        config.classList.add('xk-mihomo-menu-action');
+        params.content.append(config);
+      }
+      if (strip) params.content.append(strip);
       const searchInput = byId('mihomo-clash-groups-filter');
       if (searchInput) searchInput.placeholder = 'Группа, узел или IP';
-      if (search) search.after(params.container);
       if (diagnosticsTabs) {
         diagnosticsTabs.classList.add('xk-mihomo-diagnostics-toolbar-tabs');
         params.container.after(diagnosticsTabs);
       }
-      if (config) (diagnosticsTabs || params.container).after(config);
+      const collapse = byId('mihomo-clash-groups-collapse');
+      if (collapse) collapse.before(params.container);
+      else toolbar.append(params.container);
       params.container.after(summaryToggle);
       const count = byId('mihomo-clash-groups-count');
-      if (count) mihomoView.querySelector('.xk-mihomo-workspace-head').append(count);
+      if (count) count.remove();
       function syncSubview() {
         // A runtime-state mutation is also observed below. Do not close the
         // global service menu while the Mihomo facade changes state: the core
@@ -209,13 +250,10 @@ export function initPanelOperatorHeader() {
         toolbar.hidden = configuration;
         if (diagnosticsTabs) diagnosticsTabs.hidden = !diagnostics;
         toolbar.dataset.controlReady = String(control && !controlContent?.hidden);
-        if (count) count.hidden = !control;
         if (configuration) {
           // Keep a visible entry point in the tablist while its selected tab is hidden.
           byId('mihomo-clash-tab-control').tabIndex = 0;
-          if (toolbar.contains(document.activeElement) || runtime?.contains(document.activeElement)) {
-            mihomoView.querySelector('[data-xk-toggle="mihomo-card"]')?.focus({ preventScroll: true });
-          }
+          mihomoView.querySelector('[data-xk-toggle="mihomo-card"]')?.focus({ preventScroll: true });
         }
       }
       if (tabs) new MutationObserver(syncSubview).observe(tabs, { attributes: true, attributeFilter: ['aria-selected'], subtree: true });

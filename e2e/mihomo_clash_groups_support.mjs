@@ -131,3 +131,11 @@ export async function setHiddenGroupsVisible(page, visible = true) {
     await expect(input).not.toBeChecked();
   }
 }
+
+export async function openMihomoGroupsMenu(page) {
+  const menu = page.locator('#xk-mihomo-parameters-menu');
+  if (!(await menu.isVisible())) {
+    await page.locator('[aria-controls="xk-mihomo-parameters-menu"]').click();
+    await expect(menu).toBeVisible();
+  }
+}
