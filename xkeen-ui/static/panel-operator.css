@@ -24140,17 +24140,22 @@ body.panel-page #view-mihomo .xk-mihomo-workspace-head > .xk-mihomo-groups-toolb
   margin-left: 0;
 }
 body.panel-page #view-mihomo .xk-mihomo-workspace-head > .xk-mihomo-groups-toolbar :is(.xk-mihomo-groups-menu-trigger, #mihomo-clash-groups-collapse, #mihomo-clash-test-visible) {
-  height: 28px;
-  min-height: 28px;
-  font-size: 12px !important;
+  box-sizing: border-box;
+  height: 26px;
+  min-height: 26px;
+  font-size: 11.5px !important;
 }
 body.panel-page #view-mihomo .xk-mihomo-workspace-head :is(.xk-mihomo-groups-menu-trigger, #mihomo-clash-groups-collapse) {
-  width: 28px;
-  min-width: 28px;
+  width: 26px;
+  min-width: 26px;
   padding: 0 !important;
 }
+body.panel-page #view-mihomo .xk-mihomo-workspace-head :is(.xk-mihomo-groups-menu-trigger, #mihomo-clash-groups-collapse, #mihomo-clash-test-visible) .xk-action-icon {
+  width: 13px;
+  height: 13px;
+}
 body.panel-page #view-mihomo .xk-mihomo-workspace-head #mihomo-clash-test-visible {
-  padding: 0 8px;
+  padding: 0 7px;
 }
 body.panel-page #view-mihomo .xk-mihomo-workspace-head #mihomo-clash-groups-collapse {
   margin-left: 0;

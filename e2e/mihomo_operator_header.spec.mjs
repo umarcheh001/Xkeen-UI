@@ -138,8 +138,8 @@ test('Mihomo header preserves controls, service state and navigation in both the
       const testVisibleRect = await page.locator('#mihomo-clash-test-visible').boundingBox();
       expect(Math.abs(menuRect.width - collapseRect.width)).toBeLessThanOrEqual(1);
       expect(Math.abs(menuRect.height - collapseRect.height)).toBeLessThanOrEqual(1);
-      expect(menuRect.width).toBeLessThanOrEqual(width <= 720 ? 40 : 28);
-      expect(testVisibleRect.height).toBeLessThanOrEqual(width <= 720 ? 40 : 28);
+      expect(menuRect.width).toBeLessThanOrEqual(width <= 720 ? 40 : 26);
+      expect(testVisibleRect.height).toBeLessThanOrEqual(width <= 720 ? 40 : 26);
       const tab = page.locator('#mihomo-clash-tab-control');
       expect(await tab.evaluate(el => getComputedStyle(el).borderBottomColor)).toBe(await tab.evaluate(el => {
         const probe = document.createElement('span'); probe.style.color = 'var(--op-accent)'; el.append(probe);
