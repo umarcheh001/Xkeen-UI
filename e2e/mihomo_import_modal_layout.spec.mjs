@@ -4,7 +4,7 @@ import { test, expect, selectPanelView } from './fixtures.mjs';
 const AMNEZIA_LOCATIONS = [
   'FI', 'DE', 'FR', 'GB', 'NL', 'SE', 'NO', 'PL', 'ES', 'IT',
   'CH', 'AT', 'BE', 'CZ', 'DK', 'EE', 'GR', 'HU', 'IE', 'IS',
-  'LT', 'LU', 'LV', 'PT', 'RO', 'SK', 'SI', 'US', 'CA', 'BR',
+  'LT', 'LU', 'LV', 'PT', 'RO', 'SK', 'SI', 'US-EAST', 'CA', 'BR',
   'AU', 'JP', 'KR', 'SG', 'HK', 'AE', 'TR', 'KZ', 'IN', 'ID',
 ].map((code) => ({ code, name: `Location ${code}` }));
 
@@ -13,7 +13,10 @@ async function openMihomoImport(page) {
   await selectPanelView(page, 'mihomo');
   await expect(page.locator('#view-mihomo')).toBeVisible();
   const configTab = page.locator('#mihomo-clash-tab-config');
-  if (await configTab.isVisible()) await configTab.click();
+  if (!await configTab.isVisible()) {
+    await page.locator('[aria-controls="xk-mihomo-parameters-menu"]').click();
+  }
+  await configTab.click();
   const menu = page.locator('.xk-mihomo-menu');
   await menu.locator('summary').click();
   await expect(page.locator('#mihomo-import-node-btn')).toBeVisible();
@@ -62,6 +65,9 @@ test('Amnezia Premium locations use compact flags and a two-column scroller', as
   expect(layout.svgWidth).toBeLessThanOrEqual(20);
   expect(layout.svgHeight).toBeGreaterThanOrEqual(10);
   expect(layout.svgHeight).toBeLessThanOrEqual(14);
+  const usEastFlag = shell.locator('.xk-mi-amnezia-location-row:has([data-location-code="US-EAST"]) .xk-mi-amnezia-location-flag');
+  await expect(usEastFlag).toHaveAttribute('data-country', 'US');
+  await expect(usEastFlag.locator('svg')).toBeVisible();
 });
 
 

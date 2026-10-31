@@ -2477,7 +2477,7 @@
           "accessible_label": "Открыть"
         },
         {
-          "location": "xkeen-ui/static/js/features/mihomo_import.js:L4229",
+          "location": "xkeen-ui/static/js/features/mihomo_import.js:L4230",
           "control_type": "runtime-action",
           "accessible_label": "Открыть"
         },

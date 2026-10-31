@@ -3406,12 +3406,13 @@ let mihomoImportModuleApi = null;
       const name = String(location && location.name || code).trim() || code;
       if (!code) return '';
       const checked = selectedCodes.has(code) ? ' checked' : '';
-      const flag = mihomoCountryFlag(code);
+      const flagCode = code.match(/^[A-Z]{2}(?=[-_])/)?.[0] || code;
+      const flag = mihomoCountryFlag(flagCode);
       const flagHtml = flag.svg || escapeHtml(flag.region || flag.code || '');
       return (
         '<label class="global-autorestart-toggle xk-mi-amnezia-location-row">' +
           '<input type="checkbox" class="mihomo-import-amnezia-location-cb" data-location-code="' + escapeHtml(code) + '"' + checked + '>' +
-          '<span class="xk-mi-amnezia-location-label"><span class="xk-sub-node-country xk-mi-amnezia-location-flag" data-country="' + escapeHtml(code) + '" aria-hidden="true">' + flagHtml + '</span>' + escapeHtml(name) + ' <code>' + escapeHtml(code) + '</code></span>' +
+          '<span class="xk-mi-amnezia-location-label"><span class="xk-sub-node-country xk-mi-amnezia-location-flag" data-country="' + escapeHtml(flagCode) + '" aria-hidden="true">' + flagHtml + '</span>' + escapeHtml(name) + ' <code>' + escapeHtml(code) + '</code></span>' +
         '</label>'
       );
     }).filter(Boolean);

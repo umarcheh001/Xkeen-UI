@@ -301,9 +301,9 @@ test('Mihomo connection summary can be hidden, keeps updating and remembers its 
   await expect(toggle.locator('use')).toHaveAttribute('href', /#xk-statistics$/);
   const parametersBox = await page.locator('[aria-controls="xk-mihomo-parameters-menu"]').boundingBox();
   const toggleBox = await toggle.boundingBox();
-  const configBox = await page.locator('#mihomo-clash-tab-config').boundingBox();
   expect(toggleBox.x).toBeGreaterThan(parametersBox.x + parametersBox.width);
-  expect(configBox.x).toBeGreaterThan(toggleBox.x + toggleBox.width);
+  expect(toggleBox.height).toBe(parametersBox.height);
+  expect(toggleBox.y).toBe(parametersBox.y);
   const expandedTable = await table.boundingBox();
   const summaryBox = await summary.boundingBox();
   await toggle.click();

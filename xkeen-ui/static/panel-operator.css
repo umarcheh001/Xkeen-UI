@@ -24138,7 +24138,7 @@ body.panel-page #view-mihomo .xk-mihomo-workspace-head > .xk-mihomo-groups-toolb
 body.panel-page #view-mihomo .xk-mihomo-workspace-head > .xk-mihomo-groups-toolbar .xk-mihomo-groups-menu {
   margin-left: 0;
 }
-body.panel-page #view-mihomo .xk-mihomo-workspace-head > .xk-mihomo-groups-toolbar :is(.xk-mihomo-groups-menu-trigger, #mihomo-clash-groups-collapse, #mihomo-clash-test-visible) {
+body.panel-page #view-mihomo .xk-mihomo-workspace-head > .xk-mihomo-groups-toolbar :is(.xk-mihomo-groups-menu-trigger, #mihomo-clash-groups-collapse, #mihomo-clash-test-visible, #mihomo-clash-connections-summary-toggle) {
   box-sizing: border-box;
   height: 26px;
   min-height: 26px;
@@ -24149,11 +24149,11 @@ body.panel-page #view-mihomo .xk-mihomo-workspace-head :is(.xk-mihomo-groups-men
   min-width: 26px;
   padding: 0 !important;
 }
-body.panel-page #view-mihomo .xk-mihomo-workspace-head :is(.xk-mihomo-groups-menu-trigger, #mihomo-clash-groups-collapse, #mihomo-clash-test-visible) .xk-action-icon {
+body.panel-page #view-mihomo .xk-mihomo-workspace-head :is(.xk-mihomo-groups-menu-trigger, #mihomo-clash-groups-collapse, #mihomo-clash-test-visible, #mihomo-clash-connections-summary-toggle) .xk-action-icon {
   width: 13px;
   height: 13px;
 }
-body.panel-page #view-mihomo .xk-mihomo-workspace-head #mihomo-clash-test-visible {
+body.panel-page #view-mihomo .xk-mihomo-workspace-head :is(#mihomo-clash-test-visible, #mihomo-clash-connections-summary-toggle) {
   padding: 0 7px;
 }
 body.panel-page #view-mihomo .xk-mihomo-workspace-head #mihomo-clash-groups-collapse {
@@ -24184,7 +24184,7 @@ body.panel-page #view-mihomo .xk-mihomo-workspace-head #mihomo-clash-groups-coll
 }
 
 @media (max-width: 720px) {
-  body.panel-page #view-mihomo .xk-mihomo-workspace-head > .xk-mihomo-groups-toolbar :is(.xk-mihomo-groups-menu-trigger, #mihomo-clash-groups-collapse, #mihomo-clash-test-visible) {
+  body.panel-page #view-mihomo .xk-mihomo-workspace-head > .xk-mihomo-groups-toolbar :is(.xk-mihomo-groups-menu-trigger, #mihomo-clash-groups-collapse, #mihomo-clash-test-visible, #mihomo-clash-connections-summary-toggle) {
     height: 40px;
     min-height: 40px;
   }
