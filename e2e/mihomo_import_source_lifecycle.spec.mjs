@@ -14,7 +14,11 @@ async function prepare(page, { theme = 'dark', engine = 'codemirror' } = {}) {
   await page.route('**/api/mihomo/subscriptions', (route) => route.fulfill({ json: { ok: true, subscriptions: [] } }));
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
-  await page.locator('#mihomo-clash-tab-config').click();
+  const configTab = page.locator('#mihomo-clash-tab-config');
+  if (!await configTab.isVisible()) {
+    await page.locator('[aria-controls="xk-mihomo-parameters-menu"]').click();
+  }
+  await configTab.click();
   await page.evaluate(async (content) => {
     const { getMihomoPanelApi } = await import('/static/js/features/mihomo_panel.js');
     getMihomoPanelApi().setEditorText(content);
@@ -281,7 +285,7 @@ test('managed subscriptions remain reachable from the source without loading pre
   await page.route('**/api/mihomo/subscriptions', (route) => route.fulfill({
     json: { ok: true, subscriptions: [{
       id: 'synthetic-sub', tag: 'Stage3 fixture', source: 'config',
-      interval_hours: 24, enabled: true, proxy_names: ['Fixture'],
+      interval_hours: 168, enabled: true, proxy_names: ['Fixture'],
     }] },
   }));
   await open(page);
@@ -291,6 +295,12 @@ test('managed subscriptions remain reachable from the source without loading pre
   await details.locator('summary').click();
   await expect(page.locator('#mihomo-import-xray-managed')).toContainText('Stage3 fixture');
   await expect(page.locator('#mihomo-import-xray-managed button')).toHaveCount(5);
+  const interval = page.locator('#mihomo-import-xray-managed .xk-mi-managed-interval');
+  await expect(interval).toHaveValue('168');
+  await expect(interval).toHaveCSS('width', '60px');
+  await expect(interval).toHaveCSS('padding-right', '4px');
+  await interval.hover();
+  await page.locator('#mihomo-import-xray-managed').screenshot({ path: '.tmp/mihomo-managed-interval.png' });
   await expect(page.locator(`${MODAL} .cm-editor, ${MODAL} .monaco-editor`)).toHaveCount(0);
 });
 

@@ -8021,14 +8021,14 @@ html[data-theme="light"] #routing-forced-rules-modal .xk-chip[data-kind="ip"] {
 }
 
 .xk-mi-managed-interval {
-  width: 54px;
-  min-width: 54px;
+  width: 60px;
+  min-width: 60px;
   height: 26px;
-  padding: 2px 18px 2px 7px;
+  padding: 2px 4px 2px 8px;
   font-size: calc(12px * var(--xk-font-scale));
   font-weight: 700;
   line-height: 1;
-  text-align: center;
+  text-align: left;
   background-position: right 6px center;
   background-size: 11px 11px;
   box-shadow: 0 3px 8px rgba(15, 23, 42, 0.28);
