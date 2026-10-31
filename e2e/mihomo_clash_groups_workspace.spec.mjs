@@ -22,9 +22,61 @@ test('Mihomo groups recover from transient snapshot failures without restarting 
 
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
-  await expect(page.locator('[data-mihomo-groups-retry]')).toBeVisible();
+  const retry = page.locator('[data-mihomo-groups-retry]');
+  await expect(retry).toBeVisible();
+  const readRetryLayout = () => page.evaluate(() => {
+    const button = document.querySelector('[data-mihomo-groups-retry]');
+    const icon = button?.querySelector('.xk-action-icon')?.getBoundingClientRect();
+    const label = button?.querySelector('.xk-action-label')?.getBoundingClientRect();
+    return {
+      clientWidth: button?.clientWidth || 0,
+      scrollWidth: button?.scrollWidth || 0,
+      sameRow: !!icon && !!label && Math.abs(icon.top - label.top) < 5,
+      pageOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    };
+  });
+  expect(await readRetryLayout()).toMatchObject({ sameRow: true, pageOverflow: false });
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileRetry = await readRetryLayout();
+  expect(mobileRetry).toMatchObject({
+    clientWidth: mobileRetry.scrollWidth,
+    sameRow: true,
+    pageOverflow: false,
+  });
   expect(requests).toBe(2);
-  await page.locator('[data-mihomo-groups-retry]').click();
+  await retry.click();
+  await expect(page.locator('#mihomo-clash-groups-list')).toContainText('AUTO');
+  expect(requests).toBe(3);
+});
+
+test('Mihomo group retry stays aligned after a network failure', async ({ page }) => {
+  let requests = 0;
+  await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
+  await page.route('**/api/mihomo/clash/proxy-groups', (route) => {
+    requests += 1;
+    if (requests <= 2) return route.abort('failed');
+    return route.fulfill({ json: groupsPayload() });
+  });
+
+  await page.goto('/');
+  await selectPanelView(page, 'mihomo');
+  const error = page.locator('#mihomo-clash-groups-list [role="alert"]');
+  const retry = page.locator('[data-mihomo-groups-retry]');
+  await expect(error).toContainText('Failed to fetch');
+  await expect(retry).toBeVisible();
+  await expect(retry).toHaveAccessibleName('Повторить');
+  await page.setViewportSize({ width: 390, height: 844 });
+  const layout = await retry.evaluate((button) => {
+    const icon = button.querySelector('.xk-action-icon').getBoundingClientRect();
+    const label = button.querySelector('.xk-action-label').getBoundingClientRect();
+    return {
+      sameRow: Math.abs(icon.top - label.top) < 5,
+      contentFits: button.scrollWidth <= button.clientWidth + 1,
+      pageOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    };
+  });
+  expect(layout).toEqual({ sameRow: true, contentFits: true, pageOverflow: false });
+  await retry.click();
   await expect(page.locator('#mihomo-clash-groups-list')).toContainText('AUTO');
   expect(requests).toBe(3);
 });
@@ -80,6 +132,80 @@ test('Mihomo node tiles keep compact metadata and reserve room for latency', asy
   await page.setViewportSize({ width: 375, height: 800 });
   const mobile = await geometry();
   expect(mobile.endpointRight).toBeLessThanOrEqual(mobile.probeLeft + 1);
+});
+
+
+test('Mihomo Smart reset action keeps its icon and label aligned on narrow screens', async ({ page }) => {
+  const payload = groupsPayload();
+  payload.groups[0] = {
+    ...payload.groups[0],
+    name: 'SMART',
+    type: 'Smart',
+    icon: '',
+  };
+  payload.groups[1] = {
+    ...payload.groups[1],
+    name: 'ROUTER',
+    type: 'Selector',
+    now: 'SMART',
+    fixed: '',
+    hidden: false,
+    nodes: [{ name: 'SMART', type: 'Smart', alive: true, udp: true, provider: '', provider_candidates: [], delay_ms: null }],
+  };
+  await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
+  await page.route(/\/api\/mihomo\/clash\/proxy-groups(?:\/.*)?$/, (route) => route.fulfill({ json: payload }));
+  await page.route('**/api/mihomo/clash/smart/weights', (route) => route.fulfill({
+    json: { ok: true, weights: { SMART: [{ name: 'node-a', rank: 'best', weight: 75.2 }] } },
+  }));
+
+  await page.goto('/');
+  await selectPanelView(page, 'mihomo');
+  const reset = page.locator('[data-group-name="SMART"] [data-mihomo-smart-flush]');
+  await expect(reset).toBeVisible();
+  await expect(reset.locator('.xk-action-label')).toHaveText('Сбросить Smart');
+  await expect(reset).toHaveAccessibleName('Сбросить Smart');
+  await expect(page.locator('[data-group-name="SMART"] .xk-mihomo-group-icon use'))
+    .toHaveAttribute('href', /#xk-smart$/);
+  await expect(page.locator('[data-group-name="ROUTER"] .xk-mihomo-picker-node-icon use'))
+    .toHaveAttribute('href', /#xk-smart$/);
+  await page.locator('[data-group-name="ROUTER"] .xk-mihomo-group-head').click();
+  await expect(page.locator('[data-group-name="ROUTER"] .xk-mihomo-node-icon use'))
+    .toHaveAttribute('href', /#xk-smart$/);
+
+  const readLayout = () => page.evaluate(() => {
+    const button = document.querySelector('[data-group-name="SMART"] [data-mihomo-smart-flush]');
+    const icon = button?.querySelector('.xk-action-icon')?.getBoundingClientRect();
+    const label = button?.querySelector('.xk-action-label')?.getBoundingClientRect();
+    const box = button?.getBoundingClientRect();
+    return {
+      buttonWidth: box ? Math.round(box.width) : 0,
+      buttonHeight: box ? Math.round(box.height) : 0,
+      buttonScrollWidth: button?.scrollWidth || 0,
+      buttonClientWidth: button?.clientWidth || 0,
+      iconTop: icon?.top ?? null,
+      labelTop: label?.top ?? null,
+      sameRow: !!icon && !!label && Math.abs(icon.top - label.top) < 5,
+      labelDisplay: button ? getComputedStyle(button.querySelector('.xk-action-label')).display : '',
+      pageOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    };
+  });
+
+  expect(await readLayout()).toMatchObject({
+    buttonScrollWidth: expect.any(Number),
+    buttonClientWidth: expect.any(Number),
+    sameRow: true,
+    pageOverflow: false,
+  });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobile = await readLayout();
+  expect(mobile).toMatchObject({
+    buttonScrollWidth: mobile.buttonClientWidth,
+    labelDisplay: 'none',
+    pageOverflow: false,
+  });
+  expect(mobile.buttonHeight).toBeLessThanOrEqual(40);
+  expect(mobile.iconTop).not.toBeNull();
 });
 
 

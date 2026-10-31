@@ -59,7 +59,7 @@
 
   // Sprite icon names mirror the operator console vocabulary: a toast icon and
   // a button icon must be the same Tabler glyph at the same weight.
-  const SPRITE_URL = '/static/icons/operator.svg?v=20261019a';
+  const SPRITE_URL = '/static/icons/operator.svg?v=20261031a';
 
   const ICON_NAME_BY_KIND = {
     success: 'check',

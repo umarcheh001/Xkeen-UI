@@ -21688,6 +21688,20 @@ body.panel-page .xk-mihomo-group-unfix {
 
 body.panel-page .xk-mihomo-group-unfix .xk-action-icon { width: 14px; height: 14px; }
 
+body.panel-page .xk-mihomo-group-smart-flush {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding-inline: 8px;
+  white-space: nowrap;
+}
+
+body.panel-page .xk-mihomo-group-smart-flush .xk-action-icon {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+}
+
 body.panel-page .xk-mihomo-group-head:not(.is-collapsed) {
   border-bottom: 1px solid var(--op-border);
 }
@@ -22452,6 +22466,29 @@ body.panel-page .xk-mihomo-groups-empty {
   text-align: center;
 }
 
+/* Error-state retry is rendered after the groups request fails, outside the
+ * regular toolbar action rules. Keep its icon and label on one compact row. */
+body.panel-page .xk-mihomo-groups-empty [data-mihomo-groups-retry] {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+body.panel-page .xk-mihomo-groups-empty [data-mihomo-groups-retry] .xk-action-icon {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
+body.panel-page .xk-mihomo-groups-empty [data-mihomo-groups-retry] .xk-action-label {
+  display: inline !important;
+  line-height: 1;
+}
+
 @media (prefers-reduced-motion: reduce) {
   body.panel-page .xk-mihomo-runtime[aria-busy="true"] .xk-action-icon {
     animation: none !important;
@@ -22616,6 +22653,16 @@ body.panel-page .xk-mihomo-groups-empty {
   }
 
   body.panel-page .xk-mihomo-group-test span {
+    display: none;
+  }
+
+  body.panel-page .xk-mihomo-group-smart-flush {
+    width: 34px;
+    min-width: 34px;
+    padding: 0;
+  }
+
+  body.panel-page .xk-mihomo-group-smart-flush .xk-action-label {
     display: none;
   }
 

@@ -890,6 +890,9 @@ function thematicGroupIcon(name) {
 
 function nodeVisualIconHtml(node) {
   const nestedGroup = allGroups().find((group) => group.name === node?.name);
+  if (nestedGroup && !node?.icon && !nestedGroup.icon && String(nestedGroup.type || '').trim().toLowerCase() === 'smart') {
+    return `<span class="xk-mihomo-node-icon" aria-hidden="true">${iconHtml('smart')}</span>`;
+  }
   const icon = String(node?.icon || nestedGroup?.icon || thematicGroupIcon(node?.name) || '').trim();
   if (!icon) return '';
   return `<span class="xk-mihomo-node-icon" aria-hidden="true"><img src="${escapeHtml(icon)}" alt="" loading="lazy" referrerpolicy="no-referrer"></span>`;
@@ -993,6 +996,10 @@ function groupIconHtml(group) {
   // Older configs often omit icons for the built-in automatic groups. Keep
   // those cards visually identifiable even before the template is regenerated.
   const name = String(group.name || '').trim().toLowerCase();
+  const type = String(group.type || '').trim().toLowerCase();
+  if (!icon && type === 'smart') {
+    return `<span class="xk-mihomo-group-icon xk-mihomo-group-icon--default" aria-hidden="true">${iconHtml('smart', 'xk-mihomo-group-default-icon')}</span>`;
+  }
   const thematicIcon = thematicGroupIcon(name);
   const resolvedIcon = icon || thematicIcon;
   if (!resolvedIcon) {
@@ -1011,6 +1018,9 @@ function groupFixedStatusHtml(group) {
 
 function pickerNodeIconHtml(node) {
   const nestedGroup = allGroups().find((group) => group.name === node?.name);
+  if (nestedGroup && !nestedGroup.icon && String(nestedGroup.type || '').trim().toLowerCase() === 'smart') {
+    return `<span class="xk-mihomo-picker-node-icon xk-mihomo-picker-node-icon--default" aria-hidden="true">${iconHtml('smart')}</span>`;
+  }
   const groupIcon = String(nestedGroup?.icon || thematicGroupIcon(node?.name) || '').trim();
   if (groupIcon) {
     return `<span class="xk-mihomo-picker-node-icon xk-mihomo-picker-node-icon--group"><img src="${escapeHtml(groupIcon)}" alt="" loading="lazy" referrerpolicy="no-referrer"></span>`;
@@ -1141,7 +1151,7 @@ function renderGroup(group) {
           ${groupFixedStatusHtml(group)}
         </div>
         <div class="xk-mihomo-group-actions">
-          ${canFlushSmart ? `<button type="button" class="btn-secondary xk-mihomo-group-smart-flush" data-mihomo-smart-flush="1" data-group="${escapeHtml(group.name)}" data-tooltip="Сбросить историю и веса Smart для всех Smart-групп">${iconHtml('refresh')}<span class="xk-action-label">Сбросить Smart</span></button>` : ''}
+          ${canFlushSmart ? `<button type="button" class="btn-secondary xk-mihomo-group-smart-flush" data-mihomo-smart-flush="1" data-group="${escapeHtml(group.name)}" aria-label="Сбросить Smart" data-tooltip="Сбросить историю и веса Smart для всех Smart-групп">${iconHtml('refresh')}<span class="xk-action-label">Сбросить Smart</span></button>` : ''}
           ${canUnfix ? `<button type="button" class="btn-secondary xk-mihomo-group-unfix" data-mihomo-group-unfix="1" data-group="${escapeHtml(group.name)}">${iconHtml('lock')}<span>Вернуть автоматический выбор</span></button>` : ''}
           ${collapsed || !canTestGroup ? '' : `<button type="button" class="btn-secondary xk-mihomo-group-test" data-mihomo-group-delay="1"
             data-group="${escapeHtml(group.name)}">${iconHtml('ping')}<span class="xk-action-label">Тест группы</span></button>`}
