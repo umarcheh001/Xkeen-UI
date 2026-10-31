@@ -6,6 +6,7 @@ test('HWID subscription uses the resizable Operator workbench and stretches its 
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
   await expect(page.locator('#view-mihomo')).toBeVisible();
+  await page.locator('[aria-controls="xk-mihomo-parameters-menu"]').click();
   await page.locator('#mihomo-clash-tab-config').click();
   const menu = page.locator('.xk-mihomo-menu');
   await menu.locator('summary').click();
@@ -62,6 +63,7 @@ test('HWID device profile is compact, editable, and resets to Mihomo panel defau
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
   await expect(page.locator('#view-mihomo')).toBeVisible();
+  await page.locator('[aria-controls="xk-mihomo-parameters-menu"]').click();
   await page.locator('#mihomo-clash-tab-config').click();
   const menu = page.locator('.xk-mihomo-menu');
   await menu.locator('summary').click();
@@ -96,4 +98,17 @@ test('HWID device profile is compact, editable, and resets to Mihomo panel defau
   expect(density.gap).toBeLessThanOrEqual(8);
   expect(density.paddingTop).toBeLessThanOrEqual(10);
   expect(density.maxInputHeight).toBeLessThanOrEqual(36);
+
+  await page.setViewportSize({ width: 390, height: 900 });
+  const mobileFlow = await page.evaluate(() => {
+    const modal = document.querySelector('#mihomo-hwid-modal');
+    const controls = modal?.querySelector('.xk-hw-panel--controls')?.getBoundingClientRect();
+    const preview = modal?.querySelector('.xk-hw-panel--preview')?.getBoundingClientRect();
+    return {
+      noHorizontalOverflow: document.documentElement.scrollWidth <= window.innerWidth,
+      previewStartsAfterControls: !!controls && !!preview && preview.top >= controls.bottom - 1,
+    };
+  });
+  expect(mobileFlow.noHorizontalOverflow).toBe(true);
+  expect(mobileFlow.previewStartsAfterControls).toBe(true);
 });

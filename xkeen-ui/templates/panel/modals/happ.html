@@ -15,8 +15,29 @@
         </div>
 
         <div class="modal-body xk-hw-body">
-          <div class="xk-hw-grid">
+          <section class="xk-hw-lead" aria-label="Порядок настройки HWID-подписки">
+            <div class="xk-hw-lead-icon" aria-hidden="true">{{ op_icon('hwid') }}</div>
+            <div class="xk-hw-lead-copy">
+              <div class="xk-hw-lead-title">Профиль устройства и provider</div>
+              <div class="xk-hw-lead-desc">Проверьте URL, при необходимости отредактируйте HWID-профиль и убедитесь, что итоговый provider выглядит правильно перед записью.</div>
+            </div>
+            <div class="xk-hw-chiprow" aria-hidden="true">
+              <span class="xk-hw-chip">HWID headers</span>
+              <span class="xk-hw-chip">Editable profile</span>
+              <span class="xk-hw-chip">YAML preview</span>
+            </div>
+          </section>
+
+          <div class="xk-hw-shell">
+            <div class="xk-hw-grid">
             <section class="xk-hw-panel xk-hw-panel--controls">
+              <div class="xk-hw-panel-head">
+                <div>
+                  <div class="xk-hw-section-kicker">Шаг 1</div>
+                  <div class="xk-hw-section-title">Источник подписки</div>
+                  <div class="xk-hw-section-subtitle">Укажите URL и имя provider для будущей записи в <code>proxy-providers</code>.</div>
+                </div>
+              </div>
               <div class="xk-hw-form-grid">
                 <label class="xk-hw-field xk-hw-field--full">
                   <span class="hint-label">URL подписки</span>
@@ -95,6 +116,7 @@
             <section class="xk-hw-panel xk-hw-panel--preview">
               <div class="xk-hw-section-head">
                 <div>
+                  <div class="xk-hw-section-kicker">Шаг 2</div>
                   <div class="xk-hw-section-title">YAML preview</div>
                   <div class="xk-hw-section-subtitle">Provider будет добавлен в <code>proxy-providers</code> именно в таком виде.</div>
                 </div>
@@ -111,6 +133,7 @@
                 <textarea id="mihomo-hwid-preview" class="xkeen-textarea outbounds-gen-preview xk-hw-preview" spellcheck="false" readonly></textarea>
               </div>
             </section>
+            </div>
           </div>
         </div>
 
