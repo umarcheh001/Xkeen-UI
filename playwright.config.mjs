@@ -5,6 +5,7 @@ import { defineConfig, devices } from '@playwright/test';
 // external server (E2E_BASE_URL) is shared and stays serial; `--workers=1`
 // gives the serial run for the local servers.
 const SERIAL = !!process.env.E2E_BASE_URL;
+const WORKERS = Math.max(1, Number.parseInt(process.env.XKEEN_E2E_WORKERS || '4', 10) || 4);
 
 // Speed measurements (tests tagged @perf) are slow to set up and depend on the
 // machine, so a normal run skips them. They run when asked for by name
@@ -28,7 +29,7 @@ export default defineConfig({
   fullyParallel: false,
   // Tests of one file share a server and run in order; only files are spread
   // across workers.
-  workers: SERIAL ? 1 : 4,
+  workers: SERIAL ? 1 : WORKERS,
   reporter: [
     ['list'],
     ['html', { open: 'never' }],

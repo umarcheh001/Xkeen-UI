@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 615,
-      "size_bytes": 8293075,
+      "size_bytes": 8293174,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -9422,7 +9422,7 @@
       "module_id": "core",
       "kind": "configuration",
       "path": "playwright.config.mjs",
-      "size_bytes": 1939,
+      "size_bytes": 2038,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -9437,7 +9437,8 @@
       ],
       "environment_variables": [
         "XKEEN_E2E_PERF",
-        "XKEEN_E2E_PORT"
+        "XKEEN_E2E_PORT",
+        "XKEEN_E2E_WORKERS"
       ],
       "removable": false
     },
