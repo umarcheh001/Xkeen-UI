@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 617,
-      "size_bytes": 8299445,
+      "size_bytes": 8299939,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -4633,7 +4633,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_frontend_runtime_hotfixes.py",
-      "size_bytes": 143524,
+      "size_bytes": 144018,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
