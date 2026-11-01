@@ -1309,6 +1309,7 @@ def test_p5_top_level_router_prefers_history_navigation_and_keeps_hard_navigatio
     }""" in helper
 
     assert "const fn = replace ? historyRef.replaceState : historyRef.pushState;" in router
+    assert "import { animateScreenEnter, animateScreenLeave } from './screen_motion.js';" in router
     assert """if (currentScreen !== nextScreen || !state.currentScreenMounted) {
       await runScreenLifecycle(nextScreen, 'mount', {
         router: api,
@@ -1319,6 +1320,8 @@ def test_p5_top_level_router_prefers_history_navigation_and_keeps_hard_navigatio
     }
 
     if (currentScreen && currentScreen !== nextScreen) {
+      const currentRoot = document.querySelector(`#xk-top-level-screen-mount [data-xk-top-level-screen-root="${state.activeScreenName}"]`);
+      await animateScreenLeave(currentRoot);
       await runScreenLifecycle(currentScreen, 'deactivate', {
         router: api,
         from: currentRoute,
@@ -1327,7 +1330,9 @@ def test_p5_top_level_router_prefers_history_navigation_and_keeps_hard_navigatio
         reason: meta.reason,
       });
     }""" in router
-    assert """if (currentScreenName && route.name === currentScreenName) {
+    assert """const nextRoot = document.querySelector(`#xk-top-level-screen-mount [data-xk-top-level-screen-root="${route.name}"]`);
+    animateScreenEnter(nextRoot);""" in router
+    assert """if (!state.pendingTransitions && currentScreenName && route.name === currentScreenName) {
       pushHistoryState(route, replace);
       return handleSameScreenNavigation(route, meta);
     }""" in router

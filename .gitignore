@@ -54,6 +54,8 @@ e2e/.auth/
 !/.secrets/router-e2e.env.example
 
 # Local audit working notes
+/README-ai-assistant-implementation-plan.md
+/ai-assistant-prototypes.html
 /README_AUDIT_CHECKLIST_CURRENT.md
 /docs/README_AUDIT_CHECKLIST_CURRENT.md
 /docs/README_clash_api_implementation_plan.md
