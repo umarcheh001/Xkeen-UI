@@ -123,6 +123,11 @@ def _convert_vless(
     yaml_lines.append(f"  network: {_yaml_str(network)}")
     yaml_lines.append("  udp: true")
     yaml_lines.append("  packet-encoding: xudp")
+    # Fast Open is an opt-in socket setting, not implied by TLS. Enabling it
+    # unconditionally can stall otherwise healthy XHTTP endpoints on routers.
+    tfo = _mapping_bool(stream.get("sockopt"), "tcpFastOpen", "tcp-fast-open")
+    if tfo is not None:
+        yaml_lines.append(f"  tfo: {'true' if tfo else 'false'}")
 
     if security == "reality":
         rs = stream.get("realitySettings") or {}
@@ -132,7 +137,6 @@ def _convert_vless(
         spider_x = str(rs.get("spiderX") or "").strip()
 
         yaml_lines.append("  tls: true")
-        yaml_lines.append("  tfo: true")
         if sni:
             yaml_lines.append(f"  servername: {_yaml_str(sni)}")
         yaml_lines.append("  reality-opts:")
@@ -157,7 +161,6 @@ def _convert_vless(
         allow_insecure = bool(ts.get("allowInsecure"))
 
         yaml_lines.append("  tls: true")
-        yaml_lines.append("  tfo: true")
         if sni:
             yaml_lines.append(f"  servername: {_yaml_str(sni)}")
         yaml_lines.append(f"  client-fingerprint: {_yaml_str(fp or 'chrome')}")
@@ -173,23 +176,7 @@ def _convert_vless(
         path = str(xs.get("path") or "/")
         host = str(xs.get("host") or sni or "")
         mode = str(xs.get("mode") or "")
-        extra: Dict[str, Any] = {}
-        for k in (
-            "headers",
-            "no-grpc-header",
-            "noGrpcHeader",
-            "x-padding-bytes",
-            "xPaddingBytes",
-            "sc-max-each-post-bytes",
-            "scMaxEachPostBytes",
-            "reuse-settings",
-            "reuseSettings",
-            "download-settings",
-            "downloadSettings",
-        ):
-            if isinstance(xs, dict) and k in xs and xs[k] not in (None, ""):
-                extra[k] = xs[k]
-        opts = _build_xhttp_opts(path, host, mode, extra)
+        opts = _build_xhttp_opts(path, host, mode, xs)
         yaml_lines.append("  xhttp-opts:")
         for key, value in opts.items():
             _yaml_append_key(yaml_lines, 4, key, value)

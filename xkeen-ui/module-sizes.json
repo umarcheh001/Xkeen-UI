@@ -4,12 +4,12 @@
   "modules": {
     "core": 8299939,
     "engine.xray": 3961331,
-    "engine.mihomo": 3384082,
+    "engine.mihomo": 3400171,
     "tool.editor": 832858,
     "tool.terminal": 483327,
     "tool.files": 1008333,
     "tool.backups": 102055,
-    "integration.happ": 326955,
+    "integration.happ": 326912,
     "tool.advanced-diagnostics": 917075
   }
 }

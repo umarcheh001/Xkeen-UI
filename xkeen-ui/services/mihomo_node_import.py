@@ -358,7 +358,6 @@ def _provider_yaml(name: str, url: str, headers: Mapping[str, Any] | None = None
             "      expected-status: 204",
             "    override:",
             "      udp: true",
-            "      tfo: true",
         ]
     )
     return "\n".join(lines)

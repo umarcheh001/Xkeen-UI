@@ -271,7 +271,6 @@ def append_extra_provider_blocks(
                 "      lazy: true",
                 "      expected-status: 204",
                 "    override:",
-                "      tfo: true",
                 "      mptcp: true",
                 "      udp: true",
                 "",

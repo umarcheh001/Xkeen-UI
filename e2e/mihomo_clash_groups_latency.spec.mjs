@@ -6,6 +6,101 @@ import {
 // Mihomo groups: how fresh a latency is, delay probes, country flags, sorting,
 // fixed groups and hiding nodes that time out.
 
+test('Smart availability follows merged probes across groups and a later timeout replaces success', async ({ page }) => {
+  const data = groupsPayload();
+  const nodes = ['Poland', 'Sweden Reality', 'Sweden XHTTP', 'Netherlands'].map((name) => ({
+    name, type: 'VLESS', alive: false, availability: 'unavailable', provider: '', provider_candidates: [],
+    delay_ms: 0, delay_history: [{ measured_at: new Date().toISOString(), delay_ms: 0 }],
+  }));
+  data.groups = ['Smart', 'Fallback'].map((name) => ({
+    name, type: name, now: name === 'Smart' ? 'Smart - Select' : 'Sweden Reality', fixed: '',
+    hidden: false, selectable: true, nodes,
+  }));
+  let groupReads = 0;
+  let polandDelay = 81;
+  await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
+  await page.route(/\/api\/mihomo\/clash\/proxy-groups(?:\/.*)?$/, (route) => {
+    groupReads += 1;
+    // Reproduce the core's last failed service check even when the combined
+    // result reports a successful Google/Cloudflare measurement.
+    return route.fulfill({ json: data });
+  });
+  await page.route('**/api/mihomo/clash/smart/weights', (route) => route.fulfill({ json: { ok: true, weights: {} } }));
+  await page.route('**/api/mihomo/clash/delay', (route) => {
+    const body = route.request().postDataJSON();
+    return route.fulfill({ json: {
+      ok: true, preset: 'all', effective_preset: 'all',
+      results: [{ name: body.name, delay_ms: body.name === 'Poland' ? polandDelay : 0 }],
+    } });
+  });
+  await page.goto('/');
+  await selectPanelView(page, 'mihomo');
+  await page.evaluate(async () => {
+    window.XKeen?.ui?.settings?.setLocal?.({ mihomo: { latencyPreset: 'all' } });
+    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    mod.activateMihomoClashWorkspace({ reason: 'e2e-smart-availability' });
+  });
+  const smart = page.locator('[data-group-name="Smart"]');
+  const fallback = page.locator('[data-group-name="Fallback"]');
+  const summary = (group) => group.locator('.xk-mihomo-group-title > small');
+  await expect(summary(smart)).toContainText('0/4 доступны');
+  await smart.locator('.xk-mihomo-group-head').click();
+  await fallback.locator('.xk-mihomo-group-head').click();
+  const readsBefore = groupReads;
+  await smart.locator('.xk-mihomo-group-test').click();
+  await expect.poll(() => groupReads).toBeGreaterThan(readsBefore);
+  for (const group of [smart, fallback]) {
+    await expect(summary(group)).toContainText('1/4 доступны');
+    await expect(group.locator('[data-node-name="Poland"] .xk-mihomo-node-delay')).toHaveText('81 мс');
+    await expect(group.locator('[data-node="Poland"].xk-mihomo-node-select')).toBeEnabled();
+  }
+
+  // The next complete failure must win over both the previous merged result
+  // and a still-positive core snapshot, including in the other group.
+  polandDelay = 0;
+  nodes[0].alive = true;
+  nodes[0].availability = 'available';
+  await fallback.locator('[data-node-name="Poland"] .xk-mihomo-node-delay').click();
+  for (const group of [smart, fallback]) {
+    await expect(summary(group)).toContainText('0/4 доступны');
+    await expect(group.locator('[data-node-name="Poland"] .xk-visually-hidden')).toHaveText('нет ответа');
+    await expect(group.locator('[data-node="Poland"].xk-mihomo-node-select')).toBeDisabled();
+    await expect(group.locator('[data-node-name="Poland"]')).toHaveAttribute('data-alive', 'недоступен');
+  }
+});
+
+test('expired successful Smart probe no longer overrides the unavailable core snapshot', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-11-01T13:30:00Z') });
+  const data = groupsPayload();
+  data.groups = [{
+    name: 'Smart', type: 'Smart', now: 'Smart - Select', fixed: '', hidden: false, selectable: true,
+    nodes: [{ name: 'Poland', type: 'VLESS', alive: false, provider: '', provider_candidates: [], delay_ms: 0 }],
+  }];
+  await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));
+  await page.route(/\/api\/mihomo\/clash\/proxy-groups(?:\/.*)?$/, (route) => route.fulfill({ json: data }));
+  await page.route('**/api/mihomo/clash/smart/weights', (route) => route.fulfill({ json: { ok: true, weights: {} } }));
+  await page.route('**/api/mihomo/clash/delay', (route) => route.fulfill({ json: {
+    ok: true, results: [{ name: 'Poland', delay_ms: 81 }],
+  } }));
+  await page.goto('/');
+  await selectPanelView(page, 'mihomo');
+  await page.evaluate(async () => {
+    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    mod.activateMihomoClashWorkspace({ reason: 'e2e-smart-availability-expiry' });
+  });
+  const group = page.locator('[data-group-name="Smart"]');
+  await group.locator('.xk-mihomo-group-head').click();
+  await group.locator('[data-node-name="Poland"] .xk-mihomo-node-delay').click();
+  await expect(group.locator('.xk-mihomo-group-title > small')).toContainText('1/1 доступны');
+  await page.clock.fastForward((5 * 60 * 1000) + 100);
+  await page.evaluate(async () => {
+    const mod = await import('/static/js/features/mihomo_clash/groups.js');
+    await mod.refreshMihomoClashGroups();
+  });
+  await expect(group.locator('.xk-mihomo-group-title > small')).toContainText('0/1 доступны');
+  await expect(group.locator('[data-node-name="Poland"] .xk-mihomo-node-delay')).toHaveAttribute('data-delay-tone', 'unavailable');
+});
+
 test('Mihomo latency stays visible but is marked stale after five minutes and groups refresh on return', async ({ page }) => {
   await page.clock.install({ time: new Date('2026-08-16T10:15:30Z') });
   let groupRequests = 0;

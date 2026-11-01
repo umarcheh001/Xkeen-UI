@@ -2270,6 +2270,7 @@ let mihomoImportModuleApi = null;
       'c-max-reuse-times': firstDefined(reuse, 'c-max-reuse-times', 'cMaxReuseTimes'),
       'h-max-request-times': firstDefined(reuse, 'h-max-request-times', 'hMaxRequestTimes'),
       'h-max-reusable-secs': firstDefined(reuse, 'h-max-reusable-secs', 'hMaxReusableSecs'),
+      'h-keep-alive-period': firstDefined(reuse, 'h-keep-alive-period', 'hKeepAlivePeriod'),
     };
     Object.entries(mappings).forEach(([key, value]) => {
       if (value === undefined) return;
@@ -2376,32 +2377,48 @@ let mihomoImportModuleApi = null;
     return Object.keys(out).length ? out : undefined;
   };
 
-  const normalizeXhttpSettings = (params) => {
-    const extra = parseJsonMaybe(params.extra);
+  const normalizeXhttpOptions = (settings = {}) => {
+    const extra = { ...parseJsonMaybe(settings.extra), ...settings };
     const xhttp = {
-      path: decodeMaybe(params.path) || '/',
-      host: decodeMaybe(params.host) || decodeMaybe(params.sni),
-      mode: decodeMaybe(params.mode),
+      path: settings.path || '/',
+      host: settings.host,
+      mode: settings.mode,
     };
 
     const headers = cleanHeaders(firstDefined(extra, 'headers'));
     if (headers) xhttp.headers = headers;
 
     const noGrpcHeader = boolMaybe(extra, 'no-grpc-header', 'noGrpcHeader', 'noGRPCHeader');
-    if (noGrpcHeader === true) xhttp['no-grpc-header'] = true;
-
-    const xPaddingBytes = firstDefined(extra, 'x-padding-bytes', 'xPaddingBytes');
-    if (xPaddingBytes !== undefined) {
-      xhttp['x-padding-bytes'] = typeof xPaddingBytes === 'number' ? xPaddingBytes : String(xPaddingBytes);
-    }
-
-    const scMaxEachPostBytes = firstDefined(extra, 'sc-max-each-post-bytes', 'scMaxEachPostBytes');
-    if (scMaxEachPostBytes !== undefined) {
-      xhttp['sc-max-each-post-bytes'] =
-        typeof scMaxEachPostBytes === 'number' ? scMaxEachPostBytes : String(scMaxEachPostBytes);
-    }
-
-    const reuseSettings = cleanReuseSettings(firstDefined(extra, 'reuse-settings', 'reuseSettings'));
+    if (noGrpcHeader !== undefined) xhttp['no-grpc-header'] = noGrpcHeader;
+    const obfs = boolMaybe(extra, 'x-padding-obfs-mode', 'xPaddingObfsMode');
+    if (obfs !== undefined) xhttp['x-padding-obfs-mode'] = obfs;
+    const aliases = {
+      'x-padding-bytes': ['xPaddingBytes'],
+      'x-padding-key': ['xPaddingKey'],
+      'x-padding-header': ['xPaddingHeader'],
+      'x-padding-placement': ['xPaddingPlacement'],
+      'x-padding-method': ['xPaddingMethod'],
+      'uplink-http-method': ['uplinkHTTPMethod'],
+      'session-placement': ['sessionIDPlacement', 'sessionPlacement'],
+      'session-key': ['sessionIDKey', 'sessionKey'],
+      'session-table': ['sessionIDTable', 'sessionTable'],
+      'session-length': ['sessionIDLength', 'sessionLength'],
+      'seq-placement': ['seqPlacement'],
+      'seq-key': ['seqKey'],
+      'uplink-data-placement': ['uplinkDataPlacement'],
+      'uplink-data-key': ['uplinkDataKey'],
+      'uplink-chunk-size': ['uplinkChunkSize'],
+      'sc-max-each-post-bytes': ['scMaxEachPostBytes'],
+      'sc-min-posts-interval-ms': ['scMinPostsIntervalMs'],
+    };
+    Object.entries(aliases).forEach(([key, names]) => {
+      let value = firstDefined(extra, key, ...names);
+      // Xray's zero padding range means its default, whereas Mihomo's means none.
+      if (key === 'x-padding-bytes' && firstDefined(extra, key) === undefined
+          && /^0(?:\s*-\s*0)?$/.test(String(value).trim())) value = '100-1000';
+      if (value !== undefined) xhttp[key] = typeof value === 'number' ? value : String(value);
+    });
+    const reuseSettings = cleanReuseSettings(firstDefined(extra, 'reuse-settings', 'reuseSettings', 'xmux'));
     if (reuseSettings) xhttp['reuse-settings'] = reuseSettings;
 
     const downloadSettings = cleanDownloadSettings(firstDefined(extra, 'download-settings', 'downloadSettings'));
@@ -2409,6 +2426,13 @@ let mihomoImportModuleApi = null;
 
     return Object.fromEntries(Object.entries(xhttp).filter(([, value]) => value != null && value !== ''));
   };
+
+  const normalizeXhttpSettings = (params) => normalizeXhttpOptions({
+    path: decodeMaybe(params.path) || '/',
+    host: decodeMaybe(params.host) || decodeMaybe(params.sni),
+    mode: decodeMaybe(params.mode),
+    extra: parseJsonMaybe(params.extra),
+  });
 
   const getStreamSettings = (type, params) => {
     const number = (val) => (val ? +val : undefined);
@@ -2469,6 +2493,8 @@ let mihomoImportModuleApi = null;
 
     if (type === 'httpupgrade') output.httpupgradeSettings = { path: params.path || '/', host: string(params.host) };
     if (type === 'xhttp') output.xhttpSettings = normalizeXhttpSettings(params);
+    const tfo = boolMaybe(params, 'tfo', 'tcpFastOpen');
+    if (tfo !== undefined) output.sockopt = { tcpFastOpen: tfo };
 
     return output;
   };
@@ -2630,6 +2656,8 @@ let mihomoImportModuleApi = null;
     }
 
     if (streamSettings.network) common.network = streamSettings.network;
+    const tfo = boolMaybe(streamSettings.sockopt, 'tcpFastOpen', 'tcp-fast-open');
+    if (tfo !== undefined) common.tfo = tfo;
 
     if (['tls', 'reality'].includes(streamSettings.security)) {
       const tls = streamSettings.tlsSettings || {};
@@ -2638,7 +2666,6 @@ let mihomoImportModuleApi = null;
 
       Object.assign(common, {
         tls: true,
-        tfo: true,
         'client-fingerprint': tls.fingerprint || reality.fingerprint,
         alpn: tls.alpn,
       });
@@ -2686,17 +2713,7 @@ let mihomoImportModuleApi = null;
         headers: streamSettings.httpupgradeSettings?.host ? { Host: streamSettings.httpupgradeSettings.host } : undefined,
       };
     } else if (streamSettings.network === 'xhttp') {
-      common['xhttp-opts'] = {
-        path: streamSettings.xhttpSettings?.path,
-        host: streamSettings.xhttpSettings?.host,
-        mode: streamSettings.xhttpSettings?.mode,
-        headers: streamSettings.xhttpSettings?.headers,
-        'no-grpc-header': streamSettings.xhttpSettings?.['no-grpc-header'],
-        'x-padding-bytes': streamSettings.xhttpSettings?.['x-padding-bytes'],
-        'sc-max-each-post-bytes': streamSettings.xhttpSettings?.['sc-max-each-post-bytes'],
-        'reuse-settings': streamSettings.xhttpSettings?.['reuse-settings'],
-        'download-settings': streamSettings.xhttpSettings?.['download-settings'],
-      };
+      common['xhttp-opts'] = normalizeXhttpOptions(streamSettings.xhttpSettings);
     }
 
     return `  - ${toYaml(common).trim().replace(/\n/g, '\n    ')}`;
@@ -2839,7 +2856,7 @@ let mihomoImportModuleApi = null;
           interval: 300,
           'expected-status': 204,
         },
-        override: { udp: true, tfo: true },
+        override: { udp: true },
       };
       if (headers) provider.header = headers;
       return {

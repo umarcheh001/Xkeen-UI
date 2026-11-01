@@ -166,6 +166,51 @@ def test_convert_vless_xhttp_tls_emits_expected_yaml():
     assert p["xhttp-opts"]["mode"] == "auto"
     # encryption: "" must remain a string, not get parsed as null
     assert p["encryption"] == ""
+    assert "tfo" not in p
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_convert_vless_preserves_explicit_tcp_fast_open(enabled):
+    outbound = _outbound_vless_xhttp_tls()
+    outbound["streamSettings"]["sockopt"] = {"tcpFastOpen": enabled}
+    parsed = yaml.safe_load(convert_outbound_to_mihomo(outbound, "Node").yaml)[0]
+    assert parsed["tfo"] is enabled
+
+
+def test_convert_xhttp_reality_zero_padding_uses_xray_default():
+    outbound = _outbound_vless_xhttp_tls()
+    outbound["streamSettings"]["security"] = "reality"
+    outbound["streamSettings"]["realitySettings"] = {"publicKey": "test-key", "shortId": "abcd"}
+    outbound["streamSettings"]["xhttpSettings"]["extra"] = {"xPaddingBytes": "0-0"}
+    parsed = yaml.safe_load(convert_outbound_to_mihomo(outbound, "Reality").yaml)[0]
+    assert parsed["xhttp-opts"]["x-padding-bytes"] == "100-1000"
+
+
+def test_convert_xhttp_keeps_nested_extra_wire_settings_and_xmux():
+    outbound = _outbound_vless_xhttp_tls()
+    outbound["streamSettings"]["xhttpSettings"] = {
+        "path": "/vod/cid/", "host": "edge.example.com", "mode": "packet-up",
+        "extra": {
+            "noGRPCHeader": False, "xPaddingObfsMode": True, "xPaddingBytes": "50-800",
+            "xPaddingKey": "trl", "xPaddingPlacement": "query", "xPaddingMethod": "tokenish",
+            "sessionIDKey": "cid", "sessionIDPlacement": "query", "sessionIDLength": "40-52",
+            "sessionIDTable": "0123456789abcdef", "seqKey": "storage", "seqPlacement": "query",
+            "uplinkChunkSize": "16384-131072", "uplinkDataPlacement": "body", "uplinkHTTPMethod": "GET",
+            "scMaxEachPostBytes": "65536-262144", "scMinPostsIntervalMs": "20-250",
+            "xmux": {"cMaxReuseTimes": 0, "hKeepAlivePeriod": 30, "maxConnections": 1},
+        },
+    }
+    p = yaml.safe_load(convert_outbound_to_mihomo(outbound, "Node").yaml)[0]
+    assert p["xhttp-opts"] == {
+        "path": "/vod/cid/", "host": "edge.example.com", "mode": "packet-up",
+        "no-grpc-header": False, "x-padding-obfs-mode": True, "x-padding-bytes": "50-800",
+        "x-padding-key": "trl", "x-padding-placement": "query", "x-padding-method": "tokenish",
+        "session-key": "cid", "session-placement": "query", "session-length": "40-52",
+        "session-table": "0123456789abcdef", "seq-key": "storage", "seq-placement": "query",
+        "uplink-chunk-size": "16384-131072", "uplink-data-placement": "body", "uplink-http-method": "GET",
+        "sc-max-each-post-bytes": "65536-262144", "sc-min-posts-interval-ms": "20-250",
+        "reuse-settings": {"c-max-reuse-times": 0, "h-keep-alive-period": 30, "max-connections": 1},
+    }
 
 
 def test_convert_vless_tcp_reality_vision_emits_expected_yaml():

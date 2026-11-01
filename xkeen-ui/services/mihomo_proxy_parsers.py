@@ -252,6 +252,7 @@ def _sanitize_reuse_settings(value: Any) -> Optional[Dict[str, Any]]:
         "c-max-reuse-times": ("c-max-reuse-times", "cMaxReuseTimes"),
         "h-max-request-times": ("h-max-request-times", "hMaxRequestTimes"),
         "h-max-reusable-secs": ("h-max-reusable-secs", "hMaxReusableSecs"),
+        "h-keep-alive-period": ("h-keep-alive-period", "hKeepAlivePeriod"),
     }
 
     out: Dict[str, Any] = {}
@@ -368,6 +369,11 @@ def _parse_xhttp_extra(raw: str) -> Dict[str, Any]:
 
 
 def _build_xhttp_opts(path: str, host: str, mode: str, extra: Any) -> Dict[str, Any]:
+    # Xray JSON nests transport options under extra; URI imports already pass
+    # that mapping directly. Explicit fields take precedence over nested ones.
+    extra = extra if isinstance(extra, dict) else {}
+    nested = extra.get("extra")
+    extra = {**(nested if isinstance(nested, dict) else {}), **extra}
     opts: Dict[str, Any] = {"path": path or "/"}
     if host:
         opts["host"] = host
@@ -379,26 +385,42 @@ def _build_xhttp_opts(path: str, host: str, mode: str, extra: Any) -> Dict[str, 
         opts["headers"] = headers
 
     no_grpc_header = _mapping_bool(extra, "no-grpc-header", "noGrpcHeader", "noGRPCHeader")
-    if no_grpc_header is True:
-        opts["no-grpc-header"] = True
+    if no_grpc_header is not None:
+        opts["no-grpc-header"] = no_grpc_header
+    obfs = _mapping_bool(extra, "x-padding-obfs-mode", "xPaddingObfsMode")
+    if obfs is not None:
+        opts["x-padding-obfs-mode"] = obfs
+    aliases = {
+        "x-padding-bytes": ("xPaddingBytes",),
+        "x-padding-key": ("xPaddingKey",),
+        "x-padding-header": ("xPaddingHeader",),
+        "x-padding-placement": ("xPaddingPlacement",),
+        "x-padding-method": ("xPaddingMethod",),
+        "uplink-http-method": ("uplinkHTTPMethod",),
+        "session-placement": ("sessionIDPlacement", "sessionPlacement"),
+        "session-key": ("sessionIDKey", "sessionKey"),
+        "session-table": ("sessionIDTable", "sessionTable"),
+        "session-length": ("sessionIDLength", "sessionLength"),
+        "seq-placement": ("seqPlacement",),
+        "seq-key": ("seqKey",),
+        "uplink-data-placement": ("uplinkDataPlacement",),
+        "uplink-data-key": ("uplinkDataKey",),
+        "uplink-chunk-size": ("uplinkChunkSize",),
+        "sc-max-each-post-bytes": ("scMaxEachPostBytes",),
+        "sc-min-posts-interval-ms": ("scMinPostsIntervalMs",),
+    }
+    for key, names in aliases.items():
+        value = _mapping_first(extra, key, *names, default=None)
+        if value not in (None, ""):
+            # Xray treats a zero padding range as its 100-1000 default.
+            # Mihomo interprets literal zero as no padding. Preserve native
+            # Mihomo options, but translate Xray's sentinel to its wire value.
+            if key == "x-padding-bytes" and extra.get(key) in (None, ""):
+                if re.fullmatch(r"0(?:\s*-\s*0)?", str(value).strip()):
+                    value = "100-1000"
+            opts[key] = value if isinstance(value, (int, float)) and not isinstance(value, bool) else str(value)
 
-    x_padding_bytes = _mapping_first(extra, "x-padding-bytes", "xPaddingBytes", default=None)
-    if x_padding_bytes not in (None, ""):
-        opts["x-padding-bytes"] = (
-            x_padding_bytes if isinstance(x_padding_bytes, (bool, int, float)) else str(x_padding_bytes)
-        )
-
-    sc_max_each_post_bytes = _mapping_first(
-        extra, "sc-max-each-post-bytes", "scMaxEachPostBytes", default=None
-    )
-    if sc_max_each_post_bytes not in (None, ""):
-        opts["sc-max-each-post-bytes"] = (
-            sc_max_each_post_bytes
-            if isinstance(sc_max_each_post_bytes, (bool, int, float))
-            else str(sc_max_each_post_bytes)
-        )
-
-    reuse_settings = _sanitize_reuse_settings(_mapping_first(extra, "reuse-settings", "reuseSettings", default=None))
+    reuse_settings = _sanitize_reuse_settings(_mapping_first(extra, "reuse-settings", "reuseSettings", "xmux", default=None))
     if reuse_settings:
         opts["reuse-settings"] = reuse_settings
 
@@ -520,11 +542,13 @@ def parse_vless(link: str, custom_name: Optional[str] = None) -> ProxyParseResul
     yaml_lines.append(f"  network: {_yaml_str(type_)}")
     yaml_lines.append("  udp: true")
     yaml_lines.append("  packet-encoding: xudp")
+    tfo = _query_bool(qs, "tfo", "tcpFastOpen")
+    if tfo is not None:
+        yaml_lines.append(f"  tfo: {'true' if tfo else 'false'}")
 
     sec = security.lower()
     if sec == "reality":
         yaml_lines.append("  tls: true")
-        yaml_lines.append("  tfo: true")
         if sni:
             yaml_lines.append(f"  servername: {_yaml_str(sni)}")
         if alpn:
@@ -546,7 +570,6 @@ def parse_vless(link: str, custom_name: Optional[str] = None) -> ProxyParseResul
         yaml_lines.append(f"  client-fingerprint: {_yaml_str(fp or 'chrome')}")
     elif sec == "tls":
         yaml_lines.append("  tls: true")
-        yaml_lines.append("  tfo: true")
         if sni:
             yaml_lines.append(f"  servername: {_yaml_str(sni)}")
         yaml_lines.append(f"  client-fingerprint: {_yaml_str(fp or 'chrome')}")

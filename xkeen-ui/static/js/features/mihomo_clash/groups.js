@@ -650,7 +650,23 @@ function nodeDelayResult(group, node) {
     groupDelays.get(key),
     latestDelays.get(effectiveIdentity),
   ];
-  return candidates.map(freshDelayResult).find(Boolean) || null;
+  const fresh = candidates.map(freshDelayResult).filter(Boolean);
+  return fresh.find((result) => result.state === 'pending')
+    || fresh.sort((left, right) => Number(right.measuredAt) - Number(left.measuredAt))[0]
+    || null;
+}
+
+function nodeAvailability(group, node) {
+  const result = nodeDelayResult(group, node);
+  // A multi-service probe may succeed before the final service fails. Its
+  // merged result takes precedence over the core's last per-service verdict.
+  if (result?.state === 'done') return 'available';
+  if (result?.state === 'timeout') return 'unavailable';
+  if (!isPayloadFresh()) return 'unknown';
+  const effectiveNode = effectiveDelayNode(node);
+  if (effectiveNode.availability === 'available' || effectiveNode.alive === true) return 'available';
+  if (effectiveNode.availability === 'unavailable' || effectiveNode.alive === false) return 'unavailable';
+  return 'unknown';
 }
 
 function nodeProbeStatus(group, node) {
@@ -770,7 +786,9 @@ function canProbeNode(node) {
 }
 
 function isTimedOutNode(group, node) {
-  if (nodeDelayResult(group, node)?.state === 'timeout') return true;
+  const result = nodeDelayResult(group, node);
+  if (result?.state === 'done') return false;
+  if (result?.state === 'timeout') return true;
   const effectiveNode = effectiveDelayNode(node);
   const history = Array.isArray(effectiveNode?.delay_history) ? effectiveNode.delay_history : [];
   if (!history.length) return false;
@@ -845,8 +863,9 @@ function sortNodes(group, nodes) {
     let comparison = 0;
     if (sortMode === 'name') comparison = String(left.node.name).localeCompare(String(right.node.name), 'ru', { sensitivity: 'base' });
     if (sortMode === 'delay') comparison = nodeDelayValue(group, left.node) - nodeDelayValue(group, right.node);
-    if (sortMode === 'availability' && isPayloadFresh()) {
-      comparison = Number(right.node.alive === true) - Number(left.node.alive === true);
+    if (sortMode === 'availability') {
+      comparison = Number(nodeAvailability(group, right.node) === 'available')
+        - Number(nodeAvailability(group, left.node) === 'available');
     }
     return comparison || left.index - right.index;
   });
@@ -937,13 +956,7 @@ function renderNode(group, node) {
   const checking = nodeDelayResult(group, node)?.state === 'pending';
   const selectable = !!group.selectable && SELECTABLE_TYPES.has(String(group.type || '').toLowerCase());
   const selectionDisabled = nodeSelectionDisabled(group, node);
-  const effectiveNode = effectiveDelayNode(node);
-  const alive = nodeDelayResult(group, node)?.state === 'done'
-    || (isPayloadFresh() && (effectiveNode.availability === 'available' || effectiveNode.alive === true))
-    ? 'доступен'
-    : (isPayloadFresh() && (effectiveNode.availability === 'unavailable' || effectiveNode.alive === false)
-      ? 'недоступен'
-      : 'нет данных');
+  const alive = { available: 'доступен', unavailable: 'недоступен', unknown: 'нет данных' }[nodeAvailability(group, node)];
   const countryCode = mihomoNodeCountryCode(node.name);
   const displayName = nodeDisplayName(node, countryCode);
   const protocol = [node.type || 'unknown', node.network, node.security].filter(Boolean).join(' · ');
@@ -983,7 +996,7 @@ function groupSummary(group) {
   const automatic = AUTOMATIC_TYPES.has(String(group.type || '').toLowerCase());
   const mode = automatic ? (group.fixed ? 'зафиксирован' : 'автоматически') : (selectable ? 'ручной выбор' : 'автоматически');
   const availability = isPayloadFresh()
-    ? `${nodes.filter((node) => node.alive === true).length}/${nodes.length} доступны`
+    ? `${nodes.filter((node) => nodeAvailability(group, node) === 'available').length}/${nodes.length} доступны`
     : `${nodes.length} узлов · нет актуальных данных`;
   const smartState = String(group.type || '').toLowerCase() === 'smart'
     ? (smartWeightsAvailable ? 'Smart-веса доступны' : 'Smart-веса недоступны')
@@ -1644,10 +1657,10 @@ function setTargetResult(target, result) {
   const timedResult = { ...result, measuredAt };
   delayRun.results.set(target.key, timedResult);
   groupDelays.set(target.key, timedResult);
-  if (timedResult.state === 'done') {
+  // Share both recovery and a later failed probe across groups containing the
+  // same proxy, so an older group-local success cannot keep it available.
+  if (timedResult.state === 'done' || timedResult.state === 'timeout') {
     latestDelays.set(target.identity, timedResult);
-  } else if (timedResult.state === 'timeout') {
-    latestDelays.delete(target.identity);
   }
 }
 

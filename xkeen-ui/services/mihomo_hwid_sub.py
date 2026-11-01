@@ -2027,7 +2027,6 @@ def build_provider_entry(
 
     lines.append("    override:")
     lines.append("      udp: true")
-    lines.append("      tfo: true")
 
     return "\n".join(lines) + "\n"
 

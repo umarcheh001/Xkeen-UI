@@ -29,6 +29,40 @@ def test_parse_vless_supports_xhttp_transport_for_mihomo():
     assert "host: cdn.example.com" in result.yaml
     assert "mode: stream-up" in result.yaml
     assert "servername: edge.example.com" in result.yaml
+    assert "tfo" not in yaml.safe_load(result.yaml)[0]
+
+
+def test_vless_uri_xhttp_keeps_packet_placement_and_explicit_false_values():
+    extra = quote(json.dumps({
+        "sessionIDKey": "auth", "sessionIDPlacement": "query", "seqKey": "offset", "seqPlacement": "query",
+        "uplinkHTTPMethod": "GET", "uplinkDataPlacement": "body", "xPaddingBytes": "0-0",
+        "noGRPCHeader": False, "xPaddingObfsMode": False, "xmux": {"maxConnections": 1, "hKeepAlivePeriod": 30},
+    }))
+    result = parse_vless(
+        "vless://11111111-1111-1111-1111-111111111111@example.com:443"
+        f"?type=xhttp&security=reality&sni=edge.example.com&mode=packet-up&extra={extra}"
+    )
+    opts = yaml.safe_load(result.yaml)[0]["xhttp-opts"]
+    assert opts["session-key"] == "auth"
+    assert opts["session-placement"] == "query"
+    assert opts["seq-key"] == "offset"
+    assert opts["uplink-http-method"] == "GET"
+    assert opts["x-padding-bytes"] == "100-1000"
+    assert opts["no-grpc-header"] is False
+    assert opts["x-padding-obfs-mode"] is False
+    assert opts["reuse-settings"] == {"max-connections": 1, "h-keep-alive-period": 30}
+
+
+@pytest.mark.parametrize("value", [0, "0", "0-0"])
+@pytest.mark.parametrize("key", ["xPaddingBytes", "x-padding-bytes"])
+def test_xhttp_padding_translates_xray_zero_default_but_keeps_native_mihomo_zero(key, value):
+    extra = quote(json.dumps({key: value}))
+    result = parse_vless(
+        "vless://11111111-1111-1111-1111-111111111111@example.com:443"
+        f"?type=xhttp&security=tls&extra={extra}"
+    )
+    actual = yaml.safe_load(result.yaml)[0]["xhttp-opts"]["x-padding-bytes"]
+    assert actual == ("100-1000" if key == "xPaddingBytes" else value)
 
 
 def test_parse_vless_normalizes_vision_udp443_flow_for_mihomo_schema():
@@ -214,11 +248,11 @@ def test_frontend_mihomo_import_has_xhttp_generation_path():
     src = (ROOT / "xkeen-ui/static/js/features/mihomo_import.js").read_text(encoding="utf-8")
 
     assert "const cleanDownloadSettings = (download) => {" in src
-    assert "const normalizeXhttpSettings = (params) => {" in src
+    assert "const normalizeXhttpSettings = (params) => normalizeXhttpOptions({" in src
     assert "output.xhttpSettings = normalizeXhttpSettings(params);" in src
     assert "common['xhttp-opts']" in src
     assert "xhttp['download-settings'] = downloadSettings;" in src
-    assert "'download-settings': streamSettings.xhttpSettings?.['download-settings']" in src
+    assert "normalizeXhttpOptions(streamSettings.xhttpSettings)" in src
     assert "Keep xhttp synchronous in the shared parser API used by import and proxy tools." in src
 
 

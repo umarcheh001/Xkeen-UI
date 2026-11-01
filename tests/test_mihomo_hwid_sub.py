@@ -291,7 +291,7 @@ def test_hwid_provider_entry_uses_mihomo_provider_defaults():
     assert "      x-device-os:" not in entry
     assert "    override:" in entry
     assert "      udp: true" in entry
-    assert "      tfo: true" in entry
+    assert "tfo:" not in entry
 
 
 def test_hwid_provider_payload_extracts_proxies_from_full_mihomo_config():
