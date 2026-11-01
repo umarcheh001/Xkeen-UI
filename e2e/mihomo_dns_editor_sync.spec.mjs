@@ -1,4 +1,4 @@
-import { test, expect, selectPanelView } from './fixtures.mjs';
+import { test, expect, selectPanelView, openMihomoConfig } from './fixtures.mjs';
 
 const CONFIG_BEFORE = [
   'mixed-port: 7890',
@@ -84,7 +84,7 @@ async function openMihomoDns(page, {
 
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
-  await page.locator('#mihomo-clash-tab-config').click();
+  await openMihomoConfig(page);
 
   const editor = page.locator('#mihomo-editor + .xkeen-cm6-host .cm-content');
   await expect(editor).toBeVisible();

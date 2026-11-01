@@ -1,4 +1,4 @@
-import { test, expect, selectPanelView } from './fixtures.mjs';
+import { test, expect, selectPanelView, openMihomoConfig } from './fixtures.mjs';
 
 
 const PROFILE = String(process.env.XKEEN_E2E_MODULE_PROFILE || 'full').toLowerCase();
@@ -57,7 +57,7 @@ test.describe(`single-engine core source selection: ${PROFILE}`, () => {
     await selectPanelView(page, VIEW);
     const configTab = page.locator('#mihomo-clash-tab-config');
     if (await configTab.count()) {
-      await configTab.click();
+      await openMihomoConfig(page);
       // Two editors carry a toolbar; the one that competes with the menu is Mihomo's.
       await expect(page.locator('.xk-mihomo-toolbarhost .xkeen-cm-toolbar')).toBeAttached();
     }

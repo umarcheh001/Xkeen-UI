@@ -2,7 +2,7 @@
 // No provider traffic, config save, restart or persisted subscription registration.
 import fs from 'node:fs';
 import path from 'node:path';
-import { test, expect, selectPanelView } from './fixtures.mjs';
+import { test, expect, selectPanelView, openMihomoConfig } from './fixtures.mjs';
 
 const DATA = JSON.parse(fs.readFileSync(new URL('./fixtures/mihomo-import/stage0.json', import.meta.url), 'utf8'));
 if (process.env.E2E_BASE_URL) throw new Error('Baseline capture requires a disposable local server; E2E_BASE_URL is forbidden.');
@@ -67,7 +67,7 @@ async function prepare(page, theme = 'dark') {
   }, theme);
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
-  await page.locator('#mihomo-clash-tab-config').click();
+  await openMihomoConfig(page);
   await seedEditor(page);
 }
 
@@ -228,7 +228,7 @@ test('stage0 light/mobile, Monaco and no-runtime fallback', async ({ page }) => 
   await page.locator('#mihomo-import-close-btn').click();
   await page.reload();
   await selectPanelView(page, 'mihomo');
-  await page.locator('#mihomo-clash-tab-config').click();
+  await openMihomoConfig(page);
   await seedEditor(page);
   // Fault injection is scoped to import preview only, leaving the main editor intact.
   await page.evaluate(() => {

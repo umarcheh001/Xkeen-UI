@@ -1,4 +1,4 @@
-import { test, expect, selectPanelView } from './fixtures.mjs';
+import { test, expect, selectPanelView, openMihomoConfig } from './fixtures.mjs';
 
 const BASE_STATUS = {
   ok: true,
@@ -63,7 +63,7 @@ test('Mihomo DNS offers one-click re-enable for a preserved edited block', async
 
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
-  await page.locator('#mihomo-clash-tab-config').click();
+  await openMihomoConfig(page);
   await page.locator('#mihomo-dns-btn').click();
 
   await expect(page.locator('#mihomo-dns-badge')).toHaveText('Готово к повторному включению');

@@ -1,4 +1,4 @@
-import { test, expect, selectPanelView } from './fixtures.mjs';
+import { test, expect, selectPanelView, openMihomoConfig } from './fixtures.mjs';
 
 
 async function openPanel(page, theme, viewport = { width: 1440, height: 900 }) {
@@ -73,7 +73,7 @@ async function switchToMonaco(page, { tab, select, host }) {
   if (tab === 'mihomo') {
     // Редактор живёт во вкладке «Конфигурация» рабочей области Mihomo.
     await expect(page.locator('#view-mihomo')).toBeVisible();
-    await page.locator('#mihomo-clash-tab-config').click();
+    await openMihomoConfig(page);
   }
   await expect(page.locator(select)).toBeAttached();
   await page.locator(select).scrollIntoViewIfNeeded();
@@ -852,7 +852,7 @@ test.describe('Operator Console Stage 5 editor workbench contract', () => {
   test('Mihomo engine selector stays compact next to editor actions', async ({ page }) => {
     await openPanel(page, 'dark');
     await selectPanelView(page, 'mihomo');
-    await page.locator('#mihomo-clash-tab-config').click();
+    await openMihomoConfig(page);
 
     const metrics = await page.locator('#mihomo-editor-engine-select').evaluate((select) => {
       const control = select.getBoundingClientRect();

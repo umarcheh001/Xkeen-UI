@@ -246,3 +246,22 @@ test('Mihomo header preserves controls, service state and navigation in both the
   await expect(page.locator('#xkeen-restart-btn')).toHaveCount(1);
   expect(errors).toEqual([]);
 });
+
+
+test('Mihomo parameters menu stays open while the runtime state changes', async ({ page }) => {
+  await page.goto('/');
+  await selectPanelView(page, 'mihomo');
+  const menu = page.locator('#xk-mihomo-parameters-menu');
+  await page.locator('[aria-controls="xk-mihomo-parameters-menu"]').click();
+  await expect(menu).toBeVisible();
+
+  await page.evaluate(async () => {
+    const content = document.getElementById('mihomo-clash-control-content');
+    content.hidden = !content.hidden;
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+  });
+  await expect(menu).toBeVisible();
+
+  await page.locator('#mihomo-clash-tab-rules').click();
+  await expect(menu).toBeHidden();
+});

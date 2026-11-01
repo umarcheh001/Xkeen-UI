@@ -1,4 +1,4 @@
-import { test, expect, selectPanelView } from './fixtures.mjs';
+import { test, expect, selectPanelView, openMihomoConfig } from './fixtures.mjs';
 
 async function waitForMihomoGeneratorPreview(page) {
   await expect(page.locator('#profileSelect')).toBeVisible();
@@ -294,7 +294,7 @@ test('routing Mihomo proxy tools use a compact operator empty state', async ({ p
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
   await expect(page.locator('#view-mihomo')).toBeVisible();
-  await page.locator('#mihomo-clash-tab-config').click();
+  await openMihomoConfig(page);
 
   const menu = page.locator('.xk-mihomo-menu');
   await menu.locator('summary').click();
@@ -330,7 +330,7 @@ test('routing Mihomo proxy tools use a compact operator empty state', async ({ p
 test('CM6 search panel stays below the Mihomo proxy tools modal', async ({ page }) => {
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
-  await page.locator('#mihomo-clash-tab-config').click();
+  await openMihomoConfig(page);
 
   const editor = page.locator('#mihomo-editor + .xkeen-cm6-host .cm-content');
   await expect(editor).toBeVisible();
@@ -375,7 +375,7 @@ test('routing Mihomo proxy tools keep a scrollable resize-safe workbench and ali
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
   await expect(page.locator('#view-mihomo')).toBeVisible();
-  await page.locator('#mihomo-clash-tab-config').click();
+  await openMihomoConfig(page);
 
   const menu = page.locator('.xk-mihomo-menu');
   await menu.locator('summary').click();

@@ -1,4 +1,4 @@
-import { test, expect, selectPanelView } from './fixtures.mjs';
+import { test, expect, selectPanelView, openMihomoConfig } from './fixtures.mjs';
 
 
 const STATUS = {
@@ -52,7 +52,7 @@ test('Mihomo DNS reports a secured active WAN without a stale provider warning',
 
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
-  await page.locator('#mihomo-clash-tab-config').click();
+  await openMihomoConfig(page);
   await page.locator('#mihomo-dns-btn').click();
 
   const modal = page.locator('#mihomo-dns-modal');
@@ -86,7 +86,7 @@ for (const state of ['inactive', 'unknown', 'warning']) {
     await page.route('**/api/mihomo/dns', (route) => route.fulfill({ json: status }));
     await page.goto('/');
     await selectPanelView(page, 'mihomo');
-    await page.locator('#mihomo-clash-tab-config').click();
+    await openMihomoConfig(page);
     await page.locator('#mihomo-dns-btn').click();
 
     const badge = page.locator('#mihomo-dns-router-bypass-state');

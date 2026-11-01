@@ -1,4 +1,4 @@
-import { test, expect, selectPanelView } from './fixtures.mjs';
+import { test, expect, selectPanelView, openMihomoConfig } from './fixtures.mjs';
 import yaml from 'js-yaml';
 import { statusPayload, groupsPayload } from './mihomo_clash_groups_support.mjs';
 
@@ -19,7 +19,7 @@ async function setup(page, source = LINK) {
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
   await page.locator('[aria-controls="xk-mihomo-parameters-menu"]').click();
-  await page.locator('#mihomo-clash-tab-config').click();
+  await openMihomoConfig(page);
   await editor(page, CONFIG);
   const menu = page.locator('.xk-mihomo-menu');
   if (!await menu.evaluate(el => el.open)) await menu.locator('summary').click();

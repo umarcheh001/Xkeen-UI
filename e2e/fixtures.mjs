@@ -188,6 +188,22 @@ export async function selectPanelView(page, view) {
 }
 
 
+// The configuration tab lives in the parameters menu of the Mihomo workspace.
+// While it is selected the toolbar with that menu is hidden, and a restored
+// subview may already be the configuration.
+export async function openMihomoConfig(page) {
+  const tab = page.locator('#mihomo-clash-tab-config');
+  const trigger = page.locator('[aria-controls="xk-mihomo-parameters-menu"]');
+  const selected = async () => (await tab.getAttribute('aria-selected')) === 'true';
+  // A status answer arriving meanwhile closes the menu: try again.
+  await expect(async () => {
+    if (await selected()) return;
+    if (!(await page.locator('#xk-mihomo-parameters-menu').isVisible())) await trigger.click({ timeout: 1500 });
+    await tab.click({ timeout: 1500 });
+  }).toPass({ timeout: 15000 });
+}
+
+
 export async function switchTopView(page, view) {
   return selectPanelView(page, view);
 }

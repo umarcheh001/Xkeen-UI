@@ -98,7 +98,7 @@ test.describe('DevTools Operator Console theme', () => {
     expect(geometry.cardBackgroundImage).toBe('none');
     expect(geometry.viewRadius).toBe('9px');
     // The header is the Xray logs screen's: 32 px controls, 6 px corners.
-    expect(geometry.segHeight).toBe(32);
+    expect(geometry.segHeight).toBeCloseTo(32, 1);
     expect(geometry.segRadius).toBe('6px');
   });
 

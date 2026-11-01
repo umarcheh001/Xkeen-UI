@@ -1,4 +1,4 @@
-import { test, expect, selectPanelView } from './fixtures.mjs';
+import { test, expect, selectPanelView, openMihomoConfig } from './fixtures.mjs';
 import { mockClients, openDialog, STATUS } from './dns_over_vless_fixtures.mjs';
 
 
@@ -187,7 +187,7 @@ test('Mihomo DNS: оборванный ответ на включение дос
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
   await expect(page.locator('#view-mihomo')).toBeVisible();
-  await page.locator('#mihomo-clash-tab-config').click();
+  await openMihomoConfig(page);
   await page.locator('#mihomo-dns-btn').click();
   await expect(page.locator('#mihomo-dns-modal')).toBeVisible();
 
@@ -244,7 +244,7 @@ test('Mihomo DNS: зависший ответ — счётчик на нажат
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
   await expect(page.locator('#view-mihomo')).toBeVisible();
-  await page.locator('#mihomo-clash-tab-config').click();
+  await openMihomoConfig(page);
   await page.locator('#mihomo-dns-btn').click();
   await expect(page.locator('#mihomo-dns-modal')).toBeVisible();
 
@@ -273,7 +273,7 @@ test('Mihomo DNS: «Применить изменения» — счётчик �
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
   await expect(page.locator('#view-mihomo')).toBeVisible();
-  await page.locator('#mihomo-clash-tab-config').click();
+  await openMihomoConfig(page);
   await page.locator('#mihomo-dns-btn').click();
   await expect(page.locator('#mihomo-dns-update')).toBeVisible();
 

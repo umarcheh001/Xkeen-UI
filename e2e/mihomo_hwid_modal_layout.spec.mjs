@@ -1,4 +1,4 @@
-import { test, expect, selectPanelView } from './fixtures.mjs';
+import { test, expect, selectPanelView, openMihomoConfig } from './fixtures.mjs';
 
 
 test('HWID subscription uses the resizable Operator workbench and stretches its YAML preview', async ({ page }) => {
@@ -6,8 +6,7 @@ test('HWID subscription uses the resizable Operator workbench and stretches its 
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
   await expect(page.locator('#view-mihomo')).toBeVisible();
-  await page.locator('[aria-controls="xk-mihomo-parameters-menu"]').click();
-  await page.locator('#mihomo-clash-tab-config').click();
+  await openMihomoConfig(page);
   const menu = page.locator('.xk-mihomo-menu');
   await menu.locator('summary').click();
   await expect(page.locator('#mihomo-hwid-sub-btn')).toBeVisible();
@@ -63,8 +62,7 @@ test('HWID device profile is compact, editable, and resets to Mihomo panel defau
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
   await expect(page.locator('#view-mihomo')).toBeVisible();
-  await page.locator('[aria-controls="xk-mihomo-parameters-menu"]').click();
-  await page.locator('#mihomo-clash-tab-config').click();
+  await openMihomoConfig(page);
   const menu = page.locator('.xk-mihomo-menu');
   await menu.locator('summary').click();
   await page.locator('#mihomo-hwid-sub-btn').click();
@@ -128,10 +126,10 @@ test('HWID HAPP redirect stays inside the form and opens the node importer', asy
   }));
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
-  await page.locator('[aria-controls="xk-mihomo-parameters-menu"]').click();
-  await page.locator('#mihomo-clash-tab-config').click();
+  await openMihomoConfig(page);
   await page.locator('.xk-mihomo-menu summary').click();
   await page.locator('#mihomo-hwid-sub-btn').click();
+  await expect(page.locator('#mihomo-hwid-modal .xk-hw-panel--controls .xk-hw-panel-head')).toBeVisible();
 
   const layout = await page.locator('#mihomo-hwid-modal').evaluate((modal) => {
     const body = modal.querySelector('.xk-hw-body').getBoundingClientRect();

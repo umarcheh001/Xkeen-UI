@@ -24183,6 +24183,18 @@ body.panel-page #view-mihomo .xk-mihomo-workspace-head #mihomo-clash-groups-coll
   }
 }
 
+@media (max-width: 520px) {
+  /* The actions and the toolbar do not fit one row: the toolbar covered the DNS button. */
+  body.panel-page #view-mihomo .xk-mihomo-workspace-head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  body.panel-page #view-mihomo .xk-mihomo-workspace-head > .xk-mihomo-groups-toolbar {
+    grid-column: 1;
+    grid-row: 3;
+    margin-left: 0;
+  }
+}
+
 @media (max-width: 720px) {
   body.panel-page #view-mihomo .xk-mihomo-workspace-head > .xk-mihomo-groups-toolbar :is(.xk-mihomo-groups-menu-trigger, #mihomo-clash-groups-collapse, #mihomo-clash-test-visible, #mihomo-clash-connections-summary-toggle) {
     height: 40px;

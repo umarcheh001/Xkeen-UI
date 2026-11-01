@@ -1,4 +1,4 @@
-import { test, expect, selectPanelView, serveAdvancedEditorVariant } from './fixtures.mjs';
+import { test, expect, selectPanelView, serveAdvancedEditorVariant, openMihomoConfig } from './fixtures.mjs';
 
 // proxies of a group as a bare name instead of a list.
 const SCALAR_PROXIES_CONFIG = [
@@ -16,7 +16,7 @@ test('Mihomo CodeMirror offers quick fixes as buttons of the diagnostic tooltip'
   await page.goto('/');
   await expect.poll(() => page.evaluate(() => window.XKeen?.pageConfig?.frontendModules?.editor?.variant)).toBe('advanced');
   await selectPanelView(page, 'mihomo');
-  await page.locator('[data-mihomo-clash-subview="config"]').click();
+  await openMihomoConfig(page);
   const mihomo = page.locator('#view-mihomo');
   await expect(mihomo.locator('.cm-editor').first()).toBeVisible();
 

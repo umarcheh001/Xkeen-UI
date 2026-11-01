@@ -43,7 +43,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 | `tool.terminal` | 47 | 472.0 КБ | 2 | 2 | 2 | да |
 | `tool.files` | 85 | 984.7 КБ | 43 | 1 | 1 | да |
 | `tool.backups` | 8 | 99.7 КБ | 14 | 0 | 0 | да |
-| `integration.happ` | 22 | 319.2 КБ | 5 | 0 | 1 | да |
+| `integration.happ` | 22 | 319.1 КБ | 5 | 0 | 1 | да |
 | `tool.advanced-diagnostics` | 67 | 895.6 КБ | 16 | 0 | 2 | да |
 
 ## Backend routes и регистрация

@@ -1,4 +1,4 @@
-import { test, expect, selectPanelView } from './fixtures.mjs';
+import { test, expect, selectPanelView, openMihomoConfig } from './fixtures.mjs';
 import {
   statusPayload, groupsPayload, setHiddenGroupsVisible, openMihomoGroupsMenu,
 } from './mihomo_clash_groups_support.mjs';
@@ -865,7 +865,7 @@ test('Mihomo group disclosures keep the workspace compact and keyboard accessibl
   await expect(page.locator('.xk-mihomo-group-head[aria-expanded="true"]')).toHaveCount(2);
 
   await page.locator('[aria-controls="xk-mihomo-parameters-menu"]').click();
-  await page.locator('#mihomo-clash-tab-config').click();
+  await openMihomoConfig(page);
   await expect(page.locator('#mihomo-clash-panel-config')).toBeVisible();
   await expect(page.locator('#mihomo-clash-runtime')).toBeHidden();
 });

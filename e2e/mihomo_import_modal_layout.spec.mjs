@@ -1,4 +1,4 @@
-import { test, expect, selectPanelView } from './fixtures.mjs';
+import { test, expect, selectPanelView, openMihomoConfig } from './fixtures.mjs';
 
 
 const AMNEZIA_LOCATIONS = [
@@ -12,11 +12,7 @@ const AMNEZIA_LOCATIONS = [
 async function openMihomoImport(page) {
   await selectPanelView(page, 'mihomo');
   await expect(page.locator('#view-mihomo')).toBeVisible();
-  const configTab = page.locator('#mihomo-clash-tab-config');
-  if (!await configTab.isVisible()) {
-    await page.locator('[aria-controls="xk-mihomo-parameters-menu"]').click();
-  }
-  await configTab.click();
+  await openMihomoConfig(page);
   const menu = page.locator('.xk-mihomo-menu');
   await menu.locator('summary').click();
   await expect(page.locator('#mihomo-import-node-btn')).toBeVisible();
@@ -117,7 +113,7 @@ test('Mihomo import opens as a compact source form and expands into the Operator
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
   await expect(page.locator('#view-mihomo')).toBeVisible();
-  await page.locator('#mihomo-clash-tab-config').click();
+  await openMihomoConfig(page);
   const menu = page.locator('.xk-mihomo-menu');
   await menu.locator('summary').click();
   await expect(page.locator('#mihomo-import-node-btn')).toBeVisible();
@@ -205,7 +201,7 @@ test('Mihomo import stays within a narrow viewport', async ({ page }) => {
   });
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
-  await page.locator('#mihomo-clash-tab-config').click();
+  await openMihomoConfig(page);
   await page.locator('.xk-mihomo-menu summary').click();
   await page.locator('#mihomo-import-node-btn').click();
   await expect(page.locator('#mihomo-import-modal')).toBeVisible();
@@ -259,7 +255,7 @@ test('Mihomo import status stays readable and keeps the final action reachable a
 test('global error toasts stay above the Mihomo import modal', async ({ page }) => {
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
-  await page.locator('#mihomo-clash-tab-config').click();
+  await openMihomoConfig(page);
   await page.locator('.xk-mihomo-menu summary').click();
   await page.locator('#mihomo-import-node-btn').click();
   await expect(page.locator('#mihomo-import-modal')).toBeVisible();
@@ -308,7 +304,7 @@ test('busy spinner in the import status is centred on the first line of text', a
 
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
-  await page.locator('#mihomo-clash-tab-config').click();
+  await openMihomoConfig(page);
   await page.locator('.xk-mihomo-menu summary').click();
   await page.locator('#mihomo-import-node-btn').click();
   await expect(page.locator('#mihomo-import-modal')).toBeVisible();
@@ -347,7 +343,7 @@ test('busy spinner in the import status is centred on the first line of text', a
 test('editing source or mode invalidates the previous import result', async ({ page }) => {
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
-  await page.locator('#mihomo-clash-tab-config').click();
+  await openMihomoConfig(page);
   await page.locator('.xk-mihomo-menu summary').click();
   await page.locator('#mihomo-import-node-btn').click();
   await expect(page.locator('#mihomo-import-modal')).toBeVisible();
@@ -382,7 +378,7 @@ test('closing the modal invalidates a late parse response', async ({ page }) => 
 
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
-  await page.locator('#mihomo-clash-tab-config').click();
+  await openMihomoConfig(page);
   await page.locator('.xk-mihomo-menu summary').click();
   await page.locator('#mihomo-import-node-btn').click();
   await expect(page.locator('#mihomo-import-modal')).toBeVisible();

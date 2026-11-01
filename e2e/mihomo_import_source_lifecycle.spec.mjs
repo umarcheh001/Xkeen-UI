@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { test, expect, selectPanelView } from './fixtures.mjs';
+import { test, expect, selectPanelView, openMihomoConfig } from './fixtures.mjs';
 
 const MODAL = '#mihomo-import-modal';
 const LINK = 'vless://11111111-1111-1111-1111-111111111111@example.com:443?encryption=none&type=tcp#Stage3';
@@ -14,11 +14,7 @@ async function prepare(page, { theme = 'dark', engine = 'codemirror' } = {}) {
   await page.route('**/api/mihomo/subscriptions', (route) => route.fulfill({ json: { ok: true, subscriptions: [] } }));
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
-  const configTab = page.locator('#mihomo-clash-tab-config');
-  if (!await configTab.isVisible()) {
-    await page.locator('[aria-controls="xk-mihomo-parameters-menu"]').click();
-  }
-  await configTab.click();
+  await openMihomoConfig(page);
   await page.evaluate(async (content) => {
     const { getMihomoPanelApi } = await import('/static/js/features/mihomo_panel.js');
     getMihomoPanelApi().setEditorText(content);

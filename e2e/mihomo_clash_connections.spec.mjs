@@ -1,4 +1,4 @@
-import { test, expect, selectPanelView } from './fixtures.mjs';
+import { test, expect, selectPanelView, openMihomoConfig } from './fixtures.mjs';
 
 
 function statusPayload() {
@@ -248,7 +248,7 @@ test('Mihomo connections use HTTP fallback, local filters, inspector and confirm
   await page.locator('#mihomo-clash-closed-clear').click();
   await expect(page.locator('#mihomo-clash-closed-count')).toHaveText('0');
 
-  await page.locator('#mihomo-clash-tab-config').click();
+  await openMihomoConfig(page);
   await expect(page.locator('#mihomo-clash-runtime')).toBeHidden();
   await expect(page.locator('#mihomo-clash-stream-state')).toHaveText('Пауза');
 });

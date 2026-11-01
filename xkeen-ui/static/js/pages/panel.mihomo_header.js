@@ -224,24 +224,27 @@ export function initPanelOperatorHeader() {
       if (searchInput) searchInput.placeholder = 'Группа, узел или IP';
       if (diagnosticsTabs) {
         diagnosticsTabs.classList.add('xk-mihomo-diagnostics-toolbar-tabs');
-        params.container.after(diagnosticsTabs);
       }
       const collapse = byId('mihomo-clash-groups-collapse');
       if (collapse) collapse.before(params.container);
       else toolbar.append(params.container);
+      if (diagnosticsTabs) params.container.after(diagnosticsTabs);
       params.container.after(summaryToggle);
       const count = byId('mihomo-clash-groups-count');
       if (count) count.remove();
+      let activeSubview = '';
       function syncSubview() {
         // A runtime-state mutation is also observed below. Do not close the
         // global service menu while the Mihomo facade changes state: the core
         // management button lives there, and closing it makes the underlying
         // workspace intercept the next click. Only the local parameters menu
         // needs to reset when the active Mihomo subview changes.
-        if (!params.content.hidden) {
+        const subview = mihomoView.querySelector('[data-mihomo-clash-subview][aria-selected="true"]')?.id || '';
+        if (subview !== activeSubview && !params.content.hidden) {
           params.content.hidden = true;
           params.trigger.setAttribute('aria-expanded', 'false');
         }
+        activeSubview = subview;
         const control = byId('mihomo-clash-tab-control')?.getAttribute('aria-selected') === 'true';
         const configuration = config?.getAttribute('aria-selected') === 'true';
         const diagnostics = byId('mihomo-clash-tab-diagnostics')?.getAttribute('aria-selected') === 'true';

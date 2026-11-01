@@ -1,4 +1,4 @@
-import { test, expect, selectPanelView } from './fixtures.mjs';
+import { test, expect, selectPanelView, openMihomoConfig } from './fixtures.mjs';
 
 
 const enabled = process.env.E2E_ROUTER_SMOKE === '1';
@@ -43,7 +43,7 @@ test.describe('Router panel smoke (read-only)', () => {
   test('Mihomo DNS dialog matches live router diagnostics without changing DNS', async ({ page }, testInfo) => {
     await page.goto('/');
     await selectPanelView(page, 'mihomo');
-    await page.locator('#mihomo-clash-tab-config').click();
+    await openMihomoConfig(page);
     const response = page.waitForResponse((result) =>
       new URL(result.url()).pathname === '/api/mihomo/dns'
       && result.request().method() === 'GET');

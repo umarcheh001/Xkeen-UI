@@ -53,15 +53,19 @@ test('reduced motion keeps screen changes immediate', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await readyPanel(page);
 
+  // Reduced-motion styles keep 0.01 ms CSS transitions: only the screen motion counts.
   const tabMotion = await page.evaluate(() => {
     document.querySelector('.top-tab-btn[data-view="mihomo"]').click();
     const view = document.getElementById('view-mihomo');
-    return { visible: getComputedStyle(view).display !== 'none', animations: view.getAnimations().length };
+    const animations = view.getAnimations().filter((item) => item.constructor.name === 'Animation').length;
+    return { visible: getComputedStyle(view).display !== 'none', animations };
   });
   expect(tabMotion).toEqual({ visible: true, animations: 0 });
 
   await page.evaluate(() => document.querySelector('a.xk-header-btn-devtools').click());
   await expect(page).toHaveURL(/\/devtools$/);
   await expect(page.locator('[data-xk-top-level-screen-root="devtools"]')).toBeVisible();
-  expect(await page.locator('[data-xk-top-level-screen-root="devtools"]').evaluate((node) => node.getAnimations().length)).toBe(0);
+  expect(await page.locator('[data-xk-top-level-screen-root="devtools"]').evaluate(
+    (node) => node.getAnimations().filter((item) => item.constructor.name === 'Animation').length,
+  )).toBe(0);
 });

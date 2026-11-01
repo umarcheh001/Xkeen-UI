@@ -1,4 +1,4 @@
-import { test, expect, selectPanelView } from './fixtures.mjs';
+import { test, expect, selectPanelView, openMihomoConfig } from './fixtures.mjs';
 import { openMihomoGroupsMenu } from './mihomo_clash_groups_support.mjs';
 
 
@@ -183,9 +183,8 @@ test('500-connection fallback stays bounded, responsive and idle when hidden', a
   expect(desktopMetrics.rowCount).toBe(100);
   if (desktopMetrics.heap) expect(desktopMetrics.heap).toBeLessThan(256 * 1024 * 1024);
 
+  await openMihomoConfig(page);
   const beforeHidden = runtime.requests();
-  await page.locator('[aria-controls="xk-mihomo-parameters-menu"]').click();
-  await page.locator('#mihomo-clash-tab-config').click();
   await page.waitForTimeout(2300);
   expect(runtime.requests()).toBe(beforeHidden);
 

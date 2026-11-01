@@ -253,11 +253,10 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
     await expect(diagnosticsTabs).toBeVisible();
     if (viewport.width >= 800) {
       const toolbarOrder = await page.evaluate(() => (
-        ['.xk-mihomo-parameters', '#mihomo-clash-diagnostics-tabs', '#mihomo-clash-tab-config']
+        ['.xk-mihomo-parameters', '#mihomo-clash-diagnostics-tabs']
           .map((selector) => document.querySelector(selector)?.getBoundingClientRect().left ?? -1)
       ));
       expect(toolbarOrder[0]).toBeLessThan(toolbarOrder[1]);
-      expect(toolbarOrder[1]).toBeLessThan(toolbarOrder[2]);
     }
     const trafficTitle = page.locator('#mihomo-clash-diagnostics-title .xk-mihomo-traffic-title-tooltip');
     await expect(trafficTitle).toHaveAttribute('data-tooltip', /Локальная история по устройствам, маршрутам\/VPN и запрошенным доменам/);

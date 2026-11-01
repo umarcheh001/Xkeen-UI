@@ -1,4 +1,4 @@
-import { test, expect, selectPanelView } from './fixtures.mjs';
+import { test, expect, selectPanelView, openMihomoConfig } from './fixtures.mjs';
 
 const ROUTING_VALIDATION_MODAL = '#mihomo-validation-modal';
 
@@ -15,7 +15,7 @@ async function openRoutingMihomoValidation(page) {
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
   await expect(page.locator('#view-mihomo')).toBeVisible();
-  await page.locator('#mihomo-clash-tab-config').click();
+  await openMihomoConfig(page);
   await expect.poll(() => page.evaluate(() => (
     typeof window.XKeen?.features?.mihomoPanel?.setEditorText === 'function'
   ))).toBe(true);

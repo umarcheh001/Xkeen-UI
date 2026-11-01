@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 617,
-      "size_bytes": 8299939,
+      "size_bytes": 8300383,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -132,7 +132,7 @@
       ],
       "removable": true,
       "unit_count": 147,
-      "size_bytes": 3404871,
+      "size_bytes": 3405037,
       "kind_counts": {
         "app_runtime": 4,
         "backend_route": 2,
@@ -320,7 +320,7 @@
       ],
       "removable": true,
       "unit_count": 22,
-      "size_bytes": 326912,
+      "size_bytes": 326728,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 6,
@@ -12043,7 +12043,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/core_source_single_engine.spec.mjs",
-      "size_bytes": 3671,
+      "size_bytes": 3694,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -12137,7 +12137,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/devtools_operator_theme.spec.mjs",
-      "size_bytes": 9343,
+      "size_bytes": 9353,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -12237,7 +12237,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/dns_guard_shots.spec.mjs",
-      "size_bytes": 22112,
+      "size_bytes": 22104,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -12260,7 +12260,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/dns_operation_recovery.spec.mjs",
-      "size_bytes": 13756,
+      "size_bytes": 13696,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -12280,7 +12280,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/editor_compare_button.spec.mjs",
-      "size_bytes": 4722,
+      "size_bytes": 4702,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -12586,7 +12586,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/monaco_yaml_alias_highlighting.spec.mjs",
-      "size_bytes": 1017,
+      "size_bytes": 1009,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -12948,7 +12948,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/panel_operator_stage5_editors.spec.mjs",
-      "size_bytes": 42284,
+      "size_bytes": 42250,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -13050,7 +13050,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/router_panel_smoke.spec.mjs",
-      "size_bytes": 3608,
+      "size_bytes": 3600,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -13130,7 +13130,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/screen_motion.spec.mjs",
-      "size_bytes": 3527,
+      "size_bytes": 3759,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -13190,7 +13190,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/smoke.spec.mjs",
-      "size_bytes": 23362,
+      "size_bytes": 23302,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -14125,7 +14125,7 @@
       "module_id": "core",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/panel-operator.css",
-      "size_bytes": 824734,
+      "size_bytes": 825111,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -18132,7 +18132,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_javascript",
       "path": "xkeen-ui/static/js/pages/panel.mihomo_header.js",
-      "size_bytes": 16210,
+      "size_bytes": 16434,
       "depends_on": [
         "core",
         "tool.editor"
@@ -18213,7 +18213,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_test",
       "path": "e2e/mihomo_clash_connections.spec.mjs",
-      "size_bytes": 24028,
+      "size_bytes": 24020,
       "depends_on": [
         "core",
         "tool.editor"
@@ -18234,7 +18234,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_test",
       "path": "e2e/mihomo_clash_diagnostics.spec.mjs",
-      "size_bytes": 31190,
+      "size_bytes": 31101,
       "depends_on": [
         "core",
         "tool.editor"
@@ -18255,7 +18255,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_test",
       "path": "e2e/mihomo_clash_groups_latency.spec.mjs",
-      "size_bytes": 46554,
+      "size_bytes": 46546,
       "depends_on": [
         "core",
         "tool.editor"
@@ -18297,7 +18297,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_test",
       "path": "e2e/mihomo_clash_pr8_acceptance.spec.mjs",
-      "size_bytes": 11986,
+      "size_bytes": 11901,
       "depends_on": [
         "core",
         "tool.editor"
@@ -18339,7 +18339,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_test",
       "path": "e2e/mihomo_dns_editor_sync.spec.mjs",
-      "size_bytes": 6400,
+      "size_bytes": 6392,
       "depends_on": [
         "core",
         "tool.editor"
@@ -18360,7 +18360,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_test",
       "path": "e2e/mihomo_dns_policy_detection.spec.mjs",
-      "size_bytes": 4170,
+      "size_bytes": 4136,
       "depends_on": [
         "core",
         "tool.editor"
@@ -18381,7 +18381,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_test",
       "path": "e2e/mihomo_dns_reenable.spec.mjs",
-      "size_bytes": 3195,
+      "size_bytes": 3187,
       "depends_on": [
         "core",
         "tool.editor"
@@ -18423,7 +18423,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_test",
       "path": "e2e/mihomo_import_modal_layout.spec.mjs",
-      "size_bytes": 17773,
+      "size_bytes": 17457,
       "depends_on": [
         "core",
         "tool.editor"
@@ -18444,7 +18444,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_test",
       "path": "e2e/mihomo_import_review.spec.mjs",
-      "size_bytes": 24527,
+      "size_bytes": 24519,
       "depends_on": [
         "core",
         "tool.editor"
@@ -18465,7 +18465,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_test",
       "path": "e2e/mihomo_import_source_lifecycle.spec.mjs",
-      "size_bytes": 26037,
+      "size_bytes": 25877,
       "depends_on": [
         "core",
         "tool.editor"
@@ -18507,7 +18507,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_test",
       "path": "e2e/mihomo_operator_header.spec.mjs",
-      "size_bytes": 17397,
+      "size_bytes": 18091,
       "depends_on": [
         "core",
         "tool.editor"
@@ -18528,7 +18528,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_test",
       "path": "e2e/mihomo_quick_fixes.spec.mjs",
-      "size_bytes": 1918,
+      "size_bytes": 1898,
       "depends_on": [
         "core",
         "tool.editor"
@@ -18549,7 +18549,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_test",
       "path": "e2e/mihomo_validation_modal_layout.spec.mjs",
-      "size_bytes": 3068,
+      "size_bytes": 3060,
       "depends_on": [
         "core",
         "tool.editor"
@@ -23016,7 +23016,7 @@
       "module_id": "integration.happ",
       "kind": "frontend_test",
       "path": "e2e/mihomo_hwid_modal_layout.spec.mjs",
-      "size_bytes": 8274,
+      "size_bytes": 8090,
       "depends_on": [
         "core"
       ],

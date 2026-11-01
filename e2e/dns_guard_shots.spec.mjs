@@ -1,4 +1,4 @@
-import { test, expect, selectPanelView } from './fixtures.mjs';
+import { test, expect, selectPanelView, openMihomoConfig } from './fixtures.mjs';
 import { mkdirSync } from 'node:fs';
 
 /* Screenshots of the shared port-53 guard as both windows now describe it. */
@@ -199,7 +199,7 @@ async function openMihomo(page, status) {
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
   await expect(page.locator('#view-mihomo')).toBeVisible();
-  await page.locator('#mihomo-clash-tab-config').click();
+  await openMihomoConfig(page);
   await expect(page.locator('#mihomo-dns-btn')).toBeVisible();
   await page.locator('#mihomo-dns-btn').click();
   await expect(page.locator('#mihomo-dns-modal')).toBeVisible();

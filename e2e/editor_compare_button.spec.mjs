@@ -1,4 +1,4 @@
-import { test, expect, selectPanelView } from './fixtures.mjs';
+import { test, expect, selectPanelView, openMihomoConfig } from './fixtures.mjs';
 
 
 // The diff viewer is loaded when Compare is first pressed. The screens used to
@@ -34,7 +34,7 @@ test.describe('Editor Compare button', () => {
   test('opens the diff viewer on its first press in the Mihomo editor', async ({ page }) => {
     await page.goto('/');
     await selectPanelView(page, 'mihomo');
-    await page.locator('[data-mihomo-clash-subview="config"]').click();
+    await openMihomoConfig(page);
     const mihomo = page.locator('#view-mihomo');
     await expect(mihomo.locator('.cm-editor').first()).toBeVisible();
     expect(await page.evaluate(() => !!window.XKeen?.ui?.diff)).toBe(false);
