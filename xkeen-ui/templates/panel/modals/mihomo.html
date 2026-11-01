@@ -204,10 +204,10 @@ rule-set:github@domain
                 <div class="xk-mi-flow-content">
                   <div class="xk-mi-flow-heading">
                     <h3>Проверьте размещение</h3>
-                    <span>секция proxies</span>
+                    <span id="mihomo-import-placement-section">секция proxies</span>
                   </div>
                   <div class="xk-mi-placement" role="group" aria-label="Размещение узлов">
-                    <span class="xk-mi-placement-label">Новые узлы будут добавлены</span>
+                    <span class="xk-mi-placement-label">Положение внутри секции</span>
                     <div class="xk-mi-placement-actions">
                       <button type="button" class="btn-secondary btn-compact" data-mi-placement="start" aria-pressed="false" data-tooltip="Добавить импортируемые узлы перед существующими в секции config.yaml.">В начало</button>
                       <button type="button" class="btn-secondary btn-compact" data-mi-placement="end" aria-pressed="true" data-tooltip="Добавить импортируемые узлы после существующих в секции config.yaml.">В конец</button>
@@ -217,6 +217,7 @@ rule-set:github@domain
                       <select id="mihomo-import-replace-target" class="xray-log-select xk-mi-control"></select>
                     </label>
                   </div>
+                  <p class="modal-hint xk-mi-flow-caption">Сама секция остаётся на своём месте в config.yaml.</p>
                   <div class="xk-mi-connection-options" aria-label="Параметры подключений">
                     <div class="xk-mi-connection-options-head">
                       <span class="xk-mi-placement-label">Параметры узлов</span>

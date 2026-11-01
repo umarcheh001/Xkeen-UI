@@ -2980,7 +2980,7 @@ let mihomoImportModuleApi = null;
     details.className = 'xk-mi-candidate-details';
     const detailLines = [
       `${candidate.outputs.length} ${pluralRu(candidate.outputs.length, ['элемент', 'элемента', 'элементов'])} → ${candidate.destinations.join(' + ') || 'config.yaml'}`,
-      candidate.placement === 'replace' ? `Заменяемый узел: ${candidate.replaceName}` : `Размещение: ${candidate.placement === 'start' ? 'в начале' : 'в конце'} секции`,
+      candidate.placement === 'replace' ? `Заменяемый узел: ${candidate.replaceName}` : `Размещение: ${candidate.placement === 'start' ? 'в начале' : 'в конце'} секции ${candidate.destinations.join(' + ')}`,
       candidate.outputs.slice(0, 5).map(output => output.proxy_name || output.provider_name || '').filter(Boolean).join(', '),
       `Групп: ${candidate.groups.length ? candidate.groups.join(', ') : 'не выбраны'}`,
       candidate.missingGroups.length ? `Неизвестные группы: ${candidate.missingGroups.join(', ')}` : '',
@@ -2988,6 +2988,8 @@ let mihomoImportModuleApi = null;
       'Доступность серверов не проверялась.',
     ].filter(Boolean);
     details.textContent = detailLines.join('\n');
+    const placementSection = $('mihomo-import-placement-section');
+    if (placementSection) placementSection.textContent = `секция ${candidate.destinations.join(' + ')}`;
     summaryContent.append(title, details);
     const metrics = document.createElement('div');
     metrics.className = 'xk-mi-summary-metrics';

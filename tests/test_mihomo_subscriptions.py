@@ -5,6 +5,9 @@ from __future__ import annotations
 import base64
 import json
 
+import pytest
+import yaml
+
 from mihomo_config_generator import build_full_config
 from services import mihomo_subscriptions as svc
 
@@ -534,6 +537,38 @@ def test_refresh_config_subscription_replaces_imported_proxy_blocks(tmp_path, mo
     assert sub["source"] == "config"
     assert sub["proxy_names"] == ["New Node"]
     assert "New Node" in sub["managed_yaml"]
+
+
+@pytest.mark.parametrize('before,after', [([], ['Keep']), (['Before'], ['After']), (['Keep'], [])])
+@pytest.mark.parametrize('section_header', ['proxies:', 'proxies: # custom nodes'])
+def test_config_subscription_refresh_keeps_its_position(tmp_path, monkeypatch, before, after, section_header):
+    old_block = '- name: Old\n  type: direct'
+    blocks = [f'- name: {name}\n  type: direct' for name in before] + [old_block] + [
+        f'- name: {name}\n  type: direct' for name in after
+    ]
+    content = ('mixed-port: 7890\nproxy-groups:\n  - name: Main\n    type: select\n'
+               '    proxies: [DIRECT, Old]\nrules: []\n# Keep section here\n' + section_header + '\n'
+               + '\n'.join('  ' + line for line in '\n'.join(blocks).splitlines()) + '\n')
+    config_path = tmp_path / 'config.yaml'
+    config_path.write_text(content, encoding='utf-8')
+    entry = svc.sync_imported_xray_subscription(
+        str(tmp_path), url='https://example.test/xray.json', config_text=content,
+        proxy_yamls=[old_block], groups=['Main'],
+    )
+    body = json.dumps([
+        json.loads(_subscription_body(name, 'edge.example.com', '11111111-1111-1111-1111-111111111111'))[0]
+        for name in ['New One', 'New Two']
+    ])
+    monkeypatch.setattr(svc, '_fetch_xray_subscription_body', lambda _url: (body, {}, {}))
+    for _ in range(2):
+        result = svc.refresh_subscription(str(tmp_path), entry['id'], mihomo_config_file=str(config_path), restart=False)
+        assert result['ok'] is True
+        written = config_path.read_text(encoding='utf-8')
+        parsed = yaml.safe_load(written)
+        assert [proxy['name'] for proxy in parsed['proxies']] == before + ['New One', 'New Two'] + after
+        assert parsed['proxy-groups'][0]['proxies'] == ['DIRECT', 'New One', 'New Two']
+        assert written.index('rules:') < written.index('\nproxies:')
+        assert '# Keep section here' in written
 
 
 def _state_with_two_managed_subscriptions(first_yaml: str, second_yaml: str):

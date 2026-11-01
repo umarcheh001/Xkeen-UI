@@ -1,4 +1,6 @@
 import { test, expect, selectPanelView } from './fixtures.mjs';
+import yaml from 'js-yaml';
+import { statusPayload, groupsPayload } from './mihomo_clash_groups_support.mjs';
 
 const CONFIG = 'mixed-port: 7890\nproxies: []\nproxy-groups:\n  - name: Main\n    type: select\n    proxies: [DIRECT]\nrules: []\n';
 const LINK = 'vless://11111111-1111-1111-1111-111111111111@example.com:443?type=tcp#Review';
@@ -12,8 +14,11 @@ async function editor(page, text) {
 }
 async function setup(page, source = LINK) {
   await page.route('**/api/mihomo/subscriptions', route => route.fulfill({ json: { ok: true, subscriptions: [] } }));
+  await page.route('**/api/mihomo/clash/status', route => route.fulfill({ json: statusPayload() }));
+  await page.route(/\/api\/mihomo\/clash\/proxy-groups(?:\?.*)?$/, route => route.fulfill({ json: groupsPayload() }));
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
+  await page.locator('[aria-controls="xk-mihomo-parameters-menu"]').click();
   await page.locator('#mihomo-clash-tab-config').click();
   await editor(page, CONFIG);
   const menu = page.locator('.xk-mihomo-menu');
@@ -130,6 +135,26 @@ test('review lets a single node move to the start or replace a chosen existing n
   expect(committed.content).not.toContain('name: Existing');
   expect(committed.content).toContain('proxies: [DIRECT, "Review"]');
 });
+
+for (const action of ['draft', 'save']) {
+  test(`start placement keeps source order at the beginning of a trailing proxies section (${action})`, async ({ page }) => {
+    let committed;
+    await page.route('**/api/mihomo/import/commit', route => {
+      committed = route.request().postDataJSON();
+      return route.fulfill({ json: { ok: true, saved: true, revision: 'saved' } });
+    });
+    await setup(page, `${LINK}\n${LINK.replace('#Review', '#Second')}`);
+    const base = 'mixed-port: 7890\nproxy-groups: []\nrules: []\n# Nodes at the bottom\nproxies:\n  - name: Existing\n    type: direct\n';
+    await editor(page, base);
+    await page.locator('#mihomo-import-review-btn').click();
+    await page.locator('[data-mi-placement="start"]').click();
+    await expect(page.locator('#mihomo-import-candidate-summary')).toContainText('в начале');
+    await page.locator(action === 'save' ? '#mihomo-import-save-btn' : '#mihomo-import-insert-btn').click();
+    const content = action === 'save' ? committed.content : await editor(page);
+    expect(yaml.load(content).proxies.map(proxy => proxy.name)).toEqual(['Review', 'Second', 'Existing']);
+    expect(content.indexOf('rules:')).toBeLessThan(content.indexOf('\nproxies:'));
+  });
+}
 
 test('replacement requires one imported static node', async ({ page }) => {
   await setup(page, `${LINK}\n${LINK.replace('#Review', '#Second')}`);

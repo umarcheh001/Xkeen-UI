@@ -20,7 +20,7 @@ from urllib.parse import urlparse
 
 from mihomo_config_generator import build_full_config
 from services.io.atomic import _atomic_write_json, _atomic_write_text
-from services.mihomo_proxy_config import apply_proxy_insert
+from services.mihomo_proxy_config import apply_proxy_insert, insert_proxy_into_groups
 from services.mihomo_xray_json import convert_subscription_source_text, convert_subscription_text
 from services.subscription_schedule import plan_alignment
 from services.url_policy import env_flag
@@ -911,9 +911,16 @@ def _remove_group_references(content: str, proxy_names: Sequence[str]) -> str:
 
 
 def _remove_proxy_blocks(content: str, proxy_names: Sequence[str]) -> str:
+    return _rewrite_proxy_blocks(content, proxy_names)[0]
+
+
+def _rewrite_proxy_blocks(
+    content: str, proxy_names: Sequence[str], replacement_yaml: str = "",
+) -> Tuple[str, bool]:
+    """Remove managed blocks, placing their replacement at the first old block."""
     targets = {str(name or "").strip() for name in proxy_names if str(name or "").strip()}
     if not targets:
-        return content
+        return content, False
 
     content_n = str(content or "").replace("\r\n", "\n").replace("\r", "\n")
     had_trailing_newline = content_n.endswith("\n")
@@ -921,11 +928,11 @@ def _remove_proxy_blocks(content: str, proxy_names: Sequence[str]) -> str:
 
     proxies_idx = None
     for idx, line in enumerate(lines):
-        if line.strip() == "proxies:" and (len(line) - len(line.lstrip()) == 0):
+        if re.fullmatch(r"proxies\s*:\s*(?:#.*)?", line):
             proxies_idx = idx
             break
     if proxies_idx is None:
-        return content_n if had_trailing_newline else content_n.rstrip("\n")
+        return content_n, False
 
     end_idx = len(lines)
     for idx in range(proxies_idx + 1, len(lines)):
@@ -945,7 +952,7 @@ def _remove_proxy_blocks(content: str, proxy_names: Sequence[str]) -> str:
             item_indent_len = len(match.group(1))
             break
     if item_indent_len is None:
-        return content_n
+        return content_n, False
 
     remove_ranges: List[Tuple[int, int]] = []
     idx = proxies_idx + 1
@@ -966,17 +973,25 @@ def _remove_proxy_blocks(content: str, proxy_names: Sequence[str]) -> str:
         idx = block_end
 
     if not remove_ranges:
-        return content_n
+        return content_n, False
 
     keep = [True] * len(lines)
+    insert_at = remove_ranges[0][0]
     for start, end in remove_ranges:
-        while start > proxies_idx + 1 and not lines[start - 1].strip():
+        while not replacement_yaml and start > proxies_idx + 1 and not lines[start - 1].strip():
             start -= 1
         for pos in range(start, end):
             keep[pos] = False
 
-    out = "\n".join(line for pos, line in enumerate(lines) if keep[pos]).rstrip("\n")
-    return out + ("\n" if had_trailing_newline else "")
+    replacement = [" " * item_indent_len + line for line in replacement_yaml.splitlines()]
+    out_lines = []
+    for pos, line in enumerate(lines):
+        if pos == insert_at:
+            out_lines.extend(replacement)
+        if keep[pos]:
+            out_lines.append(line)
+    out = "\n".join(out_lines).rstrip("\n")
+    return out + ("\n" if had_trailing_newline else ""), True
 
 
 def _replace_config_subscription_blocks(
@@ -987,15 +1002,16 @@ def _replace_config_subscription_blocks(
     groups: Sequence[Any],
 ) -> str:
     patched = _remove_group_references(content, old_proxy_names)
-    patched = _remove_proxy_blocks(patched, old_proxy_names)
-    for block in new_proxy_blocks:
-        block_text = str(block or "").strip()
-        if not block_text:
-            continue
+    blocks = [str(block or "").strip() for block in new_proxy_blocks if str(block or "").strip()]
+    patched, replaced = _rewrite_proxy_blocks(patched, old_proxy_names, "\n\n".join(blocks))
+    for block_text in blocks:
         names = _extract_proxy_names_from_yaml(block_text)
         proxy_name = names[0] if names else ""
         if proxy_name:
-            patched = apply_proxy_insert(patched, block_text, proxy_name, groups)
+            if replaced:
+                patched = insert_proxy_into_groups(patched, proxy_name, groups)
+            else:
+                patched = apply_proxy_insert(patched, block_text, proxy_name, groups)
     return patched
 
 
