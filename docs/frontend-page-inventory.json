@@ -39,6 +39,11 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/pages/screen_motion.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
           "path": "static/js/pages/top_level_panel_mihomo.shared.js",
           "globals": [],
           "lazy_features": []
@@ -671,6 +676,11 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/pages/screen_motion.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
           "path": "static/js/pages/top_level_panel_mihomo.shared.js",
           "globals": [],
           "lazy_features": []
@@ -1043,6 +1053,11 @@
         },
         {
           "path": "static/js/pages/top_level_screen_registry.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/screen_motion.js",
           "globals": [],
           "lazy_features": []
         },
@@ -1709,6 +1724,11 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/pages/screen_motion.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
           "path": "static/js/pages/top_level_panel_mihomo.shared.js",
           "globals": [],
           "lazy_features": []
@@ -2166,6 +2186,11 @@
         },
         {
           "path": "static/js/pages/top_level_screen_registry.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/screen_motion.js",
           "globals": [],
           "lazy_features": []
         },

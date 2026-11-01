@@ -30,6 +30,7 @@ import {
   publishXkeenPageApi,
 } from '../features/xkeen_runtime.js';
 import { wireTopLevelNavigation } from './top_level_nav.shared.js';
+import { animateScreenEnter } from './screen_motion.js';
 
 (() => {
   'use strict';
@@ -642,6 +643,9 @@ import { wireTopLevelNavigation } from './top_level_nav.shared.js';
     const prevView = _currentView;
     applyShellView(nextView);
     _currentView = nextView;
+    if (prevView && prevView !== nextView) {
+      animateScreenEnter(getSections()[nextView]);
+    }
     if (nextView === 'routing') {
       try { scheduleRoutingInteractionRecovery(); } catch (e) {}
     }

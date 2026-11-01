@@ -2,6 +2,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
 import { iconHtml } from '../../ui/operator_icons.js';
 import { createPanelLogView } from '../panel_log_view.js';
 import { panelLogKind } from '../panel_log_parser.js';
+import { animateScreenEnter } from '../../pages/screen_motion.js';
 
 // DevTools -> Logs: the panel's own log files (core, update, restart, ...).
 //
@@ -804,6 +805,7 @@ import { panelLogKind } from '../panel_log_parser.js';
       stopListPolling();
       return;
     }
+    const previous = S.activeTab;
     S.activeTab = next;
     if (btnTools) {
       const active = next === 'tools';
@@ -817,6 +819,7 @@ import { panelLogKind } from '../panel_log_parser.js';
     }
     if (tabTools) tabTools.style.display = next === 'tools' ? '' : 'none';
     if (tabLogs) tabLogs.style.display = next === 'logs' ? '' : 'none';
+    if (previous && previous !== next) animateScreenEnter(next === 'tools' ? tabTools : tabLogs);
 
     if (next === 'logs') {
       startListPolling();

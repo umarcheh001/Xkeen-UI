@@ -4,6 +4,7 @@ import {
   resolveTopLevelRoute,
   normalizeTopLevelScreenName,
 } from './top_level_screen_registry.js';
+import { animateScreenEnter, animateScreenLeave } from './screen_motion.js';
 
 const ROUTE_CHANGE_EVENT = 'xkeen:top-level-route-change';
 
@@ -139,6 +140,8 @@ function createTopLevelRouterApi() {
     activeScreenName: '',
     currentScreenMounted: false,
     transitionChain: Promise.resolve(),
+    pendingTransitions: 0,
+    latestQueuedHref: '',
   };
 
   function getActiveRoute() {
@@ -179,6 +182,8 @@ function createTopLevelRouterApi() {
     }
 
     if (currentScreen && currentScreen !== nextScreen) {
+      const currentRoot = document.querySelector(`#xk-top-level-screen-mount [data-xk-top-level-screen-root="${state.activeScreenName}"]`);
+      await animateScreenLeave(currentRoot);
       await runScreenLifecycle(currentScreen, 'deactivate', {
         router: api,
         from: currentRoute,
@@ -199,6 +204,8 @@ function createTopLevelRouterApi() {
       trigger: meta.trigger,
       reason: meta.reason,
     });
+    const nextRoot = document.querySelector(`#xk-top-level-screen-mount [data-xk-top-level-screen-root="${route.name}"]`);
+    animateScreenEnter(nextRoot);
 
     emitRouteChange(route, Object.assign({}, meta, { inApp: true }));
     scrollToHash(route.hash);
@@ -206,6 +213,8 @@ function createTopLevelRouterApi() {
   }
 
   function queueTransition(route, meta) {
+    state.pendingTransitions += 1;
+    state.latestQueuedHref = route.href;
     state.transitionChain = state.transitionChain
       .catch(() => {})
       .then(async () => {
@@ -214,6 +223,9 @@ function createTopLevelRouterApi() {
         } catch (error) {
           try { console.error('[XKeen] top-level router transition failed', error); } catch (secondaryError) {}
           hardNavigate(route, true);
+        } finally {
+          state.pendingTransitions -= 1;
+          if (!state.pendingTransitions) state.latestQueuedHref = '';
         }
       });
     return true;
@@ -242,12 +254,16 @@ function createTopLevelRouterApi() {
 
     if (!currentRoute) return false;
 
-    if (currentRoute.href === route.href) {
+    if (state.pendingTransitions && state.latestQueuedHref === route.href) {
+      return true;
+    }
+
+    if (!state.pendingTransitions && currentRoute.href === route.href) {
       scrollToHash(route.hash);
       return true;
     }
 
-    if (currentScreenName && route.name === currentScreenName) {
+    if (!state.pendingTransitions && currentScreenName && route.name === currentScreenName) {
       pushHistoryState(route, replace);
       return handleSameScreenNavigation(route, meta);
     }
@@ -263,7 +279,7 @@ function createTopLevelRouterApi() {
     if (!route) return;
 
     const currentScreenName = normalizeTopLevelScreenName(state.activeScreenName || (state.activeRoute && state.activeRoute.name));
-    if (route.name === currentScreenName) {
+    if (!state.pendingTransitions && route.name === currentScreenName) {
       handleSameScreenNavigation(route, {
         trigger: 'popstate',
         reason: 'popstate',

@@ -38,8 +38,8 @@
         "gevent-websocket (optional)"
       ],
       "removable": false,
-      "unit_count": 615,
-      "size_bytes": 8293344,
+      "unit_count": 617,
+      "size_bytes": 8299445,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -49,9 +49,9 @@
         "frontend_bundle": 9,
         "frontend_entrypoint": 3,
         "frontend_feature": 37,
-        "frontend_javascript": 37,
+        "frontend_javascript": 38,
         "frontend_runtime": 2,
-        "frontend_test": 73,
+        "frontend_test": 74,
         "frontend_ui": 18,
         "stylesheet": 9,
         "template": 32
@@ -359,7 +359,7 @@
       ],
       "removable": true,
       "unit_count": 67,
-      "size_bytes": 916876,
+      "size_bytes": 917075,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 17,
@@ -11366,10 +11366,36 @@
       "module_id": "core",
       "kind": "frontend_javascript",
       "path": "xkeen-ui/static/js/pages/panel_shell.shared.js",
-      "size_bytes": 52331,
+      "size_bytes": 52490,
       "depends_on": [
         "tool.terminal"
       ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [
+        "devtools-page",
+        "mihomo-generator-page",
+        "modules-page",
+        "panel-core",
+        "xkeen-page"
+      ],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "frontend_javascript",
+      "path": "xkeen-ui/static/js/pages/screen_motion.js",
+      "size_bytes": 1546,
+      "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
       "registers_routes": false,
@@ -11526,7 +11552,7 @@
       "module_id": "core",
       "kind": "frontend_javascript",
       "path": "xkeen-ui/static/js/pages/top_level_router.js",
-      "size_bytes": 9817,
+      "size_bytes": 10686,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -13085,6 +13111,26 @@
       "kind": "frontend_test",
       "path": "e2e/routing_schema.spec.mjs",
       "size_bytes": 25606,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "frontend_test",
+      "path": "e2e/screen_motion.spec.mjs",
+      "size_bytes": 3527,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -24016,7 +24062,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/devtools/logs.js",
-      "size_bytes": 32220,
+      "size_bytes": 32419,
       "depends_on": [
         "core"
       ],
@@ -31504,7 +31550,7 @@
     {
       "id": "panel-core",
       "root": "xkeen-ui/static/js/pages/panel.entry.js",
-      "file_count": 313,
+      "file_count": 314,
       "module_ids": [
         "core",
         "engine.mihomo",
@@ -31718,6 +31764,7 @@
         "xkeen-ui/static/js/pages/panel.shared_compat.bundle.js",
         "xkeen-ui/static/js/pages/panel.view_runtime.js",
         "xkeen-ui/static/js/pages/panel_shell.shared.js",
+        "xkeen-ui/static/js/pages/screen_motion.js",
         "xkeen-ui/static/js/pages/shell.shared.js",
         "xkeen-ui/static/js/pages/terminal.lazy.entry.js",
         "xkeen-ui/static/js/pages/top_level_devtools_screen.js",
@@ -32226,7 +32273,7 @@
     {
       "id": "devtools-page",
       "root": "xkeen-ui/static/js/pages/devtools.entry.js",
-      "file_count": 313,
+      "file_count": 314,
       "module_ids": [
         "core",
         "engine.mihomo",
@@ -32440,6 +32487,7 @@
         "xkeen-ui/static/js/pages/panel.shared_compat.bundle.js",
         "xkeen-ui/static/js/pages/panel.view_runtime.js",
         "xkeen-ui/static/js/pages/panel_shell.shared.js",
+        "xkeen-ui/static/js/pages/screen_motion.js",
         "xkeen-ui/static/js/pages/shell.shared.js",
         "xkeen-ui/static/js/pages/terminal.lazy.entry.js",
         "xkeen-ui/static/js/pages/top_level_devtools_screen.js",
@@ -32557,7 +32605,7 @@
     {
       "id": "xkeen-page",
       "root": "xkeen-ui/static/js/pages/xkeen.entry.js",
-      "file_count": 313,
+      "file_count": 314,
       "module_ids": [
         "core",
         "engine.mihomo",
@@ -32770,6 +32818,7 @@
         "xkeen-ui/static/js/pages/panel.shared_compat.bundle.js",
         "xkeen-ui/static/js/pages/panel.view_runtime.js",
         "xkeen-ui/static/js/pages/panel_shell.shared.js",
+        "xkeen-ui/static/js/pages/screen_motion.js",
         "xkeen-ui/static/js/pages/shell.shared.js",
         "xkeen-ui/static/js/pages/terminal.lazy.entry.js",
         "xkeen-ui/static/js/pages/top_level_devtools_screen.js",
@@ -32888,7 +32937,7 @@
     {
       "id": "mihomo-generator-page",
       "root": "xkeen-ui/static/js/pages/mihomo_generator.entry.js",
-      "file_count": 313,
+      "file_count": 314,
       "module_ids": [
         "core",
         "engine.mihomo",
@@ -33102,6 +33151,7 @@
         "xkeen-ui/static/js/pages/panel.shared_compat.bundle.js",
         "xkeen-ui/static/js/pages/panel.view_runtime.js",
         "xkeen-ui/static/js/pages/panel_shell.shared.js",
+        "xkeen-ui/static/js/pages/screen_motion.js",
         "xkeen-ui/static/js/pages/shell.shared.js",
         "xkeen-ui/static/js/pages/terminal.lazy.entry.js",
         "xkeen-ui/static/js/pages/top_level_devtools_screen.js",
@@ -33219,7 +33269,7 @@
     {
       "id": "modules-page",
       "root": "xkeen-ui/static/js/pages/modules.entry.js",
-      "file_count": 313,
+      "file_count": 314,
       "module_ids": [
         "core",
         "engine.mihomo",
@@ -33433,6 +33483,7 @@
         "xkeen-ui/static/js/pages/panel.shared_compat.bundle.js",
         "xkeen-ui/static/js/pages/panel.view_runtime.js",
         "xkeen-ui/static/js/pages/panel_shell.shared.js",
+        "xkeen-ui/static/js/pages/screen_motion.js",
         "xkeen-ui/static/js/pages/shell.shared.js",
         "xkeen-ui/static/js/pages/terminal.lazy.entry.js",
         "xkeen-ui/static/js/pages/top_level_devtools_screen.js",
@@ -35214,7 +35265,7 @@
         },
         "tool.advanced-diagnostics": {
           "unit_count": 67,
-          "size_bytes": 916876
+          "size_bytes": 917075
         }
       },
       "next_stage": "Этапы 4, 5 и 6."
