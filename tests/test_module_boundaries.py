@@ -60,12 +60,14 @@ def test_no_static_import_crosses_a_separated_module_boundary() -> None:
     modules = separate_modules()
     assert modules
     offenders: list[str] = []
+    seen_owners: set[str] = set()
 
     # Sources: the core does not import the module's files, the module does not
     # import the core's (the core is reached by a bare name, `xk-core/...`).
     for source in sorted((STATIC / "js").rglob("*.js")):
         relative = source.relative_to(STATIC).as_posix()
         who = owner("static/" + relative)
+        seen_owners.add(who)
         text = source.read_text(encoding="utf-8")
         for specifier in static_specifiers(text, strip_comments=True):
             target = resolve(relative, specifier)
@@ -77,12 +79,29 @@ def test_no_static_import_crosses_a_separated_module_boundary() -> None:
             if who != there and (who in modules or there in modules):
                 offenders.append(f"{relative} ({who}) -> {target} ({there})")
 
+    # The walk must have looked at both sides, or a green run proves nothing.
+    assert "core" in seen_owners
+    for module_id in modules:
+        assert module_id in seen_owners, module_id
+
+    assert offenders == []
+
+
+def test_built_bundles_do_not_cross_a_separated_module_boundary() -> None:
+    modules = separate_modules()
+    if not all((BUILD / "modules" / module_id).is_dir() for module_id in modules) or not (BUILD / "assets").is_dir():
+        pytest.skip("frontend build not found: run npm run frontend:build")
+    offenders: list[str] = []
+    module_bundles = 0
+    core_bundles = 0
+
     # The build: the module's bundle imports nothing outside its own directory
     # (no relative path into the core, no core chunk `assets/*`); the core's
     # bundles do not import the module's directory.
     for module_id in modules:
         module_dir = f"frontend-build/modules/{module_id}"
         for built in sorted((BUILD / "modules" / module_id).glob("*.js")):
+            module_bundles += 1
             relative = f"{module_dir}/{built.name}"
             for specifier in static_specifiers(built.read_text(encoding="utf-8"), strip_comments=False):
                 target = resolve(relative, specifier)
@@ -94,11 +113,14 @@ def test_no_static_import_crosses_a_separated_module_boundary() -> None:
         relative = built.relative_to(STATIC).as_posix()
         if relative.startswith("frontend-build/modules/"):
             continue
+        core_bundles += 1
         for specifier in static_specifiers(built.read_text(encoding="utf-8"), strip_comments=False):
             target = resolve(relative, specifier)
             if target is not None and target.startswith("frontend-build/modules/"):
                 offenders.append(f"{relative} -> {target}")
 
+    assert module_bundles >= 1
+    assert core_bundles >= 1
     assert offenders == []
 
 
