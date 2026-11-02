@@ -49,7 +49,8 @@ INSTALL_MARKERS = {
     "integration.happ": ("routes/happ_decryptor.py", "services/happ_decryptor/__init__.py"),
     "tool.advanced-diagnostics": ("routes/system_resources.py", "static/js/features/resource_monitor.js"),
 }
-STATE_FILES = {"modules.json", "module-installed.json", "install-profile.json", "install-managed.json"}
+OWNERSHIP_OVERRIDES = "module-ownership-overrides.json"
+STATE_FILES = {"modules.json", "module-installed.json", "install-profile.json", "install-managed.json", OWNERSHIP_OVERRIDES}
 USER_TOP_LEVEL = {"xray-jsonc", "var", "bin"}
 USER_FILES = {"secret.key", "devtools.env", "ui-settings.json", "branding.json", "module-update-channel.json", "module-notifications.json", "xkeen-last-core.json"}
 USER_PREFIXES = (
@@ -724,6 +725,11 @@ def apply_profile(
             }})
             _write_json(target / "install-profile.json", {"schema_version": 1, "profile": profile, "module_ids": [module for module in MODULE_IDS if module in selected], "editor_variant": variant})
             _write_json(target / "install-managed.json", {"schema_version": 1, "paths": sorted(source_files)})
+        # Every module is laid from this archive now: the files of modules
+        # updated on their own are gone, and so are their versions, which the
+        # record of installed modules written above no longer carries.
+        if (target / OWNERSHIP_OVERRIDES).exists():
+            _write_json(target / OWNERSHIP_OVERRIDES, {"schema_version": 1, "modules": {}})
     except BaseException:
         # An interrupt (Ctrl+C, a closed SSH session) must not leave a panel
         # that is half old and half new.

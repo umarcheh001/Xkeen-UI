@@ -44,7 +44,13 @@ _REPAIR_ONLY_MODULES = REPAIR_ONLY_MODULES
 
 # Compatibility exports for Stage 8.3 callers; the predicate itself is shared
 # with the profile planner so these contracts cannot diverge in production.
-STATE_FILES = {"modules.json", "module-installed.json", "install-profile.json", "install-managed.json"}
+STATE_FILES = {
+    "modules.json",
+    "module-installed.json",
+    "install-profile.json",
+    "install-managed.json",
+    "module-ownership-overrides.json",
+}
 USER_TOP_LEVEL = {"xray-jsonc", "var", "bin"}
 USER_FILES = {"secret.key", "devtools.env", "ui-settings.json", "branding.json", "module-update-channel.json", "module-notifications.json", "xkeen-last-core.json"}
 USER_PREFIXES = (
@@ -124,13 +130,15 @@ def load_ownership_map(panel_root: Path) -> OwnershipMap:
     return OwnershipMap(modules=normalized, frontend={"bridge": bridge, "build": build})
 
 
-def installed_panel_listing(panel_root: Path) -> dict[str, Any]:
+def installed_panel_listing(panel_root: Path, state_dir: Path | None = None) -> dict[str, Any]:
     """The installed release described the way a verified panel archive is.
 
     A profile transition stays on the installed release, whose ownership map
     already lies in the panel: what the target profile consists of is known
     without downloading anything. Sizes are those of the files on the storage;
     a file that is not there counts as zero and has to come from the archive.
+    With ``state_dir`` a module updated on its own is described by the files
+    it really consists of, not by the list of the release.
     """
 
     root = Path(panel_root)
@@ -147,7 +155,7 @@ def installed_panel_listing(panel_root: Path) -> dict[str, Any]:
             "module_ownership_unavailable",
             "this panel build does not describe which files its modules own",
         ) from error
-    return {
+    listing = {
         "ownership": raw,
         "payload_sizes": {
             path: _file_size(root / path)
@@ -156,6 +164,57 @@ def installed_panel_listing(panel_root: Path) -> dict[str, Any]:
             if _safe_relative(path)
         },
     }
+    if state_dir is not None:
+        listing = _listing_with_overrides(listing, root, Path(state_dir))
+    return listing
+
+
+def _tree_listing(tree: Path) -> dict[str, Any]:
+    """An unpacked release described the way a verified archive listing is."""
+
+    try:
+        raw = json.loads((Path(tree) / OWNERSHIP_MAP_FILENAME).read_text(encoding="utf-8"))
+        modules = raw["modules"]
+        sizes = {
+            path: _file_size(Path(tree) / path)
+            for paths in modules.values()
+            for path in paths
+            if _safe_relative(path) and (Path(tree) / path).is_file()
+        }
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
+        raise ModuleTransactionError(
+            "profile_ownership_unavailable",
+            "panel ownership metadata cannot build a physical profile",
+        ) from error
+    return {"ownership": raw, "payload_sizes": sizes}
+
+
+def _listing_with_overrides(
+    listing: Mapping[str, Any], panel_root: Path, state_dir: Path
+) -> dict[str, Any]:
+    """A release listing in which every updated module has its own files.
+
+    The release stays the same, so an updated module that stays installed
+    keeps what lies on the storage: its files are measured there. The record
+    is checked against the installed map before it is used.
+    """
+
+    # Imported here: the record module builds on this one.
+    from .ownership_overrides import effective_ownership, read_overrides
+
+    overrides = read_overrides(state_dir)
+    if not overrides:
+        return dict(listing)
+    effective_ownership(panel_root, state_dir)
+    ownership = dict(listing["ownership"])
+    modules = dict(ownership["modules"])
+    sizes = dict(listing["payload_sizes"])
+    for module_id, paths in overrides.items():
+        modules[module_id] = list(paths)
+        for path in paths:
+            sizes[path] = _file_size(Path(panel_root) / path)
+    ownership["modules"] = modules
+    return {**listing, "ownership": ownership, "payload_sizes": sizes}
 
 
 def read_panel_version(panel_root: Path) -> str:
@@ -357,7 +416,13 @@ def build_plan(
     panel_root = Path(panel_root)
     version = read_panel_version(panel_root)
     ensure_release_build(version)
-    ownership = load_ownership_map(panel_root)
+    # Imported here: the record module builds on this one.
+    from .ownership_overrides import effective_ownership
+
+    release_ownership = load_ownership_map(panel_root)
+    # What lies on the storage: an updated module consists of the files its
+    # entry named, and a removal takes exactly those.
+    ownership = effective_ownership(panel_root, Path(state_dir))
     if (
         operation not in OPERATIONS
         or module_id == "core"
@@ -414,7 +479,9 @@ def build_plan(
             files = module_files
         else:
             module_version = read_panel_module_versions(panel_root).get(module_id, BASE_MODULE_VERSION)
-            files = _module_files(ownership, module_id)
+            # A release entry lays the files of the release, whatever an
+            # earlier update made of the module.
+            files = _module_files(ownership, module_id, release_ownership.modules[module_id])
         installed_version = read_installed_module_versions(Path(state_dir), panel_root).get(
             module_id, BASE_MODULE_VERSION
         )
@@ -464,7 +531,15 @@ def build_plan(
         incoming = 0
     else:
         files_add = files
-        files_remove = ()
+        # A repair may lay an entry with fewer files than the module has now:
+        # what the new entry does not name would stay on the storage unowned.
+        files_remove = tuple(
+            sorted(
+                path
+                for path in ownership.modules[module_id]
+                if path not in set(files) and (panel_root / path).is_file()
+            )
+        ) if operation == "repair" else ()
         archive = ArchiveSource(archive=str(entry["archive"]), size=int(entry["size"]), sha256=str(entry["sha256"]))
         installed_after = installed | {module_id}
         # The archive itself plus its unpacked payload. The normalized catalog
@@ -705,6 +780,18 @@ def _full_scope_plan(
         else:
             profile = "custom"
             requested_modules = [module_id for module_id in MODULE_IDS if module_id in installed_profile_modules]
+    if scope == "profile":
+        # Imported here: the record module builds on this one.
+        from .ownership_overrides import read_overrides
+
+        # The release stays, but a module updated on its own consists of other
+        # files than the release lists: those on the storage are the ones that
+        # stay or go. An update of the panel lays its release as a whole.
+        if read_overrides(Path(state_dir)):
+            if target_archive is None:
+                target_archive = _tree_listing(Path(target_panel_root))
+                target_panel_root = None
+            target_archive = _listing_with_overrides(target_archive, Path(panel_root), Path(state_dir))
     try:
         if target_archive is not None:
             # The verified listing of the archive: nothing has to be unpacked

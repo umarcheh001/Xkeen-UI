@@ -1174,7 +1174,7 @@ class ModuleLifecycleService:
                     panel_root=self.panel_root,
                     state_dir=self.state_dir,
                     catalog=snapshot.catalog,
-                    target_archive=installed_panel_listing(self.panel_root),
+                    target_archive=installed_panel_listing(self.panel_root, self.state_dir),
                     architecture=architecture,
                 )
                 if not local.files_add:

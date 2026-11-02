@@ -26,6 +26,7 @@ _INSIDE_PANEL: Tuple[Tuple[str, bool], ...] = (
     ("module-installed.json", False),
     ("install-profile.json", False),
     ("install-managed.json", False),
+    ("module-ownership-overrides.json", False),
     ("module-runtime.json", False),
 )
 # Каталоги рядом с панелью: журнал операций с модулями и прежняя версия.

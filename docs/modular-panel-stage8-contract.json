@@ -194,6 +194,7 @@
       "install-managed.json",
       "install-profile.json",
       "module-installed.json",
+      "module-ownership-overrides.json",
       "modules.json"
     ],
     "user_files": [

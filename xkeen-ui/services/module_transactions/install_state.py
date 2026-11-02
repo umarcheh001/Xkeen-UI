@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 from typing import Any, Mapping
 
+from .ownership_overrides import OVERRIDES_FILENAME, overrides_document, parse_overrides
 from .plan import PHYSICAL_REQUEST_KEY, Plan
 
 
@@ -69,9 +70,55 @@ def rebuild_frontend_manifests(panel_root: Path, frontend: Mapping[str, Mapping[
     return result
 
 
+def _current_overrides(panel_root: Path) -> dict[str, tuple[str, ...]]:
+    try:
+        return parse_overrides(_load(Path(panel_root) / OVERRIDES_FILENAME))
+    except (ValueError, TypeError):
+        # The plan refuses a broken record; what replaces it starts empty.
+        return {}
+
+
+def _overrides_update(panel_root: Path, modules: Mapping[str, tuple[str, ...]]) -> dict[str, bytes]:
+    """The record of the files of updated modules, when it has to change.
+
+    An emptied record is written, not deleted: the journal then undoes a
+    write like any other. Where no record exists and none is needed, there is
+    nothing to write.
+    """
+
+    if not modules and not (Path(panel_root) / OVERRIDES_FILENAME).exists():
+        return {}
+    return {OVERRIDES_FILENAME: _dump(overrides_document(modules))}
+
+
 def state_file_updates(panel_root: Path, plan: Plan) -> dict[str, bytes]:
     """New contents of the installer records, keyed by path under the panel root."""
 
+    updates = _state_file_updates(panel_root, plan)
+    if plan.scope == "panel":
+        # A release is laid as a whole: no module keeps files of its own.
+        updates.update(_overrides_update(panel_root, {}))
+    elif plan.scope == "profile":
+        if isinstance(plan.target_profile, Mapping) and isinstance(plan.target_profile.get("module_ids"), list):
+            kept = {str(module_id) for module_id in plan.target_profile["module_ids"]}
+            current = _current_overrides(panel_root)
+            updates.update(
+                _overrides_update(
+                    panel_root, {module_id: files for module_id, files in current.items() if module_id in kept}
+                )
+            )
+    elif plan.module_id is not None:
+        current = _current_overrides(panel_root)
+        current.pop(plan.module_id, None)
+        if plan.operation != "remove" and plan.module_files is not None:
+            # An update entry named the files itself; a release entry brings
+            # the module back to the map of the panel.
+            current[plan.module_id] = tuple(plan.module_files)
+        updates.update(_overrides_update(panel_root, current))
+    return updates
+
+
+def _state_file_updates(panel_root: Path, plan: Plan) -> dict[str, bytes]:
     if plan.scope in {"panel", "profile"}:
         if not isinstance(plan.target_profile, Mapping):
             return {}
@@ -116,11 +163,22 @@ def state_file_updates(panel_root: Path, plan: Plan) -> dict[str, bytes]:
         # A profile transition lays only what was missing: the rest of
         # the managed set is what was there before.
         target_paths = (current_paths - set(plan.files_remove)) | set(plan.files_add)
+        installed_record: dict[str, Any] = {
+            "schema_version": 1,
+            "modules": {module_id: module_id in selected for module_id in recorded},
+        }
+        if plan.scope == "profile":
+            # The release stays: a module that stays keeps the version it has.
+            # An update of the panel lays the versions of its release.
+            previous = _load(Path(panel_root) / "module-installed.json")
+            versions = previous.get("versions") if isinstance(previous, dict) else None
+            if isinstance(versions, dict):
+                kept_versions = {key: value for key, value in versions.items() if key in selected}
+                if kept_versions:
+                    installed_record["versions"] = kept_versions
         return {
             "modules.json": _dump(modules_state),
-            "module-installed.json": _dump(
-                {"schema_version": 1, "modules": {module_id: module_id in selected for module_id in recorded}}
-            ),
+            "module-installed.json": _dump(installed_record),
             "install-profile.json": _dump(
                 {
                     "schema_version": 1,
@@ -131,9 +189,17 @@ def state_file_updates(panel_root: Path, plan: Plan) -> dict[str, bytes]:
             ),
             "install-managed.json": _dump({"schema_version": 1, "paths": sorted(target_paths)}),
         }
-    if plan.operation == "repair":
-        return {}
     panel_root = Path(panel_root)
+    if plan.operation == "repair":
+        if not plan.files_remove:
+            return {}
+        # Files of an earlier update the laid entry no longer names.
+        managed = _load(panel_root / "install-managed.json")
+        paths = managed.get("paths") if isinstance(managed, dict) else None
+        if not isinstance(paths, list) or not all(isinstance(item, str) for item in paths):
+            return {}
+        managed["paths"] = sorted((set(paths) | set(plan.files_add)) - set(plan.files_remove))
+        return {"install-managed.json": _dump(managed)}
     present = plan.operation == "install"
     installed_after = set(plan.installed_after)
     updates: dict[str, bytes] = {}

@@ -17,7 +17,13 @@ PRESETS: Mapping[str, tuple[str, ...]] = {
     "mihomo-minimal": ("core", "engine.mihomo", "tool.editor"),
 }
 EDITOR_VARIANTS = frozenset({"light", "full", "advanced"})
-STATE_FILENAMES = ("modules.json", "module-installed.json", "install-profile.json", "install-managed.json")
+STATE_FILENAMES = (
+    "modules.json",
+    "module-installed.json",
+    "install-profile.json",
+    "install-managed.json",
+    "module-ownership-overrides.json",
+)
 _USER_TOP_LEVEL = {"xray-jsonc", "var", "bin"}
 _USER_FILES = {
     "install.sh",
