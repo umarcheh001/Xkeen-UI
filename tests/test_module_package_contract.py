@@ -16,6 +16,8 @@ from services.module_package_contract import (
     validate_catalog_document,
     validate_catalog_entry,
     validate_catalog_source,
+    MODULE_UPDATES_KIND,
+    validate_module_updates_document,
     validate_module_archive,
     validate_semver,
 )
@@ -410,3 +412,111 @@ def test_detected_architecture_is_accepted_by_a_catalog_entry_for_every_router()
     for machine, byteorder in (("aarch64", "little"), ("mips", "little"), ("mips", "big")):
         architecture = detect_platform_architecture(machine=machine, byteorder=byteorder)
         assert validate_catalog_entry(catalog, platform_architecture=architecture, core_version="1.0.0")
+
+
+def _update_entry(**overrides: object) -> dict[str, object]:
+    entry = _catalog(
+        size=1,
+        sha256="a" * 64,
+        version="1.0.1",
+        min_core="3.0.3",
+        archive="xkeen-module-tool.files-1.0.1.tar.gz",
+        ownership=["services/file_manager.py"],
+    )
+    entry.update(overrides)
+    return entry
+
+
+def _updates_document(**overrides: object) -> dict[str, object]:
+    document: dict[str, object] = {
+        "kind": MODULE_UPDATES_KIND,
+        "schema_version": 1,
+        "panel_version": "3.0.3",
+        "serial": 1,
+        "modules": [_update_entry()],
+    }
+    document.update(overrides)
+    return document
+
+
+def _validate_updates(document: object, **overrides: object) -> dict[str, object]:
+    kwargs: dict[str, object] = {
+        "panel_version": "3.0.3",
+        "signing_key_id": "release-2026",
+        "trusted_signing_key_ids": {"release-2026"},
+    }
+    kwargs.update(overrides)
+    return validate_module_updates_document(document, **kwargs)
+
+
+def test_module_updates_document_accepts_minimal_document() -> None:
+    result = _validate_updates(_updates_document(), core_version="3.0.3")
+
+    assert result["kind"] == "xkeen-module-updates"
+    assert result["schema_version"] == 1
+    assert result["panel_version"] == "3.0.3"
+    assert result["serial"] == 1
+    assert [item["id"] for item in result["modules"]] == ["tool.files"]
+    assert result["modules"][0]["version"] == "1.0.1"
+    assert result["modules"][0]["ownership"] == ["services/file_manager.py"]
+
+
+@pytest.mark.parametrize(
+    ("overrides", "code"),
+    [
+        ({"kind": "xkeen-catalog"}, "module_updates_kind_invalid"),
+        ({"schema_version": 2}, "module_updates_schema_unsupported"),
+        ({"panel_version": "3.0.4"}, "module_updates_panel_mismatch"),
+        ({"serial": "1"}, "module_updates_serial_invalid"),
+        ({"serial": True}, "module_updates_serial_invalid"),
+        ({"serial": 0}, "module_updates_serial_invalid"),
+    ],
+)
+def test_module_updates_document_rejects_bad_header(overrides: dict[str, object], code: str) -> None:
+    with pytest.raises(ModulePackageContractError, match=code):
+        _validate_updates(_updates_document(**overrides))
+
+
+def test_module_updates_document_rejects_duplicate_module() -> None:
+    document = _updates_document(modules=[_update_entry(), _update_entry()])
+
+    with pytest.raises(ModulePackageContractError, match="catalog_module_duplicate"):
+        _validate_updates(document)
+
+
+def test_module_updates_document_rejects_min_core_other_than_panel_version() -> None:
+    document = _updates_document(modules=[_update_entry(min_core="3.0.2")])
+
+    with pytest.raises(ModulePackageContractError, match="module_updates_min_core_invalid"):
+        _validate_updates(document)
+
+
+def test_module_updates_document_rejects_entry_key_different_from_signature_key() -> None:
+    document = _updates_document(modules=[_update_entry(signing_key_id="rotated-2027")])
+
+    with pytest.raises(ModulePackageContractError, match="catalog_signing_key_mismatch"):
+        _validate_updates(document, trusted_signing_key_ids={"release-2026", "rotated-2027"})
+
+
+@pytest.mark.parametrize(
+    ("ownership", "code"),
+    [
+        ([], "manifest_path_unsafe"),
+        (["../escape.py"], "manifest_path_unsafe"),
+        (["install.sh"], "manifest_hook_forbidden"),
+        (["hooks/run.py"], "manifest_hook_forbidden"),
+    ],
+)
+def test_module_updates_document_rejects_unsafe_ownership(ownership: list[str], code: str) -> None:
+    document = _updates_document(modules=[_update_entry(ownership=ownership)])
+
+    with pytest.raises(ModulePackageContractError, match=code):
+        _validate_updates(document)
+
+
+def test_module_updates_document_rejects_core_module() -> None:
+    entry = _update_entry(id="core", archive="xkeen-module-core-1.0.1.tar.gz", requires=[])
+    document = _updates_document(modules=[entry])
+
+    with pytest.raises(ModulePackageContractError, match="module_updates_core_forbidden"):
+        _validate_updates(document)

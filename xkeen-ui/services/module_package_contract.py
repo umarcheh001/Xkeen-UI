@@ -25,6 +25,7 @@ from services.module_registry import MODULE_DEFINITIONS, MODULE_IDS, is_module_i
 SUPPORTED_PANEL_API = "1"
 SUPPORTED_MODULE_API = "1"
 MANIFEST_SCHEMA_VERSION = 1
+MODULE_UPDATES_KIND = "xkeen-module-updates"
 # The ids a catalog entry may name. The release builder keeps the same list.
 CATALOG_ARCHITECTURES = ("aarch64", "mips", "mipsel")
 MAX_PANEL_ARCHIVE_BYTES = 64 * 1024 * 1024
@@ -515,14 +516,107 @@ def _validate_manifest(manifest: Mapping[str, Any], catalog: Mapping[str, Any]) 
     if not isinstance(max_size, int) or isinstance(max_size, bool) or max_size <= 0:
         _fail("manifest_max_size_invalid", "manifest max_size must be a positive integer")
     for path in ownership:
-        normalized = _safe_relative_path(path, "manifest_path_unsafe")
-        if normalized != path:
-            _fail("manifest_path_unsafe", "manifest ownership path is not normalized", path=path)
-        if PurePosixPath(normalized).name.lower() in _HOOK_NAMES or any(
-            segment.lower() == "hooks" for segment in PurePosixPath(normalized).parts
-        ):
-            _fail("manifest_hook_forbidden", "install/uninstall shell hooks are outside the contract", path=path)
+        _check_ownership_path(path)
     return ownership
+
+
+def _check_ownership_path(path: str) -> None:
+    normalized = _safe_relative_path(path, "manifest_path_unsafe")
+    if normalized != path:
+        _fail("manifest_path_unsafe", "manifest ownership path is not normalized", path=path)
+    if PurePosixPath(normalized).name.lower() in _HOOK_NAMES or any(
+        segment.lower() == "hooks" for segment in PurePosixPath(normalized).parts
+    ):
+        _fail("manifest_hook_forbidden", "install/uninstall shell hooks are outside the contract", path=path)
+
+
+def validate_module_updates_document(
+    document: Mapping[str, Any],
+    *,
+    panel_version: str,
+    signing_key_id: str,
+    trusted_signing_key_ids: AbstractSet[str] | None = None,
+    core_version: str | None = None,
+) -> dict[str, Any]:
+    """Validate the contents of a signed ``module-updates.json`` after its envelope is verified.
+
+    Every entry is a full catalog entry of the installed panel's release plus the
+    ``ownership`` list, so a plan knows the files before the archive is fetched.
+    The architecture is not passed: it is checked later, for the one module a
+    plan is built for.
+    """
+
+    updates = _mapping(document, "module_updates")
+    required = ("kind", "schema_version", "panel_version", "serial", "modules")
+    missing = [field for field in required if field not in updates]
+    if missing:
+        _fail("module_updates_required_field", "module updates document is missing required fields", fields=missing)
+    if updates["kind"] != MODULE_UPDATES_KIND:
+        _fail("module_updates_kind_invalid", "document is not a module updates catalog")
+    schema = updates["schema_version"]
+    if not isinstance(schema, int) or isinstance(schema, bool) or schema != 1:
+        _fail("module_updates_schema_unsupported", "module updates schema is not supported")
+    expected_panel = validate_semver(panel_version, "expected_panel_version")
+    document_panel = validate_semver(updates["panel_version"], "module_updates_panel_version")
+    if document_panel != expected_panel:
+        _fail(
+            "module_updates_panel_mismatch",
+            "module updates belong to another panel version",
+            panel_version=document_panel,
+            expected_panel_version=expected_panel,
+        )
+    serial = updates["serial"]
+    if not isinstance(serial, int) or isinstance(serial, bool) or serial < 1:
+        _fail("module_updates_serial_invalid", "serial must be a positive integer")
+    modules = updates["modules"]
+    if not isinstance(modules, list):
+        _fail("module_updates_modules_invalid", "module updates modules must be a list")
+
+    normalized_modules: list[dict[str, Any]] = []
+    seen_module_ids: set[str] = set()
+    for item in modules:
+        raw = _mapping(item, "module_updates_entry")
+        if raw.get("id") == "core":
+            _fail("module_updates_core_forbidden", "core has no version of its own and is not updated by modules")
+        entry = validate_catalog_entry(
+            raw,
+            trusted_signing_key_ids=trusted_signing_key_ids,
+            core_version=core_version,
+        )
+        if entry["id"] in seen_module_ids:
+            _fail("catalog_module_duplicate", "module updates contain duplicate module IDs", module_id=entry["id"])
+        if entry["signing_key_id"] != signing_key_id:
+            _fail(
+                "catalog_signing_key_mismatch",
+                "module updates entry key does not match the verified signature envelope",
+                module_id=entry["id"],
+                entry_signing_key_id=entry["signing_key_id"],
+                signing_key_id=signing_key_id,
+            )
+        if entry["min_core"] != expected_panel:
+            _fail(
+                "module_updates_min_core_invalid",
+                "min_core of an update must equal the panel version",
+                module_id=entry["id"],
+                min_core=entry["min_core"],
+            )
+        if "ownership" not in raw:
+            _fail("catalog_required_field", "module updates entry is missing required fields", fields=["ownership"])
+        ownership = _string_list(raw["ownership"], "manifest_ownership")
+        if not ownership:
+            _fail("manifest_path_unsafe", "module ownership must not be empty", module_id=entry["id"])
+        for path in ownership:
+            _check_ownership_path(path)
+        seen_module_ids.add(entry["id"])
+        normalized_modules.append({**entry, "ownership": ownership})
+
+    return {
+        "kind": MODULE_UPDATES_KIND,
+        "schema_version": 1,
+        "panel_version": expected_panel,
+        "serial": serial,
+        "modules": normalized_modules,
+    }
 
 
 def validate_module_archive(
