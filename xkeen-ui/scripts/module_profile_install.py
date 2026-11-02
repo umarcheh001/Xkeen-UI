@@ -47,7 +47,7 @@ INSTALL_MARKERS = {
     "tool.files": ("static/js/pages/file_manager.lazy.entry.js",),
     "tool.backups": ("routes/backups.py",),
     "integration.happ": ("routes/happ_decryptor.py", "services/happ_decryptor/__init__.py"),
-    "tool.advanced-diagnostics": ("routes/devtools.py", "templates/devtools.html"),
+    "tool.advanced-diagnostics": ("routes/system_resources.py", "static/js/features/resource_monitor.js"),
 }
 STATE_FILES = {"modules.json", "module-installed.json", "install-profile.json", "install-managed.json"}
 USER_TOP_LEVEL = {"xray-jsonc", "var", "bin"}
@@ -92,7 +92,7 @@ def owner(path: str) -> str:
             ("terminal.lazy", "tool.terminal"),
             ("file_manager", "tool.files"),
             ("backups", "tool.backups"),
-            ("devtools", "tool.advanced-diagnostics"),
+            ("resource_monitor", "tool.advanced-diagnostics"),
             ("editor_monaco", "editor-full"),
         ):
             if token in name:
@@ -111,6 +111,9 @@ def owner(path: str) -> str:
     if p.startswith("static/schemas/xray-"):
         return "engine.xray"
     if p.startswith("templates/panel/"):
+        if p == "templates/panel/slots/diagnostics_actions.html":
+            # The link to the DevTools page, which stays without the module.
+            return "core"
         if "/slots/backups_" in p:
             return "tool.backups"
         if "/mihomo" in p or "core_source_mihomo" in p:
@@ -133,6 +136,10 @@ def owner(path: str) -> str:
             "services/xray_subscriptions.py", "services/happ_links.py",
             "services/filemanager/metadata.py",
             "routes/devtools.py",
+            # The header summary and the Mihomo clients need these without the
+            # diagnostics module; see also _PACKAGE_OWNER_OVERRIDES of the builder.
+            "services/router_diagnostics.py", "services/system_resources.py",
+            "services/system_resources_history/sensors.py",
         }:
             return "core"
         if p.startswith(("services/devtools/", "services/fs_common/")):
@@ -141,7 +148,7 @@ def owner(path: str) -> str:
             return "integration.happ"
         if any(token in p for token in ("/fs/", "/remotefs/", "/fileops/", "/fs_common/", "filemanager", "storage_usb")):
             return "tool.files"
-        if any(token in p for token in ("/devtools/", "devtools.py", "resource_monitor", "router_diagnostics", "system_resources")):
+        if any(token in p for token in ("resource_monitor", "system_resources")):
             return "tool.advanced-diagnostics"
         if any(token in p for token in ("commands.py", "command_jobs.py", "ws_pty.py")):
             return "tool.terminal"
@@ -173,7 +180,7 @@ def owner(path: str) -> str:
             return "tool.terminal"
         if "backups" in p:
             return "tool.backups"
-        if "devtools" in p:
+        if "resource_monitor" in p:
             return "tool.advanced-diagnostics"
     if p.startswith("templates/"):
         if "mihomo" in p:
@@ -182,8 +189,6 @@ def owner(path: str) -> str:
             return "engine.xray"
         if "backups" in p:
             return "tool.backups"
-        if "devtools" in p:
-            return "tool.advanced-diagnostics"
     if p.startswith("opt/etc/mihomo/"):
         return "engine.mihomo"
     if p.startswith("opt/etc/xray/"):

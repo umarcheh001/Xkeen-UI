@@ -75,9 +75,14 @@ _KNOWN_PACKAGE_FILES = {
 # import closure below drags what they import into the core package. Every
 # importer of a file listed here already belongs to the same module.
 _PACKAGE_OWNER_OVERRIDES = {
-    # Stable update/core.log/recovery routes are registered unconditionally;
-    # only their optional UI stays with advanced diagnostics.
+    # The DevTools page: it carries the panel update screen, so no module
+    # release may touch it.
     "routes/devtools.py": "core",
+    "templates/panel/slots/diagnostics_actions.html": "core",
+    # Shared by the DevTools routes, the Mihomo clients and the modem control.
+    "services/router_diagnostics.py": "core",
+    "services/system_resources.py": "core",
+    "services/system_resources_history/sensors.py": "core",
     "mihomo_config_generator.py": "engine.mihomo",
     # A facade over the Mihomo services; the core takes the config path and
     # the save helpers straight from services/mihomo_runtime.py.

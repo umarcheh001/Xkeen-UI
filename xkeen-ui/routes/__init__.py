@@ -215,7 +215,9 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
 
         app.register_blueprint(create_ws_support_blueprint())
 
-    if module_active("engine.xray") or module_active("tool.advanced-diagnostics"):
+    # The Xray stream answers 404 by itself when its engine is off; the DevTools
+    # log stream belongs to core.
+    if module_active("core"):
         from .ws_streams import create_ws_streams_blueprint
 
         app.register_blueprint(create_ws_streams_blueprint())
@@ -445,9 +447,8 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
 
         register_module_blueprints("tool.terminal", "terminal_blueprint_init_failed", _build_terminal)
 
-    # Core-owned maintenance APIs (core.log, recovery and
-    # module-control diagnostics) must remain available even when the optional
-    # advanced diagnostics UI is disabled.
+    # The DevTools API is core-owned; only the live router figures of the
+    # resource summary come with the diagnostics module.
     from .devtools import create_devtools_blueprint
     app.register_blueprint(
         create_devtools_blueprint(

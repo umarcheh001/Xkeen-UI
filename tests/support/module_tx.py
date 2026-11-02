@@ -71,7 +71,7 @@ OWNERSHIP: dict[str, tuple[str, ...]] = {
         "templates/backups.html",
     ),
     "integration.happ": ("routes/happ_decryptor.py", "services/happ_decryptor/__init__.py"),
-    "tool.advanced-diagnostics": ("routes/devtools.py", "templates/devtools.html"),
+    "tool.advanced-diagnostics": ("routes/system_resources.py", "static/js/features/resource_monitor.js"),
 }
 
 FRONTEND = {

@@ -23,7 +23,7 @@ def test_modules_page_is_core_owned_and_uses_its_canonical_entry(tmp_path, monke
     assert "frontend_page_entry_url('modules')" in (ROOT / "xkeen-ui/templates/modules.html").read_text(encoding="utf-8")
     assert "devtools.screen.bootstrap.js" not in html
     assert 'href="/"' in html
-    assert 'href="/devtools"' not in html
+    assert 'href="/devtools"' in html  # DevTools is core, like this page
     assert 'href="/modules"' in app.test_client().get("/").get_data(as_text=True)
 
 

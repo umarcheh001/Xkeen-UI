@@ -98,10 +98,12 @@
         "requires_restart": false,
         "frontend": {
           "bundles": [
-            "panel-core"
+            "panel-core",
+            "devtools-page"
           ],
           "navigation_views": [
-            "xkeen"
+            "xkeen",
+            "devtools"
           ]
         },
         "installed": true,
@@ -371,7 +373,7 @@
         "sha256": "17e3e0aac99fe556e47166920e662f2a98eca7a9c3a244f7ec7148ff0fdac30a",
         "signing_key_id": "release-2026",
         "name": "Расширенная диагностика",
-        "description": "Страница инструментов: состояние роутера, загрузка, служебные журналы.",
+        "description": "Окно диагностики роутера: графики, история и события.",
         "module_version": "1.0.0",
         "installed_version": null,
         "installed": false,
@@ -1006,10 +1008,12 @@
         "requires_restart": false,
         "frontend": {
           "bundles": [
-            "panel-core"
+            "panel-core",
+            "devtools-page"
           ],
           "navigation_views": [
-            "xkeen"
+            "xkeen",
+            "devtools"
           ]
         },
         "installed": true,
@@ -1326,7 +1330,7 @@
         "sha256": "17e3e0aac99fe556e47166920e662f2a98eca7a9c3a244f7ec7148ff0fdac30a",
         "signing_key_id": "release-2026",
         "name": "Расширенная диагностика",
-        "description": "Страница инструментов: состояние роутера, загрузка, служебные журналы.",
+        "description": "Окно диагностики роутера: графики, история и события.",
         "module_version": "1.0.0",
         "installed_version": null,
         "installed": false,
@@ -1778,10 +1782,12 @@
         "requires_restart": false,
         "frontend": {
           "bundles": [
-            "panel-core"
+            "panel-core",
+            "devtools-page"
           ],
           "navigation_views": [
-            "xkeen"
+            "xkeen",
+            "devtools"
           ]
         },
         "installed": true,

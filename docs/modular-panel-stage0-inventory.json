@@ -38,27 +38,27 @@
         "gevent-websocket (optional)"
       ],
       "removable": false,
-      "unit_count": 619,
-      "size_bytes": 8314622,
+      "unit_count": 641,
+      "size_bytes": 8668701,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
-        "backend_service": 86,
-        "backend_test": 279,
+        "backend_service": 94,
+        "backend_test": 281,
         "configuration": 10,
         "frontend_bundle": 9,
-        "frontend_entrypoint": 3,
-        "frontend_feature": 37,
-        "frontend_javascript": 38,
+        "frontend_entrypoint": 4,
+        "frontend_feature": 44,
+        "frontend_javascript": 40,
         "frontend_runtime": 2,
         "frontend_test": 74,
         "frontend_ui": 18,
         "stylesheet": 9,
-        "template": 32
+        "template": 34
       },
       "route_count": 107,
       "background_task_count": 4,
-      "ui_surface_count": 36,
+      "ui_surface_count": 37,
       "representative_paths": [
         "xkeen-ui/app.py",
         "xkeen-ui/app_factory.py",
@@ -350,7 +350,7 @@
     {
       "id": "tool.advanced-diagnostics",
       "name": "Расширенная диагностика",
-      "description": "DevTools, ресурсы, router diagnostics и служебные журналы.",
+      "description": "Окно диагностики роутера: графики, история и события.",
       "depends_on": [
         "core"
       ],
@@ -358,34 +358,31 @@
         "ndmc (router diagnostics optional)"
       ],
       "removable": true,
-      "unit_count": 67,
-      "size_bytes": 917075,
+      "unit_count": 46,
+      "size_bytes": 570930,
       "kind_counts": {
         "backend_route": 1,
-        "backend_service": 17,
-        "backend_test": 13,
-        "frontend_entrypoint": 1,
-        "frontend_feature": 28,
-        "frontend_javascript": 2,
-        "frontend_test": 3,
-        "template": 2
+        "backend_service": 9,
+        "backend_test": 12,
+        "frontend_feature": 21,
+        "frontend_test": 3
       },
       "route_count": 16,
       "background_task_count": 0,
-      "ui_surface_count": 2,
+      "ui_surface_count": 1,
       "representative_paths": [
         "xkeen-ui/routes/system_resources.py",
-        "xkeen-ui/services/devtools/__init__.py",
-        "xkeen-ui/services/devtools/common.py",
-        "xkeen-ui/services/devtools/env.py",
-        "xkeen-ui/services/devtools/logs.py",
-        "xkeen-ui/services/devtools/ui_service.py",
-        "xkeen-ui/services/router_diagnostics.py",
-        "xkeen-ui/services/system_resources.py",
         "xkeen-ui/services/system_resources_history/__init__.py",
         "xkeen-ui/services/system_resources_history/collector.py",
         "xkeen-ui/services/system_resources_history/event_preferences.py",
-        "xkeen-ui/services/system_resources_history/hardware.py"
+        "xkeen-ui/services/system_resources_history/hardware.py",
+        "xkeen-ui/services/system_resources_history/persist.py",
+        "xkeen-ui/services/system_resources_history/problems.py",
+        "xkeen-ui/services/system_resources_history/store.py",
+        "xkeen-ui/services/system_resources_history/top_procs.py",
+        "xkeen-ui/services/system_resources_history/zones.py",
+        "tests/test_resource_monitor_frontend.py",
+        "tests/test_resource_monitor_model_runtime.py"
       ]
     }
   ],
@@ -539,7 +536,7 @@
       "module_id": "core",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/__init__.py",
-      "size_bytes": 23690,
+      "size_bytes": 23703,
       "depends_on": [
         "tool.files",
         "engine.xray",
@@ -816,7 +813,7 @@
       "module_id": "core",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/devtools.py",
-      "size_bytes": 10971,
+      "size_bytes": 10575,
       "depends_on": [
         "tool.advanced-diagnostics"
       ],
@@ -1087,7 +1084,7 @@
       "module_id": "core",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/pages.py",
-      "size_bytes": 24774,
+      "size_bytes": 24582,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -1319,7 +1316,7 @@
       "module_id": "core",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/ws_streams.py",
-      "size_bytes": 7268,
+      "size_bytes": 7180,
       "depends_on": [
         "engine.xray"
       ],
@@ -1808,6 +1805,243 @@
         "XKEEN_CORE_START_TIMEOUT",
         "XKEEN_CORE_SWITCH_TIMEOUT",
         "XKEEN_XRAY_TEST_TIMEOUT"
+      ],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_service",
+      "path": "xkeen-ui/services/devtools/__init__.py",
+      "size_bytes": 1963,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_service",
+      "path": "xkeen-ui/services/devtools/common.py",
+      "size_bytes": 1368,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_service",
+      "path": "xkeen-ui/services/devtools/env.py",
+      "size_bytes": 30296,
+      "depends_on": [
+        "integration.happ"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [
+        "XKEEN_ALLOW_SHELL",
+        "XKEEN_AUTH_LOGIN_LOCKOUT_SECONDS",
+        "XKEEN_AUTH_LOGIN_MAX_ATTEMPTS",
+        "XKEEN_AUTH_LOGIN_WINDOW_SECONDS",
+        "XKEEN_CONFIG_EXCHANGE_MAX_BYTES",
+        "XKEEN_CONFIG_FILE",
+        "XKEEN_CONFIG_SERVER_BASE",
+        "XKEEN_DAT_ALLOW_CUSTOM_URLS",
+        "XKEEN_DAT_ALLOW_HOSTS",
+        "XKEEN_DAT_ALLOW_HTTP",
+        "XKEEN_DAT_ALLOW_PRIVATE_HOSTS",
+        "XKEEN_DNS_OVER_VLESS_MAX_RTT",
+        "XKEEN_DNS_OVER_VLESS_PREFER",
+        "XKEEN_DNS_OVER_VLESS_WATCHDOG",
+        "XKEEN_DNS_OVER_VLESS_WATCHDOG_FAILS",
+        "XKEEN_DNS_OVER_VLESS_WATCHDOG_INTERVAL",
+        "XKEEN_DNS_OVER_VLESS_WATCHDOG_RESTARTS",
+        "XKEEN_FILEOPS_FXP",
+        "XKEEN_FILEOPS_JOB_TTL",
+        "XKEEN_FILEOPS_MAX_JOBS",
+        "XKEEN_FILEOPS_REMOTE2REMOTE_DIRECT",
+        "XKEEN_FILEOPS_SPOOL_CLEANUP_AGE",
+        "XKEEN_FILEOPS_SPOOL_DIR",
+        "XKEEN_FILEOPS_SPOOL_MAX_MB",
+        "XKEEN_FILEOPS_WORKERS",
+        "XKEEN_GEODAT_ALLOW_CUSTOM_URLS",
+        "XKEEN_GEODAT_ALLOW_HOSTS",
+        "XKEEN_GEODAT_ALLOW_HTTP",
+        "XKEEN_GEODAT_ALLOW_PRIVATE_HOSTS",
+        "XKEEN_GEODAT_UPLOAD_MAX_BYTES",
+        "XKEEN_GITHUB_BRANCH",
+        "XKEEN_GITHUB_OWNER",
+        "XKEEN_GITHUB_REPO",
+        "XKEEN_GITHUB_REPO_URL",
+        "XKEEN_HAPP_DECRYPTOR_ALLOW_CUSTOM_URLS",
+        "XKEEN_HAPP_DECRYPTOR_CMD",
+        "XKEEN_HAPP_DECRYPTOR_RELEASE_URL",
+        "XKEEN_HAPP_DECRYPTOR_REMOTE_URL",
+        "XKEEN_HAPP_DECRYPTOR_TIMEOUT",
+        "XKEEN_HAPP_HELPER_CMD",
+        "XKEEN_HAPP_HELPER_TIMEOUT",
+        "XKEEN_HAPP_KEYS_MANIFEST_URL",
+        "XKEEN_INIT_SCRIPT",
+        "XKEEN_IP_EXCLUDE_FILE",
+        "XKEEN_JSON_BODY_MAX_BYTES",
+        "XKEEN_JSON_HEAVY_MAX_BYTES",
+        "XKEEN_LOCALFM_ROOTS",
+        "XKEEN_LOG_ACCESS_ENABLE",
+        "XKEEN_LOG_CORE_ENABLE",
+        "XKEEN_LOG_CORE_LEVEL",
+        "XKEEN_LOG_DIR",
+        "XKEEN_LOG_ROTATE_BACKUPS",
+        "XKEEN_LOG_ROTATE_MAX_MB",
+        "XKEEN_LOG_WS_ENABLE",
+        "XKEEN_MAX_ZIP_ESTIMATE_ITEMS",
+        "XKEEN_MAX_ZIP_MB",
+        "XKEEN_MIHOMO_DNS_FLUSH_ENABLE",
+        "XKEEN_MIHOMO_DNS_QUERY_ENABLE",
+        "XKEEN_MIHOMO_FAKE_IP_FLUSH_ENABLE",
+        "XKEEN_MIHOMO_HWID",
+        "XKEEN_MIHOMO_JSON_MAX_BYTES",
+        "XKEEN_MIHOMO_SUBSCRIPTIONS_LOOKAHEAD_SEC",
+        "XKEEN_MIHOMO_SUBSCRIPTIONS_RESTART_BATCH",
+        "XKEEN_MIHOMO_SUBSCRIPTIONS_SCHEDULER",
+        "XKEEN_MIHOMO_SUBSCRIPTIONS_SCHEDULER_TICK",
+        "XKEEN_MIHOMO_TELEMETRY_KILL_SWITCH",
+        "XKEEN_MIHOMO_TELEMETRY_STREAM_ENABLE",
+        "XKEEN_MIHOMO_TRAFFIC_ENABLE",
+        "XKEEN_MIHOMO_UI_ALLOW_PROXY_FALLBACK",
+        "XKEEN_PORT_EXCLUDE_FILE",
+        "XKEEN_PORT_PROXYING_FILE",
+        "XKEEN_PROTECTED_MNT_ROOT",
+        "XKEEN_PROTECT_MNT_LABELS",
+        "XKEEN_PTY_IDLE_TTL_SECONDS",
+        "XKEEN_PTY_MAX_BUF_CHARS",
+        "XKEEN_REMOTEFM_CA_FILE",
+        "XKEEN_REMOTEFM_ENABLE",
+        "XKEEN_REMOTEFM_KNOWN_HOSTS",
+        "XKEEN_REMOTEFM_MAX_SESSIONS",
+        "XKEEN_REMOTEFM_MAX_UPLOAD_MB",
+        "XKEEN_REMOTEFM_SESSION_TTL",
+        "XKEEN_REMOTEFM_STATE_DIR",
+        "XKEEN_REMOTEFM_TMP_DIR",
+        "XKEEN_RESTART_LOG_FILE",
+        "XKEEN_ROUTING_SAVE_MAX_BYTES",
+        "XKEEN_SUBSCRIPTIONS_LOOKAHEAD_SEC",
+        "XKEEN_SUBSCRIPTIONS_PREFLIGHT",
+        "XKEEN_SUBSCRIPTIONS_RESTART_BATCH",
+        "XKEEN_SUBSCRIPTIONS_SCHEDULER",
+        "XKEEN_SUBSCRIPTIONS_SCHEDULER_TICK",
+        "XKEEN_SUBSCRIPTIONS_SNAPSHOT",
+        "XKEEN_SUBSCRIPTION_ALLOW_HTTP",
+        "XKEEN_SUBSCRIPTION_ALLOW_PRIVATE_HOSTS",
+        "XKEEN_SUBSCRIPTION_HAPP_FALLBACK",
+        "XKEEN_SUBSCRIPTION_HAPP_USER_AGENT",
+        "XKEEN_TRASH_DIR",
+        "XKEEN_TRASH_MAX_BYTES",
+        "XKEEN_TRASH_MAX_GB",
+        "XKEEN_TRASH_PURGE_INTERVAL_SECONDS",
+        "XKEEN_TRASH_STATS_CACHE_SECONDS",
+        "XKEEN_TRASH_TTL_DAYS",
+        "XKEEN_TRASH_WARN_RATIO",
+        "XKEEN_UI_DEVTOOLS_SECTIONS_WHITELIST",
+        "XKEEN_UI_DIR",
+        "XKEEN_UI_ENV_FILE",
+        "XKEEN_UI_GITHUB_TOKEN",
+        "XKEEN_UI_MAX_CONTENT_LENGTH",
+        "XKEEN_UI_PANEL_SECTIONS_WHITELIST",
+        "XKEEN_UI_PORT",
+        "XKEEN_UI_SECRET_KEY",
+        "XKEEN_UI_STATE_DIR",
+        "XKEEN_UI_UPDATE_CHANNEL",
+        "XKEEN_UI_UPDATE_REPO",
+        "XKEEN_XRAY_CONFIGS_DIR",
+        "XKEEN_XRAY_INBOUNDS_FILE",
+        "XKEEN_XRAY_JSONC_DIR",
+        "XKEEN_XRAY_LOG_TZ_OFFSET",
+        "XKEEN_XRAY_OUTBOUNDS_FILE",
+        "XKEEN_XRAY_ROUTING_FILE",
+        "XKEEN_XRAY_ROUTING_FILE_RAW",
+        "XKEEN_XRAY_TEST_TIMEOUT"
+      ],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_service",
+      "path": "xkeen-ui/services/devtools/logs.py",
+      "size_bytes": 7879,
+      "depends_on": [
+        "engine.xray"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [
+        "XKEEN_LOG_DIR",
+        "XKEEN_RESTART_LOG_FILE",
+        "XKEEN_UI_DIR",
+        "XKEEN_UI_STATE_DIR"
+      ],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_service",
+      "path": "xkeen-ui/services/devtools/ui_service.py",
+      "size_bytes": 4638,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [
+        "XKEEN_ENV",
+        "XKEEN_RUNTIME",
+        "XKEEN_UI_CONTROL_CMD",
+        "XKEEN_UI_PID_FILE",
+        "XKEEN_UI_RESTART_CMD"
       ],
       "removable": false
     },
@@ -2421,7 +2655,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_registry.py",
-      "size_bytes": 70127,
+      "size_bytes": 70160,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -2939,11 +3173,29 @@
     {
       "module_id": "core",
       "kind": "backend_service",
+      "path": "xkeen-ui/services/router_diagnostics.py",
+      "size_bytes": 56746,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_service",
       "path": "xkeen-ui/services/router_modem_control.py",
       "size_bytes": 14885,
-      "depends_on": [
-        "tool.advanced-diagnostics"
-      ],
+      "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
       "registers_routes": false,
@@ -3067,6 +3319,46 @@
       "kind": "backend_service",
       "path": "xkeen-ui/services/subscription_schedule.py",
       "size_bytes": 6738,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_service",
+      "path": "xkeen-ui/services/system_resources.py",
+      "size_bytes": 9273,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_service",
+      "path": "xkeen-ui/services/system_resources_history/sensors.py",
+      "size_bytes": 10207,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -3953,7 +4245,6 @@
       "path": "tests/test_devtools_env_whitelist.py",
       "size_bytes": 7658,
       "depends_on": [
-        "tool.advanced-diagnostics",
         "engine.mihomo",
         "engine.xray"
       ],
@@ -4026,9 +4317,7 @@
       "kind": "backend_test",
       "path": "tests/test_devtools_log_targets.py",
       "size_bytes": 1300,
-      "depends_on": [
-        "tool.advanced-diagnostics"
-      ],
+      "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
       "registers_routes": false,
@@ -4071,6 +4360,26 @@
       "kind": "backend_test",
       "path": "tests/test_devtools_tools_zones.py",
       "size_bytes": 25081,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_diagnostics_module_boundary.py",
+      "size_bytes": 8346,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -5238,7 +5547,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_installer_profile_frontend_closure.py",
-      "size_bytes": 6493,
+      "size_bytes": 6503,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -5258,7 +5567,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_installer_profiles.py",
-      "size_bytes": 20315,
+      "size_bytes": 20448,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -5280,7 +5589,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_installer_retired_files.py",
-      "size_bytes": 7999,
+      "size_bytes": 8132,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -5683,7 +5992,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_modular_panel_stage0_inventory.py",
-      "size_bytes": 7232,
+      "size_bytes": 7360,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -5723,7 +6032,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_modular_panel_stage4_1_contract.py",
-      "size_bytes": 6815,
+      "size_bytes": 6767,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -5995,7 +6304,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_modular_panel_standalone_pages.py",
-      "size_bytes": 6550,
+      "size_bytes": 6373,
       "depends_on": [
         "tool.backups"
       ],
@@ -6017,7 +6326,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_backend_gates.py",
-      "size_bytes": 16193,
+      "size_bytes": 16222,
       "depends_on": [
         "tool.terminal",
         "integration.happ",
@@ -6168,7 +6477,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_manager_ui.py",
-      "size_bytes": 6896,
+      "size_bytes": 6928,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -7217,9 +7526,7 @@
       "kind": "backend_test",
       "path": "tests/test_panel_service.py",
       "size_bytes": 3402,
-      "depends_on": [
-        "tool.advanced-diagnostics"
-      ],
+      "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
       "registers_routes": false,
@@ -7901,6 +8208,26 @@
       "kind": "backend_test",
       "path": "tests/test_restart_log_subscription_ux.py",
       "size_bytes": 11777,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_router_diagnostics.py",
+      "size_bytes": 25503,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -9652,6 +9979,7 @@
       "routes": [],
       "frontend_bundle": [
         "devtools-page",
+        "diagnostics-panel",
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
@@ -9873,6 +10201,30 @@
     {
       "module_id": "core",
       "kind": "frontend_entrypoint",
+      "path": "xkeen-ui/static/js/pages/devtools.entry.js",
+      "size_bytes": 540,
+      "depends_on": [
+        "engine.mihomo"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [
+        "devtools-page"
+      ],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "frontend_entrypoint",
       "path": "xkeen-ui/static/js/pages/modules.entry.js",
       "size_bytes": 534,
       "depends_on": [
@@ -10003,9 +10355,7 @@
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/compat/devtools.js",
       "size_bytes": 639,
-      "depends_on": [
-        "tool.advanced-diagnostics"
-      ],
+      "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
       "registers_routes": false,
@@ -10288,6 +10638,327 @@
     {
       "module_id": "core",
       "kind": "frontend_feature",
+      "path": "xkeen-ui/static/js/features/devtools.js",
+      "size_bytes": 7763,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [
+        "devtools-page",
+        "mihomo-generator-page",
+        "modules-page",
+        "panel-core",
+        "xkeen-page"
+      ],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "frontend_feature",
+      "path": "xkeen-ui/static/js/features/devtools/env.js",
+      "size_bytes": 80588,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [
+        "devtools-page",
+        "mihomo-generator-page",
+        "modules-page",
+        "panel-core",
+        "xkeen-page"
+      ],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [
+        "XKEEN_ALLOW_SHELL",
+        "XKEEN_AUTH_LOGIN_",
+        "XKEEN_AUTH_LOGIN_LOCKOUT_SECONDS",
+        "XKEEN_AUTH_LOGIN_MAX_ATTEMPTS",
+        "XKEEN_AUTH_LOGIN_WINDOW_SECONDS",
+        "XKEEN_CONFIG_EXCHANGE_MAX_BYTES",
+        "XKEEN_CONFIG_FILE",
+        "XKEEN_CONFIG_SERVER_BASE",
+        "XKEEN_DAT_",
+        "XKEEN_DAT_ALLOW_CUSTOM_URLS",
+        "XKEEN_DAT_ALLOW_HOSTS",
+        "XKEEN_DAT_ALLOW_HTTP",
+        "XKEEN_DAT_ALLOW_PRIVATE_HOSTS",
+        "XKEEN_DNS_OVER_VLESS_",
+        "XKEEN_DNS_OVER_VLESS_MAX_RTT",
+        "XKEEN_DNS_OVER_VLESS_PREFER",
+        "XKEEN_DNS_OVER_VLESS_WATCHDOG",
+        "XKEEN_DNS_OVER_VLESS_WATCHDOG_FAILS",
+        "XKEEN_DNS_OVER_VLESS_WATCHDOG_INTERVAL",
+        "XKEEN_DNS_OVER_VLESS_WATCHDOG_RESTARTS",
+        "XKEEN_FILEOPS_",
+        "XKEEN_FILEOPS_FXP",
+        "XKEEN_FILEOPS_JOB_TTL",
+        "XKEEN_FILEOPS_MAX_JOBS",
+        "XKEEN_FILEOPS_REMOTE2REMOTE_DIRECT",
+        "XKEEN_FILEOPS_SPOOL_CLEANUP_AGE",
+        "XKEEN_FILEOPS_SPOOL_DIR",
+        "XKEEN_FILEOPS_SPOOL_MAX_MB",
+        "XKEEN_FILEOPS_WORKERS",
+        "XKEEN_GEODAT_",
+        "XKEEN_GEODAT_ALLOW_CUSTOM_URLS",
+        "XKEEN_GEODAT_ALLOW_HOSTS",
+        "XKEEN_GEODAT_ALLOW_HTTP",
+        "XKEEN_GEODAT_ALLOW_PRIVATE_HOSTS",
+        "XKEEN_GEODAT_UPLOAD_MAX_BYTES",
+        "XKEEN_GITHUB_",
+        "XKEEN_GITHUB_BRANCH",
+        "XKEEN_GITHUB_OWNER",
+        "XKEEN_GITHUB_REPO",
+        "XKEEN_GITHUB_REPO_URL",
+        "XKEEN_HAPP_DECRYPTOR_ALLOW_CUSTOM_URLS",
+        "XKEEN_HAPP_DECRYPTOR_CMD",
+        "XKEEN_HAPP_DECRYPTOR_RELEASE_URL",
+        "XKEEN_HAPP_DECRYPTOR_REMOTE_URL",
+        "XKEEN_HAPP_DECRYPTOR_TIMEOUT",
+        "XKEEN_HAPP_HELPER_CMD",
+        "XKEEN_HAPP_HELPER_TIMEOUT",
+        "XKEEN_HAPP_KEYS_MANIFEST_URL",
+        "XKEEN_INIT_SCRIPT",
+        "XKEEN_IP_",
+        "XKEEN_IP_EXCLUDE_FILE",
+        "XKEEN_JSON_BODY_MAX_BYTES",
+        "XKEEN_JSON_HEAVY_MAX_BYTES",
+        "XKEEN_LOCALFM_ROOTS",
+        "XKEEN_LOG_",
+        "XKEEN_LOG_ACCESS_ENABLE",
+        "XKEEN_LOG_CORE_ENABLE",
+        "XKEEN_LOG_CORE_LEVEL",
+        "XKEEN_LOG_DIR",
+        "XKEEN_LOG_ROTATE_BACKUPS",
+        "XKEEN_LOG_ROTATE_MAX_MB",
+        "XKEEN_LOG_WS_ENABLE",
+        "XKEEN_MAX_ZIP_",
+        "XKEEN_MAX_ZIP_ESTIMATE_ITEMS",
+        "XKEEN_MAX_ZIP_MB",
+        "XKEEN_MIHOMO_DNS_FLUSH_ENABLE",
+        "XKEEN_MIHOMO_DNS_QUERY_ENABLE",
+        "XKEEN_MIHOMO_FAKE_IP_FLUSH_ENABLE",
+        "XKEEN_MIHOMO_HWID",
+        "XKEEN_MIHOMO_JSON_MAX_BYTES",
+        "XKEEN_MIHOMO_SUBSCRIPTIONS_",
+        "XKEEN_MIHOMO_SUBSCRIPTIONS_LOOKAHEAD_SEC",
+        "XKEEN_MIHOMO_SUBSCRIPTIONS_RESTART_BATCH",
+        "XKEEN_MIHOMO_SUBSCRIPTIONS_SCHEDULER",
+        "XKEEN_MIHOMO_SUBSCRIPTIONS_SCHEDULER_TICK",
+        "XKEEN_MIHOMO_TELEMETRY_KILL_SWITCH",
+        "XKEEN_MIHOMO_TELEMETRY_STREAM_ENABLE",
+        "XKEEN_MIHOMO_TRAFFIC_ENABLE",
+        "XKEEN_MIHOMO_UI_ALLOW_PROXY_FALLBACK",
+        "XKEEN_PORT_",
+        "XKEEN_PORT_EXCLUDE_FILE",
+        "XKEEN_PORT_PROXYING_FILE",
+        "XKEEN_PROTECTED_MNT_ROOT",
+        "XKEEN_PROTECT_MNT_LABELS",
+        "XKEEN_PTY_",
+        "XKEEN_PTY_IDLE_TTL_SECONDS",
+        "XKEEN_PTY_MAX_BUF_CHARS",
+        "XKEEN_REMOTEFM_",
+        "XKEEN_REMOTEFM_CA_FILE",
+        "XKEEN_REMOTEFM_ENABLE",
+        "XKEEN_REMOTEFM_KNOWN_HOSTS",
+        "XKEEN_REMOTEFM_MAX_SESSIONS",
+        "XKEEN_REMOTEFM_MAX_UPLOAD_MB",
+        "XKEEN_REMOTEFM_SESSION_TTL",
+        "XKEEN_REMOTEFM_STATE_DIR",
+        "XKEEN_REMOTEFM_TMP_DIR",
+        "XKEEN_RESTART_LOG_FILE",
+        "XKEEN_ROUTING_SAVE_MAX_BYTES",
+        "XKEEN_SUBSCRIPTIONS_",
+        "XKEEN_SUBSCRIPTIONS_LOOKAHEAD_SEC",
+        "XKEEN_SUBSCRIPTIONS_PREFLIGHT",
+        "XKEEN_SUBSCRIPTIONS_RESTART_BATCH",
+        "XKEEN_SUBSCRIPTIONS_SCHEDULER",
+        "XKEEN_SUBSCRIPTIONS_SCHEDULER_TICK",
+        "XKEEN_SUBSCRIPTIONS_SNAPSHOT",
+        "XKEEN_SUBSCRIPTION_",
+        "XKEEN_SUBSCRIPTION_ALLOW_HTTP",
+        "XKEEN_SUBSCRIPTION_ALLOW_PRIVATE_HOSTS",
+        "XKEEN_SUBSCRIPTION_HAPP_FALLBACK",
+        "XKEEN_SUBSCRIPTION_HAPP_USER_AGENT",
+        "XKEEN_TRASH_",
+        "XKEEN_TRASH_DIR",
+        "XKEEN_TRASH_MAX_BYTES",
+        "XKEEN_TRASH_MAX_GB",
+        "XKEEN_TRASH_PURGE_INTERVAL_SECONDS",
+        "XKEEN_TRASH_STATS_CACHE_SECONDS",
+        "XKEEN_TRASH_TTL_DAYS",
+        "XKEEN_TRASH_WARN_RATIO",
+        "XKEEN_UI_DEVTOOLS_SECTIONS_WHITELIST",
+        "XKEEN_UI_ENV_FILE",
+        "XKEEN_UI_GITHUB_TOKEN",
+        "XKEEN_UI_MAX_CONTENT_LENGTH",
+        "XKEEN_UI_PANEL_SECTIONS_WHITELIST",
+        "XKEEN_UI_PORT",
+        "XKEEN_UI_SECRET_KEY",
+        "XKEEN_UI_STATE_DIR",
+        "XKEEN_UI_UPDATE_",
+        "XKEEN_UI_UPDATE_CHANNEL",
+        "XKEEN_UI_UPDATE_REPO",
+        "XKEEN_XRAY_",
+        "XKEEN_XRAY_CONFIGS_DIR",
+        "XKEEN_XRAY_INBOUNDS_FILE",
+        "XKEEN_XRAY_JSONC_DIR",
+        "XKEEN_XRAY_LOG_TZ_OFFSET",
+        "XKEEN_XRAY_OUTBOUNDS_FILE",
+        "XKEEN_XRAY_ROUTING_FILE",
+        "XKEEN_XRAY_ROUTING_FILE_RAW",
+        "XKEEN_XRAY_TEST_TIMEOUT"
+      ],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "frontend_feature",
+      "path": "xkeen-ui/static/js/features/devtools/logs.js",
+      "size_bytes": 32419,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [
+        "devtools-page",
+        "mihomo-generator-page",
+        "modules-page",
+        "panel-core",
+        "xkeen-page"
+      ],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "frontend_feature",
+      "path": "xkeen-ui/static/js/features/devtools/service.js",
+      "size_bytes": 5173,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [
+        "devtools-page",
+        "mihomo-generator-page",
+        "modules-page",
+        "panel-core",
+        "xkeen-page"
+      ],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "frontend_feature",
+      "path": "xkeen-ui/static/js/features/devtools/shared.js",
+      "size_bytes": 12514,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [
+        "devtools-page",
+        "mihomo-generator-page",
+        "modules-page",
+        "panel-core",
+        "xkeen-page"
+      ],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "frontend_feature",
+      "path": "xkeen-ui/static/js/features/devtools/update.js",
+      "size_bytes": 4936,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [
+        "devtools-page",
+        "mihomo-generator-page",
+        "modules-page",
+        "panel-core",
+        "xkeen-page"
+      ],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "frontend_feature",
+      "path": "xkeen-ui/static/js/features/devtools_namespace.js",
+      "size_bytes": 1134,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [
+        "devtools-page",
+        "mihomo-generator-page",
+        "modules-page",
+        "panel-core",
+        "xkeen-page"
+      ],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/dns_guard_text.js",
       "size_bytes": 7356,
       "depends_on": [],
@@ -10374,9 +11045,7 @@
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/feature_access.js",
       "size_bytes": 1330,
-      "depends_on": [
-        "tool.advanced-diagnostics"
-      ],
+      "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
       "registers_routes": false,
@@ -10433,7 +11102,6 @@
       "depends_on": [
         "tool.backups",
         "tool.terminal",
-        "tool.advanced-diagnostics",
         "tool.files",
         "engine.xray",
         "engine.mihomo",
@@ -11153,6 +11821,61 @@
     {
       "module_id": "core",
       "kind": "frontend_javascript",
+      "path": "xkeen-ui/static/js/pages/devtools.init.js",
+      "size_bytes": 1039,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [
+        "devtools-page",
+        "mihomo-generator-page",
+        "modules-page",
+        "panel-core",
+        "xkeen-page"
+      ],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "frontend_javascript",
+      "path": "xkeen-ui/static/js/pages/devtools.screen.bootstrap.js",
+      "size_bytes": 1269,
+      "depends_on": [
+        "tool.editor",
+        "integration.happ"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [
+        "devtools-page",
+        "mihomo-generator-page",
+        "modules-page",
+        "panel-core",
+        "xkeen-page"
+      ],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "frontend_javascript",
       "path": "xkeen-ui/static/js/pages/logs_shell.shared.js",
       "size_bytes": 4308,
       "depends_on": [
@@ -11487,9 +12210,7 @@
       "kind": "frontend_javascript",
       "path": "xkeen-ui/static/js/pages/top_level_devtools_screen.js",
       "size_bytes": 4331,
-      "depends_on": [
-        "tool.advanced-diagnostics"
-      ],
+      "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
       "registers_routes": false,
@@ -12584,7 +13305,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/modules_update_channel_visibility.spec.mjs",
-      "size_bytes": 4267,
+      "size_bytes": 4245,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -14304,6 +15025,28 @@
     {
       "module_id": "core",
       "kind": "template",
+      "path": "xkeen-ui/templates/devtools.html",
+      "size_bytes": 49808,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [
+        "XKEEN_REMOTEFM_ENABLE"
+      ],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "template",
       "path": "xkeen-ui/templates/login.html",
       "size_bytes": 3602,
       "depends_on": [],
@@ -14786,6 +15529,26 @@
       "kind": "template",
       "path": "xkeen-ui/templates/panel/slots/diagnostics_summary.html",
       "size_bytes": 984,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "template",
+      "path": "xkeen-ui/templates/panel/slots/resource_monitor_unavailable.html",
+      "size_bytes": 1089,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -15310,8 +16073,7 @@
       "size_bytes": 116312,
       "depends_on": [
         "core",
-        "tool.editor",
-        "tool.advanced-diagnostics"
+        "tool.editor"
       ],
       "starts_background_task": false,
       "background_markers": [],
@@ -22787,8 +23549,7 @@
       "path": "tests/test_happ_decryptor_env.py",
       "size_bytes": 1841,
       "depends_on": [
-        "core",
-        "tool.advanced-diagnostics"
+        "core"
       ],
       "starts_background_task": false,
       "background_markers": [],
@@ -22982,8 +23743,7 @@
       "path": "xkeen-ui/static/js/features/devtools/happ_decryptor.js",
       "size_bytes": 17510,
       "depends_on": [
-        "core",
-        "tool.advanced-diagnostics"
+        "core"
       ],
       "starts_background_task": false,
       "background_markers": [],
@@ -23201,274 +23961,6 @@
     {
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_service",
-      "path": "xkeen-ui/services/devtools/__init__.py",
-      "size_bytes": 1963,
-      "depends_on": [
-        "core"
-      ],
-      "starts_background_task": false,
-      "background_markers": [],
-      "registers_routes": false,
-      "routes": [],
-      "frontend_bundle": [],
-      "system_requirements": [
-        "ndmc (router diagnostics optional)"
-      ],
-      "environment_variables": [],
-      "removable": true
-    },
-    {
-      "module_id": "tool.advanced-diagnostics",
-      "kind": "backend_service",
-      "path": "xkeen-ui/services/devtools/common.py",
-      "size_bytes": 1368,
-      "depends_on": [
-        "core"
-      ],
-      "starts_background_task": false,
-      "background_markers": [],
-      "registers_routes": false,
-      "routes": [],
-      "frontend_bundle": [],
-      "system_requirements": [
-        "ndmc (router diagnostics optional)"
-      ],
-      "environment_variables": [],
-      "removable": true
-    },
-    {
-      "module_id": "tool.advanced-diagnostics",
-      "kind": "backend_service",
-      "path": "xkeen-ui/services/devtools/env.py",
-      "size_bytes": 30296,
-      "depends_on": [
-        "core",
-        "integration.happ"
-      ],
-      "starts_background_task": false,
-      "background_markers": [],
-      "registers_routes": false,
-      "routes": [],
-      "frontend_bundle": [],
-      "system_requirements": [
-        "ndmc (router diagnostics optional)"
-      ],
-      "environment_variables": [
-        "XKEEN_ALLOW_SHELL",
-        "XKEEN_AUTH_LOGIN_LOCKOUT_SECONDS",
-        "XKEEN_AUTH_LOGIN_MAX_ATTEMPTS",
-        "XKEEN_AUTH_LOGIN_WINDOW_SECONDS",
-        "XKEEN_CONFIG_EXCHANGE_MAX_BYTES",
-        "XKEEN_CONFIG_FILE",
-        "XKEEN_CONFIG_SERVER_BASE",
-        "XKEEN_DAT_ALLOW_CUSTOM_URLS",
-        "XKEEN_DAT_ALLOW_HOSTS",
-        "XKEEN_DAT_ALLOW_HTTP",
-        "XKEEN_DAT_ALLOW_PRIVATE_HOSTS",
-        "XKEEN_DNS_OVER_VLESS_MAX_RTT",
-        "XKEEN_DNS_OVER_VLESS_PREFER",
-        "XKEEN_DNS_OVER_VLESS_WATCHDOG",
-        "XKEEN_DNS_OVER_VLESS_WATCHDOG_FAILS",
-        "XKEEN_DNS_OVER_VLESS_WATCHDOG_INTERVAL",
-        "XKEEN_DNS_OVER_VLESS_WATCHDOG_RESTARTS",
-        "XKEEN_FILEOPS_FXP",
-        "XKEEN_FILEOPS_JOB_TTL",
-        "XKEEN_FILEOPS_MAX_JOBS",
-        "XKEEN_FILEOPS_REMOTE2REMOTE_DIRECT",
-        "XKEEN_FILEOPS_SPOOL_CLEANUP_AGE",
-        "XKEEN_FILEOPS_SPOOL_DIR",
-        "XKEEN_FILEOPS_SPOOL_MAX_MB",
-        "XKEEN_FILEOPS_WORKERS",
-        "XKEEN_GEODAT_ALLOW_CUSTOM_URLS",
-        "XKEEN_GEODAT_ALLOW_HOSTS",
-        "XKEEN_GEODAT_ALLOW_HTTP",
-        "XKEEN_GEODAT_ALLOW_PRIVATE_HOSTS",
-        "XKEEN_GEODAT_UPLOAD_MAX_BYTES",
-        "XKEEN_GITHUB_BRANCH",
-        "XKEEN_GITHUB_OWNER",
-        "XKEEN_GITHUB_REPO",
-        "XKEEN_GITHUB_REPO_URL",
-        "XKEEN_HAPP_DECRYPTOR_ALLOW_CUSTOM_URLS",
-        "XKEEN_HAPP_DECRYPTOR_CMD",
-        "XKEEN_HAPP_DECRYPTOR_RELEASE_URL",
-        "XKEEN_HAPP_DECRYPTOR_REMOTE_URL",
-        "XKEEN_HAPP_DECRYPTOR_TIMEOUT",
-        "XKEEN_HAPP_HELPER_CMD",
-        "XKEEN_HAPP_HELPER_TIMEOUT",
-        "XKEEN_HAPP_KEYS_MANIFEST_URL",
-        "XKEEN_INIT_SCRIPT",
-        "XKEEN_IP_EXCLUDE_FILE",
-        "XKEEN_JSON_BODY_MAX_BYTES",
-        "XKEEN_JSON_HEAVY_MAX_BYTES",
-        "XKEEN_LOCALFM_ROOTS",
-        "XKEEN_LOG_ACCESS_ENABLE",
-        "XKEEN_LOG_CORE_ENABLE",
-        "XKEEN_LOG_CORE_LEVEL",
-        "XKEEN_LOG_DIR",
-        "XKEEN_LOG_ROTATE_BACKUPS",
-        "XKEEN_LOG_ROTATE_MAX_MB",
-        "XKEEN_LOG_WS_ENABLE",
-        "XKEEN_MAX_ZIP_ESTIMATE_ITEMS",
-        "XKEEN_MAX_ZIP_MB",
-        "XKEEN_MIHOMO_DNS_FLUSH_ENABLE",
-        "XKEEN_MIHOMO_DNS_QUERY_ENABLE",
-        "XKEEN_MIHOMO_FAKE_IP_FLUSH_ENABLE",
-        "XKEEN_MIHOMO_HWID",
-        "XKEEN_MIHOMO_JSON_MAX_BYTES",
-        "XKEEN_MIHOMO_SUBSCRIPTIONS_LOOKAHEAD_SEC",
-        "XKEEN_MIHOMO_SUBSCRIPTIONS_RESTART_BATCH",
-        "XKEEN_MIHOMO_SUBSCRIPTIONS_SCHEDULER",
-        "XKEEN_MIHOMO_SUBSCRIPTIONS_SCHEDULER_TICK",
-        "XKEEN_MIHOMO_TELEMETRY_KILL_SWITCH",
-        "XKEEN_MIHOMO_TELEMETRY_STREAM_ENABLE",
-        "XKEEN_MIHOMO_TRAFFIC_ENABLE",
-        "XKEEN_MIHOMO_UI_ALLOW_PROXY_FALLBACK",
-        "XKEEN_PORT_EXCLUDE_FILE",
-        "XKEEN_PORT_PROXYING_FILE",
-        "XKEEN_PROTECTED_MNT_ROOT",
-        "XKEEN_PROTECT_MNT_LABELS",
-        "XKEEN_PTY_IDLE_TTL_SECONDS",
-        "XKEEN_PTY_MAX_BUF_CHARS",
-        "XKEEN_REMOTEFM_CA_FILE",
-        "XKEEN_REMOTEFM_ENABLE",
-        "XKEEN_REMOTEFM_KNOWN_HOSTS",
-        "XKEEN_REMOTEFM_MAX_SESSIONS",
-        "XKEEN_REMOTEFM_MAX_UPLOAD_MB",
-        "XKEEN_REMOTEFM_SESSION_TTL",
-        "XKEEN_REMOTEFM_STATE_DIR",
-        "XKEEN_REMOTEFM_TMP_DIR",
-        "XKEEN_RESTART_LOG_FILE",
-        "XKEEN_ROUTING_SAVE_MAX_BYTES",
-        "XKEEN_SUBSCRIPTIONS_LOOKAHEAD_SEC",
-        "XKEEN_SUBSCRIPTIONS_PREFLIGHT",
-        "XKEEN_SUBSCRIPTIONS_RESTART_BATCH",
-        "XKEEN_SUBSCRIPTIONS_SCHEDULER",
-        "XKEEN_SUBSCRIPTIONS_SCHEDULER_TICK",
-        "XKEEN_SUBSCRIPTIONS_SNAPSHOT",
-        "XKEEN_SUBSCRIPTION_ALLOW_HTTP",
-        "XKEEN_SUBSCRIPTION_ALLOW_PRIVATE_HOSTS",
-        "XKEEN_SUBSCRIPTION_HAPP_FALLBACK",
-        "XKEEN_SUBSCRIPTION_HAPP_USER_AGENT",
-        "XKEEN_TRASH_DIR",
-        "XKEEN_TRASH_MAX_BYTES",
-        "XKEEN_TRASH_MAX_GB",
-        "XKEEN_TRASH_PURGE_INTERVAL_SECONDS",
-        "XKEEN_TRASH_STATS_CACHE_SECONDS",
-        "XKEEN_TRASH_TTL_DAYS",
-        "XKEEN_TRASH_WARN_RATIO",
-        "XKEEN_UI_DEVTOOLS_SECTIONS_WHITELIST",
-        "XKEEN_UI_DIR",
-        "XKEEN_UI_ENV_FILE",
-        "XKEEN_UI_GITHUB_TOKEN",
-        "XKEEN_UI_MAX_CONTENT_LENGTH",
-        "XKEEN_UI_PANEL_SECTIONS_WHITELIST",
-        "XKEEN_UI_PORT",
-        "XKEEN_UI_SECRET_KEY",
-        "XKEEN_UI_STATE_DIR",
-        "XKEEN_UI_UPDATE_CHANNEL",
-        "XKEEN_UI_UPDATE_REPO",
-        "XKEEN_XRAY_CONFIGS_DIR",
-        "XKEEN_XRAY_INBOUNDS_FILE",
-        "XKEEN_XRAY_JSONC_DIR",
-        "XKEEN_XRAY_LOG_TZ_OFFSET",
-        "XKEEN_XRAY_OUTBOUNDS_FILE",
-        "XKEEN_XRAY_ROUTING_FILE",
-        "XKEEN_XRAY_ROUTING_FILE_RAW",
-        "XKEEN_XRAY_TEST_TIMEOUT"
-      ],
-      "removable": true
-    },
-    {
-      "module_id": "tool.advanced-diagnostics",
-      "kind": "backend_service",
-      "path": "xkeen-ui/services/devtools/logs.py",
-      "size_bytes": 7879,
-      "depends_on": [
-        "core",
-        "engine.xray"
-      ],
-      "starts_background_task": false,
-      "background_markers": [],
-      "registers_routes": false,
-      "routes": [],
-      "frontend_bundle": [],
-      "system_requirements": [
-        "ndmc (router diagnostics optional)"
-      ],
-      "environment_variables": [
-        "XKEEN_LOG_DIR",
-        "XKEEN_RESTART_LOG_FILE",
-        "XKEEN_UI_DIR",
-        "XKEEN_UI_STATE_DIR"
-      ],
-      "removable": true
-    },
-    {
-      "module_id": "tool.advanced-diagnostics",
-      "kind": "backend_service",
-      "path": "xkeen-ui/services/devtools/ui_service.py",
-      "size_bytes": 4638,
-      "depends_on": [
-        "core"
-      ],
-      "starts_background_task": false,
-      "background_markers": [],
-      "registers_routes": false,
-      "routes": [],
-      "frontend_bundle": [],
-      "system_requirements": [
-        "ndmc (router diagnostics optional)"
-      ],
-      "environment_variables": [
-        "XKEEN_ENV",
-        "XKEEN_RUNTIME",
-        "XKEEN_UI_CONTROL_CMD",
-        "XKEEN_UI_PID_FILE",
-        "XKEEN_UI_RESTART_CMD"
-      ],
-      "removable": true
-    },
-    {
-      "module_id": "tool.advanced-diagnostics",
-      "kind": "backend_service",
-      "path": "xkeen-ui/services/router_diagnostics.py",
-      "size_bytes": 56746,
-      "depends_on": [
-        "core"
-      ],
-      "starts_background_task": false,
-      "background_markers": [],
-      "registers_routes": false,
-      "routes": [],
-      "frontend_bundle": [],
-      "system_requirements": [
-        "ndmc (router diagnostics optional)"
-      ],
-      "environment_variables": [],
-      "removable": true
-    },
-    {
-      "module_id": "tool.advanced-diagnostics",
-      "kind": "backend_service",
-      "path": "xkeen-ui/services/system_resources.py",
-      "size_bytes": 9273,
-      "depends_on": [
-        "core"
-      ],
-      "starts_background_task": false,
-      "background_markers": [],
-      "registers_routes": false,
-      "routes": [],
-      "frontend_bundle": [],
-      "system_requirements": [
-        "ndmc (router diagnostics optional)"
-      ],
-      "environment_variables": [],
-      "removable": true
-    },
-    {
-      "module_id": "tool.advanced-diagnostics",
-      "kind": "backend_service",
       "path": "xkeen-ui/services/system_resources_history/__init__.py",
       "size_bytes": 0,
       "depends_on": [
@@ -23586,25 +24078,6 @@
     {
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_service",
-      "path": "xkeen-ui/services/system_resources_history/sensors.py",
-      "size_bytes": 10207,
-      "depends_on": [
-        "core"
-      ],
-      "starts_background_task": false,
-      "background_markers": [],
-      "registers_routes": false,
-      "routes": [],
-      "frontend_bundle": [],
-      "system_requirements": [
-        "ndmc (router diagnostics optional)"
-      ],
-      "environment_variables": [],
-      "removable": true
-    },
-    {
-      "module_id": "tool.advanced-diagnostics",
-      "kind": "backend_service",
       "path": "xkeen-ui/services/system_resources_history/store.py",
       "size_bytes": 18590,
       "depends_on": [
@@ -23683,25 +24156,6 @@
       "kind": "backend_test",
       "path": "tests/test_resource_monitor_model_runtime.py",
       "size_bytes": 3796,
-      "depends_on": [
-        "core"
-      ],
-      "starts_background_task": false,
-      "background_markers": [],
-      "registers_routes": false,
-      "routes": [],
-      "frontend_bundle": [],
-      "system_requirements": [
-        "ndmc (router diagnostics optional)"
-      ],
-      "environment_variables": [],
-      "removable": true
-    },
-    {
-      "module_id": "tool.advanced-diagnostics",
-      "kind": "backend_test",
-      "path": "tests/test_router_diagnostics.py",
-      "size_bytes": 25503,
       "depends_on": [
         "core"
       ],
@@ -23910,342 +24364,6 @@
     },
     {
       "module_id": "tool.advanced-diagnostics",
-      "kind": "frontend_entrypoint",
-      "path": "xkeen-ui/static/js/pages/devtools.entry.js",
-      "size_bytes": 540,
-      "depends_on": [
-        "core",
-        "engine.mihomo"
-      ],
-      "starts_background_task": false,
-      "background_markers": [],
-      "registers_routes": false,
-      "routes": [],
-      "frontend_bundle": [
-        "devtools-page"
-      ],
-      "system_requirements": [
-        "ndmc (router diagnostics optional)"
-      ],
-      "environment_variables": [],
-      "removable": true
-    },
-    {
-      "module_id": "tool.advanced-diagnostics",
-      "kind": "frontend_feature",
-      "path": "xkeen-ui/static/js/features/devtools.js",
-      "size_bytes": 7763,
-      "depends_on": [
-        "core"
-      ],
-      "starts_background_task": false,
-      "background_markers": [],
-      "registers_routes": false,
-      "routes": [],
-      "frontend_bundle": [
-        "devtools-page",
-        "mihomo-generator-page",
-        "modules-page",
-        "panel-core",
-        "xkeen-page"
-      ],
-      "system_requirements": [
-        "ndmc (router diagnostics optional)"
-      ],
-      "environment_variables": [],
-      "removable": true
-    },
-    {
-      "module_id": "tool.advanced-diagnostics",
-      "kind": "frontend_feature",
-      "path": "xkeen-ui/static/js/features/devtools/env.js",
-      "size_bytes": 80588,
-      "depends_on": [
-        "core"
-      ],
-      "starts_background_task": false,
-      "background_markers": [],
-      "registers_routes": false,
-      "routes": [],
-      "frontend_bundle": [
-        "devtools-page",
-        "mihomo-generator-page",
-        "modules-page",
-        "panel-core",
-        "xkeen-page"
-      ],
-      "system_requirements": [
-        "ndmc (router diagnostics optional)"
-      ],
-      "environment_variables": [
-        "XKEEN_ALLOW_SHELL",
-        "XKEEN_AUTH_LOGIN_",
-        "XKEEN_AUTH_LOGIN_LOCKOUT_SECONDS",
-        "XKEEN_AUTH_LOGIN_MAX_ATTEMPTS",
-        "XKEEN_AUTH_LOGIN_WINDOW_SECONDS",
-        "XKEEN_CONFIG_EXCHANGE_MAX_BYTES",
-        "XKEEN_CONFIG_FILE",
-        "XKEEN_CONFIG_SERVER_BASE",
-        "XKEEN_DAT_",
-        "XKEEN_DAT_ALLOW_CUSTOM_URLS",
-        "XKEEN_DAT_ALLOW_HOSTS",
-        "XKEEN_DAT_ALLOW_HTTP",
-        "XKEEN_DAT_ALLOW_PRIVATE_HOSTS",
-        "XKEEN_DNS_OVER_VLESS_",
-        "XKEEN_DNS_OVER_VLESS_MAX_RTT",
-        "XKEEN_DNS_OVER_VLESS_PREFER",
-        "XKEEN_DNS_OVER_VLESS_WATCHDOG",
-        "XKEEN_DNS_OVER_VLESS_WATCHDOG_FAILS",
-        "XKEEN_DNS_OVER_VLESS_WATCHDOG_INTERVAL",
-        "XKEEN_DNS_OVER_VLESS_WATCHDOG_RESTARTS",
-        "XKEEN_FILEOPS_",
-        "XKEEN_FILEOPS_FXP",
-        "XKEEN_FILEOPS_JOB_TTL",
-        "XKEEN_FILEOPS_MAX_JOBS",
-        "XKEEN_FILEOPS_REMOTE2REMOTE_DIRECT",
-        "XKEEN_FILEOPS_SPOOL_CLEANUP_AGE",
-        "XKEEN_FILEOPS_SPOOL_DIR",
-        "XKEEN_FILEOPS_SPOOL_MAX_MB",
-        "XKEEN_FILEOPS_WORKERS",
-        "XKEEN_GEODAT_",
-        "XKEEN_GEODAT_ALLOW_CUSTOM_URLS",
-        "XKEEN_GEODAT_ALLOW_HOSTS",
-        "XKEEN_GEODAT_ALLOW_HTTP",
-        "XKEEN_GEODAT_ALLOW_PRIVATE_HOSTS",
-        "XKEEN_GEODAT_UPLOAD_MAX_BYTES",
-        "XKEEN_GITHUB_",
-        "XKEEN_GITHUB_BRANCH",
-        "XKEEN_GITHUB_OWNER",
-        "XKEEN_GITHUB_REPO",
-        "XKEEN_GITHUB_REPO_URL",
-        "XKEEN_HAPP_DECRYPTOR_ALLOW_CUSTOM_URLS",
-        "XKEEN_HAPP_DECRYPTOR_CMD",
-        "XKEEN_HAPP_DECRYPTOR_RELEASE_URL",
-        "XKEEN_HAPP_DECRYPTOR_REMOTE_URL",
-        "XKEEN_HAPP_DECRYPTOR_TIMEOUT",
-        "XKEEN_HAPP_HELPER_CMD",
-        "XKEEN_HAPP_HELPER_TIMEOUT",
-        "XKEEN_HAPP_KEYS_MANIFEST_URL",
-        "XKEEN_INIT_SCRIPT",
-        "XKEEN_IP_",
-        "XKEEN_IP_EXCLUDE_FILE",
-        "XKEEN_JSON_BODY_MAX_BYTES",
-        "XKEEN_JSON_HEAVY_MAX_BYTES",
-        "XKEEN_LOCALFM_ROOTS",
-        "XKEEN_LOG_",
-        "XKEEN_LOG_ACCESS_ENABLE",
-        "XKEEN_LOG_CORE_ENABLE",
-        "XKEEN_LOG_CORE_LEVEL",
-        "XKEEN_LOG_DIR",
-        "XKEEN_LOG_ROTATE_BACKUPS",
-        "XKEEN_LOG_ROTATE_MAX_MB",
-        "XKEEN_LOG_WS_ENABLE",
-        "XKEEN_MAX_ZIP_",
-        "XKEEN_MAX_ZIP_ESTIMATE_ITEMS",
-        "XKEEN_MAX_ZIP_MB",
-        "XKEEN_MIHOMO_DNS_FLUSH_ENABLE",
-        "XKEEN_MIHOMO_DNS_QUERY_ENABLE",
-        "XKEEN_MIHOMO_FAKE_IP_FLUSH_ENABLE",
-        "XKEEN_MIHOMO_HWID",
-        "XKEEN_MIHOMO_JSON_MAX_BYTES",
-        "XKEEN_MIHOMO_SUBSCRIPTIONS_",
-        "XKEEN_MIHOMO_SUBSCRIPTIONS_LOOKAHEAD_SEC",
-        "XKEEN_MIHOMO_SUBSCRIPTIONS_RESTART_BATCH",
-        "XKEEN_MIHOMO_SUBSCRIPTIONS_SCHEDULER",
-        "XKEEN_MIHOMO_SUBSCRIPTIONS_SCHEDULER_TICK",
-        "XKEEN_MIHOMO_TELEMETRY_KILL_SWITCH",
-        "XKEEN_MIHOMO_TELEMETRY_STREAM_ENABLE",
-        "XKEEN_MIHOMO_TRAFFIC_ENABLE",
-        "XKEEN_MIHOMO_UI_ALLOW_PROXY_FALLBACK",
-        "XKEEN_PORT_",
-        "XKEEN_PORT_EXCLUDE_FILE",
-        "XKEEN_PORT_PROXYING_FILE",
-        "XKEEN_PROTECTED_MNT_ROOT",
-        "XKEEN_PROTECT_MNT_LABELS",
-        "XKEEN_PTY_",
-        "XKEEN_PTY_IDLE_TTL_SECONDS",
-        "XKEEN_PTY_MAX_BUF_CHARS",
-        "XKEEN_REMOTEFM_",
-        "XKEEN_REMOTEFM_CA_FILE",
-        "XKEEN_REMOTEFM_ENABLE",
-        "XKEEN_REMOTEFM_KNOWN_HOSTS",
-        "XKEEN_REMOTEFM_MAX_SESSIONS",
-        "XKEEN_REMOTEFM_MAX_UPLOAD_MB",
-        "XKEEN_REMOTEFM_SESSION_TTL",
-        "XKEEN_REMOTEFM_STATE_DIR",
-        "XKEEN_REMOTEFM_TMP_DIR",
-        "XKEEN_RESTART_LOG_FILE",
-        "XKEEN_ROUTING_SAVE_MAX_BYTES",
-        "XKEEN_SUBSCRIPTIONS_",
-        "XKEEN_SUBSCRIPTIONS_LOOKAHEAD_SEC",
-        "XKEEN_SUBSCRIPTIONS_PREFLIGHT",
-        "XKEEN_SUBSCRIPTIONS_RESTART_BATCH",
-        "XKEEN_SUBSCRIPTIONS_SCHEDULER",
-        "XKEEN_SUBSCRIPTIONS_SCHEDULER_TICK",
-        "XKEEN_SUBSCRIPTIONS_SNAPSHOT",
-        "XKEEN_SUBSCRIPTION_",
-        "XKEEN_SUBSCRIPTION_ALLOW_HTTP",
-        "XKEEN_SUBSCRIPTION_ALLOW_PRIVATE_HOSTS",
-        "XKEEN_SUBSCRIPTION_HAPP_FALLBACK",
-        "XKEEN_SUBSCRIPTION_HAPP_USER_AGENT",
-        "XKEEN_TRASH_",
-        "XKEEN_TRASH_DIR",
-        "XKEEN_TRASH_MAX_BYTES",
-        "XKEEN_TRASH_MAX_GB",
-        "XKEEN_TRASH_PURGE_INTERVAL_SECONDS",
-        "XKEEN_TRASH_STATS_CACHE_SECONDS",
-        "XKEEN_TRASH_TTL_DAYS",
-        "XKEEN_TRASH_WARN_RATIO",
-        "XKEEN_UI_DEVTOOLS_SECTIONS_WHITELIST",
-        "XKEEN_UI_ENV_FILE",
-        "XKEEN_UI_GITHUB_TOKEN",
-        "XKEEN_UI_MAX_CONTENT_LENGTH",
-        "XKEEN_UI_PANEL_SECTIONS_WHITELIST",
-        "XKEEN_UI_PORT",
-        "XKEEN_UI_SECRET_KEY",
-        "XKEEN_UI_STATE_DIR",
-        "XKEEN_UI_UPDATE_",
-        "XKEEN_UI_UPDATE_CHANNEL",
-        "XKEEN_UI_UPDATE_REPO",
-        "XKEEN_XRAY_",
-        "XKEEN_XRAY_CONFIGS_DIR",
-        "XKEEN_XRAY_INBOUNDS_FILE",
-        "XKEEN_XRAY_JSONC_DIR",
-        "XKEEN_XRAY_LOG_TZ_OFFSET",
-        "XKEEN_XRAY_OUTBOUNDS_FILE",
-        "XKEEN_XRAY_ROUTING_FILE",
-        "XKEEN_XRAY_ROUTING_FILE_RAW",
-        "XKEEN_XRAY_TEST_TIMEOUT"
-      ],
-      "removable": true
-    },
-    {
-      "module_id": "tool.advanced-diagnostics",
-      "kind": "frontend_feature",
-      "path": "xkeen-ui/static/js/features/devtools/logs.js",
-      "size_bytes": 32419,
-      "depends_on": [
-        "core"
-      ],
-      "starts_background_task": false,
-      "background_markers": [],
-      "registers_routes": false,
-      "routes": [],
-      "frontend_bundle": [
-        "devtools-page",
-        "mihomo-generator-page",
-        "modules-page",
-        "panel-core",
-        "xkeen-page"
-      ],
-      "system_requirements": [
-        "ndmc (router diagnostics optional)"
-      ],
-      "environment_variables": [],
-      "removable": true
-    },
-    {
-      "module_id": "tool.advanced-diagnostics",
-      "kind": "frontend_feature",
-      "path": "xkeen-ui/static/js/features/devtools/service.js",
-      "size_bytes": 5173,
-      "depends_on": [
-        "core"
-      ],
-      "starts_background_task": false,
-      "background_markers": [],
-      "registers_routes": false,
-      "routes": [],
-      "frontend_bundle": [
-        "devtools-page",
-        "mihomo-generator-page",
-        "modules-page",
-        "panel-core",
-        "xkeen-page"
-      ],
-      "system_requirements": [
-        "ndmc (router diagnostics optional)"
-      ],
-      "environment_variables": [],
-      "removable": true
-    },
-    {
-      "module_id": "tool.advanced-diagnostics",
-      "kind": "frontend_feature",
-      "path": "xkeen-ui/static/js/features/devtools/shared.js",
-      "size_bytes": 12514,
-      "depends_on": [
-        "core"
-      ],
-      "starts_background_task": false,
-      "background_markers": [],
-      "registers_routes": false,
-      "routes": [],
-      "frontend_bundle": [
-        "devtools-page",
-        "mihomo-generator-page",
-        "modules-page",
-        "panel-core",
-        "xkeen-page"
-      ],
-      "system_requirements": [
-        "ndmc (router diagnostics optional)"
-      ],
-      "environment_variables": [],
-      "removable": true
-    },
-    {
-      "module_id": "tool.advanced-diagnostics",
-      "kind": "frontend_feature",
-      "path": "xkeen-ui/static/js/features/devtools/update.js",
-      "size_bytes": 4936,
-      "depends_on": [
-        "core"
-      ],
-      "starts_background_task": false,
-      "background_markers": [],
-      "registers_routes": false,
-      "routes": [],
-      "frontend_bundle": [
-        "devtools-page",
-        "mihomo-generator-page",
-        "modules-page",
-        "panel-core",
-        "xkeen-page"
-      ],
-      "system_requirements": [
-        "ndmc (router diagnostics optional)"
-      ],
-      "environment_variables": [],
-      "removable": true
-    },
-    {
-      "module_id": "tool.advanced-diagnostics",
-      "kind": "frontend_feature",
-      "path": "xkeen-ui/static/js/features/devtools_namespace.js",
-      "size_bytes": 1134,
-      "depends_on": [
-        "core"
-      ],
-      "starts_background_task": false,
-      "background_markers": [],
-      "registers_routes": false,
-      "routes": [],
-      "frontend_bundle": [
-        "devtools-page",
-        "mihomo-generator-page",
-        "modules-page",
-        "panel-core",
-        "xkeen-page"
-      ],
-      "system_requirements": [
-        "ndmc (router diagnostics optional)"
-      ],
-      "environment_variables": [],
-      "removable": true
-    },
-    {
-      "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor.js",
       "size_bytes": 10808,
@@ -24258,6 +24376,7 @@
       "routes": [],
       "frontend_bundle": [
         "devtools-page",
+        "diagnostics-panel",
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
@@ -24284,6 +24403,7 @@
       "routes": [],
       "frontend_bundle": [
         "devtools-page",
+        "diagnostics-panel",
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
@@ -24310,6 +24430,7 @@
       "routes": [],
       "frontend_bundle": [
         "devtools-page",
+        "diagnostics-panel",
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
@@ -24336,6 +24457,7 @@
       "routes": [],
       "frontend_bundle": [
         "devtools-page",
+        "diagnostics-panel",
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
@@ -24362,6 +24484,7 @@
       "routes": [],
       "frontend_bundle": [
         "devtools-page",
+        "diagnostics-panel",
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
@@ -24388,6 +24511,7 @@
       "routes": [],
       "frontend_bundle": [
         "devtools-page",
+        "diagnostics-panel",
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
@@ -24414,6 +24538,7 @@
       "routes": [],
       "frontend_bundle": [
         "devtools-page",
+        "diagnostics-panel",
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
@@ -24440,6 +24565,7 @@
       "routes": [],
       "frontend_bundle": [
         "devtools-page",
+        "diagnostics-panel",
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
@@ -24466,6 +24592,7 @@
       "routes": [],
       "frontend_bundle": [
         "devtools-page",
+        "diagnostics-panel",
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
@@ -24492,6 +24619,7 @@
       "routes": [],
       "frontend_bundle": [
         "devtools-page",
+        "diagnostics-panel",
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
@@ -24518,6 +24646,7 @@
       "routes": [],
       "frontend_bundle": [
         "devtools-page",
+        "diagnostics-panel",
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
@@ -24544,6 +24673,7 @@
       "routes": [],
       "frontend_bundle": [
         "devtools-page",
+        "diagnostics-panel",
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
@@ -24570,6 +24700,7 @@
       "routes": [],
       "frontend_bundle": [
         "devtools-page",
+        "diagnostics-panel",
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
@@ -24596,6 +24727,7 @@
       "routes": [],
       "frontend_bundle": [
         "devtools-page",
+        "diagnostics-panel",
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
@@ -24622,6 +24754,7 @@
       "routes": [],
       "frontend_bundle": [
         "devtools-page",
+        "diagnostics-panel",
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
@@ -24648,6 +24781,7 @@
       "routes": [],
       "frontend_bundle": [
         "devtools-page",
+        "diagnostics-panel",
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
@@ -24674,6 +24808,7 @@
       "routes": [],
       "frontend_bundle": [
         "devtools-page",
+        "diagnostics-panel",
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
@@ -24700,6 +24835,7 @@
       "routes": [],
       "frontend_bundle": [
         "devtools-page",
+        "diagnostics-panel",
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
@@ -24726,6 +24862,7 @@
       "routes": [],
       "frontend_bundle": [
         "devtools-page",
+        "diagnostics-panel",
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
@@ -24752,6 +24889,7 @@
       "routes": [],
       "frontend_bundle": [
         "devtools-page",
+        "diagnostics-panel",
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
@@ -24778,62 +24916,11 @@
       "routes": [],
       "frontend_bundle": [
         "devtools-page",
+        "diagnostics-panel",
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
         "terminal-lazy",
-        "xkeen-page"
-      ],
-      "system_requirements": [
-        "ndmc (router diagnostics optional)"
-      ],
-      "environment_variables": [],
-      "removable": true
-    },
-    {
-      "module_id": "tool.advanced-diagnostics",
-      "kind": "frontend_javascript",
-      "path": "xkeen-ui/static/js/pages/devtools.init.js",
-      "size_bytes": 1039,
-      "depends_on": [
-        "core"
-      ],
-      "starts_background_task": false,
-      "background_markers": [],
-      "registers_routes": false,
-      "routes": [],
-      "frontend_bundle": [
-        "devtools-page",
-        "mihomo-generator-page",
-        "modules-page",
-        "panel-core",
-        "xkeen-page"
-      ],
-      "system_requirements": [
-        "ndmc (router diagnostics optional)"
-      ],
-      "environment_variables": [],
-      "removable": true
-    },
-    {
-      "module_id": "tool.advanced-diagnostics",
-      "kind": "frontend_javascript",
-      "path": "xkeen-ui/static/js/pages/devtools.screen.bootstrap.js",
-      "size_bytes": 1269,
-      "depends_on": [
-        "core",
-        "tool.editor",
-        "integration.happ"
-      ],
-      "starts_background_task": false,
-      "background_markers": [],
-      "registers_routes": false,
-      "routes": [],
-      "frontend_bundle": [
-        "devtools-page",
-        "mihomo-generator-page",
-        "modules-page",
-        "panel-core",
         "xkeen-page"
       ],
       "system_requirements": [
@@ -24885,46 +24972,6 @@
       "kind": "frontend_test",
       "path": "e2e/resource_monitor_visibility.spec.mjs",
       "size_bytes": 3903,
-      "depends_on": [
-        "core"
-      ],
-      "starts_background_task": false,
-      "background_markers": [],
-      "registers_routes": false,
-      "routes": [],
-      "frontend_bundle": [],
-      "system_requirements": [
-        "ndmc (router diagnostics optional)"
-      ],
-      "environment_variables": [],
-      "removable": true
-    },
-    {
-      "module_id": "tool.advanced-diagnostics",
-      "kind": "template",
-      "path": "xkeen-ui/templates/devtools.html",
-      "size_bytes": 49808,
-      "depends_on": [
-        "core"
-      ],
-      "starts_background_task": false,
-      "background_markers": [],
-      "registers_routes": false,
-      "routes": [],
-      "frontend_bundle": [],
-      "system_requirements": [
-        "ndmc (router diagnostics optional)"
-      ],
-      "environment_variables": [
-        "XKEEN_REMOTEFM_ENABLE"
-      ],
-      "removable": true
-    },
-    {
-      "module_id": "tool.advanced-diagnostics",
-      "kind": "template",
-      "path": "xkeen-ui/templates/panel/slots/resource_monitor_unavailable.html",
-      "size_bytes": 1089,
       "depends_on": [
         "core"
       ],
@@ -32664,6 +32711,39 @@
       ]
     },
     {
+      "id": "diagnostics-panel",
+      "root": "xkeen-ui/static/js/pages/panel.diagnostics.bundle.js",
+      "file_count": 22,
+      "module_ids": [
+        "core",
+        "tool.advanced-diagnostics"
+      ],
+      "files": [
+        "xkeen-ui/static/js/features/resource_monitor.js",
+        "xkeen-ui/static/js/features/resource_monitor/canvas_charts.js",
+        "xkeen-ui/static/js/features/resource_monitor/chart_css.js",
+        "xkeen-ui/static/js/features/resource_monitor/chart_data.js",
+        "xkeen-ui/static/js/features/resource_monitor/chart_view.js",
+        "xkeen-ui/static/js/features/resource_monitor/dashboard.js",
+        "xkeen-ui/static/js/features/resource_monitor/tariff_form.js",
+        "xkeen-ui/static/js/features/resource_monitor/tool_devices.js",
+        "xkeen-ui/static/js/features/resource_monitor/tool_events.js",
+        "xkeen-ui/static/js/features/resource_monitor/tool_ifaces.js",
+        "xkeen-ui/static/js/features/resource_monitor/tool_modems.js",
+        "xkeen-ui/static/js/features/resource_monitor/tool_ping.js",
+        "xkeen-ui/static/js/features/resource_monitor/tool_procs.js",
+        "xkeen-ui/static/js/features/resource_monitor/tools.js",
+        "xkeen-ui/static/js/features/resource_monitor/tools_css.js",
+        "xkeen-ui/static/js/features/resource_monitor/tools_format.js",
+        "xkeen-ui/static/js/features/resource_monitor/tools_net.js",
+        "xkeen-ui/static/js/features/resource_monitor/view.js",
+        "xkeen-ui/static/js/features/resource_monitor/view_css.js",
+        "xkeen-ui/static/js/features/resource_monitor/virtual_rows.js",
+        "xkeen-ui/static/js/features/resource_monitor_model.js",
+        "xkeen-ui/static/js/pages/panel.diagnostics.bundle.js"
+      ]
+    },
+    {
       "id": "xkeen-page",
       "root": "xkeen-ui/static/js/pages/xkeen.entry.js",
       "file_count": 314,
@@ -33679,7 +33759,7 @@
       {
         "id": "devtools",
         "route": "/devtools",
-        "module_id": "tool.advanced-diagnostics",
+        "module_id": "core",
         "template": "xkeen-ui/templates/devtools.html",
         "entry": "xkeen-ui/static/js/pages/devtools.entry.js"
       },
@@ -34003,7 +34083,7 @@
       {
         "from": "core",
         "to": "engine.mihomo",
-        "unit_count": 18,
+        "unit_count": 19,
         "examples": [
           "xkeen-ui/app_factory.py",
           "xkeen-ui/run_server.py",
@@ -34018,7 +34098,7 @@
       {
         "from": "core",
         "to": "engine.xray",
-        "unit_count": 35,
+        "unit_count": 36,
         "examples": [
           "xkeen-ui/app.py",
           "xkeen-ui/app_factory.py",
@@ -34027,36 +34107,35 @@
           "xkeen-ui/routes/ws_streams.py",
           "xkeen-ui/services/config_exchange_local.py",
           "xkeen-ui/services/cores.py",
-          "xkeen-ui/services/memory_guard.py"
+          "xkeen-ui/services/devtools/logs.py"
         ]
       },
       {
         "from": "core",
         "to": "integration.happ",
-        "unit_count": 7,
+        "unit_count": 9,
         "examples": [
           "xkeen-ui/routes/__init__.py",
+          "xkeen-ui/services/devtools/env.py",
           "xkeen-ui/services/subscription_request_profile.py",
           "tests/test_addons_refresh_on_update.py",
           "tests/test_check_keys_upstream.py",
           "tests/test_module_backend_gates.py",
           "xkeen-ui/static/js/features/index.js",
-          "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js"
+          "xkeen-ui/static/js/pages/devtools.screen.bootstrap.js"
         ]
       },
       {
         "from": "core",
         "to": "tool.advanced-diagnostics",
-        "unit_count": 14,
+        "unit_count": 6,
         "examples": [
           "xkeen-ui/run_server.py",
           "xkeen-ui/routes/__init__.py",
           "xkeen-ui/routes/devtools.py",
           "xkeen-ui/routes/ui_settings.py",
-          "xkeen-ui/services/router_modem_control.py",
-          "tests/test_devtools_env_whitelist.py",
-          "tests/test_devtools_log_targets.py",
-          "tests/test_panel_service.py"
+          "tests/test_resource_event_preferences.py",
+          "xkeen-ui/static/js/pages/panel.diagnostics.bundle.js"
         ]
       },
       {
@@ -34077,7 +34156,7 @@
       {
         "from": "core",
         "to": "tool.editor",
-        "unit_count": 11,
+        "unit_count": 12,
         "examples": [
           "xkeen-ui/static/js/pages/panel.editor.bundle.js",
           "xkeen-ui/static/js/pages/panel.editor.codemirror.bundle.js",
@@ -34086,7 +34165,7 @@
           "xkeen-ui/static/js/pages/panel.editor.monaco.bundle.js",
           "xkeen-ui/static/js/pages/panel.shared_compat.bundle.js",
           "xkeen-ui/static/js/pages/config_shell.shared.js",
-          "xkeen-ui/static/js/pages/modules.screen.bootstrap.js"
+          "xkeen-ui/static/js/pages/devtools.screen.bootstrap.js"
         ]
       },
       {
@@ -34155,14 +34234,6 @@
           "xkeen-ui/routes/mihomo.py",
           "xkeen-ui/services/mihomo_subscriptions.py",
           "xkeen-ui/static/js/features/mihomo_import.js"
-        ]
-      },
-      {
-        "from": "engine.mihomo",
-        "to": "tool.advanced-diagnostics",
-        "unit_count": 1,
-        "examples": [
-          "xkeen-ui/routes/mihomo_clash.py"
         ]
       },
       {
@@ -34288,60 +34359,18 @@
         ]
       },
       {
-        "from": "integration.happ",
-        "to": "tool.advanced-diagnostics",
-        "unit_count": 2,
-        "examples": [
-          "tests/test_happ_decryptor_env.py",
-          "xkeen-ui/static/js/features/devtools/happ_decryptor.js"
-        ]
-      },
-      {
         "from": "tool.advanced-diagnostics",
         "to": "core",
-        "unit_count": 67,
+        "unit_count": 46,
         "examples": [
           "xkeen-ui/routes/system_resources.py",
-          "xkeen-ui/services/devtools/__init__.py",
-          "xkeen-ui/services/devtools/common.py",
-          "xkeen-ui/services/devtools/env.py",
-          "xkeen-ui/services/devtools/logs.py",
-          "xkeen-ui/services/devtools/ui_service.py",
-          "xkeen-ui/services/router_diagnostics.py",
-          "xkeen-ui/services/system_resources.py"
-        ]
-      },
-      {
-        "from": "tool.advanced-diagnostics",
-        "to": "engine.mihomo",
-        "unit_count": 1,
-        "examples": [
-          "xkeen-ui/static/js/pages/devtools.entry.js"
-        ]
-      },
-      {
-        "from": "tool.advanced-diagnostics",
-        "to": "engine.xray",
-        "unit_count": 1,
-        "examples": [
-          "xkeen-ui/services/devtools/logs.py"
-        ]
-      },
-      {
-        "from": "tool.advanced-diagnostics",
-        "to": "integration.happ",
-        "unit_count": 2,
-        "examples": [
-          "xkeen-ui/services/devtools/env.py",
-          "xkeen-ui/static/js/pages/devtools.screen.bootstrap.js"
-        ]
-      },
-      {
-        "from": "tool.advanced-diagnostics",
-        "to": "tool.editor",
-        "unit_count": 1,
-        "examples": [
-          "xkeen-ui/static/js/pages/devtools.screen.bootstrap.js"
+          "xkeen-ui/services/system_resources_history/__init__.py",
+          "xkeen-ui/services/system_resources_history/collector.py",
+          "xkeen-ui/services/system_resources_history/event_preferences.py",
+          "xkeen-ui/services/system_resources_history/hardware.py",
+          "xkeen-ui/services/system_resources_history/persist.py",
+          "xkeen-ui/services/system_resources_history/problems.py",
+          "xkeen-ui/services/system_resources_history/store.py"
         ]
       },
       {
@@ -34451,7 +34480,7 @@
       {
         "from": "core",
         "to": "engine.mihomo",
-        "unit_count": 14,
+        "unit_count": 15,
         "examples": [
           "xkeen-ui/app_factory.py",
           "xkeen-ui/run_server.py",
@@ -34460,13 +34489,13 @@
           "xkeen-ui/services/dns_service_lifecycle.py",
           "xkeen-ui/services/memory_guard.py",
           "xkeen-ui/services/xkeen.py",
-          "xkeen-ui/static/js/pages/modules.entry.js"
+          "xkeen-ui/static/js/pages/devtools.entry.js"
         ]
       },
       {
         "from": "core",
         "to": "engine.xray",
-        "unit_count": 23,
+        "unit_count": 24,
         "examples": [
           "xkeen-ui/app.py",
           "xkeen-ui/app_factory.py",
@@ -34475,33 +34504,32 @@
           "xkeen-ui/routes/ws_streams.py",
           "xkeen-ui/services/config_exchange_local.py",
           "xkeen-ui/services/cores.py",
-          "xkeen-ui/services/memory_guard.py"
+          "xkeen-ui/services/devtools/logs.py"
         ]
       },
       {
         "from": "core",
         "to": "integration.happ",
-        "unit_count": 4,
+        "unit_count": 6,
         "examples": [
           "xkeen-ui/routes/__init__.py",
+          "xkeen-ui/services/devtools/env.py",
           "xkeen-ui/services/subscription_request_profile.py",
           "xkeen-ui/static/js/features/index.js",
+          "xkeen-ui/static/js/pages/devtools.screen.bootstrap.js",
           "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js"
         ]
       },
       {
         "from": "core",
         "to": "tool.advanced-diagnostics",
-        "unit_count": 10,
+        "unit_count": 5,
         "examples": [
           "xkeen-ui/run_server.py",
           "xkeen-ui/routes/__init__.py",
           "xkeen-ui/routes/devtools.py",
           "xkeen-ui/routes/ui_settings.py",
-          "xkeen-ui/services/router_modem_control.py",
-          "xkeen-ui/static/js/pages/panel.diagnostics.bundle.js",
-          "xkeen-ui/static/js/features/compat/devtools.js",
-          "xkeen-ui/static/js/features/feature_access.js"
+          "xkeen-ui/static/js/pages/panel.diagnostics.bundle.js"
         ]
       },
       {
@@ -34519,7 +34547,7 @@
       {
         "from": "core",
         "to": "tool.editor",
-        "unit_count": 11,
+        "unit_count": 12,
         "examples": [
           "xkeen-ui/static/js/pages/panel.editor.bundle.js",
           "xkeen-ui/static/js/pages/panel.editor.codemirror.bundle.js",
@@ -34528,7 +34556,7 @@
           "xkeen-ui/static/js/pages/panel.editor.monaco.bundle.js",
           "xkeen-ui/static/js/pages/panel.shared_compat.bundle.js",
           "xkeen-ui/static/js/pages/config_shell.shared.js",
-          "xkeen-ui/static/js/pages/modules.screen.bootstrap.js"
+          "xkeen-ui/static/js/pages/devtools.screen.bootstrap.js"
         ]
       },
       {
@@ -34592,14 +34620,6 @@
           "xkeen-ui/routes/mihomo.py",
           "xkeen-ui/services/mihomo_subscriptions.py",
           "xkeen-ui/static/js/features/mihomo_import.js"
-        ]
-      },
-      {
-        "from": "engine.mihomo",
-        "to": "tool.advanced-diagnostics",
-        "unit_count": 1,
-        "examples": [
-          "xkeen-ui/routes/mihomo_clash.py"
         ]
       },
       {
@@ -34725,59 +34745,18 @@
         ]
       },
       {
-        "from": "integration.happ",
-        "to": "tool.advanced-diagnostics",
-        "unit_count": 1,
-        "examples": [
-          "xkeen-ui/static/js/features/devtools/happ_decryptor.js"
-        ]
-      },
-      {
         "from": "tool.advanced-diagnostics",
         "to": "core",
-        "unit_count": 51,
+        "unit_count": 31,
         "examples": [
           "xkeen-ui/routes/system_resources.py",
-          "xkeen-ui/services/devtools/__init__.py",
-          "xkeen-ui/services/devtools/common.py",
-          "xkeen-ui/services/devtools/env.py",
-          "xkeen-ui/services/devtools/logs.py",
-          "xkeen-ui/services/devtools/ui_service.py",
-          "xkeen-ui/services/router_diagnostics.py",
-          "xkeen-ui/services/system_resources.py"
-        ]
-      },
-      {
-        "from": "tool.advanced-diagnostics",
-        "to": "engine.mihomo",
-        "unit_count": 1,
-        "examples": [
-          "xkeen-ui/static/js/pages/devtools.entry.js"
-        ]
-      },
-      {
-        "from": "tool.advanced-diagnostics",
-        "to": "engine.xray",
-        "unit_count": 1,
-        "examples": [
-          "xkeen-ui/services/devtools/logs.py"
-        ]
-      },
-      {
-        "from": "tool.advanced-diagnostics",
-        "to": "integration.happ",
-        "unit_count": 2,
-        "examples": [
-          "xkeen-ui/services/devtools/env.py",
-          "xkeen-ui/static/js/pages/devtools.screen.bootstrap.js"
-        ]
-      },
-      {
-        "from": "tool.advanced-diagnostics",
-        "to": "tool.editor",
-        "unit_count": 1,
-        "examples": [
-          "xkeen-ui/static/js/pages/devtools.screen.bootstrap.js"
+          "xkeen-ui/services/system_resources_history/__init__.py",
+          "xkeen-ui/services/system_resources_history/collector.py",
+          "xkeen-ui/services/system_resources_history/event_preferences.py",
+          "xkeen-ui/services/system_resources_history/hardware.py",
+          "xkeen-ui/services/system_resources_history/persist.py",
+          "xkeen-ui/services/system_resources_history/problems.py",
+          "xkeen-ui/services/system_resources_history/store.py"
         ]
       },
       {
@@ -34887,7 +34866,7 @@
       {
         "from": "core",
         "to": "engine.mihomo",
-        "unit_count": 14,
+        "unit_count": 15,
         "examples": [
           "xkeen-ui/app_factory.py",
           "xkeen-ui/run_server.py",
@@ -34896,13 +34875,13 @@
           "xkeen-ui/services/dns_service_lifecycle.py",
           "xkeen-ui/services/memory_guard.py",
           "xkeen-ui/services/xkeen.py",
-          "xkeen-ui/static/js/pages/modules.entry.js"
+          "xkeen-ui/static/js/pages/devtools.entry.js"
         ]
       },
       {
         "from": "core",
         "to": "engine.xray",
-        "unit_count": 23,
+        "unit_count": 24,
         "examples": [
           "xkeen-ui/app.py",
           "xkeen-ui/app_factory.py",
@@ -34911,33 +34890,32 @@
           "xkeen-ui/routes/ws_streams.py",
           "xkeen-ui/services/config_exchange_local.py",
           "xkeen-ui/services/cores.py",
-          "xkeen-ui/services/memory_guard.py"
+          "xkeen-ui/services/devtools/logs.py"
         ]
       },
       {
         "from": "core",
         "to": "integration.happ",
-        "unit_count": 4,
+        "unit_count": 6,
         "examples": [
           "xkeen-ui/routes/__init__.py",
+          "xkeen-ui/services/devtools/env.py",
           "xkeen-ui/services/subscription_request_profile.py",
           "xkeen-ui/static/js/features/index.js",
+          "xkeen-ui/static/js/pages/devtools.screen.bootstrap.js",
           "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js"
         ]
       },
       {
         "from": "core",
         "to": "tool.advanced-diagnostics",
-        "unit_count": 10,
+        "unit_count": 5,
         "examples": [
           "xkeen-ui/run_server.py",
           "xkeen-ui/routes/__init__.py",
           "xkeen-ui/routes/devtools.py",
           "xkeen-ui/routes/ui_settings.py",
-          "xkeen-ui/services/router_modem_control.py",
-          "xkeen-ui/static/js/pages/panel.diagnostics.bundle.js",
-          "xkeen-ui/static/js/features/compat/devtools.js",
-          "xkeen-ui/static/js/features/feature_access.js"
+          "xkeen-ui/static/js/pages/panel.diagnostics.bundle.js"
         ]
       },
       {
@@ -34955,7 +34933,7 @@
       {
         "from": "core",
         "to": "tool.editor",
-        "unit_count": 11,
+        "unit_count": 12,
         "examples": [
           "xkeen-ui/static/js/pages/panel.editor.bundle.js",
           "xkeen-ui/static/js/pages/panel.editor.codemirror.bundle.js",
@@ -34964,7 +34942,7 @@
           "xkeen-ui/static/js/pages/panel.editor.monaco.bundle.js",
           "xkeen-ui/static/js/pages/panel.shared_compat.bundle.js",
           "xkeen-ui/static/js/pages/config_shell.shared.js",
-          "xkeen-ui/static/js/pages/modules.screen.bootstrap.js"
+          "xkeen-ui/static/js/pages/devtools.screen.bootstrap.js"
         ]
       },
       {
@@ -34998,7 +34976,7 @@
       {
         "from": "core",
         "to": "engine.mihomo",
-        "unit_count": 18,
+        "unit_count": 19,
         "examples": [
           "xkeen-ui/app_factory.py",
           "xkeen-ui/run_server.py",
@@ -35013,7 +34991,7 @@
       {
         "from": "core",
         "to": "engine.xray",
-        "unit_count": 35,
+        "unit_count": 36,
         "examples": [
           "xkeen-ui/app.py",
           "xkeen-ui/app_factory.py",
@@ -35022,36 +35000,35 @@
           "xkeen-ui/routes/ws_streams.py",
           "xkeen-ui/services/config_exchange_local.py",
           "xkeen-ui/services/cores.py",
-          "xkeen-ui/services/memory_guard.py"
+          "xkeen-ui/services/devtools/logs.py"
         ]
       },
       {
         "from": "core",
         "to": "integration.happ",
-        "unit_count": 7,
+        "unit_count": 9,
         "examples": [
           "xkeen-ui/routes/__init__.py",
+          "xkeen-ui/services/devtools/env.py",
           "xkeen-ui/services/subscription_request_profile.py",
           "tests/test_addons_refresh_on_update.py",
           "tests/test_check_keys_upstream.py",
           "tests/test_module_backend_gates.py",
           "xkeen-ui/static/js/features/index.js",
-          "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js"
+          "xkeen-ui/static/js/pages/devtools.screen.bootstrap.js"
         ]
       },
       {
         "from": "core",
         "to": "tool.advanced-diagnostics",
-        "unit_count": 14,
+        "unit_count": 6,
         "examples": [
           "xkeen-ui/run_server.py",
           "xkeen-ui/routes/__init__.py",
           "xkeen-ui/routes/devtools.py",
           "xkeen-ui/routes/ui_settings.py",
-          "xkeen-ui/services/router_modem_control.py",
-          "tests/test_devtools_env_whitelist.py",
-          "tests/test_devtools_log_targets.py",
-          "tests/test_panel_service.py"
+          "tests/test_resource_event_preferences.py",
+          "xkeen-ui/static/js/pages/panel.diagnostics.bundle.js"
         ]
       },
       {
@@ -35072,7 +35049,7 @@
       {
         "from": "core",
         "to": "tool.editor",
-        "unit_count": 11,
+        "unit_count": 12,
         "examples": [
           "xkeen-ui/static/js/pages/panel.editor.bundle.js",
           "xkeen-ui/static/js/pages/panel.editor.codemirror.bundle.js",
@@ -35081,7 +35058,7 @@
           "xkeen-ui/static/js/pages/panel.editor.monaco.bundle.js",
           "xkeen-ui/static/js/pages/panel.shared_compat.bundle.js",
           "xkeen-ui/static/js/pages/config_shell.shared.js",
-          "xkeen-ui/static/js/pages/modules.screen.bootstrap.js"
+          "xkeen-ui/static/js/pages/devtools.screen.bootstrap.js"
         ]
       },
       {
@@ -35181,7 +35158,7 @@
         {
           "from": "core",
           "to": "engine.mihomo",
-          "unit_count": 14,
+          "unit_count": 15,
           "examples": [
             "xkeen-ui/app_factory.py",
             "xkeen-ui/run_server.py",
@@ -35190,13 +35167,13 @@
             "xkeen-ui/services/dns_service_lifecycle.py",
             "xkeen-ui/services/memory_guard.py",
             "xkeen-ui/services/xkeen.py",
-            "xkeen-ui/static/js/pages/modules.entry.js"
+            "xkeen-ui/static/js/pages/devtools.entry.js"
           ]
         },
         {
           "from": "core",
           "to": "engine.xray",
-          "unit_count": 23,
+          "unit_count": 24,
           "examples": [
             "xkeen-ui/app.py",
             "xkeen-ui/app_factory.py",
@@ -35205,33 +35182,32 @@
             "xkeen-ui/routes/ws_streams.py",
             "xkeen-ui/services/config_exchange_local.py",
             "xkeen-ui/services/cores.py",
-            "xkeen-ui/services/memory_guard.py"
+            "xkeen-ui/services/devtools/logs.py"
           ]
         },
         {
           "from": "core",
           "to": "integration.happ",
-          "unit_count": 4,
+          "unit_count": 6,
           "examples": [
             "xkeen-ui/routes/__init__.py",
+            "xkeen-ui/services/devtools/env.py",
             "xkeen-ui/services/subscription_request_profile.py",
             "xkeen-ui/static/js/features/index.js",
+            "xkeen-ui/static/js/pages/devtools.screen.bootstrap.js",
             "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js"
           ]
         },
         {
           "from": "core",
           "to": "tool.advanced-diagnostics",
-          "unit_count": 10,
+          "unit_count": 5,
           "examples": [
             "xkeen-ui/run_server.py",
             "xkeen-ui/routes/__init__.py",
             "xkeen-ui/routes/devtools.py",
             "xkeen-ui/routes/ui_settings.py",
-            "xkeen-ui/services/router_modem_control.py",
-            "xkeen-ui/static/js/pages/panel.diagnostics.bundle.js",
-            "xkeen-ui/static/js/features/compat/devtools.js",
-            "xkeen-ui/static/js/features/feature_access.js"
+            "xkeen-ui/static/js/pages/panel.diagnostics.bundle.js"
           ]
         },
         {
@@ -35249,7 +35225,7 @@
         {
           "from": "core",
           "to": "tool.editor",
-          "unit_count": 11,
+          "unit_count": 12,
           "examples": [
             "xkeen-ui/static/js/pages/panel.editor.bundle.js",
             "xkeen-ui/static/js/pages/panel.editor.codemirror.bundle.js",
@@ -35258,7 +35234,7 @@
             "xkeen-ui/static/js/pages/panel.editor.monaco.bundle.js",
             "xkeen-ui/static/js/pages/panel.shared_compat.bundle.js",
             "xkeen-ui/static/js/pages/config_shell.shared.js",
-            "xkeen-ui/static/js/pages/modules.screen.bootstrap.js"
+            "xkeen-ui/static/js/pages/devtools.screen.bootstrap.js"
           ]
         },
         {
@@ -35301,6 +35277,7 @@
         "terminal-lazy",
         "file-manager-lazy",
         "devtools-page",
+        "diagnostics-panel",
         "xkeen-page",
         "mihomo-generator-page",
         "modules-page"
@@ -35325,8 +35302,8 @@
           "size_bytes": 1008333
         },
         "tool.advanced-diagnostics": {
-          "unit_count": 67,
-          "size_bytes": 917075
+          "unit_count": 46,
+          "size_bytes": 570930
         }
       },
       "next_stage": "Этапы 4, 5 и 6."

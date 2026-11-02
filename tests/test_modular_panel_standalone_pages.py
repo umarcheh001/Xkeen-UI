@@ -66,7 +66,7 @@ def test_standalone_pages_never_fail_for_a_module_set(name, tmp_path):
         "/": 200,
         "/xkeen": 200,
         "/mihomo_generator": 200 if _has(module_ids, "engine.mihomo") else 404,
-        "/devtools": 200 if _has(module_ids, "tool.advanced-diagnostics") else 404,
+        "/devtools": 200,
         # The standalone backups page is retired; its card lives in routing.
         "/backups": 404,
     }
@@ -74,10 +74,9 @@ def test_standalone_pages_never_fail_for_a_module_set(name, tmp_path):
 
 
 @pytest.mark.parametrize("name", sorted(MODULE_SETS))
-def test_standalone_pages_link_to_devtools_only_when_it_is_registered(name, tmp_path):
+def test_standalone_pages_always_link_to_devtools(name, tmp_path):
     module_ids = MODULE_SETS[name]
     client = _app(module_ids, tmp_path).test_client()
-    has_devtools = _has(module_ids, "tool.advanced-diagnostics")
 
     for path in ("/xkeen", "/mihomo_generator"):
         response = client.get(path)
@@ -85,7 +84,7 @@ def test_standalone_pages_link_to_devtools_only_when_it_is_registered(name, tmp_
             continue
         html = response.get_data(as_text=True)
         links = re.findall(r'href="/devtools[^"]*"', html)
-        assert bool(links) == has_devtools, f"{name}: {path}"
+        assert links, f"{name}: {path}"
         # The legacy update indicator is gone from every header: updates are
         # announced by the badge of the Modules manager item.
         assert 'id="xk-update-link"' not in html, f"{name}: {path}"
@@ -97,8 +96,7 @@ def test_devtools_shows_the_link_utility_card_only_with_its_module(name, tmp_pat
     # page drew dead buttons and asked for a status that answered 404.
     module_ids = MODULE_SETS[name]
     response = _app(module_ids, tmp_path).test_client().get("/devtools")
-    if response.status_code != 200:
-        return
+    assert response.status_code == 200
     html = response.get_data(as_text=True)
     assert ('id="dt-happ-decryptor-card"' in html) == _has(module_ids, "integration.happ")
     assert 'id="dt-update-card"' in html

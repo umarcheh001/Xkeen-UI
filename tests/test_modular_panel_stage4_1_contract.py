@@ -79,7 +79,6 @@ def test_stage4_1_contract_covers_shell_screens_modals_and_profiles(tmp_path):
         if entry.owners == ("tool.advanced-diagnostics",)
     ] == [
         "panel/slots/diagnostics_summary.html",
-        "panel/slots/diagnostics_actions.html",
         "panel/modals/diagnostics.html",
     ]
     assert [

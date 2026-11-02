@@ -119,6 +119,10 @@ def create_devtools_blueprint(
                 payload["ui_process"] = get_memory_guard_status()
             except Exception:  # noqa: BLE001 - optional process telemetry
                 pass
+        # The thresholds belong to the diagnostics module: without it, or with
+        # its files gone, the header stays neutral.
+        payload["zones"] = {}
+        if include_advanced:
             try:
                 from services.system_resources_history.zones import header_zones
 
@@ -131,26 +135,6 @@ def create_devtools_blueprint(
         response = jsonify(payload)
         response.headers["Cache-Control"] = "no-store"
         return response, 200
-
-    @bp.before_request
-    def _gate_optional_advanced_routes():
-        if include_advanced:
-            return None
-        path = request.path
-        advanced_prefixes = (
-            "/api/devtools/env",
-            "/api/devtools/branding",
-            "/api/devtools/ui/",
-        )
-        if path.startswith(advanced_prefixes):
-            return jsonify(
-                {
-                    "ok": False,
-                    "code": "module_not_enabled",
-                    "module_id": "tool.advanced-diagnostics",
-                }
-            ), 404
-        return None
 
     @bp.get("/api/devtools/env")
     def api_devtools_env_get() -> Any:

@@ -186,8 +186,6 @@ def ws_xray_logs2():
 @ws_streams_bp.route("/ws/devtools-logs")
 def ws_devtools_logs():
     """WebSocket tail -f for DevTools logs (legacy payloads)."""
-    if not _module_active("tool.advanced-diagnostics"):
-        return "Not Found", 404
     from services import devtools as _svc_devtools
     from services.ws_tail import stream_devtools_logs_ws
 

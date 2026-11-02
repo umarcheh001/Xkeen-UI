@@ -241,7 +241,7 @@ def test_advanced_diagnostics_routes_are_not_exposed_when_optional_module_is_off
     client = app.test_client()
 
     assert client.get("/api/devtools/logs").status_code == 200
-    assert client.get("/api/devtools/env").status_code == 404
+    assert client.get("/api/devtools/env").status_code == 200  # the DevTools page is core
     assert client.get("/api/system/resources").status_code in {200, 503}
     assert client.get("/api/system/processes").status_code == 404
 

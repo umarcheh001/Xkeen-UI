@@ -21,10 +21,10 @@ test(`Modules screen shows the update channel in its summary: ${PROFILE}`, async
   await page.goto('/modules');
 
   // The summary is the same as the DevTools card: the channel is switched in
-  // both, whether DevTools is installed or not.
+  // both, and DevTools is there in every module set.
   const channel = page.locator('.modules-summary .xk-summary-switch');
   await expect(channel).toHaveCount(1);
-  await expect(page.locator('body')).toHaveAttribute('data-xk-devtools-available', PROFILE === 'full' ? '1' : '0');
+  await expect(page.locator('body')).toHaveAttribute('data-xk-devtools-available', '1');
 
   {
     const prerelease = channel.locator('button[data-channel="prerelease"]');

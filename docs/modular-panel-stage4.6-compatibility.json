@@ -47,7 +47,7 @@
     {
       "collection": "header_action_partials",
       "owners": [
-        "tool.advanced-diagnostics"
+        "core"
       ],
       "template": "panel/slots/diagnostics_actions.html"
     },

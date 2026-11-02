@@ -148,12 +148,12 @@ def test_minimal_profiles_still_leave_optional_modules_out(installed):
         "xray-minimal": ["pages/panel.mihomo.bundle.js", "features/mihomo_panel.js",
                          "features/mihomo_generator.js", "pages/mihomo_generator.entry.js",
                          "pages/file_manager.lazy.entry.js", "pages/panel.editor.monaco.bundle.js",
-                         "pages/backups.entry.js", "pages/devtools.entry.js",
+                         "pages/backups.entry.js", "features/resource_monitor.js",
                          "features/backups.js"],
         "mihomo-minimal": ["pages/panel.routing.bundle.js", "features/xray_logs.js",
                            "features/routing_templates.js", "pages/file_manager.lazy.entry.js",
                            "pages/panel.editor.monaco.bundle.js", "pages/backups.entry.js",
-                           "pages/devtools.entry.js", "features/backups.js"],
+                           "features/resource_monitor.js", "features/backups.js"],
         "full": [],
     }[profile]
     for name in expected_absent:

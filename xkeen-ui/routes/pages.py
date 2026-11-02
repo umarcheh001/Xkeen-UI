@@ -75,7 +75,7 @@ PANEL_COMPOSITION: tuple[PanelCompositionEntry, ...] = (
     PanelCompositionEntry("header_badge_partials", ("engine.xray",), "panel/slots/xray_badge.html"),
     PanelCompositionEntry("header_summary_partials", ("core",), "panel/slots/resource_monitor_unavailable.html"),
     PanelCompositionEntry("header_summary_partials", ("tool.advanced-diagnostics",), "panel/slots/diagnostics_summary.html"),
-    PanelCompositionEntry("header_action_partials", ("tool.advanced-diagnostics",), "panel/slots/diagnostics_actions.html"),
+    PanelCompositionEntry("header_action_partials", ("core",), "panel/slots/diagnostics_actions.html"),
     # The backup API belongs to tool.backups, so the routing screen gets its
     # backup card and buttons only together with that module.
     PanelCompositionEntry("routing_inbounds_action_partials", ("engine.xray", "tool.backups"), "panel/slots/backups_inbounds_actions.html"),
@@ -381,8 +381,7 @@ def _detect_panel_core_ui(active_module_ids: set[str] | None = None) -> dict[str
             supported_sections.append("commands")
         if has_files:
             supported_sections.append("files")
-        if has_diagnostics:
-            supported_sections.append("devtools")
+        supported_sections.append("devtools")
         supported_sections.append("donate")
 
         effective_sections = _effective_panel_sections(supported_sections)
@@ -601,18 +600,16 @@ def register_pages_routes(
             except Exception:
                 return render_template("mihomo_generator.html")
 
-    if active_module_ids is None or "tool.advanced-diagnostics" in active_module_ids:
-
-        @app.get("/devtools")
-        def devtools_page():
-            # The card's API is registered only together with its module.
-            page_ctx = {
-                "devtools_link_utility_card": active_module_ids is None
-                or "integration.happ" in active_module_ids,
-            }
-            # Avoid stale cached HTML holding on to old static asset versions
-            try:
-                resp = make_response(render_template("devtools.html", **page_ctx))
-                return _no_cache(resp)
-            except Exception:
-                return render_template("devtools.html", **page_ctx)
+    @app.get("/devtools")
+    def devtools_page():
+        # The card's API is registered only together with its module.
+        page_ctx = {
+            "devtools_link_utility_card": active_module_ids is None
+            or "integration.happ" in active_module_ids,
+        }
+        # Avoid stale cached HTML holding on to old static asset versions
+        try:
+            resp = make_response(render_template("devtools.html", **page_ctx))
+            return _no_cache(resp)
+        except Exception:
+            return render_template("devtools.html", **page_ctx)

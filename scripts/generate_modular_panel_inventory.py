@@ -76,7 +76,7 @@ MODULE_SPECS: dict[str, dict[str, Any]] = {
     },
     "tool.advanced-diagnostics": {
         "name": "Расширенная диагностика",
-        "description": "DevTools, ресурсы, router diagnostics и служебные журналы.",
+        "description": "Окно диагностики роутера: графики, история и события.",
         "depends_on": ["core"],
         "system_requirements": ["ndmc (router diagnostics optional)"],
         "removable": True,
@@ -92,6 +92,7 @@ FRONTEND_ROOTS: dict[str, str] = {
     "terminal-lazy": "static/js/pages/terminal.lazy.entry.js",
     "file-manager-lazy": "static/js/pages/file_manager.lazy.entry.js",
     "devtools-page": "static/js/pages/devtools.entry.js",
+    "diagnostics-panel": "static/js/pages/panel.diagnostics.bundle.js",
     "xkeen-page": "static/js/pages/xkeen.entry.js",
     "mihomo-generator-page": "static/js/pages/mihomo_generator.entry.js",
     "modules-page": "static/js/pages/modules.entry.js",
@@ -431,19 +432,16 @@ class ModularPanelInventoryGenerator:
             or "mihomo_backups.py" in p
         ):
             module_id = "tool.backups"
-        elif p.endswith("/routes/devtools.py"):
-            # Stable update, core.log and recovery endpoints are registered
-            # unconditionally; only the optional DevTools UI stays removable.
-            module_id = "core"
         elif (
-            "/services/devtools/" in p
-            or "/features/devtools" in p
-            or "/templates/devtools.html" in p
-            or "/pages/devtools." in p
-            or "resource_monitor" in p
-            or "router_diagnostics" in p
-            or "system_resources" in p
+            "devtools" in p
+            or p.endswith("/services/system_resources.py")
+            or p.endswith("/services/system_resources_history/sensors.py")
+            or p.endswith("/services/router_diagnostics.py")
+            or p.endswith("/templates/panel/slots/resource_monitor_unavailable.html")
         ):
+            # The DevTools page and what it needs stay without the module.
+            module_id = "core"
+        elif "resource_monitor" in p or "system_resources" in p:
             module_id = "tool.advanced-diagnostics"
         elif self._is_editor_path(p):
             module_id = "tool.editor"
@@ -976,7 +974,7 @@ class ModularPanelInventoryGenerator:
             {
                 "id": "devtools",
                 "route": "/devtools",
-                "module_id": "tool.advanced-diagnostics",
+                "module_id": "core",
                 "template": "xkeen-ui/templates/devtools.html",
                 "entry": "xkeen-ui/static/js/pages/devtools.entry.js",
             },
@@ -1011,7 +1009,7 @@ class ModularPanelInventoryGenerator:
             return "tool.backups"
         if any(token in value for token in ("editor", "diff", "schema", "prettier", "monaco")):
             return "tool.editor"
-        if any(token in value for token in ("devtool", "diagnostic", "resource")):
+        if any(token in value for token in ("diagnostic", "resource")):
             return "tool.advanced-diagnostics"
         if any(
             token in value

@@ -110,7 +110,10 @@ _MODULE_INSTALL_MARKERS: dict[str, tuple[str, ...]] = {
         "xkeen-ui/routes/happ_decryptor.py",
         "xkeen-ui/services/happ_decryptor/__init__.py",
     ),
-    "tool.advanced-diagnostics": ("xkeen-ui/routes/devtools.py", "xkeen-ui/templates/devtools.html"),
+    "tool.advanced-diagnostics": (
+        "xkeen-ui/routes/system_resources.py",
+        "xkeen-ui/static/js/features/resource_monitor.js",
+    ),
 }
 
 
@@ -196,8 +199,8 @@ MODULE_DEFINITIONS: tuple[ModuleDefinition, ...] = (
         removable=False,
         can_disable=False,
         requires_restart=False,
-        frontend_bundles=("panel-core",),
-        navigation_views=("xkeen",),
+        frontend_bundles=("panel-core", "devtools-page"),
+        navigation_views=("xkeen", "devtools"),
     ),
     ModuleDefinition(
         id="engine.xray",
@@ -308,7 +311,7 @@ MODULE_DEFINITIONS: tuple[ModuleDefinition, ...] = (
     ModuleDefinition(
         id="tool.advanced-diagnostics",
         name="Расширенная диагностика",
-        description="Страница инструментов: состояние роутера, загрузка, служебные журналы.",
+        description="Окно диагностики роутера: графики, история и события.",
         version=REGISTRY_VERSION,
         dependencies=("core",),
         conflicts=(),
@@ -317,8 +320,8 @@ MODULE_DEFINITIONS: tuple[ModuleDefinition, ...] = (
         removable=True,
         can_disable=True,
         requires_restart=True,
-        frontend_bundles=("devtools-page",),
-        navigation_views=("devtools",),
+        frontend_bundles=("diagnostics-panel",),
+        navigation_views=(),
     ),
 )
 

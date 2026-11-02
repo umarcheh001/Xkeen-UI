@@ -225,8 +225,8 @@
         },
         {
           "id": "devtools",
-          "module_id": "tool.advanced-diagnostics",
-          "gate": "has_diagnostics"
+          "module_id": "core",
+          "gate": "always"
         },
         {
           "id": "donate",
@@ -1736,6 +1736,7 @@
         "routing",
         "xkeen",
         "xray-logs",
+        "devtools",
         "donate"
       ],
       "expected_modal_ids": [
@@ -1819,6 +1820,7 @@
         "mihomo",
         "xkeen",
         "mihomo-generator",
+        "devtools",
         "donate"
       ],
       "expected_modal_ids": [

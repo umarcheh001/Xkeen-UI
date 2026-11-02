@@ -40,6 +40,8 @@ def _source(root: Path) -> Path:
         "services/happ_decryptor/__init__.py": "# happ service",
         "routes/devtools.py": "# devtools route",
         "templates/devtools.html": "devtools",
+        "routes/system_resources.py": "# diagnostics route",
+        "static/js/features/resource_monitor.js": "diagnostics window",
         "static/js/pages/panel.routing.bundle.js": "xray bundle",
         "static/js/pages/panel.mihomo.bundle.js": "mihomo bundle",
         "static/js/pages/codemirror6.shared.js": "light editor",

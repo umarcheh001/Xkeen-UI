@@ -241,8 +241,8 @@ SHELL_BOUNDARIES: tuple[dict[str, Any], ...] = (
             },
             {
                 "id": "devtools",
-                "module_id": "tool.advanced-diagnostics",
-                "gate": "has_diagnostics",
+                "module_id": "core",
+                "gate": "always",
             },
             {"id": "donate", "module_id": "core", "gate": "always"},
         ],
@@ -489,8 +489,7 @@ def build_contract(root: Path) -> dict[str, Any]:
         expected_nav_sections = list(expected_views)
         if "engine.mihomo" in active:
             expected_nav_sections.append("mihomo-generator")
-        if "tool.advanced-diagnostics" in active:
-            expected_nav_sections.append("devtools")
+        expected_nav_sections.append("devtools")
         expected_nav_sections.append("donate")
         forbidden_views = [
             item["id"] for item in views if item["module_id"] not in active

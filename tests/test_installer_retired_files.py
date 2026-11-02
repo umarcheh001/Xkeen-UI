@@ -73,6 +73,8 @@ def _source(root: Path, retired: list[str] | None) -> Path:
         "services/happ_decryptor/__init__.py": "# happ service",
         "routes/devtools.py": "# devtools route",
         "templates/devtools.html": "devtools",
+        "routes/system_resources.py": "# diagnostics route",
+        "static/js/features/resource_monitor.js": "diagnostics window",
         "static/js/pages/codemirror6.shared.js": "light editor",
     }
     for name, data in files.items():
