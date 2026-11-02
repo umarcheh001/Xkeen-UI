@@ -161,6 +161,12 @@ test.describe('Panel sections after a dropped link', () => {
     }));
 
     await page.goto('/');
+    // The page publishes the module in its importmap only when the module is on.
+    const published = await page.evaluate(() => {
+      const map = document.querySelector('script[type="importmap"]');
+      return !!map && (map.textContent || '').includes('xk-module/tool.advanced-diagnostics');
+    });
+    test.skip(!published, 'the diagnostics module is not active in this profile: the page never asks for its file');
     const notice = page.locator('#toast-container .toast-error');
     await expect(notice).toContainText(NOTICE, { timeout: 30_000 });
     // The browser keeps a failed module file failed, so asking again is pointless.

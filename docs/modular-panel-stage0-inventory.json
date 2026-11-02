@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 648,
-      "size_bytes": 8717360,
+      "size_bytes": 8717782,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -13591,7 +13591,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/panel_module_load_recovery.spec.mjs",
-      "size_bytes": 9737,
+      "size_bytes": 10159,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
