@@ -903,10 +903,14 @@ class ModuleLifecycleService:
             client = self._catalog_factory(version, architecture)
             # A local build only looks and is offered no update: the release
             # catalog alone. Operations take the newest entry of each module.
+            # The screen and the plans do not wait again for a GitHub that
+            # could not be reached a moment ago: they answer from the signed
+            # copy. The executor asks without patience when it lays an archive
+            # and refuses a plan whose entry no longer matches.
             snapshot = (
                 client.get_release_catalog(version)
                 if read_only
-                else client.get_effective_catalog(version)
+                else client.get_effective_catalog(version, patient=True)
             )
         except Exception as error:  # domain adapters expose stable codes
             if getattr(error, "code", None):

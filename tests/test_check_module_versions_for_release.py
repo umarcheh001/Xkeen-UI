@@ -128,3 +128,14 @@ def test_main_skips_unbump_check_with_note_when_old_versions_missing(monkeypatch
     monkeypatch.setattr(checker, "_versions_at", lambda root, ref: None)
     assert checker.main(["--tag", "v3.0.3", "--root", str(tmp_path)]) == 0
     assert "пропущена" in capsys.readouterr().out
+
+
+def test_stable_before_beta_on_one_commit_of_ancestors(tmp_path):
+    repo = _git_repo(tmp_path, True)
+    subprocess.run(["git", "tag", "v1.0.0-beta.3"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "next"],
+        cwd=repo, check=True, capture_output=True,
+    )
+    subprocess.run(["git", "tag", "v1.0.1-beta.1"], cwd=repo, check=True, capture_output=True)
+    assert checker._ancestor_panel_tags(repo, "v1.0.1-beta.1")[:2] == ["v1.0.0", "v1.0.0-beta.3"]

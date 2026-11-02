@@ -27,6 +27,9 @@ jobs:
         with:
           # Тег панели V ищется среди предков, проверки сравнивают с ним историю.
           fetch-depth: 0
+          # Токен не остаётся в .git/config на время npm ci и тестов: git по сети
+          # дальше не ходит, а gh берёт GH_TOKEN из окружения своего шага.
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v6

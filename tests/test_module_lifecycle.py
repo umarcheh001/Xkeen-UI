@@ -1394,3 +1394,40 @@ def test_tiles_and_available_tab_agree_on_module_updates(tmp_path):
 
     assert offers == available
     assert set(offers) == {"engine.xray", "tool.editor"}
+
+
+# --- GitHub недоступен: экран и планы не ждут его каждый раз ---------------------
+
+
+def test_screen_and_plans_do_not_wait_for_unreachable_github_again(tmp_path):
+    from services.module_catalog_client import ModuleCatalogClient
+
+    panel = make_panel(tmp_path, version="3.1.0")
+    release = make_release("3.1.0")
+    publish_module_updates(release, {"engine.xray": "1.0.1"})
+    service, recorder = make_service(panel, release)
+    clock = [1_000_000.0]
+    recorder.client = ModuleCatalogClient(
+        panel.state,
+        transport=release.transport,
+        keyring=release.keyring,
+        platform_architecture=ARCHITECTURE,
+        core_version="3.1.0",
+        now=lambda: clock[0],
+    )
+    updates_url = official_release_asset_url("3.1.0", "module-updates.json")
+    assert service.available()["update_stale_reason"] is None
+
+    # Копия устарела, а GitHub не отвечает: один запрос с ожиданием.
+    clock[0] += 2 * 24 * 60 * 60
+    release.transport.fail[updates_url] = CatalogTransportError("catalog_transport_timeout", "timed out")
+    before = release.transport.calls.count(updates_url)
+    assert service.available()["update_stale_reason"] == "catalog_transport_timeout"
+    assert release.transport.calls.count(updates_url) == before + 1
+
+    # Следующие открытия экрана и планы отвечают копией, не спрашивая снова.
+    modules = {item["id"]: item for item in service.available()["modules"]}
+    assert modules["engine.xray"]["update_available"] is True
+    assert service.plan("repair", "engine.xray")["applicable"] is True
+    assert service.plan("update", "engine.xray")["applicable"] is True
+    assert release.transport.calls.count(updates_url) == before + 1

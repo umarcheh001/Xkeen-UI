@@ -102,10 +102,34 @@ def find_panel_tag(tags_reachable: Sequence[str]) -> str:
     raise ValueError("среди предков нет тега панели v*")
 
 
-def _panel_key(tag: str) -> tuple[tuple[int, int, int], int]:
+def _panel_key(tag: str) -> tuple[tuple[int, int, int], int, int]:
+    """Order of panel tags: a stable X.Y.Z is above every beta of X.Y.Z."""
+
     match = PANEL_TAG_RE.match(tag)
     assert match
-    return (int(match.group(1)), int(match.group(2)), int(match.group(3))), int(match.group(4) or 0)
+    base = (int(match.group(1)), int(match.group(2)), int(match.group(3)))
+    beta = match.group(4)
+    return base, 0 if beta else 1, int(beta or 0)
+
+
+def check_earlier_releases_included(
+    tag: str, panel_tag: str, panel_of: Mapping[str, str | None], included: Collection[str]
+) -> list[str]:
+    """Every issued release of the module from the same panel tag is an ancestor of HEAD.
+
+    `panel_of` maps the module's issued tags to their nearest panel ancestor,
+    `included` holds the ones that are ancestors of HEAD.
+    """
+
+    errors: list[str] = []
+    for other in sorted(panel_of):
+        if other == tag or panel_of[other] != panel_tag or other in included:
+            continue
+        errors.append(
+            f"выпуск {other} от той же панели {panel_tag} не входит в историю {tag}: "
+            f"ветку выпуска надо отрезать от {other}, иначе его правка пропадёт"
+        )
+    return errors
 
 
 def check_latest_in_channel(panel_tag: str, published: Sequence[str]) -> list[str]:
@@ -254,14 +278,38 @@ def _git(root: Path, *args: str) -> list[str]:
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
 
-def _ancestor_tags(root: Path) -> list[str]:
+def _ancestor_tags(root: Path, ref: str = "HEAD") -> list[str]:
     tags: list[str] = []
-    for line in _git(root, "log", "--simplify-by-decoration", "--format=%D", "HEAD"):
+    for line in _git(root, "log", "--simplify-by-decoration", "--format=%D", ref):
         on_commit = [part.strip()[5:] for part in line.split(",") if part.strip().startswith("tag: ")]
         # Several panel tags on one commit: the newest counts as the nearest.
-        on_commit.sort(key=lambda tag: _panel_key(tag) if PANEL_TAG_RE.match(tag) else ((0, 0, 0), 0), reverse=True)
+        on_commit.sort(key=lambda tag: _panel_key(tag) if PANEL_TAG_RE.match(tag) else ((0, 0, 0), 0, 0), reverse=True)
         tags.extend(on_commit)
     return tags
+
+
+def _is_ancestor(root: Path, ref: str, of: str = "HEAD") -> bool:
+    result = subprocess.run(["git", "merge-base", "--is-ancestor", ref, of], cwd=root, capture_output=True)
+    return result.returncode == 0
+
+
+def _earlier_releases(root: Path, module_id: str, issued: Sequence[str]) -> tuple[dict[str, str | None], set[str]]:
+    panel_of: dict[str, str | None] = {}
+    included: set[str] = set()
+    for other in issued:
+        try:
+            other_id, _ = parse_module_tag(other)
+        except ValueError:
+            continue
+        if other_id != module_id:
+            continue
+        try:
+            panel_of[other] = find_panel_tag(_ancestor_tags(root, f"refs/tags/{other}"))
+        except ValueError:
+            panel_of[other] = None
+        if _is_ancestor(root, f"refs/tags/{other}"):
+            included.add(other)
+    return panel_of, included
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -290,13 +338,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     if errors:
         return stop(errors)
     versions = json.loads((root / "module-versions.json").read_text(encoding="utf-8"))
-    errors = check_tag_version(args.tag, versions, _git(root, "tag", "-l", "module-*"))
+    issued = _git(root, "tag", "-l", "module-*")
+    errors = check_tag_version(args.tag, versions, issued)
     if errors:
         return stop(errors)
     try:
         panel_tag = find_panel_tag(_ancestor_tags(root))
     except ValueError as error:
         return stop([str(error)])
+    panel_of, included = _earlier_releases(root, module_id, issued)
+    errors = check_earlier_releases_included(args.tag, panel_tag, panel_of, included)
+    if errors:
+        return stop(errors)
     if args.published_file:
         published = args.published_file.read_text(encoding="utf-8").split()
     else:

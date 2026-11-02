@@ -211,3 +211,9 @@ def test_workflow_order_and_release_checks():
     assert ".sha256" in publish[0] and "--clobber" in publish[0]
     assert publish[1].endswith("module-updates.json --clobber")
     assert publish[2].endswith("module-updates.json.sig --clobber")
+
+
+def test_checkout_does_not_keep_the_token_in_git_config():
+    checkout = _steps()["Checkout repository"]["with"]
+    assert checkout["persist-credentials"] is False
+    assert checkout["fetch-depth"] == 0

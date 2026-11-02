@@ -274,3 +274,79 @@ def test_main_end_to_end_on_a_temp_repo(tmp_path, monkeypatch, capsys):
     _git_run(repo, "commit", "-q", "-m", "core change")
     assert main(args) == 2
     assert "ВЫПУСК ПАНЕЛИ" in capsys.readouterr().err
+
+
+# ---- стабильный выпуск и беты на одном коммите -----------------------------
+
+def test_stable_ranks_above_its_own_betas():
+    from scripts.check_module_release import _panel_key
+
+    assert _panel_key("v3.1.0") > _panel_key("v3.1.0-beta.3")
+    assert _panel_key("v3.1.0-beta.10") > _panel_key("v3.1.0-beta.9")
+    assert _panel_key("v3.1.1-beta.1") > _panel_key("v3.1.0")
+
+
+def test_stable_and_beta_on_one_commit_choose_stable_as_base(tmp_path):
+    from scripts.check_module_release import _ancestor_tags
+
+    repo = _make_repo(tmp_path)
+    _git_run(repo, "tag", "v3.0.3")
+    assert find_panel_tag(_ancestor_tags(repo)) == "v3.0.3"
+
+
+# ---- второй выпуск модуля от той же панели ----------------------------------
+
+def _release_commit(repo: Path, version: str, content: bytes, tag: str | None = None) -> None:
+    (repo / "module-versions.json").write_text(json.dumps({MODULE: version}), encoding="utf-8")
+    (repo / "xkeen-ui" / "files.py").write_bytes(content)
+    _git_run(repo, "add", ".")
+    _git_run(repo, "commit", "-q", "-m", f"module {version}")
+    if tag:
+        _git_run(repo, "tag", tag)
+
+
+def test_second_release_on_one_panel_must_contain_the_first(tmp_path, monkeypatch, capsys):
+    from scripts.check_module_release import main
+
+    repo = _make_repo(tmp_path)
+    archive = _base_archive(tmp_path)
+    _patch_builder(monkeypatch, repo, {"app.py": b"core", "files.py": b"x", "module-ownership.json": OWN})
+    _git_run(repo, "checkout", "-q", "-b", "module/tool.files-1.0.1")
+    _release_commit(repo, "1.0.1", b"files-v2", "module-tool.files-1.0.1")
+
+    # ветка 1.0.2 отрезана от тега панели и не содержит правку 1.0.1
+    _git_run(repo, "checkout", "-q", "-b", "module/tool.files-1.0.2", "v3.0.3-beta.10")
+    _release_commit(repo, "1.0.2", b"files-v3", "module-tool.files-1.0.2")
+    args = ["--root", str(repo), "--tag", "module-tool.files-1.0.2", "--panel-archive", str(archive)]
+    capsys.readouterr()
+    assert main(args) == 1
+    err = capsys.readouterr().err
+    assert "ОШИБКА" in err and "module-tool.files-1.0.1" in err
+
+    # ветка от тега 1.0.1 проходит
+    _git_run(repo, "tag", "-d", "module-tool.files-1.0.2")
+    _git_run(repo, "checkout", "-q", "-b", "module/tool.files-1.0.2-fixed", "module-tool.files-1.0.1")
+    _release_commit(repo, "1.0.2", b"files-v3", "module-tool.files-1.0.2")
+    assert main(args) == 0
+
+
+def test_earlier_release_on_another_panel_is_not_required(tmp_path, monkeypatch, capsys):
+    from scripts.check_module_release import main
+
+    repo = _make_repo(tmp_path)
+    archive = _base_archive(tmp_path)
+    _patch_builder(monkeypatch, repo, {"app.py": b"core", "files.py": b"x", "module-ownership.json": OWN})
+    # выпуск 1.0.1 от более старой панели v3.0.2 на отдельной линии
+    _git_run(repo, "checkout", "-q", "--", "module-versions.json")
+    _git_run(repo, "switch", "-q", "--orphan", "old-line")
+    (repo / "old.txt").write_text("old", encoding="utf-8")
+    _git_run(repo, "add", "old.txt")
+    _git_run(repo, "commit", "-q", "-m", "old panel")
+    _git_run(repo, "tag", "v3.0.2")
+    _git_run(repo, "commit", "-q", "--allow-empty", "-m", "old module release")
+    _git_run(repo, "tag", "module-tool.files-1.0.1")
+
+    _git_run(repo, "checkout", "-q", "-f", "-b", "module/tool.files-1.0.2", "v3.0.3-beta.10")
+    _release_commit(repo, "1.0.2", b"files-v3", "module-tool.files-1.0.2")
+    args = ["--root", str(repo), "--tag", "module-tool.files-1.0.2", "--panel-archive", str(archive)]
+    assert main(args) == 0, capsys.readouterr().err
