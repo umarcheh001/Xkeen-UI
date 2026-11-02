@@ -2007,7 +2007,7 @@
           "accessible_label": "Информация"
         },
         {
-          "location": "xkeen-ui/static/js/features/module_manager/render.js:L443",
+          "location": "xkeen-ui/static/js/features/module_manager/render.js:L444",
           "control_type": "runtime-action",
           "accessible_label": "Информация"
         },
@@ -2258,7 +2258,7 @@
           "accessible_label": "Дополнительные действия"
         },
         {
-          "location": "xkeen-ui/static/js/features/module_manager/render.js:L469",
+          "location": "xkeen-ui/static/js/features/module_manager/render.js:L470",
           "control_type": "runtime-action",
           "accessible_label": "Дополнительные действия"
         },

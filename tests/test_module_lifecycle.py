@@ -312,6 +312,31 @@ def test_available_uses_installed_release_and_exposes_only_stage83_actions(tmp_p
     assert all(item["update_available"] is False for item in modules.values())
 
 
+def test_available_entry_keeps_catalog_version_and_adds_module_version(tmp_path):
+    panel = make_panel(tmp_path, version="3.1.0")
+    service, _ = make_service(panel, make_release("3.1.0"))
+
+    modules = {item["id"]: item for item in service.available()["modules"]}
+
+    assert modules["engine.xray"]["version"] == "3.1.0"
+    assert modules["engine.xray"]["module_version"] == "1.0.0"
+    assert modules["engine.xray"]["installed_version"] == "1.0.0"
+    assert modules["tool.terminal"]["module_version"] == "1.0.0"
+    assert modules["tool.terminal"]["installed_version"] is None
+    assert all("module_version" in item and "installed_version" in item for item in modules.values())
+
+
+def test_available_module_version_follows_module_versions_file(tmp_path):
+    panel = make_panel(tmp_path, version="3.1.0")
+    (panel.root / "module-versions.json").write_text('{"engine.xray": "1.2.0"}', encoding="utf-8")
+    service, _ = make_service(panel, make_release("3.1.0"))
+
+    modules = {item["id"]: item for item in service.available()["modules"]}
+
+    assert modules["engine.xray"]["installed_version"] == "1.2.0"
+    assert modules["engine.xray"]["module_version"] == "1.2.0"
+
+
 def test_available_calls_every_known_module_by_its_name(tmp_path):
     # The signed catalog speaks in ids only; the names are this build's own.
     service, _ = make_service(make_panel(tmp_path), make_release())

@@ -97,7 +97,7 @@ def test_stage8_contract_generator_covers_boundaries_and_acceptance_matrix(tmp_p
         "registry": "module-installed.json + module-ownership.json",
         "transaction_root": "/opt/etc/xkeen-ui.module-transactions/<operation-id>/",
         "user_data_root": "var/ and declared core/engine config paths",
-        "module_version": "equal to the installed panel release",
+        "module_version": "own SemVer per module, separate from the panel release; core has none (its version is the panel)",
     }
 
     catalog = payload["catalog"]
@@ -308,6 +308,9 @@ def test_stage8_contract_describes_closed_lifecycle_api(tmp_path) -> None:
     assert lifecycle["update_available"] is False
     assert lifecycle["recovery_restarts_implicitly"] is False
     assert "## Lifecycle API 8.4" in markdown
+    assert "equal to the installed panel release" not in markdown
+    assert "всегда `false`" not in markdown
+    assert "module_version" in markdown
 
 
 def test_stage8_lifecycle_document_and_roadmap_are_closed() -> None:

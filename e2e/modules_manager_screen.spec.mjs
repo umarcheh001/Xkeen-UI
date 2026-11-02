@@ -419,7 +419,7 @@ test.describe('Module manager loading', () => {
     await expect(page.getByRole('heading', { name: 'Модули и обновления' })).toBeVisible();
     await expect(page.locator('.modules-summary')).toContainText('Xkeen UI 2.10.0');
     await expect(page.locator('.modules-core')).toContainText('Xkeen UI Core');
-    await expect(page.locator('.modules-core')).toContainText('версия 1.0.0');
+    await expect(page.locator('.modules-core')).toContainText('версия 2.10.0');
     await page.getByLabel('Действия: Mihomo').click();
     await expect(page.getByRole('button', { name: 'Восстановить Mihomo' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Удалить Mihomo' })).toBeVisible();
@@ -427,7 +427,7 @@ test.describe('Module manager loading', () => {
     expect(availableCalls).toBe(0);
 
     await page.getByRole('tab', { name: 'Доступные' }).click();
-    await expect(page.getByRole('heading', { name: `${TERMINAL} 2.10.0` })).toBeVisible();
+    await expect(page.getByRole('heading', { name: `${TERMINAL} 1.0.0` })).toBeVisible();
     expect(availableCalls).toBe(1);
 
     await page.getByRole('tab', { name: 'Установленные' }).click();
@@ -444,7 +444,7 @@ test.describe('Module manager loading', () => {
     } }));
     await page.goto('/modules');
     await page.getByRole('tab', { name: 'Доступные' }).click();
-    await expect(page.getByRole('heading', { name: '<img src=x onerror="window.catalogInjected=1"> 2.10.0' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '<img src=x onerror="window.catalogInjected=1"> 1.0.0' })).toBeVisible();
     expect(await page.evaluate(() => window.catalogInjected || 0)).toBe(0);
     expect(await page.locator('#modules-card-host img').count()).toBe(0);
   });

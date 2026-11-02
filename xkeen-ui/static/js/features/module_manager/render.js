@@ -12,7 +12,7 @@ function node(tag, className, text) {
 }
 
 function moduleTitle(item) {
-  return [item.name || item.id || 'Модуль', item.version].filter(Boolean).join(' ');
+  return [item.name || item.id || 'Модуль', item.module_version || item.version].filter(Boolean).join(' ');
 }
 
 // A module is called by its name wherever the window knows it.
@@ -414,7 +414,8 @@ function lockNote(text) {
 }
 
 function versionLine(item) {
-  return item.version ? `версия ${item.version}` : '';
+  const version = item.module_version || item.version;
+  return version ? `версия ${version}` : '';
 }
 
 // Core is the panel itself: it is never switched, so it is not a tile.

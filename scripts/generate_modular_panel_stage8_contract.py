@@ -161,7 +161,7 @@ def build_contract(root: Path) -> dict[str, Any]:
         "registry": "module-installed.json + module-ownership.json",
         "transaction_root": "/opt/etc/xkeen-ui.module-transactions/<operation-id>/",
         "user_data_root": "var/ and declared core/engine config paths",
-        "module_version": "equal to the installed panel release",
+        "module_version": "own SemVer per module, separate from the panel release; core has none (its version is the panel)",
     }
     catalog_fields = [
         "id",
@@ -496,7 +496,7 @@ def render_markdown(payload: dict[str, Any]) -> str:
             "## Lifecycle API 8.4",
             "",
             f"Подэтап {lifecycle_api['stage']['id']} закрыт {lifecycle_api['stage']['closed_on']}. `{lifecycle_api['service']}` повторно строит authoritative plan и передаёт его в {lifecycle_api['execution']}; Flask request не меняет файлы панели.",
-            f"Допустимы только `{ '`, `'.join(lifecycle_api['operations']) }`. Plan guard — {lifecycle_api['plan_guard']}. Независимые версии модулей не входят в текущую модель релиза, поэтому module-only `update_available` всегда `false`.",
+            f"Допустимы только `{ '`, `'.join(lifecycle_api['operations']) }`. Plan guard — {lifecycle_api['plan_guard']}. Версия модуля (`module_version`, у установленного ещё и `installed_version`) отделена от релиза панели (`version` записи каталога); `update_available` сравнивает версии модулей, а не релиз панели.",
             "",
             "| Method | Path | Success |",
             "| --- | --- | --- |",

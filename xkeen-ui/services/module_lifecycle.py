@@ -50,6 +50,11 @@ from services.module_transactions.plan import (
     read_panel_version,
 )
 from services.module_transactions.previous_version import describe_previous_version
+from services.module_versions import (
+    BASE_MODULE_VERSION,
+    read_installed_module_versions,
+    read_panel_module_versions,
+)
 from services.module_transactions.state import ModuleTransactionError
 
 if TYPE_CHECKING:
@@ -896,6 +901,7 @@ class ModuleLifecycleService:
     def available(self) -> dict[str, Any]:
         if self.local_demo:
             installed_ids = set(read_installed_modules(self.state_dir))
+            installed_versions = read_installed_module_versions(self.state_dir, self.panel_root)
             modules = []
             for definition in MODULE_DEFINITIONS:
                 installed = definition.id in installed_ids
@@ -903,6 +909,11 @@ class ModuleLifecycleService:
                     {
                         "id": definition.id,
                         "version": definition.version,
+                        # core has no version of its own: it is the panel.
+                        "module_version": installed_versions.get(definition.id, definition.version),
+                        "installed_version": (
+                            installed_versions.get(definition.id, definition.version) if installed else None
+                        ),
                         "channel": "local",
                         "panel_api": "1",
                         "module_api": "1",
@@ -941,6 +952,11 @@ class ModuleLifecycleService:
         # The signed catalog speaks in ids only. What a module is called is
         # known to this build; a module of a later release stays an id.
         known = {definition.id: definition for definition in MODULE_DEFINITIONS}
+        # `version` of an entry stays the catalog's (the panel release); the
+        # module's own version comes from this build and from what is installed.
+        # core has no version of its own: it is the panel.
+        panel_versions = read_panel_module_versions(self.panel_root)
+        installed_versions = read_installed_module_versions(self.state_dir, self.panel_root)
         modules: list[dict[str, Any]] = []
         for raw_entry in snapshot.catalog.get("modules", []):
             entry = dict(raw_entry)
@@ -949,7 +965,15 @@ class ModuleLifecycleService:
             definition = known.get(module_id)
             if definition is not None:
                 entry.update(name=definition.name, description=definition.description)
+            if module_id == "core":
+                module_version = str(entry.get("version") or version)
+                installed_version = version if installed else None
+            else:
+                module_version = panel_versions.get(module_id, BASE_MODULE_VERSION)
+                installed_version = installed_versions.get(module_id, BASE_MODULE_VERSION) if installed else None
             entry.update(
+                module_version=module_version,
+                installed_version=installed_version,
                 installed=installed,
                 lifecycle_actions=[] if read_only else _lifecycle_actions(module_id, installed),
                 update_available=False,

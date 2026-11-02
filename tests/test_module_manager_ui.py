@@ -119,6 +119,15 @@ def test_manager_source_is_isolated_and_entry_stays_thin():
     assert "/api/modules/" not in entry
 
 
+def test_manager_shows_the_module_version_not_the_catalog_entry_version():
+    source = (MANAGER / "render.js").read_text(encoding="utf-8")
+
+    # The catalog entry's own `version` is the panel release; the screen says
+    # what the module itself is at.
+    assert "item.module_version" in source
+    assert source.count("item.module_version") >= 2
+
+
 def test_stable_devtools_update_is_a_modules_link_not_a_second_runner():
     source = (ROOT / "xkeen-ui/static/js/features/devtools/update.js").read_text(encoding="utf-8")
 

@@ -229,7 +229,7 @@
     "registry": "module-installed.json + module-ownership.json",
     "transaction_root": "/opt/etc/xkeen-ui.module-transactions/<operation-id>/",
     "user_data_root": "var/ and declared core/engine config paths",
-    "module_version": "equal to the installed panel release"
+    "module_version": "own SemVer per module, separate from the panel release; core has none (its version is the panel)"
   },
   "catalog": {
     "source": "https://github.com/umarcheh001/Xkeen-UI/releases/download/<version>/catalog.json",

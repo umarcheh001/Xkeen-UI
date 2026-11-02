@@ -36,7 +36,7 @@ State files, `secret.key`, runtime/config directories and Mihomo profiles/backup
 | `registry` | `module-installed.json + module-ownership.json` |
 | `transaction_root` | `/opt/etc/xkeen-ui.module-transactions/<operation-id>/` |
 | `user_data_root` | `var/ and declared core/engine config paths` |
-| `module_version` | `equal to the installed panel release` |
+| `module_version` | `own SemVer per module, separate from the panel release; core has none (its version is the panel)` |
 
 Файлы модуля лежат в общем корне панели по путям из manifest: панель загружает код, статику и шаблоны только оттуда. Замена ведётся под журналом — прежний файл сохраняется в каталоге операции, и по журналу дерево возвращается в исходное состояние после любой ошибки или обрыва питания (Stage 8.3).
 Какие файлы принадлежат модулю, панель знает из `module-ownership.json`: его пишет сборщик релиза, он лежит в panel archive и описывает то же дерево, из которого собраны module archives.
@@ -82,7 +82,7 @@ Stable discovery ограничен `https://api.github.com/repos/umarcheh001/Xk
 ## Lifecycle API 8.4
 
 Подэтап 8.4 закрыт 2026-10-06. `xkeen-ui/services/module_lifecycle.py` повторно строит authoritative plan и передаёт его в detached module transaction runner; Flask request не меняет файлы панели.
-Допустимы только `install`, `repair`, `remove`, `panel-update`, `profile-transition`. Plan guard — lowercase SHA-256 of canonical server plan and dependency diff. Независимые версии модулей не входят в текущую модель релиза, поэтому module-only `update_available` всегда `false`.
+Допустимы только `install`, `repair`, `remove`, `panel-update`, `profile-transition`. Plan guard — lowercase SHA-256 of canonical server plan and dependency diff. Версия модуля (`module_version`, у установленного ещё и `installed_version`) отделена от релиза панели (`version` записи каталога); `update_available` сравнивает версии модулей, а не релиз панели.
 
 | Method | Path | Success |
 | --- | --- | --- |
