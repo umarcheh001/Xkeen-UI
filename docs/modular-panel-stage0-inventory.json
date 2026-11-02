@@ -38,13 +38,13 @@
         "gevent-websocket (optional)"
       ],
       "removable": false,
-      "unit_count": 652,
-      "size_bytes": 8913330,
+      "unit_count": 653,
+      "size_bytes": 8920654,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
         "backend_service": 96,
-        "backend_test": 286,
+        "backend_test": 287,
         "configuration": 11,
         "frontend_bundle": 9,
         "frontend_entrypoint": 4,
@@ -4039,6 +4039,26 @@
       "depends_on": [
         "integration.happ"
       ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_check_module_release.py",
+      "size_bytes": 7324,
+      "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
       "registers_routes": false,
