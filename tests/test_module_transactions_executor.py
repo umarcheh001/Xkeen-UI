@@ -543,3 +543,132 @@ def test_executor_refuses_a_release_plan_once_an_update_entry_replaced_it(tmp_pa
     assert read_status(panel.state)["error_code"] == "module_version_mismatch"
     after = snapshot(panel.root)
     assert all(after.get(relative) == before[relative] for relative in OWNERSHIP["tool.terminal"])
+
+
+# --- Операция update ----------------------------------------------------------
+
+DIAGNOSTICS = "tool.advanced-diagnostics"
+INSTALLED_WITH_DIAGNOSTICS = ("core", "tool.editor", "engine.xray", DIAGNOSTICS)
+DIAGNOSTICS_NEW = ("routes/system_resources.py", "static/js/features/resource_history.js")
+OVERRIDES = "module-ownership-overrides.json"
+
+
+def _run_update(panel, release, module_id: str, recorder: Recorder | None = None, operation: str = "update", **kwargs):
+    recorder = recorder or Recorder()
+    client = release.client(panel.state)
+    catalog = client.get_effective_catalog(VERSION).catalog
+    plan = build_plan(operation, module_id, **{**panel.kwargs, "catalog": catalog})
+    journal = Journal.create(panel.root, plan, f"20261102T000000Z-{operation[:6]}", extra={})
+    result = run_operation(
+        journal, state_dir=panel.state, client=client, architecture=ARCHITECTURE,
+        restart=recorder.restart, wait_healthy=recorder.wait_healthy, **kwargs,
+    )
+    return result, plan, recorder
+
+
+def _switch_off(panel, module_id: str) -> None:
+    state = panel.read_json("modules.json")
+    state["modules"][module_id]["enabled"] = False
+    panel.path("modules.json").write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
+
+
+def test_update_writes_version_override_and_managed_paths(tmp_path: Path) -> None:
+    panel = make_panel(tmp_path, installed=INSTALLED_WITH_DIAGNOSTICS)
+    release = make_release()
+    publish_module_updates(release, {DIAGNOSTICS: "1.0.1"}, ownership={DIAGNOSTICS: DIAGNOSTICS_NEW})
+    before = snapshot(panel.root)
+
+    result, plan, recorder = _run_update(panel, release, DIAGNOSTICS)
+
+    assert result == "committed", read_status(panel.state)
+    assert recorder.restarts == 1
+    for relative in DIAGNOSTICS_NEW:
+        assert panel.path(relative).read_bytes() == file_bytes(relative, "1.0.1")
+    gone = set(OWNERSHIP[DIAGNOSTICS]) - set(DIAGNOSTICS_NEW)
+    assert gone and not any(panel.path(relative).exists() for relative in gone)
+    installed = panel.read_json("module-installed.json")
+    assert installed["versions"] == {DIAGNOSTICS: "1.0.1"}
+    assert installed["modules"][DIAGNOSTICS] is True
+    assert panel.read_json(OVERRIDES) == {"schema_version": 1, "modules": {DIAGNOSTICS: sorted(DIAGNOSTICS_NEW)}}
+    managed = set(panel.read_json("install-managed.json")["paths"])
+    assert set(DIAGNOSTICS_NEW) <= managed and not gone & managed
+    changed = {
+        path for path in changed_paths(before, snapshot(panel.root))
+        if not path.startswith(("module-catalog/", "module-operations/"))
+    }
+    assert changed <= set(OWNERSHIP[DIAGNOSTICS]) | set(DIAGNOSTICS_NEW) | STATE_PATHS | {OVERRIDES}
+
+
+def test_update_keeps_switch_and_profile_label(tmp_path: Path) -> None:
+    panel = make_panel(tmp_path, installed=INSTALLED_WITH_DIAGNOSTICS)
+    _switch_off(panel, DIAGNOSTICS)
+    modules_before = panel.path("modules.json").read_bytes()
+    profile_before = panel.path("install-profile.json").read_bytes()
+    release = make_release()
+    publish_module_updates(release, {DIAGNOSTICS: "1.0.1"})
+
+    result, _plan, _recorder = _run_update(panel, release, DIAGNOSTICS)
+
+    assert result == "committed", read_status(panel.state)
+    # Выключенный модуль остаётся выключенным, метка профиля не становится custom.
+    assert panel.path("modules.json").read_bytes() == modules_before
+    assert panel.read_json("modules.json")["profile"] == "xray-minimal"
+    assert panel.read_json("modules.json")["modules"][DIAGNOSTICS]["enabled"] is False
+    assert panel.path("install-profile.json").read_bytes() == profile_before
+
+
+def test_failed_health_restores_files_version_and_overrides(tmp_path: Path) -> None:
+    panel = make_panel(tmp_path, installed=INSTALLED_WITH_DIAGNOSTICS)
+    first = make_release()
+    publish_module_updates(first, {DIAGNOSTICS: "1.0.1"}, ownership={DIAGNOSTICS: DIAGNOSTICS_NEW})
+    assert _run_update(panel, first, DIAGNOSTICS)[0] == "committed"
+    before = snapshot(panel.root)
+    second = make_release()
+    publish_module_updates(second, {DIAGNOSTICS: "1.0.2"})
+
+    result, _plan, recorder = _run_update(panel, second, DIAGNOSTICS, Recorder([False, True]))
+
+    assert result == "rolled_back"
+    assert recorder.probes == ["operation", "rollback"]
+    after = snapshot(panel.root)
+    bookkeeping = {path for path in changed_paths(before, after) if path.startswith(("module-catalog/", "module-operations/"))}
+    assert changed_paths(before, after) == bookkeeping
+    assert panel.read_json("module-installed.json")["versions"] == {DIAGNOSTICS: "1.0.1"}
+    assert panel.read_json(OVERRIDES)["modules"] == {DIAGNOSTICS: sorted(DIAGNOSTICS_NEW)}
+    assert (read_status(panel.state)["result"], read_status(panel.state)["error_code"]) == (
+        "rolled_back", "operation_health_failed"
+    )
+
+
+def test_update_does_not_install_packages(tmp_path: Path) -> None:
+    panel = make_panel(tmp_path, installed=("core", "tool.editor", "engine.xray", "tool.files"))
+    release = make_release()
+    publish_module_updates(release, {"tool.files": "1.0.1"})
+    phases: list[str] = []
+
+    result, _plan, _recorder = _run_update(
+        panel, release, "tool.files", provision=lambda phase, _script: phases.append(phase)
+    )
+
+    assert result == "committed", read_status(panel.state)
+    assert "packages" not in phases
+
+
+def test_remove_after_update_clears_version_and_release_install_succeeds(tmp_path: Path) -> None:
+    panel = make_panel(tmp_path)
+    plain = make_release()
+    assert _run_update(panel, plain, DIAGNOSTICS, operation="install")[0] == "committed"
+    updated = make_release()
+    publish_module_updates(updated, {DIAGNOSTICS: "1.0.1"}, ownership={DIAGNOSTICS: DIAGNOSTICS_NEW})
+    assert _run_update(panel, updated, DIAGNOSTICS)[0] == "committed"
+
+    assert _run_update(panel, updated, DIAGNOSTICS, operation="remove")[0] == "committed"
+
+    assert "versions" not in panel.read_json("module-installed.json")
+    assert panel.read_json(OVERRIDES)["modules"] == {}
+    # Обновлений больше нет (документ не опубликован): ставится запись выпуска.
+    result, plan, _recorder = _run_update(panel, make_release(), DIAGNOSTICS, operation="install")
+    assert result == "committed", read_status(panel.state)
+    assert plan.module_version == "1.0.0" and plan.module_files is None
+    for relative in OWNERSHIP[DIAGNOSTICS]:
+        assert panel.path(relative).read_bytes() == file_bytes(relative, VERSION)

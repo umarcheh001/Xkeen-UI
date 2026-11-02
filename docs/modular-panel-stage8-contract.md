@@ -82,7 +82,7 @@ Stable discovery ограничен `https://api.github.com/repos/umarcheh001/Xk
 ## Lifecycle API 8.4
 
 Подэтап 8.4 закрыт 2026-10-06. `xkeen-ui/services/module_lifecycle.py` повторно строит authoritative plan и передаёт его в detached module transaction runner; Flask request не меняет файлы панели.
-Допустимы только `install`, `repair`, `remove`, `panel-update`, `profile-transition`. Plan guard — lowercase SHA-256 of canonical server plan and dependency diff. Версия модуля (`module_version`, у установленного ещё и `installed_version`) отделена от релиза панели (`version` записи каталога); `update_available` сравнивает версии модулей, а не релиз панели.
+Допустимы только `install`, `repair`, `remove`, `update`, `panel-update`, `profile-transition`. Plan guard — lowercase SHA-256 of canonical server plan and dependency diff. Версия модуля (`module_version`, у установленного ещё и `installed_version`) отделена от релиза панели (`version` записи каталога); `update_available` сравнивает версии модулей, а не релиз панели.
 
 | Method | Path | Success |
 | --- | --- | --- |

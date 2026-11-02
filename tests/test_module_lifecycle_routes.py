@@ -497,3 +497,35 @@ def test_lifecycle_json_remains_readable_after_production_size_guard():
 
     assert response.status_code == 200
     assert service.calls == [("plan", "install", "tool.terminal")]
+
+
+def test_route_accepts_update_and_rejects_core(tmp_path):
+    from tests.support.module_lifecycle import make_service
+    from tests.support.module_tx import make_panel, make_release, publish_module_updates
+
+    panel = make_panel(tmp_path, installed=("core", "tool.editor", "engine.xray", "tool.advanced-diagnostics"))
+    release = make_release()
+    publish_module_updates(release, {"tool.advanced-diagnostics": "1.0.1"})
+    service, _catalog = make_service(panel, release)
+    app = Flask(__name__)
+    app.config["TESTING"] = True
+    app.register_blueprint(create_modules_blueprint(RegistryFake(), lifecycle_service=service))
+    client = app.test_client()
+
+    planned = client.post(
+        "/api/modules/operations/plan",
+        json={"operation": "update", "module_id": "tool.advanced-diagnostics"},
+    )
+    core = client.post("/api/modules/operations/plan", json={"operation": "update", "module_id": "core"})
+    current = client.post("/api/modules/operations/plan", json={"operation": "update", "module_id": "engine.xray"})
+
+    assert planned.status_code == 200, planned.get_json()
+    body = planned.get_json()
+    assert (body["operation"], body["applicable"], body["blockers"]) == ("update", True, [])
+    assert core.status_code == 400
+    assert core.get_json()["code"] == "module_operation_forbidden"
+    # Nothing newer than what is installed: a blocked plan, not an error.
+    assert current.status_code == 200
+    blocked = current.get_json()
+    assert blocked["applicable"] is False
+    assert [item["code"] for item in blocked["blockers"]] == ["module_update_not_available"]

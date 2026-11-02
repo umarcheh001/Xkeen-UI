@@ -459,12 +459,13 @@
       "install",
       "repair",
       "remove",
+      "update",
       "panel-update",
       "profile-transition"
     ],
     "execution": "detached module transaction runner",
     "plan_guard": "lowercase SHA-256 of canonical server plan and dependency diff",
-    "update_available": false,
+    "update_available": "the newest signed entry is newer than the installed module version",
     "recovery_restarts_implicitly": false
   },
   "panel_profile": {

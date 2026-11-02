@@ -122,7 +122,7 @@ def test_plan_from_stage_8_3_json_defaults_to_module_scope() -> None:
 
 @pytest.mark.parametrize(
     ("operation", "module_id"),
-    [("update", "tool.terminal"), ("install", "core"), ("remove", "core"), ("repair", "core"),
+    [("upgrade", "tool.terminal"), ("update", "core"), ("install", "core"), ("remove", "core"), ("repair", "core"),
      ("install", "tool.editor"), ("remove", "tool.editor"), ("install", "tool.unknown")],
 )
 def test_forbidden_operations(tmp_path: Path, operation: str, module_id: str) -> None:
@@ -165,7 +165,7 @@ def test_install_of_an_installed_module_is_refused(tmp_path: Path) -> None:
     assert _code("install", "engine.xray", make_panel(tmp_path)) == "module_already_installed"
 
 
-@pytest.mark.parametrize("operation", ["repair", "remove"])
+@pytest.mark.parametrize("operation", ["repair", "remove", "update"])
 def test_repair_and_remove_need_an_installed_module(tmp_path: Path, operation: str) -> None:
     assert _code(operation, "tool.terminal", make_panel(tmp_path)) == "module_not_installed"
 
@@ -469,3 +469,76 @@ def test_plan_from_old_journal_has_no_module_version() -> None:
 
     assert plan.module_version is None
     assert plan.module_files is None
+
+
+# --- Операция update ----------------------------------------------------------
+
+DIAGNOSTICS = "tool.advanced-diagnostics"
+INSTALLED_WITH_DIAGNOSTICS = ("core", "tool.editor", "engine.xray", DIAGNOSTICS)
+
+
+def test_update_plan_removes_old_files_and_adds_new(tmp_path: Path) -> None:
+    panel = make_panel(tmp_path, installed=INSTALLED_WITH_DIAGNOSTICS)
+    old_files = set(OWNERSHIP[DIAGNOSTICS])
+    new_files = {"routes/system_resources.py", "static/js/features/resource_history.js"}
+    catalog = _effective_catalog(panel, {DIAGNOSTICS: "1.0.1"}, ownership={DIAGNOSTICS: tuple(new_files)})
+
+    plan = build_plan("update", DIAGNOSTICS, **{**panel.kwargs, "catalog": catalog})
+
+    assert plan.operation == "update" and plan.module_id == DIAGNOSTICS
+    assert plan.files_add == tuple(sorted(new_files))
+    assert plan.files_remove == tuple(sorted(old_files - new_files))
+    assert plan.module_version == "1.0.1"
+    assert plan.module_files == tuple(sorted(new_files))
+    assert plan.archive is not None and plan.archive.archive == f"xkeen-module-{DIAGNOSTICS}-1.0.1.tar.gz"
+    assert plan.installed_after == tuple(sorted(INSTALLED_WITH_DIAGNOSTICS))
+    assert plan_from_json(json.loads(json.dumps(plan_to_json(plan)))) == plan
+
+
+def test_update_space_is_counted_like_a_repair(tmp_path: Path) -> None:
+    panel = make_panel(tmp_path, installed=INSTALLED_WITH_DIAGNOSTICS)
+    catalog = _effective_catalog(panel, {DIAGNOSTICS: "1.0.1"})
+
+    update = build_plan("update", DIAGNOSTICS, **{**panel.kwargs, "catalog": catalog})
+    repair = build_plan("repair", DIAGNOSTICS, **{**panel.kwargs, "catalog": catalog})
+
+    assert update.required_free_bytes == repair.required_free_bytes > 0
+    required = update.required_free_bytes
+    assert _code("update", DIAGNOSTICS, panel, catalog=catalog, free_bytes=required - 1) == "module_free_space"
+
+
+def test_update_without_newer_entry_is_blocked(tmp_path: Path) -> None:
+    panel = make_panel(tmp_path, installed=INSTALLED_WITH_DIAGNOSTICS)
+
+    # Только каталог выпуска: обновлять нечем.
+    assert _code("update", DIAGNOSTICS, panel) == "module_update_not_available"
+
+    # Запись той же версии, что установлена, — тоже не обновление.
+    _record_installed_versions(panel, {DIAGNOSTICS: "1.0.1"})
+    same = _effective_catalog(make_panel(tmp_path / "same"), {DIAGNOSTICS: "1.0.1"})
+    assert _code("update", DIAGNOSTICS, panel, catalog=same) == "module_update_not_available"
+
+
+def test_update_of_not_installed_module_is_refused(tmp_path: Path) -> None:
+    panel = make_panel(tmp_path)
+    catalog = _effective_catalog(panel, {DIAGNOSTICS: "1.0.1"})
+
+    assert _code("update", DIAGNOSTICS, panel, catalog=catalog) == "module_not_installed"
+
+
+def test_editor_module_can_be_updated(tmp_path: Path) -> None:
+    panel = make_panel(tmp_path)
+    catalog = _effective_catalog(panel, {"tool.editor": "1.0.1"})
+
+    plan = build_plan("update", "tool.editor", **{**panel.kwargs, "catalog": catalog})
+
+    assert plan.module_version == "1.0.1"
+    assert plan.files_add == tuple(sorted(OWNERSHIP["tool.editor"]))
+
+
+def test_entry_claiming_foreign_file_is_a_conflict(tmp_path: Path) -> None:
+    panel = make_panel(tmp_path, installed=INSTALLED_WITH_DIAGNOSTICS)
+    files = (*OWNERSHIP[DIAGNOSTICS], "routes/routing/__init__.py")
+    catalog = _effective_catalog(panel, {DIAGNOSTICS: "1.0.1"}, ownership={DIAGNOSTICS: files})
+
+    assert _code("update", DIAGNOSTICS, panel, catalog=catalog) == "module_ownership_conflict"

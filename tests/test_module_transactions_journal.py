@@ -13,7 +13,16 @@ from services.module_transactions import journal as journal_module
 from services.module_transactions.journal import Journal
 from services.module_transactions.plan import build_plan
 from services.module_transactions.state import ModuleTransactionError, transactions_root
-from tests.support.module_tx import OWNERSHIP, file_bytes, make_panel, set_mtime, snapshot
+from tests.support.module_tx import (
+    ARCHITECTURE,
+    OWNERSHIP,
+    file_bytes,
+    make_panel,
+    make_release,
+    publish_module_updates,
+    set_mtime,
+    snapshot,
+)
 
 
 def _staged(tmp_path: Path, relative: str, payload: bytes | None = None) -> Path:
@@ -491,3 +500,49 @@ def test_runner_without_a_pid_is_not_alive(tmp_path: Path) -> None:
     panel = make_panel(tmp_path)
 
     assert _install_journal(tmp_path, panel).runner_alive() is False
+
+
+@pytest.mark.parametrize("old_journal", [False, True], ids=["journal", "journal-without-module-fields"])
+def test_power_loss_mid_update_recovers_at_boot(tmp_path: Path, old_journal: bool) -> None:
+    """Обрыв питания после раскладки файлов и записей: запуск панели всё возвращает."""
+
+    from services.module_transactions.executor import recover, run_operation
+
+    module_id = "tool.advanced-diagnostics"
+    files = ("routes/system_resources.py", "static/js/features/resource_history.js")
+    panel = make_panel(tmp_path, installed=("core", "tool.editor", "engine.xray", module_id))
+    release = make_release()
+    publish_module_updates(release, {module_id: "1.0.1"}, ownership={module_id: files})
+    client = release.client(panel.state)
+    catalog = client.get_effective_catalog(panel.version).catalog
+    plan = build_plan("update", module_id, **{**panel.kwargs, "catalog": catalog})
+    before = snapshot(panel.root)
+    journal = Journal.create(panel.root, plan, "20261102T000000Z-update", extra={})
+
+    def power_cut(step: str) -> None:
+        if step == "restarting":
+            raise KeyboardInterrupt("power cut")
+
+    with pytest.raises(KeyboardInterrupt):
+        run_operation(
+            journal, state_dir=panel.state, client=client, architecture=ARCHITECTURE,
+            restart=lambda: None, wait_healthy=lambda _phase: True, on_step=power_cut,
+        )
+    # The update was laid: new files, the version and the record of its files.
+    assert panel.read_json("module-installed.json")["versions"] == {module_id: "1.0.1"}
+    assert panel.path("module-ownership-overrides.json").is_file()
+    if old_journal:
+        # A journal written by a panel that knew nothing of module versions.
+        record_path = journal.dir / "operation.json"
+        record = json.loads(record_path.read_text(encoding="utf-8"))
+        record["plan"].pop("module_version")
+        record["plan"].pop("module_files")
+        record_path.write_text(json.dumps(record), encoding="utf-8")
+
+    assert recover(panel.root, panel.state) == "rolled_back"
+
+    after = snapshot(panel.root)
+    changed = {path for path in set(before) | set(after) if before.get(path) != after.get(path)}
+    assert {path for path in changed if not path.startswith(("module-catalog/", "module-operations/"))} == set()
+    assert not panel.path("module-ownership-overrides.json").exists()
+    assert not transactions_root(panel.root).exists()

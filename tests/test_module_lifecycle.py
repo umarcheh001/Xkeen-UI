@@ -727,7 +727,8 @@ def test_running_engine_and_free_space_are_visible_blockers(tmp_path, monkeypatc
 @pytest.mark.parametrize(
     ("operation", "module_id", "code", "status"),
     [
-        ("update", "tool.terminal", "module_operation_invalid", 400),
+        ("upgrade", "tool.terminal", "module_operation_invalid", 400),
+        ("update", "core", "module_operation_forbidden", 400),
         ("install", "unknown.module", "module_not_found", 404),
         ("remove", "core", "module_operation_forbidden", 400),
         ("install", "tool.editor", "module_operation_forbidden", 400),
@@ -1151,3 +1152,47 @@ def test_local_build_never_offers_update(tmp_path):
     assert modules["engine.xray"]["module_version"] == "1.0.0"
     assert all(item["update_available"] is False for item in modules.values())
     assert all(item["lifecycle_actions"] == [] for item in modules.values())
+
+
+# --- Операция update на экране модулей ---------------------------------------
+
+
+def test_lifecycle_actions_offer_update_only_when_one_is_available():
+    from services.module_lifecycle import _lifecycle_actions
+
+    assert _lifecycle_actions("engine.xray", True) == ["repair", "remove"]
+    assert _lifecycle_actions("engine.xray", True, update_available=True) == ["update", "repair", "remove"]
+    assert _lifecycle_actions("tool.editor", True, update_available=True) == ["update", "repair"]
+    # Not installed: an install lays the newest entry anyway.
+    assert _lifecycle_actions("tool.files", False, update_available=True) == ["install"]
+    assert _lifecycle_actions("core", True, update_available=True) == []
+
+
+def test_available_offers_update_for_a_module_with_a_newer_entry(tmp_path):
+    panel = make_panel(tmp_path, installed=("core", "tool.editor", "engine.xray", "tool.terminal"))
+    release = make_release()
+    publish_module_updates(release, {"engine.xray": "1.0.1", "tool.editor": "1.0.1", "tool.files": "1.0.1"})
+    service, _catalog = make_service(panel, release)
+
+    modules = {item["id"]: item for item in service.available()["modules"]}
+
+    assert modules["engine.xray"]["lifecycle_actions"] == ["update", "repair", "remove"]
+    assert modules["tool.editor"]["lifecycle_actions"] == ["update", "repair"]
+    assert modules["tool.terminal"]["lifecycle_actions"] == ["repair", "remove"]
+    assert modules["tool.files"]["lifecycle_actions"] == ["install"]
+    assert service.plan("update", "engine.xray")["applicable"] is True
+
+
+def test_installed_newer_than_the_catalog_is_a_blocked_plan(tmp_path):
+    panel = make_panel(tmp_path)
+    record = json.loads(panel.path("module-installed.json").read_text(encoding="utf-8"))
+    record["versions"] = {"engine.xray": "1.0.2"}
+    panel.path("module-installed.json").write_text(json.dumps(record), encoding="utf-8")
+    service, _catalog = make_service(panel, make_release())
+
+    for operation in ("repair", "update"):
+        payload = service.plan(operation, "engine.xray")
+
+        assert payload["applicable"] is False
+        assert [item["code"] for item in payload["blockers"]] == ["module_update_catalog_unavailable"]
+        assert "catalog cannot be read" not in payload["blockers"][0]["message"]

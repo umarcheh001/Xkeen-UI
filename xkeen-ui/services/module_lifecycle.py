@@ -36,6 +36,7 @@ from services.module_transactions.launcher import (
 from services.module_transactions.plan import (
     OPERATIONS,
     REPAIR_ONLY_MODULES as _REPAIR_ONLY_MODULES,
+    REPAIR_ONLY_OPERATIONS as _REPAIR_ONLY_OPERATIONS,
     ROLLBACK_OPERATION,
     Plan,
     build_plan,
@@ -73,6 +74,9 @@ _PLAN_BLOCKERS = frozenset(
         "module_engine_active",
         "module_last_engine",
         "module_free_space",
+        "module_update_not_available",
+        # The installed module is newer than the entry that could be read.
+        "module_update_catalog_unavailable",
     }
 )
 _PUBLIC_STATUS_FIELDS = frozenset(
@@ -243,12 +247,16 @@ def _dependency_diff(
     }
 
 
-def _lifecycle_actions(module_id: str, installed: bool) -> list[str]:
+def _lifecycle_actions(module_id: str, installed: bool, update_available: bool = False) -> list[str]:
     if module_id == "core" or (module_id in _REPAIR_ONLY_MODULES and not installed):
         return []
+    if not installed:
+        # An install lays the newest entry anyway.
+        return ["install"]
+    actions = ["update"] if update_available else []
     if module_id in _REPAIR_ONLY_MODULES:
-        return ["repair"]
-    return ["repair", "remove"] if installed else ["install"]
+        return [*actions, "repair"]
+    return [*actions, "repair", "remove"]
 
 
 def _is_newer(candidate: str, installed: str) -> bool:
@@ -1011,7 +1019,7 @@ class ModuleLifecycleService:
                 module_version=module_version,
                 installed_version=installed_version,
                 installed=installed,
-                lifecycle_actions=[] if read_only else _lifecycle_actions(module_id, installed),
+                lifecycle_actions=[] if read_only else _lifecycle_actions(module_id, installed, update_available),
                 # A local build only looks: it is never offered an update.
                 update_available=update_available and not read_only,
             )
@@ -1048,7 +1056,7 @@ class ModuleLifecycleService:
         if normalized_operation not in OPERATIONS:
             raise ModuleLifecycleError(
                 "module_operation_invalid",
-                "operation must be install, repair, or remove",
+                "operation must be install, repair, remove, or update",
                 status=400,
             )
         if normalized_module not in MODULE_IDS:
@@ -1060,7 +1068,7 @@ class ModuleLifecycleService:
             )
         if normalized_module == "core" or (
             normalized_module in _REPAIR_ONLY_MODULES
-            and normalized_operation != "repair"
+            and normalized_operation not in _REPAIR_ONLY_OPERATIONS
         ):
             raise ModuleLifecycleError(
                 "module_operation_forbidden",

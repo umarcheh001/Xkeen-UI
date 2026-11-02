@@ -246,3 +246,107 @@ def test_profile_update_after_a_module_install_keeps_the_module(built: Built, tm
     installed_flags = json.loads((panel / "module-installed.json").read_text(encoding="utf-8"))["modules"]
     assert installed_flags["engine.mihomo"] is False
     assert _dangling(built, present) == []
+
+
+UPDATE_MARK = b"\n# module update\n"
+ADDED_BODY = b"# added by the module update\n"
+
+
+def _publish_update(built: Built, dist: Path, module_id: str, module_version: str, changed: str, added: str) -> dict[str, bytes]:
+    """A copy of the release with a signed update of one module: one file changed, one added."""
+
+    import gzip
+    import hashlib
+    import io
+    import tarfile
+
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    from tests.support.module_tx import _sign
+
+    shutil.copytree(built.dist, dist)
+    members: dict[str, bytes] = {}
+    with tarfile.open(dist / f"xkeen-module-{module_id}-{VERSION}.tar.gz", "r:gz") as archive:
+        for member in archive.getmembers():
+            if member.isreg():
+                members[member.name] = archive.extractfile(member).read()
+    manifest = json.loads(members.pop("module-manifest.json"))
+    payload = {name.removeprefix("payload/"): body for name, body in members.items()}
+    payload[changed] = payload[changed] + UPDATE_MARK
+    payload[added] = ADDED_BODY
+    manifest.update(
+        version=module_version,
+        # An update of a module is for the panel release it was built against.
+        min_core=VERSION,
+        ownership=sorted(payload),
+        max_size=sum(len(body) for body in payload.values()),
+    )
+    buffer = io.BytesIO()
+    entries = [("module-manifest.json", json.dumps(manifest).encode("utf-8"))]
+    entries += [("payload/" + relative, payload[relative]) for relative in sorted(payload)]
+    with gzip.GzipFile(fileobj=buffer, mode="wb", mtime=0) as packed, tarfile.open(fileobj=packed, mode="w") as archive:
+        for name, body in entries:
+            info = tarfile.TarInfo(name)
+            info.size = len(body)
+            info.mtime = 1_700_000_000
+            archive.addfile(info, io.BytesIO(body))
+    body = buffer.getvalue()
+    asset = f"xkeen-module-{module_id}-{module_version}.tar.gz"
+    (dist / asset).write_bytes(body)
+
+    catalog_bytes = (dist / "catalog.json").read_bytes()
+    entry = dict(next(item for item in json.loads(catalog_bytes)["modules"] if item["id"] == module_id))
+    entry.update(
+        version=module_version, archive=asset, size=len(body), sha256=hashlib.sha256(body).hexdigest(),
+        min_core=VERSION, ownership=sorted(payload),
+    )
+    document = {
+        "kind": "xkeen-module-updates", "schema_version": 1, "panel_version": VERSION, "serial": 1, "modules": [entry],
+    }
+    updates_bytes = json.dumps(document, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    key = Ed25519PrivateKey.generate()
+    (dist / "catalog.json.sig").write_bytes(_sign(key, catalog_bytes))
+    (dist / "module-updates.json").write_bytes(updates_bytes)
+    (dist / "module-updates.json.sig").write_bytes(_sign(key, updates_bytes))
+    pem = key.public_key().public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
+    return {"release-2026": pem}
+
+
+def test_update_of_a_module_over_a_real_profile(built: Built, tmp_path: Path) -> None:
+    module_id = "engine.xray"
+    changed = sorted(path for path in built.ownership[module_id] if path.endswith(".py"))[0]
+    added = "services/xray_module_update_probe.py"
+    panel = _install_profile(built, tmp_path, "xray-minimal")
+    modules_before = (panel / "modules.json").read_bytes()
+    profile_before = (panel / "install-profile.json").read_bytes()
+    before = _files(panel)
+    keyring = _publish_update(built, tmp_path / "dist", module_id, "1.0.1", changed, added)
+    client = ModuleCatalogClient(
+        panel, transport=DirectoryTransport(tmp_path / "dist"), keyring=keyring,
+        platform_architecture=ARCHITECTURE, core_version=VERSION,
+    )
+    catalog = client.get_effective_catalog(VERSION).catalog
+    plan = build_plan("update", module_id, panel_root=panel, state_dir=panel, catalog=catalog, architecture=ARCHITECTURE)
+
+    result = run_operation(
+        Journal.create(panel, plan, new_operation_id(), extra={}), state_dir=panel, client=client,
+        architecture=ARCHITECTURE, restart=lambda: None, wait_healthy=lambda _phase: True,
+    )
+
+    assert result == "committed", read_status(panel)
+    after = _files(panel)
+    assert after[changed] == before[changed] + UPDATE_MARK
+    assert after[added] == ADDED_BODY
+    assert _dangling(built, set(after)) == []
+    installed = json.loads((panel / "module-installed.json").read_text(encoding="utf-8"))
+    assert installed["versions"] == {module_id: "1.0.1"}
+    overrides = json.loads((panel / "module-ownership-overrides.json").read_text(encoding="utf-8"))
+    assert overrides["modules"] == {module_id: sorted({*built.ownership[module_id], added})}
+    assert added in json.loads((panel / "install-managed.json").read_text(encoding="utf-8"))["paths"]
+    # The switch of the module and the profile label stay the owner's.
+    assert (panel / "modules.json").read_bytes() == modules_before
+    assert (panel / "install-profile.json").read_bytes() == profile_before
+    touched = {path for path in set(before) | set(after) if before.get(path) != after.get(path)}
+    bookkeeping = {path for path in touched if path.startswith(("module-catalog/", "module-operations/"))}
+    assert touched - bookkeeping <= {changed, added} | STATE_PATHS | {"module-ownership-overrides.json"}

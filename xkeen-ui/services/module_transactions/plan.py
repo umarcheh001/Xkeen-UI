@@ -34,13 +34,17 @@ from .previous_version import read_previous_version
 from .state import ModuleTransactionError, transactions_root
 
 
-OPERATIONS = ("install", "repair", "remove")
+OPERATIONS = ("install", "repair", "remove", "update")
 SCOPES = ("module", "panel", "profile")
 OWNERSHIP_MAP_FILENAME = "module-ownership.json"
 # The editor is a dependency of both engines and its variant belongs to the
-# installer, so it can only be laid out again, never added or taken away.
+# installer, so it can only be laid out again or updated, never added or taken away.
 REPAIR_ONLY_MODULES = frozenset({"tool.editor"})
 _REPAIR_ONLY_MODULES = REPAIR_ONLY_MODULES
+REPAIR_ONLY_OPERATIONS = frozenset({"repair", "update"})
+# Operations that lay a module that is installed already: files the new entry
+# does not name leave with them.
+_RELAYING_OPERATIONS = frozenset({"repair", "update"})
 
 # Compatibility exports for Stage 8.3 callers; the predicate itself is shared
 # with the profile planner so these contracts cannot diverge in production.
@@ -90,7 +94,7 @@ class Plan:
     required_free_bytes: int
     restart_required: bool
     installed_after: tuple[str, ...]
-    # The module's own version the operation lays (install, repair); ``None``
+    # The module's own version the operation lays (install, repair, update); ``None``
     # for a removal and for the plans of a panel written before modules had
     # versions of their own.
     module_version: str | None = None
@@ -427,7 +431,7 @@ def build_plan(
         operation not in OPERATIONS
         or module_id == "core"
         or module_id not in ownership.modules
-        or (module_id in _REPAIR_ONLY_MODULES and operation != "repair")
+        or (module_id in _REPAIR_ONLY_MODULES and operation not in REPAIR_ONLY_OPERATIONS)
     ):
         _fail("module_operation_forbidden", "this operation is not available for the module", operation=operation, module_id=module_id)
 
@@ -460,7 +464,7 @@ def build_plan(
         _fail("catalog_architecture_unsupported", "the module is not published for this router", architecture=architecture)
 
     installed = read_installed_modules(Path(state_dir))
-    # The version an install or a repair lays: that of the update entry, else
+    # The version an install, a repair or an update lays: that of the update entry, else
     # the one this panel build carries.
     module_version: str | None = None
     module_files: tuple[str, ...] | None = None
@@ -501,12 +505,22 @@ def build_plan(
         # which undoing an interrupted operation at boot must not need.
         from services.module_package_contract import compare_semver
 
-        if compare_semver(module_version, installed_version) < 0:
-            # The newest entry could not be read: laying this one would
-            # silently take back a released fix.
+        comparison = compare_semver(module_version, installed_version)
+        if comparison < 0:
+            # The newest entry could not be read, or is older than what is
+            # installed: laying it would silently take back a released fix.
             _fail(
                 "module_update_catalog_unavailable",
-                "the module is newer than the catalog entry; the update catalog cannot be read",
+                "a newer version of the module is installed than the catalog has",
+                module_id=module_id,
+                installed_version=installed_version,
+                module_version=module_version,
+            )
+        if operation == "update" and (not update_entry or comparison == 0):
+            # Only a signed update entry newer than the installed module is an update.
+            _fail(
+                "module_update_not_available",
+                "there is no newer version of the module",
                 module_id=module_id,
                 installed_version=installed_version,
                 module_version=module_version,
@@ -531,15 +545,16 @@ def build_plan(
         incoming = 0
     else:
         files_add = files
-        # A repair may lay an entry with fewer files than the module has now:
-        # what the new entry does not name would stay on the storage unowned.
+        # A repair or an update may lay an entry with fewer files than the
+        # module has now: what the new entry does not name would stay on the
+        # storage unowned.
         files_remove = tuple(
             sorted(
                 path
                 for path in ownership.modules[module_id]
                 if path not in set(files) and (panel_root / path).is_file()
             )
-        ) if operation == "repair" else ()
+        ) if operation in _RELAYING_OPERATIONS else ()
         archive = ArchiveSource(archive=str(entry["archive"]), size=int(entry["size"]), sha256=str(entry["sha256"]))
         installed_after = installed | {module_id}
         # The archive itself plus its unpacked payload. The normalized catalog

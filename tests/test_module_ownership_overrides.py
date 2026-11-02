@@ -211,8 +211,9 @@ def test_remove_takes_the_files_of_the_updated_module(tree):
     assert plan.files_remove == tuple(sorted(files))
     updates = state_file_updates(tree.root, plan)
     assert _json(updates[OVERRIDES_FILENAME]) == {"schema_version": 1, "modules": {}}
-    # Версии пишет задача обновления модулей; здесь их не трогают.
-    assert _json(updates["module-installed.json"])["versions"] == {"engine.mihomo": UPDATED}
+    # Удалённый модуль забывает и свою версию: иначе следующая установка из
+    # выпуска встретила бы «более новую» запись и отказала.
+    assert "versions" not in _json(updates["module-installed.json"])
 
 
 def test_install_of_update_entry_records_its_files(tmp_path: Path):

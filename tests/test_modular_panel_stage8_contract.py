@@ -300,12 +300,13 @@ def test_stage8_contract_describes_closed_lifecycle_api(tmp_path) -> None:
         "install",
         "repair",
         "remove",
+        "update",
         "panel-update",
         "profile-transition",
     ]
     assert lifecycle["execution"] == "detached module transaction runner"
     assert lifecycle["plan_guard"] == "lowercase SHA-256 of canonical server plan and dependency diff"
-    assert lifecycle["update_available"] is False
+    assert lifecycle["update_available"] == "the newest signed entry is newer than the installed module version"
     assert lifecycle["recovery_restarts_implicitly"] is False
     assert "## Lifecycle API 8.4" in markdown
     assert "equal to the installed panel release" not in markdown
@@ -321,6 +322,9 @@ def test_stage8_lifecycle_document_and_roadmap_are_closed() -> None:
     plan = PLAN.read_text(encoding="utf-8")
     docs_index = DOCS_INDEX.read_text(encoding="utf-8")
 
+    # A module has a version of its own and is updated by itself.
+    assert "Версия модуля равна версии установленной панели" not in lifecycle
+    assert "`update`" in lifecycle and "module_update_not_available" in lifecycle
     for fragment in (
         "GET /api/modules/installed",
         "POST /api/modules/operations/apply",
