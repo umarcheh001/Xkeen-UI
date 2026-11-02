@@ -1,5 +1,5 @@
 import { editorChangeOf, renderInstalled, renderAvailable, renderCatalogError, renderPlan, renderPlanError, renderPrepareDialog, renderOperationDialog, renderOperationStatus, hasOperationStatus, describeLifecycleFailure, renderPageAlert, TILE_REFUSAL_CODES } from './render.js';
-import { lifecycleAvailable } from '../panel_summary.js';
+import { lifecycleAvailable, modulesChangeable } from '../panel_summary.js';
 import { clearModulesUpdateBadge, reconcileModulesUpdateBadge, reconcileModulesUpdateCheck, reconcileModulesUpdatePlan, reconcileModulesUpdateStatus } from './badge.js';
 
 // The panel restarts at the end of every operation and after a restart
@@ -102,6 +102,10 @@ export function createModuleManagerController({ root, api, pollMs, reload = () =
   // Closed in this page even when the browser keeps no storage.
   let dismissedId = null;
   let dialogEditorChange = null;
+  // The installed version of a module the window updates: its plan named it.
+  let dialogFromVersion = '';
+  // Bytes a second of the archive an operation downloads, between two statuses.
+  const download = { sample: null, speed: null };
   let terminalRefreshed = null;
   let restartWait = null;
   let restartTimedOut = false;
@@ -229,7 +233,29 @@ export function createModuleManagerController({ root, api, pollMs, reload = () =
   // What of the state the cards depend on besides the data they show.
   function cardsState() {
     return [state.selectedTab, mutationsLocked(), canRestart(), statusFresh, installedFresh, statusChecked,
-      panelUnreachable, restartWait !== null, busy, statusRefreshPending].join('|');
+      panelUnreachable, restartWait !== null, busy, statusRefreshPending, JSON.stringify(runningUpdate())].join('|');
+  }
+
+  // Updates of single modules found by the last check. A local build only looks.
+  function moduleUpdateOffers() {
+    if (!modulesChangeable(state.installed) || !state.update?.checked) return [];
+    const installed = new Set((state.installed?.modules || []).map((item) => item?.id));
+    const offers = Array.isArray(state.update.module_updates) ? state.update.module_updates : [];
+    return offers.filter((offer) => offer && typeof offer.module_id === 'string' && typeof offer.version === 'string'
+      && installed.has(offer.module_id));
+  }
+
+  function moduleUpdatesStale() {
+    if (!modulesChangeable(state.installed) || !state.update?.checked) return null;
+    const reason = state.update.module_updates_stale_reason;
+    return typeof reason === 'string' && reason ? reason : null;
+  }
+
+  // The update of a module running now: its tile says where it goes.
+  function runningUpdate() {
+    const status = state.status;
+    if (status?.result !== 'running' || status.operation !== 'update' || !status.module_id) return null;
+    return { module_id: status.module_id, version: status.module_version || '' };
   }
 
   function render() {
@@ -272,6 +298,9 @@ export function createModuleManagerController({ root, api, pollMs, reload = () =
         openMenus,
         refusals,
         onDismissRefusal: dismissRefusal,
+        moduleUpdates: moduleUpdateOffers(),
+        updating: runningUpdate(),
+        updateStaleReason: moduleUpdatesStale(),
       });
     } else {
       host.textContent = 'Загрузка модулей…';
@@ -299,11 +328,13 @@ export function createModuleManagerController({ root, api, pollMs, reload = () =
     const notice = waitNotice();
     const names = moduleNames();
     // The block is a live region: the same words drawn again are read aloud again.
-    const drawing = JSON.stringify([shown, locked, notice, shown?.module_id ? names.get(shown.module_id) || null : null, dialogMode, dialogOperationId]);
+    const drawing = JSON.stringify([shown, locked, notice, shown?.module_id ? names.get(shown.module_id) || null : null, dialogMode, dialogOperationId, download.speed]);
     if (drawing === drawnStatus) return;
     drawnStatus = drawing;
     if (dialogMode === 'operation' && shown && shown.operation_id === dialogOperationId) {
-      renderOperationDialog(dialog, shown, { notice, busy: locked, names, cancelPending, editorChange: dialogEditorChange });
+      renderOperationDialog(dialog, shown, {
+        notice, busy: locked, names, cancelPending, editorChange: dialogEditorChange, fromVersion: dialogFromVersion, speed: download.speed,
+      });
     }
     const focused = statusHost.contains(document.activeElement) ? document.activeElement.textContent : null;
     // The window tells how an operation ended; the page keeps only what the
@@ -336,6 +367,7 @@ export function createModuleManagerController({ root, api, pollMs, reload = () =
     dialogMode = null;
     dialogOperationId = null;
     dialogEditorChange = null;
+    dialogFromVersion = '';
     drawnStatus = null;
     if (dialog?.open) dialog.close();
     if (restoreFocus && returnFocus?.isConnected) returnFocus.focus();
@@ -578,8 +610,25 @@ export function createModuleManagerController({ root, api, pollMs, reload = () =
     if (active && returnTo === 'available' && lifecycleAvailable(state.installed)) await selectTab('available');
   }
 
+  // Bytes a second between two statuses of the same download, as the panel update window counts them.
+  function noteDownloadSpeed(status) {
+    if (status?.result !== 'running' || status.step !== 'downloading') {
+      download.sample = null;
+      download.speed = null;
+      return;
+    }
+    const now = Date.now();
+    const bytes = Number(status.downloaded_bytes) || 0;
+    const previous = download.sample;
+    download.sample = { at: now, bytes };
+    if (previous && now > previous.at && bytes > previous.bytes) {
+      download.speed = (bytes - previous.bytes) / ((now - previous.at) / 1000);
+    }
+  }
+
   function observeStatus(status, operationId) {
     const watched = state.status?.result === 'running' ? state.status.operation_id : null;
+    noteDownloadSpeed(status);
     state.status = { ...status, operation_id: status.operation_id || operationId };
     statusFresh = true;
     statusChecked = true;
@@ -675,7 +724,10 @@ export function createModuleManagerController({ root, api, pollMs, reload = () =
     try {
       const applied = await api.apply(plan.operation, plan.module_id, plan.plan_id);
       // The screen was left meanwhile: the operation is told by its card on return.
-      if (active) openOperationDialog(applied.operation_id || applied.status?.operation_id);
+      if (active) {
+        openOperationDialog(applied.operation_id || applied.status?.operation_id);
+        dialogFromVersion = plan.operation === 'update' ? String(plan.installed_version || '') : '';
+      }
       observeStatus(applied.status, applied.operation_id);
     } catch (error) {
       if (error?.code === 'operation_in_progress') await refreshInstalledAfterTerminal();

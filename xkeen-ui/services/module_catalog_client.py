@@ -869,8 +869,13 @@ class ModuleCatalogClient:
         snapshot: CatalogSnapshot,
         module_id: str,
         destination_dir: str | os.PathLike[str],
+        *,
+        progress: Callable[[int], None] | None = None,
     ) -> Path:
-        """Stream one trusted module asset and return it only after byte verification."""
+        """Stream one trusted module asset and return it only after byte verification.
+
+        ``progress`` hears the bytes written so far, as for the panel archive.
+        """
 
         entry = next(
             (
@@ -899,6 +904,7 @@ class ModuleCatalogClient:
             expected_size=expected_size,
             expected_digest=expected_digest,
             destination_dir=destination_dir,
+            progress=progress,
         )
 
     def download_verified_panel_archive(

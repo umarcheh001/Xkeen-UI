@@ -32,6 +32,9 @@ OPERATION_ID = "20261006T120000Z-abcdef"
 NEXT_VERSION = "2.11.0"
 INSTALLED = ("core", "tool.editor", "engine.mihomo")
 TARGET = "tool.terminal"
+# An installed module with an update of its own inside the installed release.
+UPDATED = "engine.mihomo"
+UPDATED_VERSION = "1.0.1"
 # 2026-10-08 12:39:02 UTC and a fraction: the server speaks in float seconds.
 CLOCK_START = 1791463142.1234567
 CLOCK_STEP = 0.37
@@ -96,16 +99,26 @@ def _service(panel, registry, release):
     return service
 
 
-def _run(panel, release, operation: str, *, on_step: Callable[[str], None] | None = None, healthy: bool = True) -> str:
+def _run(
+    panel,
+    release,
+    operation: str,
+    *,
+    on_step: Callable[[str], None] | None = None,
+    healthy: bool = True,
+    module_id: str = TARGET,
+) -> str:
     from services.module_transactions.executor import run_operation
     from services.module_transactions.journal import Journal
     from services.module_transactions.plan import build_plan
     from tests.support.module_tx import ARCHITECTURE
 
-    plan = build_plan(operation, TARGET, **{**panel.kwargs, "catalog": release.catalog})
-    journal = Journal.create(panel.root, plan, OPERATION_ID, extra={})
     client = release.client(panel.state)
     client._now = time.time
+    # An update is laid from the newest entry, as the service plans it.
+    catalog = client.get_effective_catalog(release.version).catalog if operation == "update" else release.catalog
+    plan = build_plan(operation, module_id, **{**panel.kwargs, "catalog": catalog})
+    journal = Journal.create(panel.root, plan, OPERATION_ID, extra={})
     return run_operation(
         journal,
         state_dir=panel.state,
@@ -176,7 +189,7 @@ def build_fixtures() -> dict[str, Any]:
     from services.module_transactions import journal as journal_module
     from services.module_transactions.executor import OperationCancelled
     from services.module_transactions.state import ModuleTransactionError
-    from tests.support.module_tx import make_release
+    from tests.support.module_tx import make_release, publish_module_updates
 
     with (
         tempfile.TemporaryDirectory(prefix="xk-module-fixtures-") as raw,
@@ -253,6 +266,24 @@ def build_fixtures() -> dict[str, Any]:
         service = _service(panel, registry, make_release(version=NEXT_VERSION))
         fixtures["update_check"] = service.panel_update_check()
         fixtures["panel_update_plan"] = service.plan("panel-update", None)
+
+        # Mihomo has an update of its own inside the installed release.
+        panel, registry = _panel(tmp, "module-update")
+        module_release = make_release()
+        publish_module_updates(module_release, {UPDATED: UPDATED_VERSION})
+        service = _service(panel, registry, module_release)
+        fixtures["update_check_modules"] = service.panel_update_check()
+        fixtures["available_update"] = service.available()
+        fixtures["module_update_plan"] = service.plan("update", UPDATED)
+        steps = {}
+        _run(
+            panel, module_release, "update", module_id=UPDATED,
+            on_step=lambda step: steps.setdefault(step, service.status()),
+        )
+        fixtures["module_update_steps"] = steps
+        fixtures["module_update_committed"] = service.status()
+        fixtures["installed_after_update"] = service.installed()
+        fixtures["update_check_after_update"] = service.panel_update_check()
 
     return _pin(fixtures)
 

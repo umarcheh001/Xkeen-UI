@@ -4,12 +4,13 @@ import { wireTopLevelNavigation } from '../pages/top_level_nav.shared.js';
 const API_BASE = '/api/notifications';
 const CHANNEL_NAME = 'xkeen-notification-center.v1';
 const NARROW = '(max-width: 680px)';
-// Release notes lead to the screen where the update is planned and applied.
-// Modules arrive with the panel update: every release note leads there.
+// Release notes lead to the screen where the update is planned and applied:
+// the panel update, and the update of one module inside the installed release.
 const RECORD_LINKS = {
   'panel-update': 'К обновлению',
   'module-new': 'К обновлению',
   'module-update': 'К обновлению',
+  module_update_available: 'К обновлению',
 };
 
 // The card drawn when the panel itself did not answer: no record behind it.

@@ -231,13 +231,16 @@ function attentionStat(count) {
   return { tone: count ? 'warn' : 'ok', value: String(count), label: one ? 'требует внимания' : 'требуют внимания' };
 }
 
-export function updateStat(snapshot, update) {
+// moduleUpdates counts modules with an update of their own; while the panel
+// itself is current, the counter tells of them instead.
+export function updateStat(snapshot, update, { moduleUpdates = 0, moduleUpdatesLabel = '' } = {}) {
   if (!lifecycleAvailable(snapshot)) return { tone: 'muted', value: '—', label: 'обновление из окна недоступно' };
   if (update?.loading) return { tone: 'muted', value: '…', label: 'проверяем обновления' };
   if (update?.error) return { tone: 'muted', value: '—', label: 'не удалось проверить' };
   if (!update?.checked) return { tone: 'muted', value: '—', label: 'обновления не проверены' };
   if (update.requires_installer) return { tone: 'warn', value: update.target_version || '—', label: 'только через установщик' };
   if (update.update_available) return { tone: 'accent', value: update.target_version || '—', label: 'доступно обновление' };
+  if (moduleUpdates > 0 && moduleUpdatesLabel) return { tone: 'accent', value: String(moduleUpdates), label: moduleUpdatesLabel };
   if (update.stable_unreleased) return { tone: 'ok', value: update.source_version || snapshot?.panel_version || '—', label: 'стабильных выпусков пока нет' };
   const current = update.source_version || snapshot?.panel_version || '—';
   return { tone: 'ok', value: current, label: update.freshness === 'stale' ? 'актуальна по сохранённым данным' : 'версия актуальна' };
@@ -254,12 +257,13 @@ function statValue(value) {
 }
 
 // Три плашки: сколько включено, сколько требует внимания, что с обновлением.
-export function summaryStats(snapshot, update, issues) {
+// modules — { moduleUpdates, moduleUpdatesLabel }: обновления отдельных модулей.
+export function summaryStats(snapshot, update, issues, modules = {}) {
   const stats = node('div', 'xk-summary-stats');
   for (const [key, stat] of [
     ['enabled', enabledStat(snapshot)],
     ['attention', attentionStat(issues.length)],
-    ['update', updateStat(snapshot, update)],
+    ['update', updateStat(snapshot, update, modules)],
   ]) {
     const cell = node('div', `xk-summary-stat${stat.tone ? ` is-${stat.tone}` : ''}`);
     cell.dataset.stat = key;

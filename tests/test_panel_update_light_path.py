@@ -133,6 +133,10 @@ def test_update_check_reads_only_the_signed_catalog_when_an_update_exists(tmp_pa
         "min_updater": None,
         "freshness": "fresh",
         "stale_reason": None,
+        # This release serves no catalog of the installed 2.10.0: module
+        # updates stay unchecked, and the panel's own answer is unspoiled.
+        "module_updates": [],
+        "module_updates_stale_reason": "catalog_unavailable",
     }
     assert _panel_downloads(release) == 0
     assert catalog.latest_requests == 1

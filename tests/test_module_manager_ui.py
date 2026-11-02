@@ -135,3 +135,17 @@ def test_stable_devtools_update_is_a_modules_link_not_a_second_runner():
     # nothing and holds one link to the Modules screen is checked in a browser.
     assert "api.plan(" not in source and "api.apply(" not in source
     assert not (ROOT / "xkeen-ui/static/js/features/update_notifier.js").exists()
+
+
+def test_download_speed_is_said_in_megabits():
+    source = (MANAGER / "render.js").read_text(encoding="utf-8")
+
+    # Providers sell megabits a second: the speed is said the same way, sizes stay in megabytes.
+    assert "Мбит/с" in source
+    assert "МБ/с" not in source
+
+
+def test_module_update_notification_leads_to_the_modules_screen():
+    source = (ROOT / "xkeen-ui/static/js/features/notification_center.js").read_text(encoding="utf-8")
+
+    assert "module_update_available" in source

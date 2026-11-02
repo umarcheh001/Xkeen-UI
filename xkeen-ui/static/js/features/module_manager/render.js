@@ -11,8 +11,13 @@ function node(tag, className, text) {
   return element;
 }
 
+// The module's own version; the `version` of a catalog entry is the panel release.
+function moduleVersion(item) {
+  return item.module_version || item.version || '';
+}
+
 function moduleTitle(item) {
-  return [item.name || item.id || 'Модуль', item.module_version || item.version].filter(Boolean).join(' ');
+  return [item.name || item.id || 'Модуль', moduleVersion(item)].filter(Boolean).join(' ');
 }
 
 // A module is called by its name wherever the window knows it.
@@ -31,7 +36,7 @@ function dependencies(card, label, items, names) {
 }
 
 const ACTION_LABELS = {
-  install: 'Установить', repair: 'Восстановить', remove: 'Удалить',
+  install: 'Установить', repair: 'Восстановить', remove: 'Удалить', update: 'Обновить',
   'panel-update': 'Обновить панель', 'panel-rollback': 'Откатить панель',
   'profile-transition': 'Применить профиль',
 };
@@ -70,12 +75,12 @@ const MODULE_SET_LABELS = {
 };
 
 const OPERATION_TITLES = {
-  install: 'Установка модуля', repair: 'Восстановление модуля', remove: 'Удаление модуля',
+  install: 'Установка модуля', repair: 'Восстановление модуля', remove: 'Удаление модуля', update: 'Обновление модуля',
   'panel-update': 'Обновление панели', 'panel-rollback': 'Откат панели', 'profile-transition': 'Переход профиля',
 };
 
 const PLAN_ACTIONS = {
-  install: 'Установить модуль', repair: 'Восстановить модуль', remove: 'Удалить модуль',
+  install: 'Установить модуль', repair: 'Восстановить модуль', remove: 'Удалить модуль', update: 'Обновить модуль',
 };
 
 const RESULT_LABELS = {
@@ -413,9 +418,18 @@ function lockNote(text) {
   return note;
 }
 
-function versionLine(item) {
-  const version = item.module_version || item.version;
+function versionText(item) {
+  const version = moduleVersion(item);
   return version ? `версия ${version}` : '';
+}
+
+// offer is { version, installed_version } of the update the tile offers.
+function versionLine(item, offer = null) {
+  const text = versionText(item);
+  if (!text) return null;
+  const line = node('span', 'modules-tile-version', text);
+  if (offer) line.append(document.createTextNode(' → '), node('b', 'modules-tile-version-new', offer.version));
+  return line;
 }
 
 // Core is the panel itself: it is never switched, so it is not a tile.
@@ -424,7 +438,7 @@ function coreStrip(item) {
   strip.dataset.moduleId = item.id;
   const text = node('div', 'modules-core-text');
   text.append(node('strong', 'modules-tile-name', item.name || item.id));
-  text.append(node('span', 'modules-core-meta', [versionLine(item), item.description].filter(Boolean).join(' · ')));
+  text.append(node('span', 'modules-core-meta', [versionText(item), item.description].filter(Boolean).join(' · ')));
   strip.append(moduleIcon(item.id), text, lockNote('Не выключается'));
   return strip;
 }
@@ -450,14 +464,18 @@ function tileNotice(item, names) {
 const ENGINE_CORE_NAMES = { 'engine.xray': 'Xray', 'engine.mihomo': 'Mihomo' };
 
 const MENU_LABELS = { repair: 'Восстановить файлы модуля', remove: 'Удалить модуль' };
+const MENU_ICONS = { update: 'download', repair: 'restore', remove: 'trash' };
 
-function tileMenu(item, names, { onPlan, busy, openMenus }) {
+function tileMenu(item, names, { onPlan, busy, openMenus, offer = null }) {
+  const label = item.name || item.id;
   // The last engine is not removed: the panel would have nothing to manage.
   const actions = (Array.isArray(item.lifecycle_actions) ? item.lifecycle_actions : [])
-    .filter((action) => MENU_LABELS[action] && !(action === 'remove' && item.lock_reason === 'last_engine'));
+    .filter((action) => MENU_LABELS[action] && !(action === 'remove' && item.lock_reason === 'last_engine'))
+    .map((action) => ({ action, text: MENU_LABELS[action], aria: `${ACTION_LABELS[action]} ${label}` }));
+  // An update found for the module comes first.
+  if (offer) actions.unshift({ action: 'update', text: `Обновить до ${offer.version}`, aria: `Обновить ${label} до ${offer.version}` });
   const deps = Array.isArray(item.dependencies) ? item.dependencies : [];
   if (!actions.length && !deps.length) return null;
-  const label = item.name || item.id;
   const menu = node('details', 'modules-tile-menu');
   menu.open = openMenus.has(item.id);
   menu.addEventListener('toggle', () => {
@@ -469,12 +487,12 @@ function tileMenu(item, names, { onPlan, busy, openMenus }) {
   summary.title = `Действия: ${label}`;
   summary.insertAdjacentHTML('afterbegin', iconHtml('more', 'modules-tile-menu-icon'));
   const panel = node('div', 'modules-tile-menu-panel');
-  for (const action of actions) {
+  for (const { action, text, aria } of actions) {
     const button = node('button', `modules-tile-menu-item modules-action-${action}`);
     button.type = 'button';
-    button.insertAdjacentHTML('afterbegin', iconHtml(action === 'repair' ? 'restore' : 'trash', 'modules-action-icon'));
-    button.append(document.createTextNode(MENU_LABELS[action]));
-    button.setAttribute('aria-label', `${ACTION_LABELS[action]} ${label}`);
+    button.insertAdjacentHTML('afterbegin', iconHtml(MENU_ICONS[action], 'modules-action-icon'));
+    button.append(document.createTextNode(text));
+    button.setAttribute('aria-label', aria);
     button.dataset.operation = action;
     button.dataset.moduleId = item.id;
     button.disabled = busy;
@@ -511,18 +529,54 @@ function moduleSwitch(item, { onToggle, busy }) {
   return label;
 }
 
-function moduleTile(item, snapshot, names, { onToggle, onPlan, onEditorVariant, busy, openMenus, refusals, onDismissRefusal }) {
+// The bottom line of a tile with an update: the version found and the button,
+// or, while the update runs, where it goes. updatingTo is null when it does not run.
+function tileUpdate(item, offer, updatingTo, onPlan, busy) {
+  const row = node('div', 'modules-tile-update');
+  row.append(node('span', 'modules-tile-dot'));
+  if (updatingTo !== null) {
+    row.append(node('span', 'modules-tile-update-text', updatingTo ? `Обновляется до ${updatingTo}…` : 'Обновляется…'));
+    return row;
+  }
+  row.append(node('span', 'modules-tile-update-text', `Доступна версия ${offer.version}`));
+  const label = `Обновить «${item.name || item.id}» до ${offer.version}`;
+  const button = node('button', 'btn-primary modules-action modules-action-update');
+  button.type = 'button';
+  button.insertAdjacentHTML('afterbegin', iconHtml('download', 'modules-action-icon'));
+  button.append(document.createTextNode(ACTION_LABELS.update));
+  button.setAttribute('aria-label', label);
+  button.title = label;
+  button.dataset.operation = 'update';
+  button.dataset.moduleId = item.id;
+  button.disabled = busy;
+  button.addEventListener('click', () => onPlan('update', item.id, button));
+  row.append(button);
+  return row;
+}
+
+function noticeLine(host, notice) {
+  if (notice.tone === 'lock') host.append(lockNote(notice.text));
+  else host.append(node('span', 'modules-tile-dot'), node('span', '', notice.text));
+  return host;
+}
+
+function moduleTile(item, snapshot, names, {
+  onToggle, onPlan, onEditorVariant, busy, openMenus, refusals, onDismissRefusal, moduleUpdates = new Map(), updating = null,
+}) {
   const tile = node('article', 'modules-tile modules-module');
   tile.dataset.moduleId = item.id;
   if (item.enabled !== true) tile.classList.add('is-off');
+  // The update of this module running now, or the one found for it.
+  const updatingTo = updating && updating.module_id === item.id ? String(updating.version || '') : null;
+  const offer = updatingTo === null ? moduleUpdates.get(item.id) || null : null;
   const top = node('div', 'modules-tile-top');
   const title = node('div', 'modules-tile-title');
   title.append(node('strong', 'modules-tile-name', item.name || item.id));
-  const version = versionLine(item);
-  if (version) title.append(node('span', 'modules-tile-version', version));
+  const version = versionLine(item, offer);
+  if (version) title.append(version);
   top.append(moduleIcon(item.id), title);
   top.append(item.can_disable ? moduleSwitch(item, { onToggle, busy }) : node('span', 'modules-tile-switch-slot'));
-  const menu = tileMenu(item, names, { onPlan, busy, openMenus });
+  const menu = tileMenu(item, names, { onPlan, busy, openMenus, offer });
   if (menu) top.append(menu);
   tile.append(top);
   if (item.description) tile.append(node('p', 'modules-tile-description', item.description));
@@ -536,16 +590,42 @@ function moduleTile(item, snapshot, names, { onToggle, onPlan, onEditorVariant, 
     return tile;
   }
   const notice = tileNotice(item, names);
-  if (notice) {
-    const foot = node('div', `modules-tile-foot is-${notice.tone}`);
-    if (notice.tone === 'lock') foot.append(lockNote(notice.text));
-    else {
-      foot.append(node('span', 'modules-tile-dot'));
-      foot.append(node('span', '', notice.text));
-    }
+  if (offer || updatingTo !== null) {
+    // The update goes first; a note the tile had stays under it, in the same bottom line.
+    const foot = node('div', 'modules-tile-foot is-update');
+    foot.append(tileUpdate(item, offer, updatingTo, onPlan, busy));
+    if (notice) foot.append(noticeLine(node('div', `modules-tile-foot-row is-${notice.tone}`), notice));
     tile.append(foot);
+  } else if (notice) {
+    tile.append(noticeLine(node('div', `modules-tile-foot is-${notice.tone}`), notice));
   }
   return tile;
+}
+
+// Russian counts: 1 модуль, 2 модуля, 5 модулей.
+function modulesWord(count) {
+  const ones = count % 10;
+  const tens = count % 100;
+  if (ones === 1 && tens !== 11) return 'модуль';
+  if (ones >= 2 && ones <= 4 && (tens < 12 || tens > 14)) return 'модуля';
+  return 'модулей';
+}
+
+// The update document of the release could not be read: the screen works on,
+// with what it has, and says so calmly.
+function updateStaleNote(reason, retryWord) {
+  const line = node('p', 'modules-update-stale');
+  line.setAttribute('role', 'status');
+  line.dataset.code = String(reason || '');
+  line.insertAdjacentHTML('afterbegin', iconHtml('info', 'modules-update-stale-icon'));
+  const network = /transport|unavailable|network|timeout/.test(String(reason || ''));
+  const text = node('span');
+  text.append(
+    node('strong', '', 'Обновления модулей сейчас не проверить.'),
+    document.createTextNode(` ${network ? 'Не удалось связаться с GitHub.' : 'Каталог обновлений не прошёл проверку.'} Модули работают как прежде; проверка повторится сама, или нажмите «${retryWord}».`),
+  );
+  line.append(text);
+  return line;
 }
 
 function moduleSetLabel(name) { return MODULE_SET_LABELS[name] || 'свой набор'; }
@@ -562,7 +642,8 @@ function formatCatalogTime(seconds) {
 // release is one of the panel before modules and carries no catalog.
 const STABLE_UNRELEASED_HINT = 'Вы на стабильном канале, а все текущие обновления пока выходят как пререлизы. Как только появится стабильный выпуск, панель предложит его здесь.';
 
-function updateMessages(update, lifecycleReady) {
+// moduleNote says what is known of single-module updates, or is empty.
+function updateMessages(update, lifecycleReady, moduleNote = '') {
   const lines = [];
   const say = (className, text) => {
     const message = node('p', className, text);
@@ -579,7 +660,8 @@ function updateMessages(update, lifecycleReady) {
     if (update.freshness === 'stale') say('modules-alert', `Не удалось связаться с GitHub. Показаны данные каталога от ${formatCatalogTime(update.fetched_at)}.`);
     if (update.stable_unreleased) say('xk-summary-hint', STABLE_UNRELEASED_HINT);
     else if (update.requires_installer) say('modules-alert', `Версия ${update.target_version || 'из каталога'} требует обновления через установщик.`);
-    else if (update.update_available) say('xk-summary-hint', `Обновит панель и все модули одним выпуском.${when ? ` Проверено ${when}.` : ''}`);
+    else if (update.update_available) say('xk-summary-hint', `Обновит панель и все модули одним выпуском.${moduleNote ? ` ${moduleNote}` : ''}${when ? ` Проверено ${when}.` : ''}`);
+    else if (moduleNote) say('xk-summary-hint', `Панель актуальна. ${moduleNote}${when ? ` Проверено ${when}.` : ''}`);
     else say('xk-summary-hint', `${when ? `Проверено ${when}. ` : ''}Проверка не скачивает архив и не меняет панель.`);
   } else {
     say('xk-summary-hint', 'Проверка не скачивает архив и не меняет панель.');
@@ -595,8 +677,16 @@ function summaryActions(buttons) {
   return row;
 }
 
+function moduleUpdatesNote(offers, staleReason, names) {
+  if (offers.length) {
+    return `Есть обновления модулей: ${offers.map((offer) => `${moduleLabel(offer.module_id, names)} ${offer.version}`).join(', ')}.`;
+  }
+  return staleReason ? 'Обновления модулей не проверены: каталог выпуска недоступен.' : '';
+}
+
 function renderSummary(snapshot, {
   onPlan, busy, onRestart, canRestart, onCheckUpdate, update, onUpdateChannel, channelBusy,
+  moduleUpdates = [], updateStaleReason = null, names = null,
 }) {
   const summary = node('section', 'modules-summary card xk-summary is-wide');
   const head = node('div', 'xk-summary-head');
@@ -619,7 +709,10 @@ function renderSummary(snapshot, {
   // the warning names what the one button does instead.
   const transition = modulesChangeable(snapshot) ? pendingTransition(snapshot) : null;
   const controls = node('div', 'xk-summary-col is-controls');
-  controls.append(summaryStats(snapshot, update, summaryIssues(snapshot, { restartRequired: restartPending })));
+  controls.append(summaryStats(snapshot, update, summaryIssues(snapshot, { restartRequired: restartPending }), {
+    moduleUpdates: moduleUpdates.length,
+    moduleUpdatesLabel: `${modulesWord(moduleUpdates.length)} можно обновить`,
+  }));
   if (transition) {
     controls.append(node('p', 'modules-warning', transition.kind === 'editor'
       ? 'Нужно докачать файлы редакторов и перезапустить панель'
@@ -665,7 +758,7 @@ function renderSummary(snapshot, {
     buttons.push(check);
   }
   if (buttons.length) controls.append(summaryActions(buttons));
-  controls.append(...updateMessages(update, ready));
+  controls.append(...updateMessages(update, ready, moduleUpdatesNote(moduleUpdates, updateStaleReason, names)));
   summary.append(identity, controls);
   return summary;
 }
@@ -705,16 +798,16 @@ function describeBlocker(blocker, names) {
 
 // The window of one operation: its plan, then how it goes, then how it ended.
 const APPLY_LABELS = {
-  install: 'Установить', repair: 'Восстановить', remove: 'Удалить',
+  install: 'Установить', repair: 'Восстановить', remove: 'Удалить', update: 'Обновить',
   'panel-update': 'Обновить', 'panel-rollback': 'Откатить', 'profile-transition': 'Применить',
 };
 
 const RUNNING_LABELS = {
-  install: 'Установка…', repair: 'Восстановление…', remove: 'Удаление…',
+  install: 'Установка…', repair: 'Восстановление…', remove: 'Удаление…', update: 'Обновление…',
   'panel-update': 'Обновление…', 'panel-rollback': 'Откат…', 'profile-transition': 'Применение…',
 };
 
-const DONE_VERBS = { install: 'установлен', repair: 'восстановлен', remove: 'удалён' };
+const DONE_VERBS = { install: 'установлен', repair: 'восстановлен', remove: 'удалён', update: 'обновлён' };
 
 // The runner takes these steps in this order; «Готово» is the end of them.
 const PROGRESS_STEPS = [
@@ -729,6 +822,12 @@ function operationVersion(source) {
   return source.target_version || source.version || '';
 }
 
+// An update names the module's own versions: the installed one and the one it lays.
+function keepHint(source, fromVersion = '') {
+  if (source.operation !== 'update') return KEEP_HINT;
+  return `Текущие файлы модуля будут сохранены. При ошибке проверки или перезапуска панель вернёт ${fromVersion ? `версию ${fromVersion}` : 'прежнюю версию'}.`;
+}
+
 // A transition that only fetches another editor variant is named after it:
 // editorChange is { from, to } then, null for any other operation.
 function dialogTitle(source, names, editorChange = null) {
@@ -738,6 +837,7 @@ function dialogTitle(source, names, editorChange = null) {
     case 'panel-update': return version ? `Обновить панель до ${version}` : 'Обновить панель';
     case 'panel-rollback': return version ? `Откатить панель до ${version}` : 'Откатить панель';
     case 'profile-transition': return editorChange ? 'Докачать файлы редакторов и перезапустить' : 'Применить набор модулей';
+    case 'update': return [APPLY_LABELS.update, module, source.module_version ? `до ${source.module_version}` : ''].filter(Boolean).join(' ');
     default: return [APPLY_LABELS[source.operation] || 'Операция', module].filter(Boolean).join(' ');
   }
 }
@@ -750,7 +850,8 @@ function doneTitle(status, names, editorChange = null) {
     return editorChange ? `Редакторы переведены на «${editorVariantLabel(editorChange.to)}»` : 'Набор модулей применён';
   }
   const verb = DONE_VERBS[status.operation];
-  return verb && status.module_id ? `«${moduleLabel(status.module_id, names)}» ${verb}` : 'Операция завершена';
+  const to = status.operation === 'update' && status.module_version ? ` до ${status.module_version}` : '';
+  return verb && status.module_id ? `«${moduleLabel(status.module_id, names)}» ${verb}${to}` : 'Операция завершена';
 }
 
 function setDialogHead(dialog, title, description) {
@@ -775,7 +876,9 @@ function planFacts(plan, names, blockers, editorChange = null) {
   const version = operationVersion(plan);
   if (plan.module_id) {
     fact('Модуль', moduleLabel(plan.module_id, names));
-    if (version) fact('Версия', version, 'is-mono');
+    if (plan.operation === 'update' && plan.module_version) {
+      fact('Версия', plan.installed_version ? `${plan.installed_version} → ${plan.module_version}` : plan.module_version, 'is-mono');
+    } else if (version) fact('Версия', version, 'is-mono');
   } else if (plan.operation === 'panel-update' || plan.operation === 'panel-rollback') {
     if (version) fact('Версия', plan.source_version ? `${plan.source_version} → ${version}` : version, 'is-mono');
   } else if (editorChange) {
@@ -804,7 +907,7 @@ export function renderPlan(dialog, plan, names = null, { editorChange = null, pr
   const blockers = Array.isArray(plan.blockers) ? plan.blockers : [];
   const applicable = plan.applicable === true && Boolean(plan.plan_id);
   dialog.dataset.mode = 'plan';
-  setDialogHead(dialog, dialogTitle(plan, names, editorChange), applicable ? KEEP_HINT : 'План проверен на роутере, но применить его сейчас нельзя.');
+  setDialogHead(dialog, dialogTitle(plan, names, editorChange), applicable ? keepHint(plan, plan.installed_version) : 'План проверен на роутере, но применить его сейчас нельзя.');
   summary.replaceChildren(planFacts(plan, names, blockers, editorChange));
   // A plan that cannot be applied restarts nothing: only its refusal is said.
   if (applicable && plan.restart_required) {
@@ -875,7 +978,8 @@ function stepsBox({ phase, note, count, share, stateOf, tone }) {
 // the time the owner confirms, and the runner goes on from the fourth.
 const PREPARED_STEPS = 3;
 
-function progressBox(status, notice) {
+// speed is in bytes a second, between two answers about the same download.
+function progressBox(status, notice, speed = null) {
   const tone = RESULT_TONES[status.result] || 'run';
   const total = PROGRESS_STEPS.length;
   const running = status.result === 'running';
@@ -892,7 +996,18 @@ function progressBox(status, notice) {
       phase = 'Сверка копии архива';
     }
     note = notice || 'Окно можно закрыть, операция продолжится на роутере.';
-  } else {
+  }
+  // The archive coming down: how much, how fast, and the bar fills its step by the share.
+  let downloaded = null;
+  if (running && status.step === 'downloading' && phase === STEP_LABELS.downloading && !notice) {
+    const size = Number(status.total_bytes) || 0;
+    const done = Number(status.downloaded_bytes) || 0;
+    if (size > 0) {
+      note = downloadNote(done, size, speed);
+      downloaded = Math.min(done / size, 1);
+    }
+  }
+  if (!running) {
     reached = status.result === 'committed' ? total : Math.max(lastLoggedStep(status), 0);
     // Stopped on that check: the step after the prepared ones failed.
     if (status.operation === 'panel-update' && reached < PREPARED_STEPS) reached = PREPARED_STEPS;
@@ -906,7 +1021,7 @@ function progressBox(status, notice) {
     note,
     tone,
     count: Math.min(running ? reached + 1 : reached, total),
-    share: status.result === 'committed' ? 1 : (running ? (reached + 0.5) / total : reached / total),
+    share: status.result === 'committed' ? 1 : (running ? (reached + (downloaded ?? 0.5)) / total : reached / total),
     stateOf: (index) => {
       if (status.result === 'committed' || index < reached) return 'done';
       if (index === reached) return running ? 'active' : 'failed';
@@ -922,10 +1037,15 @@ function megabytes(bytes) {
   return (Math.max(Number(bytes) || 0, 0) / (1024 * 1024)).toFixed(1).replace('.', ',');
 }
 
+// Speed as providers sell it: megabits a second.
+function megabits(bytesPerSecond) {
+  return ((Math.max(Number(bytesPerSecond) || 0, 0) * 8) / 1000000).toFixed(1).replace('.', ',');
+}
+
 function downloadNote(done, total, speed) {
   const parts = [`${megabytes(done)} из ${megabytes(total)} МБ`];
   if (speed > 0) {
-    parts.push(`${megabytes(speed)} МБ/с`);
+    parts.push(`${megabits(speed)} Мбит/с`);
     if (total > done) parts.push(`осталось около ${Math.max(1, Math.round((total - done) / speed))} с`);
   }
   return parts.join(' · ');
@@ -993,12 +1113,16 @@ export function renderPrepareDialog(dialog, snapshot, { version = '', speed = nu
 
 // The operation goes on in the window it was planned in, and the window
 // tells how it ended when the panel comes back.
-export function renderOperationDialog(dialog, status, { notice = '', busy = false, names = null, cancelPending = false, editorChange = null } = {}) {
+// fromVersion is the installed version of a module being updated; speed is
+// in bytes a second while the archive comes down.
+export function renderOperationDialog(dialog, status, {
+  notice = '', busy = false, names = null, cancelPending = false, editorChange = null, fromVersion = '', speed = null,
+} = {}) {
   const summary = dialog.querySelector('#modules-plan-summary');
   const progress = dialog.querySelector('#modules-plan-progress');
   const running = status.result === 'running';
   dialog.dataset.mode = 'operation';
-  let description = KEEP_HINT;
+  let description = keepHint(status, fromVersion);
   if (status.result === 'committed') {
     description = Array.isArray(status.log) && status.log.some((record) => record?.step === 'restarting')
       ? 'Панель перезапущена и прошла проверку.'
@@ -1013,7 +1137,7 @@ export function renderOperationDialog(dialog, status, { notice = '', busy = fals
   summary.querySelector('.modules-plan-error')?.remove();
   summary.querySelectorAll('.modules-alert, .modules-warning').forEach((line) => line.remove());
   progress.hidden = false;
-  progress.replaceChildren(progressBox(status, notice));
+  progress.replaceChildren(progressBox(status, notice, speed));
   if (!running) appendOperationProblems(progress, status);
   setDialogButtons(dialog, {
     abort: running && status.operation_id ? { label: cancelPending ? 'Отменяем…' : 'Отменить операцию', disabled: busy || cancelPending } : null,
@@ -1044,6 +1168,9 @@ function operationTitle(status, names) {
   const title = OPERATION_TITLES[status.operation];
   if (!title) return 'Операция с модулями';
   if (status.operation === 'panel-update') return status.version ? `${title} до ${status.version}` : title;
+  if (status.operation === 'update' && status.module_id) {
+    return [`${title} «${moduleLabel(status.module_id, names)}»`, status.module_version ? `до ${status.module_version}` : ''].filter(Boolean).join(' ');
+  }
   if (!status.module_id) return [title, status.version].filter(Boolean).join(' ');
   return [`${title} «${moduleLabel(status.module_id, names)}»`, status.version].filter(Boolean).join(' ');
 }
@@ -1148,10 +1275,18 @@ export function renderInstalled(host, snapshot, onToggle, onPlan = () => {}, bus
   openMenus = new Set(),
   refusals = new Map(),
   onDismissRefusal = () => {},
+  // Updates of single modules: [{ module_id, version, installed_version }],
+  // the one running ({ module_id, version }) and why they could not be checked.
+  moduleUpdates = [],
+  updating = null,
+  updateStaleReason = null,
 } = {}) {
   host.replaceChildren();
+  const known = snapshot.module_names && typeof snapshot.module_names === 'object' ? snapshot.module_names : {};
+  const summaryNames = new Map(Object.entries(known));
   host.append(renderSummary(snapshot, {
     onPlan, busy, onRestart, canRestart, onCheckUpdate, update, onUpdateChannel, channelBusy,
+    moduleUpdates, updateStaleReason, names: summaryNames,
   }));
   const list = node('section', 'modules-list card');
   const listHeader = node('div', 'modules-list-header');
@@ -1161,6 +1296,7 @@ export function renderInstalled(host, snapshot, onToggle, onPlan = () => {}, bus
   );
   listHeader.querySelector('.modules-list-heading').append(node('h2', '', 'Установленные модули'));
   list.append(listHeader);
+  if (updateStaleReason) list.append(updateStaleNote(updateStaleReason, 'Проверить ещё раз'));
   const modules = Array.isArray(snapshot.modules) ? snapshot.modules : [];
   if (!modules.length) list.append(node('p', 'modules-empty', 'Установленных модулей нет.'));
   const names = new Map(modules.map((module) => [module.id, module.name || module.id]));
@@ -1169,8 +1305,11 @@ export function renderInstalled(host, snapshot, onToggle, onPlan = () => {}, bus
   const others = modules.filter((item) => item.id !== 'core');
   if (others.length) {
     const grid = node('div', 'modules-grid');
+    const offers = new Map(moduleUpdates.map((offer) => [offer.module_id, offer]));
     for (const item of others) {
-      grid.append(moduleTile(item, snapshot, names, { onToggle, onPlan, onEditorVariant, busy, openMenus, refusals, onDismissRefusal }));
+      grid.append(moduleTile(item, snapshot, names, {
+        onToggle, onPlan, onEditorVariant, busy, openMenus, refusals, onDismissRefusal, moduleUpdates: offers, updating,
+      }));
     }
     list.append(grid);
   }
@@ -1179,13 +1318,11 @@ export function renderInstalled(host, snapshot, onToggle, onPlan = () => {}, bus
 
 export function renderAvailable(host, catalog, onPlan = () => {}, busy = false, { names = null, onRefresh = null } = {}) {
   host.replaceChildren();
-  if (catalog.freshness === 'stale') {
-    // The server answered from the catalog it kept: not today's word.
-    const note = alertLine(
-      'modules-warning',
-      'Каталог мог устареть.',
-      `Не удалось связаться с GitHub, показан каталог${catalog.release_version ? ` выпуска ${catalog.release_version}` : ''} от ${formatCatalogTime(catalog.fetched_at)}.`,
-    );
+  // A release catalog never goes stale: a stale answer is that of the update
+  // document. The modules of the release are shown as they are.
+  const staleReason = catalog.update_stale_reason || (catalog.freshness === 'stale' ? catalog.stale_reason || 'catalog_unavailable' : null);
+  if (staleReason) {
+    const note = updateStaleNote(staleReason, 'Обновить каталог');
     if (typeof onRefresh === 'function') {
       const refresh = node('button', 'btn-secondary modules-inline-action', 'Обновить каталог');
       refresh.type = 'button';
@@ -1208,12 +1345,28 @@ export function renderAvailable(host, catalog, onPlan = () => {}, busy = false, 
   if (!modules.length) host.append(node('p', 'modules-empty', 'Доступных модулей нет.'));
   modules.forEach((item) => {
     const card = node('article', 'modules-card');
-    const heading = node('h2', '', moduleTitle(item));
+    // An installed module with a newer entry: both of its own versions.
+    const update = item.installed === true && item.update_available === true && !readOnly
+      && Array.isArray(item.lifecycle_actions) && item.lifecycle_actions.includes('update');
+    const heading = node('h2', '', update
+      ? `${item.name || item.id} ${item.installed_version} → ${item.module_version}`
+      : moduleTitle(item));
     if (item.installed === true) heading.append(node('span', 'modules-chip is-ok', 'Установлен'));
     card.append(heading);
     if (item.description) card.append(node('p', '', item.description));
     dependencies(card, 'Нужны модули', item.requires || item.dependencies, names);
     dependencies(card, 'Конфликтуют', item.conflicts, names);
+    if (update) {
+      const actionRow = node('div', 'modules-card-actions');
+      const button = node('button', 'btn-primary modules-action modules-action-update', `Обновить до ${item.module_version}`);
+      button.type = 'button';
+      button.dataset.operation = 'update';
+      button.dataset.moduleId = item.id;
+      button.disabled = busy;
+      button.addEventListener('click', () => onPlan('update', item.id, button));
+      actionRow.append(button, node('span', 'modules-card-installed', `установлена ${item.installed_version}`));
+      card.append(actionRow);
+    }
     // What is installed is repaired and removed on its own tab.
     const actions = item.installed === true || readOnly ? [] : (Array.isArray(item.lifecycle_actions) ? item.lifecycle_actions : []);
     if (actions.length) {

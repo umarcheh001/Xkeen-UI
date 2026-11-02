@@ -337,3 +337,91 @@ def test_notification_state_is_kept_by_the_installer():
     from services.module_profile_plan import user_owned
 
     assert user_owned("module-notifications.json")
+
+
+# --- Обновление модуля внутри установленного выпуска --------------------------
+
+
+def _module_update_payload(channel="stable"):
+    payload = _payload(channel)
+    payload.update(
+        target_version="2.10.0",
+        update_available=False,
+        current_modules=[],
+        target_modules=[],
+        module_updates=[{"module_id": "engine.xray", "version": "1.1.0", "installed_version": "1.0.0"}],
+    )
+    return payload
+
+
+def test_module_update_available_is_one_record_with_module_and_version(tmp_path: Path):
+    lifecycle = FakeLifecycle(_module_update_payload())
+    versions = {"engine.xray": "1.0.0"}
+    center = NotificationCenter(
+        lifecycle, state_dir=tmp_path, now=lambda: 2_000.0, module_versions=lambda: dict(versions)
+    )
+
+    first = center.check(force_refresh=True)
+    second = center.check(force_refresh=True)
+
+    records = [record for record in second["records"] if record["kind"] == "module_update_available"]
+    assert len(records) == 1
+    assert (records[0]["module_id"], records[0]["version"]) == ("engine.xray", "1.1.0")
+    assert records[0]["id"] == next(r["id"] for r in first["records"] if r["kind"] == "module_update_available")
+    assert "Happ" not in json.dumps(records[0], ensure_ascii=False)
+    center.mark_seen()
+    assert center.check(force_refresh=True)["unread_count"] == 0
+
+
+def test_module_update_record_is_the_same_on_either_channel(tmp_path: Path):
+    lifecycle = FakeLifecycle(_module_update_payload())
+    center = NotificationCenter(lifecycle, state_dir=tmp_path, now=lambda: 2_000.0, module_versions=lambda: {"engine.xray": "1.0.0"})
+    stable = center.check()
+    center.mark_seen()
+    write_channel(tmp_path, "prerelease")
+    lifecycle.payload = _module_update_payload("prerelease")
+
+    prerelease = center.check()
+
+    assert [r["id"] for r in prerelease["records"]] == [r["id"] for r in stable["records"]]
+    # Seen once is seen: the bell does not count it again on the other channel.
+    assert prerelease["unread_count"] == 0
+
+
+def test_module_update_record_goes_away_once_the_module_is_updated(tmp_path: Path):
+    lifecycle = FakeLifecycle(_module_update_payload())
+    versions = {"engine.xray": "1.0.0"}
+    center = NotificationCenter(
+        lifecycle, state_dir=tmp_path, now=lambda: 2_000.0, module_versions=lambda: dict(versions)
+    )
+    assert center.check()["unread_count"] == 1
+
+    versions["engine.xray"] = "1.1.0"
+
+    # Before the next check of the catalog the record no longer applies.
+    snapshot = center.snapshot()
+    assert snapshot["records"] == []
+    assert snapshot["unread_count"] == 0
+
+
+def test_module_update_record_follows_what_the_router_has_installed(tmp_path: Path):
+    from tests.support.module_lifecycle import make_service
+    from tests.support.module_tx import make_panel, make_release, publish_module_updates
+
+    panel = make_panel(tmp_path)
+    release = make_release()
+    publish_module_updates(release, {"engine.xray": "1.1.0"})
+    service, _catalog = make_service(panel, release)
+    center = NotificationCenter(service, state_dir=panel.state, now=lambda: 2_000.0)
+
+    checked = center.check(force_refresh=True)
+    assert [(r["kind"], r["module_id"], r["version"]) for r in checked["records"]] == [
+        ("module_update_available", "engine.xray", "1.1.0"),
+    ]
+
+    # The update is laid: the runner records the module's new version.
+    record = json.loads(panel.path("module-installed.json").read_text(encoding="utf-8"))
+    record["versions"] = {"engine.xray": "1.1.0"}
+    panel.path("module-installed.json").write_text(json.dumps(record), encoding="utf-8")
+
+    assert center.snapshot()["records"] == []

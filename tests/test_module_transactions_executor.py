@@ -672,3 +672,81 @@ def test_remove_after_update_clears_version_and_release_install_succeeds(tmp_pat
     assert plan.module_version == "1.0.0" and plan.module_files is None
     for relative in OWNERSHIP[DIAGNOSTICS]:
         assert panel.path(relative).read_bytes() == file_bytes(relative, VERSION)
+
+
+# --- Ход загрузки в окне операции ---------------------------------------------
+
+
+class _ChunkedTransport:
+    """Hands the archive over in pieces and notes what the status said meanwhile."""
+
+    def __init__(self, transport, state_dir: Path, pieces: int = 40) -> None:
+        self._transport = transport
+        self._state_dir = state_dir
+        self._pieces = pieces
+        self.seen: list[tuple[object, object]] = []
+
+    def fetch_bytes(self, url, **kwargs):
+        return self._transport.fetch_bytes(url, **kwargs)
+
+    def stream_to(self, url, output, **kwargs):
+        if not url.endswith(".tar.gz"):
+            return self._transport.stream_to(url, output, **kwargs)
+        body = self._transport.responses[url]
+        step = max(1, len(body) // self._pieces)
+        for start in range(0, len(body), step):
+            output.write(body[start:start + step])
+            status = read_status(self._state_dir)
+            self.seen.append((status.get("downloaded_bytes"), status.get("total_bytes")))
+        return len(body)
+
+
+def test_update_reports_downloaded_bytes_into_the_status(tmp_path: Path, monkeypatch) -> None:
+    from services.module_transactions import executor
+
+    panel = make_panel(tmp_path, installed=INSTALLED_WITH_DIAGNOSTICS)
+    release = make_release()
+    entries = publish_module_updates(release, {DIAGNOSTICS: "1.0.1"})
+    total = entries[DIAGNOSTICS]["size"]
+    chunked = _ChunkedTransport(release.transport, panel.state)
+    release.transport = chunked
+    # A clock that moves a second for every look: each piece is worth a note.
+    ticks = iter(range(10_000))
+    monkeypatch.setattr(executor, "_monotonic", lambda: float(next(ticks)))
+
+    result, _plan, _recorder = _run_update(panel, release, DIAGNOSTICS)
+
+    assert result == "committed", read_status(panel.state)
+    noted = [done for done, size in chunked.seen if done is not None]
+    assert noted and all(size == total for done, size in chunked.seen if done is not None)
+    assert noted == sorted(noted) and 0 < noted[0] < total
+    status = read_status(panel.state)
+    assert status["module_version"] == "1.0.1"
+
+
+def test_download_progress_is_written_sparingly(tmp_path: Path, monkeypatch) -> None:
+    from services.module_transactions import executor
+
+    panel = make_panel(tmp_path, installed=INSTALLED_WITH_DIAGNOSTICS)
+    release = make_release()
+    publish_module_updates(release, {DIAGNOSTICS: "1.0.1"})
+    chunked = _ChunkedTransport(release.transport, panel.state, pieces=200)
+    release.transport = chunked
+    writes: list[dict] = []
+    real_write = executor.write_status
+
+    def counting(state_dir, status):
+        if status.get("step") == "downloading":
+            writes.append(dict(status))
+        return real_write(state_dir, status)
+
+    monkeypatch.setattr(executor, "write_status", counting)
+    # The clock stands still: the pieces come faster than a note is worth.
+    monkeypatch.setattr(executor, "_monotonic", lambda: 100.0)
+
+    result, _plan, _recorder = _run_update(panel, release, DIAGNOSTICS)
+
+    assert result == "committed", read_status(panel.state)
+    # The step itself, and the archive complete; not a note per piece.
+    assert len(writes) <= 3
+    assert writes[-1]["downloaded_bytes"] == writes[-1]["total_bytes"]

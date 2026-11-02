@@ -654,7 +654,9 @@ test.describe('What the window says about operations and refusals', () => {
     await page.goto('/modules');
     await page.getByRole('tab', { name: 'Доступные' }).click();
     const host = page.locator('#modules-card-host');
-    await expect(host.locator('.modules-warning')).toContainText('Каталог мог устареть. Не удалось связаться с GitHub, показан каталог выпуска 2.10.0 от');
+    // A stale answer is that of the update document: one calm line, the release is shown as it is.
+    await expect(host.locator('.modules-update-stale')).toContainText('Обновления модулей сейчас не проверить. Не удалось связаться с GitHub.');
+    await expect(host.locator('.modules-warning')).toHaveCount(0);
     await expect(host.getByRole('button', { name: 'Обновить каталог' })).toBeVisible();
     const files = host.locator('.modules-card').filter({ hasText: 'Файловый менеджер 2.10.0' });
     await expect(files.locator('.modules-chip')).toHaveText('Установлен');

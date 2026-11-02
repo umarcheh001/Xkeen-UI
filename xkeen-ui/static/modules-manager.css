@@ -716,6 +716,112 @@ body.modules-page .modules-tile-foot.is-bad { color: var(--modules-danger); }
 body.modules-page .modules-tile-foot.is-info { color: var(--op-accent); }
 body.modules-page .modules-tile-foot.is-muted { color: var(--modules-faint); }
 
+/* An update of the module (02.11.2026): the new version in the accent, and in
+   the bottom line the version found with its button. A note the tile already
+   had stays under it, under the same divider. */
+body.modules-page .modules-tile-version-new {
+  color: var(--modules-accent);
+  font-weight: 650;
+}
+
+body.modules-page .modules-tile-foot.is-update {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+body.modules-page .modules-tile-update,
+body.modules-page .modules-tile-foot-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+body.modules-page .modules-tile-update {
+  min-height: 26px;
+  color: var(--modules-accent);
+}
+
+body.modules-page .modules-tile-update-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+body.modules-page .modules-tile-foot-row.is-warn { color: var(--op-warning, #d4a64a); }
+body.modules-page .modules-tile-foot-row.is-bad { color: var(--modules-danger); }
+body.modules-page .modules-tile-foot-row.is-info { color: var(--op-accent); }
+body.modules-page .modules-tile-foot-row.is-muted { color: var(--modules-faint); }
+
+html body.modules-page .modules-tile-update .modules-action-update,
+html body.modules-page .modules-card-actions button.btn-primary.modules-action-update {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  border-color: var(--modules-accent) !important;
+  background: var(--modules-accent) !important;
+  color: #ffffff !important;
+  font-weight: 600;
+}
+
+html body.modules-page .modules-tile-update .modules-action-update {
+  min-height: 26px;
+  padding: 0 12px !important;
+  border-radius: 5px;
+  font-size: calc(12px * var(--xk-font-scale, 1)) !important;
+}
+
+html body.modules-page .modules-tile-update .modules-action-update:hover:not(:disabled),
+html body.modules-page .modules-card-actions button.btn-primary.modules-action-update:hover:not(:disabled) {
+  border-color: var(--modules-accent-hover) !important;
+  background: var(--modules-accent-hover) !important;
+}
+
+html body.modules-page :is(.modules-tile-update, .modules-card-actions) .modules-action-update:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+}
+
+body.modules-page .modules-card-actions:has(.modules-action-update) {
+  align-items: center;
+}
+
+body.modules-page .modules-card-installed {
+  color: var(--modules-faint);
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+}
+
+/* The update document could not be read: one calm line, the screen works on. */
+body.modules-page .modules-update-stale {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  border: 1px solid var(--modules-border);
+  border-radius: 6px;
+  background: var(--modules-surface-raised);
+  color: var(--modules-muted);
+  font-size: calc(12.5px * var(--xk-font-scale, 1));
+  line-height: 1.45;
+}
+
+body.modules-page .modules-update-stale > span { flex: 1 1 260px; min-width: 0; }
+body.modules-page .modules-update-stale strong { color: var(--modules-text); font-weight: 600; }
+body.modules-page .modules-update-stale .modules-inline-action { margin: 0; }
+
+body.modules-page .modules-update-stale-icon {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 /* The switch of the main panel: accent when on, no words beside it. */
 body.modules-page .modules-switch.dt-switch.xk-switch-bare {
   display: inline-flex !important;

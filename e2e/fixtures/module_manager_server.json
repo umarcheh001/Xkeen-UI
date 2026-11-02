@@ -523,6 +523,8 @@
     "affected_module_ids": [
       "tool.terminal"
     ],
+    "module_version": "1.0.0",
+    "installed_version": null,
     "files_add": [
       "services/ws_pty.py",
       "static/js/pages/terminal.lazy.entry.js",
@@ -559,7 +561,9 @@
     "min_updater": null,
     "freshness": "fresh",
     "stale_reason": null,
-    "fetched_at": 1791463142.4934566
+    "fetched_at": 1791463142.4934566,
+    "module_updates": [],
+    "module_updates_stale_reason": null
   },
   "panel_update_current": {
     "ok": true,
@@ -595,16 +599,17 @@
       "operation": "install",
       "module_id": "tool.terminal",
       "version": "2.10.0",
+      "module_version": "1.0.0",
       "step": "prepared",
       "result": "running",
       "error_code": null,
       "error": null,
-      "started_at": 1791463143.6034563,
+      "started_at": 1791463143.9734561,
       "finished_at": null,
       "log": [
         {
           "step": "prepared",
-          "at": 1791463143.9734561
+          "at": 1791463144.343456
         }
       ]
     },
@@ -615,20 +620,21 @@
       "operation": "install",
       "module_id": "tool.terminal",
       "version": "2.10.0",
+      "module_version": "1.0.0",
       "step": "downloading",
       "result": "running",
       "error_code": null,
       "error": null,
-      "started_at": 1791463143.6034563,
+      "started_at": 1791463143.9734561,
       "finished_at": null,
       "log": [
         {
           "step": "prepared",
-          "at": 1791463143.9734561
+          "at": 1791463144.343456
         },
         {
           "step": "downloading",
-          "at": 1791463144.343456
+          "at": 1791463144.713456
         }
       ]
     },
@@ -639,24 +645,27 @@
       "operation": "install",
       "module_id": "tool.terminal",
       "version": "2.10.0",
+      "module_version": "1.0.0",
       "step": "verifying",
       "result": "running",
       "error_code": null,
       "error": null,
-      "started_at": 1791463143.6034563,
+      "started_at": 1791463143.9734561,
       "finished_at": null,
+      "downloaded_bytes": 464,
+      "total_bytes": 464,
       "log": [
         {
           "step": "prepared",
-          "at": 1791463143.9734561
-        },
-        {
-          "step": "downloading",
           "at": 1791463144.343456
         },
         {
+          "step": "downloading",
+          "at": 1791463144.713456
+        },
+        {
           "step": "verifying",
-          "at": 1791463145.0834558
+          "at": 1791463145.4534557
         }
       ]
     },
@@ -667,28 +676,31 @@
       "operation": "install",
       "module_id": "tool.terminal",
       "version": "2.10.0",
+      "module_version": "1.0.0",
       "step": "applying",
       "result": "running",
       "error_code": null,
       "error": null,
-      "started_at": 1791463143.6034563,
+      "started_at": 1791463143.9734561,
       "finished_at": null,
+      "downloaded_bytes": 464,
+      "total_bytes": 464,
       "log": [
         {
           "step": "prepared",
-          "at": 1791463143.9734561
-        },
-        {
-          "step": "downloading",
           "at": 1791463144.343456
         },
         {
+          "step": "downloading",
+          "at": 1791463144.713456
+        },
+        {
           "step": "verifying",
-          "at": 1791463145.0834558
+          "at": 1791463145.4534557
         },
         {
           "step": "applying",
-          "at": 1791463145.4534557
+          "at": 1791463145.8234556
         }
       ]
     },
@@ -699,32 +711,35 @@
       "operation": "install",
       "module_id": "tool.terminal",
       "version": "2.10.0",
+      "module_version": "1.0.0",
       "step": "state",
       "result": "running",
       "error_code": null,
       "error": null,
-      "started_at": 1791463143.6034563,
+      "started_at": 1791463143.9734561,
       "finished_at": null,
+      "downloaded_bytes": 464,
+      "total_bytes": 464,
       "log": [
         {
           "step": "prepared",
-          "at": 1791463143.9734561
-        },
-        {
-          "step": "downloading",
           "at": 1791463144.343456
         },
         {
-          "step": "verifying",
-          "at": 1791463145.0834558
+          "step": "downloading",
+          "at": 1791463144.713456
         },
         {
-          "step": "applying",
+          "step": "verifying",
           "at": 1791463145.4534557
         },
         {
-          "step": "state",
+          "step": "applying",
           "at": 1791463145.8234556
+        },
+        {
+          "step": "state",
+          "at": 1791463146.1934555
         }
       ]
     },
@@ -735,36 +750,39 @@
       "operation": "install",
       "module_id": "tool.terminal",
       "version": "2.10.0",
+      "module_version": "1.0.0",
       "step": "restarting",
       "result": "running",
       "error_code": null,
       "error": null,
-      "started_at": 1791463143.6034563,
+      "started_at": 1791463143.9734561,
       "finished_at": null,
+      "downloaded_bytes": 464,
+      "total_bytes": 464,
       "log": [
         {
           "step": "prepared",
-          "at": 1791463143.9734561
-        },
-        {
-          "step": "downloading",
           "at": 1791463144.343456
         },
         {
-          "step": "verifying",
-          "at": 1791463145.0834558
+          "step": "downloading",
+          "at": 1791463144.713456
         },
         {
-          "step": "applying",
+          "step": "verifying",
           "at": 1791463145.4534557
         },
         {
-          "step": "state",
+          "step": "applying",
           "at": 1791463145.8234556
         },
         {
-          "step": "restarting",
+          "step": "state",
           "at": 1791463146.1934555
+        },
+        {
+          "step": "restarting",
+          "at": 1791463146.5634553
         }
       ]
     },
@@ -775,40 +793,43 @@
       "operation": "install",
       "module_id": "tool.terminal",
       "version": "2.10.0",
+      "module_version": "1.0.0",
       "step": "health",
       "result": "running",
       "error_code": null,
       "error": null,
-      "started_at": 1791463143.6034563,
+      "started_at": 1791463143.9734561,
       "finished_at": null,
+      "downloaded_bytes": 464,
+      "total_bytes": 464,
       "log": [
         {
           "step": "prepared",
-          "at": 1791463143.9734561
-        },
-        {
-          "step": "downloading",
           "at": 1791463144.343456
         },
         {
-          "step": "verifying",
-          "at": 1791463145.0834558
+          "step": "downloading",
+          "at": 1791463144.713456
         },
         {
-          "step": "applying",
+          "step": "verifying",
           "at": 1791463145.4534557
         },
         {
-          "step": "state",
+          "step": "applying",
           "at": 1791463145.8234556
         },
         {
-          "step": "restarting",
+          "step": "state",
           "at": 1791463146.1934555
         },
         {
-          "step": "health",
+          "step": "restarting",
           "at": 1791463146.5634553
+        },
+        {
+          "step": "health",
+          "at": 1791463146.9334552
         }
       ]
     },
@@ -819,44 +840,47 @@
       "operation": "install",
       "module_id": "tool.terminal",
       "version": "2.10.0",
+      "module_version": "1.0.0",
       "step": "committed",
       "result": "running",
       "error_code": null,
       "error": null,
-      "started_at": 1791463143.6034563,
+      "started_at": 1791463143.9734561,
       "finished_at": null,
+      "downloaded_bytes": 464,
+      "total_bytes": 464,
       "log": [
         {
           "step": "prepared",
-          "at": 1791463143.9734561
-        },
-        {
-          "step": "downloading",
           "at": 1791463144.343456
         },
         {
-          "step": "verifying",
-          "at": 1791463145.0834558
+          "step": "downloading",
+          "at": 1791463144.713456
         },
         {
-          "step": "applying",
+          "step": "verifying",
           "at": 1791463145.4534557
         },
         {
-          "step": "state",
+          "step": "applying",
           "at": 1791463145.8234556
         },
         {
-          "step": "restarting",
+          "step": "state",
           "at": 1791463146.1934555
         },
         {
-          "step": "health",
+          "step": "restarting",
           "at": 1791463146.5634553
         },
         {
-          "step": "committed",
+          "step": "health",
           "at": 1791463146.9334552
+        },
+        {
+          "step": "committed",
+          "at": 1791463147.303455
         }
       ]
     }
@@ -868,44 +892,47 @@
     "operation": "install",
     "module_id": "tool.terminal",
     "version": "2.10.0",
+    "module_version": "1.0.0",
     "step": "committed",
     "result": "committed",
     "error_code": null,
     "error": null,
-    "started_at": 1791463143.6034563,
-    "finished_at": 1791463147.303455,
+    "started_at": 1791463143.9734561,
+    "finished_at": 1791463147.673455,
+    "downloaded_bytes": 464,
+    "total_bytes": 464,
     "log": [
       {
         "step": "prepared",
-        "at": 1791463143.9734561
-      },
-      {
-        "step": "downloading",
         "at": 1791463144.343456
       },
       {
-        "step": "verifying",
-        "at": 1791463145.0834558
+        "step": "downloading",
+        "at": 1791463144.713456
       },
       {
-        "step": "applying",
+        "step": "verifying",
         "at": 1791463145.4534557
       },
       {
-        "step": "state",
+        "step": "applying",
         "at": 1791463145.8234556
       },
       {
-        "step": "restarting",
+        "step": "state",
         "at": 1791463146.1934555
       },
       {
-        "step": "health",
+        "step": "restarting",
         "at": 1791463146.5634553
       },
       {
-        "step": "committed",
+        "step": "health",
         "at": 1791463146.9334552
+      },
+      {
+        "step": "committed",
+        "at": 1791463147.303455
       }
     ]
   },
@@ -1476,21 +1503,22 @@
     "operation": "install",
     "module_id": "tool.terminal",
     "version": "2.10.0",
+    "module_version": "1.0.0",
     "step": "downloading",
     "result": "interrupted",
     "error_code": "operation_interrupted",
     "error": "the module operation was interrupted",
-    "started_at": 1791463148.043455,
-    "finished_at": 1791463149.1534545,
+    "started_at": 1791463148.4134548,
+    "finished_at": 1791463149.5234544,
     "recovered": true,
     "log": [
       {
         "step": "prepared",
-        "at": 1791463148.4134548
+        "at": 1791463148.7834547
       },
       {
         "step": "downloading",
-        "at": 1791463148.7834547
+        "at": 1791463149.1534545
       }
     ]
   },
@@ -1501,21 +1529,22 @@
     "operation": "install",
     "module_id": "tool.terminal",
     "version": "2.10.0",
+    "module_version": "1.0.0",
     "step": "downloading",
     "result": "interrupted",
     "error_code": "operation_interrupted",
     "error": "the module operation was interrupted",
-    "started_at": 1791463148.043455,
-    "finished_at": 1791463149.1534545,
+    "started_at": 1791463148.4134548,
+    "finished_at": 1791463149.5234544,
     "recovered": true,
     "log": [
       {
         "step": "prepared",
-        "at": 1791463148.4134548
+        "at": 1791463148.7834547
       },
       {
         "step": "downloading",
-        "at": 1791463148.7834547
+        "at": 1791463149.1534545
       }
     ]
   },
@@ -1526,20 +1555,21 @@
     "operation": "install",
     "module_id": "tool.terminal",
     "version": "2.10.0",
+    "module_version": "1.0.0",
     "step": "downloading",
     "result": "interrupted",
     "error_code": "operation_cancelled",
     "error": "the module operation was cancelled",
-    "started_at": 1791463149.5234544,
-    "finished_at": 1791463150.633454,
+    "started_at": 1791463149.8934543,
+    "finished_at": 1791463151.003454,
     "log": [
       {
         "step": "prepared",
-        "at": 1791463149.8934543
+        "at": 1791463150.2634542
       },
       {
         "step": "downloading",
-        "at": 1791463150.2634542
+        "at": 1791463150.633454
       }
     ]
   },
@@ -1551,42 +1581,45 @@
     "operation": "install",
     "module_id": "tool.terminal",
     "version": "2.10.0",
+    "module_version": "1.0.0",
     "step": "health",
     "result": "rolled_back",
     "error_code": "operation_interrupted",
     "error": "the module operation was interrupted",
-    "started_at": 1791463151.003454,
-    "finished_at": 1791463154.7034528,
+    "started_at": 1791463151.3734539,
+    "finished_at": 1791463155.0734527,
+    "downloaded_bytes": 464,
+    "total_bytes": 464,
     "recovered": true,
     "restart_required": true,
     "log": [
       {
         "step": "prepared",
-        "at": 1791463151.3734539
-      },
-      {
-        "step": "downloading",
         "at": 1791463151.7434537
       },
       {
-        "step": "verifying",
-        "at": 1791463152.8534534
+        "step": "downloading",
+        "at": 1791463152.1134536
       },
       {
-        "step": "applying",
+        "step": "verifying",
         "at": 1791463153.2234533
       },
       {
-        "step": "state",
+        "step": "applying",
         "at": 1791463153.5934532
       },
       {
-        "step": "restarting",
+        "step": "state",
         "at": 1791463153.963453
       },
       {
-        "step": "health",
+        "step": "restarting",
         "at": 1791463154.333453
+      },
+      {
+        "step": "health",
+        "at": 1791463154.7034528
       }
     ]
   },
@@ -1597,42 +1630,45 @@
     "operation": "install",
     "module_id": "tool.terminal",
     "version": "2.10.0",
+    "module_version": "1.0.0",
     "step": "health",
     "result": "rolled_back",
     "error_code": "operation_interrupted",
     "error": "the module operation was interrupted",
-    "started_at": 1791463151.003454,
-    "finished_at": 1791463154.7034528,
+    "started_at": 1791463151.3734539,
+    "finished_at": 1791463155.0734527,
+    "downloaded_bytes": 464,
+    "total_bytes": 464,
     "recovered": true,
     "restart_required": true,
     "log": [
       {
         "step": "prepared",
-        "at": 1791463151.3734539
-      },
-      {
-        "step": "downloading",
         "at": 1791463151.7434537
       },
       {
-        "step": "verifying",
-        "at": 1791463152.8534534
+        "step": "downloading",
+        "at": 1791463152.1134536
       },
       {
-        "step": "applying",
+        "step": "verifying",
         "at": 1791463153.2234533
       },
       {
-        "step": "state",
+        "step": "applying",
         "at": 1791463153.5934532
       },
       {
-        "step": "restarting",
+        "step": "state",
         "at": 1791463153.963453
       },
       {
-        "step": "health",
+        "step": "restarting",
         "at": 1791463154.333453
+      },
+      {
+        "step": "health",
+        "at": 1791463154.7034528
       }
     ]
   },
@@ -1643,44 +1679,47 @@
     "operation": "install",
     "module_id": "tool.terminal",
     "version": "2.10.0",
+    "module_version": "1.0.0",
     "step": "rolling_back",
     "result": "rollback_failed",
     "error_code": "operation_health_failed",
     "error": "the panel did not become healthy after the module operation",
-    "started_at": 1791463155.0734527,
-    "finished_at": 1791463159.1434515,
+    "started_at": 1791463155.4434526,
+    "finished_at": 1791463159.5134513,
+    "downloaded_bytes": 464,
+    "total_bytes": 464,
     "log": [
       {
         "step": "prepared",
-        "at": 1791463155.4434526
-      },
-      {
-        "step": "downloading",
         "at": 1791463155.8134525
       },
       {
-        "step": "verifying",
-        "at": 1791463156.9234521
+        "step": "downloading",
+        "at": 1791463156.1834524
       },
       {
-        "step": "applying",
+        "step": "verifying",
         "at": 1791463157.293452
       },
       {
-        "step": "state",
+        "step": "applying",
         "at": 1791463157.663452
       },
       {
-        "step": "restarting",
+        "step": "state",
         "at": 1791463158.0334518
       },
       {
-        "step": "health",
+        "step": "restarting",
         "at": 1791463158.4034517
       },
       {
-        "step": "rolling_back",
+        "step": "health",
         "at": 1791463158.7734516
+      },
+      {
+        "step": "rolling_back",
+        "at": 1791463159.1434515
       }
     ],
     "failed_path": "services/ws_pty.py"
@@ -1914,7 +1953,9 @@
     "min_updater": null,
     "freshness": "fresh",
     "stale_reason": null,
-    "fetched_at": 1791463160.253451
+    "fetched_at": 1791463160.623451,
+    "module_updates": [],
+    "module_updates_stale_reason": "catalog_unavailable"
   },
   "panel_update_plan": {
     "ok": true,
@@ -1962,5 +2003,928 @@
     "blockers": [],
     "applicable": true,
     "plan_id": "3a58284907c91c74652b0f5ead93eb440ce3343d28e76e4e802971108a9e8a81"
+  },
+  "update_check_modules": {
+    "ok": true,
+    "source_version": "2.10.0",
+    "target_version": "2.10.0",
+    "update_available": false,
+    "requires_installer": false,
+    "min_updater": null,
+    "freshness": "fresh",
+    "stale_reason": null,
+    "fetched_at": 1791463160.9934509,
+    "module_updates": [
+      {
+        "module_id": "engine.mihomo",
+        "version": "1.0.1",
+        "installed_version": "1.0.0"
+      }
+    ],
+    "module_updates_stale_reason": null
+  },
+  "available_update": {
+    "ok": true,
+    "release_version": "2.10.0",
+    "read_only": false,
+    "catalog_url": "https://github.com/umarcheh001/Xkeen-UI/releases/download/v2.10.0/catalog.json",
+    "fetched_at": 1791463160.9934509,
+    "freshness": "fresh",
+    "stale_reason": null,
+    "update_stale_reason": null,
+    "modules": [
+      {
+        "id": "core",
+        "version": "2.10.0",
+        "channel": "stable",
+        "panel_api": "1",
+        "module_api": "1",
+        "min_core": "1.0.0",
+        "architectures": [
+          "aarch64",
+          "mips",
+          "mipsel"
+        ],
+        "requires": [],
+        "conflicts": [],
+        "requires_restart": false,
+        "archive": "xkeen-module-core-2.10.0.tar.gz",
+        "size": 4096,
+        "sha256": "bc8140fbcf3c5b07c0412d61eaf7975150aa79543fdc82337d46a1afa7339604",
+        "signing_key_id": "release-2026",
+        "name": "Xkeen UI Core",
+        "description": "Основа панели: вход, настройки и работа самой панели.",
+        "module_version": "2.10.0",
+        "installed_version": "2.10.0",
+        "installed": true,
+        "lifecycle_actions": [],
+        "update_available": false
+      },
+      {
+        "id": "engine.mihomo",
+        "version": "2.10.0",
+        "channel": "stable",
+        "panel_api": "1",
+        "module_api": "1",
+        "min_core": "2.10.0",
+        "architectures": [
+          "aarch64",
+          "mips",
+          "mipsel"
+        ],
+        "requires": [
+          "core",
+          "tool.editor"
+        ],
+        "conflicts": [],
+        "requires_restart": true,
+        "archive": "xkeen-module-engine.mihomo-1.0.1.tar.gz",
+        "size": 4096,
+        "sha256": "4848c734a5930ce1c950b6eb015a3419d4483fdd6162a08cecc9ba35cf739f59",
+        "signing_key_id": "release-2026",
+        "name": "Mihomo",
+        "description": "Всё для ядра Mihomo: настройки, генератор конфигурации, импорт ссылок, Защищённый DNS Mihomo, базы доменов и адресов, статистика соединений, логи Mihomo.",
+        "module_version": "1.0.1",
+        "installed_version": "1.0.0",
+        "installed": true,
+        "lifecycle_actions": [
+          "update",
+          "repair",
+          "remove"
+        ],
+        "update_available": true
+      },
+      {
+        "id": "engine.xray",
+        "version": "2.10.0",
+        "channel": "stable",
+        "panel_api": "1",
+        "module_api": "1",
+        "min_core": "1.0.0",
+        "architectures": [
+          "aarch64",
+          "mips",
+          "mipsel"
+        ],
+        "requires": [
+          "core",
+          "tool.editor"
+        ],
+        "conflicts": [],
+        "requires_restart": true,
+        "archive": "xkeen-module-engine.xray-2.10.0.tar.gz",
+        "size": 4096,
+        "sha256": "e939228c9095f2c5c2b2afd7ade5ea0e3d000eca475dc09c78365e0bd24fecd8",
+        "signing_key_id": "release-2026",
+        "name": "Xray",
+        "description": "Всё для ядра Xray: маршруты, подключения, подписки, DNS-over-VLESS, базы доменов и адресов, логи Xray.",
+        "module_version": "1.0.0",
+        "installed_version": null,
+        "installed": false,
+        "lifecycle_actions": [
+          "install"
+        ],
+        "update_available": false
+      },
+      {
+        "id": "integration.happ",
+        "version": "2.10.0",
+        "channel": "stable",
+        "panel_api": "1",
+        "module_api": "1",
+        "min_core": "1.0.0",
+        "architectures": [
+          "aarch64",
+          "mips",
+          "mipsel"
+        ],
+        "requires": [
+          "core"
+        ],
+        "conflicts": [],
+        "requires_restart": true,
+        "archive": "xkeen-module-integration.happ-2.10.0.tar.gz",
+        "size": 4096,
+        "sha256": "b4669b46fc5289314e45806280bee3327d339aa93972e43b9c991cb1b423dc87",
+        "signing_key_id": "release-2026",
+        "name": "Расшифровка подписок",
+        "description": "Подписки с зашифрованными ссылками и подписки, привязанные к устройству (HWID).",
+        "module_version": "1.0.0",
+        "installed_version": null,
+        "installed": false,
+        "lifecycle_actions": [
+          "install"
+        ],
+        "update_available": false
+      },
+      {
+        "id": "tool.advanced-diagnostics",
+        "version": "2.10.0",
+        "channel": "stable",
+        "panel_api": "1",
+        "module_api": "1",
+        "min_core": "1.0.0",
+        "architectures": [
+          "aarch64",
+          "mips",
+          "mipsel"
+        ],
+        "requires": [
+          "core"
+        ],
+        "conflicts": [],
+        "requires_restart": true,
+        "archive": "xkeen-module-tool.advanced-diagnostics-2.10.0.tar.gz",
+        "size": 4096,
+        "sha256": "17e3e0aac99fe556e47166920e662f2a98eca7a9c3a244f7ec7148ff0fdac30a",
+        "signing_key_id": "release-2026",
+        "name": "Расширенная диагностика",
+        "description": "Окно диагностики роутера: графики, история и события.",
+        "module_version": "1.0.0",
+        "installed_version": null,
+        "installed": false,
+        "lifecycle_actions": [
+          "install"
+        ],
+        "update_available": false
+      },
+      {
+        "id": "tool.backups",
+        "version": "2.10.0",
+        "channel": "stable",
+        "panel_api": "1",
+        "module_api": "1",
+        "min_core": "1.0.0",
+        "architectures": [
+          "aarch64",
+          "mips",
+          "mipsel"
+        ],
+        "requires": [
+          "core"
+        ],
+        "conflicts": [],
+        "requires_restart": true,
+        "archive": "xkeen-module-tool.backups-2.10.0.tar.gz",
+        "size": 4096,
+        "sha256": "6a35d1a94d1d60ff2452808c0d00f273967cf27c03ba23c09b9c4a4d27b1ba83",
+        "signing_key_id": "release-2026",
+        "name": "Резервные копии",
+        "description": "Сохранение и восстановление настроек Xray и Mihomo.",
+        "module_version": "1.0.0",
+        "installed_version": null,
+        "installed": false,
+        "lifecycle_actions": [
+          "install"
+        ],
+        "update_available": false
+      },
+      {
+        "id": "tool.editor",
+        "version": "2.10.0",
+        "channel": "stable",
+        "panel_api": "1",
+        "module_api": "1",
+        "min_core": "1.0.0",
+        "architectures": [
+          "aarch64",
+          "mips",
+          "mipsel"
+        ],
+        "requires": [
+          "core"
+        ],
+        "conflicts": [],
+        "requires_restart": true,
+        "archive": "xkeen-module-tool.editor-2.10.0.tar.gz",
+        "size": 4096,
+        "sha256": "62b963e6f345aa94bd9f7dcbb12cfaa5059ff69431bb00ed406be8365222e02e",
+        "signing_key_id": "release-2026",
+        "name": "Редакторы",
+        "description": "Редакторы конфигураций с подсветкой, подсказками, проверкой ошибок и сравнением версий.",
+        "module_version": "1.0.0",
+        "installed_version": "1.0.0",
+        "installed": true,
+        "lifecycle_actions": [
+          "repair"
+        ],
+        "update_available": false
+      },
+      {
+        "id": "tool.files",
+        "version": "2.10.0",
+        "channel": "stable",
+        "panel_api": "1",
+        "module_api": "1",
+        "min_core": "1.0.0",
+        "architectures": [
+          "aarch64",
+          "mips",
+          "mipsel"
+        ],
+        "requires": [
+          "core"
+        ],
+        "conflicts": [],
+        "requires_restart": true,
+        "archive": "xkeen-module-tool.files-2.10.0.tar.gz",
+        "size": 4096,
+        "sha256": "91e610094777b9ef24158a0991c44d83fc67f7b3fcd6bdee39f6553643d2f364",
+        "signing_key_id": "release-2026",
+        "name": "Файловый менеджер",
+        "description": "Файлы на роутере и на удалённых серверах: правка, копирование, архивы, USB-накопители.",
+        "module_version": "1.0.0",
+        "installed_version": null,
+        "installed": false,
+        "lifecycle_actions": [
+          "install"
+        ],
+        "update_available": false
+      },
+      {
+        "id": "tool.terminal",
+        "version": "2.10.0",
+        "channel": "stable",
+        "panel_api": "1",
+        "module_api": "1",
+        "min_core": "1.0.0",
+        "architectures": [
+          "aarch64",
+          "mips",
+          "mipsel"
+        ],
+        "requires": [
+          "core"
+        ],
+        "conflicts": [],
+        "requires_restart": true,
+        "archive": "xkeen-module-tool.terminal-2.10.0.tar.gz",
+        "size": 4096,
+        "sha256": "59386e5df3a7d0858aa3fef57ff1c5e5f252bd25d42d823c7af971c3548e6aad",
+        "signing_key_id": "release-2026",
+        "name": "Терминал и команды",
+        "description": "Командная строка роутера прямо в браузере и быстрый запуск команд XKeen.",
+        "module_version": "1.0.0",
+        "installed_version": null,
+        "installed": false,
+        "lifecycle_actions": [
+          "install"
+        ],
+        "update_available": false
+      }
+    ]
+  },
+  "module_update_plan": {
+    "ok": true,
+    "operation": "update",
+    "module_id": "engine.mihomo",
+    "version": "2.10.0",
+    "affected_module_ids": [
+      "engine.mihomo"
+    ],
+    "module_version": "1.0.1",
+    "installed_version": "1.0.0",
+    "files_add": [
+      "routes/mihomo.py",
+      "services/mihomo_subscriptions.py"
+    ],
+    "files_remove": [],
+    "required_free_bytes": 12582912,
+    "restart_required": true,
+    "installed_after": [
+      "core",
+      "engine.mihomo",
+      "tool.editor"
+    ],
+    "dependency_diff": {
+      "requires": [
+        "core",
+        "tool.editor"
+      ],
+      "missing": [],
+      "conflicts": [],
+      "required_by": []
+    },
+    "blockers": [],
+    "applicable": true,
+    "plan_id": "fd60ec145af9e061c5dd095cd80840b8523b605c17af2f5e06fb8f5be218ae0b"
+  },
+  "module_update_steps": {
+    "prepared": {
+      "ok": true,
+      "operation_id": "20261006T120000Z-abcdef",
+      "scope": "module",
+      "operation": "update",
+      "module_id": "engine.mihomo",
+      "version": "2.10.0",
+      "module_version": "1.0.1",
+      "step": "prepared",
+      "result": "running",
+      "error_code": null,
+      "error": null,
+      "started_at": 1791463162.8434503,
+      "finished_at": null,
+      "log": [
+        {
+          "step": "prepared",
+          "at": 1791463163.2134502
+        }
+      ]
+    },
+    "downloading": {
+      "ok": true,
+      "operation_id": "20261006T120000Z-abcdef",
+      "scope": "module",
+      "operation": "update",
+      "module_id": "engine.mihomo",
+      "version": "2.10.0",
+      "module_version": "1.0.1",
+      "step": "downloading",
+      "result": "running",
+      "error_code": null,
+      "error": null,
+      "started_at": 1791463162.8434503,
+      "finished_at": null,
+      "log": [
+        {
+          "step": "prepared",
+          "at": 1791463163.2134502
+        },
+        {
+          "step": "downloading",
+          "at": 1791463163.58345
+        }
+      ]
+    },
+    "verifying": {
+      "ok": true,
+      "operation_id": "20261006T120000Z-abcdef",
+      "scope": "module",
+      "operation": "update",
+      "module_id": "engine.mihomo",
+      "version": "2.10.0",
+      "module_version": "1.0.1",
+      "step": "verifying",
+      "result": "running",
+      "error_code": null,
+      "error": null,
+      "started_at": 1791463162.8434503,
+      "finished_at": null,
+      "downloaded_bytes": 400,
+      "total_bytes": 400,
+      "log": [
+        {
+          "step": "prepared",
+          "at": 1791463163.2134502
+        },
+        {
+          "step": "downloading",
+          "at": 1791463163.58345
+        },
+        {
+          "step": "verifying",
+          "at": 1791463164.3234499
+        }
+      ]
+    },
+    "applying": {
+      "ok": true,
+      "operation_id": "20261006T120000Z-abcdef",
+      "scope": "module",
+      "operation": "update",
+      "module_id": "engine.mihomo",
+      "version": "2.10.0",
+      "module_version": "1.0.1",
+      "step": "applying",
+      "result": "running",
+      "error_code": null,
+      "error": null,
+      "started_at": 1791463162.8434503,
+      "finished_at": null,
+      "downloaded_bytes": 400,
+      "total_bytes": 400,
+      "log": [
+        {
+          "step": "prepared",
+          "at": 1791463163.2134502
+        },
+        {
+          "step": "downloading",
+          "at": 1791463163.58345
+        },
+        {
+          "step": "verifying",
+          "at": 1791463164.3234499
+        },
+        {
+          "step": "applying",
+          "at": 1791463164.6934497
+        }
+      ]
+    },
+    "state": {
+      "ok": true,
+      "operation_id": "20261006T120000Z-abcdef",
+      "scope": "module",
+      "operation": "update",
+      "module_id": "engine.mihomo",
+      "version": "2.10.0",
+      "module_version": "1.0.1",
+      "step": "state",
+      "result": "running",
+      "error_code": null,
+      "error": null,
+      "started_at": 1791463162.8434503,
+      "finished_at": null,
+      "downloaded_bytes": 400,
+      "total_bytes": 400,
+      "log": [
+        {
+          "step": "prepared",
+          "at": 1791463163.2134502
+        },
+        {
+          "step": "downloading",
+          "at": 1791463163.58345
+        },
+        {
+          "step": "verifying",
+          "at": 1791463164.3234499
+        },
+        {
+          "step": "applying",
+          "at": 1791463164.6934497
+        },
+        {
+          "step": "state",
+          "at": 1791463165.0634496
+        }
+      ]
+    },
+    "restarting": {
+      "ok": true,
+      "operation_id": "20261006T120000Z-abcdef",
+      "scope": "module",
+      "operation": "update",
+      "module_id": "engine.mihomo",
+      "version": "2.10.0",
+      "module_version": "1.0.1",
+      "step": "restarting",
+      "result": "running",
+      "error_code": null,
+      "error": null,
+      "started_at": 1791463162.8434503,
+      "finished_at": null,
+      "downloaded_bytes": 400,
+      "total_bytes": 400,
+      "log": [
+        {
+          "step": "prepared",
+          "at": 1791463163.2134502
+        },
+        {
+          "step": "downloading",
+          "at": 1791463163.58345
+        },
+        {
+          "step": "verifying",
+          "at": 1791463164.3234499
+        },
+        {
+          "step": "applying",
+          "at": 1791463164.6934497
+        },
+        {
+          "step": "state",
+          "at": 1791463165.0634496
+        },
+        {
+          "step": "restarting",
+          "at": 1791463165.4334495
+        }
+      ]
+    },
+    "health": {
+      "ok": true,
+      "operation_id": "20261006T120000Z-abcdef",
+      "scope": "module",
+      "operation": "update",
+      "module_id": "engine.mihomo",
+      "version": "2.10.0",
+      "module_version": "1.0.1",
+      "step": "health",
+      "result": "running",
+      "error_code": null,
+      "error": null,
+      "started_at": 1791463162.8434503,
+      "finished_at": null,
+      "downloaded_bytes": 400,
+      "total_bytes": 400,
+      "log": [
+        {
+          "step": "prepared",
+          "at": 1791463163.2134502
+        },
+        {
+          "step": "downloading",
+          "at": 1791463163.58345
+        },
+        {
+          "step": "verifying",
+          "at": 1791463164.3234499
+        },
+        {
+          "step": "applying",
+          "at": 1791463164.6934497
+        },
+        {
+          "step": "state",
+          "at": 1791463165.0634496
+        },
+        {
+          "step": "restarting",
+          "at": 1791463165.4334495
+        },
+        {
+          "step": "health",
+          "at": 1791463165.8034494
+        }
+      ]
+    },
+    "committed": {
+      "ok": true,
+      "operation_id": "20261006T120000Z-abcdef",
+      "scope": "module",
+      "operation": "update",
+      "module_id": "engine.mihomo",
+      "version": "2.10.0",
+      "module_version": "1.0.1",
+      "step": "committed",
+      "result": "running",
+      "error_code": null,
+      "error": null,
+      "started_at": 1791463162.8434503,
+      "finished_at": null,
+      "downloaded_bytes": 400,
+      "total_bytes": 400,
+      "log": [
+        {
+          "step": "prepared",
+          "at": 1791463163.2134502
+        },
+        {
+          "step": "downloading",
+          "at": 1791463163.58345
+        },
+        {
+          "step": "verifying",
+          "at": 1791463164.3234499
+        },
+        {
+          "step": "applying",
+          "at": 1791463164.6934497
+        },
+        {
+          "step": "state",
+          "at": 1791463165.0634496
+        },
+        {
+          "step": "restarting",
+          "at": 1791463165.4334495
+        },
+        {
+          "step": "health",
+          "at": 1791463165.8034494
+        },
+        {
+          "step": "committed",
+          "at": 1791463166.1734493
+        }
+      ]
+    }
+  },
+  "module_update_committed": {
+    "ok": true,
+    "operation_id": "20261006T120000Z-abcdef",
+    "scope": "module",
+    "operation": "update",
+    "module_id": "engine.mihomo",
+    "version": "2.10.0",
+    "module_version": "1.0.1",
+    "step": "committed",
+    "result": "committed",
+    "error_code": null,
+    "error": null,
+    "started_at": 1791463162.8434503,
+    "finished_at": 1791463166.5434492,
+    "downloaded_bytes": 400,
+    "total_bytes": 400,
+    "log": [
+      {
+        "step": "prepared",
+        "at": 1791463163.2134502
+      },
+      {
+        "step": "downloading",
+        "at": 1791463163.58345
+      },
+      {
+        "step": "verifying",
+        "at": 1791463164.3234499
+      },
+      {
+        "step": "applying",
+        "at": 1791463164.6934497
+      },
+      {
+        "step": "state",
+        "at": 1791463165.0634496
+      },
+      {
+        "step": "restarting",
+        "at": 1791463165.4334495
+      },
+      {
+        "step": "health",
+        "at": 1791463165.8034494
+      },
+      {
+        "step": "committed",
+        "at": 1791463166.1734493
+      }
+    ]
+  },
+  "installed_after_update": {
+    "ok": true,
+    "panel_version": "2.10.0",
+    "build": {
+      "exists": true,
+      "version": "2.10.0",
+      "base_commit": null,
+      "commit": "cccccccccccccccccccccccccccccccccccccccc",
+      "dirty": null,
+      "tree_sha256": null,
+      "built_utc": null,
+      "repo": "umarcheh001/Xkeen-UI",
+      "channel": "stable"
+    },
+    "update_channel": "stable",
+    "profile": "custom",
+    "editor": {
+      "variant": "light",
+      "active_variant": "light",
+      "available_variants": [
+        "light",
+        "full",
+        "advanced"
+      ],
+      "capabilities": [
+        "codemirror",
+        "schema-basic"
+      ],
+      "requires_restart": false,
+      "installed_variant": "light"
+    },
+    "restart_required": false,
+    "transition_required": false,
+    "transition_target": null,
+    "installed_module_ids": [
+      "core",
+      "engine.mihomo",
+      "tool.editor"
+    ],
+    "installed_set": "mihomo-minimal",
+    "enabled_set": "custom",
+    "previous_version": {
+      "available": false,
+      "reason": "no_previous_version",
+      "version": null,
+      "kept_at": null,
+      "size": 0
+    },
+    "module_names": {
+      "core": "Xkeen UI Core",
+      "engine.xray": "Xray",
+      "engine.mihomo": "Mihomo",
+      "tool.editor": "Редакторы",
+      "tool.terminal": "Терминал и команды",
+      "tool.files": "Файловый менеджер",
+      "tool.backups": "Резервные копии",
+      "integration.happ": "Расшифровка подписок",
+      "tool.advanced-diagnostics": "Расширенная диагностика"
+    },
+    "modules": [
+      {
+        "id": "core",
+        "module_id": "core",
+        "name": "Xkeen UI Core",
+        "description": "Основа панели: вход, настройки и работа самой панели.",
+        "version": "2.10.0",
+        "api_version": 1,
+        "depends_on": [],
+        "dependencies": [],
+        "conflicts": [],
+        "system_requirements": [
+          {
+            "id": "python3",
+            "optional": false,
+            "available": true
+          },
+          {
+            "id": "flask",
+            "optional": false,
+            "available": true
+          },
+          {
+            "id": "gevent",
+            "optional": true,
+            "available": true
+          },
+          {
+            "id": "gevent-websocket",
+            "optional": true,
+            "available": true
+          }
+        ],
+        "size_bytes": 1048576,
+        "removable": false,
+        "can_disable": false,
+        "lock_reason": "core",
+        "requires_restart": false,
+        "frontend": {
+          "bundles": [
+            "panel-core",
+            "devtools-page"
+          ],
+          "navigation_views": [
+            "xkeen",
+            "devtools"
+          ]
+        },
+        "installed": true,
+        "enabled": true,
+        "effective_enabled": true,
+        "available": true,
+        "status": "enabled",
+        "reason": null,
+        "missing_requirement_ids": [],
+        "unavailable_dependency_ids": [],
+        "lifecycle_actions": []
+      },
+      {
+        "id": "engine.mihomo",
+        "module_id": "engine.mihomo",
+        "name": "Mihomo",
+        "description": "Всё для ядра Mihomo: настройки, генератор конфигурации, импорт ссылок, Защищённый DNS Mihomo, базы доменов и адресов, статистика соединений, логи Mihomo.",
+        "version": "1.0.1",
+        "api_version": 1,
+        "depends_on": [
+          "core",
+          "tool.editor"
+        ],
+        "dependencies": [
+          "core",
+          "tool.editor"
+        ],
+        "conflicts": [],
+        "system_requirements": [
+          {
+            "id": "xkeen",
+            "optional": false,
+            "available": true
+          },
+          {
+            "id": "mihomo",
+            "optional": false,
+            "available": true
+          }
+        ],
+        "size_bytes": 1048576,
+        "removable": true,
+        "can_disable": true,
+        "lock_reason": null,
+        "requires_restart": true,
+        "frontend": {
+          "bundles": [
+            "panel-mihomo",
+            "mihomo-generator-page"
+          ],
+          "navigation_views": [
+            "mihomo"
+          ]
+        },
+        "installed": true,
+        "enabled": false,
+        "effective_enabled": false,
+        "available": true,
+        "status": "disabled",
+        "reason": "user_disabled",
+        "missing_requirement_ids": [],
+        "unavailable_dependency_ids": [],
+        "lifecycle_actions": [
+          "repair",
+          "remove"
+        ]
+      },
+      {
+        "id": "tool.editor",
+        "module_id": "tool.editor",
+        "name": "Редакторы",
+        "description": "Редакторы конфигураций с подсветкой, подсказками, проверкой ошибок и сравнением версий.",
+        "version": "1.0.0",
+        "api_version": 1,
+        "depends_on": [
+          "core"
+        ],
+        "dependencies": [
+          "core"
+        ],
+        "conflicts": [],
+        "system_requirements": [
+          {
+            "id": "browser-esm",
+            "optional": false,
+            "available": true
+          }
+        ],
+        "size_bytes": 1048576,
+        "removable": true,
+        "can_disable": true,
+        "lock_reason": null,
+        "requires_restart": true,
+        "frontend": {
+          "bundles": [],
+          "navigation_views": []
+        },
+        "installed": true,
+        "enabled": true,
+        "effective_enabled": true,
+        "available": true,
+        "status": "enabled",
+        "reason": null,
+        "missing_requirement_ids": [],
+        "unavailable_dependency_ids": [],
+        "lifecycle_actions": [
+          "repair"
+        ]
+      }
+    ],
+    "lifecycle": {
+      "available": true,
+      "code": null
+    }
+  },
+  "update_check_after_update": {
+    "ok": true,
+    "source_version": "2.10.0",
+    "target_version": "2.10.0",
+    "update_available": false,
+    "requires_installer": false,
+    "min_updater": null,
+    "freshness": "fresh",
+    "stale_reason": null,
+    "fetched_at": 1791463160.9934509,
+    "module_updates": [],
+    "module_updates_stale_reason": null
   }
 }

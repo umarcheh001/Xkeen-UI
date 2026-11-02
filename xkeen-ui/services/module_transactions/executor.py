@@ -30,6 +30,12 @@ if TYPE_CHECKING:
     from services.module_catalog_client import ModuleCatalogClient
 
 
+# How often the bytes of a download are noted for the window that polls the
+# status: often enough for a moving bar, rarely enough for a slow storage.
+_PROGRESS_INTERVAL_S = 0.5
+_monotonic = time.monotonic
+
+
 class OperationCancelled(ModuleTransactionError):
     """The operation was asked to stop; before files change this is harmless."""
 
@@ -182,6 +188,8 @@ def run_operation(
         "operation": plan.operation,
         "module_id": plan.module_id,
         "version": plan.version,
+        # The module's own version the operation lays; the window names it.
+        "module_version": plan.module_version,
         "source_version": plan.source_version,
         "step": "prepared",
         "result": "running",
@@ -199,6 +207,25 @@ def run_operation(
         write_status(state_dir, status)
         if on_step is not None:
             on_step(step)
+
+    def download_progress(total: int) -> Callable[[int], None]:
+        """Note the bytes downloaded so far, at most every half a second and once complete."""
+
+        noted: list[float] = []
+
+        def heard(done: int) -> None:
+            now = _monotonic()
+            if done < total and noted and now - noted[0] < _PROGRESS_INTERVAL_S:
+                return
+            noted[:] = [now]
+            status["downloaded_bytes"] = int(done)
+            status["total_bytes"] = int(total)
+            try:
+                write_status(state_dir, status)
+            except OSError:
+                pass  # a note for the window; the download goes on
+
+        return heard
 
     def finish(result: str, error: BaseException | None = None, **extra: Any) -> str:
         status["result"] = result
@@ -254,7 +281,9 @@ def run_operation(
                         "the release catalog no longer matches the planned operation",
                         module_id=plan.module_id,
                     )
-                archive_path = client.download_verified_archive(snapshot, plan.module_id, journal.staging)
+                archive_path = client.download_verified_archive(
+                    snapshot, plan.module_id, journal.staging, progress=download_progress(plan.archive.size)
+                )
                 enter("verifying")
                 from services.module_package_contract import validate_module_archive
 
@@ -298,7 +327,9 @@ def run_operation(
                 archive_path = _take_kept_panel_archive(panel_archive_cache, plan.archive, journal.staging)
                 kept = archive_path is not None
                 if archive_path is None:
-                    archive_path = client.download_verified_panel_archive(snapshot, journal.staging)
+                    archive_path = client.download_verified_panel_archive(
+                        snapshot, journal.staging, progress=download_progress(plan.archive.size)
+                    )
                 enter("verifying")
                 try:
                     checked = validate_panel_archive(

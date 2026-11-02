@@ -86,6 +86,9 @@ _PUBLIC_STATUS_FIELDS = frozenset(
         "operation",
         "module_id",
         "version",
+        "module_version",
+        "downloaded_bytes",
+        "total_bytes",
         "step",
         "result",
         "error_code",
@@ -620,6 +623,8 @@ class ModuleLifecycleService:
                 "freshness": "local",
                 "stale_reason": None,
                 "fetched_at": time.time(),
+                "module_updates": [],
+                "module_updates_stale_reason": None,
             }
 
         self._ensure_profile_settled("panel-update")
@@ -647,6 +652,7 @@ class ModuleLifecycleService:
                     "freshness": "fresh",
                     "stale_reason": None,
                     "fetched_at": time.time(),
+                    **self._module_update_check(client, source_version, force_refresh=bool(force_refresh)),
                 }
             target_version = str(snapshot.catalog.get("release_version") or "")
             newer = compare_semver(target_version, source_version) > 0
@@ -662,6 +668,7 @@ class ModuleLifecycleService:
                 # The archive of this very release may be waiting between a
                 # plan that was shown and its "apply"; it is left for a while.
                 kept_digest = digest
+            module_updates = self._module_update_check(client, source_version, force_refresh=bool(force_refresh))
         except ModuleTransactionError as error:
             _raise_domain(error)
         except Exception as error:
@@ -680,6 +687,46 @@ class ModuleLifecycleService:
             "freshness": snapshot.freshness,
             "stale_reason": snapshot.stale_reason,
             "fetched_at": snapshot.fetched_at,
+            **module_updates,
+        }
+
+    def _module_update_offers(self, catalog: Mapping[str, Any]) -> list[dict[str, str]]:
+        """Installed modules with a newer update entry: what the screen offers to update."""
+
+        installed_ids = read_installed_modules(self.state_dir)
+        installed_versions = read_installed_module_versions(self.state_dir, self.panel_root)
+        offers: list[dict[str, str]] = []
+        for entry in catalog.get("modules", []):
+            if not isinstance(entry, Mapping) or entry.get("update_entry") is not True:
+                continue
+            module_id = str(entry.get("id") or "")
+            if module_id == "core" or module_id not in installed_ids:
+                continue
+            version = str(entry.get("version") or "")
+            installed_version = installed_versions.get(module_id, BASE_MODULE_VERSION)
+            if _is_newer(version, installed_version):
+                offers.append({"module_id": module_id, "version": version, "installed_version": installed_version})
+        return offers
+
+    def _module_update_check(self, client: Any, panel_version: str, *, force_refresh: bool = False) -> dict[str, Any]:
+        """Module updates of the installed release; a failure here never spoils the panel's answer.
+
+        A local build only looks: it is offered nothing.
+        """
+
+        if is_local_build(panel_version):
+            return {"module_updates": [], "module_updates_stale_reason": None}
+        try:
+            snapshot = client.get_effective_catalog(panel_version, force_refresh=force_refresh)
+            offers = self._module_update_offers(snapshot.catalog)
+        except Exception as error:  # noqa: BLE001 - the panel check stands on its own
+            return {
+                "module_updates": [],
+                "module_updates_stale_reason": str(getattr(error, "code", None) or "catalog_unavailable"),
+            }
+        return {
+            "module_updates": offers,
+            "module_updates_stale_reason": snapshot.stale_reason if snapshot.freshness == "stale" else None,
         }
 
     def notification_catalog(self, *, force_refresh: bool = False) -> dict[str, Any]:
@@ -708,6 +755,8 @@ class ModuleLifecycleService:
                 "target_modules": [],
                 "target_panel": {},
                 "baseline_error": None,
+                "module_updates": [],
+                "module_updates_stale_reason": None,
             }
 
         self._ensure_profile_settled("panel-update")
@@ -744,6 +793,7 @@ class ModuleLifecycleService:
                     "target_modules": [],
                     "target_panel": {},
                     "baseline_error": None,
+                    **self._module_update_check(client, source_version, force_refresh=bool(force_refresh)),
                 }
 
             target_version = str(snapshot.catalog.get("release_version") or "")
@@ -794,6 +844,8 @@ class ModuleLifecycleService:
                 ],
                 "target_panel": target_panel,
                 "baseline_error": baseline_error,
+                # Updates of single modules inside the installed release.
+                **self._module_update_check(client, source_version, force_refresh=bool(force_refresh)),
             }
         except ModuleTransactionError as error:
             _raise_domain(error)
@@ -1343,6 +1395,13 @@ class ModuleLifecycleService:
             "module_id": plan.module_id,
             "version": plan.version,
             "affected_module_ids": [plan.module_id],
+            # The module's own versions, before and after: the window names them.
+            "module_version": plan.module_version,
+            "installed_version": (
+                read_installed_module_versions(self.state_dir, self.panel_root).get(plan.module_id, BASE_MODULE_VERSION)
+                if plan.module_id in installed
+                else None
+            ),
             "files_add": encoded["files_add"],
             "files_remove": encoded["files_remove"],
             "required_free_bytes": plan.required_free_bytes,

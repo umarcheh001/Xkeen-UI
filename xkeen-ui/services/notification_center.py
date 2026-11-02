@@ -34,7 +34,10 @@ STATE_RETENTION_S = 90 * 24 * 60 * 60
 SNOOZE_INTERVALS = frozenset({24 * 60 * 60, 7 * 24 * 60 * 60})
 # Records computed from the catalog describe a step away from one installed
 # version; once the panel runs another version they no longer apply.
-_RELEASE_KINDS = frozenset({"panel-update", "module-new", "module-update"})
+_RELEASE_KINDS = frozenset({"panel-update", "module-new", "module-update", "module_update_available"})
+# An update of one module inside the installed release. Its record is the same
+# on either channel: the update document belongs to the release, not the channel.
+MODULE_UPDATE_KIND = "module_update_available"
 # Notes about the check itself rather than about a release.
 _CHECK_NOTE_KINDS = frozenset({"catalog-error", "catalog-stale", "catalog-baseline"})
 _IDENTITY_HEX = frozenset("0123456789abcdef")
@@ -106,9 +109,11 @@ class NotificationCenter:
         now: Callable[[], float] = time.time,
         background_interval_s: float = BACKGROUND_INTERVAL_S,
         panel_version: Callable[[], str | None] | None = None,
+        module_versions: Callable[[], Mapping[str, str] | None] | None = None,
     ) -> None:
         self.lifecycle_service = lifecycle_service
         self._panel_version = panel_version or self._installed_panel_version
+        self._module_versions = module_versions or self._installed_module_versions
         self.state_dir = Path(state_dir)
         self._path = self.state_dir / STATE_FILENAME
         self._now = now
@@ -125,6 +130,39 @@ class NotificationCenter:
         from services.module_transactions.plan import read_panel_version
 
         return read_panel_version(Path(panel_root))
+
+    def _installed_module_versions(self) -> Mapping[str, str] | None:
+        panel_root = getattr(self.lifecycle_service, "panel_root", None)
+        state_dir = getattr(self.lifecycle_service, "state_dir", None)
+        if panel_root is None or state_dir is None:
+            return None
+        from services.module_transactions.state import ModuleTransactionError
+        from services.module_transactions.plan import read_installed_modules
+        from services.module_versions import read_installed_module_versions
+
+        try:
+            installed = read_installed_modules(Path(state_dir))
+        except ModuleTransactionError:
+            return None
+        versions = read_installed_module_versions(Path(state_dir), Path(panel_root))
+        return {module_id: version for module_id, version in versions.items() if module_id in installed}
+
+    def _current_module_versions(self) -> Mapping[str, str] | None:
+        try:
+            versions = self._module_versions()
+        except Exception:
+            return None
+        return versions if isinstance(versions, Mapping) else None
+
+    @staticmethod
+    def _module_updated(record: Mapping[str, Any], versions: Mapping[str, str] | None) -> bool:
+        """A module update the router no longer waits for: laid, or the module is gone."""
+
+        return (
+            versions is not None
+            and record.get("kind") == MODULE_UPDATE_KIND
+            and versions.get(str(record.get("module_id"))) != record.get("installed_version")
+        )
 
     def _current_panel_version(self) -> str | None:
         try:
@@ -277,16 +315,48 @@ class NotificationCenter:
             "retry_available": True,
         }
 
+    @staticmethod
+    def _module_update_records(payload: Mapping[str, Any], channel: str) -> list[dict[str, Any]]:
+        from services.module_registry import MODULE_DEFINITIONS
+
+        names = {definition.id: definition.name for definition in MODULE_DEFINITIONS}
+        source_version = str(payload.get("source_version") or "")
+        records: list[dict[str, Any]] = []
+        offers = payload.get("module_updates")
+        for offer in offers if isinstance(offers, list) else []:
+            if not isinstance(offer, Mapping):
+                continue
+            module_id, version, installed = offer.get("module_id"), offer.get("version"), offer.get("installed_version")
+            if not all(isinstance(value, str) and value for value in (module_id, version, installed)):
+                continue
+            name = names.get(module_id, module_id)
+            records.append(
+                {
+                    "id": _record_id(MODULE_UPDATE_KIND, module_id, version, "release"),
+                    "kind": MODULE_UPDATE_KIND,
+                    "channel": channel,
+                    "module_id": module_id,
+                    "version": version,
+                    "installed_version": installed,
+                    "source_version": source_version,
+                    "title": f"Обновление модуля: {name}",
+                    "message": f"Доступна версия {version}, установлена {installed}. Обновить можно на странице модулей.",
+                    "requires_restart": True,
+                }
+            )
+        return records
+
     def _records_from_catalog(self, payload: Mapping[str, Any]) -> list[dict[str, Any]]:
         channel = str(payload.get("channel") or "stable")
         if channel not in CHANNELS:
             return []
+        module_updates = self._module_update_records(payload, channel)
         if payload.get("update_available") is not True:
-            return []
+            return module_updates
 
         target_version = str(payload.get("target_version") or "")
         source_version = str(payload.get("source_version") or "")
-        records: list[dict[str, Any]] = []
+        records: list[dict[str, Any]] = list(module_updates)
         target_panel = payload.get("target_panel")
         if target_version:
             panel_size = target_panel.get("size") if isinstance(target_panel, Mapping) else None
@@ -379,7 +449,10 @@ class NotificationCenter:
 
     @staticmethod
     def _sort_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        priority = {"catalog-error": 0, "catalog-stale": 1, "catalog-baseline": 2, "panel-update": 3, "module-new": 4, "module-update": 5}
+        priority = {
+            "catalog-error": 0, "catalog-stale": 1, "catalog-baseline": 2, "panel-update": 3,
+            MODULE_UPDATE_KIND: 4, "module-new": 5, "module-update": 6,
+        }
         return sorted(records, key=lambda record: (priority.get(str(record.get("kind")), 9), str(record.get("title") or "")))
 
     def _prune_locked(self, state: dict[str, Any], active_ids: set[str], now: float) -> None:
@@ -410,12 +483,13 @@ class NotificationCenter:
         active_ids: set[str] = set()
         snooze_ends: list[float] = []
         panel_version = self._current_panel_version()
+        module_versions = self._current_module_versions()
         for raw in self._sort_records(list(channel_state["records"])):
             record_id = raw.get("id")
             if not self._valid_record_id(record_id):
                 continue
             active_ids.add(record_id)
-            if self._outdated(raw, panel_version):
+            if self._outdated(raw, panel_version) or self._module_updated(raw, module_versions):
                 continue
             persisted = state["records"].get(record_id, self._normalize_record_state(None))
             if persisted.get("dismissed_at") is not None:

@@ -1196,3 +1196,108 @@ def test_installed_newer_than_the_catalog_is_a_blocked_plan(tmp_path):
         assert payload["applicable"] is False
         assert [item["code"] for item in payload["blockers"]] == ["module_update_catalog_unavailable"]
         assert "catalog cannot be read" not in payload["blockers"][0]["message"]
+
+
+# --- Обновления модулей на экране и в уведомлениях ---------------------------
+
+
+def test_update_check_lists_module_updates_of_installed_modules(tmp_path):
+    panel = make_panel(tmp_path, installed=("core", "tool.editor", "engine.xray", "tool.terminal"))
+    release = make_release()
+    publish_module_updates(release, {"engine.xray": "1.1.0", "tool.files": "1.0.1", "tool.terminal": "1.0.0"})
+    service, _catalog = make_service(panel, release)
+
+    payload = service.panel_update_check()
+
+    # Only an installed module with a newer entry; the panel's own answer is untouched.
+    assert payload["update_available"] is False
+    assert payload["module_updates"] == [
+        {"module_id": "engine.xray", "version": "1.1.0", "installed_version": "1.0.0"},
+    ]
+    assert payload["module_updates_stale_reason"] is None
+
+
+def test_update_check_without_update_document_lists_nothing(tmp_path):
+    panel = make_panel(tmp_path)
+    service, _catalog = make_service(panel, make_release())
+
+    payload = service.panel_update_check()
+
+    assert payload["module_updates"] == []
+    assert payload["module_updates_stale_reason"] is None
+
+
+def test_update_check_keeps_the_panel_answer_when_module_updates_fail(tmp_path):
+    panel = make_panel(tmp_path)
+    release = make_release()
+    service, catalog = make_service(panel, release)
+
+    def unavailable(_version, **_kwargs):
+        error = RuntimeError("offline")
+        error.code = "catalog_transport_failed"
+        raise error
+
+    catalog.get_effective_catalog = unavailable
+
+    payload = service.panel_update_check()
+
+    assert payload["ok"] is True
+    assert payload["module_updates"] == []
+    assert payload["module_updates_stale_reason"] == "catalog_transport_failed"
+
+
+def test_update_check_of_a_local_build_offers_no_module_update(tmp_path):
+    panel = make_panel(tmp_path, version="3.1.0")
+    panel.path("BUILD.json").write_text(
+        json.dumps({"version": "3.1.0+local.f46f1f10", "commit": "f" * 40}), encoding="utf-8"
+    )
+    release = make_release("3.1.0")
+    publish_module_updates(release, {"engine.xray": "1.0.1"})
+    service, catalog = make_service(panel, release)
+
+    payload = service.panel_update_check()
+
+    assert payload["module_updates"] == []
+    assert catalog.effective_requests == 0
+
+
+def test_update_plan_names_both_module_versions(tmp_path):
+    panel = make_panel(tmp_path)
+    release = make_release()
+    publish_module_updates(release, {"engine.xray": "1.1.0"})
+    service, _catalog = make_service(panel, release)
+
+    plan = service.plan("update", "engine.xray")
+
+    assert plan["applicable"] is True
+    assert (plan["installed_version"], plan["module_version"]) == ("1.0.0", "1.1.0")
+    # An install has nothing installed to name.
+    install = service.plan("install", "tool.terminal")
+    assert install["installed_version"] is None
+    assert install["module_version"] == "1.0.0"
+
+
+def test_notification_catalog_lists_module_updates(tmp_path):
+    panel = make_panel(tmp_path)
+    release = make_release()
+    publish_module_updates(release, {"engine.xray": "1.1.0"})
+    service, _catalog = make_service(panel, release)
+
+    payload = service.notification_catalog()
+
+    assert payload["module_updates"] == [
+        {"module_id": "engine.xray", "version": "1.1.0", "installed_version": "1.0.0"},
+    ]
+
+
+def test_public_status_carries_module_version_and_download_bytes():
+    from services.module_lifecycle import _public_status
+
+    public = _public_status(
+        status_record(
+            operation="update", module_id="engine.xray", module_version="1.1.0", step="downloading",
+            downloaded_bytes=1024, total_bytes=4096,
+        )
+    )
+
+    assert (public["module_version"], public["downloaded_bytes"], public["total_bytes"]) == ("1.1.0", 1024, 4096)
