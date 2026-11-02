@@ -48,7 +48,8 @@ SCOPE_PREFIXES = (
     "xkeen-ui/", "tests/", "e2e/", "scripts/", "docs/", "packaging/", ".github/workflows/",
 )
 SCOPE_FILES = (
-    "package.json", "pyproject.toml", "requirements-dev.txt", "vite.config.mjs", "playwright.config.mjs",
+    "package.json", "pyproject.toml", "requirements-dev.txt", "vite.config.mjs", "vite.module.config.mjs",
+    "playwright.config.mjs",
 )
 # Generated outputs live here; their hashes tell whether a pass changed anything.
 OUTPUT_DIRS = ("docs", "e2e/fixtures")

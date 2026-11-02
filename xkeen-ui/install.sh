@@ -1197,7 +1197,7 @@ def keep_rel(keep, value):
         keep.add(rel)
 
 
-def load_manifest(path, keep, errors):
+def load_manifest(path, keep, errors, prefix=""):
     if not path.is_file():
         return False
     try:
@@ -1217,12 +1217,12 @@ def load_manifest(path, keep, errors):
     for item in payload.values():
         if not isinstance(item, dict):
             continue
-        keep_rel(keep, item.get("file"))
+        keep_rel(keep, prefix + str(item.get("file") or ""))
         for key in ("imports", "dynamicImports", "css", "assets"):
             value = item.get(key)
             if isinstance(value, list):
                 for entry in value:
-                    keep_rel(keep, entry)
+                    keep_rel(keep, prefix + str(entry or ""))
     return True
 
 
@@ -1249,6 +1249,12 @@ if not loaded_any:
     if errors:
         print("errors=" + " | ".join(errors[:10]))
     raise SystemExit(0)
+
+# A module built apart from the panel keeps its manifest here, and the files it
+# names lie under modules/<id>/.
+for manifest in build_dir.glob(".vite/module.*.json"):
+    module_id = manifest.name[len("module."):-len(".json")]
+    load_manifest(manifest, keep, errors, "modules/" + module_id + "/")
 
 # Precompressed siblings are produced by the archive builder and never appear
 # in a vite manifest. Without this the cleanup wipes every .gz of the compiled

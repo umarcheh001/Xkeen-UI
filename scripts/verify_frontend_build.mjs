@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { SEPARATE_MODULES } from '../vite.module.config.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -132,6 +133,52 @@ function collectManifestFileRefs(manifest) {
   return refs;
 }
 
+function moduleManifestPath(moduleId) {
+  return path.join(buildRoot, '.vite', `module.${moduleId}.json`);
+}
+
+function sourceExportNames(sourcePath) {
+  const text = fs.readFileSync(sourcePath, 'utf8');
+  return Array.from(text.matchAll(/^export\s+(?:async\s+)?(?:function\*?|const|let|class)\s+([\w$]+)/gm)).map((match) => match[1]);
+}
+
+function builtExportNames(filePath) {
+  const text = fs.readFileSync(filePath, 'utf8');
+  return new Set(Array.from(text.matchAll(/\bexport\s*\{([^}]*)\}/g)).flatMap((match) => (
+    match[1].split(',').map((item) => item.trim().split(/\s+as\s+/).pop())
+  )));
+}
+
+function verifySeparateModules() {
+  for (const [moduleId, definition] of Object.entries(SEPARATE_MODULES)) {
+    const manifest = readJson(moduleManifestPath(moduleId), `Manifest of module ${moduleId}`);
+    const entries = Object.values(manifest).filter((payload) => payload && payload.isEntry === true);
+    assert(entries.length === 1, `module ${moduleId} must have exactly one entry`);
+    assert(entries[0].src === definition.entry, `module ${moduleId} must be built from ${definition.entry}`);
+
+    // The core calls what the entry exports, and an entry without them loads quietly.
+    const built = builtExportNames(path.join(buildRoot, 'modules', moduleId, String(entries[0].file || '')));
+    const lost = sourceExportNames(path.join(projectRoot, 'static', definition.entry)).filter((name) => !built.has(name));
+    assert(lost.length === 0, `module ${moduleId} lost its exports in the build: ${lost.join(', ')}`);
+
+    for (const payload of Object.values(manifest)) {
+      const filePath = path.join(buildRoot, 'modules', moduleId, String(payload.file || ''));
+      assert(fs.existsSync(filePath), `module file is missing: ${path.relative(repoRoot, filePath)}`);
+      assert(fs.statSync(filePath).size > 0, `module file must not be empty: ${path.relative(repoRoot, filePath)}`);
+    }
+  }
+}
+
+function collectModuleBuildRefs() {
+  const refs = new Set();
+  for (const moduleId of Object.keys(SEPARATE_MODULES)) {
+    refs.add(`.vite/module.${moduleId}.json`);
+    const manifest = readJson(moduleManifestPath(moduleId), `Manifest of module ${moduleId}`);
+    for (const rel of collectManifestFileRefs(manifest)) refs.add(`modules/${moduleId}/${rel}`);
+  }
+  return refs;
+}
+
 function verifyNoStaleBuildFiles() {
   const rawManifest = readJson(buildManifestPath, 'Raw Vite build manifest');
   const bridgeManifest = readJson(bridgeManifestPath, 'Bridge manifest');
@@ -141,6 +188,7 @@ function verifyNoStaleBuildFiles() {
   ]);
 
   for (const rel of collectManifestFileRefs(rawManifest)) keep.add(rel);
+  for (const rel of collectModuleBuildRefs()) keep.add(rel);
   for (const payload of Object.values(bridgeManifest || {})) {
     if (!payload || typeof payload !== 'object') continue;
     const buildFile = normalizeBuildPath(payload.file);
@@ -236,6 +284,7 @@ function verifyVendorBrowserSafeImports() {
 
 verifyBridgeManifest();
 verifyBuildManifest();
+verifySeparateModules();
 verifyNoStaleBuildFiles();
 verifyVendorAssets();
 verifyVendorBrowserSafeImports();

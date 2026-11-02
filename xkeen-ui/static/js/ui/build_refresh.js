@@ -25,7 +25,7 @@
 
   // Same rule as routes/ui_assets.py (_IMMUTABLE_ASSET_ROOTS and
   // _HASHED_ASSET_BASENAME_RE): such files are unique per build already.
-  const IMMUTABLE_ROOTS = ['frontend-build/assets/', 'assets/', 'monaco-editor/'];
+  const IMMUTABLE_ROOTS = ['frontend-build/assets/', 'frontend-build/modules/', 'assets/', 'monaco-editor/'];
   const HASHED_BASENAME_RE = /^.+\-[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9]+$/;
 
   let storage = null;

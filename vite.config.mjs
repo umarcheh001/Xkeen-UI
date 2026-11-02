@@ -3,7 +3,7 @@ import path from 'node:path';
 
 const repoRoot = path.resolve('.');
 const uiRoot = path.resolve(repoRoot, 'xkeen-ui');
-const staticRoot = path.resolve(uiRoot, 'static');
+export const staticRoot = path.resolve(uiRoot, 'static');
 const pageDir = path.resolve(staticRoot, 'js/pages');
 
 const CANONICAL_PAGE_ENTRIES = {
@@ -14,7 +14,11 @@ const CANONICAL_PAGE_ENTRIES = {
   mihomo_generator: path.resolve(pageDir, 'mihomo_generator.entry.js'),
 };
 
-const EXTERNAL_IMPORT_SPECIFIERS = new Set([
+// Published as entries of the core build for modules that import it by the name
+// xk-core/<path>. No separate module needs one yet.
+const CORE_PUBLIC_ENTRIES = {};
+
+export const EXTERNAL_IMPORT_SPECIFIERS = new Set([
   '@codemirror/autocomplete',
   '@codemirror/commands',
   '@codemirror/lang-json',
@@ -42,7 +46,8 @@ const EXTERNAL_IMPORT_SPECIFIERS = new Set([
 ]);
 
 function isExternalImport(specifier) {
-  return EXTERNAL_IMPORT_SPECIFIERS.has(String(specifier || ''));
+  const name = String(specifier || '');
+  return EXTERNAL_IMPORT_SPECIFIERS.has(name) || /^xk-module\//.test(name);
 }
 
 export default defineConfig({
@@ -56,7 +61,7 @@ export default defineConfig({
     sourcemap: false,
     target: 'es2022',
     rollupOptions: {
-      input: CANONICAL_PAGE_ENTRIES,
+      input: { ...CANONICAL_PAGE_ENTRIES, ...CORE_PUBLIC_ENTRIES },
       external: isExternalImport,
       output: {
         entryFileNames: 'assets/[name]-[hash].js',

@@ -68,6 +68,12 @@ class ProfileInstallError(RuntimeError):
     pass
 
 
+# Build files of a module built apart from the panel: its directory and manifest.
+_SEPARATE_MODULE_BUILD_FILE = re.compile(
+    r"^static/frontend-build/(?:modules/([^/]+)/|\.vite/module\.(.+)\.json(?:\.gz)?$)"
+)
+
+
 def owner(path: str) -> str:
     """Conservative file ownership: ambiguous shared files stay with core."""
     p = path.replace("\\", "/").lower()
@@ -83,6 +89,9 @@ def owner(path: str) -> str:
     if p.startswith("static/js/vendor/monaco-"):
         return "editor-full"
     if p.startswith("static/frontend-build/"):
+        separate = _SEPARATE_MODULE_BUILD_FILE.match(p)
+        if separate:
+            return separate.group(1) or separate.group(2)
         if "/.vite/" in p or name == "manifest.json":
             return "core"
         for token, module in (
@@ -243,6 +252,10 @@ def _frontend_files(root: Path, selected: set[str], variant: str) -> tuple[set[s
                 files.add("static/frontend-build/" + name)
                 if (build / (name + ".gz")).is_file():
                     files.add("static/frontend-build/" + name + ".gz")
+    for path in (*build.glob("modules/**/*"), *build.glob(".vite/module.*")):
+        rel = path.relative_to(root).as_posix()
+        if path.is_file() and owner(rel) in allowed:
+            files.add(rel)
     bridge = build / ".vite/manifest.json"
     selected_bridge = {}
     if bridge.is_file():

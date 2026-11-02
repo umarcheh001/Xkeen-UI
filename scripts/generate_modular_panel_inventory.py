@@ -103,6 +103,7 @@ CONFIG_PATHS = (
     "pyproject.toml",
     "requirements-dev.txt",
     "vite.config.mjs",
+    "vite.module.config.mjs",
     "playwright.config.mjs",
     "xkeen-ui/install.sh",
     "xkeen-ui/uninstall.sh",

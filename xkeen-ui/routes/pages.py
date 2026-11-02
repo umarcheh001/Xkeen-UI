@@ -480,6 +480,8 @@ def register_pages_routes(
         if isinstance(module_activation, dict)
         else None
     )
+    # The importmap of every page reads the same activation.
+    app.extensions.setdefault("xkeen.module_activation", module_activation)
 
     def _frontend_modules_descriptor() -> dict[str, object]:
         editor_descriptor = module_activation.get("editor") if isinstance(module_activation, dict) else None

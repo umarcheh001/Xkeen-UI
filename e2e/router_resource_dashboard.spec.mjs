@@ -403,6 +403,16 @@ for (const width of [1280, 390]) {
   });
 }
 
+test('the window is loaded from the build of its own module', async ({ page }) => {
+  const statuses = [];
+  page.on('response', response => {
+    if (/\/frontend-build\/modules\/tool\.advanced-diagnostics\/resource_monitor-[^/]+\.js/.test(response.url())) statuses.push(response.status());
+  });
+  const view = await openDashboard(page);
+  await expect(view.locator('.xkm-card')).toHaveCount(4);
+  expect(statuses).toContain(200);
+});
+
 test('dashboard renders cards with aligned indicators', async ({ page }) => {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));

@@ -23,6 +23,8 @@ from typing import Any
 from flask import Flask, Response, current_app, request, send_file, url_for
 from werkzeug.utils import safe_join
 
+from services.frontend_importmap import build_module_importmap
+
 _SOURCE_ENTRIES = {
     "panel": "js/pages/panel.entry.js",
     "xkeen": "js/pages/xkeen.entry.js",
@@ -117,6 +119,7 @@ _HASHED_ASSET_BASENAME_RE = re.compile(r"^.+\-[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9]+$"
 _MONACO_DIRNAME = "monaco-editor"
 _IMMUTABLE_ASSET_ROOTS = (
     f"{_BUILD_DIRNAME}/assets/",
+    f"{_BUILD_DIRNAME}/modules/",
     "assets/",
     f"{_MONACO_DIRNAME}/",
 )
@@ -897,6 +900,12 @@ class FrontendAssetHelper:
             revision = 0
         return url_for("static", filename=filename, v=str(revision))
 
+    def frontend_module_importmap(self) -> dict[str, str]:
+        activation = current_app.extensions.get("xkeen.module_activation")
+        active = activation.get("active_module_ids", []) if isinstance(activation, dict) else None
+        targets = build_module_importmap(Path(self.static_folder).parent, active)
+        return {specifier: url_for("static", filename=target) for specifier, target in targets.items()}
+
     def frontend_page_config(
         self,
         page_name: str,
@@ -983,6 +992,7 @@ def init_ui_assets_helpers(app: Flask) -> FrontendAssetHelper:
     app.extensions[_APP_EXTENSIONS_KEY] = helper
     app.add_template_global(helper.frontend_page_entry_url, name="frontend_page_entry_url")
     app.add_template_global(helper.frontend_page_config, name="frontend_page_config")
+    app.add_template_global(helper.frontend_module_importmap, name="frontend_module_importmap")
     app.add_template_global(ui_endpoint_available, name="ui_endpoint_available")
     return helper
 

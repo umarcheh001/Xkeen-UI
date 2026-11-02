@@ -1,6 +1,9 @@
 <script type="importmap" data-xkeen-cm6-importmap="1">
 {
   "imports": {
+    {%- for specifier, url in frontend_module_importmap().items() %}
+    {{ specifier|tojson }}: {{ url|tojson }},
+    {%- endfor %}
     "@codemirror/autocomplete": "{{ url_for('static', filename='vendor/npm/@codemirror/autocomplete/dist/index.js') }}",
     "@codemirror/commands": "{{ url_for('static', filename='vendor/npm/@codemirror/commands/dist/index.js') }}",
     "@codemirror/lang-json": "{{ url_for('static', filename='vendor/npm/@codemirror/lang-json/dist/index.js') }}",

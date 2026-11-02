@@ -47,6 +47,19 @@ def _make_static(root: Path) -> Path:
     return static
 
 
+def test_separately_built_module_gets_a_gzip_sibling(tmp_path):
+    builder = _load_builder()
+    module_dir = _make_static(tmp_path) / "frontend-build" / "modules" / "tool.advanced-diagnostics"
+    module_dir.mkdir(parents=True)
+    script = module_dir / "resource_monitor-AbCd1234.js"
+    script.write_text("export const value = 1;\n" * 200, encoding="utf-8")
+
+    builder.precompress_static_assets(tmp_path)
+
+    packed = script.with_name(script.name + ".gz")
+    assert gzip.decompress(packed.read_bytes()) == script.read_bytes()
+
+
 def test_large_stylesheet_gets_a_gzip_sibling(tmp_path):
     builder = _load_builder()
     static = _make_static(tmp_path)
