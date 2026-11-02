@@ -490,6 +490,7 @@ def write_retired_files(package_root: Path, *, deleted: Optional[list[str]] = No
 
 
 MODULE_OWNERSHIP_FILENAME = "module-ownership.json"
+MODULE_VERSIONS_FILENAME = "module-versions.json"
 
 
 def write_module_ownership_map(package_root: Path, *, strict: bool = False) -> Optional[Path]:
@@ -504,6 +505,15 @@ def write_module_ownership_map(package_root: Path, *, strict: bool = False) -> O
     import importlib.util
 
     target = package_root / MODULE_OWNERSHIP_FILENAME
+    # Версии модулей лежат в корне репозитория, а не в панели: в дерево поставки
+    # их кладёт сборка, байтами, и карта описывает их вместе с остальным.
+    versions = package_root / MODULE_VERSIONS_FILENAME
+    try:
+        versions.write_bytes((REPO_ROOT / MODULE_VERSIONS_FILENAME).read_bytes())
+    except OSError as error:
+        if strict:
+            raise
+        print(f"[!] {MODULE_VERSIONS_FILENAME} не записан ({error}); версии модулей в этом архиве будут базовыми")
     # Карта считается загрузкой модулей панели из самого дерева поставки:
     # байткод лёг бы рядом с ними, а CI пакует это дерево как есть.
     wrote_bytecode = sys.dont_write_bytecode

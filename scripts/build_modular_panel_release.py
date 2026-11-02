@@ -65,6 +65,7 @@ _KNOWN_PACKAGE_FILES = {
     "mihomo_server_core.py",
     "module-ownership.json",
     "module-sizes.json",
+    "module-versions.json",
     "retired-files.json",
     "run_server.py",
     "uninstall.sh",
@@ -348,6 +349,7 @@ def build_module_ownership(root: Path) -> dict[str, tuple[str, ...]]:
 
 
 OWNERSHIP_MAP_FILENAME = "module-ownership.json"
+MODULE_VERSIONS_FILENAME = "module-versions.json"
 _FRONTEND_MANIFESTS = {
     "bridge": "static/frontend-build/.vite/manifest.json",
     "build": "static/frontend-build/.vite/manifest.build.json",
@@ -374,14 +376,35 @@ def build_ownership_map(root: Path) -> dict[str, Any]:
             raise ReleaseBuildError(f"invalid frontend manifest {relative}: not an object")
         frontend[key] = entries
     ownership = {module_id: list(paths) for module_id, paths in build_module_ownership(root).items()}
-    if OWNERSHIP_MAP_FILENAME not in ownership["core"]:
-        ownership["core"].append(OWNERSHIP_MAP_FILENAME)
-        ownership["core"].sort()
+    # Both files are laid into the archive by the builder, not read from the
+    # development tree, so they are listed whether or not the tree holds them.
+    for generated in (OWNERSHIP_MAP_FILENAME, MODULE_VERSIONS_FILENAME):
+        if generated not in ownership["core"]:
+            ownership["core"].append(generated)
+    ownership["core"].sort()
     return {
         "schema_version": 1,
         "modules": ownership,
         "frontend": frontend,
     }
+
+
+def module_versions_bytes(root: Path) -> bytes:
+    """The module versions file as it goes into an archive built from `root`.
+
+    The copy in the package tree (a user archive wrote it there) wins over the
+    one at the repository root, which is the source of truth and is never kept
+    inside the package on the development disk.
+    """
+
+    for candidate in (
+        Path(root).resolve() / PACKAGE_DIRNAME / MODULE_VERSIONS_FILENAME,
+        Path(root).resolve() / MODULE_VERSIONS_FILENAME,
+        Path(__file__).resolve().parents[1] / MODULE_VERSIONS_FILENAME,
+    ):
+        if candidate.is_file():
+            return candidate.read_bytes()
+    raise ReleaseBuildError(f"{MODULE_VERSIONS_FILENAME} is missing")
 
 
 def write_ownership_map(root: Path) -> Path:
@@ -704,6 +727,7 @@ def build_panel_archive(root: Path, output_dir: Path, *, version: str, epoch: in
     members[f"{PACKAGE_DIRNAME}/{OWNERSHIP_MAP_FILENAME}"] = (
         json.dumps(build_ownership_map(root), ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
     ).encode("utf-8")
+    members[f"{PACKAGE_DIRNAME}/{MODULE_VERSIONS_FILENAME}"] = module_versions_bytes(root)
     build_deterministic_tar(path, members, epoch=epoch)
     return _built_asset(path)
 

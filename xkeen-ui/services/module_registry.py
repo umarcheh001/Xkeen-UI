@@ -25,6 +25,8 @@ from services.io import safe_write_text
 
 API_VERSION = 1
 STATE_SCHEMA_VERSION = 1
+# Version of the registry format (`registry_version`). A module's own version
+# is not this: it comes from module-versions.json / module-installed.json.
 REGISTRY_VERSION = "1.0.0"
 STATE_FILENAME = "modules.json"
 RUNTIME_DIAGNOSTICS_FILENAME = "module-runtime.json"
@@ -1346,7 +1348,21 @@ class ModuleRegistry:
             snapshot["recovery_reason"] = self._recovery_reason
         return snapshot
 
+    def _module_versions(self) -> dict[str, str]:
+        """Installed version of each module; `core` is the panel itself."""
+
+        from services.build_info import read_build_info
+        from services.module_versions import read_installed_module_versions
+
+        root = os.path.dirname(os.path.dirname(__file__))
+        versions = dict(read_installed_module_versions(self.ui_state_dir, root))
+        panel_version = read_build_info(self.ui_state_dir).get("version")
+        if isinstance(panel_version, str) and panel_version.strip():
+            versions["core"] = panel_version.strip()
+        return versions
+
     def _module_payloads(self, state: Mapping[str, Any]) -> list[dict[str, Any]]:
+        versions = self._module_versions()
         requirement_status = {
             definition.id: self._requirement_status(definition)
             for definition in MODULE_DEFINITIONS
@@ -1418,7 +1434,7 @@ class ModuleRegistry:
                 "module_id": definition.id,
                 "name": definition.name,
                 "description": definition.description,
-                "version": definition.version,
+                "version": versions.get(module_id, definition.version),
                 "api_version": API_VERSION,
                 "depends_on": list(definition.dependencies),
                 "dependencies": list(definition.dependencies),
