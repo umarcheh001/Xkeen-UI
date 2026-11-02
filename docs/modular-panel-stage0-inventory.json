@@ -38,14 +38,14 @@
         "gevent-websocket (optional)"
       ],
       "removable": false,
-      "unit_count": 654,
-      "size_bytes": 8928029,
+      "unit_count": 656,
+      "size_bytes": 8948144,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
         "backend_service": 96,
-        "backend_test": 288,
-        "configuration": 11,
+        "backend_test": 289,
+        "configuration": 12,
         "frontend_bundle": 9,
         "frontend_entrypoint": 4,
         "frontend_feature": 44,
@@ -3974,6 +3974,26 @@
     {
       "module_id": "core",
       "kind": "backend_test",
+      "path": "tests/test_build_module_update.py",
+      "size_bytes": 8872,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
       "path": "tests/test_build_refresh_after_update.py",
       "size_bytes": 5234,
       "depends_on": [],
@@ -4726,7 +4746,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_e2e_gate.py",
-      "size_bytes": 4492,
+      "size_bytes": 4808,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -9944,6 +9964,28 @@
         "XKEEN_ANDROID_KEYSTORE_PASSWORD",
         "XKEEN_ANDROID_KEY_ALIAS",
         "XKEEN_ANDROID_KEY_PASSWORD"
+      ],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "configuration",
+      "path": ".github/workflows/release-module.yml",
+      "size_bytes": 10927,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [
+        "XKEEN_RELEASE_ED25519_PRIVATE_KEY"
       ],
       "removable": false
     },

@@ -4,7 +4,7 @@
 e2e нет в CI, поэтому зелёный CI не говорит, что браузерные тесты прошли.
 
   python scripts/e2e_gate.py run         весь e2e на текущем коммите; при успехе — отметка
-  python scripts/e2e_gate.py check-push  pre-push: тег v* только на коммит с отметкой
+  python scripts/e2e_gate.py check-push  pre-push: теги v* и module-* только на коммит с отметкой
 
 Разовые сбои (смена сети на ноутбуке, плавающие тесты) добираются одним повтором
 упавших тестов. Отметка лежит в каталоге git и в коммиты не попадает.
@@ -22,7 +22,8 @@ from pathlib import Path
 BUILD = "npm run frontend:build"
 FULL_RUN = "npx playwright test"
 RETRY_FAILED = "npx playwright test --last-failed"
-RELEASE_TAG = re.compile(r"^refs/tags/v\d")
+# Выпуск панели (v*) и выпуск модуля (module-<id>-X.Y.Z): e2e нужен обоим.
+RELEASE_TAG = re.compile(r"^refs/tags/(?:v\d|module-)")
 ZERO_SHA = re.compile(r"^0+$")
 
 

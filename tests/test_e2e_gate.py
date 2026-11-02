@@ -50,6 +50,14 @@ def test_tag_without_marker_is_reported(repo):
     assert tags_missing_e2e([push_line(repo, "refs/tags/v1.2.3", head)], repo) == ["refs/tags/v1.2.3"]
 
 
+def test_module_release_tag_without_marker_is_reported(repo):
+    head = git(repo, "rev-parse", "HEAD")
+    ref = "refs/tags/module-tool.files-1.0.1"
+    assert tags_missing_e2e([push_line(repo, ref, head)], repo) == [ref]
+    mark(repo, head)
+    assert tags_missing_e2e([push_line(repo, ref, head)], repo) == []
+
+
 def test_annotated_tag_is_checked_by_its_commit(repo):
     git(repo, "tag", "-a", "v1.2.3-beta.1", "-m", "beta")
     tag_object = git(repo, "rev-parse", "v1.2.3-beta.1")

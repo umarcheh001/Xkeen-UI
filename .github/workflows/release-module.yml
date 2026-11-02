@@ -1,0 +1,246 @@
+name: Release module
+
+# Выпуск одного модуля: тег module-<id>-X.Y.Z на ветке module/<id>-<версия>,
+# отрезанной от тега панели V. Файлы ложатся в GitHub Release панели V рядом
+# с её ассетами (порядок — в RELEASING.md).
+
+on:
+  push:
+    tags:
+      - "module-*"
+
+permissions:
+  contents: write
+
+# Публикации идут по одной: следующий serial строится от прежнего документа.
+concurrency:
+  group: module-release
+  cancel-in-progress: false
+
+jobs:
+  release-module:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          # Тег панели V ищется среди предков, проверки сравнивают с ним историю.
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install Python dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run frontend:build
+
+      - name: Run Python tests
+        run: |
+          set -o pipefail
+          # Проверки, которые меряют настоящее время, идут отдельно, по потоку на файл:
+          # рядом с параллельным прогоном они падают без всякой поломки.
+          python -m pytest -q -n auto --dist loadfile -m "not timing" 2>&1 | tee "$RUNNER_TEMP/pytest.log"
+          python -m pytest -q -n 4 --dist loadfile -m timing 2>&1 | tee -a "$RUNNER_TEMP/pytest.log"
+
+      - name: Name the failed tests
+        if: failure()
+        run: |
+          log="$RUNNER_TEMP/pytest.log"; [ -f "$log" ] || exit 0
+          grep -E '^(FAILED|ERROR) ' "$log" | head -n 8 | while IFS= read -r line; do
+            echo "::error title=pytest::$line"
+          done
+          details="$(grep -E '^E  ' "$log" | head -n 60 | cut -c1-300 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
+          [ -z "$details" ] || echo "::error title=pytest details::$details"
+
+      - name: Verify frontend build
+        run: node scripts/verify_frontend_build.mjs
+
+      - name: Find the panel release
+        id: release
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          V="$(python scripts/build_module_update.py panel-tag)"
+          echo "Модуль ${TAG}, панель ${V}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "panel=${V}" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure GitHub CLI is available
+        run: |
+          if ! command -v gh >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y gh
+          fi
+
+      # Опубликованные выпуски берутся из GitHub, а не из git-тегов:
+      # тег без выпуска не годится в основу.
+      - name: Download the panel archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+          V: ${{ steps.release.outputs.panel }}
+        run: |
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/releases" \
+            --jq '.[] | select(.draft | not) | .tag_name' > "$RUNNER_TEMP/published.txt"
+          if ! grep -qxF "$V" "$RUNNER_TEMP/published.txt"; then
+            echo "::error title=Нет выпуска панели::У тега ${V} нет опубликованного GitHub Release, модуль от него не выпускается"
+            exit 1
+          fi
+          gh release view "$V" --json assets --jq ".assets[].name" > "$RUNNER_TEMP/panel-assets.txt"
+          mkdir -p "$RUNNER_TEMP/panel"
+          gh release download "$V" --pattern "xkeen-ui-panel-${V#v}.tar.gz" --dir "$RUNNER_TEMP/panel"
+
+      # Дерево пакета — как в сборке панели: со сжатой статикой, иначе
+      # сравнение с архивом панели и список файлов модуля разойдутся.
+      - name: Prepare package tree
+        run: |
+          python - <<'PY'
+          import importlib.util
+          import sys
+          from pathlib import Path
+
+          spec = importlib.util.spec_from_file_location("builder", "scripts/build_user_archive.py")
+          builder = importlib.util.module_from_spec(spec)
+          sys.modules["builder"] = builder
+          spec.loader.exec_module(builder)
+
+          packed = builder.precompress_static_assets(Path("xkeen-ui"))
+          print(f"static precompressed: {packed.files} file(s)")
+          PY
+
+      - name: Check module release
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+          V: ${{ steps.release.outputs.panel }}
+        run: |
+          code=0
+          python scripts/check_module_release.py \
+            --tag "$TAG" \
+            --panel-archive "$RUNNER_TEMP/panel/xkeen-ui-panel-${V#v}.tar.gz" \
+            --published-file "$RUNNER_TEMP/published.txt" || code=$?
+          case "$code" in
+            0) ;;
+            2)
+              echo "::error title=Нужен выпуск панели::Правка ${TAG} выходит за файлы модуля и должна выйти с выпуском панели. Модуль не опубликован, причины выше."
+              exit 1
+              ;;
+            *)
+              echo "::error title=Проверки выпуска модуля::Выпуск ${TAG} остановлен, причины выше."
+              exit 1
+              ;;
+          esac
+
+      # 404 — первый выпуск модулей этой панели (serial 1). Документ без
+      # подписи останавливает выпуск: прежние записи нельзя принять на веру.
+      - name: Download previous module updates
+        env:
+          GH_TOKEN: ${{ github.token }}
+          V: ${{ steps.release.outputs.panel }}
+        run: |
+          assets="$RUNNER_TEMP/panel-assets.txt"
+          has_document=0; has_signature=0
+          grep -qxF module-updates.json "$assets" && has_document=1
+          grep -qxF module-updates.json.sig "$assets" && has_signature=1
+          if [ "$has_document" = 0 ] && [ "$has_signature" = 0 ]; then
+            echo "У ${V} ещё нет module-updates.json: первый выпуск, serial 1"
+            exit 0
+          fi
+          if [ "$has_document" != "$has_signature" ]; then
+            echo "::error title=Каталог обновлений::У ${V} module-updates.json и его подпись есть не вместе"
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/previous"
+          gh release download "$V" \
+            --pattern module-updates.json \
+            --pattern module-updates.json.sig \
+            --dir "$RUNNER_TEMP/previous"
+
+      - name: Build module release
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+          V: ${{ steps.release.outputs.panel }}
+        run: |
+          previous=()
+          if [ -f "$RUNNER_TEMP/previous/module-updates.json" ]; then
+            # Сборщик сверяет подпись прежнего документа до того, как его читать.
+            previous=(--previous "$RUNNER_TEMP/previous/module-updates.json"
+                      --previous-signature "$RUNNER_TEMP/previous/module-updates.json.sig")
+          fi
+          rm -rf dist/module-release
+          python scripts/build_module_update.py build \
+            --tag "$TAG" \
+            --panel-tag "$V" \
+            --output-dir dist/module-release \
+            --source-date-epoch "$(git show -s --format=%ct "${GITHUB_SHA}")" \
+            "${previous[@]}"
+
+      - name: Sign module updates
+        env:
+          XKEEN_RELEASE_ED25519_PRIVATE_KEY: ${{ secrets.XKEEN_RELEASE_ED25519_PRIVATE_KEY }}
+        run: |
+          python scripts/sign_modular_panel_catalog.py \
+            --catalog dist/module-release/module-updates.json \
+            --metadata dist/module-release/release-metadata.json \
+            --key-id release-2026 \
+            --private-key-env XKEEN_RELEASE_ED25519_PRIVATE_KEY
+
+      - name: Validate module release assets
+        env:
+          V: ${{ steps.release.outputs.panel }}
+        run: |
+          PYTHONPATH=xkeen-ui python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          from services.module_catalog_trust import verify_catalog_signature
+          from services.module_package_contract import validate_module_updates_document
+
+          root = Path("dist/module-release")
+          document_bytes = (root / "module-updates.json").read_bytes()
+          # Тем же встроенным ключом, что проверяет роутер.
+          signature = verify_catalog_signature(document_bytes, (root / "module-updates.json.sig").read_bytes())
+          document = validate_module_updates_document(
+              json.loads(document_bytes.decode("utf-8")),
+              panel_version=os.environ["V"][1:],
+              signing_key_id=signature.key_id,
+          )
+          metadata = json.loads((root / "release-metadata.json").read_text(encoding="utf-8"))
+          actual = {path.name for path in root.iterdir()} - {"release-metadata.json"}
+          if set(metadata["assets"]) != actual:
+              raise SystemExit(f"metadata asset mismatch: {sorted(actual ^ set(metadata['assets']))}")
+          print(f"serial {document['serial']}, {len(document['modules'])} module(s), {len(actual)} assets")
+          PY
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: module-release
+          path: dist/module-release/**
+
+      # Сначала архив, затем документ, затем подпись: документ не ссылается
+      # на архив, которого ещё нет. Между документом и подписью роутер видит
+      # несовпадение и отвечает кэшем.
+      - name: Publish to the panel release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+          V: ${{ steps.release.outputs.panel }}
+        run: |
+          archive="dist/module-release/xkeen-${TAG}.tar.gz"
+          test -f "$archive"
+          gh release upload "$V" "$archive" "${archive}.sha256" --clobber
+          gh release upload "$V" dist/module-release/module-updates.json --clobber
+          gh release upload "$V" dist/module-release/module-updates.json.sig --clobber
