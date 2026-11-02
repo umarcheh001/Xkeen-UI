@@ -26,6 +26,7 @@ from services.module_package_contract import (
     compare_semver,
     validate_catalog_document,
     validate_catalog_source,
+    validate_module_updates_document,
     validate_panel_catalog_descriptor,
     validate_semver,
 )
@@ -69,6 +70,10 @@ def _stable_unreleased() -> None:
 
 class CatalogTransportError(CatalogClientError):
     """A transport failure eligible for validated stale-cache fallback."""
+
+
+class CatalogAssetNotFound(CatalogTransportError):
+    """The server answered 404: the release carries no such asset."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,6 +158,9 @@ class UrlLibCatalogTransport:
                 raise CatalogTransportError("catalog_transport_unavailable", "catalog transport request failed") from error
             status = self._response_status(response)
             if status not in {301, 302, 303, 307, 308}:
+                if status == 404:
+                    self._close(response)
+                    raise CatalogAssetNotFound("catalog_asset_not_found", "catalog asset does not exist")
                 if status != 200:
                     self._close(response)
                     raise CatalogTransportError("catalog_transport_http", "catalog response returned an unexpected HTTP status")
@@ -340,6 +348,44 @@ class CatalogSnapshot:
     fetched_at: float
     freshness: Literal["fresh", "stale"]
     stale_reason: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class ModuleUpdatesSnapshot:
+    """A signed ``module-updates.json`` of one panel version, verified and validated."""
+
+    document: Mapping[str, Any]
+    document_bytes: bytes
+    signature_bytes: bytes
+    panel_version: str
+    fetched_at: float
+    freshness: Literal["fresh", "stale"]
+    stale_reason: str | None
+
+
+def merge_module_updates(catalog: Mapping[str, Any], updates: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Replace the module entries of a release catalog by the newest update entries.
+
+    The replaced entry carries the unsigned marker ``update_entry``: its
+    ``version`` is the module's own, not the panel's. The input is not changed.
+    """
+
+    merged = dict(catalog)
+    modules = [dict(entry) if isinstance(entry, Mapping) else entry for entry in catalog.get("modules", [])]
+    if updates:
+        newest = {
+            entry["id"]: entry
+            for entry in updates.get("modules", [])
+            if isinstance(entry, Mapping) and isinstance(entry.get("id"), str)
+        }
+        modules = [
+            {**newest[entry["id"]], "update_entry": True}
+            if isinstance(entry, Mapping) and entry.get("id") in newest
+            else entry
+            for entry in modules
+        ]
+    merged["modules"] = modules
+    return merged
 
 
 class ModuleCatalogClient:
@@ -586,9 +632,13 @@ class ModuleCatalogClient:
             return
         for path in entries:
             name = path.name
-            if not (name.startswith("catalog-") and name.endswith(".json")):
+            if name.startswith("module-updates-") and name.endswith(".json"):
+                # module-updates-<version>.json and module-updates-<version>.none.json
+                version = name[len("module-updates-"):-len(".json")].removesuffix(".none")
+            elif name.startswith("catalog-") and name.endswith(".json"):
+                version = name[len("catalog-"):-len(".json")]
+            else:
                 continue
-            version = name[len("catalog-"):-len(".json")]
             try:
                 validate_semver(version, "catalog_release_version")
             except ModulePackageContractError:
@@ -647,6 +697,172 @@ class ModuleCatalogClient:
         )
         self._write_cache(snapshot, cache_path)
         return snapshot
+
+    def _verified_updates(
+        self,
+        *,
+        document_bytes: bytes,
+        signature_bytes: bytes,
+        panel_version: str,
+        fetched_at: float,
+    ) -> ModuleUpdatesSnapshot:
+        try:
+            signature = verify_catalog_signature(document_bytes, signature_bytes, keyring=self._keyring)
+            document = validate_module_updates_document(
+                json.loads(document_bytes.decode("utf-8")),
+                panel_version=panel_version,
+                signing_key_id=signature.key_id,
+                trusted_signing_key_ids=frozenset(self._keyring),
+                core_version=None,
+            )
+        except (CatalogTrustError, ModulePackageContractError) as error:
+            raise self._client_validation_error(error) from error
+        except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as error:
+            raise CatalogClientError("catalog_schema_invalid", "module updates content is not valid JSON") from error
+        return ModuleUpdatesSnapshot(
+            document=document,
+            document_bytes=bytes(document_bytes),
+            signature_bytes=bytes(signature_bytes),
+            panel_version=panel_version,
+            fetched_at=float(fetched_at),
+            freshness="fresh",
+            stale_reason=None,
+        )
+
+    def _read_updates_cache(self, path: Path, panel_version: str) -> ModuleUpdatesSnapshot | None:
+        """The verified cache, or ``None`` if absent or no longer verifiable (then dropped)."""
+
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return None
+        except (OSError, ValueError):
+            record = None
+        try:
+            if not isinstance(record, Mapping) or record.get("schema_version") != 1 or record.get("panel_version") != panel_version:
+                raise ValueError("unsupported cache record")
+            fetched_at = float(record["fetched_at"])
+            if not math.isfinite(fetched_at):
+                raise ValueError("invalid timestamp")
+            return self._verified_updates(
+                document_bytes=base64.b64decode(record["document"], validate=True),
+                signature_bytes=base64.b64decode(record["signature"], validate=True),
+                panel_version=panel_version,
+                fetched_at=fetched_at,
+            )
+        except (CatalogClientError, KeyError, TypeError, ValueError):
+            try:
+                path.unlink()
+            except OSError:
+                pass
+            return None
+
+    def _checked_none_at(self, path: Path) -> float:
+        try:
+            checked_at = float(json.loads(path.read_text(encoding="utf-8"))["checked_at"])
+        except (OSError, ValueError, TypeError, KeyError):
+            return -math.inf
+        return checked_at if math.isfinite(checked_at) else -math.inf
+
+    def get_module_updates(self, panel_version: str, *, force_refresh: bool = False) -> ModuleUpdatesSnapshot | None:
+        """The signed module-updates catalog of one panel version, ``None`` if there are none.
+
+        404 is the normal state "no updates" and is remembered like a catalog.
+        Any other failure never breaks the caller: a verified cache answers as
+        stale with ``stale_reason``, without one the answer is ``None``. The
+        ``serial`` of the cache is a floor: a lower one is refused.
+        """
+
+        try:
+            version = validate_semver(panel_version, "catalog_release_version")
+        except ModulePackageContractError as error:
+            raise CatalogClientError(error.code, "panel version is invalid") from error
+        cache_dir = self._cache_path.parent
+        cache_path = cache_dir / f"module-updates-{version}.json"
+        none_path = cache_dir / f"module-updates-{version}.none.json"
+        self._prune_release_catalogs(keep=version)
+        cached = self._read_updates_cache(cache_path, version)
+        now = float(self._now())
+        max_age_s = self._min_refresh_s if force_refresh else self._cache_ttl_s
+        # A timestamp ahead of the clock is never fresh: the clock may be behind.
+        if cached is not None and 0.0 <= now - cached.fetched_at <= max_age_s:
+            return cached
+        if cached is None and 0.0 <= now - self._checked_none_at(none_path) <= max_age_s:
+            return None
+
+        def keep_cache(reason: str) -> ModuleUpdatesSnapshot | None:
+            return None if cached is None else replace(cached, freshness="stale", stale_reason=reason)
+
+        try:
+            document_bytes = self._transport.fetch_bytes(
+                official_release_asset_url(version, "module-updates.json"),
+                max_bytes=_MAX_CATALOG_BYTES,
+                policy=_RELEASE_POLICY,
+            )
+        except CatalogAssetNotFound as error:
+            if cached is not None:
+                return keep_cache(error.code)
+            try:
+                _atomic_write_json(
+                    str(none_path),
+                    {"schema_version": 1, "panel_version": version, "checked_at": now},
+                    mode=0o600,
+                )
+            except OSError:
+                pass
+            return None
+        except CatalogClientError as error:
+            return keep_cache(error.code)
+        try:
+            signature_bytes = self._transport.fetch_bytes(
+                official_release_asset_url(version, "module-updates.json.sig"),
+                max_bytes=_MAX_SIGNATURE_BYTES,
+                policy=_RELEASE_POLICY,
+            )
+            snapshot = self._verified_updates(
+                document_bytes=document_bytes,
+                signature_bytes=signature_bytes,
+                panel_version=version,
+                fetched_at=now,
+            )
+        except CatalogClientError as error:
+            # Includes a missing .sig: the .json and .sig of a publication are not read atomically.
+            return keep_cache(error.code)
+        if cached is not None and snapshot.document["serial"] < cached.document["serial"]:
+            return keep_cache("module_updates_rollback")
+        record = {
+            "schema_version": 1,
+            "panel_version": version,
+            "document": base64.b64encode(snapshot.document_bytes).decode("ascii"),
+            "signature": base64.b64encode(snapshot.signature_bytes).decode("ascii"),
+            "fetched_at": snapshot.fetched_at,
+        }
+        try:
+            _atomic_write_json(str(cache_path), record, mode=0o600)
+        except OSError:
+            pass  # the answer is still valid; the next call fetches again
+        try:
+            none_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return snapshot
+
+    def get_effective_catalog(self, release_version: str, *, force_refresh: bool = False) -> CatalogSnapshot:
+        """The catalog of one release with its module entries replaced by the newest updates.
+
+        The snapshot keeps the release version (archives of updates live in the
+        release of the panel) and the release catalog's own bytes and signature.
+        Stale updates mark the snapshot stale with their reason.
+        """
+
+        base = self.get_release_catalog(release_version)
+        updates = self.get_module_updates(base.release_version, force_refresh=force_refresh)
+        if updates is None:
+            return base
+        changes: dict[str, Any] = {"catalog": merge_module_updates(base.catalog, updates.document)}
+        if updates.freshness == "stale":
+            changes.update(freshness="stale", stale_reason=updates.stale_reason)
+        return replace(base, **changes)
 
     def download_verified_archive(
         self,

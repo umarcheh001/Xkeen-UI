@@ -12,6 +12,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from services.module_catalog_client import (
     CATALOG_REDIRECT_HOSTS,
+    CatalogAssetNotFound,
     LATEST_RELEASE_URL,
     PRERELEASES_URL,
     CatalogClientError,
@@ -19,6 +20,7 @@ from services.module_catalog_client import (
     FetchPolicy,
     ModuleCatalogClient,
     UrlLibCatalogTransport,
+    merge_module_updates,
     official_release_asset_url,
     parse_latest_prerelease,
     parse_latest_release,
@@ -1213,3 +1215,319 @@ def test_a_prerelease_catalog_keeps_the_stable_unreleased_answer(tmp_path) -> No
         stable.get_catalog()
     assert raised.value.code == "catalog_stable_unreleased"
     assert stable_transport.calls == [LATEST_RELEASE_URL]
+
+
+# --- Каталог обновлений модулей -------------------------------------------
+
+_NOT_FOUND = CatalogAssetNotFound("catalog_asset_not_found", "not found")
+
+
+def _updates_bytes(panel: str, serial: int, *, version: str = "1.0.1", kind: str = "xkeen-module-updates") -> bytes:
+    document = {
+        "kind": kind,
+        "schema_version": 1,
+        "panel_version": panel,
+        "serial": serial,
+        "modules": [
+            {
+                "id": "tool.files",
+                "version": version,
+                "channel": "stable",
+                "panel_api": "1",
+                "module_api": "1",
+                "min_core": panel,
+                "architectures": ["aarch64"],
+                "requires": ["core"],
+                "conflicts": [],
+                "requires_restart": True,
+                "archive": f"xkeen-module-tool.files-{version}.tar.gz",
+                "size": 3,
+                "sha256": hashlib.sha256(b"abc").hexdigest(),
+                "signing_key_id": "release-2026",
+                "ownership": ["static/js/files.js"],
+            }
+        ],
+    }
+    return (json.dumps(document, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+
+
+def _updates_url(panel: str) -> str:
+    return official_release_asset_url(panel, "module-updates.json")
+
+
+def _updates_sig_url(panel: str) -> str:
+    return official_release_asset_url(panel, "module-updates.json.sig")
+
+
+def _updates_responses(private_key, panel: str, serial: int, **kwargs) -> dict[str, bytes]:
+    body = _updates_bytes(panel, serial, **kwargs)
+    return {_updates_url(panel): body, _updates_sig_url(panel): _signature_bytes(private_key, body)}
+
+
+class _Clock:
+    def __init__(self, value: float = 100.0):
+        self.value = value
+
+    def __call__(self) -> float:
+        return self.value
+
+
+def _updates_client(tmp_path, private_key, transport, clock=None, **kwargs) -> ModuleCatalogClient:
+    return ModuleCatalogClient(
+        tmp_path,
+        transport=transport,
+        now=clock or (lambda: 100.0),
+        keyring={"release-2026": _public_pem(private_key)},
+        **kwargs,
+    )
+
+
+def test_404_means_no_updates_and_is_remembered(tmp_path) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    transport = _CatalogTransport({_updates_url("1.2.3"): _NOT_FOUND})
+    client = _updates_client(tmp_path, private_key, transport)
+
+    assert client.get_module_updates("1.2.3") is None
+    assert client.get_module_updates("1.2.3") is None
+
+    assert transport.calls == [_updates_url("1.2.3")]
+    assert (tmp_path / "module-catalog" / "module-updates-1.2.3.none.json").is_file()
+
+
+def test_none_record_expires_after_a_day(tmp_path) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    clock = _Clock()
+    transport = _CatalogTransport({_updates_url("1.2.3"): _NOT_FOUND})
+    client = _updates_client(tmp_path, private_key, transport, clock)
+    assert client.get_module_updates("1.2.3") is None
+    clock.value += 86400 + 1
+    assert client.get_module_updates("1.2.3") is None
+    assert len(transport.calls) == 2
+
+
+def test_valid_document_is_cached_and_served_fresh(tmp_path) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    transport = _CatalogTransport(_updates_responses(private_key, "1.2.3", 5))
+    client = _updates_client(tmp_path, private_key, transport)
+
+    first = client.get_module_updates("1.2.3")
+    second = client.get_module_updates("1.2.3")
+
+    assert first is not None and second is not None
+    assert first.freshness == "fresh" and first.stale_reason is None
+    assert first.document["serial"] == 5
+    assert first.panel_version == "1.2.3"
+    assert first.document_bytes == _updates_bytes("1.2.3", 5)
+    assert second.document_bytes == first.document_bytes
+    assert transport.calls == [_updates_url("1.2.3"), _updates_sig_url("1.2.3")]
+    assert (tmp_path / "module-catalog" / "module-updates-1.2.3.json").is_file()
+
+
+def test_transport_failure_serves_stale_cache(tmp_path) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    clock = _Clock()
+    transport = _CatalogTransport(_updates_responses(private_key, "1.2.3", 5))
+    client = _updates_client(tmp_path, private_key, transport, clock)
+    client.get_module_updates("1.2.3")
+    clock.value += 86400 + 1
+    transport.responses = {_updates_url("1.2.3"): CatalogTransportError("catalog_transport_unavailable", "offline")}
+
+    snapshot = client.get_module_updates("1.2.3")
+
+    assert snapshot is not None
+    assert snapshot.freshness == "stale"
+    assert snapshot.stale_reason == "catalog_transport_unavailable"
+    assert snapshot.document["serial"] == 5
+
+
+def test_transport_failure_without_cache_means_no_updates(tmp_path) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    transport = _CatalogTransport({_updates_url("1.2.3"): CatalogTransportError("catalog_transport_unavailable", "offline")})
+    assert _updates_client(tmp_path, private_key, transport).get_module_updates("1.2.3") is None
+
+
+def test_lower_serial_is_refused_and_cache_stays(tmp_path) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    clock = _Clock()
+    transport = _CatalogTransport(_updates_responses(private_key, "1.2.3", 5))
+    client = _updates_client(tmp_path, private_key, transport, clock)
+    client.get_module_updates("1.2.3")
+    clock.value += 86400 + 1
+    transport.responses = _updates_responses(private_key, "1.2.3", 4, version="1.0.0")
+
+    snapshot = client.get_module_updates("1.2.3")
+
+    assert snapshot is not None
+    assert snapshot.freshness == "stale"
+    assert snapshot.stale_reason == "module_updates_rollback"
+    assert snapshot.document["serial"] == 5
+    # A higher serial replaces the record.
+    transport.responses = _updates_responses(private_key, "1.2.3", 6, version="1.0.2")
+    newer = client.get_module_updates("1.2.3", force_refresh=True)
+    assert newer.freshness == "fresh" and newer.document["serial"] == 6
+
+
+def test_signature_mismatch_from_network_keeps_cache(tmp_path) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    clock = _Clock()
+    transport = _CatalogTransport(_updates_responses(private_key, "1.2.3", 5))
+    client = _updates_client(tmp_path, private_key, transport, clock)
+    client.get_module_updates("1.2.3")
+    clock.value += 86400 + 1
+    transport.responses = _updates_responses(Ed25519PrivateKey.generate(), "1.2.3", 9)
+
+    snapshot = client.get_module_updates("1.2.3")
+
+    assert snapshot is not None
+    assert snapshot.freshness == "stale"
+    assert snapshot.stale_reason == "catalog_signature_invalid"
+    assert snapshot.document["serial"] == 5
+
+
+def test_signature_404_keeps_cache(tmp_path) -> None:
+    # Publication in progress: the .json is already up, the .sig not yet.
+    private_key = Ed25519PrivateKey.generate()
+    clock = _Clock()
+    transport = _CatalogTransport(_updates_responses(private_key, "1.2.3", 5))
+    client = _updates_client(tmp_path, private_key, transport, clock)
+    client.get_module_updates("1.2.3")
+    clock.value += 86400 + 1
+    transport.responses = {
+        _updates_url("1.2.3"): _updates_bytes("1.2.3", 6),
+        _updates_sig_url("1.2.3"): _NOT_FOUND,
+    }
+
+    snapshot = client.get_module_updates("1.2.3")
+
+    assert snapshot is not None
+    assert snapshot.stale_reason == "catalog_asset_not_found"
+    assert snapshot.document["serial"] == 5
+    # Without a cache the screen sees no updates, and no "none" record hides the publication.
+    fresh_dir = tmp_path / "other"
+    other = _updates_client(fresh_dir, private_key, _CatalogTransport(dict(transport.responses)))
+    assert other.get_module_updates("1.2.3") is None
+    assert not (fresh_dir / "module-catalog" / "module-updates-1.2.3.none.json").exists()
+
+
+def test_tampered_cache_is_dropped(tmp_path) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    transport = _CatalogTransport(_updates_responses(private_key, "1.2.3", 5))
+    client = _updates_client(tmp_path, private_key, transport)
+    client.get_module_updates("1.2.3")
+    cache_path = tmp_path / "module-catalog" / "module-updates-1.2.3.json"
+    record = json.loads(cache_path.read_text(encoding="utf-8"))
+    record["document"] = base64.b64encode(_updates_bytes("1.2.3", 99)).decode("ascii")
+    cache_path.write_text(json.dumps(record), encoding="utf-8")
+
+    snapshot = client.get_module_updates("1.2.3")
+
+    assert snapshot is not None
+    assert snapshot.document["serial"] == 5
+    assert snapshot.freshness == "fresh"
+    assert len(transport.calls) == 4  # fetched again
+
+
+def test_clock_behind_never_counts_as_fresh(tmp_path) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    clock = _Clock(1000.0)
+    transport = _CatalogTransport(_updates_responses(private_key, "1.2.3", 5))
+    client = _updates_client(tmp_path, private_key, transport, clock)
+    client.get_module_updates("1.2.3")
+    clock.value = 10.0  # the cache is dated in the future
+
+    snapshot = client.get_module_updates("1.2.3")
+
+    assert snapshot is not None and snapshot.freshness == "fresh"
+    assert len(transport.calls) == 4  # not served from the future-dated cache
+    transport.responses = {_updates_url("1.2.3"): CatalogTransportError("catalog_transport_unavailable", "offline")}
+    clock.value = 1.0
+    offline = client.get_module_updates("1.2.3")
+    assert offline.freshness == "stale"
+
+
+def test_prune_removes_other_panels_updates(tmp_path) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    transport = _CatalogTransport(_updates_responses(private_key, "1.2.3", 5))
+    client = _updates_client(tmp_path, private_key, transport, core_version="1.2.2+local.abc")
+    cache_dir = tmp_path / "module-catalog"
+    cache_dir.mkdir()
+    for name in (
+        "module-updates-1.1.0.json",
+        "module-updates-1.1.0.none.json",
+        "module-updates-1.2.2.json",
+        "module-updates-1.2.2.none.json",
+        "module-updates-notes.txt",
+    ):
+        (cache_dir / name).write_text("{}", encoding="utf-8")
+
+    client.get_module_updates("1.2.3")
+
+    assert sorted(path.name for path in cache_dir.iterdir()) == [
+        "module-updates-1.2.2.json",
+        "module-updates-1.2.2.none.json",
+        "module-updates-1.2.3.json",
+        "module-updates-notes.txt",
+    ]
+
+
+def test_merge_replaces_one_module_and_keeps_others() -> None:
+    catalog = json.loads(_catalog_bytes("1.2.3"))
+    other = dict(catalog["modules"][0], id="tool.other")
+    catalog["modules"].append(other)
+    updates = json.loads(_updates_bytes("1.2.3", 5))
+
+    merged = merge_module_updates(catalog, updates)
+
+    by_id = {entry["id"]: entry for entry in merged["modules"]}
+    assert by_id["tool.files"]["version"] == "1.0.1"
+    assert by_id["tool.files"]["update_entry"] is True
+    assert by_id["tool.files"]["ownership"] == ["static/js/files.js"]
+    assert by_id["tool.other"] == other and "update_entry" not in by_id["tool.other"]
+    assert "update_entry" not in catalog["modules"][0]  # the input is untouched
+    assert merge_module_updates(catalog, None) == catalog
+
+
+def test_effective_catalog_keeps_release_version_for_download_url(tmp_path) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    responses = _release_responses(private_key, "1.2.3")
+    responses.update(_updates_responses(private_key, "1.2.3", 5))
+    transport = _CatalogTransport(responses)
+    client = _updates_client(tmp_path, private_key, transport)
+
+    snapshot = client.get_effective_catalog("1.2.3")
+
+    assert snapshot.release_version == "1.2.3"
+    entry = snapshot.catalog["modules"][0]
+    assert entry["version"] == "1.0.1" and entry["update_entry"] is True
+    assert snapshot.catalog_bytes == _catalog_bytes("1.2.3")
+    # The archive of an update is downloaded from the release of the panel.
+    transport.stream_responses = {official_release_asset_url("1.2.3", "xkeen-module-tool.files-1.0.1.tar.gz"): b"abc"}
+    path = client.download_verified_archive(snapshot, "tool.files", tmp_path / "dl")
+    assert path.read_bytes() == b"abc"
+
+
+def test_effective_catalog_without_updates_is_the_release_catalog(tmp_path) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    responses = _release_responses(private_key, "1.2.3")
+    responses[_updates_url("1.2.3")] = _NOT_FOUND
+    snapshot = _updates_client(tmp_path, private_key, _CatalogTransport(responses)).get_effective_catalog("1.2.3")
+    assert "update_entry" not in snapshot.catalog["modules"][0]
+
+
+def test_catalog_json_404_is_still_transport_failure_for_get_catalog(tmp_path) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    responses = _release_responses(private_key, "1.2.3")
+    responses[official_release_asset_url("1.2.3", "catalog.json")] = _NOT_FOUND
+    client = _updates_client(tmp_path, private_key, _CatalogTransport(responses))
+
+    with pytest.raises(CatalogClientError) as raised:
+        client.get_catalog()
+
+    assert raised.value.code == "catalog_unavailable"
+
+
+def test_transport_maps_http_404_to_asset_not_found() -> None:
+    transport = UrlLibCatalogTransport(opener=_Opener([_Response(404)]))
+    with pytest.raises(CatalogAssetNotFound) as raised:
+        transport.fetch_bytes(official_release_asset_url("1.2.3", "module-updates.json"), max_bytes=10, policy=RELEASE_POLICY)
+    assert raised.value.code == "catalog_asset_not_found"
