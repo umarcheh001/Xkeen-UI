@@ -23207,6 +23207,12 @@ body.panel-page .xk-resource-monitor[data-memory-tone="warning"] #xk-resource-me
 body.panel-page .xk-resource-monitor[data-cpu-tone="danger"] #xk-resource-cpu-meter,
 body.panel-page .xk-resource-monitor[data-memory-tone="danger"] #xk-resource-memory-meter { background: var(--op-danger); }
 body.panel-page .xk-resource-monitor-stale { color: var(--op-warning); font-size: calc(8px * var(--xk-font-scale, 1)); }
+/* Without the diagnostics module the figures sit in a link to the modules
+   screen; they read as figures, like the button of the full panel, not as a
+   blue underlined link. */
+body.panel-page #xk-resource-monitor-install-offer,
+body.panel-page #xk-resource-monitor-install-offer:is(:hover, :focus-visible) { color: var(--op-muted); text-decoration: none; }
+body.panel-page #xk-resource-monitor-install-offer strong { color: inherit; }
 body.panel-page .xk-resource-monitor[data-state="stale"] :is(strong, .xk-resource-meter) { opacity: .55; }
 
 /* Resource dashboard: a compact diagnostic workbench, not a second visual

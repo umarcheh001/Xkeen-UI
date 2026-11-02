@@ -244,7 +244,8 @@
           </details>
           {% endif %}
 
-          <details class="card dt-logging-card dt-collapsible" id="dt-logging-card" data-xk-section="logging dt-logging-card" open>
+          {#- Alone in its row (no link utility card) the card takes the full width and two columns. #}
+          <details class="card dt-logging-card dt-collapsible{% if not devtools_link_utility_card %} dt-card-wide{% endif %}" id="dt-logging-card" data-xk-section="logging dt-logging-card" open>
             <summary class="dt-collapsible-summary">
               <h2 style="margin:0;">Логирование</h2>
               <span class="dt-collapsible-icon" aria-hidden="true">▾</span>
@@ -256,6 +257,7 @@
             </div>
 
             <div class="dt-logging-grid" role="group" aria-label="Logging settings">
+              <div class="dt-logging-col">
               <label class="dt-logging-field">
                 <span class="dt-logging-label">Уровень логов</span>
                 <select
@@ -281,7 +283,9 @@
                 <span class="dt-switch-slider" aria-hidden="true"></span>
                 <span class="dt-switch-label">Отладка WebSocket</span>
               </label>
+              </div>
 
+              <div class="dt-logging-col">
               <label class="dt-logging-field">
                 <span class="dt-logging-label">Ротация (МБ)</span>
                 <input
@@ -309,6 +313,7 @@
                   title="Сколько архивных файлов лога хранить после ротации."
                 >
               </label>
+              </div>
             </div>
 
             <div class="dt-logging-actions">
@@ -373,35 +378,49 @@
 
               <div style="margin-top:12px;">
                 <div class="small" style="margin-bottom:8px; opacity:0.9;"><b>Переименование вкладок</b> (например “Mihomo” → “Proxy”)</div>
+                {#- Only the tabs this profile has; renames of the others are kept by branding_prefs.js. #}
+                {%- set dt_hidden_tabs = devtools_hidden_tab_sections | default([]) %}
                 <div id="dt-branding-tab-rename" class="dt-rename-list" role="group" aria-label="Tab renaming">
+                  {% if 'routing' not in dt_hidden_tabs %}
                   <div class="dt-rename-row">
                     <span class="dt-rename-label">Роутинг Xray</span>
                     <input class="dt-pill-field dt-rename-input" data-tab-key="view:routing" placeholder="Роутинг Xray" autocomplete="off">
                   </div>
+                  {% endif %}
+                  {% if 'mihomo' not in dt_hidden_tabs %}
                   <div class="dt-rename-row">
                     <span class="dt-rename-label">Роутинг Mihomo</span>
                     <input class="dt-pill-field dt-rename-input" data-tab-key="view:mihomo" placeholder="Роутинг Mihomo" autocomplete="off">
                   </div>
+                  {% endif %}
                   <div class="dt-rename-row">
                     <span class="dt-rename-label">Порты и Исключения</span>
                     <input class="dt-pill-field dt-rename-input" data-tab-key="view:xkeen" placeholder="Порты и Исключения" autocomplete="off">
                   </div>
+                  {% if 'xray-logs' not in dt_hidden_tabs %}
                   <div class="dt-rename-row">
                     <span class="dt-rename-label">Логи Xray онлайн</span>
                     <input class="dt-pill-field dt-rename-input" data-tab-key="view:xray-logs" placeholder="Логи Xray онлайн" autocomplete="off">
                   </div>
+                  {% endif %}
+                  {% if 'commands' not in dt_hidden_tabs %}
                   <div class="dt-rename-row">
                     <span class="dt-rename-label">Команды</span>
                     <input class="dt-pill-field dt-rename-input" data-tab-key="view:commands" placeholder="Команды" autocomplete="off">
                   </div>
+                  {% endif %}
+                  {% if 'files' not in dt_hidden_tabs %}
                   <div class="dt-rename-row">
                     <span class="dt-rename-label">Файлы</span>
                     <input class="dt-pill-field dt-rename-input" data-tab-key="view:files" placeholder="Файлы" autocomplete="off">
                   </div>
+                  {% endif %}
+                  {% if 'mihomo-generator' not in dt_hidden_tabs %}
                   <div class="dt-rename-row">
                     <span class="dt-rename-label">Mihomo Генератор</span>
                     <input class="dt-pill-field dt-rename-input" data-tab-key="id:top-tab-mihomo-generator" placeholder="Mihomo Генератор" autocomplete="off">
                   </div>
+                  {% endif %}
                   <div class="dt-rename-row">
                     <span class="dt-rename-label">💰 Донат</span>
                     <input class="dt-pill-field dt-rename-input" data-tab-key="id:top-tab-donate" placeholder="💰 Донат" autocomplete="off">
@@ -605,7 +624,7 @@
                 <div>
                   <div class="small dt-layout-col-head">Вкладки основной панели: перетаскивайте для перестановки, ⭐ закрепляет вкладку слева.</div>
                   <div>
-                    <ul class="dt-tab-list" id="dt-layout-tab-list" aria-label="Tab order editor"></ul>
+                    <ul class="dt-tab-list" id="dt-layout-tab-list" aria-label="Tab order editor" data-hidden-sections="{{ (devtools_hidden_tab_sections | default([])) | join(',') }}"></ul>
                   </div>
                 </div>
               </div>

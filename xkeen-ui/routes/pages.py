@@ -355,6 +355,40 @@ def _effective_panel_sections(supported_sections: list[str]) -> list[str]:
     return [section for section in supported_sections if section in requested_sections]
 
 
+def _module_panel_sections(active_module_ids) -> list[str]:
+    """Panel sections that the given module set brings."""
+
+    sections: list[str] = []
+    if "engine.xray" in active_module_ids:
+        sections.extend(["routing", "xray-logs"])
+    if "engine.mihomo" in active_module_ids:
+        sections.extend(["mihomo", "mihomo-generator"])
+    sections.append("xkeen")
+    if "tool.terminal" in active_module_ids:
+        sections.append("commands")
+    if "tool.files" in active_module_ids:
+        sections.append("files")
+    sections.append("devtools")
+    sections.append("donate")
+    return sections
+
+
+# Panel tabs that DevTools lets the user rename and reorder.
+DEVTOOLS_TAB_SECTIONS = ("routing", "mihomo", "xkeen", "xray-logs", "commands", "files", "mihomo-generator", "donate")
+
+
+def _devtools_hidden_tab_sections(active_module_ids) -> list[str]:
+    """Tabs of the full panel that the installed profile does not have.
+
+    Without module gating (development, legacy install) every tab stays.
+    """
+
+    if active_module_ids is None:
+        return []
+    present = set(_module_panel_sections(active_module_ids))
+    return [section for section in DEVTOOLS_TAB_SECTIONS if section not in present]
+
+
 def _detect_panel_core_ui(active_module_ids: set[str] | None = None) -> dict[str, object]:
     """Build panel visibility from runtime-gated modules when supplied."""
 
@@ -371,18 +405,7 @@ def _detect_panel_core_ui(active_module_ids: set[str] | None = None) -> dict[str
             for core, module_id in (("xray", "engine.xray"), ("mihomo", "engine.mihomo"))
             if module_id in active_module_ids
         ]
-        supported_sections: list[str] = []
-        if has_xray:
-            supported_sections.extend(["routing", "xray-logs"])
-        if has_mihomo:
-            supported_sections.extend(["mihomo", "mihomo-generator"])
-        supported_sections.append("xkeen")
-        if has_terminal:
-            supported_sections.append("commands")
-        if has_files:
-            supported_sections.append("files")
-        supported_sections.append("devtools")
-        supported_sections.append("donate")
+        supported_sections = _module_panel_sections(active_module_ids)
 
         effective_sections = _effective_panel_sections(supported_sections)
         # The core watcher compares "detected" with /api/xkeen/core, which
@@ -608,6 +631,7 @@ def register_pages_routes(
         page_ctx = {
             "devtools_link_utility_card": active_module_ids is None
             or "integration.happ" in active_module_ids,
+            "devtools_hidden_tab_sections": _devtools_hidden_tab_sections(active_module_ids),
         }
         # Avoid stale cached HTML holding on to old static asset versions
         try:

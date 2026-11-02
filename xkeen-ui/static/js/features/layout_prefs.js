@@ -85,15 +85,44 @@ let layoutPrefsModuleApi = null;
     return base;
   }
 
-  function renderTabs(prefs) {
-    const ul = byId('dt-layout-tab-list');
-    if (!ul) return;
+  // Panel section of a tab key: 'view:routing' -> 'routing',
+  // 'id:top-tab-mihomo-generator' -> 'mihomo-generator'.
+  function sectionOf(key) {
+    const s = String(key || '');
+    if (s.startsWith('view:')) return s.slice(5);
+    if (s.startsWith('id:top-tab-')) return s.slice(11);
+    return s;
+  }
 
+  // Sections the installed profile lacks (the page lists them on the list).
+  function hiddenSections(ul) {
+    const raw = ul && ul.dataset ? String(ul.dataset.hiddenSections || '') : '';
+    return new Set(raw.split(',').map((s) => s.trim()).filter(Boolean));
+  }
+
+  function fullOrder(prefs) {
     const order = uniq((prefs && prefs.tabOrder && prefs.tabOrder.length) ? prefs.tabOrder : defaultOrder());
     // ensure all known keys are present
     TAB_DEFS.forEach((t) => {
       if (!order.includes(t.key)) order.push(t.key);
     });
+    return order;
+  }
+
+  // The new order of the shown tabs takes their places in the saved order;
+  // tabs of absent modules keep theirs for the day the module comes back.
+  function mergeShownOrder(order, shownOrder, hidden) {
+    const queue = shownOrder.slice();
+    const merged = order.map((key) => (hidden.has(sectionOf(key)) ? key : queue.shift())).filter(Boolean);
+    return uniq(merged.concat(queue));
+  }
+
+  function renderTabs(prefs) {
+    const ul = byId('dt-layout-tab-list');
+    if (!ul) return;
+
+    const hidden = hiddenSections(ul);
+    const order = fullOrder(prefs).filter((key) => !hidden.has(sectionOf(key)));
 
     const fav = new Set(uniq(prefs && prefs.tabFav));
 
@@ -205,7 +234,7 @@ let layoutPrefsModuleApi = null;
       // Persist order
       const nextOrder = Array.from(ul.querySelectorAll('.dt-tab-item')).map(li => String(li.dataset.key || '')).filter(Boolean);
       const p = loadPrefs();
-      const next = { ...p, tabOrder: uniq(nextOrder) };
+      const next = { ...p, tabOrder: mergeShownOrder(fullOrder(p), uniq(nextOrder), hiddenSections(ul)) };
       saveApply(next);
       toast('Порядок вкладок сохранён');
     });

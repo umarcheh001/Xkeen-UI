@@ -164,7 +164,15 @@ let brandingPrefsModuleApi = null;
     const tabRename = {};
     const wrap = byId('dt-branding-tab-rename');
     if (wrap) {
-      wrap.querySelectorAll('input.dt-rename-input[data-tab-key]').forEach((inp) => {
+      const inputs = Array.from(wrap.querySelectorAll('input.dt-rename-input[data-tab-key]'));
+      const shown = new Set(inputs.map((inp) => (inp.dataset ? String(inp.dataset.tabKey || '').trim() : '')));
+      // Tabs of modules this profile lacks have no field here; their names
+      // stay saved for the day the module is installed again.
+      const saved = (base && base.tabRename && typeof base.tabRename === 'object') ? base.tabRename : {};
+      Object.keys(saved).forEach((k) => {
+        if (!shown.has(k) && typeof saved[k] === 'string' && saved[k].trim()) tabRename[k] = saved[k];
+      });
+      inputs.forEach((inp) => {
         const k = inp.dataset ? String(inp.dataset.tabKey || '').trim() : '';
         const v = String(inp.value || '').trim();
         if (!k) return;

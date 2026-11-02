@@ -12170,6 +12170,33 @@ div.toast-icon {
   align-self: flex-start;
 }
 
+/* Two groups of fields: level and switches, then rotation. In a half-width
+   card they follow each other in one column; alone in its row the card puts
+   them side by side, each column at its own height. */
+.dt-logging-col {
+  display: flex;
+  flex-direction: column;
+  gap: inherit;
+  min-width: 0;
+}
+
+.dt-logging-card.dt-card-wide .dt-logging-grid {
+  flex-direction: row;
+  align-items: flex-start;
+  column-gap: 24px;
+}
+
+.dt-logging-card.dt-card-wide .dt-logging-col {
+  flex: 1 1 0;
+}
+
+@media (max-width: 640px) {
+  .dt-logging-card.dt-card-wide .dt-logging-grid {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 /* Зазор между кнопками ряда равен отступу карточки от её границы (12px в теме
    оператора), иначе Save и Reset выглядят слипшимися. */
 .dt-logging-actions {

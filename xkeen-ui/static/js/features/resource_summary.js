@@ -34,7 +34,6 @@ function render(payload) {
   const memory = renderItem(monitor.querySelector('.xk-resource-monitor-item:nth-child(2)'), payload?.memory?.percent);
   monitor.dataset.cpuTone = cpu >= 90 ? 'danger' : cpu >= 75 ? 'warning' : 'normal';
   monitor.dataset.memoryTone = memory >= 90 ? 'danger' : memory >= 75 ? 'warning' : 'normal';
-  monitor.title = 'CPU и RAM доступны в компактном режиме. Установите «Расширенная диагностика», чтобы открыть dashboard.';
 }
 
 async function refresh() {
