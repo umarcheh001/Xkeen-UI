@@ -20,9 +20,12 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from services.frontend_importmap import build_module_importmap
 from services.module_catalog_client import ModuleCatalogClient
@@ -32,7 +35,9 @@ from services.module_transactions.journal import Journal
 from services.module_transactions.plan import build_panel_update_plan, build_plan, build_profile_transition_plan
 from services.module_transactions.previous_version import describe_previous_version
 from services.panel_package_contract import validate_panel_archive
+from tests.support import module_tx
 from tests.support.module_tx import ARCHITECTURE as SMALL_ARCHITECTURE
+from tests.support.module_tx import file_bytes
 from tests.support.module_tx import DirectoryTransport, make_panel, make_release, publish_module_updates
 from tests.support.shared_build import build_once
 from tests.test_module_transactions_real_tree import (  # noqa: F401
@@ -114,8 +119,18 @@ def client(state_dir, core_version):
     )
 
 
+WATCHED = (
+    "services",
+    "services.module_catalog_client",
+    "services.panel_package_contract",
+    "services.module_transactions.plan",
+    "services.module_transactions.executor",
+)
+
+
 def reply(value):
-    sys.stdout.write("\n@@RESULT@@" + json.dumps(value, sort_keys=True))
+    imported = {name: sys.modules[name].__file__ for name in WATCHED if name in sys.modules}
+    sys.stdout.write("\n@@RESULT@@" + json.dumps({"value": value, "imported": imported}, sort_keys=True))
 
 
 if command == "validate-archive":
@@ -196,7 +211,18 @@ class OldCode:
             timeout=600,
         )
         assert process.returncode == 0, f"{OLD_TAG} {command} failed:\n{process.stderr[-6000:]}"
-        return json.loads(process.stdout.rsplit("@@RESULT@@", 1)[1])
+        answer = json.loads(process.stdout.rsplit("@@RESULT@@", 1)[1])
+        # The code that answered is that of the extracted tag, not the current tree.
+        self.imported = {name: Path(path).resolve() for name, path in answer["imported"].items()}
+        root = self.root.resolve()
+        assert "services" in self.imported
+        for name, path in self.imported.items():
+            assert path.is_relative_to(root), (name, path)
+        return answer["value"]
+
+    def assert_imported(self, *names: str) -> None:
+        missing = [name for name in names if name not in self.imported]
+        assert not missing, missing
 
 
 def _extract_tag(tag: str, destination: Path) -> Path:
@@ -316,6 +342,12 @@ def _update_with_old_code(old_code: OldCode, panel: Path, release: NewRelease) -
         release=NEW_VERSION,
         architecture=ARCHITECTURE,
     )
+    old_code.assert_imported(
+        "services.module_catalog_client",
+        "services.panel_package_contract",
+        "services.module_transactions.plan",
+        "services.module_transactions.executor",
+    )
     assert outcome["result"] == "committed", outcome["status"]
     assert _json(panel / "BUILD.json")["version"] == NEW_VERSION
     return outcome
@@ -326,6 +358,7 @@ def _update_with_old_code(old_code: OldCode, panel: Path, release: NewRelease) -
 
 def test_old_panel_accepts_new_archive(old_code: OldCode, new_archive: NewRelease) -> None:
     listing = old_code("validate-archive", dist=new_archive.dist, architecture=ARCHITECTURE)
+    old_code.assert_imported("services.panel_package_contract")
 
     current = validate_panel_archive(
         new_archive.archive, new_archive.catalog["panel"], platform_architecture=ARCHITECTURE
@@ -349,6 +382,7 @@ def test_old_panel_reads_new_catalog(old_code: OldCode, new_catalog: NewRelease,
         core_version=OLD_VERSION,
         release=NEW_VERSION,
     )
+    old_code.assert_imported("services.module_catalog_client")
 
     assert snapshot["release_version"] == NEW_VERSION
     # The old reader keeps the same fields of the catalog the current one keeps.
@@ -478,22 +512,37 @@ def tree(tmp_path: Path):
     return make_panel(tmp_path, version=OLD_SMALL, installed=("core", "tool.files"))
 
 
-def test_serial_floor_does_not_carry_over_to_next_panel(tree, tmp_path: Path) -> None:
+def test_serial_floor_does_not_carry_over_to_next_panel(tree, tmp_path: Path, monkeypatch) -> None:
+    # Every release is signed by the same key: the cache of the earlier panel
+    # stays trusted, so only the per-panel floor keeps serial 1 acceptable.
+    key = Ed25519PrivateKey.generate()
+    monkeypatch.setattr(module_tx, "Ed25519PrivateKey", SimpleNamespace(generate=lambda: key))
     old_release = make_release(version=OLD_SMALL)
     publish_module_updates(old_release, {"tool.files": "1.0.4"}, serial=7)
     old_client = old_release.client(tree.state)
     assert old_client.get_module_updates(OLD_SMALL).document["serial"] == 7
 
     new_release = make_release(version=NEW_SMALL)
+    assert new_release.keyring == old_release.keyring
     _small_panel_update(tmp_path, tree, new_release)
-    publish_module_updates(new_release, {"tool.files": "1.0.1"}, serial=1)
+    publish_module_updates(new_release, {"tool.files": "1.0.1"}, serial=2)
 
     snapshot = new_release.client(tree.state).get_module_updates(NEW_SMALL)
 
     assert snapshot is not None
     assert snapshot.freshness == "fresh"
-    assert snapshot.document["serial"] == 1
+    assert snapshot.document["serial"] == 2
     assert [entry["version"] for entry in snapshot.document["modules"]] == ["1.0.1"]
+    # Within one panel the floor holds: a day later a lower serial is refused.
+    publish_module_updates(new_release, {"tool.files": "1.0.2"}, serial=1)
+    later = ModuleCatalogClient(
+        tree.state, transport=new_release.transport, keyring=new_release.keyring,
+        platform_architecture=SMALL_ARCHITECTURE, core_version=NEW_SMALL,
+        now=lambda: time.time() + 2 * 86400,
+    ).get_module_updates(NEW_SMALL)
+    assert later is not None
+    assert later.document["serial"] == 2
+    assert later.stale_reason == "module_updates_rollback"
 
 
 def test_rollback_is_not_offered_after_module_update(tree, tmp_path: Path) -> None:
@@ -512,6 +561,45 @@ def test_rollback_is_not_offered_after_module_update(tree, tmp_path: Path) -> No
     described = describe_previous_version(tree.root)
     assert described["available"] is False
     assert described["reason"] in {"no_previous_version", "panel_changed_since_update"}
+
+
+def test_panel_update_lays_release_module_over_updated_module_and_clears_its_record(tree, tmp_path: Path) -> None:
+    """An update of the panel replaces every module with the release's own.
+
+    By the spec («panel-update заменяет модули и очищает overrides и версии»)
+    each panel release carries all modules, and a fix of a module goes into
+    the next panel release, so laying the release is not a rollback of the
+    fix. The files the module update added leave, the module's version and
+    overrides are cleared, and the module stays installed.
+    """
+
+    old_release = make_release(version=OLD_SMALL)
+    files = (*module_tx.OWNERSHIP["tool.files"], "static/js/pages/file_manager.update_probe.js")
+    publish_module_updates(old_release, {"tool.files": "1.0.1"}, ownership={"tool.files": files})
+    catalog = old_release.client(tree.state).get_effective_catalog(OLD_SMALL).catalog
+    plan = build_plan(
+        "update", "tool.files", panel_root=tree.root, state_dir=tree.state,
+        catalog=catalog, architecture=SMALL_ARCHITECTURE, free_bytes=1 << 40,
+    )
+    assert _run_small(tree, plan, old_release) == "committed"
+    added = files[-1]
+    assert (tree.root / added).is_file()
+    assert _json(tree.root / "module-installed.json")["versions"] == {"tool.files": "1.0.1"}
+    assert _json(tree.root / "module-ownership-overrides.json")["modules"] == {"tool.files": sorted(files)}
+
+    new_release = make_release(version=NEW_SMALL)
+    _small_panel_update(tmp_path, tree, new_release)
+
+    for relative in module_tx.OWNERSHIP["tool.files"]:
+        assert (tree.root / relative).read_bytes() == file_bytes(relative, NEW_SMALL)
+    assert not (tree.root / added).exists()
+    installed = _json(tree.root / "module-installed.json")
+    assert installed["modules"]["tool.files"] is True
+    assert "versions" not in installed
+    assert _json(tree.root / "module-ownership-overrides.json")["modules"] == {}
+    managed = _json(tree.root / "install-managed.json")["paths"]
+    assert added not in managed
+    assert set(module_tx.OWNERSHIP["tool.files"]) <= set(managed)
 
 
 # --- смена профиля на панели с разрезом ------------------------------------------------------
