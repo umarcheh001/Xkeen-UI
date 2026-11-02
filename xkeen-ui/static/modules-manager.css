@@ -761,6 +761,9 @@ html body.modules-page .modules-card-actions button.btn-primary.modules-action-u
   border-color: var(--modules-accent) !important;
   background: var(--modules-accent) !important;
   color: #ffffff !important;
+  /* The legacy light .btn-primary of styles.css casts a shadow; the page's own
+     accent buttons (summary, operation window) have none. */
+  box-shadow: none !important;
   font-weight: 600;
 }
 

@@ -1301,3 +1301,96 @@ def test_public_status_carries_module_version_and_download_bytes():
     )
 
     assert (public["module_version"], public["downloaded_bytes"], public["total_bytes"]) == ("1.1.0", 1024, 4096)
+
+
+# --- Проверка обновлений модулей без сети не ждёт GitHub ----------------------
+
+
+def _stale_panel_catalog(catalog):
+    """The panel catalog answers from its copy: GitHub could not be reached."""
+
+    real = catalog.client.get_release_catalog(catalog.client._core_version)
+
+    def stale(**_kwargs):
+        catalog.latest_requests += 1
+        return replace(real, freshness="stale", stale_reason="catalog_transport_failed")
+
+    catalog.get_catalog = stale
+
+
+def _update_requests(release):
+    return [url for url in release.transport.calls if "module-updates" in url or url.endswith("catalog.json")
+            or url.endswith("catalog.json.sig")]
+
+
+def test_offline_update_check_asks_github_nothing_more(tmp_path):
+    panel = make_panel(tmp_path)
+    release = make_release()
+    publish_module_updates(release, {"engine.xray": "1.1.0"})
+    service, catalog = make_service(panel, release)
+    _stale_panel_catalog(catalog)
+    release.transport.calls.clear()
+
+    payload = service.panel_update_check()
+    notes = service.notification_catalog()
+
+    # Nothing cached of the module updates: they are "not checked", and no request waited for GitHub.
+    assert _update_requests(release) == []
+    assert payload["update_available"] is False and payload["freshness"] == "stale"
+    assert payload["module_updates"] == [] and payload["module_updates_stale_reason"]
+    assert notes["module_updates"] == [] and notes["module_updates_stale_reason"]
+
+
+def test_offline_update_check_answers_module_updates_from_the_copy(tmp_path):
+    panel = make_panel(tmp_path)
+    release = make_release()
+    publish_module_updates(release, {"engine.xray": "1.1.0"})
+    service, catalog = make_service(panel, release)
+    assert service.panel_update_check()["module_updates"]  # the copy is kept
+    # A day later GitHub is out of reach.
+    catalog.client._now = lambda: __import__("time").time() + 2 * 86400
+    _stale_panel_catalog(catalog)
+    release.transport.calls.clear()
+
+    payload = service.panel_update_check()
+
+    assert _update_requests(release) == []
+    assert payload["module_updates"] == [
+        {"module_id": "engine.xray", "version": "1.1.0", "installed_version": "1.0.0"},
+    ]
+    assert payload["module_updates_stale_reason"] == "catalog_transport_failed"
+
+
+def test_failed_module_update_request_is_not_repeated_on_every_check(tmp_path):
+    panel = make_panel(tmp_path)
+    release = make_release()
+    publish_module_updates(release, {"engine.xray": "1.1.0"})
+    url = official_release_asset_url(VERSION, "module-updates.json")
+    release.transport.fail[url] = CatalogTransportError("catalog_transport_failed", "timed out")
+    service, _catalog = make_service(panel, release)
+
+    service.panel_update_check()
+    service.panel_update_check()
+    service.notification_catalog()
+
+    # One attempt waited for GitHub; the next checks remember it and do not wait again.
+    assert release.transport.calls.count(url) == 1
+
+
+def test_tiles_and_available_tab_agree_on_module_updates(tmp_path):
+    panel = make_panel(tmp_path, installed=("core", "tool.editor", "engine.xray", "tool.terminal"))
+    # The editor is recorded older than this build lays it: both screens offer the same.
+    record = json.loads(panel.path("module-installed.json").read_text(encoding="utf-8"))
+    record["versions"] = {"tool.editor": "0.9.0"}
+    panel.path("module-installed.json").write_text(json.dumps(record), encoding="utf-8")
+    release = make_release()
+    publish_module_updates(release, {"engine.xray": "1.1.0", "tool.terminal": "1.0.0"})
+    service, _catalog = make_service(panel, release)
+
+    offers = {offer["module_id"]: offer["version"] for offer in service.panel_update_check()["module_updates"]}
+    available = {
+        item["id"]: item["module_version"] for item in service.available()["modules"] if item["update_available"]
+    }
+
+    assert offers == available
+    assert set(offers) == {"engine.xray", "tool.editor"}

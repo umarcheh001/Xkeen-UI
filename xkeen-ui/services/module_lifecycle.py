@@ -262,6 +262,29 @@ def _lifecycle_actions(module_id: str, installed: bool, update_available: bool =
     return [*actions, "repair", "remove"]
 
 
+def _module_versions_of(
+    entry: Mapping[str, Any],
+    installed: bool,
+    panel_versions: Mapping[str, str],
+    installed_versions: Mapping[str, str],
+) -> tuple[str, str | None, bool]:
+    """The module's own version an entry lays, the installed one, and whether it is an update.
+
+    One rule for the tiles, the counter and the tab of available modules. The
+    newest entry of the update document carries the module's own version; a
+    release entry lays what this panel build carries. ``core`` is not asked.
+    """
+
+    module_id = str(entry.get("id") or "")
+    if entry.get("update_entry") is True:
+        module_version = str(entry.get("version"))
+    else:
+        module_version = panel_versions.get(module_id, BASE_MODULE_VERSION)
+    installed_version = installed_versions.get(module_id, BASE_MODULE_VERSION) if installed else None
+    # Module versions only: the panel's version takes no part.
+    return module_version, installed_version, installed_version is not None and _is_newer(module_version, installed_version)
+
+
 def _is_newer(candidate: str, installed: str) -> bool:
     """Whether a module version is newer than the installed one; the panel's does not count."""
 
@@ -668,7 +691,10 @@ class ModuleLifecycleService:
                 # The archive of this very release may be waiting between a
                 # plan that was shown and its "apply"; it is left for a while.
                 kept_digest = digest
-            module_updates = self._module_update_check(client, source_version, force_refresh=bool(force_refresh))
+            module_updates = self._module_update_check(
+                client, source_version, force_refresh=bool(force_refresh),
+                offline_reason=snapshot.stale_reason if snapshot.freshness == "stale" else None,
+            )
         except ModuleTransactionError as error:
             _raise_domain(error)
         except Exception as error:
@@ -694,30 +720,40 @@ class ModuleLifecycleService:
         """Installed modules with a newer update entry: what the screen offers to update."""
 
         installed_ids = read_installed_modules(self.state_dir)
+        panel_versions = read_panel_module_versions(self.panel_root)
         installed_versions = read_installed_module_versions(self.state_dir, self.panel_root)
         offers: list[dict[str, str]] = []
         for entry in catalog.get("modules", []):
-            if not isinstance(entry, Mapping) or entry.get("update_entry") is not True:
+            if not isinstance(entry, Mapping):
                 continue
             module_id = str(entry.get("id") or "")
-            if module_id == "core" or module_id not in installed_ids:
+            if module_id == "core":
                 continue
-            version = str(entry.get("version") or "")
-            installed_version = installed_versions.get(module_id, BASE_MODULE_VERSION)
-            if _is_newer(version, installed_version):
+            version, installed_version, newer = _module_versions_of(
+                entry, module_id in installed_ids, panel_versions, installed_versions
+            )
+            if newer:
                 offers.append({"module_id": module_id, "version": version, "installed_version": installed_version})
         return offers
 
-    def _module_update_check(self, client: Any, panel_version: str, *, force_refresh: bool = False) -> dict[str, Any]:
+    def _module_update_check(
+        self, client: Any, panel_version: str, *, force_refresh: bool = False, offline_reason: str | None = None
+    ) -> dict[str, Any]:
         """Module updates of the installed release; a failure here never spoils the panel's answer.
 
-        A local build only looks: it is offered nothing.
+        A local build only looks: it is offered nothing. ``offline_reason`` says
+        the panel's own catalog could not reach GitHub just now: module updates
+        are then answered from the copies only, without another wait.
         """
 
         if is_local_build(panel_version):
             return {"module_updates": [], "module_updates_stale_reason": None}
         try:
-            snapshot = client.get_effective_catalog(panel_version, force_refresh=force_refresh)
+            # A check that could not reach GitHub a moment ago does not wait for it again.
+            options: dict[str, Any] = {"force_refresh": force_refresh, "patient": True}
+            if offline_reason:
+                options["offline"] = offline_reason
+            snapshot = client.get_effective_catalog(panel_version, **options)
             offers = self._module_update_offers(snapshot.catalog)
         except Exception as error:  # noqa: BLE001 - the panel check stands on its own
             return {
@@ -845,7 +881,10 @@ class ModuleLifecycleService:
                 "target_panel": target_panel,
                 "baseline_error": baseline_error,
                 # Updates of single modules inside the installed release.
-                **self._module_update_check(client, source_version, force_refresh=bool(force_refresh)),
+                **self._module_update_check(
+                    client, source_version, force_refresh=bool(force_refresh),
+                    offline_reason=snapshot.stale_reason if snapshot.freshness == "stale" else None,
+                ),
             }
         except ModuleTransactionError as error:
             _raise_domain(error)
@@ -1055,18 +1094,15 @@ class ModuleLifecycleService:
                 module_version = str(entry.get("version") or version)
                 installed_version = version if installed else None
             else:
+                module_version, installed_version, update_available = _module_versions_of(
+                    entry, installed, panel_versions, installed_versions
+                )
                 if entry.pop("update_entry", None) is True:
-                    # The newest entry of the update document: its version is
-                    # the module's own. The entry keeps the release version,
-                    # and the files it lists are for the plan, not the screen.
+                    # The newest entry of the update document: the entry keeps
+                    # the release version, and the files it lists are for the
+                    # plan, not the screen.
                     entry.pop("ownership", None)
-                    module_version = str(entry.get("version"))
                     entry["version"] = version
-                else:
-                    module_version = panel_versions.get(module_id, BASE_MODULE_VERSION)
-                installed_version = installed_versions.get(module_id, BASE_MODULE_VERSION) if installed else None
-                # Module versions only: the panel's version takes no part.
-                update_available = installed_version is not None and _is_newer(module_version, installed_version)
             entry.update(
                 module_version=module_version,
                 installed_version=installed_version,

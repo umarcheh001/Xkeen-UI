@@ -2022,7 +2022,7 @@
           "accessible_label": "Информация"
         },
         {
-          "location": "xkeen-ui/static/js/features/module_manager/render.js:L620",
+          "location": "xkeen-ui/static/js/features/module_manager/render.js:L629",
           "control_type": "runtime-action",
           "accessible_label": "Информация"
         },

@@ -611,6 +611,15 @@ function modulesWord(count) {
   return 'модулей';
 }
 
+// Only a request that did not get through is a lost connection. A catalog
+// that is unavailable may simply be missing (404) while the network is fine.
+function staleWhy(reason) {
+  const code = String(reason || '');
+  if (/transport|network|timeout/.test(code)) return 'Не удалось связаться с GitHub.';
+  if (/signature|trust|rollback|schema|invalid|mismatch/.test(code)) return 'Каталог обновлений не прошёл проверку.';
+  return 'Каталог обновлений сейчас недоступен.';
+}
+
 // The update document of the release could not be read: the screen works on,
 // with what it has, and says so calmly.
 function updateStaleNote(reason, retryWord) {
@@ -618,11 +627,10 @@ function updateStaleNote(reason, retryWord) {
   line.setAttribute('role', 'status');
   line.dataset.code = String(reason || '');
   line.insertAdjacentHTML('afterbegin', iconHtml('info', 'modules-update-stale-icon'));
-  const network = /transport|unavailable|network|timeout/.test(String(reason || ''));
   const text = node('span');
   text.append(
     node('strong', '', 'Обновления модулей сейчас не проверить.'),
-    document.createTextNode(` ${network ? 'Не удалось связаться с GitHub.' : 'Каталог обновлений не прошёл проверку.'} Модули работают как прежде; проверка повторится сама, или нажмите «${retryWord}».`),
+    document.createTextNode(` ${staleWhy(reason)} Модули работают как прежде; проверка повторится сама, или нажмите «${retryWord}».`),
   );
   line.append(text);
   return line;
@@ -1319,8 +1327,10 @@ export function renderInstalled(host, snapshot, onToggle, onPlan = () => {}, bus
 export function renderAvailable(host, catalog, onPlan = () => {}, busy = false, { names = null, onRefresh = null } = {}) {
   host.replaceChildren();
   // A release catalog never goes stale: a stale answer is that of the update
-  // document. The modules of the release are shown as they are.
-  const staleReason = catalog.update_stale_reason || (catalog.freshness === 'stale' ? catalog.stale_reason || 'catalog_unavailable' : null);
+  // document. The modules of the release are shown as they are. A local build
+  // is offered no update, so it has nothing to be unable to check.
+  const staleReason = catalog.read_only === true ? null
+    : catalog.update_stale_reason || (catalog.freshness === 'stale' ? catalog.stale_reason || 'catalog_unavailable' : null);
   if (staleReason) {
     const note = updateStaleNote(staleReason, 'Обновить каталог');
     if (typeof onRefresh === 'function') {

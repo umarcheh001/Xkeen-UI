@@ -48,6 +48,12 @@ CATALOG_REDIRECT_HOSTS = frozenset(
 # outgrew one megabyte with v2.10.0-beta.4 and the check fell to "stale".
 _MAX_DISCOVERY_BYTES = 8 * 1024 * 1024
 _MAX_CATALOG_BYTES = 1024 * 1024
+# After a request for module updates could not reach GitHub, the checks that
+# follow answer from the copy for this long instead of waiting again.
+_UPDATES_RETRY_AFTER_S = 60 * 60
+# The last such failure of each update document, kept by the panel process
+# only: the moment and the reason, by the path of the document's copy.
+_UPDATES_FAILURES: dict[str, tuple[float, str]] = {}
 _MAX_SIGNATURE_BYTES = 16 * 1024
 
 
@@ -650,13 +656,14 @@ class ModuleCatalogClient:
             except OSError:
                 pass
 
-    def get_release_catalog(self, release_version: str) -> CatalogSnapshot:
+    def get_release_catalog(self, release_version: str, *, offline: bool = False) -> CatalogSnapshot:
         """Return the catalog of one exact release, the one a panel was built from.
 
         A module is installed from the release of the running panel, which is
         not necessarily the latest one. A published release never changes, so
         its verified catalog is kept without an expiry and the rollback floor
-        of the update check does not apply to it.
+        of the update check does not apply to it. ``offline`` answers from the
+        copy only and asks GitHub nothing.
         """
 
         try:
@@ -673,6 +680,8 @@ class ModuleCatalogClient:
         self._prune_release_catalogs(keep=version)
         if cached is not None and cached.release_version == version:
             return cached
+        if offline:
+            raise CatalogClientError("catalog_unavailable", "no copy of the release catalog is kept")
         catalog_url = official_release_asset_url(version, "catalog.json")
         signature_url = official_release_asset_url(version, "catalog.json.sig")
         try:
@@ -764,13 +773,27 @@ class ModuleCatalogClient:
             return -math.inf
         return checked_at if math.isfinite(checked_at) else -math.inf
 
-    def get_module_updates(self, panel_version: str, *, force_refresh: bool = False) -> ModuleUpdatesSnapshot | None:
+    def get_module_updates(
+        self,
+        panel_version: str,
+        *,
+        force_refresh: bool = False,
+        offline: bool = False,
+        offline_reason: str = "",
+        patient: bool = False,
+    ) -> ModuleUpdatesSnapshot | None:
         """The signed module-updates catalog of one panel version, ``None`` if there are none.
 
         404 is the normal state "no updates" and is remembered like a catalog.
         Any other failure never breaks the caller: a verified cache answers as
         stale with ``stale_reason``, without one the answer is ``None``. The
         ``serial`` of the cache is a floor: a lower one is refused.
+
+        A request that could not reach GitHub is remembered: for an hour the
+        ``patient`` checks that follow (the screen and the notification poll,
+        not an operation) answer from the copy and do not wait again. With
+        ``offline`` nothing is asked at all; without a copy or a remembered
+        "none" that is a ``catalog_unavailable`` error, since nothing is known.
         """
 
         try:
@@ -793,6 +816,21 @@ class ModuleCatalogClient:
         def keep_cache(reason: str) -> ModuleUpdatesSnapshot | None:
             return None if cached is None else replace(cached, freshness="stale", stale_reason=reason)
 
+        if offline:
+            if cached is not None:
+                return keep_cache(offline_reason or "catalog_unavailable")
+            if self._checked_none_at(none_path) > -math.inf:
+                return None
+            raise CatalogClientError("catalog_unavailable", "module updates are not known without the network")
+        failure_key = str(cache_path)
+        failure = _UPDATES_FAILURES.get(failure_key)
+        if patient and failure is not None and not force_refresh and 0.0 <= now - failure[0] <= _UPDATES_RETRY_AFTER_S:
+            return keep_cache(failure[1])
+
+        def remember_failure(reason: str) -> ModuleUpdatesSnapshot | None:
+            _UPDATES_FAILURES[failure_key] = (now, reason)
+            return keep_cache(reason)
+
         try:
             document_bytes = self._transport.fetch_bytes(
                 official_release_asset_url(version, "module-updates.json"),
@@ -811,6 +849,8 @@ class ModuleCatalogClient:
             except OSError:
                 pass
             return None
+        except CatalogTransportError as error:
+            return remember_failure(error.code)
         except CatalogClientError as error:
             return keep_cache(error.code)
         try:
@@ -841,22 +881,32 @@ class ModuleCatalogClient:
             _atomic_write_json(str(cache_path), record, mode=0o600)
         except OSError:
             pass  # the answer is still valid; the next call fetches again
+        _UPDATES_FAILURES.pop(failure_key, None)
         try:
             none_path.unlink(missing_ok=True)
         except OSError:
             pass
         return snapshot
 
-    def get_effective_catalog(self, release_version: str, *, force_refresh: bool = False) -> CatalogSnapshot:
+    def get_effective_catalog(
+        self, release_version: str, *, force_refresh: bool = False, offline: str | None = None, patient: bool = False
+    ) -> CatalogSnapshot:
         """The catalog of one release with its module entries replaced by the newest updates.
 
         The snapshot keeps the release version (archives of updates live in the
         release of the panel) and the release catalog's own bytes and signature.
-        Stale updates mark the snapshot stale with their reason.
+        Stale updates mark the snapshot stale with their reason. ``offline`` is
+        the reason GitHub is known to be out of reach: only copies answer then.
         """
 
-        base = self.get_release_catalog(release_version)
-        updates = self.get_module_updates(base.release_version, force_refresh=force_refresh)
+        base = self.get_release_catalog(release_version, offline=bool(offline))
+        updates = self.get_module_updates(
+            base.release_version,
+            force_refresh=force_refresh,
+            offline=bool(offline),
+            offline_reason=offline or "",
+            patient=patient,
+        )
         if updates is None:
             return base
         changes: dict[str, Any] = {"catalog": merge_module_updates(base.catalog, updates.document)}

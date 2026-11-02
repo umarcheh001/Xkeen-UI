@@ -76,12 +76,15 @@ test.describe('Module update', () => {
     status = downloading(1_000_000);
     await expect(dialog.locator('.modules-plan-progress-head strong')).toHaveText('Загрузка архива');
     await expect(dialog.locator('.modules-plan-progress-head small')).toContainText('1,0 из 3,8 МБ');
-    status = downloading(2_000_000);
-    await expect(dialog.locator('.modules-plan-progress-head small')).toContainText('1,9 из 3,8 МБ');
+    // A quarter of the archive: the bar stands a quarter into its second step,
+    // (1 + 0.25) / 7, not at the half-step a step without bytes shows (21%).
+    await expect(dialog.locator('.modules-plan-progress-bar i')).toHaveAttribute('style', 'width: 18%;');
+    status = downloading(3_000_000);
+    await expect(dialog.locator('.modules-plan-progress-head small')).toContainText('2,9 из 3,8 МБ');
     await expect(dialog.locator('.modules-plan-progress-head small')).toContainText('Мбит/с');
     await expect(dialog.locator('.modules-plan-progress-head small')).toContainText('осталось около');
-    // Half the archive: the bar stands halfway through its second step.
-    await expect(dialog.locator('.modules-plan-progress-bar i')).toHaveAttribute('style', 'width: 21%;');
+    // Three quarters: (1 + 0.75) / 7.
+    await expect(dialog.locator('.modules-plan-progress-bar i')).toHaveAttribute('style', 'width: 25%;');
 
     // The runner restarted the panel: the page loads anew and the window says how it ended.
     status = server.module_update_committed;
@@ -141,6 +144,53 @@ test.describe('Module update', () => {
     await expect(page.locator('#modules-card-host .modules-update-stale')).toContainText('Обновления модулей сейчас не проверить.');
     await expect(page.locator('#modules-card-host .modules-warning')).toHaveCount(0);
     await expect(page.locator('#modules-card-host .modules-card')).toHaveCount(server.available.modules.length);
+  });
+
+  test('a catalog that is missing is not called a lost connection', async ({ page }) => {
+    await installLifecycleRoutes(page, {
+      available: { ...server.available, update_stale_reason: 'catalog_unavailable' },
+    });
+    await routeUpdateCheck(page, {
+      ...server.update_check_current, module_updates: [], module_updates_stale_reason: 'catalog_unavailable',
+    });
+
+    await page.goto('/modules');
+    const note = page.locator('.modules-list .modules-update-stale');
+    await expect(note).toContainText('Обновления модулей сейчас не проверить.');
+    // catalog_unavailable is also a release without its catalog (404): the network may be fine.
+    await expect(note).not.toContainText('GitHub');
+    await expect(note).toContainText('Каталог обновлений сейчас недоступен.');
+  });
+
+  test('a local build shows no stale line on the tab of available modules', async ({ page }) => {
+    const local = {
+      ...server.installed,
+      panel_version: '2.10.0+local.f46f1f10',
+      lifecycle: { ...server.installed.lifecycle, local: true },
+    };
+    await installLifecycleRoutes(page, {
+      installed: local,
+      available: {
+        ...server.available, read_only: true, freshness: 'stale', stale_reason: 'catalog_transport_failed', update_stale_reason: null,
+      },
+    });
+    await routeUpdateCheck(page, server.update_check_current);
+
+    await page.goto('/modules');
+    await page.getByRole('tab', { name: 'Доступные' }).click();
+    await expect(page.locator('#modules-card-host .modules-catalog-readonly')).toBeVisible();
+    await expect(page.locator('#modules-card-host .modules-update-stale')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Обновить каталог' })).toHaveCount(0);
+  });
+
+  test('the update button of a tile has no shadow at rest, as in the mockup', async ({ page }) => {
+    await installLifecycleRoutes(page, { available: server.available_update });
+    await routeUpdateCheck(page, server.update_check_modules);
+
+    await page.goto('/modules');
+    const button = tileOf(page, MIHOMO).locator('.modules-tile-update .modules-action-update');
+    await expect(button).toBeVisible();
+    expect(await button.evaluate((element) => getComputedStyle(element).boxShadow)).toBe('none');
   });
 
   test('the tile menu offers the update first', async ({ page }) => {
