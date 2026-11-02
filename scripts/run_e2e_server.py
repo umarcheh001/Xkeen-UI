@@ -49,6 +49,17 @@ E2E_MODULE_PROFILES: dict[str, tuple[str, ...]] = {
         "integration.happ",
         "tool.advanced-diagnostics",
     ),
+    # Everything but the diagnostics window: the panel must open without it.
+    "no-diagnostics": (
+        "core",
+        "engine.xray",
+        "engine.mihomo",
+        "tool.editor",
+        "tool.terminal",
+        "tool.files",
+        "tool.backups",
+        "integration.happ",
+    ),
     "xray-minimal": ("core", "tool.editor", "engine.xray"),
     "mihomo-minimal": ("core", "tool.editor", "engine.mihomo"),
     "core-only": ("core",),

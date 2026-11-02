@@ -151,6 +151,24 @@ test.describe('Panel sections after a dropped link', () => {
     await expect(notice.getByRole('button', { name: 'Повторить' })).toHaveCount(0);
   });
 
+  test('a missing diagnostics module file shows the notice and offers only a reload', async ({ page }) => {
+    test.setTimeout(90_000);
+    // The window is built apart and reached through the importmap; its file answers 404.
+    await page.route(/\/frontend-build\/modules\/tool\.advanced-diagnostics\/[^/]+\.js(\?|$)/, (route) => route.fulfill({
+      status: 404,
+      contentType: 'text/plain',
+      body: 'not found',
+    }));
+
+    await page.goto('/');
+    const notice = page.locator('#toast-container .toast-error');
+    await expect(notice).toContainText(NOTICE, { timeout: 30_000 });
+    // The browser keeps a failed module file failed, so asking again is pointless.
+    await expect(notice.getByRole('button', { name: 'Обновить страницу' })).toBeVisible();
+    await expect(notice.getByRole('button', { name: 'Повторить' })).toHaveCount(0);
+    await expect(page.locator('#xk-resource-dashboard-modal')).toBeHidden();
+  });
+
   test('unsaved text in the file manager editor counts as an unsaved change', async ({ page }) => {
     test.setTimeout(90_000);
     await page.route('**/api/fs/list?**', async (route) => {

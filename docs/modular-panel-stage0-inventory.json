@@ -38,20 +38,20 @@
         "gevent-websocket (optional)"
       ],
       "removable": false,
-      "unit_count": 646,
-      "size_bytes": 8707353,
+      "unit_count": 648,
+      "size_bytes": 8716580,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
         "backend_service": 95,
-        "backend_test": 283,
+        "backend_test": 284,
         "configuration": 11,
         "frontend_bundle": 9,
         "frontend_entrypoint": 4,
         "frontend_feature": 44,
         "frontend_javascript": 40,
         "frontend_runtime": 2,
-        "frontend_test": 75,
+        "frontend_test": 76,
         "frontend_ui": 18,
         "stylesheet": 9,
         "template": 34
@@ -6411,6 +6411,26 @@
       "environment_variables": [
         "XKEEN_UI_PORT"
       ],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_module_boundaries.py",
+      "size_bytes": 6081,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
       "removable": false
     },
     {
@@ -13079,6 +13099,28 @@
     {
       "module_id": "core",
       "kind": "frontend_test",
+      "path": "e2e/diagnostics_module_absent.spec.mjs",
+      "size_bytes": 2181,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [
+        "XKEEN_E2E_MODULE_PROFILE"
+      ],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "frontend_test",
       "path": "e2e/diff_modal_cm6_probe.spec.mjs",
       "size_bytes": 21084,
       "depends_on": [],
@@ -13549,7 +13591,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/panel_module_load_recovery.spec.mjs",
-      "size_bytes": 8772,
+      "size_bytes": 9737,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
