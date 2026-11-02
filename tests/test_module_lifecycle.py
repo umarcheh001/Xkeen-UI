@@ -324,6 +324,34 @@ def test_available_entry_keeps_catalog_version_and_adds_module_version(tmp_path)
     assert modules["tool.terminal"]["module_version"] == "1.0.0"
     assert modules["tool.terminal"]["installed_version"] is None
     assert all("module_version" in item and "installed_version" in item for item in modules.values())
+    # core has no version of its own: its version is the panel's.
+    assert modules["core"]["module_version"] == "3.1.0"
+    assert modules["core"]["installed_version"] == "3.1.0"
+
+
+def test_local_demo_available_entries_carry_module_versions(tmp_path, monkeypatch):
+    from services.local_module_demo import ensure_state
+
+    state = tmp_path / "local-demo"
+    monkeypatch.setenv("XKEEN_UI_LOCAL_DEMO", "1")
+    ensure_state(state)
+    (state / "module-versions.json").write_text('{"tool.terminal": "1.4.0"}', encoding="utf-8")
+    registry = ModuleRegistry(str(state), which=lambda _name: "/bin/tool")
+    service, _ = make_service(
+        SimpleNamespace(root=state, state=state), make_release(), registry=registry, local_demo=True
+    )
+
+    modules = {item["id"]: item for item in service.available()["modules"]}
+
+    assert modules["core"]["module_version"] == modules["core"]["version"]
+    assert modules["core"]["installed_version"] == modules["core"]["version"]
+    for item in modules.values():
+        assert item["installed_version"] in (None, item["module_version"]) or item["installed"] is True
+        assert (item["installed_version"] is None) == (item["installed"] is False)
+    absent = [item for item in modules.values() if item["installed"] is False]
+    for item in absent:
+        expected = "1.4.0" if item["id"] == "tool.terminal" else "1.0.0"
+        assert item["module_version"] == expected
 
 
 def test_available_module_version_follows_module_versions_file(tmp_path):

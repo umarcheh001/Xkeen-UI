@@ -311,6 +311,8 @@ def test_stage8_contract_describes_closed_lifecycle_api(tmp_path) -> None:
     assert "equal to the installed panel release" not in markdown
     assert "всегда `false`" not in markdown
     assert "module_version" in markdown
+    assert "версия которого равна версии установленной панели" not in markdown
+    assert "версия модуля независима от версии панели" in markdown
 
 
 def test_stage8_lifecycle_document_and_roadmap_are_closed() -> None:

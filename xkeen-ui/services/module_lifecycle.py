@@ -901,19 +901,26 @@ class ModuleLifecycleService:
     def available(self) -> dict[str, Any]:
         if self.local_demo:
             installed_ids = set(read_installed_modules(self.state_dir))
+            panel_versions = read_panel_module_versions(self.panel_root)
             installed_versions = read_installed_module_versions(self.state_dir, self.panel_root)
             modules = []
             for definition in MODULE_DEFINITIONS:
                 installed = definition.id in installed_ids
+                # Same rule as the catalog branch; core has no version of its own.
+                if definition.id == "core":
+                    module_version = definition.version
+                    installed_version = definition.version if installed else None
+                else:
+                    module_version = panel_versions.get(definition.id, BASE_MODULE_VERSION)
+                    installed_version = (
+                        installed_versions.get(definition.id, BASE_MODULE_VERSION) if installed else None
+                    )
                 modules.append(
                     {
                         "id": definition.id,
                         "version": definition.version,
-                        # core has no version of its own: it is the panel.
-                        "module_version": installed_versions.get(definition.id, definition.version),
-                        "installed_version": (
-                            installed_versions.get(definition.id, definition.version) if installed else None
-                        ),
+                        "module_version": module_version,
+                        "installed_version": installed_version,
                         "channel": "local",
                         "panel_api": "1",
                         "module_api": "1",
