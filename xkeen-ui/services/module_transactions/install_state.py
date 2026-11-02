@@ -191,14 +191,17 @@ def _state_file_updates(panel_root: Path, plan: Plan) -> dict[str, bytes]:
         }
     panel_root = Path(panel_root)
     if plan.operation == "repair":
-        if not plan.files_remove:
-            return {}
-        # Files of an earlier update the laid entry no longer names.
+        # An update entry may bring files the module did not have, and leave
+        # out files of an earlier one: the managed list follows, or a profile
+        # transition and a panel update would never take those files away.
         managed = _load(panel_root / "install-managed.json")
         paths = managed.get("paths") if isinstance(managed, dict) else None
         if not isinstance(paths, list) or not all(isinstance(item, str) for item in paths):
             return {}
-        managed["paths"] = sorted((set(paths) | set(plan.files_add)) - set(plan.files_remove))
+        wanted = sorted((set(paths) | set(plan.files_add)) - set(plan.files_remove))
+        if wanted == sorted(set(paths)):
+            return {}
+        managed["paths"] = wanted
         return {"install-managed.json": _dump(managed)}
     present = plan.operation == "install"
     installed_after = set(plan.installed_after)

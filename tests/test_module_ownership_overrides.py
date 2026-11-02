@@ -12,7 +12,6 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -29,11 +28,14 @@ from services.module_transactions.ownership_overrides import (
     read_overrides,
 )
 from services.module_transactions.plan import (
+    build_panel_rollback_plan,
+    build_panel_update_plan,
     build_plan,
     build_profile_transition_plan,
     installed_panel_listing,
 )
 from services.module_transactions.state import ModuleTransactionError
+from services.panel_package_contract import validate_panel_archive
 from tests.support.module_tx import (
     ARCHITECTURE,
     FRONTEND,
@@ -50,6 +52,7 @@ ROOT = Path(__file__).resolve().parents[1]
 EXTRA = "services/xray_routing_helpers.py"
 MIHOMO_EXTRA = "services/mihomo_helpers.py"
 UPDATED = "1.0.1"
+NEW = "2.11.0"
 
 
 @pytest.fixture
@@ -94,6 +97,29 @@ def _update_module(panel, module_id: str, files: tuple[str, ...]) -> None:
     managed = panel.read_json("install-managed.json")
     managed["paths"] = sorted(set(managed["paths"]) | set(files))
     _write_json(panel.path("install-managed.json"), managed)
+
+
+def _run(panel, plan, client) -> str:
+    journal = Journal.create(panel.root, plan, f"op-{plan.operation}-{plan.module_id or 'all'}", extra={})
+    return run_operation(
+        journal,
+        state_dir=panel.state,
+        client=client,
+        architecture=ARCHITECTURE,
+        restart=lambda: None,
+        wait_healthy=lambda phase: True,
+    )
+
+
+def _repair_to_update(panel, module_id: str, files: tuple[str, ...]) -> None:
+    """The module updated the way the panel does it: a repair that lays a signed update entry."""
+
+    release = make_release(panel.version)
+    publish_module_updates(release, {module_id: UPDATED}, ownership={module_id: files})
+    client = release.client(panel.state)
+    catalog = dict(client.get_effective_catalog(panel.version).catalog)
+    plan = build_plan("repair", module_id, **{**panel.kwargs, "catalog": catalog})
+    assert _run(panel, plan, client) == "committed"
 
 
 def _set_desired(panel, profile: str, selected: set[str], variant: str = "light") -> None:
@@ -257,10 +283,30 @@ def test_profile_transition_keeps_updated_module(tree, tmp_path: Path):
         assert set(files) <= set(_json(updates["install-managed.json"])["paths"])
 
 
+def test_repair_with_update_entry_records_its_new_files_as_managed(tree):
+    files = (*OWNERSHIP["engine.xray"], EXTRA)
+    release = make_release(tree.version)
+    publish_module_updates(release, {"engine.xray": UPDATED}, ownership={"engine.xray": files})
+    catalog = dict(release.client(tree.state).get_effective_catalog(tree.version).catalog)
+
+    plan = build_plan("repair", "engine.xray", **{**tree.kwargs, "catalog": catalog})
+
+    assert plan.files_remove == ()
+    updates = state_file_updates(tree.root, plan)
+    assert EXTRA in _json(updates["install-managed.json"])["paths"]
+    assert _json(updates[OVERRIDES_FILENAME])["modules"] == {"engine.xray": sorted(files)}
+
+    _repair_to_update(tree, "engine.xray", files)
+
+    assert tree.path(EXTRA).read_bytes() == file_bytes(EXTRA, UPDATED)
+    assert EXTRA in tree.read_json("install-managed.json")["paths"]
+    assert tree.read_json(OVERRIDES_FILENAME)["modules"] == {"engine.xray": sorted(files)}
+
+
 def test_profile_transition_dropping_module_clears_its_override(tree):
-    _update_module(tree, "engine.xray", (*OWNERSHIP["engine.xray"], EXTRA))
+    _repair_to_update(tree, "engine.xray", (*OWNERSHIP["engine.xray"], EXTRA))
     mihomo_files = (*OWNERSHIP["engine.mihomo"], MIHOMO_EXTRA)
-    _update_module(tree, "engine.mihomo", mihomo_files)
+    _repair_to_update(tree, "engine.mihomo", mihomo_files)
     _set_desired(tree, "xray-minimal", {"core", "tool.editor", "engine.xray"})
     release = make_release(tree.version)
     plan = build_profile_transition_plan(
@@ -292,28 +338,45 @@ def test_profile_transition_dropping_module_clears_its_override(tree):
     }
 
 
-def test_panel_update_clears_overrides_and_versions(tree):
-    _update_module(tree, "engine.xray", (*OWNERSHIP["engine.xray"], EXTRA))
-    module_plan = build_plan("repair", "engine.mihomo", **tree.kwargs)
-    plan = replace(
-        module_plan,
-        scope="panel",
-        operation="panel-update",
-        module_id=None,
-        version="2.11.0",
-        target_version="2.11.0",
-        target_profile={
-            "profile": "custom",
-            "module_ids": ["core", "engine.xray", "engine.mihomo", "tool.editor"],
-            "editor_variant": "light",
-        },
-        module_version=None,
+def test_panel_update_clears_overrides_and_versions(tree, tmp_path: Path):
+    files = (*OWNERSHIP["engine.xray"], EXTRA)
+    _repair_to_update(tree, "engine.xray", files)
+    # Версии запишет задача обновления модулей; здесь запись кладётся рукой.
+    installed = tree.read_json("module-installed.json")
+    installed["versions"] = {"engine.xray": UPDATED}
+    _write_json(tree.path("module-installed.json"), installed)
+    overrides_before = tree.path(OVERRIDES_FILENAME).read_bytes()
+    installed_before = tree.path("module-installed.json").read_bytes()
+    release = make_release(version=NEW)
+    archive = tmp_path / "checked" / "panel.tar.gz"
+    archive.parent.mkdir(parents=True)
+    archive.write_bytes(release.panel)
+    plan = build_panel_update_plan(
+        panel_root=tree.root,
+        state_dir=tree.state,
+        catalog=release.catalog,
+        target_archive=validate_panel_archive(archive, release.catalog["panel"], platform_architecture=ARCHITECTURE),
+        architecture=ARCHITECTURE,
+        free_bytes=1 << 40,
     )
+    assert EXTRA in plan.files_remove
 
-    updates = state_file_updates(tree.root, plan)
+    assert _run(tree, plan, release.client(tree.state, core_version=plan.source_version)) == "committed"
 
-    assert _json(updates[OVERRIDES_FILENAME]) == {"schema_version": 1, "modules": {}}
-    assert "versions" not in _json(updates["module-installed.json"])
+    assert not tree.path(EXTRA).exists()
+    assert tree.read_json(OVERRIDES_FILENAME) == {"schema_version": 1, "modules": {}}
+    assert "versions" not in tree.read_json("module-installed.json")
+    assert EXTRA not in tree.read_json("install-managed.json")["paths"]
+
+    # Возврат на прежнюю версию кладёт запись о файлах вместе с записью модулей:
+    # обе переписало обновление, обе лежат в его копии.
+    back = build_panel_rollback_plan(panel_root=tree.root, state_dir=tree.state, free_bytes=1 << 40)
+    assert {OVERRIDES_FILENAME, "module-installed.json"} <= set(back.files_add)
+    assert _run(tree, back, None) == "committed"
+
+    assert tree.path(OVERRIDES_FILENAME).read_bytes() == overrides_before
+    assert tree.path("module-installed.json").read_bytes() == installed_before
+    assert tree.path(EXTRA).read_bytes() == file_bytes(EXTRA, UPDATED)
 
 
 def test_installer_clears_overrides_and_versions(tree, tmp_path: Path):
