@@ -15,10 +15,16 @@ class CatalogRecorder:
         self.client = release.client(state_dir)
         self.requested_versions: list[str] = []
         self.latest_requests = 0
+        self.effective_requests = 0
 
     def get_release_catalog(self, version: str):
         self.requested_versions.append(version)
         return self.client.get_release_catalog(version)
+
+    def get_effective_catalog(self, version: str, **kwargs):
+        self.requested_versions.append(version)
+        self.effective_requests += 1
+        return self.client.get_effective_catalog(version, **kwargs)
 
     def get_catalog(self, **_kwargs):
         self.latest_requests += 1
@@ -43,6 +49,10 @@ class StaticCatalogRecorder:
             freshness="fresh",
             stale_reason=None,
         )
+
+    def get_effective_catalog(self, version: str, **_kwargs):
+        # A fixed catalog has no update document: the release catalog is the answer.
+        return self.get_release_catalog(version)
 
 
 class LaunchRecorder:

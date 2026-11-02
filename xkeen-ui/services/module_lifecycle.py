@@ -251,6 +251,18 @@ def _lifecycle_actions(module_id: str, installed: bool) -> list[str]:
     return ["repair", "remove"] if installed else ["install"]
 
 
+def _is_newer(candidate: str, installed: str) -> bool:
+    """Whether a module version is newer than the installed one; the panel's does not count."""
+
+    # Imported here like elsewhere in this file: the contract loads the signature library.
+    from services.module_package_contract import ModulePackageContractError, compare_semver
+
+    try:
+        return compare_semver(candidate, installed) > 0
+    except ModulePackageContractError:
+        return False
+
+
 def _plan_digest(plan: Plan, dependency_diff: Mapping[str, Any]) -> str:
     canonical = json.dumps(
         {"plan": plan_to_json(plan), "dependency_diff": dependency_diff},
@@ -790,7 +802,13 @@ class ModuleLifecycleService:
                 ensure_release_build(version)
             architecture = self._architecture_provider()
             client = self._catalog_factory(version, architecture)
-            snapshot = client.get_release_catalog(version)
+            # A local build only looks and is offered no update: the release
+            # catalog alone. Operations take the newest entry of each module.
+            snapshot = (
+                client.get_release_catalog(version)
+                if read_only
+                else client.get_effective_catalog(version)
+            )
         except Exception as error:  # domain adapters expose stable codes
             if getattr(error, "code", None):
                 _raise_domain(error)
@@ -972,18 +990,30 @@ class ModuleLifecycleService:
             definition = known.get(module_id)
             if definition is not None:
                 entry.update(name=definition.name, description=definition.description)
+            update_available = False
             if module_id == "core":
                 module_version = str(entry.get("version") or version)
                 installed_version = version if installed else None
             else:
-                module_version = panel_versions.get(module_id, BASE_MODULE_VERSION)
+                if entry.pop("update_entry", None) is True:
+                    # The newest entry of the update document: its version is
+                    # the module's own. The entry keeps the release version,
+                    # and the files it lists are for the plan, not the screen.
+                    entry.pop("ownership", None)
+                    module_version = str(entry.get("version"))
+                    entry["version"] = version
+                else:
+                    module_version = panel_versions.get(module_id, BASE_MODULE_VERSION)
                 installed_version = installed_versions.get(module_id, BASE_MODULE_VERSION) if installed else None
+                # Module versions only: the panel's version takes no part.
+                update_available = installed_version is not None and _is_newer(module_version, installed_version)
             entry.update(
                 module_version=module_version,
                 installed_version=installed_version,
                 installed=installed,
                 lifecycle_actions=[] if read_only else _lifecycle_actions(module_id, installed),
-                update_available=False,
+                # A local build only looks: it is never offered an update.
+                update_available=update_available and not read_only,
             )
             modules.append(entry)
 
@@ -996,6 +1026,10 @@ class ModuleLifecycleService:
             "fetched_at": snapshot.fetched_at,
             "freshness": snapshot.freshness,
             "stale_reason": snapshot.stale_reason,
+            # A release catalog is never stale (a published release does not
+            # change), so a stale reason here is that of the update document:
+            # the screen still works, with what the cache or the release says.
+            "update_stale_reason": None if read_only else snapshot.stale_reason,
             "modules": modules,
         }
 

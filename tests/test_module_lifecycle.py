@@ -25,6 +25,7 @@ from tests.support.module_tx import (
     catalog_document,
     make_panel,
     make_release,
+    publish_module_updates,
 )
 
 
@@ -406,7 +407,7 @@ def test_available_maps_exact_release_transport_failure_to_503(tmp_path):
 
 def test_available_maps_invalid_trusted_catalog_to_503(tmp_path):
     class InvalidCatalog:
-        def get_release_catalog(self, _version):
+        def get_effective_catalog(self, _version, **_kwargs):
             from services.module_catalog_client import CatalogClientError
 
             raise CatalogClientError(
@@ -430,7 +431,7 @@ def test_available_maps_invalid_trusted_catalog_to_503(tmp_path):
 
 def test_available_maps_release_compatibility_failure_to_409(tmp_path):
     class IncompatibleCatalog:
-        def get_release_catalog(self, _version):
+        def get_effective_catalog(self, _version, **_kwargs):
             from services.module_catalog_client import CatalogClientError
 
             raise CatalogClientError(
@@ -1062,3 +1063,91 @@ def test_apply_refuses_before_touching_files_when_the_panel_cannot_be_restarted(
     assert raised.value.code == "panel_restart_unavailable"
     assert raised.value.status == 503
     assert launcher.plans == []
+
+
+# --- Новейшая запись каталога на экране модулей ------------------------------
+
+
+def test_update_available_compares_module_versions(tmp_path):
+    # 1.0.1 > 1.0.0, панель 3.1.0 не участвует
+    panel = make_panel(tmp_path, version="3.1.0", installed=("core", "tool.editor", "engine.xray", "tool.terminal"))
+    release = make_release("3.1.0")
+    publish_module_updates(release, {"engine.xray": "1.0.1", "tool.files": "1.0.1", "tool.terminal": "1.0.0"})
+    service, catalog = make_service(panel, release)
+
+    payload = service.available()
+    modules = {item["id"]: item for item in payload["modules"]}
+
+    assert catalog.effective_requests == 1
+    assert payload["update_stale_reason"] is None
+    xray = modules["engine.xray"]
+    # The entry keeps the release version; the module's own versions are compared.
+    assert (xray["version"], xray["module_version"], xray["installed_version"]) == ("3.1.0", "1.0.1", "1.0.0")
+    assert xray["update_available"] is True
+    assert "update_entry" not in xray and "ownership" not in xray
+    # Not installed: nothing to update, the newest entry is what an install lays.
+    assert modules["tool.files"]["module_version"] == "1.0.1"
+    assert modules["tool.files"]["update_available"] is False
+    # The same version is no update.
+    assert modules["tool.terminal"]["update_available"] is False
+    assert modules["core"]["update_available"] is False
+    assert modules["core"]["module_version"] == "3.1.0"
+
+    # The operations act on the same newest entry.
+    plan = service.plan("repair", "engine.xray")
+    assert plan["applicable"] is True
+
+
+def test_update_available_is_false_when_installed_is_already_newer(tmp_path):
+    panel = make_panel(tmp_path, version="3.1.0")
+    record = json.loads(panel.path("module-installed.json").read_text(encoding="utf-8"))
+    record["versions"] = {"engine.xray": "1.0.2"}
+    panel.path("module-installed.json").write_text(json.dumps(record), encoding="utf-8")
+    release = make_release("3.1.0")
+    publish_module_updates(release, {"engine.xray": "1.0.1"})
+    service, _ = make_service(panel, release)
+
+    modules = {item["id"]: item for item in service.available()["modules"]}
+
+    assert modules["engine.xray"]["installed_version"] == "1.0.2"
+    assert modules["engine.xray"]["update_available"] is False
+
+
+def test_available_reports_why_the_update_catalog_is_stale(tmp_path):
+    panel = make_panel(tmp_path)
+    catalog = catalog_document(VERSION)
+
+    class StaleUpdates(StaticCatalogRecorder):
+        def get_effective_catalog(self, version, **_kwargs):
+            return replace_namespace(self.get_release_catalog(version), freshness="stale", stale_reason="catalog_signature_invalid")
+
+    def replace_namespace(snapshot, **changes):
+        return SimpleNamespace(**{**vars(snapshot), **changes})
+
+    recorder = StaleUpdates(catalog)
+    service, _ = make_service(panel, make_release(), catalog_factory=lambda _version, _architecture: recorder)
+
+    payload = service.available()
+
+    assert payload["update_stale_reason"] == "catalog_signature_invalid"
+    assert all(item["update_available"] is False for item in payload["modules"])
+
+
+def test_local_build_never_offers_update(tmp_path):
+    panel = make_panel(tmp_path, version="3.1.0")
+    panel.path("BUILD.json").write_text(
+        json.dumps({"version": "3.1.0+local.f46f1f10", "commit": "f" * 40}), encoding="utf-8"
+    )
+    release = make_release("3.1.0")
+    publish_module_updates(release, {"engine.xray": "1.0.1"})
+    service, catalog = make_service(panel, release)
+
+    payload = service.available()
+    modules = {item["id"]: item for item in payload["modules"]}
+
+    assert payload["read_only"] is True
+    assert catalog.effective_requests == 0
+    assert payload["update_stale_reason"] is None
+    assert modules["engine.xray"]["module_version"] == "1.0.0"
+    assert all(item["update_available"] is False for item in modules.values())
+    assert all(item["lifecycle_actions"] == [] for item in modules.values())

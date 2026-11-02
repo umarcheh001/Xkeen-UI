@@ -237,7 +237,13 @@ def run_operation(
                 )
         if plan.archive is not None:
             enter("downloading")
-            snapshot = client.get_release_catalog(plan.version)
+            # A module is laid from the newest entry: the update document of
+            # the panel's release where it has one, as the plan was built.
+            snapshot = (
+                client.get_effective_catalog(plan.version)
+                if plan.scope == "module"
+                else client.get_release_catalog(plan.version)
+            )
             if plan.scope == "module":
                 entry = next((item for item in snapshot.catalog["modules"] if item.get("id") == plan.module_id), None)
                 if entry is None or (entry.get("archive"), entry.get("size"), entry.get("sha256")) != (

@@ -24,6 +24,11 @@ from services.module_profile_plan import (
     user_owned,
 )
 from services.module_registry import ENGINE_MODULE_IDS, MODULE_IDS
+from services.module_versions import (
+    BASE_MODULE_VERSION,
+    read_installed_module_versions,
+    read_panel_module_versions,
+)
 
 from .previous_version import read_previous_version
 from .state import ModuleTransactionError, transactions_root
@@ -79,6 +84,13 @@ class Plan:
     required_free_bytes: int
     restart_required: bool
     installed_after: tuple[str, ...]
+    # The module's own version the operation lays (install, repair); ``None``
+    # for a removal and for the plans of a panel written before modules had
+    # versions of their own.
+    module_version: str | None = None
+    # The files of the entry the operation lays, when the entry names them
+    # itself (an update entry); ``None`` when they come from the panel's map.
+    module_files: tuple[str, ...] | None = None
 
 
 def _fail(code: str, message: str, **details: Any) -> None:
@@ -222,9 +234,14 @@ def _safe_relative(path: str) -> bool:
     return not pure.is_absolute() and all(part not in {"", ".", ".."} for part in pure.parts) and pure.as_posix() == path
 
 
-def _module_files(ownership: OwnershipMap, module_id: str) -> tuple[str, ...]:
+def _module_files(
+    ownership: OwnershipMap, module_id: str, files: tuple[str, ...] | None = None
+) -> tuple[str, ...]:
+    """The files of the module, checked against the map; ``files`` replaces its own list."""
+
     foreign = {path for other, paths in ownership.modules.items() if other != module_id for path in paths}
-    files = ownership.modules[module_id]
+    if files is None:
+        files = ownership.modules[module_id]
     for path in files:
         if not _safe_relative(path) or user_owned(path) or path in foreign:
             _fail(
@@ -364,7 +381,10 @@ def build_plan(
     entry = entries.get(module_id)
     if entry is None:
         _fail("catalog_module_unknown", "module does not exist in the trusted catalog", module_id=module_id)
-    if entry.get("version") != version:
+    # An entry of the signed update document carries the module's own version;
+    # an entry of the release catalog carries the panel's.
+    update_entry = entry.get("update_entry") is True
+    if not update_entry and entry.get("version") != version:
         _fail(
             "module_version_mismatch",
             "a module is installed only from the release of the panel itself",
@@ -375,7 +395,29 @@ def build_plan(
         _fail("catalog_architecture_unsupported", "the module is not published for this router", architecture=architecture)
 
     installed = read_installed_modules(Path(state_dir))
-    files = _module_files(ownership, module_id)
+    # The version an install or a repair lays: that of the update entry, else
+    # the one this panel build carries.
+    module_version: str | None = None
+    module_files: tuple[str, ...] | None = None
+    installed_version: str | None = None
+    if operation == "remove":
+        files = _module_files(ownership, module_id)
+    else:
+        if update_entry:
+            module_version = str(entry["version"])
+            raw_files = entry.get("ownership")
+            if not isinstance(raw_files, (list, tuple)) or not raw_files or any(
+                not isinstance(path, str) for path in raw_files
+            ):
+                _fail("module_ownership_conflict", "the update entry does not name the files of the module", module_id=module_id)
+            module_files = _module_files(ownership, module_id, tuple(raw_files))
+            files = module_files
+        else:
+            module_version = read_panel_module_versions(panel_root).get(module_id, BASE_MODULE_VERSION)
+            files = _module_files(ownership, module_id)
+        installed_version = read_installed_module_versions(Path(state_dir), panel_root).get(
+            module_id, BASE_MODULE_VERSION
+        )
     if operation == "install":
         if module_id in installed:
             _fail("module_already_installed", "the module is already installed", module_id=module_id)
@@ -387,6 +429,21 @@ def build_plan(
             _fail("module_conflict", "the module conflicts with an installed module", module_ids=conflicts)
     elif module_id not in installed:
         _fail("module_not_installed", "the module is not installed", module_id=module_id)
+    if module_version is not None and installed_version is not None:
+        # Imported here: the package contract loads the signature library,
+        # which undoing an interrupted operation at boot must not need.
+        from services.module_package_contract import compare_semver
+
+        if compare_semver(module_version, installed_version) < 0:
+            # The newest entry could not be read: laying this one would
+            # silently take back a released fix.
+            _fail(
+                "module_update_catalog_unavailable",
+                "the module is newer than the catalog entry; the update catalog cannot be read",
+                module_id=module_id,
+                installed_version=installed_version,
+                module_version=module_version,
+            )
 
     if operation == "remove":
         dependants = sorted(
@@ -439,6 +496,8 @@ def build_plan(
         required_free_bytes=required,
         restart_required=bool(entry.get("requires_restart", True)),
         installed_after=tuple(sorted(installed_after)),
+        module_version=module_version,
+        module_files=module_files,
     )
 
 
@@ -447,6 +506,7 @@ def plan_to_json(plan: Plan) -> dict[str, Any]:
     data["files_add"] = list(plan.files_add)
     data["files_remove"] = list(plan.files_remove)
     data["installed_after"] = list(plan.installed_after)
+    data["module_files"] = None if plan.module_files is None else list(plan.module_files)
     return data
 
 
@@ -464,6 +524,11 @@ def plan_from_json(data: Mapping[str, Any]) -> Plan:
         raw_profile = data.get("target_profile")
         if raw_profile is not None and not isinstance(raw_profile, Mapping):
             raise ValueError("target profile is not an object")
+        # Read with .get: the journal of a panel without module versions has neither.
+        raw_module_version = data.get("module_version")
+        raw_module_files = data.get("module_files")
+        if raw_module_files is not None and not isinstance(raw_module_files, list):
+            raise ValueError("module files are not a list")
         return Plan(
             scope=scope,
             operation=str(data["operation"]),
@@ -480,6 +545,8 @@ def plan_from_json(data: Mapping[str, Any]) -> Plan:
             required_free_bytes=int(data["required_free_bytes"]),
             restart_required=bool(data["restart_required"]),
             installed_after=tuple(str(item) for item in data["installed_after"]),
+            module_version=None if raw_module_version is None else str(raw_module_version),
+            module_files=None if raw_module_files is None else tuple(str(item) for item in raw_module_files),
         )
     except (KeyError, TypeError, ValueError) as error:
         raise ModuleTransactionError("operation_journal_invalid", "the stored operation plan cannot be read") from error

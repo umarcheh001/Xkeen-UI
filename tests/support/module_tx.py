@@ -481,6 +481,63 @@ def make_release(
     )
 
 
+def _sign(key: Ed25519PrivateKey, body: bytes) -> bytes:
+    return (
+        json.dumps(
+            {
+                "schema_version": 1,
+                "algorithm": "Ed25519",
+                "key_id": "release-2026",
+                "signature": base64.b64encode(key.sign(body)).decode("ascii"),
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n"
+    ).encode("utf-8")
+
+
+def publish_module_updates(
+    release: Release,
+    versions: Mapping[str, str],
+    *,
+    ownership: Mapping[str, tuple[str, ...]] | None = None,
+    serial: int = 1,
+) -> dict[str, dict[str, Any]]:
+    """Serve a signed ``module-updates.json`` of the release with the given module versions.
+
+    Each module gets an archive of its own version in the release of the panel;
+    its files are those of ``ownership`` (the panel map by default). Returns the
+    update entries by module id.
+    """
+
+    files = {**OWNERSHIP, **dict(ownership or {})}
+    entries: dict[str, dict[str, Any]] = {}
+    for module_id, module_version in versions.items():
+        entry = _entry(module_id, module_version, min_core={module_id: release.version})
+        body = module_archive(module_id, module_version, files, entry)
+        entry["size"] = len(body)
+        entry["sha256"] = hashlib.sha256(body).hexdigest()
+        entry["ownership"] = sorted(files[module_id])
+        entries[module_id] = entry
+        release.transport.responses[
+            official_release_asset_url(release.version, f"xkeen-module-{module_id}-{module_version}.tar.gz")
+        ] = body
+    document = {
+        "kind": "xkeen-module-updates",
+        "schema_version": 1,
+        "panel_version": release.version,
+        "serial": serial,
+        "modules": list(entries.values()),
+    }
+    body = (json.dumps(document, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    release.transport.responses[official_release_asset_url(release.version, "module-updates.json")] = body
+    release.transport.responses[official_release_asset_url(release.version, "module-updates.json.sig")] = _sign(
+        release.key, body
+    )
+    return entries
+
+
 def write_release_directory(release: Release, directory: Path) -> Path:
     """Lay the release out as files: asset name → bytes, plus the public key."""
 

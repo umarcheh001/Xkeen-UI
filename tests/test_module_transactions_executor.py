@@ -22,6 +22,8 @@ from tests.support.module_tx import (
     make_panel,
     make_release,
     module_archive,
+    publish_module_updates,
+    VERSION,
     snapshot,
 )
 
@@ -502,3 +504,42 @@ def test_everything_is_flushed_before_the_restart_and_before_confirming(tmp_path
     assert result == "committed"
     assert order.index("sync") < order.index("restart")
     assert "sync" in order[order.index("restart"):]
+
+
+def test_executor_uses_effective_catalog_for_module_scope(tmp_path: Path) -> None:
+    panel = make_panel(tmp_path, installed=INSTALLED_WITH_TERMINAL)
+    release = make_release()
+    publish_module_updates(release, {"tool.terminal": "1.0.1"})
+    catalog = release.client(panel.state).get_effective_catalog(VERSION).catalog
+    plan = build_plan("repair", "tool.terminal", **{**panel.kwargs, "catalog": catalog})
+    journal = Journal.create(panel.root, plan, "20261005T000000Z-abcdef", extra={})
+    recorder = Recorder()
+
+    result = run_operation(
+        journal, state_dir=panel.state, client=release.client(panel.state), architecture=ARCHITECTURE,
+        restart=recorder.restart, wait_healthy=recorder.wait_healthy,
+    )
+
+    assert result == "committed"
+    for relative in OWNERSHIP["tool.terminal"]:
+        assert panel.path(relative).read_bytes() == file_bytes(relative, "1.0.1")
+
+
+def test_executor_refuses_a_release_plan_once_an_update_entry_replaced_it(tmp_path: Path) -> None:
+    panel = make_panel(tmp_path, installed=INSTALLED_WITH_TERMINAL)
+    before = snapshot(panel.root)
+    release = make_release()
+    plan = build_plan("repair", "tool.terminal", **{**panel.kwargs, "catalog": release.catalog})
+    publish_module_updates(release, {"tool.terminal": "1.0.1"})
+    journal = Journal.create(panel.root, plan, "20261005T000000Z-abcdef", extra={})
+    recorder = Recorder()
+
+    result = run_operation(
+        journal, state_dir=panel.state, client=release.client(panel.state), architecture=ARCHITECTURE,
+        restart=recorder.restart, wait_healthy=recorder.wait_healthy,
+    )
+
+    assert result == "interrupted"
+    assert read_status(panel.state)["error_code"] == "module_version_mismatch"
+    after = snapshot(panel.root)
+    assert all(after.get(relative) == before[relative] for relative in OWNERSHIP["tool.terminal"])

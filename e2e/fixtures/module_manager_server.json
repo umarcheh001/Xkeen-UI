@@ -227,6 +227,7 @@
     "fetched_at": 1791463142.4934566,
     "freshness": "fresh",
     "stale_reason": null,
+    "update_stale_reason": null,
     "modules": [
       {
         "id": "core",
@@ -598,12 +599,12 @@
       "result": "running",
       "error_code": null,
       "error": null,
-      "started_at": 1791463142.8634565,
+      "started_at": 1791463143.6034563,
       "finished_at": null,
       "log": [
         {
           "step": "prepared",
-          "at": 1791463143.2334564
+          "at": 1791463143.9734561
         }
       ]
     },
@@ -618,16 +619,16 @@
       "result": "running",
       "error_code": null,
       "error": null,
-      "started_at": 1791463142.8634565,
+      "started_at": 1791463143.6034563,
       "finished_at": null,
       "log": [
         {
           "step": "prepared",
-          "at": 1791463143.2334564
+          "at": 1791463143.9734561
         },
         {
           "step": "downloading",
-          "at": 1791463143.6034563
+          "at": 1791463144.343456
         }
       ]
     },
@@ -642,20 +643,20 @@
       "result": "running",
       "error_code": null,
       "error": null,
-      "started_at": 1791463142.8634565,
+      "started_at": 1791463143.6034563,
       "finished_at": null,
       "log": [
         {
           "step": "prepared",
-          "at": 1791463143.2334564
+          "at": 1791463143.9734561
         },
         {
           "step": "downloading",
-          "at": 1791463143.6034563
+          "at": 1791463144.343456
         },
         {
           "step": "verifying",
-          "at": 1791463143.9734561
+          "at": 1791463145.0834558
         }
       ]
     },
@@ -670,24 +671,24 @@
       "result": "running",
       "error_code": null,
       "error": null,
-      "started_at": 1791463142.8634565,
+      "started_at": 1791463143.6034563,
       "finished_at": null,
       "log": [
         {
           "step": "prepared",
-          "at": 1791463143.2334564
-        },
-        {
-          "step": "downloading",
-          "at": 1791463143.6034563
-        },
-        {
-          "step": "verifying",
           "at": 1791463143.9734561
         },
         {
-          "step": "applying",
+          "step": "downloading",
           "at": 1791463144.343456
+        },
+        {
+          "step": "verifying",
+          "at": 1791463145.0834558
+        },
+        {
+          "step": "applying",
+          "at": 1791463145.4534557
         }
       ]
     },
@@ -702,28 +703,28 @@
       "result": "running",
       "error_code": null,
       "error": null,
-      "started_at": 1791463142.8634565,
+      "started_at": 1791463143.6034563,
       "finished_at": null,
       "log": [
         {
           "step": "prepared",
-          "at": 1791463143.2334564
-        },
-        {
-          "step": "downloading",
-          "at": 1791463143.6034563
-        },
-        {
-          "step": "verifying",
           "at": 1791463143.9734561
         },
         {
-          "step": "applying",
+          "step": "downloading",
           "at": 1791463144.343456
         },
         {
+          "step": "verifying",
+          "at": 1791463145.0834558
+        },
+        {
+          "step": "applying",
+          "at": 1791463145.4534557
+        },
+        {
           "step": "state",
-          "at": 1791463144.713456
+          "at": 1791463145.8234556
         }
       ]
     },
@@ -738,32 +739,32 @@
       "result": "running",
       "error_code": null,
       "error": null,
-      "started_at": 1791463142.8634565,
+      "started_at": 1791463143.6034563,
       "finished_at": null,
       "log": [
         {
           "step": "prepared",
-          "at": 1791463143.2334564
-        },
-        {
-          "step": "downloading",
-          "at": 1791463143.6034563
-        },
-        {
-          "step": "verifying",
           "at": 1791463143.9734561
         },
         {
-          "step": "applying",
+          "step": "downloading",
           "at": 1791463144.343456
         },
         {
+          "step": "verifying",
+          "at": 1791463145.0834558
+        },
+        {
+          "step": "applying",
+          "at": 1791463145.4534557
+        },
+        {
           "step": "state",
-          "at": 1791463144.713456
+          "at": 1791463145.8234556
         },
         {
           "step": "restarting",
-          "at": 1791463145.0834558
+          "at": 1791463146.1934555
         }
       ]
     },
@@ -778,36 +779,36 @@
       "result": "running",
       "error_code": null,
       "error": null,
-      "started_at": 1791463142.8634565,
+      "started_at": 1791463143.6034563,
       "finished_at": null,
       "log": [
         {
           "step": "prepared",
-          "at": 1791463143.2334564
-        },
-        {
-          "step": "downloading",
-          "at": 1791463143.6034563
-        },
-        {
-          "step": "verifying",
           "at": 1791463143.9734561
         },
         {
-          "step": "applying",
+          "step": "downloading",
           "at": 1791463144.343456
         },
         {
-          "step": "state",
-          "at": 1791463144.713456
-        },
-        {
-          "step": "restarting",
+          "step": "verifying",
           "at": 1791463145.0834558
         },
         {
-          "step": "health",
+          "step": "applying",
           "at": 1791463145.4534557
+        },
+        {
+          "step": "state",
+          "at": 1791463145.8234556
+        },
+        {
+          "step": "restarting",
+          "at": 1791463146.1934555
+        },
+        {
+          "step": "health",
+          "at": 1791463146.5634553
         }
       ]
     },
@@ -822,40 +823,40 @@
       "result": "running",
       "error_code": null,
       "error": null,
-      "started_at": 1791463142.8634565,
+      "started_at": 1791463143.6034563,
       "finished_at": null,
       "log": [
         {
           "step": "prepared",
-          "at": 1791463143.2334564
-        },
-        {
-          "step": "downloading",
-          "at": 1791463143.6034563
-        },
-        {
-          "step": "verifying",
           "at": 1791463143.9734561
         },
         {
-          "step": "applying",
+          "step": "downloading",
           "at": 1791463144.343456
         },
         {
-          "step": "state",
-          "at": 1791463144.713456
-        },
-        {
-          "step": "restarting",
+          "step": "verifying",
           "at": 1791463145.0834558
         },
         {
-          "step": "health",
+          "step": "applying",
           "at": 1791463145.4534557
         },
         {
-          "step": "committed",
+          "step": "state",
           "at": 1791463145.8234556
+        },
+        {
+          "step": "restarting",
+          "at": 1791463146.1934555
+        },
+        {
+          "step": "health",
+          "at": 1791463146.5634553
+        },
+        {
+          "step": "committed",
+          "at": 1791463146.9334552
         }
       ]
     }
@@ -871,40 +872,40 @@
     "result": "committed",
     "error_code": null,
     "error": null,
-    "started_at": 1791463142.8634565,
-    "finished_at": 1791463146.1934555,
+    "started_at": 1791463143.6034563,
+    "finished_at": 1791463147.303455,
     "log": [
       {
         "step": "prepared",
-        "at": 1791463143.2334564
-      },
-      {
-        "step": "downloading",
-        "at": 1791463143.6034563
-      },
-      {
-        "step": "verifying",
         "at": 1791463143.9734561
       },
       {
-        "step": "applying",
+        "step": "downloading",
         "at": 1791463144.343456
       },
       {
-        "step": "state",
-        "at": 1791463144.713456
-      },
-      {
-        "step": "restarting",
+        "step": "verifying",
         "at": 1791463145.0834558
       },
       {
-        "step": "health",
+        "step": "applying",
         "at": 1791463145.4534557
       },
       {
-        "step": "committed",
+        "step": "state",
         "at": 1791463145.8234556
+      },
+      {
+        "step": "restarting",
+        "at": 1791463146.1934555
+      },
+      {
+        "step": "health",
+        "at": 1791463146.5634553
+      },
+      {
+        "step": "committed",
+        "at": 1791463146.9334552
       }
     ]
   },
@@ -1184,6 +1185,7 @@
     "fetched_at": 1791463142.4934566,
     "freshness": "fresh",
     "stale_reason": null,
+    "update_stale_reason": null,
     "modules": [
       {
         "id": "core",
@@ -1478,17 +1480,17 @@
     "result": "interrupted",
     "error_code": "operation_interrupted",
     "error": "the module operation was interrupted",
-    "started_at": 1791463146.5634553,
-    "finished_at": 1791463147.673455,
+    "started_at": 1791463148.043455,
+    "finished_at": 1791463149.1534545,
     "recovered": true,
     "log": [
       {
         "step": "prepared",
-        "at": 1791463146.9334552
+        "at": 1791463148.4134548
       },
       {
         "step": "downloading",
-        "at": 1791463147.303455
+        "at": 1791463148.7834547
       }
     ]
   },
@@ -1503,17 +1505,17 @@
     "result": "interrupted",
     "error_code": "operation_interrupted",
     "error": "the module operation was interrupted",
-    "started_at": 1791463146.5634553,
-    "finished_at": 1791463147.673455,
+    "started_at": 1791463148.043455,
+    "finished_at": 1791463149.1534545,
     "recovered": true,
     "log": [
       {
         "step": "prepared",
-        "at": 1791463146.9334552
+        "at": 1791463148.4134548
       },
       {
         "step": "downloading",
-        "at": 1791463147.303455
+        "at": 1791463148.7834547
       }
     ]
   },
@@ -1528,16 +1530,16 @@
     "result": "interrupted",
     "error_code": "operation_cancelled",
     "error": "the module operation was cancelled",
-    "started_at": 1791463148.043455,
-    "finished_at": 1791463149.1534545,
+    "started_at": 1791463149.5234544,
+    "finished_at": 1791463150.633454,
     "log": [
       {
         "step": "prepared",
-        "at": 1791463148.4134548
+        "at": 1791463149.8934543
       },
       {
         "step": "downloading",
-        "at": 1791463148.7834547
+        "at": 1791463150.2634542
       }
     ]
   },
@@ -1553,38 +1555,38 @@
     "result": "rolled_back",
     "error_code": "operation_interrupted",
     "error": "the module operation was interrupted",
-    "started_at": 1791463149.5234544,
-    "finished_at": 1791463152.8534534,
+    "started_at": 1791463151.003454,
+    "finished_at": 1791463154.7034528,
     "recovered": true,
     "restart_required": true,
     "log": [
       {
         "step": "prepared",
-        "at": 1791463149.8934543
-      },
-      {
-        "step": "downloading",
-        "at": 1791463150.2634542
-      },
-      {
-        "step": "verifying",
-        "at": 1791463151.003454
-      },
-      {
-        "step": "applying",
         "at": 1791463151.3734539
       },
       {
-        "step": "state",
+        "step": "downloading",
         "at": 1791463151.7434537
       },
       {
+        "step": "verifying",
+        "at": 1791463152.8534534
+      },
+      {
+        "step": "applying",
+        "at": 1791463153.2234533
+      },
+      {
+        "step": "state",
+        "at": 1791463153.5934532
+      },
+      {
         "step": "restarting",
-        "at": 1791463152.1134536
+        "at": 1791463153.963453
       },
       {
         "step": "health",
-        "at": 1791463152.4834535
+        "at": 1791463154.333453
       }
     ]
   },
@@ -1599,38 +1601,38 @@
     "result": "rolled_back",
     "error_code": "operation_interrupted",
     "error": "the module operation was interrupted",
-    "started_at": 1791463149.5234544,
-    "finished_at": 1791463152.8534534,
+    "started_at": 1791463151.003454,
+    "finished_at": 1791463154.7034528,
     "recovered": true,
     "restart_required": true,
     "log": [
       {
         "step": "prepared",
-        "at": 1791463149.8934543
-      },
-      {
-        "step": "downloading",
-        "at": 1791463150.2634542
-      },
-      {
-        "step": "verifying",
-        "at": 1791463151.003454
-      },
-      {
-        "step": "applying",
         "at": 1791463151.3734539
       },
       {
-        "step": "state",
+        "step": "downloading",
         "at": 1791463151.7434537
       },
       {
+        "step": "verifying",
+        "at": 1791463152.8534534
+      },
+      {
+        "step": "applying",
+        "at": 1791463153.2234533
+      },
+      {
+        "step": "state",
+        "at": 1791463153.5934532
+      },
+      {
         "step": "restarting",
-        "at": 1791463152.1134536
+        "at": 1791463153.963453
       },
       {
         "step": "health",
-        "at": 1791463152.4834535
+        "at": 1791463154.333453
       }
     ]
   },
@@ -1645,40 +1647,40 @@
     "result": "rollback_failed",
     "error_code": "operation_health_failed",
     "error": "the panel did not become healthy after the module operation",
-    "started_at": 1791463153.2234533,
-    "finished_at": 1791463156.9234521,
+    "started_at": 1791463155.0734527,
+    "finished_at": 1791463159.1434515,
     "log": [
       {
         "step": "prepared",
-        "at": 1791463153.5934532
-      },
-      {
-        "step": "downloading",
-        "at": 1791463153.963453
-      },
-      {
-        "step": "verifying",
-        "at": 1791463154.7034528
-      },
-      {
-        "step": "applying",
-        "at": 1791463155.0734527
-      },
-      {
-        "step": "state",
         "at": 1791463155.4434526
       },
       {
-        "step": "restarting",
+        "step": "downloading",
         "at": 1791463155.8134525
       },
       {
+        "step": "verifying",
+        "at": 1791463156.9234521
+      },
+      {
+        "step": "applying",
+        "at": 1791463157.293452
+      },
+      {
+        "step": "state",
+        "at": 1791463157.663452
+      },
+      {
+        "step": "restarting",
+        "at": 1791463158.0334518
+      },
+      {
         "step": "health",
-        "at": 1791463156.1834524
+        "at": 1791463158.4034517
       },
       {
         "step": "rolling_back",
-        "at": 1791463156.5534523
+        "at": 1791463158.7734516
       }
     ],
     "failed_path": "services/ws_pty.py"
@@ -1912,7 +1914,7 @@
     "min_updater": null,
     "freshness": "fresh",
     "stale_reason": null,
-    "fetched_at": 1791463158.0334518
+    "fetched_at": 1791463160.253451
   },
   "panel_update_plan": {
     "ok": true,

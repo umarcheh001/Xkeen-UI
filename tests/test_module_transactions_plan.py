@@ -18,7 +18,15 @@ from services.module_transactions.plan import (
     read_panel_version,
 )
 from services.module_transactions.state import ModuleTransactionError
-from tests.support.module_tx import OWNERSHIP, VERSION, catalog_document, make_panel, snapshot
+from tests.support.module_tx import (
+    OWNERSHIP,
+    VERSION,
+    catalog_document,
+    make_panel,
+    make_release,
+    publish_module_updates,
+    snapshot,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -334,3 +342,130 @@ def test_user_owned_rules_match_the_profile_installer() -> None:
     for path in ("secret.key", "bin/tool", "var/log/x", "opt/etc/mihomo/config.yaml", "install.sh",
                  "opt/etc/mihomo/profiles/a.yaml", "modules.json", "routes/mihomo.py", "static/js/core.js"):
         assert planner.user_owned(path) == installer._user_owned(path), path
+
+
+# --- Новейшая запись каталога: обновления модулей ---------------------------
+
+
+def _effective_catalog(panel, versions: dict[str, str], **kwargs) -> dict:
+    """The catalog the panel acts on: the release with the signed update entries merged in."""
+
+    release = make_release(panel.version)
+    publish_module_updates(release, versions, **kwargs)
+    return dict(release.client(panel.state).get_effective_catalog(panel.version).catalog)
+
+
+def _record_installed_versions(panel, versions: dict[str, str]) -> None:
+    record = panel.read_json("module-installed.json")
+    record["versions"] = versions
+    panel.path("module-installed.json").write_text(json.dumps(record), encoding="utf-8")
+
+
+def test_update_entry_is_accepted_though_version_differs_from_panel(tmp_path: Path) -> None:
+    panel = make_panel(tmp_path)
+    catalog = _effective_catalog(panel, {"tool.terminal": "1.0.1"})
+
+    plan = build_plan("install", "tool.terminal", **{**panel.kwargs, "catalog": catalog})
+
+    assert plan.version == VERSION
+    assert plan.module_version == "1.0.1"
+    assert plan.archive is not None and plan.archive.archive == "xkeen-module-tool.terminal-1.0.1.tar.gz"
+    assert plan.module_files == tuple(sorted(OWNERSHIP["tool.terminal"]))
+    assert plan.files_add == plan.module_files
+
+
+@pytest.mark.parametrize("marker", [None, False, "true", 1])
+def test_release_entry_with_foreign_version_is_still_refused(tmp_path: Path, marker) -> None:
+    panel = make_panel(tmp_path)
+    catalog = catalog_document(VERSION)
+    entry = next(item for item in catalog["modules"] if item["id"] == "tool.terminal")
+    entry["version"] = "1.0.1"
+    if marker is not None:
+        entry["update_entry"] = marker
+
+    assert _code("install", "tool.terminal", panel, catalog=catalog) == "module_version_mismatch"
+
+
+def test_release_entry_plan_takes_the_module_version_of_the_panel_build(tmp_path: Path) -> None:
+    panel = make_panel(tmp_path)
+    panel.path("module-versions.json").write_text('{"engine.xray": "1.2.0"}', encoding="utf-8")
+
+    plan = build_plan("repair", "engine.xray", **panel.kwargs)
+
+    assert plan.module_version == "1.2.0"
+    assert plan.module_files is None
+    assert plan.files_add == tuple(sorted(OWNERSHIP["engine.xray"]))
+
+
+def test_repair_lays_newest_entry_and_records_version(tmp_path: Path) -> None:
+    panel = make_panel(tmp_path)
+    files = (*OWNERSHIP["engine.xray"], "services/xray_routing_helpers.py")
+    catalog = _effective_catalog(panel, {"engine.xray": "1.0.1"}, ownership={"engine.xray": files})
+
+    plan = build_plan("repair", "engine.xray", **{**panel.kwargs, "catalog": catalog})
+
+    assert plan.module_version == "1.0.1"
+    assert plan.module_files == tuple(sorted(files))
+    assert plan.files_add == tuple(sorted(files))
+    assert plan.archive is not None and plan.archive.archive == "xkeen-module-engine.xray-1.0.1.tar.gz"
+    assert plan_from_json(json.loads(json.dumps(plan_to_json(plan)))) == plan
+
+
+def test_update_entry_claiming_a_file_of_another_module_is_refused(tmp_path: Path) -> None:
+    panel = make_panel(tmp_path)
+    files = (*OWNERSHIP["engine.xray"], "routes/mihomo.py")
+    catalog = _effective_catalog(panel, {"engine.xray": "1.0.1"}, ownership={"engine.xray": files})
+
+    assert _code("repair", "engine.xray", panel, catalog=catalog) == "module_ownership_conflict"
+
+
+def test_repair_refuses_when_installed_is_newer_than_entry(tmp_path: Path) -> None:
+    # установлено 1.0.3, каталог обновлений недоступен
+    panel = make_panel(tmp_path)
+    _record_installed_versions(panel, {"engine.xray": "1.0.3"})
+
+    with pytest.raises(ModuleTransactionError) as caught:
+        build_plan("repair", "engine.xray", **panel.kwargs)
+    assert caught.value.code == "module_update_catalog_unavailable"
+
+    older = _effective_catalog(make_panel(tmp_path / "older"), {"engine.xray": "1.0.2"})
+    assert _code("repair", "engine.xray", panel, catalog=older) == "module_update_catalog_unavailable"
+
+    same = _effective_catalog(make_panel(tmp_path / "same"), {"engine.xray": "1.0.3"})
+    assert build_plan("repair", "engine.xray", **{**panel.kwargs, "catalog": same}).module_version == "1.0.3"
+
+
+def test_install_after_remove_takes_newest_entry(tmp_path: Path) -> None:
+    panel = make_panel(tmp_path, installed=("core", "tool.editor", "engine.xray", "tool.terminal"))
+    catalog = _effective_catalog(panel, {"tool.terminal": "1.0.1"})
+    removal = build_plan("remove", "tool.terminal", **{**panel.kwargs, "catalog": catalog})
+    assert removal.module_version is None and removal.module_files is None
+
+    removed = make_panel(tmp_path / "removed")
+    plan = build_plan("install", "tool.terminal", **{**removed.kwargs, "catalog": catalog})
+
+    assert plan.module_version == "1.0.1"
+    assert plan.archive is not None and plan.archive.archive == "xkeen-module-tool.terminal-1.0.1.tar.gz"
+
+
+def test_plan_from_old_journal_has_no_module_version() -> None:
+    old = {
+        "scope": "module",
+        "operation": "repair",
+        "module_id": "tool.files",
+        "version": "2.10.0",
+        "source_version": "2.10.0",
+        "target_version": "2.10.0",
+        "target_profile": None,
+        "files_add": ["static/js/pages/file_manager.lazy.entry.js"],
+        "files_remove": [],
+        "archive": {"archive": "module.tar.gz", "size": 10, "sha256": "a" * 64},
+        "required_free_bytes": 100,
+        "restart_required": True,
+        "installed_after": ["core", "tool.files"],
+    }
+
+    plan = plan_from_json(old)
+
+    assert plan.module_version is None
+    assert plan.module_files is None
