@@ -43,6 +43,9 @@ SEMANTIC = {"module-ownership.json", "module-sizes.json"}
 # per-variant ownership, so applying it would delete the other variant's files.
 VARIANT_MODULES = {"tool.editor"}
 
+# Exit codes of main: 0 passed, 1 a real violation, 2 the change needs a panel release.
+EXIT_NEEDS_PANEL = 2
+
 
 def parse_module_tag(tag: str) -> tuple[str, str]:
     match = MODULE_TAG_RE.match(str(tag or "").strip())
@@ -126,7 +129,9 @@ def check_changed_paths(changed: Iterable[str], module_files: Collection[str]) -
     prefix = PACKAGE_DIRNAME + "/"
     errors: list[str] = []
     for raw in changed:
-        path = str(raw).replace("\\", "/").lstrip("./")
+        path = str(raw).replace("\\", "/")
+        while path.startswith("./"):
+            path = path[2:]
         if path.startswith(prefix):
             relative = path[len(prefix):]
             if relative not in owned and path not in owned:
@@ -213,6 +218,35 @@ def compare_with_panel_archive(build_root: Path, panel_archive: Path, module_id:
     return errors
 
 
+def extract_panel_archive(archive: Path, destination: Path) -> Path:
+    """Lay the package files of a panel archive (relative to xkeen-ui/) into `destination`."""
+
+    destination.mkdir(parents=True, exist_ok=True)
+    for name, data in _read_archive(archive).items():
+        target = destination / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+    return destination
+
+
+def _builder(root: Path):
+    # The builder of the checked-out tree, not of the checkout running the check.
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+    from scripts import build_modular_panel_release as builder
+
+    return builder
+
+
+def _module_ownership(root: Path) -> Mapping[str, Sequence[str]]:
+    return _builder(root).build_ownership_map(root)["modules"]
+
+
+def _build_package_tree(root: Path, panel_tag: str, work: Path) -> Path:
+    built = _builder(root).build_panel_archive(root, work, version=panel_tag.lstrip("v"), epoch=0)
+    return extract_panel_archive(built.path, work / "tree")
+
+
 def _git(root: Path, *args: str) -> list[str]:
     result = subprocess.run(
         ["git", *args], cwd=root, capture_output=True, text=True, encoding="utf-8", check=True
@@ -223,10 +257,10 @@ def _git(root: Path, *args: str) -> list[str]:
 def _ancestor_tags(root: Path) -> list[str]:
     tags: list[str] = []
     for line in _git(root, "log", "--simplify-by-decoration", "--format=%D", "HEAD"):
-        for part in line.split(","):
-            part = part.strip()
-            if part.startswith("tag: "):
-                tags.append(part[5:])
+        on_commit = [part.strip()[5:] for part in line.split(",") if part.strip().startswith("tag: ")]
+        # Several panel tags on one commit: the newest counts as the nearest.
+        on_commit.sort(key=lambda tag: _panel_key(tag) if PANEL_TAG_RE.match(tag) else ((0, 0, 0), 0), reverse=True)
+        tags.extend(on_commit)
     return tags
 
 
@@ -240,9 +274,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     root = args.root.resolve()
 
     def stop(errors: list[str]) -> int:
+        # Exit 2 is the normal outcome (the change goes out with a panel
+        # release); exit 1 is a real failure of the release.
+        failures = [error for error in errors if NEEDS_PANEL not in error]
         for error in errors:
-            print(f"ОШИБКА: {error}", file=sys.stderr)
-        return 1
+            label = "ОШИБКА" if error in failures else "ВЫПУСК ПАНЕЛИ"
+            print(f"{label}: {error}", file=sys.stderr)
+        return 1 if failures else EXIT_NEEDS_PANEL
 
     try:
         module_id, _ = parse_module_tag(args.tag)
@@ -267,21 +305,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     if errors:
         return stop(errors)
 
-    sys.path.insert(0, str(root))
-    from scripts import build_modular_panel_release as builder
-
-    ownership = builder.build_ownership_map(root)["modules"]
+    ownership = _module_ownership(root)
     errors = check_changed_paths(_git(root, "diff", "--name-only", f"{panel_tag}..HEAD"), ownership.get(module_id, []))
     if errors:
         return stop(errors)
     with tempfile.TemporaryDirectory() as tmp:
-        built = builder.build_panel_archive(root, Path(tmp), version=panel_tag.lstrip("v"), epoch=0)
-        extracted = Path(tmp) / "tree"
-        extracted.mkdir()
-        for name, data in _read_archive(built.path).items():
-            target = extracted / name
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(data)
+        extracted = _build_package_tree(root, panel_tag, Path(tmp))
         errors = compare_with_panel_archive(extracted, args.panel_archive, module_id)
     if errors:
         return stop(errors)

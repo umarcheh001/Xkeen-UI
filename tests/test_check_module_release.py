@@ -172,3 +172,105 @@ def test_unknown_new_file_stops_release(tmp_path):
     build, archive = _setup(tmp_path, {"services/new_core.py": b"x"})
     errors = compare_with_panel_archive(build, archive, MODULE)
     assert any("services/new_core.py" in e for e in errors)
+
+
+# ---- запасные случаи -------------------------------------------------------
+
+def test_leading_dot_directories_are_not_stripped():
+    assert check_changed_paths(["./docs/x.md"], set()) == []
+    assert check_changed_paths([".docs/x"], set())
+    assert check_changed_paths([".github/x"], set())
+
+
+def test_beta_ten_is_newer_than_beta_nine():
+    published = ["v3.0.3-beta.9", "v3.0.3-beta.10", "v3.0.2"]
+    assert check_latest_in_channel("v3.0.3-beta.10", published) == []
+    assert check_latest_in_channel("v3.0.3-beta.9", published)
+    assert check_latest_in_channel("v3.0.2", published) == []
+
+
+# ---- main: коды выхода и сквозной прогон на временном репозитории ---------
+
+def test_main_exit_codes_separate_panel_outcome_from_failure(capsys):
+    from scripts.check_module_release import main
+
+    assert main(["--tag", "module-tool.editor-1.0.1", "--panel-archive", "x"]) == 2
+    err = capsys.readouterr().err
+    assert "ВЫПУСК ПАНЕЛИ" in err and "ОШИБКА" not in err
+    assert main(["--tag", "v3.0.3", "--panel-archive", "x"]) == 1
+    assert "ОШИБКА" in capsys.readouterr().err
+
+
+def _git_run(root: Path, *args: str) -> None:
+    import subprocess
+
+    subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@example.com", *args],
+        cwd=root, check=True, capture_output=True,
+    )
+
+
+def _make_repo(tmp_path: Path) -> Path:
+    repo = tmp_path / "repo"
+    (repo / "xkeen-ui").mkdir(parents=True)
+    (repo / "module-versions.json").write_text(json.dumps({MODULE: "1.0.0"}), encoding="utf-8")
+    (repo / "xkeen-ui" / "app.py").write_bytes(b"core")
+    (repo / "xkeen-ui" / "files.py").write_bytes(b"files-v1")
+    _git_run(repo.parent, "init", "-q", str(repo))
+    _git_run(repo, "add", ".")
+    _git_run(repo, "commit", "-q", "-m", "base")
+    _git_run(repo, "tag", "v3.0.3-beta.9")
+    _git_run(repo, "tag", "v3.0.3-beta.10")
+    (repo / "module-versions.json").write_text(json.dumps({MODULE: "1.0.1"}), encoding="utf-8")
+    return repo
+
+
+def _patch_builder(monkeypatch, repo: Path, files: dict[str, bytes]):
+    import scripts.check_module_release as mod
+
+    def build(root, panel_tag, work):
+        tree = work / "tree"
+        for name, data in files.items():
+            (tree / name).parent.mkdir(parents=True, exist_ok=True)
+            (tree / name).write_bytes(data)
+        return tree
+
+    monkeypatch.setattr(mod, "_build_package_tree", build)
+    monkeypatch.setattr(mod, "_module_ownership", lambda root: {MODULE: ["files.py"]})
+
+
+OWN = _ownership({"core": ["app.py"], MODULE: ["files.py"]})
+
+
+def _base_archive(tmp_path: Path) -> Path:
+    archive = tmp_path / "panel.tar.gz"
+    with tarfile.open(archive, "w:gz") as tar:
+        for name, data in {"app.py": b"core", "files.py": b"files-v1", "module-ownership.json": OWN}.items():
+            info = tarfile.TarInfo(f"xkeen-ui/{name}")
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+    return archive
+
+
+def test_main_end_to_end_on_a_temp_repo(tmp_path, monkeypatch, capsys):
+    from scripts.check_module_release import main
+
+    repo = _make_repo(tmp_path)
+    (repo / "xkeen-ui" / "files.py").write_bytes(b"files-v2")
+    _git_run(repo, "add", ".")
+    _git_run(repo, "commit", "-q", "-m", "module change")
+    archive = _base_archive(tmp_path)
+    args = ["--root", str(repo), "--tag", "module-tool.files-1.0.1", "--panel-archive", str(archive)]
+
+    _patch_builder(monkeypatch, repo, {"app.py": b"core", "files.py": b"files-v2", "module-ownership.json": OWN})
+    assert main(args) == 0
+    # тег не совпадает с module-versions.json: настоящий сбой
+    assert main(["--root", str(repo), "--tag", "module-tool.files-1.0.2", "--panel-archive", str(archive)]) == 1
+    capsys.readouterr()
+
+    # правка ядра: штатный исход
+    (repo / "xkeen-ui" / "app.py").write_bytes(b"core2")
+    _git_run(repo, "add", ".")
+    _git_run(repo, "commit", "-q", "-m", "core change")
+    assert main(args) == 2
+    assert "ВЫПУСК ПАНЕЛИ" in capsys.readouterr().err
