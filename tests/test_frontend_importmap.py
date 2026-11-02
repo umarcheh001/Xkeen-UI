@@ -219,6 +219,34 @@ def test_module_pass_is_described_by_its_own_config() -> None:
     assert f"'{MODULE_ID}': {{ entry: '{SOURCE_ENTRY}' }}" in module
 
 
+def _inventory_generator():
+    import importlib.util
+
+    # The generator imports its neighbours from scripts/ as top-level modules.
+    if str(ROOT / "scripts") not in sys.path:
+        sys.path.insert(0, str(ROOT / "scripts"))
+    spec = importlib.util.spec_from_file_location(
+        "generate_modular_panel_inventory_for_importmap", ROOT / "scripts" / "generate_modular_panel_inventory.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    generator = module.ModularPanelInventoryGenerator.__new__(module.ModularPanelInventoryGenerator)
+    generator.root = ROOT
+    generator.project_root = ROOT / "xkeen-ui"
+    return generator
+
+
+def test_inventory_follows_the_public_name_into_the_module() -> None:
+    """The core bundle still loads the module's window, only by its public name now."""
+
+    generator = _inventory_generator()
+    bundle = ROOT / "xkeen-ui/static/js/pages/panel.diagnostics.bundle.js"
+
+    assert generator._resolve_js_import(bundle, MODULE_KEY) == (ROOT / "xkeen-ui/static" / SOURCE_ENTRY).resolve()
+    assert generator._resolve_js_import(bundle, "xk-module/tool.unknown") is None
+
+
 @pytest.fixture
 def build_dir(tmp_path: Path) -> Path:
     root = tmp_path / "frontend-build"

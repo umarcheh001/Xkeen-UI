@@ -207,6 +207,13 @@ class _PanelSurfaceParser(HTMLParser):
             self.modal_ids.append(identifier)
 
 
+# A module built apart from the panel is imported as `xk-module/<id>`; its
+# source entry is listed in SEPARATE_MODULES of vite.module.config.mjs.
+SEPARATE_MODULE_PREFIX = "xk-module/"
+SEPARATE_MODULES_BLOCK_RE = re.compile(r"SEPARATE_MODULES\s*=\s*\{(.*?)\n\};", re.DOTALL)
+SEPARATE_MODULE_ENTRY_RE = re.compile(r"['\"]([^'\"]+)['\"]\s*:\s*\{\s*entry\s*:\s*['\"]([^'\"]+)['\"]")
+
+
 class ModularPanelInventoryGenerator:
     def __init__(self, root: Path) -> None:
         self.root = root.resolve()
@@ -559,9 +566,26 @@ class ModularPanelInventoryGenerator:
         visit(root_path)
         return ordered
 
-    @staticmethod
-    def _resolve_js_import(source: Path, spec: str) -> Path | None:
+    def _separate_module_entries(self) -> dict[str, str]:
+        """Source entry of each module built apart, read from vite.module.config.mjs."""
+
+        cached = getattr(self, "_separate_module_entries_cache", None)
+        if cached is None:
+            config = self.root / "vite.module.config.mjs"
+            text = self._read_text(config) if config.is_file() else ""
+            block = SEPARATE_MODULES_BLOCK_RE.search(text)
+            cached = dict(SEPARATE_MODULE_ENTRY_RE.findall(block.group(1))) if block else {}
+            self._separate_module_entries_cache = cached
+        return cached
+
+    def _resolve_js_import(self, source: Path, spec: str) -> Path | None:
         cleaned = spec.split("?", 1)[0].split("#", 1)[0]
+        if cleaned.startswith(SEPARATE_MODULE_PREFIX):
+            # The core reaches a separately built module only by this name; the
+            # graph still goes on into the module's own sources.
+            entry = self._separate_module_entries().get(cleaned[len(SEPARATE_MODULE_PREFIX):])
+            target = (self.project_root / "static" / entry).resolve() if entry else None
+            return target if target is not None and target.is_file() else None
         if not cleaned.startswith("."):
             return None
         candidate = (source.parent / cleaned).resolve()
