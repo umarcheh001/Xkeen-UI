@@ -14,6 +14,8 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
+import tarfile
+import tempfile
 import sys
 from pathlib import Path
 from typing import Iterable, Mapping, Sequence
@@ -24,6 +26,7 @@ from scripts.check_module_release import (  # noqa: E402
     PACKAGE_DIRNAME,
     PANEL_TAG_RE,
     _git,
+    _builder,
     _module_ownership,
     _panel_key,
     _version_key,
@@ -116,31 +119,70 @@ def unbumped_modules(
     return result
 
 
-def previous_panel_tag(tag: str, all_tags: Iterable[str]) -> str | None:
-    """The nearest lower panel tag of the same channel (betas and stable apart)."""
+def merge_ownership(*maps: Mapping[str, Sequence[str]]) -> dict[str, list[str]]:
+    """Union of several ownership maps: a path counts for every module that owned it."""
 
-    if not PANEL_TAG_RE.match(tag):
-        return None
-    beta = "-beta." in tag
-    lower = [
-        other
-        for other in all_tags
-        if PANEL_TAG_RE.match(other) and ("-beta." in other) == beta and _panel_key(other) < _panel_key(tag)
-    ]
-    return max(lower, key=_panel_key) if lower else None
+    merged: dict[str, list[str]] = {}
+    for ownership in maps:
+        for module_id, paths in ownership.items():
+            known = merged.setdefault(module_id, [])
+            known.extend(path for path in paths if path not in known)
+    return merged
 
 
-def _versions_at(root: Path, ref: str) -> dict[str, str]:
+def nearest_ancestor_panel_tag(tag: str, ordered_tags: Iterable[str]) -> str | None:
+    """The first panel tag (either channel) of `ordered_tags`, nearest ancestor first, except `tag`."""
+
+    for other in ordered_tags:
+        if other != tag and PANEL_TAG_RE.match(other):
+            return other
+    return None
+
+
+def _ancestor_panel_tags(root: Path, tag: str) -> list[str]:
+    """Tags on the ancestors of `tag`, nearest first (several on one commit: the newest first)."""
+
+    try:
+        lines = _git(root, "log", "--simplify-by-decoration", "--format=%D", f"{tag}^")
+    except subprocess.CalledProcessError:
+        return []
+    tags: list[str] = []
+    for line in lines:
+        on_commit = [part.strip()[5:] for part in line.split(",") if part.strip().startswith("tag: ")]
+        on_commit = [item for item in on_commit if PANEL_TAG_RE.match(item)]
+        on_commit.sort(key=_panel_key, reverse=True)
+        tags.extend(on_commit)
+    return tags
+
+
+def _versions_at(root: Path, ref: str) -> dict[str, str] | None:
+    """module-versions.json at `ref`; None when the tag has none (older than module versions)."""
+
     result = subprocess.run(
         ["git", "show", f"{ref}:module-versions.json"], cwd=root, capture_output=True, text=True, encoding="utf-8"
     )
     if result.returncode != 0:
-        return {}
+        return None
     try:
         data = json.loads(result.stdout)
     except ValueError:
-        return {}
-    return data if isinstance(data, dict) else {}
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _old_ownership(root: Path, ref: str) -> Mapping[str, Sequence[str]]:
+    """Ownership of the tree at `ref`, built by the current builder from `git archive`."""
+
+    with tempfile.TemporaryDirectory() as tmp:
+        archive = Path(tmp) / "tree.tar"
+        subprocess.run(
+            ["git", "archive", "--format=tar", "-o", str(archive), ref, PACKAGE_DIRNAME], cwd=root, check=True
+        )
+        tree = Path(tmp) / "tree"
+        tree.mkdir()
+        with tarfile.open(archive) as handle:
+            handle.extractall(tree)
+        return _builder(root).build_ownership_map(tree)["modules"]
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -154,15 +196,25 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
     new_versions = json.loads((root / "module-versions.json").read_text(encoding="utf-8"))
     errors = missing_merges(new_versions, _git(root, "tag", "-l", "module-*"))
-    previous = previous_panel_tag(args.tag, _git(root, "tag", "-l", "v*"))
-    if previous:
+    previous = nearest_ancestor_panel_tag(args.tag, _ancestor_panel_tags(root, args.tag))
+    if not previous:
+        print("Предыдущего тега панели среди предков нет: проверка подъёма версий пропущена")
+    else:
         old_versions = _versions_at(root, previous)
-        changed = _git(root, "diff", "--name-only", f"{previous}..{args.tag}")
-        for module_id in unbumped_modules(changed, _module_ownership(root), old_versions, new_versions):
-            errors.append(
-                f"исходники модуля {module_id} менялись с {previous}, а версия не поднята "
-                f"({new_versions.get(module_id)}): поднимите её в module-versions.json"
-            )
+        if old_versions is None:
+            print(f"В {previous} нет module-versions.json: проверка подъёма версий пропущена")
+        else:
+            try:
+                ownership = merge_ownership(_old_ownership(root, previous), _module_ownership(root))
+            except Exception as error:  # old tags may predate the ownership map
+                print(f"Принадлежность файлов в {previous} построить не удалось ({error}): берётся текущая")
+                ownership = _module_ownership(root)
+            changed = _git(root, "diff", "--name-only", "--no-renames", f"{previous}..{args.tag}")
+            for module_id in unbumped_modules(changed, ownership, old_versions, new_versions):
+                errors.append(
+                    f"исходники модуля {module_id} менялись с {previous}, а версия не поднята "
+                    f"({new_versions.get(module_id)}): поднимите её в module-versions.json"
+                )
     for error in errors:
         print(f"ОШИБКА: {error}", file=sys.stderr)
     if errors:
