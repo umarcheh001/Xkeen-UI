@@ -45,6 +45,7 @@ from tests.test_module_transactions_real_tree import (  # noqa: F401
     ARCHITECTURE,
     UPDATE_MARK,
     VERSION as BUILT_VERSION,
+    XRAY_UPDATE_VERSION,
     Built,
     _dangling,
     _files,
@@ -652,7 +653,7 @@ def _updated_xray(built: Built, tmp_path: Path):
     added = "services/xray_module_update_probe.py"
     panel = _install_profile(built, tmp_path, "xray-minimal")
     dist = tmp_path / "dist"
-    keyring = _publish_update(built, dist, module_id, "1.0.1", changed, added)
+    keyring = _publish_update(built, dist, module_id, XRAY_UPDATE_VERSION, changed, added)
     client = ModuleCatalogClient(
         panel, transport=DirectoryTransport(dist), keyring=keyring,
         platform_architecture=ARCHITECTURE, core_version=BUILT_VERSION,
@@ -673,20 +674,20 @@ def test_profile_switch_keeps_updated_module(built: Built, tmp_path: Path) -> No
     updated = (panel / changed).read_bytes()
     assert updated.endswith(UPDATE_MARK)
 
-    # The target is built from the release, whose engine.xray is 1.0.0.
+    # The target is built from the release, whose engine.xray is older.
     _transition(built, panel, "full", keyring, dist)
 
     assert (panel / changed).read_bytes() == updated
     assert (panel / added).read_bytes() == ADDED_BODY
     installed = _json(panel / "module-installed.json")
-    assert installed["versions"] == {module_id: "1.0.1"}
+    assert installed["versions"] == {module_id: XRAY_UPDATE_VERSION}
     assert installed["modules"][DIAGNOSTICS] is True
     overrides = _json(panel / "module-ownership-overrides.json")["modules"]
     assert added in overrides[module_id]
     assert added in _json(panel / "install-managed.json")["paths"]
     # A module the switch added is laid at the base version of the panel.
     assert _registry(panel)[DIAGNOSTICS]["version"] == "1.0.0"
-    assert _registry(panel)[module_id]["version"] == "1.0.1"
+    assert _registry(panel)[module_id]["version"] == XRAY_UPDATE_VERSION
 
 
 def test_profile_switch_drops_updated_module_with_its_files(built: Built, tmp_path: Path) -> None:  # noqa: F811

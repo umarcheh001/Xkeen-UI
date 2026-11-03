@@ -205,7 +205,12 @@ export function createXrayLogView(options) {
     records: [],
     visible: [],
     frozen: false,
-    follow: true,
+    // The newest first or, as before, the oldest. The table follows the new
+    // rows while it stands at their edge (stuck); away from it, it holds still
+    // and counts what came meanwhile (unseen).
+    order: 'oldest',
+    stuck: true,
+    unseen: 0,
     decoVersion: 1,
     filter: {
       groups: [],
@@ -487,9 +492,28 @@ export function createXrayLogView(options) {
     return fresh;
   }
 
+  // Rows stand by their place on the screen: ord grows with every line, so the
+  // newest first counts it backwards. A row keeps its place while lines come;
+  // only the shift of the whole block (baseDisp) changes.
+  function newestFirst() { return state.order === 'newest'; }
+
+  function disp(ord) { return newestFirst() ? -ord : ord; }
+
+  function baseDisp() {
+    if (!newestFirst()) return state.baseOrd;
+    const total = state.visible.length;
+    return total ? -state.visible[total - 1].ord : 0;
+  }
+
+  // The record shown at a place on the screen.
+  function atScreen(index) {
+    return newestFirst() ? state.visible[state.visible.length - 1 - index] : state.visible[index];
+  }
+
   function rowY(record) {
-    const ord = record.ord;
-    return ord * ROW_H + (state.openOrd != null && ord > state.openOrd ? state.detailH : 0);
+    const d = disp(record.ord);
+    const open = state.openOrd != null ? disp(state.openOrd) : null;
+    return d * ROW_H + (open != null && d > open ? state.detailH : 0);
   }
 
   function syncRowState(row, record) {
@@ -598,44 +622,49 @@ export function createXrayLogView(options) {
       state.detailH = dom.detail.offsetHeight;
     }
     state.openOrd = openRecord.ord;
-    dom.detail.style.transform = `translateY(${(openRecord.ord + 1) * ROW_H}px)`;
+    dom.detail.style.transform = `translateY(${(disp(openRecord.ord) + 1) * ROW_H}px)`;
   }
 
   function contentHeight() {
     return state.visible.length * ROW_H + (state.openOrd != null ? state.detailH : 0);
   }
 
-  function renderTable() {
-    if (!dom.rows) return;
-    syncDetail();
-    const total = state.visible.length;
+  function syncBodyHeight() {
     const bodyH = contentHeight();
     if (dom.body._h !== bodyH) {
       dom.body._h = bodyH;
       dom.body.style.height = `${bodyH}px`;
     }
-    if (dom.rows._base !== state.baseOrd) {
-      dom.rows._base = state.baseOrd;
-      dom.rows.style.transform = `translateY(${-state.baseOrd * ROW_H}px)`;
+  }
+
+  function renderTable() {
+    if (!dom.rows) return;
+    syncDetail();
+    const total = state.visible.length;
+    syncBodyHeight();
+    const base = baseDisp();
+    if (dom.rows._base !== base) {
+      dom.rows._base = base;
+      dom.rows.style.transform = `translateY(${-base * ROW_H}px)`;
     }
 
     const viewH = state.viewH || 600;
     const top = Math.max(0, state.scrollTop - HEAD_H);
     let first = Math.floor(top / ROW_H);
-    if (state.openOrd != null && first > state.openOrd - state.baseOrd) {
+    if (state.openOrd != null && first > disp(state.openOrd) - base) {
       first = Math.floor(Math.max(0, top - state.detailH) / ROW_H);
     }
     first = Math.max(0, first - OVERSCAN);
     const last = Math.min(total, first + Math.ceil(viewH / ROW_H) + OVERSCAN * 2);
 
     const keep = new Set();
-    for (let i = first; i < last; i += 1) keep.add(state.visible[i].seq);
+    for (let i = first; i < last; i += 1) keep.add(atScreen(i).seq);
     Array.from(state.rowsBySeq.entries()).forEach(([seq, row]) => {
       if (!keep.has(seq) || row._v !== state.decoVersion) releaseRow(row);
     });
     const ordered = [];
     for (let i = first; i < last; i += 1) {
-      const record = state.visible[i];
+      const record = atScreen(i);
       let row = state.rowsBySeq.get(record.seq);
       if (!row) {
         row = takeRow();
@@ -671,14 +700,30 @@ export function createXrayLogView(options) {
 
   // ---------- Scrolling and rendering ----------
 
-  function nearBottom() {
+  // The edge with the new rows: the bottom, or the top when the newest come first.
+  function atNewEdge() {
+    if (newestFirst()) return state.scrollTop <= ROW_H;
     return state.scrollTop + (state.viewH || 0) >= HEAD_H + contentHeight() - ROW_H;
   }
 
-  function scrollToEnd() {
-    const target = Math.max(0, HEAD_H + contentHeight() - (state.viewH || 0));
-    state.scrollTop = target;
+  // The scroll is read back from the element: a hidden screen does not scroll,
+  // and a remembered position it never took drew rows where nobody looks.
+  function scrollToNew() {
+    syncBodyHeight();
+    const target = newestFirst() ? 0 : Math.max(0, HEAD_H + contentHeight() - (state.viewH || 0));
     host.scrollTop = target;
+    state.scrollTop = host.scrollTop;
+    state.stuck = true;
+    state.unseen = 0;
+  }
+
+  // Lines came above the eye (newest first): the block grows over the rows
+  // being read, so the scroll moves by as much to keep them in place.
+  function keepPlace(addedPx) {
+    if (!addedPx) return;
+    syncBodyHeight();
+    host.scrollTop = state.scrollTop + addedPx;
+    state.scrollTop = host.scrollTop;
   }
 
   function renderEmpty() {
@@ -696,7 +741,7 @@ export function createXrayLogView(options) {
   }
 
   function renderAll() {
-    if (state.follow || nearBottom()) scrollToEnd();
+    if (state.stuck) scrollToNew();
     renderTable();
     renderEmpty();
     renderSelbar();
@@ -705,6 +750,11 @@ export function createXrayLogView(options) {
 
   function onScroll() {
     state.scrollTop = host.scrollTop;
+    // A hidden screen reports no height: its place is not the reader's choice.
+    if (state.viewH > 0) {
+      state.stuck = atNewEdge();
+      if (state.stuck) state.unseen = 0;
+    }
     if (state.renderQueued) return;
     state.renderQueued = true;
     requestAnimationFrame(() => {
@@ -716,6 +766,8 @@ export function createXrayLogView(options) {
   if (typeof ResizeObserver === 'function') {
     new ResizeObserver(() => {
       state.viewH = host.clientHeight;
+      // Shown again, or resized: a table at the new rows stays at them.
+      if (state.stuck && state.viewH > 0) scrollToNew();
       renderTable();
     }).observe(host);
   }
@@ -883,8 +935,9 @@ export function createXrayLogView(options) {
         state.baseOrd = state.visible.length ? state.visible[0].ord : state.ord;
         // Row offsets grow with every line; renumber long before float precision matters.
         if (state.baseOrd > 200000) renumber();
-        // Keep the same lines under the eye when not following the end.
-        if (!state.follow) {
+        // Keep the same lines under the eye when away from the end (oldest
+        // first: the cut rows stood above them).
+        if (!state.stuck && !newestFirst()) {
           state.scrollTop = Math.max(0, state.scrollTop - cut * ROW_H);
           host.scrollTop = state.scrollTop;
         }
@@ -924,7 +977,7 @@ export function createXrayLogView(options) {
   function append(lines) {
     const list = Array.isArray(lines) ? lines : [];
     if (!list.length) return;
-    const stick = state.follow || nearBottom();
+    const stick = state.stuck;
     const added = [];
     for (let i = 0; i < list.length; i += 1) {
       const record = makeRecord(list[i]);
@@ -942,7 +995,12 @@ export function createXrayLogView(options) {
     if (shown.length) {
       shown.forEach(pushVisible);
       if (state.visible.length === shown.length) state.baseOrd = state.visible[0].ord;
-      if (stick) scrollToEnd();
+      if (stick) {
+        scrollToNew();
+      } else {
+        state.unseen += shown.length;
+        if (newestFirst()) keepPlace(shown.length * ROW_H);
+      }
       renderTable();
       renderEmpty();
     } else {
@@ -958,8 +1016,22 @@ export function createXrayLogView(options) {
     state.filter.conditions = [];
     clearRecords();
     state.scrollTop = 0;
+    state.stuck = true;
+    state.unseen = 0;
     buildShell(next);
     host.scrollTop = 0;
+    renderAll();
+  }
+
+  function setOrder(order) {
+    const next = order === 'newest' ? 'newest' : 'oldest';
+    if (next === state.order) return;
+    state.order = next;
+    // Every row takes another place: drop the remembered ones.
+    state.rowsBySeq.forEach((row) => { row._y = null; });
+    if (dom.rows) dom.rows._base = null;
+    state.stuck = true;
+    state.unseen = 0;
     renderAll();
   }
 
@@ -1289,7 +1361,9 @@ export function createXrayLogView(options) {
     setSearch,
     addCondition,
     resetFilter,
-    setFollow(on) { state.follow = !!on; },
+    setOrder,
+    order() { return state.order; },
+    unseen() { return state.unseen; },
     setMaxLines(n) {
       const value = Math.max(50, parseInt(n, 10) || 800);
       state.maxLines = value;
@@ -1316,9 +1390,10 @@ export function createXrayLogView(options) {
       renderTable();
       markStatsDirty(true);
     },
-    isNearBottom: nearBottom,
+    // The edge with the new rows (the bottom, or the top for the newest first).
+    isNearBottom: atNewEdge,
     scrollToEnd() {
-      scrollToEnd();
+      scrollToNew();
       renderTable();
     },
     relayout() {

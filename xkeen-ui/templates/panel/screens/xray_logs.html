@@ -34,12 +34,11 @@
             <button id="xray-log-filter-clear" type="button" class="xk-xlog-search-clear" title="Очистить поиск" aria-label="Очистить поиск" hidden>{{ op_icon('close') }}</button>
             <kbd class="xk-xlog-kbd" aria-hidden="true">/</kbd>
           </div>
+          <button type="button" class="btn-secondary xk-xlog-icon-btn" id="xray-log-order" aria-pressed="false" title="Сейчас: старые сверху. Нажмите — новые сверху" aria-label="Порядок: старые сверху">{{ op_icon('sort') }}</button>
           <details class="dt-log-menu xk-xlog-menu" id="xray-log-more">
             <summary class="btn-secondary xk-xlog-icon-btn" title="Ещё" aria-label="Ещё">{{ op_icon('more') }}</summary>
             <div class="dt-log-menu-panel xk-xlog-menu-panel" role="menu" aria-label="Дополнительные действия">
               <div class="xk-xlog-menu-title">Вид</div>
-              <label class="xk-xlog-menu-item" title="Авто‑прокрутка к новым строкам.">{{ op_icon('move-down') }}<span>Следить за концом</span>
-                <span class="dt-switch"><input id="xray-log-follow" type="checkbox" checked /><span class="dt-switch-slider" aria-hidden="true"></span></span></label>
               <label class="xk-xlog-menu-item" title="Показывать доменные имена рядом с IP-адресами.">{{ op_icon('dns') }}<span>Домены рядом с IP</span>
                 <span class="dt-switch"><input id="xray-log-toggle-domains" type="checkbox" /><span class="dt-switch-slider" aria-hidden="true"></span></span></label>
               <label class="xk-xlog-menu-item" title="Сводка над таблицей access.log.">{{ op_icon('list-details') }}<span>Сводка над таблицей</span>
@@ -85,7 +84,7 @@
 
         <div class="xk-xlog-box">
           <div id="xray-log-output" class="xk-xlog-output is-table" role="grid" aria-label="Строки лога Xray" tabindex="0"></div>
-          <button type="button" id="xray-log-scroll-bottom" class="xk-xlog-float" title="Прокрутить к последним показанным строкам." aria-label="Прокрутить к последним строкам лога" hidden>К последним</button>
+          <button type="button" id="xray-log-scroll-bottom" class="xk-xlog-float" title="Вернуться к новым строкам." aria-label="К новым строкам лога" hidden>К новым</button>
           <button type="button" id="xray-log-new-lines" class="xk-xlog-float" title="Снять паузу и показать накопившиеся строки." hidden>{{ op_icon('move-down') }}<span data-xlog-new-label></span></button>
           <div class="xk-xlog-selbar" id="xray-log-selbar" role="toolbar" aria-label="Выбранные строки" hidden>
             <span>Выбрано <b data-xlog-selcount>0</b></span>

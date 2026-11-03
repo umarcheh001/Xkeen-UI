@@ -32,6 +32,17 @@ ROOT = Path(__file__).resolve().parents[1]
 PANEL = ROOT / "xkeen-ui"
 VERSION = "2.10.0"
 ARCHITECTURE = "mipsel"
+
+
+def _next_module_version(module_id: str) -> str:
+    # An update is newer than what the tree carries: module-versions.json moves
+    # with every change of a module, so the test does not fix a number.
+    versions = json.loads((ROOT / "module-versions.json").read_text(encoding="utf-8"))
+    major, minor, patch = (int(part) for part in versions[module_id].split("."))
+    return f"{major}.{minor}.{patch + 1}"
+
+
+XRAY_UPDATE_VERSION = _next_module_version("engine.xray")
 BOOKKEEPING = {f"module-catalog/catalog-{VERSION}.json", "module-operations/status.json", "module-operations/history.jsonl"}
 _TEMPLATE_LINK = re.compile(r"""{%-?\s*(?:include|extends|import|from)\s+['"]([^'"]+)['"]""")
 
@@ -321,7 +332,7 @@ def test_update_of_a_module_over_a_real_profile(built: Built, tmp_path: Path) ->
     modules_before = (panel / "modules.json").read_bytes()
     profile_before = (panel / "install-profile.json").read_bytes()
     before = _files(panel)
-    keyring = _publish_update(built, tmp_path / "dist", module_id, "1.0.1", changed, added)
+    keyring = _publish_update(built, tmp_path / "dist", module_id, XRAY_UPDATE_VERSION, changed, added)
     client = ModuleCatalogClient(
         panel, transport=DirectoryTransport(tmp_path / "dist"), keyring=keyring,
         platform_architecture=ARCHITECTURE, core_version=VERSION,
@@ -340,7 +351,7 @@ def test_update_of_a_module_over_a_real_profile(built: Built, tmp_path: Path) ->
     assert after[added] == ADDED_BODY
     assert _dangling(built, set(after)) == []
     installed = json.loads((panel / "module-installed.json").read_text(encoding="utf-8"))
-    assert installed["versions"] == {module_id: "1.0.1"}
+    assert installed["versions"] == {module_id: XRAY_UPDATE_VERSION}
     overrides = json.loads((panel / "module-ownership-overrides.json").read_text(encoding="utf-8"))
     assert overrides["modules"] == {module_id: sorted({*built.ownership[module_id], added})}
     assert added in json.loads((panel / "install-managed.json").read_text(encoding="utf-8"))["paths"]

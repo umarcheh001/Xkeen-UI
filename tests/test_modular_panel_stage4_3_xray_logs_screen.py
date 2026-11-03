@@ -52,7 +52,7 @@ def test_xray_logs_screen_composition_preserves_dom_contract():
         "xray-log-file",
         "xray-log-level",
         "xray-log-live",
-        "xray-log-follow",
+        "xray-log-order",
         "xray-log-output",
         "xray-log-status",
     ):

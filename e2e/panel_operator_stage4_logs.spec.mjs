@@ -89,6 +89,110 @@ async function readLogsGeometry(page) {
 }
 
 
+// Many lines, a second apart, so the table scrolls: 09:00:00, 09:00:01…
+const pad2 = (n) => String(n).padStart(2, '0');
+const manyAccessLines = (count, from = 0) => Array.from({ length: count }, (_, k) => {
+  const i = from + k;
+  return `2026/07/29 09:${pad2(Math.floor(i / 60) % 60)}:${pad2(i % 60)}.000000 from 192.168.1.20:${40000 + i} accepted tcp:h${i}.example.com:443 [redirect-in -> direct]`;
+});
+
+// The times of the rows the eye sees, top to bottom.
+async function seenTimes(page) {
+  return page.evaluate(() => {
+    const host = document.querySelector('#xray-log-output');
+    const box = host.getBoundingClientRect();
+    return Array.from(host.shadowRoot.querySelectorAll('.tr'))
+      .filter((row) => !row.hidden)
+      .map((row) => ({ top: row.getBoundingClientRect().top, time: (row.textContent.match(/\d\d:\d\d:\d\d/) || [''])[0] }))
+      .filter((row) => row.top >= box.top + 28 && row.top < box.bottom - 8)
+      .sort((a, b) => a.top - b.top)
+      .map((row) => row.time);
+  });
+}
+
+test.describe('Xray logs: order and the edge of new rows', () => {
+  test('the table shows its newest rows as soon as the screen opens', async ({ page }) => {
+    await openLogs(page, 'dark', { width: 1440, height: 900 }, { accessLines: manyAccessLines(80) });
+    // The view drew the end while hidden; once shown it must stand there too.
+    await expect.poll(async () => (await seenTimes(page)).at(-1)).toBe('09:01:19');
+  });
+
+  test('the order button turns the table and is remembered', async ({ page }) => {
+    await openLogs(page, 'dark', { width: 1440, height: 900 }, { accessLines: manyAccessLines(80) });
+    const order = page.locator('#xray-log-order');
+    await expect(order).toHaveAttribute('aria-pressed', 'false');
+    await expect(order).toHaveAttribute('aria-label', 'Порядок: старые сверху');
+    await order.click();
+    await expect(order).toHaveAttribute('aria-pressed', 'true');
+    await expect(order).toHaveAttribute('aria-label', 'Порядок: новые сверху');
+    // Newest first, and the table stands at its top, by the new rows.
+    await expect.poll(async () => (await seenTimes(page)).slice(0, 3)).toEqual(['09:01:19', '09:01:18', '09:01:17']);
+
+    await page.reload();
+    await selectPanelView(page, 'xray-logs');
+    await expect(page.locator('#xray-log-order')).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(async () => (await seenTimes(page))[0]).toBe('09:01:19');
+  });
+
+  test('away from the new rows a button leads back, on either order', async ({ page }) => {
+    await openLogs(page, 'dark', { width: 1440, height: 900 }, { accessLines: manyAccessLines(80) });
+    const toNew = page.locator('#xray-log-scroll-bottom');
+    await expect(toNew).toBeHidden();
+    await page.locator('#xray-log-output').hover();
+    await page.mouse.wheel(0, -800);
+    await expect(toNew).toBeVisible();
+    await expect(toNew).toHaveText('↓ К новым');
+    await toNew.click();
+    await expect(toNew).toBeHidden();
+    await expect.poll(async () => (await seenTimes(page)).at(-1)).toBe('09:01:19');
+
+    await page.locator('#xray-log-order').click();
+    await expect(toNew).toBeHidden();
+    await page.locator('#xray-log-output').hover();
+    await page.mouse.wheel(0, 800);
+    await expect(toNew).toHaveText('↑ К новым');
+    // Above the table, not over the selection bar at its foot.
+    const button = await toNew.boundingBox();
+    const output = await page.locator('#xray-log-output').boundingBox();
+    expect(button.y).toBeLessThan(output.y + output.height / 2);
+    await toNew.click();
+    await expect.poll(async () => (await seenTimes(page))[0]).toBe('09:01:19');
+  });
+
+  test('new lines do not move the rows the eye is on and are counted on the button', async ({ page }) => {
+    let n = 80;
+    await openLogs(page, 'dark', { width: 1440, height: 900 }, { accessLines: manyAccessLines(80) });
+    await page.route('**/api/xray-logs?**', async (route) => {
+      const cursor = new URL(route.request().url()).searchParams.get('cursor');
+      if (!cursor) {
+        await route.fulfill({ json: { mode: 'full', cursor: 'p0', lines: manyAccessLines(80) } });
+        return;
+      }
+      const lines = manyAccessLines(2, n);
+      n += 2;
+      await route.fulfill({ json: { mode: 'append', cursor: `p${n}`, lines } });
+    });
+    await page.locator('#xray-log-order').click();
+    await page.locator('#xray-log-more > summary').click();
+    await page.locator('#xray-log-interval').selectOption('1000');
+    await page.keyboard.press('Escape');
+    await page.locator('#xray-log-output').hover();
+    await page.mouse.wheel(0, 640);
+    const toNew = page.locator('#xray-log-scroll-bottom');
+    await expect(toNew).toBeVisible();
+    const before = await seenTimes(page);
+    await page.locator('#xray-log-enable-btn').click();
+    await expect(toNew).toHaveText(/^↑ К новым · \d+$/, { timeout: 10_000 });
+    expect((await seenTimes(page))[0]).toBe(before[0]);
+    await toNew.click();
+    await expect(toNew).toBeHidden();
+    // At the edge the table follows the new rows.
+    const top = (await seenTimes(page))[0];
+    await expect.poll(async () => (await seenTimes(page))[0], { timeout: 10_000 }).not.toBe(top);
+    await expect(toNew).toBeHidden();
+  });
+});
+
 test.describe('Operator Console Stage 4 logs', () => {
   test('keeps stream preferences in the more menu and couples auto-update to Пуск and Стоп', async ({ page }) => {
     await page.addInitScript(() => {
@@ -99,14 +203,13 @@ test.describe('Operator Console Stage 4 logs', () => {
     await expect(page.locator('.xk-xlog-head > * #xray-log-live:visible')).toHaveCount(0);
     await page.locator('#xray-log-more > summary').click();
     await expect(page.locator('#xray-log-more #xray-log-live')).toBeAttached();
-    await expect(page.locator('#xray-log-more #xray-log-follow')).toBeAttached();
+    await expect(page.locator('#xray-log-more')).not.toContainText('Следить за концом');
     await expect(page.locator('#xray-log-more #xray-log-interval')).toBeVisible();
     const menuBox = await page.locator('#xray-log-more .dt-log-menu-panel').boundingBox();
     expect(menuBox.x).toBeGreaterThanOrEqual(0);
     expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(1440);
 
     const live = page.locator('#xray-log-more #xray-log-live');
-    const follow = page.locator('#xray-log-more #xray-log-follow');
     await expect(live).not.toBeChecked();
 
     await page.locator('#xray-log-view-btn').click();
@@ -121,7 +224,6 @@ test.describe('Operator Console Stage 4 logs', () => {
 
     await page.locator('#xray-log-enable-btn').click();
     await expect(live).toBeChecked();
-    await expect(follow).toBeChecked();
     // Пуск and Пауза share one slot: a running stream offers only Пауза.
     await expect(page.locator('#xray-log-pause')).toBeVisible();
     await expect(page.locator('#xray-log-enable-btn')).toBeHidden();
@@ -514,18 +616,15 @@ test.describe('Operator Console Stage 4 logs', () => {
 
     await page.locator('#xray-log-more > summary').click();
     await page.locator('#xray-log-interval').selectOption('5000');
-    await page.locator('label.xk-xlog-menu-item:has(#xray-log-follow)').click();
     await page.locator('#xray-log-lines').fill('1200');
     await page.locator('#xray-log-lines').dispatchEvent('change');
     await expect.poll(() => stored?.logs?.view?.maxLines).toBe(1200);
     await expect.poll(() => stored?.logs?.view?.pollMs).toBe(5000);
-    await expect.poll(() => stored?.logs?.view?.follow).toBe(false);
 
     await page.reload();
     await selectPanelView(page, 'xray-logs');
     await page.locator('#xray-log-more > summary').click();
     await expect(page.locator('#xray-log-interval')).toHaveValue('5000');
-    await expect(page.locator('#xray-log-follow')).not.toBeChecked();
     await expect(page.locator('#xray-log-lines')).toHaveValue('1200');
   });
 

@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 660,
-      "size_bytes": 9021658,
+      "size_bytes": 9027302,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -88,7 +88,7 @@
       ],
       "removable": true,
       "unit_count": 147,
-      "size_bytes": 3961331,
+      "size_bytes": 3964416,
       "kind_counts": {
         "backend_route": 13,
         "backend_service": 20,
@@ -5146,7 +5146,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_frontend_runtime_hotfixes.py",
-      "size_bytes": 144018,
+      "size_bytes": 144113,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -7061,7 +7061,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_transactions_real_tree.py",
-      "size_bytes": 17146,
+      "size_bytes": 17643,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -7101,7 +7101,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_update_transitions.py",
-      "size_bytes": 30303,
+      "size_bytes": 30364,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -14037,7 +14037,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/panel_operator_stage4_logs.spec.mjs",
-      "size_bytes": 41171,
+      "size_bytes": 46162,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -21362,7 +21362,7 @@
       "module_id": "engine.xray",
       "kind": "backend_test",
       "path": "tests/test_modular_panel_stage4_3_xray_logs_screen.py",
-      "size_bytes": 4192,
+      "size_bytes": 4191,
       "depends_on": [
         "core",
         "tool.editor"
@@ -23284,7 +23284,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/xray_log_view.js",
-      "size_bytes": 56217,
+      "size_bytes": 58997,
       "depends_on": [
         "core",
         "tool.editor"
@@ -23313,7 +23313,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/xray_logs.js",
-      "size_bytes": 185709,
+      "size_bytes": 186147,
       "depends_on": [
         "core",
         "tool.editor"
@@ -23657,7 +23657,7 @@
       "module_id": "engine.xray",
       "kind": "template",
       "path": "xkeen-ui/templates/panel/screens/xray_logs.html",
-      "size_bytes": 12474,
+      "size_bytes": 12342,
       "depends_on": [
         "core",
         "tool.editor"

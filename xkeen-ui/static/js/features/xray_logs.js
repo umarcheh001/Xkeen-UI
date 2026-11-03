@@ -99,7 +99,6 @@ let xrayLogsModuleApi = null;
   const XRAY_DOMAINS_DISPLAY_STORAGE_KEY = 'xkeen.ui.xrayLogs.domainsWanted.v1';
   let _maxLines = DEFAULT_MAX_LINES;
   let _pollMs = DEFAULT_POLL_MS;
-  let _follow = true;
   let _liveWanted = false;
 
   // HTTP incremental tail cursor (DevTools-like)
@@ -575,7 +574,7 @@ let xrayLogsModuleApi = null;
       level: $('xray-log-level'),
       live: $('xray-log-live'),
       interval: $('xray-log-interval'),
-      follow: $('xray-log-follow'),
+      order: $('xray-log-order'),
       lines: $('xray-log-lines'),
       filter: $('xray-log-filter'),
       output: $('xray-log-output'),
@@ -672,7 +671,6 @@ let xrayLogsModuleApi = null;
     return {
       maxLines: clampLogLinesValue(_maxLines, DEFAULT_MAX_LINES),
       pollMs: parseInt(_pollMs, 10) || DEFAULT_POLL_MS,
-      follow: !!_follow,
       cursor: String(_cursor || ''),
       paused: !!_paused,
       pendingCount: Math.max(0, parseInt(_pendingCount || 0, 10) || 0),
@@ -700,7 +698,6 @@ let xrayLogsModuleApi = null;
       file: String((refs.file && refs.file.value) || runtime.currentFile || 'access'),
       loglevel: String((refs.level && refs.level.value) || ''),
       live: !!(refs.live && refs.live.checked),
-      follow: !!(refs.follow && refs.follow.checked),
       pollMs: (() => {
         const value = parseInt((refs.interval && refs.interval.value) || '', 10);
         return isFinite(value) && value >= 500 ? value : runtime.pollMs;
@@ -755,29 +752,36 @@ let xrayLogsModuleApi = null;
     return _liveWanted;
   }
 
-  function setXrayLogsFollowEnabled(enabled, options) {
-    const opts = options || {};
-    _follow = !!enabled;
+  // The order of the table: 'oldest' first (as before) or 'newest' first,
+  // remembered in this browser with the other view extras.
+  function readXrayLogOrder() {
+    return readXrayViewExtras().order === 'newest' ? 'newest' : 'oldest';
+  }
 
-    try {
-      const followEl = $('xray-log-follow');
-      if (followEl && followEl.checked !== _follow) followEl.checked = _follow;
-    } catch (e) {}
+  // The order button tells the order now and what a press does.
+  function syncXrayLogOrderButton(order) {
+    const btn = $('xray-log-order');
+    if (!btn) return;
+    const newest = order === 'newest';
+    btn.setAttribute('aria-pressed', newest ? 'true' : 'false');
+    btn.classList.toggle('is-active', newest);
+    btn.setAttribute('aria-label', newest ? 'Порядок: новые сверху' : 'Порядок: старые сверху');
+    syncTooltipText(btn, newest ? 'Сейчас: новые сверху. Нажмите — старые сверху' : 'Сейчас: старые сверху. Нажмите — новые сверху');
+  }
 
-    if (_follow && !opts.skipScroll) scrollXrayLogOutputToBottom();
-
-    if (!opts.skipRender) {
-      try { updateXrayLogStats(); } catch (e) {}
-    }
-
-    return _follow;
+  function setXrayLogOrder(order) {
+    const next = order === 'newest' ? 'newest' : 'oldest';
+    writeXrayViewExtras({ order: next });
+    syncXrayLogOrderButton(next);
+    if (_view) _view.setOrder(next);
+    try { updateXrayLogStats(); } catch (e) {}
   }
 
   function readXrayLogsModeState(dom, runtimeState) {
     const refs = dom || getXrayLogsDom();
     const runtime = runtimeState || readXrayLogsRuntimeState();
+    // At the edge with the new rows the table follows them.
     const isNearBottom = isXrayLogOutputNearBottom(refs.output);
-    const followEnabled = !!runtime.follow;
     const liveActive = !!runtime.streaming;
     const liveWanted = !!runtime.liveWanted;
     const paused = !!runtime.paused;
@@ -793,22 +797,18 @@ let xrayLogsModuleApi = null;
       title = pending
         ? ('Вывод на паузе. В буфере уже ' + pending + ' строк.')
         : 'Вывод на паузе, входящие строки продолжают собираться.';
-    } else if (liveActive && followEnabled) {
+    } else if (liveActive && isNearBottom) {
       state = 'live';
-      label = 'Онлайн / В конец';
-      title = 'Онлайн-поток активен, вывод закреплен на последних строках.';
+      label = 'Онлайн';
+      title = 'Онлайн-поток активен, таблица идёт за новыми строками.';
     } else if (liveActive) {
       state = 'browse';
       label = 'Онлайн / Просмотр';
-      title = 'Онлайн-поток активен, автопрокрутка выключена для просмотра старых строк.';
+      title = 'Онлайн-поток активен, таблица стоит на месте: вы смотрите старые строки.';
     } else if (liveWanted) {
       state = 'armed';
       label = 'Онлайн / Готов';
       title = 'Онлайн-режим выбран, но поток сейчас не активен.';
-    } else if (followEnabled) {
-      state = 'manual-follow';
-      label = 'Вручную / В конец';
-      title = 'Ручной просмотр логов с автопрокруткой при следующем выводе.';
     }
 
     return {
@@ -819,7 +819,6 @@ let xrayLogsModuleApi = null;
       pending,
       liveActive,
       liveWanted,
-      followEnabled,
       isNearBottom,
     };
   }
@@ -845,26 +844,28 @@ let xrayLogsModuleApi = null;
     const runtime = runtimeState || readXrayLogsRuntimeState();
     const mode = modeState || readXrayLogsModeState(refs, runtime);
     const hasLines = Array.isArray(runtime.lastLines) && runtime.lastLines.length > 0;
-    const visible = !!(hasLines && !mode.followEnabled && !mode.isNearBottom);
+    // «К новым»: away from the edge with the new rows; the count is of the
+    // rows that came meanwhile. On pause the «new lines» button takes its place.
+    const visible = !!(hasLines && !mode.isNearBottom && !mode.paused);
 
     if (btn.hidden !== !visible) btn.hidden = !visible;
     if (btn.disabled !== !visible) btn.disabled = !visible;
     if (btn.dataset.state !== (visible ? 'visible' : 'hidden')) btn.dataset.state = visible ? 'visible' : 'hidden';
+    if (!visible) return;
 
-    if (!visible) {
-      if (btn.textContent !== 'К последним') btn.textContent = 'К последним';
-      syncTooltipText(btn, 'Прокрутить к последним показанным строкам.');
-      return;
-    }
-
-    const label = mode.liveActive ? 'К последним' : 'Вниз';
+    const newest = !!(_view && _view.order() === 'newest');
+    const unseen = _view ? _view.unseen() : 0;
+    const label = (newest ? '↑' : '↓') + ' К новым' + (unseen ? (' · ' + unseen) : '');
     if (btn.textContent !== label) btn.textContent = label;
-    syncTooltipText(
-      btn,
-      mode.liveActive
-        ? 'Прокрутить к последним показанным строкам без включения автопрокрутки.'
-        : 'Прокрутить вниз текущего вывода логов.'
-    );
+    btn.setAttribute('aria-label', unseen ? ('К новым строкам лога: ' + unseen) : 'К новым строкам лога');
+    syncTooltipText(btn, 'Вернуться к новым строкам.');
+    // The newest first: the button stands under the table head, by the new rows.
+    btn.classList.toggle('is-top', newest);
+    const out = refs.output;
+    const top = newest && out && out.offsetParent === btn.offsetParent ? (out.offsetTop + 38) + 'px' : '';
+    if (btn.style.top !== top) btn.style.top = top;
+    const bottom = top ? 'auto' : '';
+    if (btn.style.bottom !== bottom) btn.style.bottom = bottom;
   }
 
   function renderXrayLogsChrome(dom, runtimeState) {
@@ -1464,7 +1465,7 @@ let xrayLogsModuleApi = null;
       onRenameDevice: (ip, name) => { void openXrayDeviceNamesModal({ ip, name }); },
     });
     _view.setMaxLines(_maxLines);
-    _view.setFollow(_follow);
+    _view.setOrder(readXrayLogOrder());
     _view.setShowRaw(!!extras.showRaw);
     _view.setShowDns(!!extras.showDns);
     _view.setSummaryOpen(!!extras.summaryOpen);
@@ -1727,11 +1728,9 @@ let xrayLogsModuleApi = null;
     const lvl = String(prefs.loglevel || '').toLowerCase();
     if (dom.level && ALLOWED_LOGLEVELS.includes(lvl)) dom.level.value = lvl;
 
-    // Follow is a view preference; auto-update is intentionally session-bound
-    // and always starts disabled until the user enables Xray logs.
-    if (typeof prefs.follow === 'boolean') {
-      setXrayLogsFollowEnabled(!!prefs.follow, { skipRender: true, skipScroll: true });
-    }
+    // Auto-update is intentionally session-bound and always starts disabled
+    // until the user enables Xray logs. A stored «follow» is no longer read:
+    // the table follows the new rows while it stands at their edge.
 
     // interval + internal poll
     try {
@@ -3758,7 +3757,6 @@ let xrayLogsModuleApi = null;
       _pendingCount = 0;
 
       setXrayLogsLiveWanted(true, { skipRender: true });
-      setXrayLogsFollowEnabled(true, { skipRender: true });
       try { scheduleSaveUiState(); } catch (e) {}
       const wantStream = true;
       const visible = isLogsViewVisible();
@@ -4392,7 +4390,7 @@ function copyXrayContextModal() {
 	  const lvlSel = $('xray-log-level');
 	  const liveEl = $('xray-log-live');
 	  const intervalEl = $('xray-log-interval');
-	  const followEl = $('xray-log-follow');
+	  const orderBtn = $('xray-log-order');
 	  const loadMoreBtn = $('xray-log-load-more');
 	  const viewBtn = $('xray-log-view-btn');
 	  const enableBtn = $('xray-log-enable-btn');
@@ -4547,14 +4545,11 @@ function copyXrayContextModal() {
     });
   }
 
-  if (followEl) {
-    // init from UI (default checked in HTML)
-    setXrayLogsFollowEnabled(!!followEl.checked, { skipRender: true, skipScroll: true });
-    followEl.addEventListener('change', () => {
-      setXrayLogsFollowEnabled(!!followEl.checked, { skipRender: true });
-      if (_view) _view.setFollow(!!followEl.checked);
-      try { updateXrayLogStats(); } catch (e) {}
-      try { scheduleSaveUiState(); } catch (e) {}
+  if (orderBtn) {
+    syncXrayLogOrderButton(readXrayLogOrder());
+    orderBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      setXrayLogOrder(readXrayLogOrder() === 'newest' ? 'oldest' : 'newest');
     });
   }
 
