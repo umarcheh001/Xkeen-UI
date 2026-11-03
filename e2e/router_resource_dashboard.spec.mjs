@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures.mjs';
+import { readFileSync } from 'node:fs';
 import { aggregationLabel, frequenciesWord, hasModems } from '../xkeen-ui/static/js/features/resource_monitor/tool_modems.js';
 
 // The dashboard window (shadow DOM). All API answers are replaced with JSON of the real
@@ -605,6 +606,15 @@ test('phone: a tapped tile shows its hint inside the screen', async ({ page }) =
     expect(box.left).toBeGreaterThanOrEqual(0);
     expect(box.right).toBeLessThanOrEqual(390);
   }
+});
+
+test('the window header names the version of the diagnostics module before the update time', async ({ page }) => {
+  const version = JSON.parse(readFileSync(new URL('../module-versions.json', import.meta.url), 'utf8'))['tool.advanced-diagnostics'];
+  const view = await openDashboard(page);
+  const freshness = page.locator('#xk-resource-dashboard-freshness');
+  await expect(freshness).toHaveText(new RegExp(`^v${version.replace(/\./g, '\\.')} · Обновлено \\d+ (с|мин) назад$`));
+  // the hardware block keeps naming only the router
+  await expect(view.locator('.xkm-panel', { hasText: 'Состояние железа' }).locator('.xkm-panel-h .xkm-hint').first()).toHaveText('Netcraze Ultra (NC-1812)');
 });
 
 test('no sensors hides temperature section', async ({ page }) => {

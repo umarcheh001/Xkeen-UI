@@ -13,6 +13,7 @@ import { createChartView } from "./chart_view.js";
 import { mountTariffForm, tariffPeaks } from "./tariff_form.js";
 import { mountTools } from "./tools.js";
 import { mountDashboardView } from "./view.js";
+import { MODULE_VERSION } from "./version.js";
 
 const SUMMARY_ENDPOINT = "/api/system/summary";
 const HARDWARE_ENDPOINT = "/api/system/hardware";
@@ -229,6 +230,9 @@ function paintFreshness() {
     const seconds = Math.max(0, Math.round((Date.now() - state.okAt) / 1000));
     text = seconds < 60 ? `Обновлено ${seconds} с назад` : `Обновлено ${Math.floor(seconds / 60)} мин назад`;
   }
+  // the version goes first: it stays in place while the counter after it changes width,
+  // and it does not read as "the version was updated N seconds ago"
+  text = `v${MODULE_VERSION} · ${text}`;
   // the text node is edited in place: no new node, no restyling of the modal around it
   const node = el.firstChild;
   if (node && node.nodeType === 3 && !node.nextSibling) {

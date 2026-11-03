@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import sys
 import tarfile
 from pathlib import Path
@@ -37,7 +38,8 @@ def _load(name: str, path: Path):
 def test_module_versions_file_covers_every_module_except_core():
     data = json.loads((REPO / "module-versions.json").read_text(encoding="utf-8"))
     assert set(data) == set(MODULE_IDS) - {"core"}
-    assert set(data.values()) == {"1.0.0"}
+    # every module starts at 1.0.0 and is raised by its own releases
+    assert all(re.fullmatch(r"\d+\.\d+\.\d+", version) for version in data.values()), data
 
 
 def test_missing_copy_reads_base_version(tmp_path):
