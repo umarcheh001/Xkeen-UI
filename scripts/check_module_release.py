@@ -201,6 +201,12 @@ def _without_module(data: bytes, module_id: str, name: str) -> tuple[dict | None
         return None, [f"{name}: неожиданная структура"]
     modules = dict(payload.get("modules", {}))
     modules.pop(module_id, None)
+    # Files not compared (IGNORED) are laid in by the panel release alone, as
+    # retired-files.json is: their lines in the ownership lists are not compared either.
+    modules = {
+        owner: [path for path in paths if path not in IGNORED] if isinstance(paths, list) else paths
+        for owner, paths in modules.items()
+    }
     return {**payload, "modules": modules}, []
 
 

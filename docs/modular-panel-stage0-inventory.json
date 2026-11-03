@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 659,
-      "size_bytes": 8968505,
+      "size_bytes": 8973000,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -4077,7 +4077,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_check_module_release.py",
-      "size_bytes": 15594,
+      "size_bytes": 16703,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -4117,7 +4117,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_check_module_versions_for_release.py",
-      "size_bytes": 6261,
+      "size_bytes": 9647,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -4130,7 +4130,9 @@
         "gevent (optional)",
         "gevent-websocket (optional)"
       ],
-      "environment_variables": [],
+      "environment_variables": [
+        "XKEEN_SKIP_MODULE_VERSIONS"
+      ],
       "removable": false
     },
     {

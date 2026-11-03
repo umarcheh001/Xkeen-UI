@@ -109,12 +109,14 @@ def _base_files() -> dict[str, bytes]:
     }
 
 
-def _setup(tmp_path: Path, build_changes: dict[str, bytes | None]) -> tuple[Path, Path]:
+def _setup(
+    tmp_path: Path, build_changes: dict[str, bytes | None], archive_changes: dict[str, bytes] | None = None
+) -> tuple[Path, Path]:
     base = _base_files()
     tmp_path.mkdir(parents=True, exist_ok=True)
     archive = tmp_path / "panel.tar.gz"
     with tarfile.open(archive, "w:gz") as tar:
-        for name, data in base.items():
+        for name, data in {**base, **(archive_changes or {})}.items():
             info = tarfile.TarInfo(f"xkeen-ui/{name}")
             info.size = len(data)
             tar.addfile(info, io.BytesIO(data))
@@ -154,6 +156,26 @@ def test_ownership_may_differ_only_in_released_module(tmp_path):
     assert compare_with_panel_archive(build, archive, MODULE) == []
     own["tool.backups"] = ["static/backups.js", "static/x.js"]
     build, archive = _setup(tmp_path / "b", {"module-ownership.json": _ownership(own), "static/new.js": b"n"})
+    assert any("module-ownership.json" in e for e in compare_with_panel_archive(build, archive, MODULE))
+
+
+def test_files_laid_in_by_the_panel_release_alone_are_not_compared_in_ownership(tmp_path):
+    # The panel release writes retired-files.json and lists it under core; the package
+    # the module check builds has neither. The file itself is IGNORED, so is its line.
+    published = {"core": ["app.py", "retired-files.json"], MODULE: ["static/files.js"], "tool.backups": ["static/backups.js"]}
+    build, archive = _setup(
+        tmp_path,
+        {"static/files.js": b"files-v2"},
+        {"module-ownership.json": _ownership(published), "retired-files.json": b"[]"},
+    )
+    assert compare_with_panel_archive(build, archive, MODULE) == []
+    # a real core file still counts
+    published["core"].append("services/extra.py")
+    build, archive = _setup(
+        tmp_path / "b",
+        {"static/files.js": b"files-v2"},
+        {"module-ownership.json": _ownership(published), "retired-files.json": b"[]"},
+    )
     assert any("module-ownership.json" in e for e in compare_with_panel_archive(build, archive, MODULE))
 
 

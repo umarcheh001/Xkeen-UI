@@ -1,12 +1,13 @@
 #!/bin/sh
-# Перед пушем тега выпуска проверяет, что на его коммите прошёл весь e2e:
-# в CI браузерных тестов нет, и зелёный CI этого не показывает.
+# Перед пушем тега выпуска две проверки:
+# 1) тег панели (v*): версии модулей согласованы — то же, что проверит сборка выпуска,
+#    но до того, как тег попадёт на GitHub и его номер беты будет потерян;
+# 2) тег панели или модуля: на его коммите прошёл весь e2e — в CI браузерных тестов нет.
 #
 # Включить один раз:  git config core.hooksPath .githooks
-# Отметка ставится:   npm run e2e:gate
-# Пропустить разово:  XKEEN_SKIP_E2E_GATE=1 git push ...
-
-[ "${XKEEN_SKIP_E2E_GATE:-}" = "1" ] && exit 0
+# Отметка e2e:        npm run e2e:gate
+# Пропустить разово:  XKEEN_SKIP_MODULE_VERSIONS=1 git push ...  (версии модулей)
+#                     XKEEN_SKIP_E2E_GATE=1 git push ...         (отметка e2e)
 
 # $0 — путь к pre-push: git передаёт его с «/», в тестах на Windows бывает «\».
 case $0 in
@@ -14,8 +15,8 @@ case $0 in
   *\\*) hooks_dir=${0%\\*} ;;
   *) hooks_dir=. ;;
 esac
+versions="$hooks_dir/../scripts/check_module_versions_for_release.py"
 script="$hooks_dir/../scripts/e2e_gate.py"
-[ -f "$script" ] || exit 0
 
 py=""
 for candidate in python3 python; do
@@ -26,8 +27,17 @@ for candidate in python3 python; do
   fi
 done
 if [ -z "$py" ]; then
-  echo "[проверка e2e] пропущено: не найден Python"
+  echo "[проверка тегов] пропущено: не найден Python"
   exit 0
 fi
 
-exec "$py" "$script" check-push
+# git передаёт список ссылок один раз, а проверок две.
+input=$(cat)
+
+if [ "${XKEEN_SKIP_MODULE_VERSIONS:-}" != "1" ] && [ -f "$versions" ]; then
+  printf '%s\n' "$input" | "$py" "$versions" --pre-push || exit 1
+fi
+
+[ "${XKEEN_SKIP_E2E_GATE:-}" = "1" ] && exit 0
+[ -f "$script" ] || exit 0
+printf '%s\n' "$input" | exec "$py" "$script" check-push

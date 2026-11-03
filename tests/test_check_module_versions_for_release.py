@@ -139,3 +139,81 @@ def test_stable_before_beta_on_one_commit_of_ancestors(tmp_path):
     )
     subprocess.run(["git", "tag", "v1.0.1-beta.1"], cwd=repo, check=True, capture_output=True)
     assert checker._ancestor_panel_tags(repo, "v1.0.1-beta.1")[:2] == ["v1.0.0", "v1.0.0-beta.3"]
+
+
+# ---- проверка перед пушем тега панели (хук pre-push) -------------------------
+
+ZERO = "0" * 40
+OWNED = {"core": ["app.py"], "tool.files": ["static/files.js"]}
+
+
+def _push_repo(tmp_path, monkeypatch):
+    def run(*args):
+        return subprocess.run(
+            ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],
+            cwd=tmp_path, check=True, capture_output=True, text=True,
+        ).stdout.strip()
+
+    run("init", "-q")
+    (tmp_path / "xkeen-ui" / "static").mkdir(parents=True)
+    (tmp_path / "xkeen-ui" / "static" / "files.js").write_text("v1", encoding="utf-8")
+    (tmp_path / "module-versions.json").write_text('{"tool.files": "1.0.0"}', encoding="utf-8")
+    run("add", ".")
+    run("commit", "-qm", "base")
+    run("tag", "v1.0.0")
+    # ownership of the tree at a ref; the builder of the real panel is not needed here
+    monkeypatch.setattr(checker, "_old_ownership", lambda root, ref: OWNED)
+    return run
+
+
+def _line(run, tag):
+    return f"refs/tags/{tag} {run('rev-parse', tag)} refs/tags/{tag} {ZERO}"
+
+
+def test_pre_push_stops_a_panel_tag_with_an_unbumped_module(tmp_path, monkeypatch, capsys):
+    run = _push_repo(tmp_path, monkeypatch)
+    (tmp_path / "xkeen-ui" / "static" / "files.js").write_text("v2", encoding="utf-8")
+    run("commit", "-qam", "module change")
+    run("tag", "v1.0.1")
+    assert checker.check_pushed_tags(tmp_path, [_line(run, "v1.0.1")]) == 1
+    err = capsys.readouterr().err
+    assert "tool.files" in err and "module-versions.json" in err and "v1.0.1" in err
+
+
+def test_pre_push_reads_versions_from_the_tag_not_from_the_working_tree(tmp_path, monkeypatch):
+    run = _push_repo(tmp_path, monkeypatch)
+    (tmp_path / "xkeen-ui" / "static" / "files.js").write_text("v2", encoding="utf-8")
+    (tmp_path / "module-versions.json").write_text('{"tool.files": "1.0.1"}', encoding="utf-8")
+    run("commit", "-qam", "module change with bump")
+    run("tag", "v1.0.1")
+    assert checker.check_pushed_tags(tmp_path, [_line(run, "v1.0.1")]) == 0
+    # a bump left uncommitted in the working tree does not make an unbumped tag pass
+    (tmp_path / "xkeen-ui" / "static" / "files.js").write_text("v3", encoding="utf-8")
+    run("commit", "-qam", "another change")
+    run("tag", "v1.0.2")
+    (tmp_path / "module-versions.json").write_text('{"tool.files": "9.9.9"}', encoding="utf-8")
+    assert checker.check_pushed_tags(tmp_path, [_line(run, "v1.0.2")]) == 1
+
+
+def test_pre_push_ignores_branches_deletions_and_module_tags(tmp_path, monkeypatch):
+    run = _push_repo(tmp_path, monkeypatch)
+    (tmp_path / "xkeen-ui" / "static" / "files.js").write_text("v2", encoding="utf-8")
+    run("commit", "-qam", "module change")
+    run("tag", "v1.0.1")
+    run("tag", "module-tool.files-1.0.1")
+    head = run("rev-parse", "HEAD")
+    lines = [
+        f"refs/heads/main {head} refs/heads/main {ZERO}",
+        f"(delete) {ZERO} refs/tags/v1.0.1 {head}",
+        _line(run, "module-tool.files-1.0.1"),
+    ]
+    assert checker.check_pushed_tags(tmp_path, lines) == 0
+
+
+def test_pre_push_hook_runs_both_checks_on_one_input():
+    from pathlib import Path
+
+    hook = (Path(__file__).resolve().parents[1] / ".githooks" / "pre-push").read_text(encoding="utf-8")
+    assert "check_module_versions_for_release.py" in hook
+    assert "--pre-push" in hook
+    assert "XKEEN_SKIP_MODULE_VERSIONS" in hook

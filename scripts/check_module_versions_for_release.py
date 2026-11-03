@@ -181,45 +181,111 @@ def _old_ownership(root: Path, ref: str) -> Mapping[str, Sequence[str]]:
         tree = Path(tmp) / "tree"
         tree.mkdir()
         with tarfile.open(archive) as handle:
-            handle.extractall(tree)
+            # git archive of our own tree; the filter keeps it to plain files and silences the 3.14 warning
+            handle.extractall(tree, filter="data")
         return _builder(root).build_ownership_map(tree)["modules"]
 
 
+ZERO_SHA = "0" * 40
+TAG_REF = "refs/tags/"
+
+
+def check_panel_tag(root: Path, tag: str, *, from_git: bool = False) -> tuple[list[str], list[str]]:
+    """Errors and notes of the module-version checks for the panel tag `tag`.
+
+    `from_git` reads module-versions.json and the ownership from the tag itself, not from the
+    working tree: before a push the checkout may be elsewhere (pre-push hook).
+    """
+
+    notes: list[str] = []
+    if from_git:
+        new_versions = _versions_at(root, tag)
+        if new_versions is None:
+            return [], [f"В {tag} нет module-versions.json: проверка версий модулей пропущена"]
+    else:
+        new_versions = json.loads((root / "module-versions.json").read_text(encoding="utf-8"))
+    errors = missing_merges(new_versions, _git(root, "tag", "-l", "module-*"))
+    previous = nearest_ancestor_panel_tag(tag, _ancestor_panel_tags(root, tag))
+    if not previous:
+        notes.append("Предыдущего тега панели среди предков нет: проверка подъёма версий пропущена")
+        return errors, notes
+    old_versions = _versions_at(root, previous)
+    if old_versions is None:
+        notes.append(f"В {previous} нет module-versions.json: проверка подъёма версий пропущена")
+        return errors, notes
+    current = (lambda: _old_ownership(root, tag)) if from_git else (lambda: _module_ownership(root))
+    try:
+        ownership = merge_ownership(_old_ownership(root, previous), current())
+    except Exception as error:  # old tags may predate the ownership map
+        notes.append(f"Принадлежность файлов в {previous} построить не удалось ({error}): берётся текущая")
+        ownership = current()
+    changed = _git(root, "diff", "--name-only", "--no-renames", f"{previous}..{tag}")
+    for module_id in unbumped_modules(changed, ownership, old_versions, new_versions):
+        errors.append(
+            f"исходники модуля {module_id} менялись с {previous}, а версия не поднята "
+            f"({new_versions.get(module_id)}): поднимите её в module-versions.json"
+        )
+    notes.append(f"Версии модулей для {tag} согласованы (сравнение с {previous})")
+    return errors, notes
+
+
+def check_pushed_tags(root: Path, lines: Iterable[str]) -> int:
+    """pre-push: the panel tags being pushed must pass the checks the release workflow runs.
+
+    Checked here, a bad tag never reaches GitHub; checked only in CI, the tag is already issued
+    and its beta number is lost.
+    """
+
+    failed = False
+    for line in lines:
+        parts = line.split()
+        if len(parts) != 4:
+            continue
+        _local_ref, local_sha, remote_ref, _remote_sha = parts
+        if local_sha == ZERO_SHA or not remote_ref.startswith(TAG_REF):
+            continue
+        tag = remote_ref[len(TAG_REF):]
+        if not PANEL_TAG_RE.match(tag):
+            continue
+        errors, _notes = check_panel_tag(root, tag, from_git=True)
+        if errors:
+            failed = True
+            print(f"Пуш тега {tag} остановлен: версии модулей не согласованы.", file=sys.stderr)
+            for error in errors:
+                print(f"  {error}", file=sys.stderr)
+    if failed:
+        print(
+            "Исправить: поднять версии в module-versions.json (или влить ветку выпуска модуля), "
+            "закоммитить, перенести тег на новый коммит. Подробно — RELEASING.md, «Выпуск одного модуля».",
+            file=sys.stderr,
+        )
+        print("Свежие теги модулей коллег: git fetch --tags. Пропустить разово: XKEEN_SKIP_MODULE_VERSIONS=1 git push ...", file=sys.stderr)
+        return 1
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--tag", required=True, help="panel tag vX.Y.Z or vX.Y.Z-beta.N")
+    parser.add_argument("--tag", help="panel tag vX.Y.Z or vX.Y.Z-beta.N")
+    parser.add_argument("--pre-push", action="store_true", help="check the tags git passes to the pre-push hook on stdin")
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
     args = parser.parse_args(argv)
     root = args.root.resolve()
-    if not PANEL_TAG_RE.match(args.tag):
+    if args.pre_push:
+        return check_pushed_tags(root, sys.stdin.read().splitlines())
+    if not args.tag or not PANEL_TAG_RE.match(args.tag):
         print(f"ОШИБКА: не тег панели: {args.tag}", file=sys.stderr)
         return 1
-    new_versions = json.loads((root / "module-versions.json").read_text(encoding="utf-8"))
-    errors = missing_merges(new_versions, _git(root, "tag", "-l", "module-*"))
-    previous = nearest_ancestor_panel_tag(args.tag, _ancestor_panel_tags(root, args.tag))
-    if not previous:
-        print("Предыдущего тега панели среди предков нет: проверка подъёма версий пропущена")
-    else:
-        old_versions = _versions_at(root, previous)
-        if old_versions is None:
-            print(f"В {previous} нет module-versions.json: проверка подъёма версий пропущена")
-        else:
-            try:
-                ownership = merge_ownership(_old_ownership(root, previous), _module_ownership(root))
-            except Exception as error:  # old tags may predate the ownership map
-                print(f"Принадлежность файлов в {previous} построить не удалось ({error}): берётся текущая")
-                ownership = _module_ownership(root)
-            changed = _git(root, "diff", "--name-only", "--no-renames", f"{previous}..{args.tag}")
-            for module_id in unbumped_modules(changed, ownership, old_versions, new_versions):
-                errors.append(
-                    f"исходники модуля {module_id} менялись с {previous}, а версия не поднята "
-                    f"({new_versions.get(module_id)}): поднимите её в module-versions.json"
-                )
+    errors, notes = check_panel_tag(root, args.tag)
     for error in errors:
         print(f"ОШИБКА: {error}", file=sys.stderr)
     if errors:
         return 1
-    print(f"Версии модулей для {args.tag} согласованы" + (f" (сравнение с {previous})" if previous else ""))
+    for note in notes:
+        print(note)
     return 0
 
 
