@@ -158,6 +158,10 @@ def check_changed_paths(changed: Iterable[str], module_files: Collection[str]) -
             path = path[2:]
         if path.startswith(prefix):
             relative = path[len(prefix):]
+            if relative in SEMANTIC:
+                # refreshed by the pre-commit hook with every change of a module;
+                # compare_with_panel_archive checks that only the module's entry moved
+                continue
             if relative not in owned and path not in owned:
                 errors.append(f"{NEEDS_PANEL}: {path} не принадлежит модулю")
         elif path in ALLOWED_OUTSIDE_FILES or path.startswith(ALLOWED_OUTSIDE):

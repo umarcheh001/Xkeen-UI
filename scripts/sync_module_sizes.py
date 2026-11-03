@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
+PACKAGE_PREFIX = "xkeen-ui/"
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -21,11 +22,19 @@ def main() -> int:
     inventory_path = args.inventory or root / "docs/modular-panel-stage0-inventory.json"
     output_path = args.output or root / "xkeen-ui/module-sizes.json"
     inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
+    # The size of a module is what lands on the router: only the files of the
+    # package. Tests, e2e and build configuration stay in the repository, and a
+    # new test in a module release must not move the entry of core.
     modules = {
-        str(item["id"]): int(item["size_bytes"])
+        str(item["id"]): 0
         for item in inventory.get("modules", [])
         if isinstance(item, dict) and item.get("id")
     }
+    for unit in inventory.get("units", []):
+        if not isinstance(unit, dict) or str(unit.get("module_id")) not in modules:
+            continue
+        if str(unit.get("path", "")).replace("\\", "/").startswith(PACKAGE_PREFIX):
+            modules[str(unit["module_id"])] += int(unit.get("size_bytes", 0))
     payload = {
         "schema_version": 1,
         "generated_from": "docs/modular-panel-stage0-inventory.json",

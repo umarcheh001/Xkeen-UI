@@ -134,6 +134,8 @@ python scripts/check_release_tag.py --next
    git switch -c module/tool.files-1.0.2 module-tool.files-1.0.1   # следующий от той же v3.1.0
    ```
 2. Правка только файлов модуля (вне `xkeen-ui/` можно менять `module-versions.json`, `tests/`, `e2e/`, `docs/`).
+   `xkeen-ui/module-sizes.json` пересчитывается хуком вместе с описями — его проверка сравнивает по смыслу:
+   меняться может только запись выпускаемого модуля (размеры считаются по файлам пакета, без тестов и e2e).
    Поднять версию модуля в `module-versions.json`, тесты, `npm run e2e:gate` на коммите тега.
 3. Тег `module-<id>-X.Y.Z` на этом коммите (версия — как в `module-versions.json`, выше уже выданных тегов модуля):
    ```sh

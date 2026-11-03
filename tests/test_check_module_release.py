@@ -73,6 +73,13 @@ def test_module_versions_file_is_allowed_outside_module():
     assert check_changed_paths(["xkeen-ui/module-versions.json"], {"a.py"})
 
 
+def test_generated_sizes_file_is_left_to_the_comparison_by_meaning():
+    # The pre-commit hook makes every change of a module refresh module-sizes.json;
+    # the comparison with the panel archive checks that only the module's entry moved.
+    assert check_changed_paths(["xkeen-ui/static/js/files.js", "xkeen-ui/module-sizes.json"], {"static/js/files.js"}) == []
+    assert check_changed_paths(["module-sizes.json"], {"a.py"})
+
+
 def test_editor_release_requires_panel_release():
     assert check_module_releasable("tool.files") == []
     errors = check_module_releasable("tool.editor")

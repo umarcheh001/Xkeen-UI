@@ -38,13 +38,13 @@
         "gevent-websocket (optional)"
       ],
       "removable": false,
-      "unit_count": 657,
-      "size_bytes": 8961225,
+      "unit_count": 659,
+      "size_bytes": 8968505,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
         "backend_service": 96,
-        "backend_test": 290,
+        "backend_test": 292,
         "configuration": 12,
         "frontend_bundle": 9,
         "frontend_entrypoint": 4,
@@ -4077,7 +4077,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_check_module_release.py",
-      "size_bytes": 15163,
+      "size_bytes": 15594,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -6781,7 +6781,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_registry.py",
-      "size_bytes": 39148,
+      "size_bytes": 39460,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -6798,6 +6798,26 @@
         "XKEEN_UI_MODULE_SAFE_MODE",
         "XKEEN_UI_UPDATE_DIR"
       ],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_module_release_inventory_chain.py",
+      "size_bytes": 4094,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
       "removable": false
     },
     {
@@ -9158,6 +9178,26 @@
       "kind": "backend_test",
       "path": "tests/test_subscription_window_icons.py",
       "size_bytes": 5075,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_sync_module_sizes.py",
+      "size_bytes": 2443,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],

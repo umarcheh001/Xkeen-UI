@@ -855,12 +855,17 @@ def test_registry_metadata_stays_aligned_with_stage0_module_snapshot():
         (root / "docs" / "modular-panel-stage0-inventory.json").read_text(encoding="utf-8")
     )
     stage0_modules = {item["id"]: item for item in inventory["modules"]}
+    # the size is what lands on the router: the package files, without tests and e2e
+    package_sizes = {module_id: 0 for module_id in stage0_modules}
+    for unit in inventory["units"]:
+        if unit["path"].startswith("xkeen-ui/"):
+            package_sizes[unit["module_id"]] += unit["size_bytes"]
 
     assert set(stage0_modules) == set(MODULE_IDS)
     for definition in MODULE_DEFINITIONS:
         stage0 = stage0_modules[definition.id]
         assert list(definition.dependencies) == stage0["depends_on"]
-        assert definition.size_bytes == stage0["size_bytes"]
+        assert definition.size_bytes == package_sizes[definition.id]
         assert definition.removable == stage0["removable"]
 
 
