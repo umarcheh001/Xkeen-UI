@@ -1762,3 +1762,22 @@ body.devtools-page.dt-logs-fullscreen {
     display: none;
   }
 }
+
+/* On a phone the "⋯" menu may stand at the start of a row (03.11.2026): it
+   opens under the header across its width, not off the left edge. */
+@media (max-width: 640px) {
+  body.devtools-page #dt-tab-logs .xk-xlog-head {
+    position: relative;
+  }
+
+  body.devtools-page #dt-tab-logs .xk-xlog-menu {
+    position: static;
+  }
+
+  body.devtools-page #dt-tab-logs .xk-xlog-menu-panel {
+    right: 0;
+    left: 0;
+    width: auto;
+    max-width: none;
+  }
+}

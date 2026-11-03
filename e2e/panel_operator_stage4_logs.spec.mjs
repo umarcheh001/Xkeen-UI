@@ -645,6 +645,58 @@ test.describe('Operator Console Stage 4 logs', () => {
     await expect(rowsOf.first()).toBeFocused();
   });
 
+  test('the journal shows the newest first when asked and remembers it', async ({ page }) => {
+    const journal = [
+      '[2026-07-28 22:00:00] source=routing result=OK file=03_routing.json duration_ms=41\n',
+      '[2026-07-29 09:12:04] source=xray-preflight result=FAIL file=04_outbounds.json phase=validation returncode=23\n',
+      'Прокси-клиент остановлен\n',
+      'Прокси-клиент запущен\n',
+      '[2026-07-29 09:13:00] source=core-switch result=OK core=mihomo previous=xray duration_ms=5021\n',
+      '$ xkeen -status\n',
+    ];
+    await openLogs(page, 'dark', { width: 1440, height: 900 }, { restartLines: journal });
+    const card = page.locator('#view-xray-logs .xk-restart-log-card');
+    const box = card.locator('[data-xk-restart-log="1"]');
+    const order = card.locator('[data-xk-restart-log-action="order"]');
+    const lines = () => box.locator(':scope > .xk-jr-day, :scope > .xk-jr-row').evaluateAll((nodes) => nodes.map((node) => (
+      node.matches('.xk-jr-day') ? `day ${node.textContent.trim()}` : (node.querySelector('.ts')?.textContent.trim() || 'live')
+    )));
+    // As before: the oldest first.
+    await expect(order).toHaveAttribute('aria-pressed', 'false');
+    await expect(order).toHaveAttribute('data-tooltip', 'Сейчас: старые сверху. Нажмите — новые сверху');
+    expect(await lines()).toEqual(['day 28 июля', '22:00:00', 'day 29 июля', '09:12:04', '09:13:00', 'live']);
+
+    await order.click();
+    await expect(order).toHaveAttribute('aria-pressed', 'true');
+    await expect(order).toHaveAttribute('data-tooltip', 'Сейчас: новые сверху. Нажмите — старые сверху');
+    // Days from today back, the newest row of a day first, a command still running on top.
+    expect(await lines()).toEqual(['day 29 июля', 'live', '09:13:00', '09:12:04', 'day 28 июля', '22:00:00']);
+    expect(await box.evaluate((el) => el.scrollTop)).toBe(0);
+    // The output of one operation keeps the order of its lines.
+    const core = card.locator('.xk-jr-row').filter({ hasText: 'Ядро Xkeen' });
+    await core.click();
+    await expect(core).toHaveClass(/is-open/);
+    await expect(core.locator('xpath=following-sibling::*[1]').locator('.xk-jr-oline')).toHaveText(['Прокси-клиент остановлен', 'Прокси-клиент запущен']);
+
+    await page.reload();
+    await selectPanelView(page, 'xray-logs');
+    await expect(card.locator('.xk-jr-row').first()).toBeVisible();
+    await expect(order).toHaveAttribute('aria-pressed', 'true');
+    expect(await lines()).toEqual(['day 29 июля', 'live', '09:13:00', '09:12:04', 'day 28 июля', '22:00:00']);
+  });
+
+  test('on a phone the «⋯» menu of the journal opens on the screen', async ({ page }) => {
+    await openLogs(page, 'dark', { width: 390, height: 900 });
+    const card = page.locator('#view-xray-logs .xk-restart-log-card');
+    await card.locator('.xk-jr-menu summary').click();
+    const [left, right, width] = await card.locator('.xk-jr-menu-panel').evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return [r.left, r.right, innerWidth];
+    });
+    expect(left).toBeGreaterThanOrEqual(0);
+    expect(right).toBeLessThanOrEqual(width);
+  });
+
   test('the logs card and the operations journal share edges and padding', async ({ page }) => {
     await openLogs(page, 'dark', { width: 1440, height: 900 });
     const boxes = await page.evaluate(() => [

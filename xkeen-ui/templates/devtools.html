@@ -662,12 +662,11 @@
         <button id="dt-log-filter-clear" type="button" class="xk-xlog-search-clear" title="Очистить поиск" aria-label="Очистить поиск" hidden>{{ op_icon('close') }}</button>
         <kbd class="xk-xlog-kbd" aria-hidden="true">/</kbd>
       </div>
+      <button type="button" class="btn-secondary xk-xlog-icon-btn" id="dt-log-order" aria-pressed="false" title="Сейчас: старые сверху. Нажмите — новые сверху" aria-label="Порядок: старые сверху">{{ op_icon('sort') }}</button>
       <details class="dt-log-menu xk-xlog-menu" id="dt-log-more">
         <summary class="btn-secondary xk-xlog-icon-btn" title="Ещё" aria-label="Ещё">{{ op_icon('more') }}</summary>
         <div class="dt-log-menu-panel xk-xlog-menu-panel" role="menu" aria-label="Дополнительные действия">
           <div class="xk-xlog-menu-title">Вид</div>
-          <label class="xk-xlog-menu-item" title="Прокручивать к новым записям.">{{ op_icon('move-down') }}<span>Следить за концом</span>
-            <span class="dt-switch"><input id="dt-log-follow" type="checkbox" checked /><span class="dt-switch-slider" aria-hidden="true"></span></span></label>
           <label class="xk-xlog-menu-item" title="Одинаковые записи подряд показываются одной строкой со счётчиком.">{{ op_icon('list-details') }}<span>Сворачивать повторы</span>
             <span class="dt-switch"><input id="dt-log-fold" type="checkbox" checked /><span class="dt-switch-slider" aria-hidden="true"></span></span></label>
           <div class="xk-xlog-menu-item" title="Сколько последних строк файла держать в окне (50–5000).">{{ op_icon('list-details') }}<span>Строк в окне</span>

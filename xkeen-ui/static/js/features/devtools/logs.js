@@ -51,7 +51,7 @@ import { animateScreenEnter } from '../../pages/screen_motion.js';
     live: 'xkeen.devtools.logs.live',
     liveTouched: 'xkeen.devtools.logs.live.touched',
     file: 'xkeen.devtools.logs.file',
-    follow: 'xkeen.devtools.logs.follow',
+    order: 'xkeen.devtools.logs.order',
     fold: 'xkeen.devtools.logs.fold',
     lines: 'xkeen.devtools.logs.lines',
     interval: 'xkeen.devtools.logs.interval',
@@ -76,7 +76,7 @@ import { animateScreenEnter } from '../../pages/screen_motion.js';
     paused: false,
     pending: null,
     pendingCount: 0,
-    follow: true,
+    order: 'oldest',
     fold: true,
     level: 'all',
     windowLines: LINES_DEFAULT,
@@ -276,6 +276,18 @@ import { animateScreenEnter } from '../../pages/screen_motion.js';
   }
 
   // ---------- Data ----------
+
+  // The order button tells the order now and what a press does.
+  function renderOrder() {
+    const btn = byId('dt-log-order');
+    if (!btn) return;
+    const newest = S.order === 'newest';
+    btn.setAttribute('aria-pressed', newest ? 'true' : 'false');
+    btn.setAttribute('aria-label', newest ? 'Порядок: новые сверху' : 'Порядок: старые сверху');
+    // The page moves a title into its own tooltip once: the words live there.
+    btn.setAttribute('data-tooltip', newest ? 'Сейчас: новые сверху. Нажмите — старые сверху' : 'Сейчас: старые сверху. Нажмите — новые сверху');
+    btn.removeAttribute('title');
+  }
 
   function setLines(lines) {
     S.lines = lines;
@@ -632,8 +644,7 @@ import { animateScreenEnter } from '../../pages/screen_motion.js';
 
   function readPrefs() {
     S.live = truthy(lsGet(LS.liveTouched)) ? truthy(lsGet(LS.live)) : false;
-    const follow = lsGet(LS.follow);
-    S.follow = follow == null ? true : truthy(follow);
+    S.order = lsGet(LS.order) === 'newest' ? 'newest' : 'oldest';
     const fold = lsGet(LS.fold);
     S.fold = fold == null ? true : truthy(fold);
     const lines = parseInt(String(lsGet(LS.lines) || ''), 10);
@@ -712,13 +723,14 @@ import { animateScreenEnter } from '../../pages/screen_motion.js';
       search.focus();
     });
 
-    const follow = byId('dt-log-follow');
-    if (follow) {
-      follow.checked = S.follow;
-      follow.addEventListener('change', () => {
-        S.follow = !!follow.checked;
-        lsSet(LS.follow, S.follow ? '1' : '0');
-        if (S.view) S.view.setFollow(S.follow);
+    const order = byId('dt-log-order');
+    if (order) {
+      renderOrder();
+      order.addEventListener('click', () => {
+        S.order = S.order === 'newest' ? 'oldest' : 'newest';
+        lsSet(LS.order, S.order);
+        renderOrder();
+        if (S.view) S.view.setOrder(S.order);
       });
     }
     const fold = byId('dt-log-fold');
@@ -882,7 +894,7 @@ import { animateScreenEnter } from '../../pages/screen_motion.js';
         onChange: onViewChange,
       });
       S.view.setFold(S.fold);
-      S.view.setFollow(S.follow);
+      S.view.setOrder(S.order);
     }
     wire();
     renderRun();

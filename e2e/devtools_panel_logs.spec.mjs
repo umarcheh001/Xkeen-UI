@@ -180,3 +180,125 @@ test.describe('DevTools logs', () => {
     expect(state.requests.length).toBe(before);
   });
 });
+
+// 03.11.2026: the order of the table, the way back to the new rows, the
+// installer's runs and the plain output without empty columns.
+test.describe('DevTools logs: order and the new rows', () => {
+  const twoDays = [
+    '2026-10-22 23:50:00,000 [INFO] xkeen-ui init | pid=1, ui_state_dir=/opt/etc/xkeen-ui\n',
+    ...CORE,
+  ];
+  const times = (page) => page.locator('#dt-log-view .tr:not([hidden]), #dt-log-view .day:not([hidden])').evaluateAll((nodes) => nodes
+    .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)
+    .map((node) => (node.matches('.day') ? `day ${node.textContent.trim()}` : node.querySelector('.ts').textContent.trim())));
+
+  test('the order button puts the newest first and is remembered', async ({ page }) => {
+    await openLogs(page, { files: { core: twoDays } });
+    const order = page.locator('#dt-log-order');
+    await expect(order).toHaveAttribute('aria-pressed', 'false');
+    await expect(rows(page)).toHaveCount(5);
+    expect(await times(page)).toEqual(['day 22 октября', '23:50:00', 'day 23 октября', '10:40:38', '14:32:30', '14:40:00', '15:00:00']);
+
+    await order.click();
+    await expect(order).toHaveAttribute('aria-pressed', 'true');
+    await expect(order).toHaveAttribute('aria-label', 'Порядок: новые сверху');
+    // Repeats fold before the order turns: «×3 с 14:30:30» stays right.
+    expect(await times(page)).toEqual(['day 23 октября', '15:00:00', '14:40:00', '14:32:30', '10:40:38', 'day 22 октября', '23:50:00']);
+    await expect(rows(page).filter({ hasText: 'правило устройств' }).locator('.rep')).toContainText('с 14:30:30');
+
+    await page.reload();
+    await expect(async () => {
+      await page.locator('#dt-log-tab-btn-logs, #dt-tab-btn-logs').first().click();
+      await expect(page.locator('#dt-tab-logs')).toBeVisible({ timeout: 1000 });
+    }).toPass({ timeout: 15000 });
+    await expect(page.locator('#dt-log-order')).toHaveAttribute('aria-pressed', 'true');
+    await expect(rows(page)).toHaveCount(5);
+    expect((await times(page))[1]).toBe('15:00:00');
+  });
+
+  test('the menu has no «Следить за концом»: away from the new rows a button leads back', async ({ page }) => {
+    const many = Array.from({ length: 80 }, (_, i) => `2026-10-23 12:${String(Math.floor(i / 60)).padStart(2, '0')}:${String(i % 60).padStart(2, '0')},000 [INFO] xray subscriptions auto-refresh | total=${i}, ok=${i}, restarted=False\n`);
+    const state = await openLogs(page, { files: { core: many }, live: true });
+    await expect(page.locator('#dt-log-follow')).toHaveCount(0);
+    await expect(page.locator('#dt-log-more')).not.toContainText('Следить за концом');
+    const host = page.locator('#dt-log-view');
+    const back = page.locator('#dt-log-view .tonew');
+    await expect(rows(page).first()).toBeVisible();
+    // At the end the table follows the new rows by itself.
+    await expect.poll(() => host.evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop)).toBeLessThan(60);
+    await expect(back).toBeHidden();
+    state.appended.push('2026-10-23 13:00:00,000 [WARNING] memory guard reclaimed runtime memory | mode=auto\n');
+    await expect(rows(page).filter({ hasText: 'memory guard' })).toBeVisible();
+
+    // Away from them, it stays put and counts what came.
+    await host.evaluate((el) => { el.scrollTop = 0; el.dispatchEvent(new Event('scroll')); });
+    await expect(back).toBeVisible();
+    await expect(back).toHaveText('↓ К новым');
+    state.appended.push('2026-10-23 13:01:00,000 [INFO] xkeen.start | source=api\n');
+    await expect(back).toHaveText('↓ К новым · 1');
+    expect(await host.evaluate((el) => el.scrollTop)).toBeLessThan(60);
+    await back.click();
+    await expect.poll(() => host.evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop)).toBeLessThan(60);
+    await expect(back).toBeHidden();
+
+    // Newest first: the new rows are on top, and so is the way back.
+    await page.locator('#dt-log-order').click();
+    await expect.poll(() => host.evaluate((el) => el.scrollTop)).toBeLessThan(60);
+    await host.evaluate((el) => { el.scrollTop = el.scrollHeight; el.dispatchEvent(new Event('scroll')); });
+    await expect(back).toHaveText('↑ К новым');
+  });
+
+  test('the install log is one row per run, its lines open under it', async ({ page }) => {
+    const install = [
+      '===== Xkeen UI install: 2026-10-31 01:42:14 =====\n',
+      '========================================\n',
+      '  Xkeen Web UI — установка\n',
+      '========================================\n',
+      '[*] Python-зависимости в порядке.\n',
+      '[*] Запускаю сервис...\n',
+      '2026-10-31 01:43:03 [=] Итог установки:\n',
+      '2026-10-31 01:43:03 [=] Подробности установки: /opt/var/log/xkeen-ui-install.log\n',
+    ];
+    await openLogs(page, { files: { install } });
+    await page.locator('#dt-log-files [data-log-name="install"]').click();
+    await expect(rows(page)).toHaveCount(1);
+    const run = rows(page).first();
+    await expect(run.locator('.ts')).toHaveText('01:42:14');
+    await expect(run.locator('.src')).toHaveText('Установка панели');
+    await expect(run.locator('.msg')).toHaveText('Установка завершена за 49 с');
+    await run.click();
+    const detail = page.locator('#dt-log-view .detail');
+    await expect(detail.locator('pre')).toHaveCount(1);
+    await expect(detail.locator('pre')).toContainText('[*] Запускаю сервис...');
+    await expect(detail.locator('pre')).not.toContainText('Xkeen Web UI — установка');
+  });
+
+  test('on a phone the «⋯» menu opens on the screen', async ({ page }) => {
+    await openLogs(page);
+    await page.setViewportSize({ width: 390, height: 900 });
+    await page.locator('#dt-log-more summary').click();
+    const [left, right, width] = await page.locator('#dt-log-more .xk-xlog-menu-panel').evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return [r.left, r.right, innerWidth];
+    });
+    expect(left).toBeGreaterThanOrEqual(0);
+    expect(right).toBeLessThanOrEqual(width);
+  });
+
+  test('a file whose lines have no time and no source hides those columns', async ({ page }) => {
+    await openLogs(page, { files: { stdout: [" * Serving Flask app 'app_factory'\n", ' * Debug mode: off\n'] } });
+    await page.locator('#dt-log-files [data-log-name="stdout"]').click();
+    // The second line is indented: it belongs to the first.
+    await expect(rows(page)).toHaveCount(1);
+    const head = page.locator('#dt-log-view .thead');
+    await expect(head.getByText('Время', { exact: true })).toBeHidden();
+    await expect(head.getByText('Источник', { exact: true })).toBeHidden();
+    await expect(head.getByText('Событие', { exact: true })).toBeVisible();
+    // The event takes the room: it starts right after the level.
+    const [lvl, msg] = await rows(page).first().evaluate((row) => [row.querySelector('.lvl').getBoundingClientRect().right, row.querySelector('.msg').getBoundingClientRect().left]);
+    expect(msg - lvl).toBeLessThan(40);
+    // core.log keeps every column.
+    await page.locator('#dt-log-files [data-log-name="core"]').click();
+    await expect(head.getByText('Время', { exact: true })).toBeVisible();
+  });
+});

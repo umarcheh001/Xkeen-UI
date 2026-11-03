@@ -24,6 +24,18 @@ let restartLogModuleApi = null;
   RL._shutGroups = RL._shutGroups instanceof Set ? RL._shutGroups : new Set();
   let restartLogScopeSeq = 0;
 
+  // The owner's order of the journal: the oldest first (as before) or the
+  // newest first. Kept in the browser; without storage the journal is as before.
+  const RESTART_LOG_ORDER_KEY = 'xkeen.restartLog.order';
+  function readRestartLogOrder() {
+    try {
+      return window.localStorage && window.localStorage.getItem(RESTART_LOG_ORDER_KEY) === 'newest' ? 'newest' : 'oldest';
+    } catch (error) {}
+    return 'oldest';
+  }
+  RL._order = RL._order === 'newest' || RL._order === 'oldest' ? RL._order : readRestartLogOrder();
+  function newestFirst() { return RL._order === 'newest'; }
+
   const RESTART_LOG_POLL_MS = 15000;
   const PREFLIGHT_PAYLOAD_STORAGE_PREFIX = 'xkeen.restartLog.preflight.';
   const PREFLIGHT_PAYLOAD_INDEX_KEY = 'xkeen.restartLog.preflight.index';
@@ -523,9 +535,11 @@ let restartLogModuleApi = null;
     return 'root';
   }
 
+  // The edge with the new rows: the bottom, or the top when the newest come first.
   function isRestartLogAtBottom(el) {
     if (!el) return true;
     try {
+      if (newestFirst()) return el.scrollTop <= 40;
       return (el.scrollHeight - el.clientHeight) <= (el.scrollTop + 40);
     } catch (error) {}
     return true;
@@ -559,12 +573,15 @@ let restartLogModuleApi = null;
     if (!btn) return;
     const show = isRestartLogScrollable(el) && !isRestartLogAtBottom(el);
     btn.hidden = !show;
+    const label = newestFirst() ? 'К новым' : 'Вниз';
+    if (btn.textContent !== label) btn.textContent = label;
+    btn.setAttribute('aria-label', newestFirst() ? 'Прокрутить журнал к новым записям' : 'Прокрутить журнал вниз');
   }
 
   function scrollRestartLogToBottom(el) {
     if (!el) return;
     try {
-      el.scrollTop = el.scrollHeight;
+      el.scrollTop = newestFirst() ? 0 : el.scrollHeight;
       RL._autoScrollByScope.set(getRestartLogScopeId(el), true);
     } catch (error) {}
     updateRestartLogScrollButton(el);
@@ -1138,7 +1155,15 @@ let restartLogModuleApi = null;
     const loadError = /^(?:Не удалось загрузить журнал|Ошибка загрузки журнала)\.?$/i.test(rawState);
     const empty = loadError || /^Журнал пуст\.?$/i.test(rawState);
     const groups = empty ? [] : groupJournalEntries(parseRenderedEntries(rawText || ''));
+    // Output with no result line has no day of its own: it belongs to the day
+    // of the operation before it, so that the day line stays above it either way.
+    let lastDay = '';
+    groups.forEach((group) => {
+      if (group.summary) lastDay = String(group.summary.ts || '').slice(0, 10) || lastDay;
+      group.day = group.summary ? String(group.summary.ts || '').slice(0, 10) : lastDay;
+    });
     const shown = groups.filter(groupMatchesFilter);
+    if (newestFirst()) shown.reverse();
     let html = '';
     if (loadError) {
       html = '<div class="xk-jr-empty is-error" role="alert"><b>Не удалось загрузить журнал</b>'
@@ -1151,7 +1176,7 @@ let restartLogModuleApi = null;
     } else {
       let day = '';
       shown.forEach((group) => {
-        const groupDay = group.summary ? String(group.summary.ts || '').slice(0, 10) : '';
+        const groupDay = group.day || '';
         if (groupDay && groupDay !== day) {
           day = groupDay;
           html += `<div class="xk-jr-day">${safeEscapeHtml(journalDayLabel(day))}</div>`;
@@ -1179,6 +1204,7 @@ let restartLogModuleApi = null;
     }
     const allEntries = parseRenderedEntries(raw);
     syncFilterButtons();
+    syncOrderButtons();
     syncFilterCounts(groupJournalEntries(allEntries));
     syncSearchControls();
     renderAllSummary(allEntries);
@@ -1625,8 +1651,49 @@ let restartLogModuleApi = null;
   }
 
   RL.copy = function copy() {
-    copyText(normalizeTextForTerminal(RL._rawText || ''), 'Журнал скопирован в буфер обмена');
+    const raw = RL._rawText || '';
+    if (!newestFirst()) {
+      copyText(normalizeTextForTerminal(raw), 'Журнал скопирован в буфер обмена');
+      return;
+    }
+    // In the order of the screen: operations from the newest, the lines of one
+    // operation (its output, then its result) as they were written.
+    const lines = [];
+    groupJournalEntries(parseRenderedEntries(raw)).reverse().forEach((group) => {
+      group.out.forEach((entry) => lines.push(entry.raw));
+      if (group.entry) lines.push(group.entry.raw);
+    });
+    copyText(normalizeTextForTerminal(lines.join('\n')), 'Журнал скопирован в буфер обмена');
   };
+
+  RL.setOrder = function setOrder(order) {
+    const next = order === 'newest' ? 'newest' : 'oldest';
+    try {
+      if (window.localStorage) window.localStorage.setItem(RESTART_LOG_ORDER_KEY, next);
+    } catch (error) {}
+    if (RL._order === next) {
+      syncOrderButtons();
+      return;
+    }
+    RL._order = next;
+    // The new rows are at the other edge now: start there.
+    RL._autoScrollByScope.clear();
+    renderAll();
+  };
+
+  function syncOrderButtons() {
+    const newest = newestFirst();
+    try {
+      document.querySelectorAll('[data-xk-restart-log-action="order"]').forEach((btn) => {
+        btn.setAttribute('aria-pressed', newest ? 'true' : 'false');
+        const title = newest ? 'Сейчас: новые сверху. Нажмите — старые сверху' : 'Сейчас: старые сверху. Нажмите — новые сверху';
+        // The panel moves a title into its own tooltip once: the words live there.
+        btn.setAttribute('data-tooltip', title);
+        btn.removeAttribute('title');
+        btn.setAttribute('aria-label', newest ? 'Порядок: новые сверху' : 'Порядок: старые сверху');
+      });
+    } catch (error) {}
+  }
 
   function bindOnce(el, handler) {
     if (!el) return;
@@ -1724,6 +1791,11 @@ let restartLogModuleApi = null;
           bindOnce(btn, (event) => {
             event.preventDefault();
             toggleRestartLogFullscreen(getRestartLogCard(btn));
+          });
+        } else if (action === 'order') {
+          bindOnce(btn, (event) => {
+            event.preventDefault();
+            RL.setOrder(newestFirst() ? 'oldest' : 'newest');
           });
         }
       });

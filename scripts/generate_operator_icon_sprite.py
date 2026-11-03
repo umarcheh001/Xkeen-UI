@@ -47,6 +47,7 @@ ICONS = {
     "owner": "user",
     "permissions": "lock",
     "move-up": "arrow-up",
+    "sort": "arrows-sort",
     "more": "dots",
     "normalize": "wand",
     "ping": "stopwatch",

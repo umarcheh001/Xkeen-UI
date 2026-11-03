@@ -85,6 +85,23 @@ const VIEW_CSS = `
 .wrap.narrow .rep { grid-column: 4; grid-row: 1; justify-self: end; }
 .wrap.narrow .chev { grid-column: 5; grid-row: 1 / span 2; }
 .wrap.narrow .detail { padding-left: 14px; }
+.wrap.no-ts .ts, .wrap.no-ts .thead > :nth-child(2), .wrap.no-src .src, .wrap.no-src .thead > :nth-child(4) { display: none; }
+.wrap.no-ts .thead > :nth-child(3) { padding-left: 10px; }
+.wrap.no-ts:not(.narrow) :is(.thead, .tr) { grid-template-columns: 3px 48px minmax(110px, 150px) minmax(0, 1fr) auto 26px; }
+.wrap.no-src:not(.narrow) :is(.thead, .tr) { grid-template-columns: 3px 64px 48px minmax(0, 1fr) auto 26px; }
+.wrap.no-ts.no-src:not(.narrow) :is(.thead, .tr) { grid-template-columns: 3px 48px minmax(0, 1fr) auto 26px; }
+.wrap.no-ts:not(.narrow) .lvl { padding-left: 10px; }
+.wrap.narrow.no-ts .tr { grid-template-columns: 3px 0 minmax(0, 1fr) auto 22px; }
+.wrap.narrow.no-src .msg { grid-row: 1 / span 2; }
+.tonew-slot { position: sticky; z-index: 4; display: flex; justify-content: center; height: 0; pointer-events: none; }
+.tonew-slot.at-top { top: 30px; }
+.wrap.narrow .tonew-slot.at-top { top: 0; }
+.tonew-slot.at-bottom { bottom: 0; }
+.tonew { height: 28px; padding: 0 14px; border: 1px solid var(--op-accent-border, var(--op-accent)); border-radius: 999px; background: var(--op-accent); color: #fff; font: 600 12px inherit; font-family: inherit; white-space: nowrap; box-shadow: 0 4px 14px rgba(0, 0, 0, .3); cursor: pointer; pointer-events: auto; }
+.tonew[hidden] { display: none; }
+.at-top .tonew { margin-top: 8px; }
+.at-bottom .tonew { transform: translateY(-38px); }
+.tonew:focus-visible { outline: 2px solid var(--op-accent-border); outline-offset: 2px; }
 `;
 
 let viewSheet = null;
@@ -133,7 +150,10 @@ export function createPanelLogView(options) {
     records: [],
     items: [],
     fold: true,
-    follow: true,
+    // The newest first or, as before, the oldest. The table follows the new
+    // rows while it stands at their edge; away from it, it counts them.
+    order: 'oldest',
+    unseen: 0,
     level: 'all',
     terms: [],
     hidden: new Set(),
@@ -154,13 +174,16 @@ export function createPanelLogView(options) {
   shadow.innerHTML = `${inlineStyle}<div class="wrap" part="wrap">
     <div class="thead" role="row"><span></span><span>Время</span><span>Ур.</span><span>Источник</span><span>Событие</span><span></span><span></span></div>
     <div class="body" role="rowgroup"><div class="rows"></div></div>
-    <div class="empty" hidden></div></div>`;
+    <div class="empty" hidden></div>
+    <div class="tonew-slot at-bottom"><button type="button" class="tonew" hidden></button></div></div>`;
   const dom = {
     wrap: shadow.querySelector('.wrap'),
     thead: shadow.querySelector('.thead'),
     body: shadow.querySelector('.body'),
     rows: shadow.querySelector('.rows'),
     empty: shadow.querySelector('.empty'),
+    toNewSlot: shadow.querySelector('.tonew-slot'),
+    toNew: shadow.querySelector('.tonew'),
     detail: null,
     chips: opts.chips || null,
   };
@@ -189,7 +212,9 @@ export function createPanelLogView(options) {
   function refilter() {
     const items = [];
     let day = null;
-    for (const rec of state.records) {
+    // Repeats are folded in the order they were written; only then the order turns.
+    const records = state.order === 'newest' ? state.records.slice().reverse() : state.records;
+    for (const rec of records) {
       if (!matches(rec)) continue;
       if (rec.date && rec.date !== day) {
         day = rec.date;
@@ -199,6 +224,11 @@ export function createPanelLogView(options) {
     }
     state.items = items;
     if (state.openId != null && !items.some((it) => it.rec && it.rec.id === state.openId)) state.openId = null;
+    // A column no line of the file fills (the plain output has no time and no
+    // source) is left out: the event takes its room.
+    const some = state.records.length > 0;
+    dom.wrap.classList.toggle('no-ts', some && !state.records.some((rec) => rec.time));
+    dom.wrap.classList.toggle('no-src', some && !state.records.some((rec) => rec.source));
   }
 
   // ---------- Rows ----------
@@ -298,7 +328,7 @@ export function createPanelLogView(options) {
     }
     // A run or an operation is told by its pairs and steps; its source lines are
     // what «Копировать запись» takes.
-    if (rec.raw.length && state.kind !== 'update' && state.kind !== 'operations') parts.push(`<pre class="block">${esc(rec.raw.join('\n'))}</pre>`);
+    if (rec.raw.length && !['update', 'operations', 'install'].includes(state.kind)) parts.push(`<pre class="block">${esc(rec.raw.join('\n'))}</pre>`);
     const src = rec.source ? esc(rec.source) : '';
     parts.push(`<div class="acts">
       <button type="button" class="btn" data-act="copy" data-id="${esc(rec.id)}">${icon('duplicate')}Копировать запись</button>
@@ -415,6 +445,12 @@ export function createPanelLogView(options) {
     return state.scrollTop + (state.viewH || 0) >= (state.narrow ? 0 : 30) + contentHeight() - state.rowH * 2;
   }
 
+  // The edge with the new rows: the bottom, or the top when the newest come first.
+  function atNewEdge() {
+    if (state.order === 'newest') return state.scrollTop <= state.rowH * 2;
+    return nearBottom();
+  }
+
   function scrollToEnd() {
     // The body has to be tall before the host can scroll that far.
     syncDetail();
@@ -423,10 +459,32 @@ export function createPanelLogView(options) {
       dom.body._h = bodyH;
       dom.body.style.height = `${bodyH}px`;
     }
-    const target = Math.max(0, (state.narrow ? 0 : 30) + bodyH - (state.viewH || 0));
+    const target = state.order === 'newest' ? 0 : Math.max(0, (state.narrow ? 0 : 30) + bodyH - (state.viewH || 0));
     host.scrollTop = target;
     // A hidden tab has no height: the browser keeps 0, and so must we.
     state.scrollTop = host.scrollTop;
+    state.unseen = 0;
+  }
+
+  // «К новым»: shown while the table stands away from the new rows, with the
+  // count of those that came meanwhile.
+  function syncToNew() {
+    const newest = state.order === 'newest';
+    const slot = dom.toNewSlot;
+    const wantTop = newest;
+    if (slot.classList.contains('at-top') !== wantTop) {
+      slot.classList.toggle('at-top', wantTop);
+      slot.classList.toggle('at-bottom', !wantTop);
+      if (wantTop) dom.thead.after(slot);
+      else dom.wrap.appendChild(slot);
+    }
+    const scrollable = contentHeight() + (state.narrow ? 0 : 30) > (state.viewH || 0) + state.rowH;
+    const show = scrollable && state.items.length > 0 && !atNewEdge();
+    if (!show) state.unseen = 0;
+    const text = `${newest ? '↑' : '↓'} К новым${state.unseen ? ` · ${state.unseen}` : ''}`;
+    if (dom.toNew.textContent !== text) dom.toNew.textContent = text;
+    dom.toNew.setAttribute('aria-label', state.unseen ? `К новым записям: ${state.unseen}` : 'К новым записям');
+    if (dom.toNew.hidden !== !show) dom.toNew.hidden = !show;
   }
 
   // ---------- Chips ----------
@@ -474,7 +532,12 @@ export function createPanelLogView(options) {
     renderTable();
     renderEmpty();
     renderChips();
+    syncToNew();
     if (hooks.onChange) hooks.onChange(stats());
+  }
+
+  function totalReps() {
+    return state.records.reduce((n, rec) => n + (rec.rep || 1), 0);
   }
 
   function rebuild() {
@@ -492,6 +555,7 @@ export function createPanelLogView(options) {
     requestAnimationFrame(() => {
       state.renderQueued = false;
       renderTable();
+      syncToNew();
     });
   }
 
@@ -571,10 +635,16 @@ export function createPanelLogView(options) {
     new ResizeObserver(() => {
       const wasHidden = !state.viewH;
       measure();
-      if (state.follow && (wasHidden || nearBottom())) scrollToEnd();
+      if (wasHidden || atNewEdge()) scrollToEnd();
       renderTable();
+      syncToNew();
     }).observe(host);
   }
+  dom.toNew.addEventListener('click', () => {
+    scrollToEnd();
+    renderTable();
+    syncToNew();
+  });
   dom.wrap.style.setProperty('--row-h', `${state.rowH}px`);
   measure();
 
@@ -582,16 +652,29 @@ export function createPanelLogView(options) {
 
   const api = {
     setData(kind, lines) {
-      const stick = state.follow || nearBottom();
       const changedKind = kind !== state.kind;
+      const stick = changedKind || atNewEdge();
+      const before = totalReps();
+      const itemsBefore = state.items.length;
       state.kind = kind;
       state.lines = Array.isArray(lines) ? lines.slice() : [];
       if (changedKind) {
         state.openId = null;
         state.hidden.clear();
+        state.unseen = 0;
       }
       rebuild();
       state.emptyHtml = '';
+      if (!stick) {
+        state.unseen += Math.max(0, totalReps() - before);
+        // Newest first, the new rows come above: keep the ones under the eye.
+        const added = state.items.length - itemsBefore;
+        if (state.order === 'newest' && added > 0) {
+          renderTable();
+          host.scrollTop = state.scrollTop + added * state.rowH;
+          state.scrollTop = host.scrollTop;
+        }
+      }
       renderAll(stick);
     },
     clear() {
@@ -609,24 +692,28 @@ export function createPanelLogView(options) {
       refilter();
       renderAll(false);
     },
+    // A new view of the rows starts at the new ones.
     setFold(on) {
       state.fold = !!on;
       rebuild();
-      renderAll(state.follow);
+      renderAll(true);
     },
-    setFollow(on) {
-      state.follow = !!on;
-      if (state.follow) renderAll(true);
+    setOrder(order) {
+      const next = order === 'newest' ? 'newest' : 'oldest';
+      if (next === state.order) return;
+      state.order = next;
+      refilter();
+      renderAll(true);
     },
     setLevel(level) {
       state.level = ['warning', 'error'].includes(level) ? level : 'all';
       refilter();
-      renderAll(state.follow);
+      renderAll(true);
     },
     setSearch(raw) {
       state.terms = String(raw || '').toLowerCase().split(/\s+/).filter(Boolean);
       refilter();
-      renderAll(state.follow);
+      renderAll(true);
     },
     toggleSource(name) {
       if (state.hidden.has(name)) state.hidden.delete(name);

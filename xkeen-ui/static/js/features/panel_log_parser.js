@@ -49,7 +49,8 @@ export function panelLogKind(name) {
   if (base === 'update') return 'update';
   if (base === 'updates') return 'operations';
   if (base === 'restart') return 'restart';
-  if (base === 'stdout' || base === 'stderr' || base === 'xkeen-ui' || base === 'install' || base === 'install-previous') return 'text';
+  if (base === 'install' || base === 'install-previous') return 'install';
+  if (base === 'stdout' || base === 'stderr' || base === 'xkeen-ui') return 'text';
   return 'core';
 }
 
@@ -324,6 +325,66 @@ function buildUpdate(lines) {
   return out;
 }
 
+// ---------- xkeen-ui-install.log ----------
+//
+// One run of install.sh: a header with the time it began, the installer's
+// steps without a time ("[*] …", "[!] …") and its result with one
+// ("2026-10-31 01:43:03 [=] …"). A run is one record; its lines open under it.
+
+const INSTALL_HEAD_RE = /^=+ Xkeen UI install: (\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}) =+$/;
+const INSTALL_STAMP_RE = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}) (.*)$/;
+
+function finishInstall(run) {
+  if (run.stopped) {
+    run.level = 'error';
+    run.msg = run.stopped;
+  } else if (run.done) {
+    run.dur = run.last ? secondsBetween(run, run.last) : '';
+    run.level = run.warnings ? 'warning' : 'ok';
+    run.msg = `Установка завершена${run.dur ? ` за ${run.dur}` : ''}${run.warnings ? ` · предупреждений: ${run.warnings}` : ''}`;
+  } else {
+    run.level = 'warning';
+    run.msg = 'Установка без итога';
+  }
+  return run;
+}
+
+function buildInstall(lines) {
+  const out = [];
+  let run = null;
+  for (const line of lines) {
+    const head = INSTALL_HEAD_RE.exec(line.trim());
+    if (head) {
+      if (run) out.push(finishInstall(run));
+      run = record({ date: head[1], time: head[2], source: 'Установка панели', raw: [line], done: false, stopped: '', warnings: 0, last: null });
+      continue;
+    }
+    if (!run) {
+      // Lines written before the installer put a header on its log.
+      if (line.trim()) out.push(parseTextLine(line));
+      continue;
+    }
+    run.raw.push(line);
+    // The framed title of the installer's own screen says nothing.
+    if (/^=+$/.test(line.trim())) {
+      run.framed = !run.framed;
+      continue;
+    }
+    if (!line.trim() || run.framed) continue;
+    run.extra.push(line);
+    const stamp = INSTALL_STAMP_RE.exec(line);
+    const body = stamp ? stamp[3] : line;
+    if (stamp) run.last = { date: stamp[1], time: stamp[2] };
+    if (/^\[=\] Итог установки/.test(body)) run.done = true;
+    else if (/^\[!\] Установка остановлена/.test(body)) run.stopped = body.slice(4);
+    else if (/^\[!\] /.test(body)) run.warnings += 1;
+  }
+  if (run) out.push(finishInstall(run));
+  // Every run is its own record: nothing to fold.
+  out.forEach((r) => { r.key = ''; delete r.done; delete r.stopped; delete r.warnings; delete r.last; delete r.framed; });
+  return out;
+}
+
 // ---------- updates: the operations of the Modules window ----------
 //
 // module-operations/history.jsonl: one JSON object a line, written by the
@@ -476,6 +537,7 @@ export function buildPanelLogRecords(kind, lines, options) {
   if (kind === 'update') return finish(buildUpdate(src), false);
   if (kind === 'operations') return finish(buildOperations(src), false);
   if (kind === 'restart') return finish(buildRestart(src), false);
+  if (kind === 'install') return finish(buildInstall(src), false);
   if (kind === 'text') return finish(buildText(src), fold);
   return finish(buildCore(src), fold);
 }

@@ -26669,3 +26669,23 @@ body.panel-page .xk-mihomo-traffic-dashboard .xk-mihomo-traffic-table th { backg
   body.panel-page .xk-mihomo-traffic-dashboard .xk-mihomo-traffic-chart-stat:nth-child(even) { border-left: 1px solid var(--op-border); }
   body.panel-page .xk-mihomo-traffic-dashboard .xk-mihomo-traffic-chart-stat:nth-child(n + 3) { border-top: 1px solid var(--op-border); }
 }
+
+/* On a phone the "⋯" menu of the journal may stand at the start of a row
+   (03.11.2026): it opens under the header across its width, not off the screen. */
+@media (max-width: 640px) {
+  body.panel-page .xk-jr-head {
+    position: relative;
+  }
+
+  /* An older rule of the cards holds the menu relative: the phone layout wins. */
+  body.panel-page .xk-jr-head > .xk-jr-menu {
+    position: static !important;
+  }
+
+  body.panel-page .xk-jr-menu > .xk-jr-menu-panel {
+    right: 0;
+    left: 0;
+    width: auto;
+    max-width: none;
+  }
+}

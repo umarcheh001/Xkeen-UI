@@ -356,6 +356,10 @@
       <path d="M6 18a4 4 0 0 1 -2 -7.465" />
       <path d="M6.004 5.125a4 4 0 0 1 -2.526 5.77" />
     </symbol>
+    <symbol id="xk-sort" viewBox="0 0 24 24">
+      <path d="M3 9l4 -4l4 4m-4 -4v14" />
+      <path d="M21 15l-4 4l-4 -4m4 4v-14" />
+    </symbol>
     <symbol id="xk-statistics" viewBox="0 0 24 24">
       <path d="M3 13a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v6a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1l0 -6" />
       <path d="M15 9a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v10a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1l0 -10" />

@@ -293,7 +293,8 @@ def operation(**overrides) -> str:
 
 def test_updates_file_is_read_as_operations():
     out = run_js("return ['updates', 'updates.1', 'install', 'install-previous'].map((n) => parser.panelLogKind(n));", None)
-    assert out == ["operations", "operations", "text", "text"]
+    # The installer's log is its runs (03.11.2026), not plain text.
+    assert out == ["operations", "operations", "install", "install"]
 
 
 def test_a_panel_update_is_one_record_with_its_steps_and_environment():
@@ -328,3 +329,61 @@ def test_a_module_is_named_by_its_name():
 def test_a_broken_line_of_the_history_is_skipped():
     recs = build("operations", [operation(operation_id="a"), '{"oper\n', operation(operation_id="b")])
     assert [dict(rec["kv"])["Операция"] for rec in recs] == ["a", "b"]
+
+
+# xkeen-ui-install.log с роутера 10.1 (31.10.2026), сокращено: заголовок со
+# временем начала, шаги установщика без времени, итог — с временем.
+INSTALL = [
+    "===== Xkeen UI install: 2026-10-31 01:42:14 =====",
+    "========================================",
+    "  Xkeen Web UI — установка",
+    "========================================",
+    "[*] Проверяю наличие Flask/cryptography/gevent/PyYAML для Python3...",
+    "[*] Python-зависимости в порядке.",
+    "[*] Запускаю сервис...",
+    "Xkeen Web UI запущен, PID 4761.",
+    "2026-10-31 01:43:03 [=] Итог установки:",
+    "2026-10-31 01:43:03 [=] WebSocket: ВКЛ — потоковые функции панели доступны; PTY работает, если установлен модуль терминала.",
+    "2026-10-31 01:43:03 [=] Подробности установки: /opt/var/log/xkeen-ui-install.log",
+    "[*] Очищаю установочные файлы...",
+]
+
+
+def test_install_files_are_read_as_install_runs():
+    out = run_js("return data.map((n) => parser.panelLogKind(n));", ["install", "install-previous"])
+    assert out == ["install", "install"]
+
+
+def test_an_install_is_one_record_with_its_lines_under_it():
+    recs = build("install", INSTALL)
+    assert len(recs) == 1
+    run = recs[0]
+    assert (run["date"], run["time"]) == ("2026-10-31", "01:42:14")
+    assert run["source"] == "Установка панели"
+    assert run["level"] == "ok"
+    assert run["msg"] == "Установка завершена за 49 с"
+    assert run["dur"] == "49 с"
+    # The lines of the run, as they were written; the frame of the header is left out.
+    assert run["extra"][0] == "[*] Проверяю наличие Flask/cryptography/gevent/PyYAML для Python3..."
+    assert "2026-10-31 01:43:03 [=] Итог установки:" in run["extra"]
+    assert not any(line.startswith("=====") for line in run["extra"])
+
+
+def test_an_install_that_stopped_says_where_and_one_with_warnings_counts_them():
+    # пример: остановка на шаге и предупреждение без остановки
+    stopped = INSTALL[:6] + [
+        "[!] Не удалось скачать gevent; WebSocket будет недоступен.",
+        "2026-10-31 01:42:40 [!] Установка остановлена: код 1, этап: deps, действие: pip.",
+    ]
+    warned = INSTALL[:6] + ["[!] Не удалось очистить legacy-шаблоны Xray; установка продолжается."] + INSTALL[6:]
+    recs = build("install", stopped + warned)
+    assert [r["level"] for r in recs] == ["error", "warning"]
+    assert recs[0]["msg"] == "Установка остановлена: код 1, этап: deps, действие: pip."
+    assert recs[1]["msg"] == "Установка завершена за 49 с · предупреждений: 1"
+
+
+def test_an_install_without_its_result_is_not_called_finished():
+    recs = build("install", INSTALL[:7])
+    assert len(recs) == 1
+    assert recs[0]["level"] == "warning"
+    assert recs[0]["msg"] == "Установка без итога"
