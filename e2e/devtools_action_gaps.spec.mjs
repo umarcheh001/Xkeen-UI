@@ -29,7 +29,9 @@ const READY = {
 // Tab strips, the update channel switch and the segments of the logs header
 // (file, level, online) are segmented controls, not rows of separate buttons.
 // The logs source chips are chips: they keep the chip gap of the Xray logs screen.
-const NOT_A_BUTTON_ROW = ['top-tabs', 'dt-tabs', 'xk-summary-switch', 'xk-xlog-seg', 'xk-xlog-chiprow'];
+// The header of the logs is not a row of actions: segments, search and icon
+// buttons under the gap of the header (03.11.2026, the order button joined it).
+const NOT_A_BUTTON_ROW = ['top-tabs', 'dt-tabs', 'xk-summary-switch', 'xk-xlog-seg', 'xk-xlog-chiprow', 'xk-xlog-head'];
 
 async function buttonRows(page) {
   return page.evaluate((skip) => {

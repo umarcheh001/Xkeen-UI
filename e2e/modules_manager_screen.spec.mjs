@@ -427,7 +427,8 @@ test.describe('Module manager loading', () => {
     expect(availableCalls).toBe(0);
 
     await page.getByRole('tab', { name: 'Доступные' }).click();
-    await expect(page.getByRole('heading', { name: `${TERMINAL} 1.0.0` })).toBeVisible();
+    const terminal = page.locator('.modules-catalog-tile', { has: page.locator('.modules-tile-name', { hasText: TERMINAL }) });
+    await expect(terminal.locator('.modules-tile-version')).toHaveText('версия 1.0.0');
     expect(availableCalls).toBe(1);
 
     await page.getByRole('tab', { name: 'Установленные' }).click();
@@ -444,7 +445,7 @@ test.describe('Module manager loading', () => {
     } }));
     await page.goto('/modules');
     await page.getByRole('tab', { name: 'Доступные' }).click();
-    await expect(page.getByRole('heading', { name: '<img src=x onerror="window.catalogInjected=1"> 1.0.0' })).toBeVisible();
+    await expect(page.locator('.modules-catalog-tile .modules-tile-name')).toHaveText('<img src=x onerror="window.catalogInjected=1">');
     expect(await page.evaluate(() => window.catalogInjected || 0)).toBe(0);
     expect(await page.locator('#modules-card-host img').count()).toBe(0);
   });

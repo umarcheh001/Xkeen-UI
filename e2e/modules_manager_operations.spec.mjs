@@ -321,7 +321,7 @@ test.describe('Module lifecycle review', () => {
     await expect(dialog).toContainText('Не хватает зависимости');
   });
 
-  test('buttons of the catalog and of the window have the size of the summary buttons', async ({ page }) => {
+  test('the catalog button is the one of a tile, the window keeps the size of the summary buttons', async ({ page }) => {
     await installIdleLifecycleRoutes(page);
     await routePlans(page, () => ({ json: installPlan }));
     await page.goto('/modules');
@@ -329,7 +329,9 @@ test.describe('Module lifecycle review', () => {
       .evaluate((element) => getComputedStyle(element).fontSize);
     await page.getByRole('tab', { name: 'Доступные' }).click();
     const install = page.getByRole('button', { name: `Установить ${TERMINAL}` });
-    expect(await install.evaluate((element) => getComputedStyle(element).fontSize)).toBe(summarySize);
+    // The tab of available modules is tiles (03.11.2026): its button is the tile's.
+    expect(await install.evaluate((element) => [getComputedStyle(element).fontSize, element.getBoundingClientRect().height]))
+      .toEqual(['12px', 26]);
     await install.click();
     const apply = page.getByRole('dialog').getByRole('button', { name: 'Установить', exact: true });
     expect(await apply.evaluate((element) => getComputedStyle(element).fontSize)).toBe(summarySize);
