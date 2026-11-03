@@ -75,8 +75,120 @@ def column_of(ts: int) -> int:
 
 CELL = """
 const model = chart.grid7Model(data.history, data.metric || 'all', null);
-return data.cells.map(([row, column]) => chart.grid7CellText(model, data.history, row, column));
+return data.cells.map(([row, column]) => chart.grid7CellTip(model, data.history, row, column).title);
 """
+
+TIP = """
+const model = chart.grid7Model(data.history, data.metric || 'all', null);
+return data.cells.map(([row, column]) => chart.grid7CellTip(model, data.history, row, column));
+"""
+
+LEVELS = """
+const model = chart.grid7Model(data.history, data.metric || 'all', null);
+return data.cells.map(([row, column]) => model.rows[row].levels[column]);
+"""
+
+BANDS = {
+    "cpu": {"orange": 60, "red": 85},
+    "memory": {"orange": 75, "red": 90},
+    "link": {"orange": 70, "red": 90},
+    "queue": {"orange": 2.1, "red": 3, "scale_max": 6},
+}
+CALM = {"cpu": (12, 30), "memory": (50, 52), "queue": (0.6, 1.1), "link_down:ISP": (5, 9), "link_up:ISP": (2, 3)}
+
+
+def measured(values: dict[str, dict[int, tuple[float, float]]] | None = None) -> dict:
+    """A week with real averages and peaks: calm since SINCE, ``values[name][i] = (avg, max)``."""
+    values = values or {}
+    first = (SINCE - START) // STEP + 1
+
+    def zone(name: str, value: float) -> int:
+        band = BANDS["link" if name.startswith("link_") else name]
+        return 2 if value >= band["red"] else 1 if value >= band["orange"] else 0
+
+    def metric(name: str) -> dict:
+        pairs = [None if i < first else values.get(name, {}).get(i, CALM[name]) for i in range(COUNT)]
+        avg = [None if p is None else p[0] for p in pairs]
+        peak = [None if p is None else p[1] for p in pairs]
+        return {
+            "avg": avg,
+            "max": peak,
+            "zone": [None if v is None else zone(name, v) for v in avg],
+            "peak_zone": [None if v is None else zone(name, v) for v in peak],
+        }
+
+    return {
+        "step_s": STEP,
+        "start": START,
+        "history_since": SINCE,
+        "cores": 3,
+        "bands": BANDS,
+        "metrics": {name: metric(name) for name in CALM},
+        "links": [{"id": "ISP", "label": "МТС"}],
+        "top": [],
+    }
+
+
+MON_10 = 1793602800  # Mon 02.11 10:00 MSK: row 1 (yesterday), column 20
+
+
+def test_a_cell_is_painted_by_a_smooth_level_of_its_worst_average():
+    at = column_of(MON_10)
+    hist = measured({"cpu": {at: (45, 60), at + 1: (72.5, 80), at + 2: (90, 95)}, "memory": {at + 3: (60, 61)}})
+    out = run_js(LEVELS, {"history": hist, "cells": [[1, 20], [1, 21], [1, 22], [1, 23], [1, 24]]})
+    # 45 % of a processor whose «высокая» starts at 60 % is three quarters of the way;
+    # a calm cell is as warm as its warmest metric (memory 50 of 75 %).
+    assert out == [0.75, 1.5, 2, 0.8, 0.667]
+
+
+def test_the_week_has_no_peak_dots_and_no_peak_counter():
+    at = column_of(MON_10)
+    hist = measured({"queue": {i: (1.2, 3.4) for i in range(at - 40, at + 40)}})
+    body = """
+    const model = chart.grid7Model(data.history, 'all', null);
+    return { dots: model.rows.some((r) => (r.peakDots || []).some(Boolean)), summary: chart.grid7Summary(model, data.history) };
+    """
+    out = run_js(body, {"history": hist})
+    assert out["dots"] is False
+    assert "peaks" not in out["summary"]
+    assert out["summary"]["heavy"] is None
+
+
+def test_the_hint_of_a_calm_cell_gives_every_metric_with_its_peak():
+    out = run_js(TIP, {"history": measured(), "cells": [[1, 20]]})[0]
+    assert out["title"] == "Всё в норме"
+    assert out["tone"] == 0
+    lines = {line["label"]: line for line in out["lines"]}
+    # From the metric nearest to its threshold to the calmest one.
+    assert list(lines) == ["Память", "Очередь задач", "Процессор", "Канал ↓ / ↑"]
+    assert lines["Процессор"]["value"] == "12 %"
+    assert lines["Процессор"]["peak"] == "пик 30 %"
+    assert lines["Очередь задач"]["value"] == "0,6"
+    assert lines["Канал ↓ / ↑"]["value"] == "5 % / 2 %"
+    assert not any(line.get("strong") for line in out["lines"])
+
+
+def test_a_warm_cell_names_the_metric_close_to_high_and_puts_it_first():
+    at = column_of(MON_10)
+    hist = measured({"memory": {at: (68, 71)}, "queue": {at: (1.4, 3.1)}})
+    out = run_js(TIP, {"history": hist, "cells": [[1, 20]]})[0]
+    assert out["title"] == "Близко к высокой: память"
+    assert out["tone"] == 1
+    first = out["lines"][0]
+    assert (first["label"], first["value"], first.get("strong")) == ("Память", "68 %", True)
+    queue = next(line for line in out["lines"] if line["label"] == "Очередь задач")
+    # A peak above the red threshold is told in the hint, not by a dot on the grid.
+    assert (queue["value"], queue["peak"], queue["peakTone"]) == ("1,4", "пик 3,1", 2)
+
+
+def test_a_single_metric_gives_its_values_and_the_threshold_it_is_measured_by():
+    at = column_of(MON_10)
+    hist = measured({"queue": {at: (1.4, 3.1), at + 1: (2.4, 3.3)}})
+    out = run_js(TIP, {"history": hist, "metric": "queue", "cells": [[1, 20], [1, 21]]})
+    assert out[0]["title"] is None
+    assert out[0]["lines"][0] == {"label": "Очередь задач", "value": "1,4", "peak": "пик 3,1", "peakTone": 2}
+    assert out[0]["lines"][1] == {"label": "Норма", "value": "высокая — от 2,1 на 3 ядра", "muted": True}
+    assert out[1]["lines"][1] == {"label": "Высокая", "value": "перегрузка — от 3 на 3 ядра", "muted": True}
 
 
 def test_a_cell_in_the_norm_says_so_without_a_worst_metric():
@@ -90,11 +202,6 @@ def test_a_loaded_cell_names_every_metric_of_its_zone():
     hist = week({"cpu": {at: 1}, "link_down:ISP": {at: 1}, "memory": {at + 1: 2}})
     out = run_js(CELL, {"history": hist, "cells": [[1, 20], [1, 21]]})
     assert out == ["Высокая нагрузка: процессор, канал", "Перегрузка: память"]
-
-
-def test_a_single_metric_keeps_the_name_of_its_zone():
-    out = run_js(CELL, {"history": week(), "metric": "cpu", "cells": [[1, 20]]})
-    assert out == ["норма"]
 
 
 def test_an_empty_cell_before_the_history_tells_when_it_began():
@@ -125,13 +232,6 @@ SUMMARY = """
 const model = chart.grid7Model(data.history, 'all', null);
 return chart.grid7Summary(model, data.history);
 """
-
-
-def test_a_week_in_the_norm_has_no_heaviest_hour_and_counts_its_short_peaks():
-    peaks = {column_of(1793602800), column_of(1793602800 + 3 * STEP), column_of(1793602800 + 30 * STEP)}
-    out = run_js(SUMMARY, {"history": week(peaks=peaks)})
-    assert out["heavy"] is None
-    assert out["peaks"] == 3
 
 
 def test_the_heaviest_hour_is_the_one_with_the_worst_zone():

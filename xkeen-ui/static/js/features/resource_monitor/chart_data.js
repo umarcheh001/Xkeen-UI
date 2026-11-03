@@ -371,6 +371,21 @@ function dayLabel(offset, dayTs) {
   return new Date(dayTs * 1000).toLocaleDateString("ru-RU", { weekday: "short", day: "2-digit", month: "2-digit" });
 }
 
+// A smooth level of an average on its own scale (04.11.2026): 0 idle, 1 the
+// threshold of «высокая», 2 that of «перегрузка» and above. The week grid is
+// painted by it; a metric without thresholds (temperature) keeps its zone.
+export const NEAR_LEVEL = 0.8; // from here a calm cell turns warmer: «близко к высокой»
+const bandKey = (name) => (name.startsWith("link_") ? "link" : name);
+
+export function levelOf(name, value, zone, bands) {
+  if (zone == null) return null;
+  const band = bands?.[bandKey(name)];
+  if (!band || !finite(value) || !(band.orange > 0) || !(band.red > band.orange)) return zone;
+  if (value >= band.red) return 2;
+  if (value >= band.orange) return Math.round((1 + (value - band.orange) / (band.red - band.orange)) * 1000) / 1000;
+  return Math.round(Math.max(0, value / band.orange) * 1000) / 1000;
+}
+
 // Seven rows (today first), 48 cells of 30 minutes in each; metric "all" paints the worst one.
 export function grid7Model(history, metric, linkId) {
   const count = columnCount(history);
@@ -386,7 +401,7 @@ export function grid7Model(history, metric, linkId) {
   const series = names.map((n) => ({ name: n, s: seriesOf(history, n) }));
   const rows = Array.from({ length: WEEK_DAYS }, (_, r) => {
     const ts = today - r * DAY_S;
-    return { key: `day${r}`, label: dayLabel(r, ts), dayTs: ts, cells: Array(perDay).fill(null), peakDots: Array(perDay).fill(false), by: Array(perDay).fill(null), column: Array(perDay).fill(null) };
+    return { key: `day${r}`, label: dayLabel(r, ts), dayTs: ts, cells: Array(perDay).fill(null), levels: Array(perDay).fill(null), by: Array(perDay).fill(null), column: Array(perDay).fill(null) };
   });
   for (let j = 0; j < count; j += 1) {
     const t = history.start + j * step;
@@ -396,7 +411,7 @@ export function grid7Model(history, metric, linkId) {
     const c = Math.min(perDay - 1, Math.floor((t - ds) / step));
     let top = null;
     let by = [];
-    let peak = false;
+    let level = null;
     for (const { name, s } of series) {
       const z = s.zone[j];
       if (z == null) continue;
@@ -405,11 +420,13 @@ export function grid7Model(history, metric, linkId) {
         const label = labelOf(name);
         if (!by.includes(label)) by.push(label);
       }
-      if (s.peak_zone[j] === 2) peak = true;
+      // Short peaks no longer mark the grid: they are told in the hint of the cell.
+      const l = levelOf(name, s.avg[j], z, history.bands);
+      if (level == null || l > level) level = l;
     }
     const row = rows[offset];
     row.cells[c] = top;
-    row.peakDots[c] = top != null && top < 2 && peak;
+    row.levels[c] = level;
     row.by[c] = top == null ? null : by;
     row.column[c] = j;
   }
@@ -432,20 +449,121 @@ function dayMonth(ts) {
   return new Date(ts * 1000).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" });
 }
 
-// The hint of one cell of the week (03.11.2026): «Всё в норме» rather than a worst
-// metric of a calm half hour; under load, every metric of the worst zone.
-export function grid7CellText(model, history, rowIndex, column) {
+const TIP_LABELS = { cpu: "Процессор", memory: "Память", queue: "Очередь задач" };
+const capital = (text) => text.charAt(0).toUpperCase() + text.slice(1);
+
+function coresWord(n) {
+  const ones = n % 10;
+  const tens = n % 100;
+  if (ones === 1 && tens !== 11) return "ядро";
+  if (ones >= 2 && ones <= 4 && (tens < 12 || tens > 14)) return "ядра";
+  return "ядер";
+}
+
+// One value as the hint writes it: percents, tasks of the queue, degrees.
+function tipValue(name, value) {
+  if (!finite(value)) return "—";
+  if (name === "queue") return num(value, 1);
+  if (name.startsWith("temp:")) return `${num(value)} °C`;
+  return pct(value);
+}
+
+// The threshold a single metric is measured by: «высокая — от 60 %», and
+// «перегрузка — от …» once it is high.
+function thresholdText(name, zone, history) {
+  const band = history.bands?.[bandKey(name)];
+  if (!band) return "";
+  const high = zone >= 1;
+  const at = high ? band.red : band.orange;
+  const value = name === "queue" ? num(at, at % 1 ? 1 : 0) : pct(at);
+  const cores = Math.max(1, Number(history.cores) || 1);
+  const tail = name === "queue" ? ` на ${cores} ${coresWord(cores)}` : bandKey(name) === "link" ? " тарифа" : "";
+  return `${high ? "перегрузка" : "высокая"} — от ${value}${tail}`;
+}
+
+// The metrics of one half hour, the warmest first: [{ key, label, value, peak, peakTone, level }].
+// Both directions of a connection make one line; of several sensors the hottest is shown.
+function tipItems(model, history, j) {
+  const items = [];
+  const link = { up: null, down: null, level: null };
+  let temp = null;
+  for (const { name, s } of model.series) {
+    const zone = s.zone[j];
+    if (zone == null) continue;
+    const avg = s.avg[j];
+    const level = levelOf(name, avg, zone, history.bands);
+    if (name.startsWith("link_")) {
+      link[name.startsWith("link_up:") ? "up" : "down"] = avg;
+      if (link.level == null || level > link.level) link.level = level;
+      continue;
+    }
+    if (name.startsWith("temp:")) {
+      if (!temp || (finite(avg) && !(avg <= temp.avg))) temp = { key: "temp", label: "Температура", value: tipValue(name, avg), avg, level };
+      continue;
+    }
+    const item = { key: name, label: TIP_LABELS[name] || METRIC_LABELS[name] || name, value: tipValue(name, avg), level };
+    const peak = s.max[j];
+    if (finite(peak) && tipValue(name, peak) !== item.value) {
+      item.peak = `пик ${tipValue(name, peak)}`;
+      if (s.peak_zone[j] === 2) item.peakTone = 2;
+    }
+    items.push(item);
+  }
+  if (link.level != null) {
+    const both = link.up != null && link.down != null;
+    items.push({
+      key: "link",
+      label: both ? "Канал ↓ / ↑" : link.down != null ? "Канал ↓" : "Канал ↑",
+      value: both ? `${pct(link.down)} / ${pct(link.up)}` : pct(link.down ?? link.up),
+      level: link.level,
+    });
+  }
+  if (temp) items.push(temp);
+  return items.sort((a, b) => (b.level ?? -1) - (a.level ?? -1));
+}
+
+const TIP_NAMES = { link: "канал", temp: "температура" };
+
+// The hint of one cell of the week (04.11.2026): { title, tone, lines }.
+// «Все»: a title that says why the cell has its colour, then every metric with
+// its average and peak, the warmest first; a peak above «перегрузка» is coloured.
+// A single metric: its value and the threshold it is measured by.
+export function grid7CellTip(model, history, rowIndex, column) {
   const row = model.rows[rowIndex];
   const zone = row.cells[column];
   if (zone == null) {
     const since = historySince(history);
     const to = row.dayTs + (column + 1) * model.cellSeconds;
-    return since != null && to <= since ? `История ведётся с ${dayMonth(since)} ${hhmm(since)}` : "нет данных";
+    const title = since != null && to <= since ? `История ведётся с ${dayMonth(since)} ${hhmm(since)}` : "нет данных";
+    return { title, tone: null, lines: [] };
   }
-  if (model.metric !== "all") return ZONE_NAMES[zone];
-  if (zone === 0) return "Всё в норме";
-  const names = (row.by[column] || []).map((name) => name.toLowerCase()).join(", ");
-  return `${zone === 2 ? "Перегрузка" : "Высокая нагрузка"}${names ? `: ${names}` : ""}`;
+  const items = tipItems(model, history, row.column[column]);
+  const line = (item, strong) => {
+    const out = { label: item.label, value: item.value };
+    if (item.peak) out.peak = item.peak;
+    if (item.peakTone) out.peakTone = item.peakTone;
+    if (strong) out.strong = true;
+    return out;
+  };
+  if (model.metric !== "all") {
+    const lines = items.map((item) => line(item, false));
+    const name = model.series.find((x) => x.s.zone[row.column[column]] != null)?.name || model.metric;
+    const threshold = thresholdText(name, zone, history);
+    lines.push({ label: capital(ZONE_NAMES[zone]), value: threshold, muted: true });
+    return { title: null, tone: null, lines };
+  }
+  const level = row.levels[column] ?? zone;
+  const floor = zone >= 1 ? zone : NEAR_LEVEL;
+  const warm = level >= NEAR_LEVEL;
+  const names = warm
+    ? items.filter((item) => (item.level ?? 0) >= floor).map((item) => TIP_NAMES[item.key] || item.label.toLowerCase())
+    : [];
+  const word = zone === 2 ? "Перегрузка" : zone === 1 ? "Высокая нагрузка" : warm ? "Близко к высокой" : "Всё в норме";
+  return {
+    title: names.length ? `${word}: ${names.join(", ")}` : word,
+    tone: zone === 2 ? 2 : warm ? 1 : 0,
+    lines: items.map((item, i) => line(item, warm && i === 0)),
+  };
 }
 
 // «история с …» of the legend: the time alone today, with its day before today.
@@ -459,14 +577,11 @@ export function historySinceText(history, now = Date.now() / 1000) {
 export function grid7Summary(model, history) {
   let best = null;
   let bestScore = 0;
-  let peaks = 0;
   model.rows.forEach((row) => {
     row.cells.forEach((z, c) => {
-      if (z == null) return;
-      if (row.peakDots[c]) peaks += 1;
-      // A week in the norm has no heaviest hour: a short peak alone does not make one.
-      if (z === 0) return;
-      const score = z * 1000 + (row.peakDots[c] ? 1 : 0);
+      // A week in the norm has no heaviest hour; among loaded cells the warmest wins.
+      if (z == null || z === 0) return;
+      const score = row.levels?.[c] ?? z;
       if (score > bestScore) { bestScore = score; best = { row, c }; }
     });
   });
@@ -475,7 +590,6 @@ export function grid7Summary(model, history) {
   return {
     heavy: t0 == null ? null : `${new Date(t0 * 1000).toLocaleDateString("ru-RU", { weekday: "short", day: "2-digit", month: "2-digit" })}, ${hhmm(t0)}–${hhmm(t0 + model.cellSeconds)}`,
     breaks: runs(online.zone, 2),
-    peaks,
   };
 }
 

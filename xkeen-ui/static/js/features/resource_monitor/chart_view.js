@@ -11,7 +11,7 @@ import { drawCellGrid, drawLevelChart, drawMirrorChart, redrawColumn } from "./c
 import {
   METRIC_LABELS, RANGE_LABELS, ZONE_NAMES, cellTimes, foldHistory, grid24Model, grid24Summary, grid7Model, leaderLines,
   grid7Summary, hasTariff, levelModel, linkOf, minutesText, mirrorModel, num, stepWords, timesOfColumn, xLabels,
-  hhmm, columnCount, grid7CellText, historySinceText,
+  hhmm, columnCount, grid7CellTip, historySinceText,
 } from "./chart_data.js";
 import { setHtml } from "./tools_format.js";
 
@@ -102,6 +102,10 @@ export function createChartView(host, callbacks = {}) {
         parts.push(`<span class="xkc-tariff">${links.length > 1 ? `Канал · ${esc(link.label)} · ` : ""}${tariffText}</span>`);
         if (reserve) parts.push('<span class="xkc-reserve">резервный канал</span>');
       }
+    } else if (model.kind === "grid7") {
+      // The week is painted smoothly: a scale instead of three swatches.
+      parts.push(`<span class="xkc-chip xkc-scale"><span>${esc(ZONE_NAMES[0])}</span><i class="xkc-grad" aria-hidden="true"></i><span>${esc(ZONE_NAMES[2])}</span></span>`);
+      parts.push(`<span class="xkc-dim">клетка = ${esc(stepWords(model.cellSeconds))}, цвет — средняя нагрузка${model.metric === "all" ? " самой загруженной метрики" : ""}</span>`);
     } else {
       parts.push(legendChip(0, ZONE_NAMES[0]), legendChip(1, ZONE_NAMES[1]), legendChip(2, ZONE_NAMES[2]));
       parts.push(`<span class="xkc-dim">клетка = ${esc(stepWords(model.cellSeconds))}, цвет — худшее значение за это время</span>`);
@@ -169,8 +173,6 @@ export function createChartView(host, callbacks = {}) {
     const s = grid7Summary(model, history);
     return [
       s.heavy ? item("Самый тяжёлый день и час", esc(s.heavy)) : '<span class="zero">Тяжёлых периодов нет</span>',
-      // Short peaks in calm half hours: told apart, not as the heaviest hour.
-      s.peaks ? `<span>Короткие пики перегрузки <b class="z1">${s.peaks}</b></span>` : "",
       `<span>Перерывов связи за неделю <b class="${s.breaks ? "z2" : "zero"}">${s.breaks}</b></span>`,
     ].join("");
   }
@@ -188,8 +190,20 @@ export function createChartView(host, callbacks = {}) {
   }
 
   // ---- tooltip -----------------------------------------------------------
+  // A line is [label, value] or, in the week, { label, value, peak, peakTone, strong, muted }.
+  function tipLine(line) {
+    if (Array.isArray(line)) {
+      const [label, value] = line;
+      return `<div class="l">${label ? `<span>${esc(label)}</span>` : ""}<b>${esc(value)}</b></div>`;
+    }
+    const peak = line.peak ? `<i class="pk${line.peakTone === 2 ? " z2" : ""}"> · ${esc(line.peak)}</i>` : "";
+    return `<div class="l${line.strong ? " st" : ""}${line.muted ? " mu" : ""}"><span>${esc(line.label)}</span><b>${esc(line.value)}${peak}</b></div>`;
+  }
+
   function showTip(x, y, tooltip) {
-    tip.innerHTML = `<div class="h">${esc(tooltip.head)}</div>${tooltip.lines.map(([label, value]) => `<div class="l">${label ? `<span>${esc(label)}</span>` : ""}<b>${esc(value)}</b></div>`).join("")}`;
+    const tone = tooltip.tone == null ? "" : ` z${tooltip.tone}`;
+    const title = tooltip.title ? `<div class="t${tone}">${esc(tooltip.title)}</div>` : "";
+    tip.innerHTML = `<div class="h">${esc(tooltip.head)}</div>${title}${tooltip.lines.map(tipLine).join("")}`;
     tip.hidden = false;
     const width = tip.offsetWidth;
     const left = x + 14 + width > wrap.clientWidth ? Math.max(0, x - 14 - width) : x + 14;
@@ -235,10 +249,10 @@ export function createChartView(host, callbacks = {}) {
       return { head: times.head, lines: [...lines, ...leaderLines(top?.[hit.column])] };
     }
     const row = model.rows[hit.row];
-    const zone = row.cells[hit.column];
-    if (zone == null) return { head: times.head, lines: [["", grid7CellText(model, cur.history, hit.row, hit.column)]] };
+    const cellTip = grid7CellTip(model, cur.history, hit.row, hit.column);
+    if (row.cells[hit.column] == null) return { head: times.head, title: cellTip.title, tone: null, lines: [] };
     const leaders = model.metric === "cpu" || model.metric === "all" ? leaderLines(top?.[row.column[hit.column]]) : [];
-    return { head: times.head, lines: [["", grid7CellText(model, cur.history, hit.row, hit.column)], ...leaders] };
+    return { head: times.head, title: cellTip.title, tone: cellTip.tone, lines: [...cellTip.lines, ...leaders] };
   }
 
   function onMove(event) {
@@ -338,7 +352,7 @@ export function createChartView(host, callbacks = {}) {
       opts = model.tariffed ? { percent: true, hoverIndex: -1 } : { neutral: true, scaleMax: model.scaleMax, hoverIndex: -1 };
       handle = drawMirrorChart(canvas, model.up, model.down, opts);
     } else {
-      handle = drawCellGrid(canvas, model.rows.map((row) => ({ cells: row.cells, peakDots: row.peakDots })), { columns: model.columns });
+      handle = drawCellGrid(canvas, model.rows.map((row) => ({ cells: row.cells, peakDots: row.peakDots, levels: row.levels })), { columns: model.columns });
     }
     cur.handle = handle;
     cur.opts = opts;

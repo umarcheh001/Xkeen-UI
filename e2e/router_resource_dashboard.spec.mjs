@@ -1260,6 +1260,35 @@ test('24 h cell opens 6 h with highlight, the last hour opens 1 h; 7 d last day 
   await expect(view.locator('.xkc-b[data-range="24h"]')).toHaveAttribute('aria-pressed', 'true');
 });
 
+test('the week is painted smoothly and its cells tell averages and peaks', async ({ page }) => {
+  const view = await openDashboard(page);
+  await view.locator('.xkc-b[data-range="7d"]').click();
+  await expect(view.locator('.xkc-canvas')).toHaveAttribute('data-kind', 'grid7');
+  await view.locator('.xkc-b[data-metric="all"]').click();
+  // A scale instead of three swatches; no counter of short peaks.
+  await expect(view.locator('.xkc-legend .xkc-grad, .xkc-grad').first()).toBeVisible();
+  await expect(view.locator('.xkc-summary')).not.toContainText('Короткие пики');
+  await view.locator('.xkc-canvas').scrollIntoViewIfNeeded();
+  const point = (row) => view.locator('.xkc-canvas').evaluate((canvas, r) => {
+    const rect = canvas.getBoundingClientRect();
+    const h = canvas.xkChart;
+    return { x: rect.left + h.plot.left + 10.5 * (h.plot.width / 48), y: rect.top + (r + 0.5) * (rect.height / 7) };
+  }, row);
+  let p = await point(1);
+  await page.mouse.move(p.x, p.y);
+  const tip = view.locator('.xkc-tip');
+  await expect(tip.locator('.t')).toHaveText(/^(Всё в норме|Близко к высокой: .+|Высокая нагрузка: .+|Перегрузка: .+)$/);
+  await expect(tip).toContainText('Память47 %');
+  await expect(tip.locator('.pk').first()).toContainText('пик');
+  // A single metric: its value and the threshold it is measured by.
+  await view.locator('.xkc-b[data-metric="memory"]').click();
+  p = await point(1);
+  await page.mouse.move(p.x, p.y);
+  await expect(tip.locator('.t')).toHaveCount(0);
+  await expect(tip).toContainText('Норма');
+  await expect(tip).toContainText('высокая — от 75 %');
+});
+
 // Even columns: xray leads; odd ones: the network packets of the kernel lead; column 3 has no data.
 const LEADERS = i => (i === 3 ? null : i % 2 ? [['ksoftirqd', 30], ['xray', 10]] : [['xray', 40], ['ndm', 2]]);
 

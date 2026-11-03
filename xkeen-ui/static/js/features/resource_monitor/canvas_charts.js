@@ -61,6 +61,29 @@ function zoneColor(colors, zone) {
   return colors.zones[zone] || colors.zones[0];
 }
 
+// A CSS colour as [r, g, b]: the context normalises whatever the theme gives.
+function rgbOf(ctx, css) {
+  ctx.fillStyle = "#000";
+  ctx.fillStyle = css;
+  const value = String(ctx.fillStyle);
+  if (value[0] === "#") return [1, 3, 5].map((i) => parseInt(value.slice(i, i + 2), 16));
+  return (value.match(/[\d.]+/g) || ["0", "0", "0"]).slice(0, 3).map(Number);
+}
+
+const mixRgb = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
+
+// The smooth colour of a level 0..2 (04.11.2026): a calm cell is a dim green that
+// brightens towards «высокая», turns yellow from NEAR on, then red at «перегрузка».
+const LEVEL_NEAR = 0.8;
+function levelFill(ctx, colors, level) {
+  if (!colors.rgb) colors.rgb = colors.zones.map((css) => rgbOf(ctx, css));
+  const [green, yellow, red] = colors.rgb;
+  const l = Math.max(0, Math.min(2, level));
+  if (l < LEVEL_NEAR) return { rgb: green, alpha: 0.4 + (l / LEVEL_NEAR) * 0.5 };
+  if (l < 1) return { rgb: mixRgb(green, yellow, (l - LEVEL_NEAR) / (1 - LEVEL_NEAR)), alpha: 0.9 + ((l - LEVEL_NEAR) / (1 - LEVEL_NEAR)) * 0.1 };
+  return { rgb: mixRgb(yellow, red, l - 1), alpha: 1 };
+}
+
 function litCount(avg, scaleMax, segments) {
   if (avg == null || !(avg > 0) || !(scaleMax > 0)) return 0;
   return Math.min(segments, Math.max(1, Math.round((avg / scaleMax) * segments)));
@@ -299,6 +322,12 @@ export function drawCellGrid(canvas, rows, opts = {}) {
       ctx.lineWidth = 1;
       if (gap) ctx.strokeRect(x + 0.5, y + 0.5, Math.max(0, cellW - gap - 1), Math.max(0, cellH - gap - 1));
       ctx.globalAlpha = 1;
+    } else if (cell && cell.level != null) {
+      const { rgb, alpha } = levelFill(ctx, colors, cell.level);
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = `rgb(${rgb.join(",")})`;
+      ctx.fillRect(x, y, cellW - gap, cellH - gap);
+      ctx.globalAlpha = 1;
     } else {
       ctx.fillStyle = zoneColor(colors, zone);
       ctx.fillRect(x, y, cellW - gap, cellH - gap);
@@ -316,7 +345,7 @@ export function drawCellGrid(canvas, rows, opts = {}) {
   list.forEach((row, r) => {
     if (row.label) ctx.fillText(row.label, left - 4, r * cellH + cellH / 2);
     (row.cells || []).forEach((zone, c) => {
-      paint(r * columns + c, { zone: zone ?? null, peak: Boolean(row.peakDots?.[c]) }, false);
+      paint(r * columns + c, { zone: zone ?? null, peak: Boolean(row.peakDots?.[c]), level: row.levels?.[c] ?? null }, false);
     });
   });
 

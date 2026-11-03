@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 660,
-      "size_bytes": 9027302,
+      "size_bytes": 9028989,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -359,7 +359,7 @@
       ],
       "removable": true,
       "unit_count": 48,
-      "size_bytes": 579705,
+      "size_bytes": 592872,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 9,
@@ -14219,7 +14219,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/router_resource_dashboard.spec.mjs",
-      "size_bytes": 105492,
+      "size_bytes": 107179,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -24562,7 +24562,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_resource_monitor_week_js.py",
-      "size_bytes": 5950,
+      "size_bytes": 10691,
       "depends_on": [
         "core"
       ],
@@ -24800,7 +24800,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor/canvas_charts.js",
-      "size_bytes": 13904,
+      "size_bytes": 15352,
       "depends_on": [
         "core"
       ],
@@ -24827,7 +24827,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor/chart_css.js",
-      "size_bytes": 6157,
+      "size_bytes": 6884,
       "depends_on": [
         "core"
       ],
@@ -24854,7 +24854,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor/chart_data.js",
-      "size_bytes": 21515,
+      "size_bytes": 26763,
       "depends_on": [
         "core"
       ],
@@ -24881,7 +24881,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor/chart_view.js",
-      "size_bytes": 21097,
+      "size_bytes": 22100,
       "depends_on": [
         "core"
       ],
@@ -35744,7 +35744,7 @@
         },
         "tool.advanced-diagnostics": {
           "unit_count": 48,
-          "size_bytes": 579705
+          "size_bytes": 592872
         }
       },
       "next_stage": "Этапы 4, 5 и 6."

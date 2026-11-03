@@ -17,6 +17,7 @@ export const CHART_CSS = `
 .xkc-chip i { width: 9px; height: 9px; border-radius: 2px; background: var(--op-success); }
 .xkc-chip i.z1 { background: var(--op-warning); }
 .xkc-chip i.z2 { background: var(--op-danger); }
+.xkc-chip i.xkc-grad { width: 72px; height: 8px; background: linear-gradient(90deg, color-mix(in srgb, var(--op-success) 40%, transparent), var(--op-success) 40%, var(--op-warning) 60%, var(--op-danger)); }
 .xkc-dim { color: var(--op-faint); }
 .xkc-tariff { color: var(--op-text); }
 .xkc-reserve { padding: 1px 8px; border: 1px solid var(--op-warning-border); border-radius: 999px; background: var(--op-warning-soft); color: var(--op-warning-strong); font-size: 11.5px; font-weight: 600; }
@@ -37,6 +38,14 @@ export const CHART_CSS = `
 .xkc-tip .l { display: flex; justify-content: space-between; gap: 14px; }
 .xkc-tip .l span { color: var(--op-muted); }
 .xkc-tip .l b { color: var(--op-text-strong); font-weight: 600; font-variant-numeric: tabular-nums; }
+.xkc-tip .t { margin: 2px 0 6px; color: var(--op-text-strong); font-weight: 650; }
+.xkc-tip .t.z0 { color: var(--op-success); }
+.xkc-tip .t.z1 { color: var(--op-warning-strong, var(--op-warning)); }
+.xkc-tip .t.z2 { color: var(--op-danger); }
+.xkc-tip .l.st span { color: var(--op-text-strong); font-weight: 650; }
+.xkc-tip .l.mu b { color: var(--op-muted); font-weight: 500; }
+.xkc-tip .pk { color: var(--op-muted); font-style: normal; font-weight: 500; }
+.xkc-tip .pk.z2 { color: var(--op-danger); font-weight: 650; }
 .xkc-axis { position: relative; height: 22px; margin: 4px 14px 0 calc(8px + var(--g) + 8px); color: var(--op-muted); font-size: 11px; }
 .xkc-axis span { position: absolute; top: 4px; transform: translateX(-50%); white-space: nowrap; }
 .xkc-axis span.first { transform: none; }
