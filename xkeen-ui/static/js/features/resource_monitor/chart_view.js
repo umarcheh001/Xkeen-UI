@@ -11,7 +11,7 @@ import { drawCellGrid, drawLevelChart, drawMirrorChart, redrawColumn } from "./c
 import {
   METRIC_LABELS, RANGE_LABELS, ZONE_NAMES, cellTimes, foldHistory, grid24Model, grid24Summary, grid7Model, leaderLines,
   grid7Summary, hasTariff, levelModel, linkOf, minutesText, mirrorModel, num, stepWords, timesOfColumn, xLabels,
-  hhmm, columnCount,
+  hhmm, columnCount, grid7CellText, historySinceText,
 } from "./chart_data.js";
 import { setHtml } from "./tools_format.js";
 
@@ -106,8 +106,8 @@ export function createChartView(host, callbacks = {}) {
       parts.push(legendChip(0, ZONE_NAMES[0]), legendChip(1, ZONE_NAMES[1]), legendChip(2, ZONE_NAMES[2]));
       parts.push(`<span class="xkc-dim">клетка = ${esc(stepWords(model.cellSeconds))}, цвет — худшее значение за это время</span>`);
     }
-    const since = history.history_since;
-    if (Number.isFinite(since) && since > history.start + history.step_s) parts.push(`<span class="xkc-dim">история с ${hhmm(since)}</span>`);
+    const sinceText = historySinceText(history);
+    if (sinceText) parts.push(`<span class="xkc-dim">${esc(sinceText)}</span>`);
     if (input.stale) parts.push('<span class="xkc-stale">обновить не удалось</span>');
     return parts.join("");
   }
@@ -169,6 +169,8 @@ export function createChartView(host, callbacks = {}) {
     const s = grid7Summary(model, history);
     return [
       s.heavy ? item("Самый тяжёлый день и час", esc(s.heavy)) : '<span class="zero">Тяжёлых периодов нет</span>',
+      // Short peaks in calm half hours: told apart, not as the heaviest hour.
+      s.peaks ? `<span>Короткие пики перегрузки <b class="z1">${s.peaks}</b></span>` : "",
       `<span>Перерывов связи за неделю <b class="${s.breaks ? "z2" : "zero"}">${s.breaks}</b></span>`,
     ].join("");
   }
@@ -234,10 +236,9 @@ export function createChartView(host, callbacks = {}) {
     }
     const row = model.rows[hit.row];
     const zone = row.cells[hit.column];
-    if (zone == null) return { head: times.head, lines: [["", "нет данных"]] };
-    const by = row.by[hit.column];
+    if (zone == null) return { head: times.head, lines: [["", grid7CellText(model, cur.history, hit.row, hit.column)]] };
     const leaders = model.metric === "cpu" || model.metric === "all" ? leaderLines(top?.[row.column[hit.column]]) : [];
-    return { head: times.head, lines: [["", `${ZONE_NAMES[zone]}${model.metric === "all" && by ? ` · хуже всего: ${by}` : ""}`], ...leaders] };
+    return { head: times.head, lines: [["", grid7CellText(model, cur.history, hit.row, hit.column)], ...leaders] };
   }
 
   function onMove(event) {

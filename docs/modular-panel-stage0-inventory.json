@@ -358,12 +358,12 @@
         "ndmc (router diagnostics optional)"
       ],
       "removable": true,
-      "unit_count": 47,
-      "size_bytes": 571484,
+      "unit_count": 48,
+      "size_bytes": 579705,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 9,
-        "backend_test": 12,
+        "backend_test": 13,
         "frontend_feature": 22,
         "frontend_test": 3
       },
@@ -24561,6 +24561,25 @@
     {
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
+      "path": "tests/test_resource_monitor_week_js.py",
+      "size_bytes": 5950,
+      "depends_on": [
+        "core"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "ndmc (router diagnostics optional)"
+      ],
+      "environment_variables": [],
+      "removable": true
+    },
+    {
+      "module_id": "tool.advanced-diagnostics",
+      "kind": "backend_test",
       "path": "tests/test_system_resources.py",
       "size_bytes": 15311,
       "depends_on": [
@@ -24835,7 +24854,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor/chart_data.js",
-      "size_bytes": 19367,
+      "size_bytes": 21515,
       "depends_on": [
         "core"
       ],
@@ -24862,7 +24881,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor/chart_view.js",
-      "size_bytes": 20974,
+      "size_bytes": 21097,
       "depends_on": [
         "core"
       ],
@@ -34783,7 +34802,7 @@
       {
         "from": "tool.advanced-diagnostics",
         "to": "core",
-        "unit_count": 47,
+        "unit_count": 48,
         "examples": [
           "xkeen-ui/routes/system_resources.py",
           "xkeen-ui/services/system_resources_history/__init__.py",
@@ -35724,8 +35743,8 @@
           "size_bytes": 1008333
         },
         "tool.advanced-diagnostics": {
-          "unit_count": 47,
-          "size_bytes": 571484
+          "unit_count": 48,
+          "size_bytes": 579705
         }
       },
       "next_stage": "Этапы 4, 5 и 6."

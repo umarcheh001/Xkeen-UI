@@ -44,7 +44,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 | `tool.files` | 85 | 984.7 КБ | 43 | 1 | 1 | да |
 | `tool.backups` | 8 | 99.7 КБ | 14 | 0 | 0 | да |
 | `integration.happ` | 22 | 319.1 КБ | 5 | 0 | 1 | да |
-| `tool.advanced-diagnostics` | 47 | 558.1 КБ | 16 | 0 | 1 | да |
+| `tool.advanced-diagnostics` | 48 | 566.1 КБ | 16 | 0 | 1 | да |
 
 ## Backend routes и регистрация
 
@@ -119,7 +119,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 | `integration.happ` | `core` | 22 | `xkeen-ui/routes/happ_decryptor.py`<br>`xkeen-ui/services/happ_decryptor/__init__.py`<br>`xkeen-ui/services/happ_decryptor/engine.py` |
 | `integration.happ` | `engine.mihomo` | 2 | `xkeen-ui/services/mihomo_hwid_sub.py`<br>`xkeen-ui/static/js/features/mihomo_hwid_sub.js` |
 | `integration.happ` | `engine.xray` | 2 | `xkeen-ui/services/happ_decryptor/engine.py`<br>`xkeen-ui/services/mihomo_hwid_sub.py` |
-| `tool.advanced-diagnostics` | `core` | 47 | `xkeen-ui/routes/system_resources.py`<br>`xkeen-ui/services/system_resources_history/__init__.py`<br>`xkeen-ui/services/system_resources_history/collector.py` |
+| `tool.advanced-diagnostics` | `core` | 48 | `xkeen-ui/routes/system_resources.py`<br>`xkeen-ui/services/system_resources_history/__init__.py`<br>`xkeen-ui/services/system_resources_history/collector.py` |
 | `tool.backups` | `core` | 8 | `xkeen-ui/routes/backups.py`<br>`xkeen-ui/services/mihomo_backups.py`<br>`xkeen-ui/services/xray_backups.py` |
 | `tool.backups` | `engine.mihomo` | 1 | `xkeen-ui/services/mihomo_backups.py` |
 | `tool.backups` | `engine.xray` | 2 | `xkeen-ui/routes/backups.py`<br>`xkeen-ui/static/js/features/backups.js` |
