@@ -253,6 +253,13 @@ function secondsBetween(a, b) {
   return s >= 60 ? `${Math.floor(s / 60)} мин ${s % 60} с` : `${s} с`;
 }
 
+// A version after «до …» is written as a tag, as panel_summary.js does; the
+// file stays without imports, so the rule is repeated here.
+function versionTag(version) {
+  const text = String(version || '').trim();
+  return /^v\d/i.test(text) ? text : `v${text}`;
+}
+
 function finishRun(run) {
   const tag = (run.steps.find(([, t]) => /^Latest tag: /.test(t)) || [])[1];
   const version = tag ? tag.replace(/^Latest tag: /, '') : '';
@@ -260,7 +267,7 @@ function finishRun(run) {
   const rollback = run.steps.some(([, t]) => /^Rollback from: /.test(t));
   if (run.done) {
     run.level = 'ok';
-    run.msg = rollback ? 'Панель откачена из копии' : (version ? `Панель обновлена до ${version}` : 'Обновление завершено');
+    run.msg = rollback ? 'Панель откачена из копии' : (version ? `Панель обновлена до ${versionTag(version)}` : 'Обновление завершено');
   } else if (run.warn) {
     run.level = 'error';
     run.msg = `Обновление прервано: ${run.warn}`;
@@ -438,8 +445,8 @@ function operationMessage(entry) {
   if (entry.result !== 'committed') {
     return `Не выполнено: ${entry.error || OPERATION_RESULTS[entry.result] || String(entry.result || 'без итога')}`;
   }
-  if (entry.operation === 'panel-update') return version ? `Панель обновлена до ${version}` : 'Панель обновлена';
-  if (entry.operation === 'panel-rollback') return version ? `Панель откачена до ${version}` : 'Панель откачена';
+  if (entry.operation === 'panel-update') return version ? `Панель обновлена до ${versionTag(version)}` : 'Панель обновлена';
+  if (entry.operation === 'panel-rollback') return version ? `Панель откачена до ${versionTag(version)}` : 'Панель откачена';
   if (entry.operation === 'profile-transition') return 'Набор модулей применён';
   const verb = MODULE_DONE[entry.operation];
   const name = entry.module_name || entry.module_id || '';

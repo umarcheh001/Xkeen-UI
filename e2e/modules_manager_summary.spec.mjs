@@ -107,8 +107,8 @@ test.describe('Modules panel update surface', () => {
     await page.getByRole('button', { name: 'Проверить ещё раз' }).click();
     await expect(summary).toContainText('Обновит панель и все модули одним выпуском.');
     await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem('xkeen.modules.update.v2'))?.targetVersion)).toBe('2.11.0');
-    await page.getByRole('button', { name: 'Обновить до 2.11.0' }).click();
-    await expect(page.getByRole('dialog', { name: 'Обновить панель до 2.11.0' })).toContainText('2.10.0 → 2.11.0');
+    await page.getByRole('button', { name: 'Обновить до v2.11.0' }).click();
+    await expect(page.getByRole('dialog', { name: 'Обновить панель до v2.11.0' })).toContainText('2.10.0 → 2.11.0');
   });
 
   test('a kept catalog older than an hour is checked again on GitHub when the screen opens', async ({ page }) => {
@@ -194,7 +194,7 @@ test.describe('Modules panel update surface', () => {
     } }));
     await page.goto('/modules');
 
-    await expect(page.getByRole('button', { name: 'Обновить до 2.11.0' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Обновить до v2.11.0' })).toBeVisible();
     await expect(page.locator('.modules-summary .xk-summary-note')).toContainText('Локальная сборка.');
     await page.getByRole('tab', { name: 'Доступные' }).click();
     const host = page.locator('#modules-card-host');
@@ -541,7 +541,7 @@ test.describe('What the window says about operations and refusals', () => {
     await installLifecycleRoutes(page, { status: failedUpdate, installed: named });
     await page.goto('/modules');
     const block = page.locator('.modules-operation');
-    await expect(block.locator('h2')).toContainText('Обновление панели до 2.11.0');
+    await expect(block.locator('h2')).toContainText('Обновление панели до v2.11.0');
     await expect(block.locator('.modules-chip')).toHaveText('Отменено, файлы возвращены');
     await expect(block).toContainText(/Начато \d{2}\.\d{2}\.\d{4}, \d{2}:\d{2}:\d{2} · длилось 48 с/);
     await expect(block).not.toContainText('1791571142');
@@ -757,7 +757,7 @@ test.describe('What the window says about operations and refusals', () => {
     await expect(stat).toHaveClass(/is-accent/);
     // The line stands right under the counters.
     const note = card.locator('.xk-summary-stats + .xk-summary-modules-note');
-    await expect(note).toHaveText('Панель актуальна. Есть обновления модулей: Файловый менеджер 1.0.1.');
+    await expect(note).toHaveText('Панель актуальна. Есть обновления модулей: Файловый менеджер v1.0.1.');
     const link = card.locator('.xk-summary-link');
     await expect(link).toHaveClass(/is-primary/);
     await expect(link).toHaveText('Обновить в «Модулях и обновлениях»');
@@ -767,7 +767,7 @@ test.describe('What the window says about operations and refusals', () => {
     await page.reload();
     await expect(stat.locator('b')).toHaveText('5');
     await expect(stat.locator('span')).toHaveText('модулей можно обновить');
-    await expect(note).toHaveText('Панель актуальна. Есть обновления модулей: Xray 1.0.1, Mihomo 1.0.1, Редакторы 1.0.1 и ещё 2.');
+    await expect(note).toHaveText('Панель актуальна. Есть обновления модулей: Xray v1.0.1, Mihomo v1.0.1, Редакторы v1.0.1 и ещё 2.');
 
     // No module updates: the card is as before.
     offers = [];

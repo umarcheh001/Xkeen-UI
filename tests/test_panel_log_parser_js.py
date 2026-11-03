@@ -300,7 +300,7 @@ def test_updates_file_is_read_as_operations():
 def test_a_panel_update_is_one_record_with_its_steps_and_environment():
     [rec] = build("operations", [operation()])
     assert (rec["level"], rec["source"], rec["msg"], rec["dur"]) == (
-        "ok", "Обновление панели", "Панель обновлена до 3.0.3-beta.6", "19 с",
+        "ok", "Обновление панели", "Панель обновлена до v3.0.3-beta.6", "19 с",
     )
     assert ["Выпуск", "3.0.3-beta.5 → 3.0.3-beta.6"] in rec["kv"]
     assert ["Операция", "20261026T122903Z-e1d4a5"] in rec["kv"]

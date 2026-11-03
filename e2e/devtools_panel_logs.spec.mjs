@@ -127,7 +127,7 @@ test.describe('DevTools logs', () => {
     await expect(failed.locator('.msg')).toContainText('Не выполнено: архив модуля не прошёл проверку');
     const run = rows(page).nth(1);
     await expect(run.locator('.src')).toHaveText('Обновление панели');
-    await expect(run.locator('.msg')).toContainText('Панель обновлена до 3.0.3-beta.6');
+    await expect(run.locator('.msg')).toContainText('Панель обновлена до v3.0.3-beta.6');
     await expect(run.locator('.rep')).toHaveText('19 с');
     await run.click();
     const detail = page.locator('#dt-log-view .detail');

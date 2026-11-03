@@ -353,6 +353,10 @@ class NotificationCenter:
         module_updates = self._module_update_records(payload, channel)
         if payload.get("update_available") is not True:
             return module_updates
+        # The new panel brings every module with it: only the panel is told of,
+        # unless it needs the installer and the button cannot lay it.
+        if payload.get("requires_installer") is not True:
+            module_updates = []
 
         target_version = str(payload.get("target_version") or "")
         source_version = str(payload.get("source_version") or "")

@@ -1249,7 +1249,7 @@
           "accessible_label": "Скачать"
         },
         {
-          "location": "xkeen-ui/static/js/features/module_manager/render.js:L1435",
+          "location": "xkeen-ui/static/js/features/module_manager/render.js:L1478",
           "control_type": "runtime-action",
           "accessible_label": "Скачать"
         },
@@ -1259,7 +1259,7 @@
           "accessible_label": "Скачать"
         },
         {
-          "location": "xkeen-ui/static/js/features/module_manager/render.js:L536",
+          "location": "xkeen-ui/static/js/features/module_manager/render.js:L539",
           "control_type": "runtime-action",
           "accessible_label": "Скачать"
         },
@@ -2027,7 +2027,7 @@
           "accessible_label": "Информация"
         },
         {
-          "location": "xkeen-ui/static/js/features/module_manager/render.js:L611",
+          "location": "xkeen-ui/static/js/features/module_manager/render.js:L639",
           "control_type": "runtime-action",
           "accessible_label": "Информация"
         },
@@ -2278,7 +2278,7 @@
           "accessible_label": "Дополнительные действия"
         },
         {
-          "location": "xkeen-ui/static/js/features/module_manager/render.js:L479",
+          "location": "xkeen-ui/static/js/features/module_manager/render.js:L482",
           "control_type": "runtime-action",
           "accessible_label": "Дополнительные действия"
         },

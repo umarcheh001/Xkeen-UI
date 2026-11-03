@@ -407,7 +407,7 @@ test.describe('Module lifecycle review', () => {
     await page.goto('/modules');
     expect(await page.evaluate(() => sessionStorage.getItem('xkeen.modules.update.v2'))).toBeNull();
     await page.getByRole('button', { name: 'Обновить панель' }).click();
-    await expect(page.getByRole('dialog', { name: 'Обновить панель до 2.11.0' })).toContainText('2.11.0');
+    await expect(page.getByRole('dialog', { name: 'Обновить панель до v2.11.0' })).toContainText('2.11.0');
     expect(JSON.parse(await page.evaluate(() => sessionStorage.getItem('xkeen.modules.update.v2')))).toEqual({
       schema: 2, sourceVersion: '2.10.0', targetVersion: '2.11.0', channel: 'stable',
     });

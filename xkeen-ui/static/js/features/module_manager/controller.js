@@ -1,4 +1,4 @@
-import { editorChangeOf, renderInstalled, renderAvailable, renderCatalogError, renderPlan, renderPlanError, renderPrepareDialog, renderOperationDialog, renderOperationStatus, hasOperationStatus, describeLifecycleFailure, renderPageAlert, TILE_REFUSAL_CODES } from './render.js';
+import { editorChangeOf, renderInstalled, renderAvailable, renderCatalogError, renderPlan, renderPlanError, renderPrepareDialog, renderOperationDialog, renderOperationStatus, hasOperationStatus, describeLifecycleFailure, renderPageAlert, TILE_REFUSAL_CODES, panelUpdateFound } from './render.js';
 import { lifecycleAvailable, modulesChangeable } from '../panel_summary.js';
 import { clearModulesUpdateBadge, reconcileModulesUpdateBadge, reconcileModulesUpdateCheck, reconcileModulesUpdatePlan, reconcileModulesUpdateStatus } from './badge.js';
 
@@ -282,7 +282,9 @@ export function createModuleManagerController({ root, api, pollMs, reload = () =
     const actionsDisabled = mutationsLocked();
     syncRefreshControls();
     if (state.selectedTab === 'available') {
-      if (state.catalog) renderAvailable(host, state.catalog, requestPlan, actionsDisabled, { names: moduleNames(), onRefresh: reloadCatalog });
+      if (state.catalog) renderAvailable(host, state.catalog, requestPlan, actionsDisabled, {
+        names: moduleNames(), onRefresh: reloadCatalog, withPanel: panelUpdateFound(state.update),
+      });
       // The refusal stays until the next attempt: a redraw must not turn it into "loading".
       else if (state.catalogError) renderCatalogError(host, state.catalogError, reloadCatalog);
       else host.textContent = 'Загрузка каталога…';

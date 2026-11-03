@@ -24,7 +24,7 @@ test.describe('Module update', () => {
     const tile = tileOf(page, MIHOMO);
     await expect(tile.locator('.modules-tile-version')).toHaveText('версия 1.0.0 → 1.0.1');
     await expect(tile.locator('.modules-tile-foot')).toContainText('Доступна версия 1.0.1');
-    const button = tile.getByRole('button', { name: 'Обновить «Mihomo» до 1.0.1' });
+    const button = tile.getByRole('button', { name: 'Обновить «Mihomo» до v1.0.1' });
     await expect(button).toBeVisible();
     await expect(button).toHaveText('Обновить');
     // Only the module that has an update offers one.
@@ -34,7 +34,7 @@ test.describe('Module update', () => {
     const counter = page.locator('.xk-summary-stat[data-stat="update"]');
     await expect(counter.locator('b')).toHaveText('1');
     await expect(counter.locator('span')).toHaveText('модуль можно обновить');
-    await expect(page.locator('.modules-summary')).toContainText('Есть обновления модулей: Mihomo 1.0.1.');
+    await expect(page.locator('.modules-summary')).toContainText('Есть обновления модулей: Mihomo v1.0.1.');
   });
 
   test('the update goes on in the window of the operation and ends in success', async ({ page }) => {
@@ -58,9 +58,9 @@ test.describe('Module update', () => {
 
     await page.goto('/modules');
     await page.evaluate(() => { window.xkBeforeUpdate = true; });
-    await tileOf(page, MIHOMO).getByRole('button', { name: 'Обновить «Mihomo» до 1.0.1' }).click();
+    await tileOf(page, MIHOMO).getByRole('button', { name: 'Обновить «Mihomo» до v1.0.1' }).click();
     const dialog = page.getByRole('dialog');
-    await expect(dialog.locator('#modules-plan-title')).toHaveText('Обновить «Mihomo» до 1.0.1');
+    await expect(dialog.locator('#modules-plan-title')).toHaveText('Обновить «Mihomo» до v1.0.1');
     await expect(dialog.locator('#modules-plan-description')).toHaveText(
       'Текущие файлы модуля будут сохранены. При ошибке проверки или перезапуска панель вернёт версию 1.0.0.',
     );
@@ -70,8 +70,8 @@ test.describe('Module update', () => {
     await dialog.getByRole('button', { name: 'Обновить', exact: true }).click();
     await expect(dialog.locator('.modules-plan-progress-head strong')).toHaveText('Подготовка');
     await expect(dialog.getByRole('button', { name: 'Обновление…' })).toBeDisabled();
-    await expect(tileOf(page, MIHOMO).locator('.modules-tile-foot')).toContainText('Обновляется до 1.0.1…');
-    await expect(page.locator('#modules-operation-status')).toContainText('Обновление модуля «Mihomo» до 1.0.1');
+    await expect(tileOf(page, MIHOMO).locator('.modules-tile-foot')).toContainText('Обновляется до v1.0.1…');
+    await expect(page.locator('#modules-operation-status')).toContainText('Обновление модуля «Mihomo» до v1.0.1');
 
     // The archive comes down: how much, how fast, how long still.
     status = downloading(1_000_000);
@@ -90,7 +90,7 @@ test.describe('Module update', () => {
     // The runner restarted the panel: the page loads anew and the window says how it ended.
     status = server.module_update_committed;
     await expect.poll(() => page.evaluate(() => window.xkBeforeUpdate === true).catch(() => true), { timeout: 15000 }).toBe(false);
-    await expect(page.getByRole('dialog', { name: '«Mihomo» обновлён до 1.0.1' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: '«Mihomo» обновлён до v1.0.1' })).toBeVisible();
     await expect(dialog.locator('.modules-plan-progress-head output')).toHaveText('7 из 7');
     await dialog.getByRole('button', { name: 'Готово' }).click();
     await expect(tileOf(page, MIHOMO).locator('.modules-tile-version')).toHaveText('версия 1.0.1');
@@ -194,19 +194,52 @@ test.describe('Module update', () => {
     expect(await button.evaluate((element) => getComputedStyle(element).boxShadow)).toBe('none');
   });
 
+  test('while a panel update is found, the module update waits for it and stays in the menu', async ({ page }) => {
+    const both = { ...server.update_check, module_updates: server.update_check_modules.module_updates, module_updates_stale_reason: null };
+    await installLifecycleRoutes(page, { available: server.available_update });
+    await routeUpdateCheck(page, both);
+    await routePlans(page, () => ({ json: server.module_update_plan }));
+
+    await page.goto('/modules');
+    await expect(page.getByRole('button', { name: 'Обновить до v2.11.0' })).toBeVisible();
+    const tile = tileOf(page, MIHOMO);
+    await expect(tile.locator('.modules-tile-foot')).toHaveText('Обновится вместе с панелью');
+    await expect(tile.locator('.modules-tile-version')).toHaveText('версия 1.0.0');
+    await expect(page.locator('.modules-tile-update')).toHaveCount(0);
+    await expect(page.locator('.modules-summary')).toContainText('Обновит панель и все модули одним выпуском.');
+    await expect(page.locator('.modules-summary')).not.toContainText('Есть обновления модулей');
+    await expect(page.locator('.xk-summary-stat[data-stat="update"] b')).toHaveText('2.11.0');
+
+    // Whoever stays on this panel still updates the module alone, from the menu.
+    await tile.locator('.modules-tile-menu-button').click();
+    await expect(tile.locator('.modules-tile-menu-item').first()).toHaveText('Обновить до v1.0.1');
+    await tile.locator('.modules-tile-menu-item').first().click();
+    await expect(page.getByRole('dialog').locator('#modules-plan-title')).toHaveText('Обновить «Mihomo» до v1.0.1');
+    await page.getByRole('dialog').getByRole('button', { name: 'Отмена', exact: true }).click();
+
+    // The tab of available modules: the module stands with the installed ones.
+    await page.getByRole('tab', { name: 'Доступные' }).click();
+    const card = catalogTileOf(page, MIHOMO);
+    await expect(card).toHaveClass(/is-quiet/);
+    await expect(card.locator('.modules-tile-version')).toHaveText('версия 1.0.0');
+    await expect(card.locator('.modules-tile-foot')).toHaveText('Обновится вместе с панелью');
+    await expect(card.getByRole('button')).toHaveCount(0);
+    await expect(page.locator('.modules-catalog-rest-head')).toHaveText('Установлены');
+  });
+
   test('the tile menu offers the update first', async ({ page }) => {
     await installLifecycleRoutes(page, { available: server.available_update });
     await routeUpdateCheck(page, server.update_check_modules);
     await routePlans(page, () => ({ json: server.module_update_plan }));
 
     await page.goto('/modules');
-    await tileOf(page, MIHOMO).getByRole('button', { name: 'Обновить «Mihomo» до 1.0.1' }).waitFor();
+    await tileOf(page, MIHOMO).getByRole('button', { name: 'Обновить «Mihomo» до v1.0.1' }).waitFor();
     await tileOf(page, MIHOMO).locator('.modules-tile-menu-button').click();
     const items = tileOf(page, MIHOMO).locator('.modules-tile-menu-item');
-    await expect(items.first()).toHaveText('Обновить до 1.0.1');
-    await expect(items).toHaveText(['Обновить до 1.0.1', 'Восстановить файлы модуля', 'Удалить модуль']);
+    await expect(items.first()).toHaveText('Обновить до v1.0.1');
+    await expect(items).toHaveText(['Обновить до v1.0.1', 'Восстановить файлы модуля', 'Удалить модуль']);
     await items.first().click();
-    await expect(page.getByRole('dialog').locator('#modules-plan-title')).toHaveText('Обновить «Mihomo» до 1.0.1');
+    await expect(page.getByRole('dialog').locator('#modules-plan-title')).toHaveText('Обновить «Mihomo» до v1.0.1');
   });
 
   test('the tab of available modules offers the update of an installed module', async ({ page }) => {
@@ -225,8 +258,8 @@ test.describe('Module update', () => {
     await expect(card.getByRole('button')).toHaveText(['Обновить']);
     // Installed without an update: nothing to press here, as before.
     await expect(catalogTileOf(page, 'tool.editor').getByRole('button')).toHaveCount(0);
-    await card.getByRole('button', { name: 'Обновить «Mihomo» до 1.0.1' }).click();
-    await expect(page.getByRole('dialog').locator('#modules-plan-title')).toHaveText('Обновить «Mihomo» до 1.0.1');
+    await card.getByRole('button', { name: 'Обновить «Mihomo» до v1.0.1' }).click();
+    await expect(page.getByRole('dialog').locator('#modules-plan-title')).toHaveText('Обновить «Mihomo» до v1.0.1');
   });
 
   test('the update button of the Available tab is the one of the tile', async ({ page }) => {

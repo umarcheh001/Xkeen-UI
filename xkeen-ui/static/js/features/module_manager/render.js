@@ -1,6 +1,6 @@
 import { iconHtml } from '../../ui/operator_icons.js';
 import {
-  formatCheckedAt, lifecycleAvailable, moduleProblem, modulesChangeable, modulesWord, moduleUpdatesText,
+  formatCheckedAt, lifecycleAvailable, moduleProblem, modulesChangeable, modulesWord, moduleUpdatesText, versionTag,
   summaryChannel, summaryHeading, pendingTransition, summaryIssues, summaryLifecycleNote, summaryStats,
 } from '../panel_summary.js';
 
@@ -464,7 +464,10 @@ function tileMenu(item, names, { onPlan, busy, openMenus, offer = null }) {
     .filter((action) => MENU_LABELS[action] && !(action === 'remove' && item.lock_reason === 'last_engine'))
     .map((action) => ({ action, text: MENU_LABELS[action], aria: `${ACTION_LABELS[action]} ${label}` }));
   // An update found for the module comes first.
-  if (offer) actions.unshift({ action: 'update', text: `Обновить до ${offer.version}`, aria: `Обновить ${label} до ${offer.version}` });
+  if (offer) {
+    const to = versionTag(offer.version);
+    actions.unshift({ action: 'update', text: `Обновить до ${to}`, aria: `Обновить ${label} до ${to}` });
+  }
   const deps = Array.isArray(item.dependencies) ? item.dependencies : [];
   if (!actions.length && !deps.length) return null;
   const menu = node('details', 'modules-tile-menu');
@@ -526,11 +529,11 @@ function tileUpdate(item, offer, updatingTo, onPlan, busy) {
   const row = node('div', 'modules-tile-update');
   row.append(node('span', 'modules-tile-dot'));
   if (updatingTo !== null) {
-    row.append(node('span', 'modules-tile-update-text', updatingTo ? `Обновляется до ${updatingTo}…` : 'Обновляется…'));
+    row.append(node('span', 'modules-tile-update-text', updatingTo ? `Обновляется до ${versionTag(updatingTo)}…` : 'Обновляется…'));
     return row;
   }
   row.append(node('span', 'modules-tile-update-text', `Доступна версия ${offer.version}`));
-  const label = `Обновить «${item.name || item.id}» до ${offer.version}`;
+  const label = `Обновить «${item.name || item.id}» до ${versionTag(offer.version)}`;
   const button = node('button', 'btn-primary modules-action modules-action-update');
   button.type = 'button';
   button.insertAdjacentHTML('afterbegin', iconHtml('download', 'modules-action-icon'));
@@ -551,8 +554,28 @@ function noticeLine(host, notice) {
   return host;
 }
 
+// The update of the panel is found: a module with an update of its own waits for it.
+export function panelUpdateFound(update) {
+  return Boolean(update?.checked && update.update_available && !update.requires_installer);
+}
+
+const WITH_PANEL_NOTE = { tone: 'muted', text: 'Обновится вместе с панелью' };
+
+// The bottom line of a tile whose update comes with the panel; a note the tile
+// had stays under it.
+function withPanelFoot(notice) {
+  if (!notice) return noticeLine(node('div', 'modules-tile-foot is-muted modules-tile-with-panel'), WITH_PANEL_NOTE);
+  const foot = node('div', 'modules-tile-foot is-update modules-tile-with-panel');
+  foot.append(
+    noticeLine(node('div', 'modules-tile-foot-row is-muted'), WITH_PANEL_NOTE),
+    noticeLine(node('div', `modules-tile-foot-row is-${notice.tone}`), notice),
+  );
+  return foot;
+}
+
 function moduleTile(item, snapshot, names, {
   onToggle, onPlan, onEditorVariant, busy, openMenus, refusals, onDismissRefusal, moduleUpdates = new Map(), updating = null,
+  withPanel = false,
 }) {
   const tile = node('article', 'modules-tile modules-module');
   tile.dataset.moduleId = item.id;
@@ -560,10 +583,13 @@ function moduleTile(item, snapshot, names, {
   // The update of this module running now, or the one found for it.
   const updatingTo = updating && updating.module_id === item.id ? String(updating.version || '') : null;
   const offer = updatingTo === null ? moduleUpdates.get(item.id) || null : null;
+  // A panel update brings the module too: the tile says so quietly and keeps
+  // the update of the module alone in its menu, for whoever stays on this panel.
+  const waits = Boolean(offer) && withPanel;
   const top = node('div', 'modules-tile-top');
   const title = node('div', 'modules-tile-title');
   title.append(node('strong', 'modules-tile-name', item.name || item.id));
-  const version = versionLine(item, offer);
+  const version = versionLine(item, waits ? null : offer);
   if (version) title.append(version);
   top.append(moduleIcon(item.id), title);
   top.append(item.can_disable ? moduleSwitch(item, { onToggle, busy }) : node('span', 'modules-tile-switch-slot'));
@@ -581,7 +607,9 @@ function moduleTile(item, snapshot, names, {
     return tile;
   }
   const notice = tileNotice(item, names);
-  if (offer || updatingTo !== null) {
+  if (waits) {
+    tile.append(withPanelFoot(notice));
+  } else if (offer || updatingTo !== null) {
     // The update goes first; a note the tile had stays under it, in the same bottom line.
     const foot = node('div', 'modules-tile-foot is-update');
     foot.append(tileUpdate(item, offer, updatingTo, onPlan, busy));
@@ -716,7 +744,7 @@ function renderSummary(snapshot, {
     // A found version is the main action. While the answer is unknown the plan
     // itself tells whether there is anything to lay; a current panel has no button.
     if (update?.checked && update.update_available && !update.requires_installer) {
-      const label = update.target_version ? `Обновить до ${update.target_version}` : ACTION_LABELS['panel-update'];
+      const label = update.target_version ? `Обновить до ${versionTag(update.target_version)}` : ACTION_LABELS['panel-update'];
       const button = actionButton('panel-update', null, label, onPlan, busy);
       button.classList.replace('btn-secondary', 'btn-primary');
       buttons.push(button);
@@ -756,7 +784,7 @@ function planAction(plan, names) {
   if (plan.operation === 'panel-update' || plan.operation === 'panel-rollback') {
     const verb = plan.operation === 'panel-update' ? 'Обновить панель' : 'Откатить панель';
     if (plan.source_version && version) return `${verb}: ${plan.source_version} → ${version}`;
-    return version ? `${verb} до ${version}` : verb;
+    return version ? `${verb} до ${versionTag(version)}` : verb;
   }
   if (plan.operation === 'profile-transition') {
     const target = plan.target_profile && typeof plan.target_profile === 'object' ? plan.target_profile : {};
@@ -822,23 +850,23 @@ function dialogTitle(source, names, editorChange = null) {
   const version = operationVersion(source);
   const module = source.module_id ? `«${moduleLabel(source.module_id, names)}»` : '';
   switch (source.operation) {
-    case 'panel-update': return version ? `Обновить панель до ${version}` : 'Обновить панель';
-    case 'panel-rollback': return version ? `Откатить панель до ${version}` : 'Откатить панель';
+    case 'panel-update': return version ? `Обновить панель до ${versionTag(version)}` : 'Обновить панель';
+    case 'panel-rollback': return version ? `Откатить панель до ${versionTag(version)}` : 'Откатить панель';
     case 'profile-transition': return editorChange ? 'Докачать файлы редакторов и перезапустить' : 'Применить набор модулей';
-    case 'update': return [APPLY_LABELS.update, module, source.module_version ? `до ${source.module_version}` : ''].filter(Boolean).join(' ');
+    case 'update': return [APPLY_LABELS.update, module, source.module_version ? `до ${versionTag(source.module_version)}` : ''].filter(Boolean).join(' ');
     default: return [APPLY_LABELS[source.operation] || 'Операция', module].filter(Boolean).join(' ');
   }
 }
 
 function doneTitle(status, names, editorChange = null) {
   const version = operationVersion(status);
-  if (status.operation === 'panel-update') return version ? `Панель обновлена до ${version}` : 'Панель обновлена';
-  if (status.operation === 'panel-rollback') return version ? `Панель откачена до ${version}` : 'Панель откачена';
+  if (status.operation === 'panel-update') return version ? `Панель обновлена до ${versionTag(version)}` : 'Панель обновлена';
+  if (status.operation === 'panel-rollback') return version ? `Панель откачена до ${versionTag(version)}` : 'Панель откачена';
   if (status.operation === 'profile-transition') {
     return editorChange ? `Редакторы переведены на «${editorVariantLabel(editorChange.to)}»` : 'Набор модулей применён';
   }
   const verb = DONE_VERBS[status.operation];
-  const to = status.operation === 'update' && status.module_version ? ` до ${status.module_version}` : '';
+  const to = status.operation === 'update' && status.module_version ? ` до ${versionTag(status.module_version)}` : '';
   return verb && status.module_id ? `«${moduleLabel(status.module_id, names)}» ${verb}${to}` : 'Операция завершена';
 }
 
@@ -1155,9 +1183,9 @@ export function hasOperationStatus(status) {
 function operationTitle(status, names) {
   const title = OPERATION_TITLES[status.operation];
   if (!title) return 'Операция с модулями';
-  if (status.operation === 'panel-update') return status.version ? `${title} до ${status.version}` : title;
+  if (status.operation === 'panel-update') return status.version ? `${title} до ${versionTag(status.version)}` : title;
   if (status.operation === 'update' && status.module_id) {
-    return [`${title} «${moduleLabel(status.module_id, names)}»`, status.module_version ? `до ${status.module_version}` : ''].filter(Boolean).join(' ');
+    return [`${title} «${moduleLabel(status.module_id, names)}»`, status.module_version ? `до ${versionTag(status.module_version)}` : ''].filter(Boolean).join(' ');
   }
   if (!status.module_id) return [title, status.version].filter(Boolean).join(' ');
   return [`${title} «${moduleLabel(status.module_id, names)}»`, status.version].filter(Boolean).join(' ');
@@ -1272,9 +1300,11 @@ export function renderInstalled(host, snapshot, onToggle, onPlan = () => {}, bus
   host.replaceChildren();
   const known = snapshot.module_names && typeof snapshot.module_names === 'object' ? snapshot.module_names : {};
   const summaryNames = new Map(Object.entries(known));
+  // The new panel brings every module: the summary tells of it alone.
+  const withPanel = panelUpdateFound(update);
   host.append(renderSummary(snapshot, {
     onPlan, busy, onRestart, canRestart, onCheckUpdate, update, onUpdateChannel, channelBusy,
-    moduleUpdates, updateStaleReason, names: summaryNames,
+    moduleUpdates: withPanel ? [] : moduleUpdates, updateStaleReason, names: summaryNames,
   }));
   const list = node('section', 'modules-list card');
   const listHeader = node('div', 'modules-list-header');
@@ -1297,6 +1327,7 @@ export function renderInstalled(host, snapshot, onToggle, onPlan = () => {}, bus
     for (const item of others) {
       grid.append(moduleTile(item, snapshot, names, {
         onToggle, onPlan, onEditorVariant, busy, openMenus, refusals, onDismissRefusal, moduleUpdates: offers, updating,
+        withPanel,
       }));
     }
     list.append(grid);
@@ -1304,7 +1335,7 @@ export function renderInstalled(host, snapshot, onToggle, onPlan = () => {}, bus
   host.append(list);
 }
 
-export function renderAvailable(host, catalog, onPlan = () => {}, busy = false, { names = null, onRefresh = null } = {}) {
+export function renderAvailable(host, catalog, onPlan = () => {}, busy = false, { names = null, onRefresh = null, withPanel = false } = {}) {
   host.replaceChildren();
   // A release catalog never goes stale: a stale answer is that of the update
   // document. The modules of the release are shown as they are. A local build
@@ -1346,9 +1377,10 @@ export function renderAvailable(host, catalog, onPlan = () => {}, busy = false, 
   if (core) list.append(catalogCoreStrip(core));
   // What can be done comes first; the rest goes under its own line, dimmed.
   const tiles = modules.filter((item) => item.id !== 'core')
-    .map((item) => ({ item, action: catalogAction(item, readOnly) }));
-  const actionable = tiles.filter((tile) => tile.action);
-  const rest = tiles.filter((tile) => !tile.action);
+    .map((item) => ({ item, action: catalogAction(item, readOnly, withPanel) }));
+  // A module whose update comes with the panel stands with the installed ones.
+  const actionable = tiles.filter((tile) => tile.action && tile.action !== WITH_PANEL);
+  const rest = tiles.filter((tile) => !tile.action || tile.action === WITH_PANEL);
   const draw = (group, quiet) => {
     const grid = node('div', 'modules-grid');
     for (const { item, action } of group) grid.append(catalogTile(item, action, names, { onPlan, busy, quiet }));
@@ -1359,9 +1391,7 @@ export function renderAvailable(host, catalog, onPlan = () => {}, busy = false, 
     first.classList.add('modules-catalog-actions');
     const restBlock = node('div', 'modules-catalog-rest');
     restBlock.append(
-      node('p', 'modules-section-kicker modules-catalog-rest-head', rest.every(({ item }) => item.installed === true)
-        ? 'Установлены, обновлений нет'
-        : 'Остальные модули'),
+      node('p', 'modules-section-kicker modules-catalog-rest-head', restHeading(rest)),
       draw(rest, true),
     );
     list.append(first, restBlock);
@@ -1375,13 +1405,23 @@ export function renderAvailable(host, catalog, onPlan = () => {}, busy = false, 
 
 // What the tile of the catalog offers: the update of an installed module, the
 // installation of one that is not on the router, or nothing.
-function catalogAction(item, readOnly) {
+// withPanel: an update of the panel is found, and the update of an installed
+// module comes with it (WITH_PANEL) instead of a button.
+function catalogAction(item, readOnly, withPanel = false) {
   if (readOnly) return null;
   const actions = Array.isArray(item.lifecycle_actions) ? item.lifecycle_actions : [];
   if (item.installed === true) {
-    return item.update_available === true && actions.includes('update') ? 'update' : null;
+    if (item.update_available !== true || !actions.includes('update')) return null;
+    return withPanel ? WITH_PANEL : 'update';
   }
   return actions.includes('install') ? 'install' : null;
+}
+
+const WITH_PANEL = 'with-panel';
+
+function restHeading(rest) {
+  if (!rest.every(({ item }) => item.installed === true)) return 'Остальные модули';
+  return rest.some(({ action }) => action === WITH_PANEL) ? 'Установлены' : 'Установлены, обновлений нет';
 }
 
 function catalogCoreStrip(item) {
@@ -1406,7 +1446,8 @@ function catalogTile(item, action, names, { onPlan, busy, quiet }) {
   const title = node('div', 'modules-tile-title');
   title.append(node('strong', 'modules-tile-name', label));
   const offer = action === 'update' ? { version: item.module_version } : null;
-  const version = versionLine(action === 'update' ? { version: item.installed_version } : item, offer);
+  const installedOnly = action === 'update' || action === WITH_PANEL;
+  const version = versionLine(installedOnly ? { version: item.installed_version } : item, offer);
   if (version) title.append(version);
   top.append(moduleIcon(item.id), title);
   if (item.installed === true) top.append(node('span', 'modules-chip is-ok modules-catalog-chip', 'Установлен'));
@@ -1425,6 +1466,8 @@ function catalogTile(item, action, names, { onPlan, busy, quiet }) {
     const foot = node('div', 'modules-tile-foot is-update');
     foot.append(tileUpdate(item, { version: item.module_version }, null, onPlan, busy));
     tile.append(foot);
+  } else if (action === WITH_PANEL) {
+    tile.append(withPanelFoot(null));
   } else if (action === 'install' || item.installed !== true) {
     const foot = node('div', 'modules-tile-foot is-update');
     const row = node('div', 'modules-tile-update is-install');

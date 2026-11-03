@@ -240,6 +240,14 @@ export function modulesWord(count) {
   return 'модулей';
 }
 
+// A version after «до …» is written as a tag: v1.0.2, v3.0.3-beta.18.
+// «версия 1.0.2» keeps the bare number: the word already says what it is.
+export function versionTag(version) {
+  const text = String(version ?? '').trim();
+  if (!text) return '';
+  return /^v\d/i.test(text) ? text : `v${text}`;
+}
+
 // «Есть обновления модулей: …». names maps an id to its name (a Map or an
 // object); limit names only so many, the rest as a count.
 export function moduleUpdatesText(offers, names = null, { limit = 0 } = {}) {
@@ -251,7 +259,7 @@ export function moduleUpdatesText(offers, names = null, { limit = 0 } = {}) {
     return known || key;
   };
   const shown = limit > 0 && list.length > limit ? list.slice(0, limit) : list;
-  const words = shown.map((offer) => `${nameOf(offer.module_id)} ${offer.version}`).join(', ');
+  const words = shown.map((offer) => `${nameOf(offer.module_id)} ${versionTag(offer.version)}`).join(', ');
   const more = list.length - shown.length;
   return `Есть обновления модулей: ${words}${more > 0 ? ` и ещё ${more}` : ''}.`;
 }

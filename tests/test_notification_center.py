@@ -388,6 +388,21 @@ def test_module_update_record_is_the_same_on_either_channel(tmp_path: Path):
     assert prerelease["unread_count"] == 0
 
 
+def test_module_update_is_not_told_while_a_panel_update_is_found(tmp_path: Path):
+    # The new panel brings every module with it: only the panel is told of.
+    payload = _module_update_payload()
+    payload.update(target_version="2.11.0", update_available=True)
+    lifecycle = FakeLifecycle(payload)
+    center = NotificationCenter(
+        lifecycle, state_dir=tmp_path, now=lambda: 2_000.0, module_versions=lambda: {"engine.xray": "1.0.0"}
+    )
+
+    kinds = [record["kind"] for record in center.check(force_refresh=True)["records"]]
+
+    assert "panel-update" in kinds
+    assert "module_update_available" not in kinds
+
+
 def test_module_update_record_goes_away_once_the_module_is_updated(tmp_path: Path):
     lifecycle = FakeLifecycle(_module_update_payload())
     versions = {"engine.xray": "1.0.0"}

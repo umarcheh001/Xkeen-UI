@@ -16,8 +16,8 @@ async function openModules(page) {
   await page.goto('/modules');
 }
 
-const updateButton = (page) => page.getByRole('button', { name: 'Обновить до 2.11.0' });
-const updateDialog = (page) => page.getByRole('dialog', { name: 'Обновить панель до 2.11.0' });
+const updateButton = (page) => page.getByRole('button', { name: 'Обновить до v2.11.0' });
+const updateDialog = (page) => page.getByRole('dialog', { name: 'Обновить панель до v2.11.0' });
 const progressBox = (page) => page.locator('#modules-plan-progress .modules-plan-progress-box');
 
 test('окно открывается сразу и показывает загрузку', async ({ page }) => {
@@ -232,7 +232,7 @@ test('повисший запрос статуса во время переза�
   await expect(progressBox(page)).toContainText('Готово к обновлению');
   await page.locator('#modules-plan-apply').click();
 
-  await expect(page.getByRole('dialog', { name: 'Панель обновлена до 2.11.0' })).toBeVisible({ timeout: 40_000 });
+  await expect(page.getByRole('dialog', { name: 'Панель обновлена до v2.11.0' })).toBeVisible({ timeout: 40_000 });
   expect(hung).toBe(1);
 });
 
