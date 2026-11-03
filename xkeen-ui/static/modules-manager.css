@@ -753,7 +753,7 @@ body.modules-page .modules-tile-foot-row.is-bad { color: var(--modules-danger); 
 body.modules-page .modules-tile-foot-row.is-info { color: var(--op-accent); }
 body.modules-page .modules-tile-foot-row.is-muted { color: var(--modules-faint); }
 
-html body.modules-page .modules-tile-update .modules-action-update,
+html body.modules-page .modules-tile-update :is(.modules-action-update, .modules-action-install),
 html body.modules-page .modules-card-actions button.btn-primary.modules-action-update {
   display: inline-flex;
   align-items: center;
@@ -767,22 +767,72 @@ html body.modules-page .modules-card-actions button.btn-primary.modules-action-u
   font-weight: 600;
 }
 
-html body.modules-page .modules-tile-update .modules-action-update {
+html body.modules-page .modules-tile-update :is(.modules-action-update, .modules-action-install) {
   min-height: 26px;
   padding: 0 12px !important;
   border-radius: 5px;
   font-size: calc(12px * var(--xk-font-scale, 1)) !important;
 }
 
-html body.modules-page .modules-tile-update .modules-action-update:hover:not(:disabled),
+html body.modules-page .modules-tile-update :is(.modules-action-update, .modules-action-install):hover:not(:disabled),
 html body.modules-page .modules-card-actions button.btn-primary.modules-action-update:hover:not(:disabled) {
   border-color: var(--modules-accent-hover) !important;
   background: var(--modules-accent-hover) !important;
 }
 
-html body.modules-page :is(.modules-tile-update, .modules-card-actions) .modules-action-update:disabled {
+html body.modules-page :is(.modules-tile-update, .modules-card-actions) :is(.modules-action-update, .modules-action-install):disabled {
   opacity: .6;
   cursor: not-allowed;
+}
+
+/* The tab of available modules as tiles (03.11.2026): the tiles of the
+   installed tab, a chip instead of the switch, what the module needs above
+   the bottom line. What can be done comes first, the rest is dimmed below. */
+body.modules-page .modules-catalog .modules-core .modules-chip {
+  justify-self: end;
+}
+
+body.modules-page .modules-catalog-chip {
+  align-self: start;
+}
+
+body.modules-page .modules-tile-metas {
+  display: grid;
+  gap: 2px;
+}
+
+body.modules-page .modules-tile-meta {
+  margin: 0;
+  color: var(--modules-faint);
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+  line-height: 1.4;
+}
+
+body.modules-page .modules-tile-update.is-install {
+  color: var(--modules-faint);
+}
+
+body.modules-page .modules-catalog-rest-head {
+  margin: 18px 0 0;
+}
+
+body.modules-page .modules-catalog-rest .modules-grid {
+  padding-top: 10px;
+}
+
+body.modules-page .modules-catalog-tile.is-quiet {
+  opacity: 0.62;
+}
+
+body.modules-page .modules-catalog-tile.is-quiet:hover {
+  opacity: 1;
+}
+
+@media (max-width: 700px) {
+  body.modules-page .modules-catalog .modules-core .modules-chip {
+    grid-column: 2;
+    justify-self: start;
+  }
 }
 
 body.modules-page .modules-card-actions:has(.modules-action-update) {

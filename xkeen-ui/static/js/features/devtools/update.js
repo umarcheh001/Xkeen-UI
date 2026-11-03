@@ -5,6 +5,8 @@ import { reconcileModulesUpdateCheck } from '../module_manager/badge.js';
 import { describeLifecycleFailure } from '../module_manager/render.js';
 import {
   lifecycleAvailable,
+  moduleUpdatesText,
+  modulesWord,
   summaryChannel,
   summaryHeading,
   summaryIssueList,
@@ -59,7 +61,19 @@ import {
     if (!host) return;
     const issues = summaryIssues(installed);
     host.replaceChildren(...summaryHeading(installed, { level: 'h3' }));
-    host.append(summaryStats(installed, update, issues));
+    // Updates of single modules count only while the panel itself is current:
+    // an update of the panel brings every module with it.
+    const checked = update && update.checked && !update.update_available && !update.requires_installer;
+    const offers = checked && Array.isArray(update.module_updates) ? update.module_updates : [];
+    host.append(summaryStats(installed, update, issues, {
+      moduleUpdates: offers.length,
+      moduleUpdatesLabel: `${modulesWord(offers.length)} можно обновить`,
+    }));
+    if (offers.length) {
+      // Three by name, the rest as a count: the whole list is on the screen of modules.
+      const names = installed && installed.module_names && typeof installed.module_names === 'object' ? installed.module_names : null;
+      host.append(node('p', 'xk-summary-hint xk-summary-modules-note', `Панель актуальна. ${moduleUpdatesText(offers, names, { limit: 3 })}`));
+    }
     if (issues.length) host.append(summaryIssueList(issues));
     host.append(...summaryChannel(installed, {
       onSelect: selectChannel,
@@ -69,7 +83,7 @@ import {
     }));
     const note = summaryLifecycleNote(installed, describeLifecycleFailure);
     if (note) host.append(note);
-    const ready = update && update.checked && update.update_available && !update.requires_installer;
+    const ready = (update && update.checked && update.update_available && !update.requires_installer) || offers.length > 0;
     const link = node('a', ready ? 'xk-summary-link is-primary' : 'xk-summary-link',
       ready ? 'Обновить в «Модулях и обновлениях»' : 'Открыть «Модули и обновления»');
     link.href = modulesUrl();

@@ -1,7 +1,7 @@
 import { iconHtml } from '../../ui/operator_icons.js';
 import {
-  formatCheckedAt, lifecycleAvailable, moduleProblem, modulesChangeable, summaryChannel, summaryHeading,
-  pendingTransition, summaryIssues, summaryLifecycleNote, summaryStats,
+  formatCheckedAt, lifecycleAvailable, moduleProblem, modulesChangeable, modulesWord, moduleUpdatesText,
+  summaryChannel, summaryHeading, pendingTransition, summaryIssues, summaryLifecycleNote, summaryStats,
 } from '../panel_summary.js';
 
 function node(tag, className, text) {
@@ -16,10 +16,6 @@ function moduleVersion(item) {
   return item.module_version || item.version || '';
 }
 
-function moduleTitle(item) {
-  return [item.name || item.id || 'Модуль', moduleVersion(item)].filter(Boolean).join(' ');
-}
-
 // A module is called by its name wherever the window knows it.
 function moduleLabel(id, names) {
   const key = String(id ?? '');
@@ -28,11 +24,6 @@ function moduleLabel(id, names) {
 
 function moduleList(ids, names) {
   return ids.map((id) => moduleLabel(id, names)).join(', ');
-}
-
-function dependencies(card, label, items, names) {
-  if (!Array.isArray(items) || !items.length) return;
-  card.append(node('p', 'modules-meta', `${label}: ${moduleList(items, names)}`));
 }
 
 const ACTION_LABELS = {
@@ -602,15 +593,6 @@ function moduleTile(item, snapshot, names, {
   return tile;
 }
 
-// Russian counts: 1 модуль, 2 модуля, 5 модулей.
-function modulesWord(count) {
-  const ones = count % 10;
-  const tens = count % 100;
-  if (ones === 1 && tens !== 11) return 'модуль';
-  if (ones >= 2 && ones <= 4 && (tens < 12 || tens > 14)) return 'модуля';
-  return 'модулей';
-}
-
 // Only a request that did not get through is a lost connection. A catalog
 // that is unavailable may simply be missing (404) while the network is fine.
 function staleWhy(reason) {
@@ -686,9 +668,7 @@ function summaryActions(buttons) {
 }
 
 function moduleUpdatesNote(offers, staleReason, names) {
-  if (offers.length) {
-    return `Есть обновления модулей: ${offers.map((offer) => `${moduleLabel(offer.module_id, names)} ${offer.version}`).join(', ')}.`;
-  }
+  if (offers.length) return moduleUpdatesText(offers, names);
   return staleReason ? 'Обновления модулей не проверены: каталог выпуска недоступен.' : '';
 }
 
@@ -1352,42 +1332,119 @@ export function renderAvailable(host, catalog, onPlan = () => {}, busy = false, 
     ));
   }
   const modules = Array.isArray(catalog.modules) ? catalog.modules : [];
-  if (!modules.length) host.append(node('p', 'modules-empty', 'Доступных модулей нет.'));
-  modules.forEach((item) => {
-    const card = node('article', 'modules-card');
-    // An installed module with a newer entry: both of its own versions.
-    const update = item.installed === true && item.update_available === true && !readOnly
-      && Array.isArray(item.lifecycle_actions) && item.lifecycle_actions.includes('update');
-    const heading = node('h2', '', update
-      ? `${item.name || item.id} ${item.installed_version} → ${item.module_version}`
-      : moduleTitle(item));
-    if (item.installed === true) heading.append(node('span', 'modules-chip is-ok', 'Установлен'));
-    card.append(heading);
-    if (item.description) card.append(node('p', '', item.description));
-    dependencies(card, 'Нужны модули', item.requires || item.dependencies, names);
-    dependencies(card, 'Конфликтуют', item.conflicts, names);
-    if (update) {
-      const actionRow = node('div', 'modules-card-actions');
-      const button = node('button', 'btn-primary modules-action modules-action-update', `Обновить до ${item.module_version}`);
+  if (!modules.length) {
+    host.append(node('p', 'modules-empty', 'Доступных модулей нет.'));
+    return;
+  }
+  const list = node('section', 'modules-list card modules-catalog');
+  const listHeader = node('div', 'modules-list-header');
+  const heading = node('div', 'modules-list-heading');
+  heading.append(node('h2', '', catalog.release_version ? `Модули выпуска ${catalog.release_version}` : 'Модули выпуска'));
+  listHeader.append(heading, node('span', 'modules-list-count', `${modules.length} ${modulesWord(modules.length)}`));
+  list.append(listHeader);
+  const core = modules.find((item) => item.id === 'core');
+  if (core) list.append(catalogCoreStrip(core));
+  // What can be done comes first; the rest goes under its own line, dimmed.
+  const tiles = modules.filter((item) => item.id !== 'core')
+    .map((item) => ({ item, action: catalogAction(item, readOnly) }));
+  const actionable = tiles.filter((tile) => tile.action);
+  const rest = tiles.filter((tile) => !tile.action);
+  const draw = (group, quiet) => {
+    const grid = node('div', 'modules-grid');
+    for (const { item, action } of group) grid.append(catalogTile(item, action, names, { onPlan, busy, quiet }));
+    return grid;
+  };
+  if (actionable.length && rest.length) {
+    const first = draw(actionable, false);
+    first.classList.add('modules-catalog-actions');
+    const restBlock = node('div', 'modules-catalog-rest');
+    restBlock.append(
+      node('p', 'modules-section-kicker modules-catalog-rest-head', rest.every(({ item }) => item.installed === true)
+        ? 'Установлены, обновлений нет'
+        : 'Остальные модули'),
+      draw(rest, true),
+    );
+    list.append(first, restBlock);
+  } else {
+    const grid = draw(actionable.length ? actionable : rest, false);
+    if (actionable.length) grid.classList.add('modules-catalog-actions');
+    list.append(grid);
+  }
+  host.append(list);
+}
+
+// What the tile of the catalog offers: the update of an installed module, the
+// installation of one that is not on the router, or nothing.
+function catalogAction(item, readOnly) {
+  if (readOnly) return null;
+  const actions = Array.isArray(item.lifecycle_actions) ? item.lifecycle_actions : [];
+  if (item.installed === true) {
+    return item.update_available === true && actions.includes('update') ? 'update' : null;
+  }
+  return actions.includes('install') ? 'install' : null;
+}
+
+function catalogCoreStrip(item) {
+  const strip = node('div', 'modules-core');
+  strip.dataset.moduleId = item.id;
+  const text = node('div', 'modules-core-text');
+  text.append(node('strong', 'modules-tile-name', item.name || item.id));
+  text.append(node('span', 'modules-core-meta', [versionText(item), item.description].filter(Boolean).join(' · ')));
+  strip.append(moduleIcon(item.id), text);
+  if (item.installed === true) strip.append(node('span', 'modules-chip is-ok', 'Установлен'));
+  return strip;
+}
+
+// A tile of the catalog looks as one of the installed modules: icon, name,
+// version, description; the bottom line holds what can be done with it.
+function catalogTile(item, action, names, { onPlan, busy, quiet }) {
+  const label = item.name || item.id;
+  const tile = node('article', 'modules-tile modules-catalog-tile');
+  tile.dataset.moduleId = item.id;
+  if (quiet) tile.classList.add('is-quiet');
+  const top = node('div', 'modules-tile-top');
+  const title = node('div', 'modules-tile-title');
+  title.append(node('strong', 'modules-tile-name', label));
+  const offer = action === 'update' ? { version: item.module_version } : null;
+  const version = versionLine(action === 'update' ? { version: item.installed_version } : item, offer);
+  if (version) title.append(version);
+  top.append(moduleIcon(item.id), title);
+  if (item.installed === true) top.append(node('span', 'modules-chip is-ok modules-catalog-chip', 'Установлен'));
+  tile.append(top);
+  if (item.description) tile.append(node('p', 'modules-tile-description', item.description));
+  const requires = item.requires || item.dependencies;
+  const meta = [];
+  if (Array.isArray(requires) && requires.length) meta.push(`Нужны модули: ${moduleList(requires, names)}`);
+  if (Array.isArray(item.conflicts) && item.conflicts.length) meta.push(`Конфликтуют: ${moduleList(item.conflicts, names)}`);
+  if (meta.length) {
+    const block = node('div', 'modules-tile-metas');
+    for (const text of meta) block.append(node('p', 'modules-tile-meta', text));
+    tile.append(block);
+  }
+  if (action === 'update') {
+    const foot = node('div', 'modules-tile-foot is-update');
+    foot.append(tileUpdate(item, { version: item.module_version }, null, onPlan, busy));
+    tile.append(foot);
+  } else if (action === 'install' || item.installed !== true) {
+    const foot = node('div', 'modules-tile-foot is-update');
+    const row = node('div', 'modules-tile-update is-install');
+    row.append(node('span', 'modules-tile-update-text', 'Не установлен'));
+    if (action === 'install') {
+      const button = node('button', 'btn-primary modules-action modules-action-install');
       button.type = 'button';
-      button.dataset.operation = 'update';
+      button.insertAdjacentHTML('afterbegin', iconHtml('download', 'modules-action-icon'));
+      button.append(document.createTextNode(ACTION_LABELS.install));
+      button.setAttribute('aria-label', `${ACTION_LABELS.install} ${label}`);
+      button.dataset.operation = 'install';
       button.dataset.moduleId = item.id;
       button.disabled = busy;
-      button.addEventListener('click', () => onPlan('update', item.id, button));
-      actionRow.append(button, node('span', 'modules-card-installed', `установлена ${item.installed_version}`));
-      card.append(actionRow);
+      button.addEventListener('click', () => onPlan('install', item.id, button));
+      row.append(button);
     }
-    // What is installed is repaired and removed on its own tab.
-    const actions = item.installed === true || readOnly ? [] : (Array.isArray(item.lifecycle_actions) ? item.lifecycle_actions : []);
-    if (actions.length) {
-      const actionRow = node('div', 'modules-card-actions');
-      actions.forEach((action) => {
-        if (ACTION_LABELS[action]) actionRow.append(actionButton(action, item.id, `${ACTION_LABELS[action]} ${item.name || item.id}`, onPlan, busy));
-      });
-      card.append(actionRow);
-    }
-    host.append(card);
-  });
+    foot.append(row);
+    tile.append(foot);
+  }
+  return tile;
 }
 
 export function renderCatalogError(host, error, onRetry) {

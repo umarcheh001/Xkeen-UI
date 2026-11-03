@@ -120,7 +120,7 @@ test.describe('Module lifecycle review', () => {
     await expect(page.locator('#modules-operation-status .modules-operation')).toHaveCount(0);
     expect(catalogCalls).toBe(1);
     await page.getByRole('tab', { name: 'Доступные' }).click();
-    const card = page.locator('#modules-card-host .modules-card').filter({ hasText: TERMINAL });
+    const card = page.locator('#modules-card-host .modules-catalog-tile').filter({ hasText: TERMINAL });
     await expect(card.locator('.modules-chip')).toHaveText('Установлен');
     await expect(card.getByRole('button')).toHaveCount(0);
     expect(catalogCalls).toBe(2);

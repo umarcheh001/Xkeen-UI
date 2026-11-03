@@ -201,7 +201,7 @@ test.describe('Modules panel update surface', () => {
     await expect(host.locator('.modules-catalog-readonly')).toHaveText(
       `Только просмотр. Это локальная сборка: модули ставятся на выпуске панели. Каталог — выпуска ${readOnly.release_version}.`,
     );
-    await expect(host.locator('.modules-card').filter({ hasText: TERMINAL })).toBeVisible();
+    await expect(host.locator('.modules-catalog-tile').filter({ hasText: TERMINAL })).toBeVisible();
     await expect(host.getByRole('button')).toHaveCount(0);
   });
 
@@ -658,21 +658,37 @@ test.describe('What the window says about operations and refusals', () => {
     await expect(host.locator('.modules-update-stale')).toContainText('Обновления модулей сейчас не проверить. Не удалось связаться с GitHub.');
     await expect(host.locator('.modules-warning')).toHaveCount(0);
     await expect(host.getByRole('button', { name: 'Обновить каталог' })).toBeVisible();
-    const files = host.locator('.modules-card').filter({ hasText: 'Файловый менеджер 2.10.0' });
+    // What can be installed comes first; the installed module goes under its own line.
+    const terminal = host.locator('.modules-catalog-actions .modules-catalog-tile[data-module-id="tool.terminal"]');
+    await expect(terminal.locator('.modules-tile-name')).toHaveText('Терминал и команды');
+    await expect(terminal.locator('.modules-tile-version')).toHaveText('версия 2.10.0');
+    await expect(terminal.locator('.modules-chip')).toHaveCount(0);
+    await expect(terminal.locator('.modules-tile-meta')).toHaveText(['Нужны модули: Xkeen UI Core', 'Конфликтуют: Файловый менеджер']);
+    await expect(terminal.locator('.modules-tile-update-text')).toHaveText('Не установлен');
+    await expect(terminal.getByRole('button', { name: 'Установить Терминал и команды' })).toHaveText('Установить');
+    await expect(host.locator('.modules-catalog-rest-head')).toHaveText('Установлены, обновлений нет');
+    const files = host.locator('.modules-catalog-rest .modules-catalog-tile[data-module-id="tool.files"]');
     await expect(files.locator('.modules-chip')).toHaveText('Установлен');
     await expect(files.getByRole('button')).toHaveCount(0);
-    const terminal = host.locator('.modules-card').filter({ hasText: 'Терминал и команды' });
-    await expect(terminal.locator('.modules-chip')).toHaveCount(0);
-    await expect(terminal).toContainText('Нужны модули: Xkeen UI Core');
-    await expect(terminal).toContainText('Конфликтуют: Файловый менеджер');
-    await expect(terminal.getByRole('button', { name: 'Установить Терминал и команды' })).toBeVisible();
+  });
+
+  test('the Available tab with nothing to do shows one grid, without a dimmed part', async ({ page }) => {
+    const done = { ...realCatalog, modules: realCatalog.modules.map((item) => ({ ...item, installed: true, lifecycle_actions: ['repair', 'remove'] })) };
+    await installLifecycleRoutes(page, { installed: named, available: done });
+    await page.goto('/modules');
+    await page.getByRole('tab', { name: 'Доступные' }).click();
+    const host = page.locator('#modules-card-host');
+    await expect(host.locator('.modules-catalog-tile')).toHaveCount(2);
+    await expect(host.locator('.modules-catalog-actions')).toHaveCount(0);
+    await expect(host.locator('.modules-catalog-rest-head')).toHaveCount(0);
+    await expect(host.locator('.modules-catalog-tile.is-quiet')).toHaveCount(0);
   });
 
   test('a fresh catalog carries no warning', async ({ page }) => {
     await installLifecycleRoutes(page, { installed: named, available: realCatalog });
     await page.goto('/modules');
     await page.getByRole('tab', { name: 'Доступные' }).click();
-    await expect(page.locator('#modules-card-host .modules-card')).toHaveCount(2);
+    await expect(page.locator('#modules-card-host .modules-catalog-tile')).toHaveCount(2);
     await expect(page.locator('#modules-card-host .modules-warning')).toHaveCount(0);
   });
 
@@ -698,7 +714,7 @@ test.describe('What the window says about operations and refusals', () => {
 
     fail = false;
     await host.getByRole('button', { name: 'Повторить' }).click();
-    await expect(host.locator('.modules-card')).toHaveCount(2);
+    await expect(host.locator('.modules-catalog-tile')).toHaveCount(2);
     await expect(host.locator('.modules-alert')).toHaveCount(0);
   });
 
@@ -706,14 +722,14 @@ test.describe('What the window says about operations and refusals', () => {
     await installLifecycleRoutes(page, { installed: named, available: realCatalog });
     await page.goto('/modules');
     await page.getByRole('tab', { name: 'Доступные' }).click();
-    await expect(page.locator('#modules-card-host .modules-card')).toHaveCount(2);
+    await expect(page.locator('#modules-card-host .modules-catalog-tile')).toHaveCount(2);
     await page.evaluate(async () => {
       const controller = (await import('/static/js/pages/modules.init.js')).getModulesController();
       controller.deactivate();
       await controller.activate();
     });
     await expect(page.getByRole('tab', { name: 'Доступные' })).toHaveAttribute('aria-selected', 'true');
-    await expect(page.locator('#modules-card-host .modules-card')).toHaveCount(2);
+    await expect(page.locator('#modules-card-host .modules-catalog-tile')).toHaveCount(2);
   });
 
   test('DevTools says about an update in its card, not in the header', async ({ page }) => {
@@ -726,5 +742,38 @@ test.describe('What the window says about operations and refusals', () => {
     await expect(page.locator('header [data-xk-modules-update-badge]')).toHaveCount(0);
     await expect(page.locator('#dt-panel-summary .xk-summary-stat[data-stat="update"] b')).toHaveText('2.11.0');
     await expect(page.locator('#dt-panel-summary .xk-summary-link')).toHaveClass(/is-primary/);
+  });
+
+  test('DevTools tells of module updates as the screen of modules does', async ({ page }) => {
+    await installIdleLifecycleRoutes(page);
+    const current = { ...server.update_check, update_available: false, target_version: server.update_check.source_version };
+    let offers = [{ module_id: 'tool.files', version: '1.0.1', installed_version: '1.0.0' }];
+    await page.route('**/api/modules/panel/update-check', (route) => route.fulfill({ json: { ...current, module_updates: offers } }));
+    await page.goto('/devtools');
+    const card = page.locator('#dt-panel-summary');
+    const stat = card.locator('.xk-summary-stat[data-stat="update"]');
+    await expect(stat.locator('b')).toHaveText('1');
+    await expect(stat.locator('span')).toHaveText('модуль можно обновить');
+    await expect(stat).toHaveClass(/is-accent/);
+    // The line stands right under the counters.
+    const note = card.locator('.xk-summary-stats + .xk-summary-modules-note');
+    await expect(note).toHaveText('Панель актуальна. Есть обновления модулей: Файловый менеджер 1.0.1.');
+    const link = card.locator('.xk-summary-link');
+    await expect(link).toHaveClass(/is-primary/);
+    await expect(link).toHaveText('Обновить в «Модулях и обновлениях»');
+
+    // Many updates: three by name, the rest as a count.
+    offers = ['engine.xray', 'engine.mihomo', 'tool.editor', 'tool.terminal', 'tool.files'].map((id) => ({ module_id: id, version: '1.0.1', installed_version: '1.0.0' }));
+    await page.reload();
+    await expect(stat.locator('b')).toHaveText('5');
+    await expect(stat.locator('span')).toHaveText('модулей можно обновить');
+    await expect(note).toHaveText('Панель актуальна. Есть обновления модулей: Xray 1.0.1, Mihomo 1.0.1, Редакторы 1.0.1 и ещё 2.');
+
+    // No module updates: the card is as before.
+    offers = [];
+    await page.reload();
+    await expect(stat.locator('span')).toHaveText('версия актуальна');
+    await expect(card.locator('.xk-summary-modules-note')).toHaveCount(0);
+    await expect(link).not.toHaveClass(/is-primary/);
   });
 });

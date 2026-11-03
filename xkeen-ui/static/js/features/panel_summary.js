@@ -231,6 +231,31 @@ function attentionStat(count) {
   return { tone: count ? 'warn' : 'ok', value: String(count), label: one ? 'требует внимания' : 'требуют внимания' };
 }
 
+// Russian counts: 1 модуль, 2 модуля, 5 модулей.
+export function modulesWord(count) {
+  const ones = count % 10;
+  const tens = count % 100;
+  if (ones === 1 && tens !== 11) return 'модуль';
+  if (ones >= 2 && ones <= 4 && (tens < 12 || tens > 14)) return 'модуля';
+  return 'модулей';
+}
+
+// «Есть обновления модулей: …». names maps an id to its name (a Map or an
+// object); limit names only so many, the rest as a count.
+export function moduleUpdatesText(offers, names = null, { limit = 0 } = {}) {
+  const list = Array.isArray(offers) ? offers : [];
+  if (!list.length) return '';
+  const nameOf = (id) => {
+    const key = String(id ?? '');
+    const known = names && (typeof names.get === 'function' ? names.get(key) : names[key]);
+    return known || key;
+  };
+  const shown = limit > 0 && list.length > limit ? list.slice(0, limit) : list;
+  const words = shown.map((offer) => `${nameOf(offer.module_id)} ${offer.version}`).join(', ');
+  const more = list.length - shown.length;
+  return `Есть обновления модулей: ${words}${more > 0 ? ` и ещё ${more}` : ''}.`;
+}
+
 // moduleUpdates counts modules with an update of their own; while the panel
 // itself is current, the counter tells of them instead.
 export function updateStat(snapshot, update, { moduleUpdates = 0, moduleUpdatesLabel = '' } = {}) {

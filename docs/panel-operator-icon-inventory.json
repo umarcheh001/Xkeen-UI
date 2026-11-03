@@ -125,7 +125,7 @@
           "accessible_label": "Предупреждение"
         },
         {
-          "location": "xkeen-ui/static/js/features/module_manager/render.js:L239",
+          "location": "xkeen-ui/static/js/features/module_manager/render.js:L230",
           "control_type": "runtime-action",
           "accessible_label": "Предупреждение"
         },
@@ -212,7 +212,7 @@
           "accessible_label": "Создать архив"
         },
         {
-          "location": "xkeen-ui/static/js/features/module_manager/render.js:L54",
+          "location": "xkeen-ui/static/js/features/module_manager/render.js:L45",
           "control_type": "runtime-action",
           "accessible_label": "Создать архив"
         },
@@ -358,7 +358,7 @@
           "accessible_label": "Открыть каталог"
         },
         {
-          "location": "xkeen-ui/static/js/features/module_manager/render.js:L62",
+          "location": "xkeen-ui/static/js/features/module_manager/render.js:L53",
           "control_type": "runtime-action",
           "accessible_label": "Открыть каталог"
         },
@@ -1249,12 +1249,17 @@
           "accessible_label": "Скачать"
         },
         {
-          "location": "xkeen-ui/static/js/features/module_manager/render.js:L467",
+          "location": "xkeen-ui/static/js/features/module_manager/render.js:L1435",
           "control_type": "runtime-action",
           "accessible_label": "Скачать"
         },
         {
-          "location": "xkeen-ui/static/js/features/module_manager/render.js:L545",
+          "location": "xkeen-ui/static/js/features/module_manager/render.js:L458",
+          "control_type": "runtime-action",
+          "accessible_label": "Скачать"
+        },
+        {
+          "location": "xkeen-ui/static/js/features/module_manager/render.js:L536",
           "control_type": "runtime-action",
           "accessible_label": "Скачать"
         },
@@ -1497,7 +1502,7 @@
           "accessible_label": "Редактировать"
         },
         {
-          "location": "xkeen-ui/static/js/features/module_manager/render.js:L51",
+          "location": "xkeen-ui/static/js/features/module_manager/render.js:L42",
           "control_type": "runtime-action",
           "accessible_label": "Редактировать"
         },
@@ -1538,7 +1543,7 @@
       "tabler_asset": "custom:mihomo",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/module_manager/render.js:L50",
+          "location": "xkeen-ui/static/js/features/module_manager/render.js:L41",
           "control_type": "runtime-action",
           "accessible_label": "engine-mihomo"
         },
@@ -1559,7 +1564,7 @@
       "tabler_asset": "custom:xray",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/module_manager/render.js:L49",
+          "location": "xkeen-ui/static/js/features/module_manager/render.js:L40",
           "control_type": "runtime-action",
           "accessible_label": "engine-xray"
         },
@@ -1627,7 +1632,7 @@
           "accessible_label": "Создать папку"
         },
         {
-          "location": "xkeen-ui/static/js/features/module_manager/render.js:L53",
+          "location": "xkeen-ui/static/js/features/module_manager/render.js:L44",
           "control_type": "runtime-action",
           "accessible_label": "Создать папку"
         }
@@ -2017,12 +2022,12 @@
           "accessible_label": "Информация"
         },
         {
-          "location": "xkeen-ui/static/js/features/module_manager/render.js:L458",
+          "location": "xkeen-ui/static/js/features/module_manager/render.js:L449",
           "control_type": "runtime-action",
           "accessible_label": "Информация"
         },
         {
-          "location": "xkeen-ui/static/js/features/module_manager/render.js:L629",
+          "location": "xkeen-ui/static/js/features/module_manager/render.js:L611",
           "control_type": "runtime-action",
           "accessible_label": "Информация"
         },
@@ -2230,7 +2235,7 @@
           "accessible_label": "Ограничить"
         },
         {
-          "location": "xkeen-ui/static/js/features/module_manager/render.js:L416",
+          "location": "xkeen-ui/static/js/features/module_manager/render.js:L407",
           "control_type": "runtime-action",
           "accessible_label": "Ограничить"
         },
@@ -2273,7 +2278,7 @@
           "accessible_label": "Дополнительные действия"
         },
         {
-          "location": "xkeen-ui/static/js/features/module_manager/render.js:L488",
+          "location": "xkeen-ui/static/js/features/module_manager/render.js:L479",
           "control_type": "runtime-action",
           "accessible_label": "Дополнительные действия"
         },
@@ -3100,7 +3105,7 @@
           "accessible_label": "Восстановить"
         },
         {
-          "location": "xkeen-ui/static/js/features/module_manager/render.js:L310",
+          "location": "xkeen-ui/static/js/features/module_manager/render.js:L301",
           "control_type": "runtime-action",
           "accessible_label": "Восстановить"
         },
@@ -3339,7 +3344,7 @@
           "accessible_label": "Настройки"
         },
         {
-          "location": "xkeen-ui/static/js/features/module_manager/render.js:L48",
+          "location": "xkeen-ui/static/js/features/module_manager/render.js:L39",
           "control_type": "runtime-action",
           "accessible_label": "Настройки"
         },
@@ -3401,7 +3406,7 @@
       "tabler_asset": "chart-bar",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/module_manager/render.js:L56",
+          "location": "xkeen-ui/static/js/features/module_manager/render.js:L47",
           "control_type": "runtime-action",
           "accessible_label": "statistics"
         },
@@ -3489,7 +3494,7 @@
           "accessible_label": "Подписки"
         },
         {
-          "location": "xkeen-ui/static/js/features/module_manager/render.js:L55",
+          "location": "xkeen-ui/static/js/features/module_manager/render.js:L46",
           "control_type": "runtime-action",
           "accessible_label": "Подписки"
         },
@@ -3557,7 +3562,7 @@
           "accessible_label": "Терминал"
         },
         {
-          "location": "xkeen-ui/static/js/features/module_manager/render.js:L52",
+          "location": "xkeen-ui/static/js/features/module_manager/render.js:L43",
           "control_type": "runtime-action",
           "accessible_label": "Терминал"
         },
@@ -3695,7 +3700,7 @@
           "accessible_label": "Удалить"
         },
         {
-          "location": "xkeen-ui/static/js/features/module_manager/render.js:L310",
+          "location": "xkeen-ui/static/js/features/module_manager/render.js:L301",
           "control_type": "runtime-action",
           "accessible_label": "Удалить"
         },

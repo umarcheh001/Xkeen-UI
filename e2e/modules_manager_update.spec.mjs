@@ -7,6 +7,7 @@ import { server, installLifecycleRoutes, routePlans } from './modules_manager_su
 const MIHOMO = 'engine.mihomo';
 const steps = server.module_update_steps;
 const tileOf = (page, id) => page.locator(`.modules-module[data-module-id="${id}"]`);
+const catalogTileOf = (page, id) => page.locator(`#modules-card-host .modules-catalog-tile[data-module-id="${id}"]`);
 
 async function routeUpdateCheck(page, answer) {
   await page.route('**/api/modules/panel/update-check', (route) => route.fulfill({
@@ -143,7 +144,7 @@ test.describe('Module update', () => {
     await page.getByRole('tab', { name: 'Доступные' }).click();
     await expect(page.locator('#modules-card-host .modules-update-stale')).toContainText('Обновления модулей сейчас не проверить.');
     await expect(page.locator('#modules-card-host .modules-warning')).toHaveCount(0);
-    await expect(page.locator('#modules-card-host .modules-card')).toHaveCount(server.available.modules.length);
+    await expect(page.locator('#modules-card-host .modules-catalog-tile')).toHaveCount(server.available.modules.filter((item) => item.id !== 'core').length);
   });
 
   test('a catalog that is missing is not called a lost connection', async ({ page }) => {
@@ -215,15 +216,65 @@ test.describe('Module update', () => {
 
     await page.goto('/modules');
     await page.getByRole('tab', { name: 'Доступные' }).click();
-    const card = page.locator('#modules-card-host .modules-card').filter({ has: page.locator('h2', { hasText: /^Mihomo/ }) });
-    await expect(card.locator('h2')).toContainText('Mihomo 1.0.0 → 1.0.1');
+    const card = catalogTileOf(page, MIHOMO);
+    await expect(card.locator('.modules-tile-name')).toHaveText('Mihomo');
+    await expect(card.locator('.modules-tile-version')).toHaveText('версия 1.0.0 → 1.0.1');
     await expect(card.locator('.modules-chip')).toHaveText('Установлен');
-    await expect(card.getByRole('button')).toHaveText(['Обновить до 1.0.1']);
-    await expect(card).toContainText('установлена 1.0.0');
+    // The bottom line of the tile, as on the tab of installed modules.
+    await expect(card.locator('.modules-tile-update-text')).toHaveText('Доступна версия 1.0.1');
+    await expect(card.getByRole('button')).toHaveText(['Обновить']);
     // Installed without an update: nothing to press here, as before.
-    await expect(page.locator('#modules-card-host .modules-card').filter({ has: page.locator('h2', { hasText: /^Редакторы/ }) }).getByRole('button')).toHaveCount(0);
-    await card.getByRole('button', { name: 'Обновить до 1.0.1' }).click();
+    await expect(catalogTileOf(page, 'tool.editor').getByRole('button')).toHaveCount(0);
+    await card.getByRole('button', { name: 'Обновить «Mihomo» до 1.0.1' }).click();
     await expect(page.getByRole('dialog').locator('#modules-plan-title')).toHaveText('Обновить «Mihomo» до 1.0.1');
+  });
+
+  test('the update button of the Available tab is the one of the tile', async ({ page }) => {
+    await installLifecycleRoutes(page, { available: server.available_update });
+    await routeUpdateCheck(page, server.update_check_modules);
+
+    await page.goto('/modules');
+    // The screen draws itself again once the check answers: measure a button that stays.
+    const size = async (locator) => {
+      let measured = null;
+      await expect.poll(async () => {
+        measured = await locator.evaluate((element) => {
+          const style = getComputedStyle(element);
+          return element.isConnected
+            ? [element.getBoundingClientRect().height, style.fontSize, style.borderRadius, element.querySelectorAll('svg').length]
+            : null;
+        }).catch(() => null);
+        return measured && measured[0] > 0;
+      }).toBe(true);
+      return measured;
+    };
+    const onTile = await size(tileOf(page, MIHOMO).locator('.modules-tile-update .modules-action-update'));
+    await page.getByRole('tab', { name: 'Доступные' }).click();
+    const onCatalog = await size(catalogTileOf(page, MIHOMO).locator('.modules-action-update'));
+    expect(onCatalog).toEqual(onTile);
+  });
+
+  test('the Available tab puts what can be done first and the rest under its own line', async ({ page }) => {
+    await installLifecycleRoutes(page, { available: server.available_update });
+    await routeUpdateCheck(page, server.update_check_modules);
+
+    await page.goto('/modules');
+    await page.getByRole('tab', { name: 'Доступные' }).click();
+    const host = page.locator('#modules-card-host');
+    // Core is the panel itself: a strip, as on the other tab.
+    await expect(host.locator('.modules-core .modules-chip')).toHaveText('Установлен');
+    const first = host.locator('.modules-catalog-actions .modules-catalog-tile');
+    const ids = server.available_update.modules.filter((item) => item.id !== 'core');
+    const actionable = ids.filter((item) => item.update_available || !item.installed).map((item) => item.id);
+    await expect(first).toHaveCount(actionable.length);
+    await expect(first.first()).toHaveAttribute('data-module-id', MIHOMO);
+    await expect(catalogTileOf(page, 'engine.xray').locator('.modules-tile-update-text')).toHaveText('Не установлен');
+    await expect(catalogTileOf(page, 'engine.xray').getByRole('button')).toHaveText(['Установить']);
+    await expect(catalogTileOf(page, 'engine.xray').locator('.modules-chip')).toHaveCount(0);
+    await expect(catalogTileOf(page, 'engine.xray').locator('.modules-tile-meta')).toHaveText('Нужны модули: Xkeen UI Core, Редакторы');
+    await expect(host.locator('.modules-catalog-rest-head')).toHaveText('Установлены, обновлений нет');
+    await expect(host.locator('.modules-catalog-rest .modules-catalog-tile')).toHaveCount(ids.length - actionable.length);
+    await expect(host.locator('.modules-catalog-rest .modules-catalog-tile').first()).toHaveAttribute('data-module-id', 'tool.editor');
   });
 
   test('a tile with a lock line puts the update above it, under one divider', async ({ page }) => {
