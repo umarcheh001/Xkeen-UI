@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 664,
-      "size_bytes": 9047484,
+      "size_bytes": 9047514,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -7493,7 +7493,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_panel_init_shutdown.py",
-      "size_bytes": 2997,
+      "size_bytes": 3027,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],

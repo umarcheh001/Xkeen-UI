@@ -32,7 +32,7 @@ def _stop(tmp_path: Path, saves_after: int, *, slow_audit: bool = False) -> dict
         f'  if [ "$elapsed" -ge {saves_after} ] && [ "$alive" = 1 ]; then',
         '    echo fresh-history > saved; alive=0',
         '  fi',
-        '}', _function('stop_service'), 'stop_service',
+        '}', _function('mark_clean_stop'), _function('stop_service'), 'stop_service',
         # Only the harness joins background loggers, after stop_service returned.
         'wait',
         'printf \'{"elapsed":%s,"forced":%s,"term_at":%s,"kill_at":%s}\\n\' "$elapsed" "$forced" "$term_at" "$kill_at" > result.json',
