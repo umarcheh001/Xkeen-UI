@@ -9,11 +9,16 @@ async function expectCompactDetailActions(page) {
   const geometry = await page.locator('.xk-provider-check-details').first().locator('.xk-provider-check-detail-actions').evaluate((container) => {
     const frame = container.getBoundingClientRect();
     const actions = [...container.querySelectorAll('button, a')].map((item) => item.getBoundingClientRect());
-    return { right: frame.right, actions: actions.map((item) => ({ top: item.top, right: item.right })) };
+    const icon = container.querySelector('a .xk-provider-check-external-icon')?.getBoundingClientRect();
+    return { right: frame.right, actions: actions.map((item) => ({ top: item.top, right: item.right, width: item.width, height: item.height })), iconCenter: icon ? icon.left + icon.width / 2 : null };
   });
   expect(geometry.actions).toHaveLength(4);
   expect(Math.max(...geometry.actions.map((item) => item.top)) - Math.min(...geometry.actions.map((item) => item.top))).toBeLessThan(1);
   expect(Math.max(...geometry.actions.map((item) => item.right))).toBeLessThanOrEqual(geometry.right + 1);
+  expect(Math.max(...geometry.actions.map((item) => item.width)) - Math.min(...geometry.actions.map((item) => item.width))).toBeLessThan(1);
+  expect(Math.max(...geometry.actions.map((item) => item.height)), JSON.stringify(geometry)).toBeLessThanOrEqual(30);
+  const link = geometry.actions[3];
+  expect(Math.abs(geometry.iconCenter - (link.right - link.width / 2))).toBeLessThan(1);
 }
 
 test('Xray toolbar opens server diagnostics and runs selected checks', async ({ page }) => {

@@ -26803,9 +26803,10 @@ body.panel-page #provider-check-modal .modal-resizer:hover { opacity: 1; }
   body.panel-page .xk-provider-check-row { grid-template-columns: 22px minmax(0, 1fr); gap: 6px 8px; }
   body.panel-page .xk-provider-check-row-state { grid-column: 2; }
   body.panel-page .xk-provider-check-details { padding-left: 30px; }
-  body.panel-page .xk-provider-check-detail-actions { flex-wrap: nowrap; gap: 5px; }
-  body.panel-page .xk-provider-check-detail-actions button { flex: 0 1 auto; min-width: 0; padding: 4px 6px !important; white-space: nowrap; font-size: 11px; }
-  body.panel-page .xk-provider-check-detail-actions a { flex: 0 0 30px; width: 30px; height: 28px; display: inline-grid; place-items: center; border: 1px solid var(--op-border); border-radius: 5px; background: var(--op-surface-2); text-decoration: none; }
+  body.panel-page .xk-provider-check-detail-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: stretch; gap: 5px; width: 100%; }
+  body.panel-page #provider-check-modal .xk-provider-check-detail-actions :is(button, a[href]) { box-sizing: border-box; min-width: 0; width: 100%; min-height: 28px !important; height: 28px !important; max-height: 28px !important; padding: 3px 4px !important; white-space: nowrap; font-size: 10.5px; line-height: 1.1; }
+  body.panel-page .xk-provider-check-detail-actions button { display: inline-flex; align-items: center; justify-content: center; }
+  body.panel-page .xk-provider-check-detail-actions a { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--op-border); border-radius: 5px; background: var(--op-surface-2); text-decoration: none; }
   body.panel-page .xk-provider-check-detail-actions .xk-provider-check-label-full { display: none; }
   body.panel-page .xk-provider-check-detail-actions .xk-provider-check-label-compact, body.panel-page .xk-provider-check-detail-actions .xk-provider-check-external-icon { display: inline-flex; }
   body.panel-page .xk-provider-check-external-icon .xk-action-icon { width: 15px; height: 15px; }
