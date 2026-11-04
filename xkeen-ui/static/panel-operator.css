@@ -26718,13 +26718,11 @@ body.panel-page #provider-check-modal .xk-provider-check-content {
   border-radius: 8px;
 }
 body.panel-page #provider-check-modal .xk-provider-check-content {
-  display: flex !important;
-  flex-direction: column;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   height: auto;
   min-height: 360px;
 }
-body.panel-page #provider-check-modal .modal-header, body.panel-page #provider-check-modal .modal-actions { flex: 0 0 auto; }
-body.panel-page .xk-provider-check-body { flex: 1 1 auto; overflow: auto; min-height: 0; display: grid; gap: 12px; }
+body.panel-page .xk-provider-check-body { overflow: auto; min-height: 0; display: grid; gap: 12px; }
 body.panel-page .xk-provider-check-head, body.panel-page .xk-provider-check-source-head, body.panel-page .xk-provider-check-list-head {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
 }
