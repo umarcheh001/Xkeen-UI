@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 662,
-      "size_bytes": 9036877,
+      "size_bytes": 9037475,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -132,7 +132,7 @@
       ],
       "removable": true,
       "unit_count": 147,
-      "size_bytes": 3437459,
+      "size_bytes": 3458402,
       "kind_counts": {
         "app_runtime": 4,
         "backend_route": 2,
@@ -15313,7 +15313,7 @@
       "module_id": "core",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/panel-operator.css",
-      "size_bytes": 826090,
+      "size_bytes": 826688,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -16123,7 +16123,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/mihomo.py",
-      "size_bytes": 189691,
+      "size_bytes": 189704,
       "depends_on": [
         "core",
         "tool.editor",
@@ -16955,7 +16955,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_service",
       "path": "xkeen-ui/services/mihomo_dns.py",
-      "size_bytes": 200600,
+      "size_bytes": 206151,
       "depends_on": [
         "core",
         "tool.editor"
@@ -17743,7 +17743,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_test",
       "path": "tests/test_mihomo_dns.py",
-      "size_bytes": 87199,
+      "size_bytes": 94663,
       "depends_on": [
         "core",
         "tool.editor"
@@ -17768,7 +17768,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_test",
       "path": "tests/test_mihomo_dns_layout.py",
-      "size_bytes": 5454,
+      "size_bytes": 5512,
       "depends_on": [
         "core",
         "tool.editor"
@@ -19026,7 +19026,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/mihomo_dns.js",
-      "size_bytes": 50104,
+      "size_bytes": 54584,
       "depends_on": [
         "core",
         "tool.editor"
@@ -19610,7 +19610,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_test",
       "path": "e2e/mihomo_dns_reenable.spec.mjs",
-      "size_bytes": 3187,
+      "size_bytes": 6142,
       "depends_on": [
         "core",
         "tool.editor"
@@ -19841,7 +19841,7 @@
       "module_id": "engine.mihomo",
       "kind": "template",
       "path": "xkeen-ui/templates/panel/modals/mihomo.html",
-      "size_bytes": 52063,
+      "size_bytes": 52485,
       "depends_on": [
         "core",
         "tool.editor"

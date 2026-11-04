@@ -271,6 +271,31 @@ def _top_level_section(text: str, key: str) -> Optional[tuple[int, int, str]]:
     return None
 
 
+def _without_dns_section(text: str) -> str:
+    """Remove one top-level DNS mapping, retaining unrelated trailing comments."""
+
+    source = str(text or "")
+    sections = [match for match in _TOP_LEVEL_KEY_RE.finditer(source) if match.group("key") == "dns"]
+    if len(sections) != 1:
+        raise MihomoDnsError("Ожидался один раздел dns в config.yaml.", code="dns_clear_ambiguous")
+    section = _top_level_section(source, "dns")
+    if section is None:
+        raise MihomoDnsError("Раздел dns не найден в config.yaml.", code="dns_clear_ambiguous")
+    start, end, body = section
+    prefix = source[:start]
+    marker = MANAGED_BEGIN + "\n"
+    if prefix.endswith(marker):
+        prefix = prefix[:-len(marker)]
+    lines = body.splitlines(keepends=True)
+    trailing: list[str] = []
+    while lines and (not lines[-1].strip() or lines[-1].startswith("#")):
+        line = lines.pop()
+        if line.strip() == MANAGED_END:
+            break
+        trailing.insert(0, line)
+    return prefix + "".join(trailing) + source[end:]
+
+
 def _strip_yaml_scalar(value: str) -> str:
     raw = str(value or "").strip()
     if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in {"'", '"'}:
@@ -3146,6 +3171,11 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
     managed = bool(has_begin and has_end and has_dns)
     applied_hash = str(state.get("applied_sha256") or "")
     exact = bool(managed and applied_hash and _sha256(text) == applied_hash)
+    applied_dns_hash = str(state.get("applied_dns_sha256") or "")
+    dns_section = _top_level_section(text, "dns")
+    dns_block_changed = (
+        _sha256(dns_section[2]) != applied_dns_hash if applied_dns_hash and dns_section else None
+    )
     # ``exact`` answers whether an automatic rollback is safe.  It must not be
     # used to decide whether DNS is actually configured: a manual save or YAML
     # formatter can remove the managed comments while preserving a working DNS
@@ -3159,7 +3189,7 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
         and override is True
     )
     tampered = bool(state and not exact)
-    partial = bool((has_begin or has_end) and not exact)
+    partial = bool(has_begin != has_end or (state and (has_begin or has_end) and not exact))
     group = str(state.get("proxy_group") or "") if exact else str(_select_proxy_group(text) or "")
     mode = str(state.get("mode") or dns_runtime.get("mode") or "redir-host").strip().lower()
     state_fake_ip = state.get("fake_ip") if isinstance(state.get("fake_ip"), dict) else {}
@@ -3225,15 +3255,24 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
         if core != "mihomo":
             blockers.append("Однокнопочная настройка доступна только при активном ядре Mihomo.")
         if has_dns:
-            blockers.append("В config.yaml уже есть раздел dns; пользовательские настройки не перезаписываются.")
+            blockers.append(
+                "В config.yaml уже есть раздел dns. Его можно сохранить как снимок и заменить пресетом панели."
+                if override is False and not dns_runtime["listener_configured"]
+                else "В config.yaml уже есть раздел dns; сначала верните DNS Keenetic, затем выберите пресет панели."
+            )
         if not group:
             blockers.append("Не найдена proxy-группа для защищённых DNS-запросов.")
         if override is None:
             blockers.append("Не удалось прочитать DNS override Keenetic: " + override_detail)
     if tampered and can_release:
+        changed_part = (
+            "Раздел dns изменён" if dns_block_changed is True
+            else "config.yaml изменён, раздел dns не менялся" if dns_block_changed is False
+            else "config.yaml изменён"
+        )
         blockers.append(
-            "Конфигурация изменена после включения DNS; полный снимок не будет восстановлен. "
-            "Можно сохранить текущий блок и вернуть DNS прошивке Keenetic."
+            f"{changed_part} после включения DNS; полный снимок не будет восстановлен, "
+            "чтобы сохранить новые правки. Можно вернуть DNS прошивке Keenetic, затем применить пресет панели."
         )
     elif tampered and not can_recover and not can_reenable:
         blockers.append("Конфигурация изменена после включения DNS; автоматическое восстановление остановлено.")
@@ -3263,6 +3302,15 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
         and group
         and override is not None
     )
+    can_clear_dns = bool(
+        has_dns
+        and sum(match.group("key") == "dns" for match in _TOP_LEVEL_KEY_RE.finditer(text)) == 1
+        and has_begin == has_end
+        and override is False
+        and not dns_runtime["listener_configured"]
+        and core == "mihomo"
+    )
+    can_replace_dns = bool(can_clear_dns and not state and not partial and group)
     dns_diagnostics = diagnose_dns_runtime(
         text,
         config_file=config_file,
@@ -3277,10 +3325,13 @@ def get_status(*, config_file: str, ui_state_dir: str = "") -> dict[str, Any]:
         "prepared": exact,
         "partial": partial,
         "tampered": tampered,
+        "dns_block_changed": dns_block_changed,
         "can_recover": can_recover,
         "can_release": can_release,
         "can_reenable": can_reenable,
         "can_enable": can_enable,
+        "can_clear_dns": can_clear_dns,
+        "can_replace_dns": can_replace_dns,
         "can_disable": can_disable,
         "can_reconfigure": can_reconfigure,
         "active_core": core,
@@ -3819,6 +3870,7 @@ def _reconfigure_managed_dns(
             "enabled": True,
             "updated_at": int(time.time()),
             "applied_sha256": _sha256(prepared),
+            "applied_dns_sha256": _sha256(_top_level_section(prepared, "dns")[2]),
             "dns_capture": capture_applied,
             "proxy_group": group,
             "listen": DNS_LISTEN,
@@ -3915,7 +3967,7 @@ def apply_action(
     repair_legacy_exclusion: bool = False,
 ) -> dict[str, Any]:
     normalized = str(action or "").strip().lower()
-    if normalized not in {"enable", "disable", "release", "resume", "reconfigure"}:
+    if normalized not in {"enable", "replace", "clear", "disable", "release", "resume", "reconfigure"}:
         raise MihomoDnsError("Неизвестное действие DNS Mihomo.", code="invalid_action")
 
     with _LOCK:
@@ -3927,6 +3979,46 @@ def apply_action(
         # not reuse data left by a previous panel request.
         _RUNNING_CONFIG_CACHE.clear()
         original_override, _detail = _dns_override_status()
+
+        if normalized == "clear":
+            if not status.get("can_clear_dns") or original_override is not False:
+                raise MihomoDnsError("Раздел dns нельзя безопасно очистить в текущем состоянии.", code="dns_clear_blocked")
+            prepared = _without_dns_section(current)
+            validation = validate_config(new_content=prepared) or ""
+            if not _validation_ok(validation):
+                raise MihomoDnsError(
+                    "Mihomo не подтвердил конфигурацию без DNS; текущий файл не изменён.",
+                    code="dns_clear_preflight_failed",
+                    details=validation[-4000:],
+                )
+            backup = save_config(prepared)
+            try:
+                if not bool(restart_xkeen(source="mihomo-dns-clear")) or not _wait_for_mihomo():
+                    raise MihomoDnsError("Mihomo не запустился после очистки DNS.", code="dns_clear_restart_failed")
+                if not _wait_for_port_53(should_be_free=False):
+                    raise MihomoDnsError("DNS Keenetic не отвечает на порту 53 после очистки.", code="dns_clear_firmware_failed")
+                _remove_mihomo_dns_capture()
+            except Exception as exc:
+                rollback_errors: list[str] = []
+                try:
+                    save_config(current)
+                    restart_xkeen(source="mihomo-dns-clear-rollback")
+                except Exception as rollback_exc:  # noqa: BLE001
+                    rollback_errors.append(str(rollback_exc))
+                if isinstance(exc, MihomoDnsError):
+                    exc.rolled_back = True
+                    if rollback_errors:
+                        exc.details = {"rollback": rollback_errors}
+                    raise
+                raise MihomoDnsError(
+                    "Не удалось очистить DNS; прежний config.yaml восстановлен.",
+                    code="dns_clear_failed",
+                    details={"cause": str(exc), "rollback": rollback_errors},
+                    rolled_back=True,
+                ) from exc
+            _clear_state(ui_state_dir, config_file)
+            _clear_release(ui_state_dir, config_file)
+            return {"ok": True, "enabled": False, "dns_cleared": True, "backup": str(getattr(backup, "filename", "") or "") or None}
 
         if normalized == "reconfigure":
             return _reconfigure_managed_dns(
@@ -3973,16 +4065,19 @@ def apply_action(
                 restart_xkeen=restart_xkeen,
             )
 
-        if normalized == "enable":
-            if not status.get("can_enable"):
+        if normalized in {"enable", "replace"}:
+            if not status.get("can_replace_dns" if normalized == "replace" else "can_enable"):
                 raise MihomoDnsError(
                     "Защищённый DNS нельзя включить в текущей конфигурации.",
                     code="enable_blocked",
                     details=status.get("blockers"),
                 )
+            if normalized == "replace" and original_override is not False:
+                raise MihomoDnsError("DNS Keenetic уже переключён; сначала обновите состояние.", code="dns_replace_override_changed")
+            source_config = _without_dns_section(current) if normalized == "replace" else current
             normalized_mode = _normalize_mode(mode)
             fake_options = (
-                _normalize_fake_ip_options(fake_ip, config_text=current)
+                _normalize_fake_ip_options(fake_ip, config_text=source_config)
                 if normalized_mode == "fake-ip"
                 else None
             )
@@ -4021,7 +4116,7 @@ def apply_action(
                             details={"route": route, "repair": repair} if code == "fake_ip_repair_confirmation_required" else route,
                         )
             prepared, group = build_enabled_config(
-                current,
+                source_config,
                 str(proxy_group or status.get("proxy_group") or ""),
                 mode=mode,
                 fake_ip=fake_ip,
@@ -4134,6 +4229,7 @@ def apply_action(
                     "original_config": snapshot,
                     "original_sha256": _sha256(current),
                     "applied_sha256": _sha256(prepared),
+                    "applied_dns_sha256": _sha256(_top_level_section(prepared, "dns")[2]),
                     "original_dns_override": original_override,
                     "original_dns_policy": original_dns_policy,
                     "dns_capture": dns_capture_applied,

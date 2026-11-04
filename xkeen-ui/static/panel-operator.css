@@ -16765,6 +16765,27 @@ body.panel-page :is(#routing-dns-over-vless-modal, #mihomo-dns-modal) .routing-d
   height: auto;
 }
 
+body.panel-page #mihomo-dns-modal .routing-dns-over-vless-actions button[hidden] {
+  display: none !important;
+}
+
+@media (max-width: 560px) {
+  body.panel-page #mihomo-dns-modal .routing-dns-over-vless-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  body.panel-page #mihomo-dns-modal .routing-dns-over-vless-actions > button:not([hidden]):not([data-operator-dismiss-duplicate="true"]) {
+    width: 100%;
+    min-width: 0;
+    height: var(--op-touch-target);
+    min-height: var(--op-touch-target);
+    max-height: none;
+  }
+}
+
 /* Кнопки окон панели нейтральны и при наведении: общее правило выше держит
  * их цвет через !important. Здесь btn-danger носит только действие, после
  * которого что-то пропадает безвозвратно, -- оно и краснеет под курсором,

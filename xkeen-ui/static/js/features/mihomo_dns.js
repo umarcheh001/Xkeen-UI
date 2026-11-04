@@ -16,6 +16,8 @@ import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from '
     cancel: 'mihomo-dns-cancel',
     apply: 'mihomo-dns-apply',
     update: 'mihomo-dns-update',
+    clear: 'mihomo-dns-clear',
+    replace: 'mihomo-dns-replace',
     updateLabel: 'mihomo-dns-update-label',
     badge: 'mihomo-dns-badge',
     status: 'mihomo-dns-status',
@@ -246,13 +248,13 @@ import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from '
       // ядра: тогда итог достаётся из статуса по номеру операции.
       payload.operation_id = newDnsOperationId();
       // «Применить настройки» — своя кнопка; счётчик идёт на той, что нажали.
-      const reconfigure = action === 'reconfigure';
-      return trackOperation(reconfigure ? IDS.update : IDS.apply, (onWaiting) => awaitDnsOperation({
+      const actionButton = action === 'reconfigure' ? IDS.update : (action === 'clear' ? IDS.clear : (action === 'replace' ? IDS.replace : IDS.apply));
+      return trackOperation(actionButton, (onWaiting) => awaitDnsOperation({
         operationId: payload.operation_id,
         send: () => client.postJSON('/api/mihomo/dns', payload, { timeoutMs: 120000, retry: 0 }),
         readStatus: (timeoutMs) => client.fetchJSON('/api/mihomo/dns', { cache: 'no-store', timeoutMs, retry: 0 }),
         onWaiting,
-      }), reconfigure ? IDS.updateLabel : '');
+      }), action === 'reconfigure' ? IDS.updateLabel : '');
     }
     const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     const response = await fetch('/api/mihomo/dns', {
@@ -334,7 +336,7 @@ import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from '
     const container = $(IDS.ruleProviders);
     const geodataEnabled = !!$(IDS.geodataEnable)?.checked;
     const isConfigured = !!data?.enabled || !!data?.can_disable || !!data?.tampered;
-    const locked = busy || (isConfigured && !data?.can_reconfigure);
+    const locked = busy || (isConfigured && !data?.can_reconfigure && !data?.can_replace_dns);
     if (container) container.classList.toggle('hidden', geodataEnabled);
 
     if (!providerSelectionTouched && !busy && data) {
@@ -404,6 +406,16 @@ import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from '
       update.hidden = !canReconfigure;
       update.disabled = busy || !canReconfigure;
       if (updateLabel) updateLabel.textContent = busy ? 'Применяется…' : 'Применить изменения';
+    }
+    const clear = $(IDS.clear);
+    if (clear) {
+      clear.hidden = !data?.can_clear_dns;
+      clear.disabled = busy || !data?.can_clear_dns;
+    }
+    const replace = $(IDS.replace);
+    if (replace) {
+      replace.hidden = !data?.can_replace_dns;
+      replace.disabled = busy || !data?.can_replace_dns || repairUnavailable;
     }
   }
 
@@ -513,9 +525,10 @@ import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from '
     const canRecover = !!data?.can_recover;
     const canRelease = !!data?.can_release;
     const canReenable = !!data?.can_reenable;
+    const canReplace = !!data?.can_replace_dns;
     const blocked = !enabled && !canDisable && !canRecover && !canRelease && !canReenable && !data?.can_enable;
     const altered = !!data?.tampered;
-    const settingsLocked = busy || canReenable || ((enabled || canDisable || altered) && !canReconfigure);
+    const settingsLocked = busy || ((enabled || canDisable || altered) && !canReconfigure && !canReplace);
     const releaseRecord = guardRelease(data);
     const released = !enabled && !!releaseRecord;
     const releasedByUser = released && releaseRecord?.source === 'user';
@@ -616,7 +629,7 @@ import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from '
       badge.textContent = enabled
         ? (fakeRouteBlocked
           ? 'Включено · Fake-IP заблокирован'
-          : (fakeRouteUnready ? 'Включено · маршрут не подтверждён' : (altered ? 'Включено · изменено вручную' : 'Включено')))
+          : (fakeRouteUnready ? 'Включено · маршрут не подтверждён' : (altered ? (data?.dns_block_changed === false ? 'Включено · конфиг обновлён' : 'Включено · изменено вручную') : 'Включено')))
         : (canReenable
           ? 'Готово к повторному включению'
           : (released ? (releasedByUser ? 'DNS у Keenetic' : GUARD_RELEASED_BADGE) : (canRecover ? 'DNS-блок удалён' : (canRelease ? 'Можно вернуть Keenetic DNS' : (altered ? 'Изменено вручную' : (canDisable ? 'Готово к восстановлению' : ((blocked || fakeRouteUnready) ? 'Требует внимания' : 'Готово')))))));
@@ -624,10 +637,14 @@ import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from '
     if (dot) dot.dataset.state = enabled && !fakeRouteUnready ? 'enabled' : ((blocked || altered || canRecover || canRelease || released || fakeRouteUnready) ? 'blocked' : 'off');
     if (status) {
       if (enabled && fakeRouteUnready) status.textContent = data?.fake_ip_route?.message || 'DNS отвечает, но маршрут Fake-IP через firewall не подтверждён: соединения по виртуальным IP могут не работать.';
-      else if (enabled && canRelease) status.textContent = 'Работает пользовательский или изменённый DNS Mihomo. Можно сохранить весь блок, выключить в нём только enable и вернуть DNS прошивке Keenetic.';
+      else if (enabled && canRelease) status.textContent = data?.dns_block_changed === false
+        ? 'DNS-блок работает без изменений. После его включения изменились другие части config.yaml, поэтому старый полный снимок нельзя восстановить поверх новых правок. Можно вернуть DNS Keenetic, затем применить пресет панели.'
+        : 'Работает пользовательский или изменённый DNS Mihomo. Можно сохранить весь блок, выключить в нём только enable и вернуть DNS прошивке Keenetic.';
       else if (enabled && altered) status.textContent = 'Защищённый DNS активен, но config.yaml был изменён вручную. Панель видит сохранённый DNS-блок и не станет автоматически откатывать ваши правки.';
       else if (enabled) status.textContent = 'Защищённый DNS активен: Mihomo отвечает на порту 53, а DNS override Keenetic включён.';
+      else if (canReenable && canReplace) status.textContent = 'DNS Keenetic активен. Можно включить сохранённый DNS-блок, очистить его или применить выбранные настройки панели. При применении пресета исходный файл сохранится для восстановления.';
       else if (canReenable) status.textContent = 'Сохранённый DNS-блок отключён. Можно включить его обратно одной кнопкой — комментарии и пользовательские правки останутся на месте.';
+      else if (canReplace) status.textContent = 'В файле есть отключённый DNS-блок. Можно удалить его или применить выбранные настройки панели; исходный файл сохранится для восстановления.';
       else if (released) status.textContent = guardReleaseText(data);
       else if (canRecover) status.textContent = 'DNS-блок уже удалён вручную, а Keenetic DNS override выключен. Можно сохранить текущий config.yaml и завершить отключение без возврата старого снимка.';
       else if (canRelease) status.textContent = 'DNS override Keenetic включён для пользовательской или изменённой конфигурации. Панель может сохранить DNS-блок, выключить в нём только enable и вернуть DNS роутеру.';
@@ -663,7 +680,7 @@ import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from '
       const dnsPresent = !!(data.dns_present || listenerConfigured);
       addDetail(
         listenerConfigured
-          ? `DNS-слушатель: ${data.listen || '0.0.0.0:53'} · ${data.mode || 'redir-host'}${altered ? ' · блок сохранён после ручной правки' : ''}`
+          ? `DNS-слушатель: ${data.listen || '0.0.0.0:53'} · ${data.mode || 'redir-host'}${altered && data?.dns_block_changed !== false ? ' · блок сохранён после ручной правки' : ''}`
           : (dnsPresent
             ? 'Раздел dns присутствует, но слушатель на порту 53 в нём не включён'
             : 'DNS-слушатель Mihomo: не активен (раздел dns отсутствует)'),
@@ -712,6 +729,8 @@ import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from '
     const status = $(IDS.status);
     const apply = $(IDS.apply);
     const update = $(IDS.update);
+    const clear = $(IDS.clear);
+    const replace = $(IDS.replace);
     if (badge) {
       badge.dataset.state = 'blocked';
       badge.textContent = 'Ошибка проверки';
@@ -724,6 +743,9 @@ import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from '
     if (update) {
       update.hidden = true;
       update.disabled = true;
+    }
+    for (const button of [clear, replace]) {
+      if (button) { button.hidden = true; button.disabled = true; }
     }
     renderDiagnostics({});
     setRuntimeState(IDS.listenerState, null, 'Mihomo :53 · включён', 'Mihomo :53 · выключен');
@@ -802,6 +824,40 @@ import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from '
     }
   }
 
+  async function manageDnsBlock(action) {
+    const replacing = action === 'replace';
+    if (busy || !current?.[replacing ? 'can_replace_dns' : 'can_clear_dns']) return;
+    const message = replacing
+      ? 'Панель сохранит текущий config.yaml с отключённым DNS-блоком, заменит только этот блок выбранным пресетом, проверит YAML, перезапустит Mihomo и проверит DNS. При ошибке текущий файл будет восстановлен; при штатном отключении пресета сохранённый блок вернётся.'
+      : 'Панель удалит только раздел dns из текущего config.yaml, проверит YAML и перезапустит Mihomo. Остальные разделы и комментарии сохранятся; перед записью будет создана резервная копия.';
+    const confirmed = await confirmMihomoAction({
+      title: replacing ? 'Применить пресет панели?' : 'Очистить DNS-блок?',
+      message,
+      okText: replacing ? 'Применить пресет' : 'Очистить блок',
+      cancelText: 'Отмена',
+      danger: !replacing,
+    }, message);
+    if (!confirmed) return;
+
+    busy = true;
+    render(current);
+    try {
+      const result = await postAction(action);
+      toastXkeen(replacing
+        ? `Пресет DNS применён${result?.probe?.latency_ms != null ? ` · ${result.probe.latency_ms} мс` : ''}`
+        : 'Пользовательский DNS-блок удалён. Теперь можно применить настройки панели.', 'success');
+      await syncMihomoPanelConfig();
+      await refresh();
+    } catch (error) {
+      const data = error?.data || null;
+      if (!error?.unknown) toastXkeen(`${String(data?.error || error?.message || 'Операция не выполнена.')}${data?.rolled_back ? ' Предыдущая конфигурация восстановлена.' : ''}`, 'error');
+      await refresh();
+    } finally {
+      busy = false;
+      render(current || {});
+    }
+  }
+
   async function apply() {
     if (busy || !current) return;
     const recovery = !!current.can_recover;
@@ -868,6 +924,8 @@ import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from '
     }));
     $(IDS.apply)?.addEventListener('click', (event) => { event.preventDefault(); void apply(); });
     $(IDS.update)?.addEventListener('click', (event) => { event.preventDefault(); void reconfigure(); });
+    $(IDS.clear)?.addEventListener('click', (event) => { event.preventDefault(); void manageDnsBlock('clear'); });
+    $(IDS.replace)?.addEventListener('click', (event) => { event.preventDefault(); void manageDnsBlock('replace'); });
     $(IDS.upstreamDiagnostics)?.addEventListener('click', (event) => { event.preventDefault(); void runDiagnostics(); });
     $(IDS.proxyGroup)?.addEventListener('change', () => {
       const hint = $(IDS.dnsSelectorHint);

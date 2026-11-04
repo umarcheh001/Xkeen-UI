@@ -988,6 +988,162 @@ def test_existing_user_dns_can_be_returned_to_keenetic_without_a_snapshot(tmp_pa
     assert any("пользовательский DNS Mihomo" in message for message in result["blockers"])
 
 
+def test_parked_user_dns_can_be_cleared_without_losing_other_sections(tmp_path: Path, monkeypatch):
+    config, state = _status_ready(tmp_path, monkeypatch)
+    original = BASE.replace("rules:\n", "# routing note\nrules:\n") + "\n# user DNS\ndns:\n  enable: false\n  nameserver:\n    - 9.9.9.9\n  # DNS-only note\n# keep this note\n"
+    config.write_text(original, encoding="utf-8")
+    calls = []
+    monkeypatch.setattr(dns, "_wait_for_mihomo", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda **_kwargs: True)
+    monkeypatch.setattr(dns, "_remove_mihomo_dns_capture", lambda: None)
+
+    def save(content):
+        config.write_text(content, encoding="utf-8")
+        calls.append(("save", content))
+        return type("Backup", (), {"filename": "before.yaml"})()
+
+    status = dns.get_status(config_file=str(config), ui_state_dir=str(state))
+    assert status["can_clear_dns"] is True
+    assert status["can_replace_dns"] is True
+    result = dns.apply_action(
+        "clear", config_file=str(config), ui_state_dir=str(state),
+        validate_config=lambda **kwargs: calls.append(("validate", kwargs["new_content"])) or "[exit code: 0]",
+        save_config=save,
+        restart_xkeen=lambda **kwargs: calls.append(("restart", kwargs["source"])) or True,
+    )
+
+    content = config.read_text(encoding="utf-8")
+    assert result["dns_cleared"] is True
+    assert "dns:" not in content
+    assert "# routing note" in content
+    assert "# keep this note" in content
+    assert "# DNS-only note" not in content
+    assert calls[0][0] == "validate"
+    assert dns.get_status(config_file=str(config), ui_state_dir=str(state))["can_enable"] is True
+
+
+def test_clear_dns_rolls_back_when_restart_fails(tmp_path: Path, monkeypatch):
+    config, state = _status_ready(tmp_path, monkeypatch)
+    original = BASE + "\ndns:\n  enable: false\n  nameserver: [9.9.9.9]\n"
+    config.write_text(original, encoding="utf-8")
+    restarts = []
+
+    def save(content):
+        config.write_text(content, encoding="utf-8")
+        return None
+
+    with pytest.raises(dns.MihomoDnsError) as error:
+        dns.apply_action(
+            "clear", config_file=str(config), ui_state_dir=str(state),
+            validate_config=lambda **_kwargs: "[exit code: 0]",
+            save_config=save,
+            restart_xkeen=lambda **kwargs: restarts.append(kwargs["source"]) or len(restarts) > 1,
+        )
+    assert error.value.code == "dns_clear_restart_failed"
+    assert error.value.rolled_back is True
+    assert config.read_text(encoding="utf-8") == original
+    assert restarts == ["mihomo-dns-clear", "mihomo-dns-clear-rollback"]
+
+
+def test_replace_dns_preset_restores_parked_user_block_on_disable(tmp_path: Path, monkeypatch):
+    config, state = _status_ready(tmp_path, monkeypatch)
+    original = BASE + "\n# user DNS\ndns:\n  enable: false\n  nameserver: [9.9.9.9]\n"
+    config.write_text(original, encoding="utf-8")
+    override = {"value": False}
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (override["value"], "test"))
+    monkeypatch.setattr(dns, "_set_dns_override", lambda value: override.update(value=value))
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda **_kwargs: True)
+    monkeypatch.setattr(dns, "_wait_for_mihomo", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(dns, "_dns_probe", lambda: {"ok": True, "latency_ms": 2})
+    monkeypatch.setattr(dns, "_remove_mihomo_dns_capture", lambda: None)
+
+    def save(content):
+        config.write_text(content, encoding="utf-8")
+        return type("Backup", (), {"filename": "before.yaml"})()
+
+    applied = dns.apply_action(
+        "replace", config_file=str(config), ui_state_dir=str(state),
+        validate_config=lambda **_kwargs: "[exit code: 0]",
+        save_config=save, restart_xkeen=lambda **_kwargs: True,
+    )
+    assert applied["enabled"] is True
+    assert dns.MANAGED_BEGIN in config.read_text(encoding="utf-8")
+    saved_state = dns._load_state(str(state), str(config))
+    assert Path(saved_state["original_config"]).read_text(encoding="utf-8") == original
+
+    restored = dns.apply_action(
+        "disable", config_file=str(config), ui_state_dir=str(state),
+        validate_config=lambda **_kwargs: "[exit code: 0]",
+        save_config=save, restart_xkeen=lambda **_kwargs: True,
+    )
+    assert restored["restored"] is True
+    assert config.read_text(encoding="utf-8") == original
+    assert override["value"] is False
+
+
+def test_released_managed_dns_can_be_replaced_by_panel_preset(tmp_path: Path, monkeypatch):
+    config, state = _status_ready(tmp_path, monkeypatch)
+    prepared, _group = dns.build_enabled_config(BASE)
+    parked, changed = dns._with_dns_disabled(prepared)
+    assert changed is True
+    config.write_text(parked, encoding="utf-8")
+    dns._record_release(str(state), str(config), {"source": "user", "dns_block_preserved": True})
+
+    status = dns.get_status(config_file=str(config), ui_state_dir=str(state))
+    assert status["can_reenable"] is True
+    assert status["can_replace_dns"] is True
+    cleared = dns._without_dns_section(parked)
+    assert "dns:" not in cleared
+    assert dns.MANAGED_BEGIN not in cleared
+    assert dns.MANAGED_END not in cleared
+    assert "proxy-groups:" in cleared
+
+
+def test_replace_dns_probe_failure_preserves_user_block(tmp_path: Path, monkeypatch):
+    config, state = _status_ready(tmp_path, monkeypatch)
+    original = BASE + "\ndns:\n  enable: false\n  nameserver: [9.9.9.9]\n"
+    config.write_text(original, encoding="utf-8")
+    override = {"value": False}
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (override["value"], "test"))
+    monkeypatch.setattr(dns, "_set_dns_override", lambda value: override.update(value=value))
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda **_kwargs: True)
+    monkeypatch.setattr(dns, "_wait_for_mihomo", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(dns, "_dns_probe", lambda: {"ok": False, "error": "timeout"})
+
+    def save(content):
+        config.write_text(content, encoding="utf-8")
+        return None
+
+    with pytest.raises(dns.MihomoDnsError) as error:
+        dns.apply_action(
+            "replace", config_file=str(config), ui_state_dir=str(state),
+            validate_config=lambda **_kwargs: "[exit code: 0]",
+            save_config=save, restart_xkeen=lambda **_kwargs: True,
+        )
+    assert error.value.code == "dns_probe_failed"
+    assert error.value.rolled_back is True
+    assert config.read_text(encoding="utf-8") == original
+    assert override["value"] is False
+    assert not dns._load_state(str(state), str(config))
+
+
+def test_status_distinguishes_other_config_edits_from_dns_edits(tmp_path: Path, monkeypatch):
+    config, state = _status_ready(tmp_path, monkeypatch)
+    prepared, group = dns.build_enabled_config(BASE)
+    config.write_text(prepared + "\n# new proxy imported\n", encoding="utf-8")
+    dns._save_state(str(state), str(config), {
+        "applied_sha256": dns._sha256(prepared),
+        "applied_dns_sha256": dns._sha256(dns._top_level_section(prepared, "dns")[2]),
+        "proxy_group": group,
+    })
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+
+    status = dns.get_status(config_file=str(config), ui_state_dir=str(state))
+    assert status["tampered"] is True
+    assert status["dns_block_changed"] is False
+    assert status["can_release"] is True
+
+
 def test_enable_validates_saves_switches_restarts_and_probes(tmp_path: Path, monkeypatch):
     config, state = _status_ready(tmp_path, monkeypatch)
     calls: list[object] = []
@@ -1744,7 +1900,7 @@ def test_http_contract_and_frontend(tmp_path: Path, monkeypatch):
     assert "Mihomo preflight" in template
     assert "Полный снимок" in template
     assert "Автооткат" in template
-    assert "один <code>no opkg dns-override</code> не отключает слушатель Mihomo" in template
+    assert "Его можно восстановить, удалить отдельно или заменить пресетом панели" in template
     assert "Keenetic автоматически направляет запросы в Mihomo" in template
     assert "192.168.1.1:1054" not in template
     assert "'/api/mihomo/dns'" in script
