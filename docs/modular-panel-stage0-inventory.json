@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 665,
-      "size_bytes": 9051913,
+      "size_bytes": 9052550,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -88,7 +88,7 @@
       ],
       "removable": true,
       "unit_count": 150,
-      "size_bytes": 3974695,
+      "size_bytes": 3974744,
       "kind_counts": {
         "backend_route": 13,
         "backend_service": 20,
@@ -5169,7 +5169,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_frontend_migration_guardrails.py",
-      "size_bytes": 75783,
+      "size_bytes": 76426,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -13162,7 +13162,7 @@
       "module_id": "core",
       "kind": "frontend_runtime",
       "path": "xkeen-ui/static/js/runtime/lazy_runtime.js",
-      "size_bytes": 28095,
+      "size_bytes": 28089,
       "depends_on": [
         "tool.terminal",
         "tool.files",
@@ -22429,7 +22429,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_entrypoint",
       "path": "xkeen-ui/static/js/pages/xray.module.entry.js",
-      "size_bytes": 1601,
+      "size_bytes": 1650,
       "depends_on": [
         "core",
         "tool.editor"

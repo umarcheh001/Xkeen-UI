@@ -61,7 +61,7 @@ import { loadModulePart } from '../features/module_parts.js';
   const featureLoaders = {
     backups: () => import('../features/backups.js'),
     jsonEditor: () => import('../ui/json_editor_modal.js'),
-    datContents: () => loadModulePart('engine.xray', 'dat_contents_modal'),
+    datContents: () => loadModulePart('engine.xray', 'dat_contents'),
   };
 
   function getFeatureLoader(name) {

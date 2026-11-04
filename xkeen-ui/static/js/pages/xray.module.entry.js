@@ -10,11 +10,12 @@ export const XRAY_MODULE_PARTS = Object.freeze({
   routing_templates: () => import('../features/routing_templates.js'),
   inbounds: () => import('../features/inbounds.js'),
   outbounds: () => import('../features/outbounds.js'),
+  xray_logs: () => import('../features/xray_logs.js'),
   xray_preflight_modal: () => import('../ui/xray_preflight_modal.js'),
-  dat_contents_modal: () => import('../ui/dat_contents_modal.js'),
   github: () => import('../features/github.js').then(
     (mod) => import('../features/compat/github.js').then(() => mod)
   ),
+  dat_contents: () => import('../ui/dat_contents_modal.js'),
 });
 
 export function load(part) {

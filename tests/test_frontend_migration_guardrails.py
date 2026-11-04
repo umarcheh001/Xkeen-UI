@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from scripts.panel_template_source import compose_panel_template
@@ -331,7 +332,7 @@ def test_lazy_runtime_keeps_only_generic_compat_feature_paths():
         "const featureLoaders = {",
         "backups: () => import('../features/backups.js'),",
         "jsonEditor: () => import('../ui/json_editor_modal.js'),",
-        "datContents: () => loadModulePart('engine.xray', 'dat_contents_modal'),",
+        "datContents: () => loadModulePart('engine.xray', 'dat_contents'),",
         "const featureModules = Object.create(null);",
         "function loadFeatureModule(name) {",
         "case 'backups': {",
@@ -548,7 +549,8 @@ def test_xray_module_entry_loads_parts_on_demand_and_the_core_calls_it_through_m
             "bundle: () => import('./xray.module.bundle.js'),",
             "routing_templates: () => import('../features/routing_templates.js'),",
             "xray_preflight_modal: () => import('../ui/xray_preflight_modal.js'),",
-            "dat_contents_modal: () => import('../ui/dat_contents_modal.js'),",
+            "dat_contents: () => import('../ui/dat_contents_modal.js'),",
+            "xray_logs: () => import('../features/xray_logs.js'),",
             "github: () => import('../features/github.js').then(",
             "(mod) => import('../features/compat/github.js').then(() => mod)",
             "rememberModulePart('engine.xray', part, mod);",
@@ -576,6 +578,25 @@ def test_xray_module_entry_loads_parts_on_demand_and_the_core_calls_it_through_m
     assert not (features / "index.js").exists(), "features/index.js was a dead re-export of the Xray files"
     module_loader = (PAGES_DIR / "panel.module_loader.js").read_text(encoding="utf-8")
     assert "'panel-routing': () => import('./panel.routing.bundle.js')," in module_loader
+
+
+def test_xray_module_parts_are_exactly_the_agreed_set():
+    text = (PAGES_DIR / "xray.module.entry.js").read_text(encoding="utf-8")
+    table = re.search(r"export const XRAY_MODULE_PARTS = Object\.freeze\(\{\n(.*?)\n\}\);", text, re.S).group(1)
+    keys = re.findall(r"^  (\w+): ", table, re.M)
+    assert keys == [
+        "bundle",
+        "routing",
+        "routing_cards",
+        "routing_shell",
+        "routing_templates",
+        "inbounds",
+        "outbounds",
+        "xray_logs",
+        "xray_preflight_modal",
+        "github",
+        "dat_contents",
+    ]
 
 
 def test_selected_page_runtime_modules_use_shared_runtime_adapters_instead_of_raw_window_xkeen_reads():
