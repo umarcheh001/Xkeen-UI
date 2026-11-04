@@ -1,5 +1,5 @@
 import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
-import { iconHtml } from '../../../ui/operator_icons.js';
+import { iconHtml } from 'xk-core/js/ui/operator_icons.js';
 
 /*
   routing_cards/rules/fields.js

@@ -2,7 +2,7 @@ let localIoModuleApi = null;
 
 import { getRoutingShellApi as getRoutingShellModuleApi } from './routing_shell.js';
 import { getRoutingApi } from './routing.js';
-import { getXkeenUiConfigShellApi, toastXkeen } from './xkeen_runtime.js';
+import { getXkeenUiConfigShellApi, toastXkeen } from 'xk-core/js/features/xkeen_runtime.js';
 
 (() => {
   // Local import/export module (routing editor file-scoped)

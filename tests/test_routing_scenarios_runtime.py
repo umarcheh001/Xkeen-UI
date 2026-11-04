@@ -6,6 +6,7 @@ import subprocess
 from pathlib import Path
 
 from scripts.panel_template_source import compose_panel_template
+from tests.support.node_js import NODE_MODULE_COMMAND
 
 import pytest
 
@@ -18,7 +19,7 @@ def _run_node_json(script: str) -> object:
         pytest.skip("node is not available in this environment")
 
     result = subprocess.run(
-        ["node", "--input-type=module"],
+        [*NODE_MODULE_COMMAND],
         input=script,
         capture_output=True,
         cwd=str(ROOT),

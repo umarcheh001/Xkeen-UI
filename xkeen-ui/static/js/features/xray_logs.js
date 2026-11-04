@@ -1,4 +1,4 @@
-import { shouldKeepXrayLogLineForLevel } from './xray_log_line_class.js';
+import { shouldKeepXrayLogLineForLevel } from 'xk-core/js/features/xray_log_line_class.js';
 import {
   collectXrayLogDestinationIpPorts,
   collectXrayLogDomainCandidates,
@@ -14,8 +14,8 @@ import {
   openXkeenModal,
   syncXkeenBodyScrollLock,
   toastXkeen,
-} from './xkeen_runtime.js';
-import { iconHtml } from '../ui/operator_icons.js';
+} from 'xk-core/js/features/xkeen_runtime.js';
+import { iconHtml } from 'xk-core/js/ui/operator_icons.js';
 import { createXrayLogView } from './xray_log_view.js';
 
 let xrayLogsModuleApi = null;

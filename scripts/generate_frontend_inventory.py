@@ -153,6 +153,10 @@ class InventoryGenerator:
 
     def _resolve_import(self, owner_path: Path, import_spec: str) -> Path | None:
         cleaned = self._strip_query(import_spec)
+        if cleaned.startswith("xk-core/"):
+            # A module reaches a file of the core by its path under static/.
+            candidate = (self.project_root / "static" / cleaned[len("xk-core/"):]).resolve()
+            return candidate if candidate.is_file() else None
         if not cleaned.startswith("."):
             return None
 

@@ -1012,7 +1012,7 @@ def test_phase2_semantic_validation_runtime_is_wired_into_mihomo_and_xray_editor
     assert 'const schemaLintSource = jsonSchemaLinter(options);' in codemirror_runtime
     assert "if (key === 'semanticValidation') {" in codemirror_runtime
     assert 'semanticValidation: opts.semanticValidation || null,' in codemirror_runtime
-    assert "import { validateXrayRoutingSemantics } from '../ui/schema_semantic_validation.js';" in routing_runtime
+    assert "import { validateXrayRoutingSemantics } from 'xk-core/js/ui/schema_semantic_validation.js';" in routing_runtime
     assert 'function refreshRoutingSemanticContext(opts) {' in routing_runtime
     assert 'function buildRoutingSemanticMarkers(text, diagnostics) {' in routing_runtime
     assert "editor.setOption('semanticValidation', getRoutingSemanticValidationConfig());" in routing_runtime

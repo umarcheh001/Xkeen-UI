@@ -3,6 +3,9 @@
 A module is reached only by the name `xk-module/<id>`, so a change inside it
 touches no build file of the core. The entries are worked out on the server for
 the modules that are active: an absent or switched-off module simply has none.
+
+The other way round a module reaches the core by `xk-core/<path under static>`:
+the core publishes such files as entries of its build.
 """
 
 from __future__ import annotations
@@ -21,6 +24,7 @@ _MODULE_KEY_PREFIX = "xk-module/"
 _CORE_KEY_PREFIX = "xk-core/"
 _MANIFEST_PREFIX = "module."
 _MANIFEST_SUFFIX = ".json"
+_CORE_MANIFEST_FILENAME = "manifest.build.json"
 
 
 @functools.lru_cache(maxsize=32)
@@ -83,3 +87,39 @@ def build_core_importmap(manifest: Mapping[str, Any], public_entries: Mapping[st
         if isinstance(filename, str) and filename:
             entries[_CORE_KEY_PREFIX + public_path] = f"{_BUILD_DIRNAME}/{filename}"
     return entries
+
+
+@functools.lru_cache(maxsize=8)
+def _core_public_entries(path: str, mtime_ns: int) -> tuple[tuple[str, str], ...] | None:
+    """The `xk-core/*` entries of one core manifest, cached by its mtime."""
+
+    try:
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(payload, Mapping):
+        return None
+    public = {
+        key: key
+        for key, item in payload.items()
+        if isinstance(key, str) and key.startswith("js/") and isinstance(item, Mapping) and item.get("isEntry") is True
+    }
+    return tuple(build_core_importmap(payload, public).items())
+
+
+def build_core_public_importmap(panel_root: Path) -> dict[str, str]:
+    """`xk-core/<path>` of every `js/` entry of the core build.
+
+    A module reaches a file of the core by its source path under `static/`.
+    With a build the name leads to the very chunk the core itself loads, so
+    the shared state exists once. Without a build every such name is the
+    source file itself: the prefix points at `static/`.
+    """
+
+    manifest = Path(panel_root) / "static" / _BUILD_DIRNAME / ".vite" / _CORE_MANIFEST_FILENAME
+    try:
+        mtime_ns = manifest.stat().st_mtime_ns
+    except OSError:
+        return {_CORE_KEY_PREFIX: ""}
+    entries = _core_public_entries(str(manifest), mtime_ns)
+    return dict(entries) if entries is not None else {_CORE_KEY_PREFIX: ""}

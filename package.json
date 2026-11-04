@@ -24,6 +24,7 @@
     "test:py": "node scripts/run_python.mjs -m pytest -q -n auto --dist loadfile -m \"not timing\" && node scripts/run_python.mjs -m pytest -q -n 4 --dist loadfile -m timing",
     "test:py:fast": "node scripts/run_python.mjs -m pytest -q -n auto --dist loadfile -m \"not slow and not timing\"",
     "test:py:changed": "node scripts/run_python.mjs scripts/run_changed_tests.py",
+    "test:js": "node --import ./tests/js/xk_core_hooks.mjs --test \"tests/js/*.test.mjs\"",
     "e2e:install": "playwright install chromium",
     "e2e": "playwright test",
     "e2e:gate": "node scripts/run_python.mjs scripts/e2e_gate.py run",

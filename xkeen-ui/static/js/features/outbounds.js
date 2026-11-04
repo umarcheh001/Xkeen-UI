@@ -1,6 +1,6 @@
 import { decodeSchedule, encodeSchedule, describeSchedule, subscriptionErrorSummary } from './xray_subscription_schedule.js';
-import { loadBackupsFeatureApi } from './backup_actions_loader.js';
-import { getRestartLogApi } from './restart_log.js';
+import { loadBackupsFeatureApi } from 'xk-core/js/features/backup_actions_loader.js';
+import { getRestartLogApi } from 'xk-core/js/features/restart_log.js';
 import { getRoutingApi } from './routing.js';
 import {
   confirmXkeenAction,
@@ -11,9 +11,9 @@ import {
   openXkeenJsonEditor,
   syncXkeenBodyScrollLock,
   toastXkeen,
-} from './xkeen_runtime.js';
-import { iconHtml, setIcon } from '../ui/operator_icons.js';
-import { appendHappDecryptorCardLink } from '../ui/happ_decryptor_link.js';
+} from 'xk-core/js/features/xkeen_runtime.js';
+import { iconHtml, setIcon } from 'xk-core/js/ui/operator_icons.js';
+import { appendHappDecryptorCardLink } from 'xk-core/js/ui/happ_decryptor_link.js';
 
 let outboundsModuleApi = null;
 

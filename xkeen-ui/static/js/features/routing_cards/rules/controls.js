@@ -1,4 +1,4 @@
-import { isXkeenMipsRuntime } from '../../xkeen_runtime.js';
+import { isXkeenMipsRuntime } from 'xk-core/js/features/xkeen_runtime.js';
 import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
 
 /*

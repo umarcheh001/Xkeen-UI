@@ -90,8 +90,9 @@ def test_engine_bundles_do_not_eagerly_import_advanced_quick_fixes():
 
     assert "schema_quickfixes.js" not in schema
     assert "from '../ui/schema_quickfixes.js'" not in routing
+    assert "from 'xk-core/js/ui/schema_quickfixes.js'" not in routing
     assert "from '../ui/schema_quickfixes.js'" not in mihomo
-    assert "import('../ui/schema_quickfixes.js')" in routing
+    assert "import('xk-core/js/ui/schema_quickfixes.js')" in routing
     assert "import('../ui/schema_quickfixes.js')" in mihomo
 
 

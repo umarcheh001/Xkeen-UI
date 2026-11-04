@@ -96,7 +96,7 @@ def test_routing_screen_loads_the_backups_feature_only_on_demand():
     for name in ("routing.js", "inbounds.js", "outbounds.js"):
         source = (features / name).read_text(encoding="utf-8")
         assert "from './backups.js'" not in source, name
-        assert "from './backup_actions_loader.js'" in source, name
+        assert "from 'xk-core/js/features/backup_actions_loader.js'" in source, name
 
     loader = (features / "backup_actions_loader.js").read_text(encoding="utf-8")
     assert "import('./backups.js')" in loader

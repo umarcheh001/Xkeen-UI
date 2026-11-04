@@ -2,14 +2,14 @@ let githubModuleApi = null;
 
 import { getRoutingApi } from './routing.js';
 import { getInboundsApi } from './inbounds.js';
-import { getXkeenTextsApi } from './xkeen_texts.js';
+import { getXkeenTextsApi } from 'xk-core/js/features/xkeen_texts.js';
 import {
   closeXkeenModal,
   getXkeenGithubRepoUrl,
   getXkeenPageConfigShellApi,
   openXkeenModal,
   toastXkeen,
-} from './xkeen_runtime.js';
+} from 'xk-core/js/features/xkeen_runtime.js';
 
 (() => {
   // GitHub / config-server integration (configs catalog + import/export)

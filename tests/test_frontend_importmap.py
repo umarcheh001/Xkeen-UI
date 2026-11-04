@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -21,6 +22,7 @@ from scripts import build_modular_panel_release as builder
 from services.frontend_importmap import (
     SOURCE_FALLBACKS,
     build_core_importmap,
+    build_core_public_importmap,
     build_module_importmap,
 )
 from tests.support.panel_render import FULL_MODULE_IDS, ROOT, XRAY_MINIMAL_MODULE_IDS, build_panel_app
@@ -155,6 +157,83 @@ def test_core_importmap_maps_public_paths_to_hashed_files() -> None:
     assert build_core_importmap(manifest, {}) == {}
 
 
+def lay_core_build_manifest(panel_root: Path, payload: dict) -> None:
+    vite = panel_root / "static/frontend-build/.vite"
+    vite.mkdir(parents=True, exist_ok=True)
+    (vite / "manifest.build.json").write_text(json.dumps(payload), encoding="utf-8")
+
+
+CORE_BUILD_MANIFEST = {
+    "js/features/xkeen_runtime.js": {
+        "file": "assets/xk-core-0123456789-AbCd1234.js",
+        "isEntry": True,
+        "name": "xk-core-0123456789",
+        "src": "js/features/xkeen_runtime.js",
+    },
+    "_shared-EfGh5678.js": {"file": "assets/shared-EfGh5678.js", "name": "shared"},
+    "js/ui/lazy.js": {"file": "assets/lazy-IjKl9012.js", "isDynamicEntry": True, "src": "js/ui/lazy.js"},
+}
+
+
+def test_core_public_entries_are_mapped_to_built_files(monkeypatch, tmp_path: Path) -> None:
+    panel_root = tmp_path / "panel"
+    lay_core_build_manifest(panel_root, CORE_BUILD_MANIFEST)
+
+    assert build_core_public_importmap(panel_root) == {
+        "xk-core/js/features/xkeen_runtime.js": "frontend-build/assets/xk-core-0123456789-AbCd1234.js",
+    }
+
+    imports = render_imports(monkeypatch, tmp_path, FULL_MODULE_IDS, panel_root)
+    assert imports["xk-core/js/features/xkeen_runtime.js"] == (
+        "/static/frontend-build/assets/xk-core-0123456789-AbCd1234.js"
+    )
+    assert "xk-core/" not in imports
+
+
+def test_core_prefix_without_build(monkeypatch, tmp_path: Path) -> None:
+    panel_root = tmp_path / "panel"
+    (panel_root / "static").mkdir(parents=True)
+
+    assert build_core_public_importmap(panel_root) == {"xk-core/": ""}
+
+    imports = render_imports(monkeypatch, tmp_path, FULL_MODULE_IDS, panel_root)
+    assert imports["xk-core/"] == "/static/"
+
+
+def test_unreadable_core_manifest_falls_back_to_the_sources(tmp_path: Path) -> None:
+    vite = tmp_path / "static/frontend-build/.vite"
+    vite.mkdir(parents=True)
+    (vite / "manifest.build.json").write_text("not json", encoding="utf-8")
+
+    assert build_core_public_importmap(tmp_path) == {"xk-core/": ""}
+
+
+def test_node_resolves_core_public_names_to_the_same_module() -> None:
+    """The node hook gives the tests what the importmap gives a page without a build."""
+
+    from tests.support.node_js import NODE_MODULE_COMMAND
+
+    if shutil.which("node") is None:
+        pytest.skip("node is not available in this environment")
+    script = (
+        "const named = await import('xk-core/js/features/module_parts.js');\n"
+        "const relative = await import('./xkeen-ui/static/js/features/module_parts.js');\n"
+        "console.log(named === relative ? 'same' : 'different');\n"
+    )
+    result = subprocess.run(
+        [*NODE_MODULE_COMMAND], input=script, cwd=ROOT, capture_output=True, text=True, encoding="utf-8", check=False
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "same"
+
+
+def test_js_unit_tests_run_with_the_core_hook() -> None:
+    package = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
+
+    assert package["scripts"]["test:js"].startswith("node --import ./tests/js/xk_core_hooks.mjs --test ")
+
+
 def test_module_assets_are_immutable() -> None:
     assert is_hashed_build_asset_filename(
         f"frontend-build/modules/{MODULE_ID}/resource_monitor-AbCd1234.js"
@@ -245,6 +324,16 @@ def test_inventory_follows_the_public_name_into_the_module() -> None:
 
     assert generator._resolve_js_import(bundle, MODULE_KEY) == (ROOT / "xkeen-ui/static" / SOURCE_ENTRY).resolve()
     assert generator._resolve_js_import(bundle, "xk-module/tool.unknown") is None
+
+
+def test_inventory_follows_the_core_public_name_into_the_core() -> None:
+    generator = _inventory_generator()
+    routing = ROOT / "xkeen-ui/static/js/features/routing.js"
+
+    assert generator._resolve_js_import(routing, "xk-core/js/features/xkeen_runtime.js") == (
+        ROOT / "xkeen-ui/static/js/features/xkeen_runtime.js"
+    ).resolve()
+    assert generator._resolve_js_import(routing, "xk-core/js/features/gone.js") is None
 
 
 @pytest.fixture

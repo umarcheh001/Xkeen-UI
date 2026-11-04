@@ -23,7 +23,7 @@ from typing import Any
 from flask import Flask, Response, current_app, request, send_file, url_for
 from werkzeug.utils import safe_join
 
-from services.frontend_importmap import build_module_importmap
+from services.frontend_importmap import build_core_public_importmap, build_module_importmap
 
 _SOURCE_ENTRIES = {
     "panel": "js/pages/panel.entry.js",
@@ -903,7 +903,11 @@ class FrontendAssetHelper:
     def frontend_module_importmap(self) -> dict[str, str]:
         activation = current_app.extensions.get("xkeen.module_activation")
         active = activation.get("active_module_ids", []) if isinstance(activation, dict) else None
-        targets = build_module_importmap(Path(self.static_folder).parent, active)
+        panel_root = Path(self.static_folder).parent
+        targets = build_module_importmap(panel_root, active)
+        # An empty target is the prefix `xk-core/` of a panel without a build:
+        # it becomes `/static/`.
+        targets.update(build_core_public_importmap(panel_root))
         return {specifier: url_for("static", filename=target) for specifier, target in targets.items()}
 
     def frontend_page_config(

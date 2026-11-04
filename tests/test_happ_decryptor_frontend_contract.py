@@ -75,7 +75,11 @@ def test_backend_messages_and_frontend_link_share_the_card_label():
 
 
 def test_subscription_windows_link_errors_to_the_card():
-    for name in ("outbounds.js", "mihomo_import.js"):
+    # Xray reaches the core by its public name, Mihomo is still built with it.
+    for name, specifier in (
+        ("outbounds.js", "xk-core/js/ui/happ_decryptor_link.js"),
+        ("mihomo_import.js", "../ui/happ_decryptor_link.js"),
+    ):
         source = (APP / "static" / "js" / "features" / name).read_text(encoding="utf-8")
         assert "appendHappDecryptorCardLink" in source, name
-        assert "../ui/happ_decryptor_link.js" in source, name
+        assert specifier in source, name

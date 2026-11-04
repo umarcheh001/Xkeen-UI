@@ -2,12 +2,12 @@ let routingModuleApi = null;
 
 import { getRoutingShellApi as getRoutingShellModuleApi } from './routing_shell.js';
 import { getRoutingCardsApi as getRoutingCardsModuleApi } from './routing_cards.js';
-import { loadBackupsFeatureApi } from './backup_actions_loader.js';
+import { loadBackupsFeatureApi } from 'xk-core/js/features/backup_actions_loader.js';
 import {
   buildJsoncPointerMap,
   findDiagnosticMapping,
   withDiagnosticContext,
-} from '../vendor/codemirror_json_schema.js';
+} from 'xk-core/js/vendor/codemirror_json_schema.js';
 import {
   confirmXkeenAction,
   getXkeenCm6RuntimeApi,
@@ -33,8 +33,8 @@ import {
   isXkeenMipsRuntime,
   setXkeenRoutingRetryWithoutPreflight,
   toastXkeen,
-} from './xkeen_runtime.js';
-import { stripJsonComments as stripJsonCommentsUtil } from '../util/strip_json_comments.js';
+} from 'xk-core/js/features/xkeen_runtime.js';
+import { stripJsonComments as stripJsonCommentsUtil } from 'xk-core/js/util/strip_json_comments.js';
 import {
   ROUTING_SCENARIO_MAIN_BALANCER_TAG,
   ROUTING_SCENARIO_RESERVE_BALANCER_TAG,
@@ -49,9 +49,9 @@ import {
   detectRoutingScenarioFromText,
   formatRoutingScenarioPreflightMessage,
 } from '../ui/routing_scenarios.js';
-import { applySchemaToEditor, resolveEditorSnippetProvider } from '../ui/editor_schema.js';
-import { validateXrayRoutingSemantics } from '../ui/schema_semantic_validation.js';
-import { iconHtml } from '../ui/operator_icons.js';
+import { applySchemaToEditor, resolveEditorSnippetProvider } from 'xk-core/js/ui/editor_schema.js';
+import { validateXrayRoutingSemantics } from 'xk-core/js/ui/schema_semantic_validation.js';
+import { iconHtml } from 'xk-core/js/ui/operator_icons.js';
 
 (() => {
   "use strict";
@@ -443,8 +443,8 @@ import { iconHtml } from '../ui/operator_icons.js';
   }
 
   async function ensureFormattersReady() {
-    await import('../ui/prettier_loader.js');
-    await import('../ui/formatters.js');
+    await import('xk-core/js/ui/prettier_loader.js');
+    await import('xk-core/js/ui/formatters.js');
     return getXkeenFormattersApi();
   }
 
@@ -479,7 +479,7 @@ import { iconHtml } from '../ui/operator_icons.js';
 
   function loadRestartLogModule() {
     if (!_restartLogModulePromise) {
-      _restartLogModulePromise = import('./restart_log.js').catch((error) => {
+      _restartLogModulePromise = import('xk-core/js/features/restart_log.js').catch((error) => {
         _restartLogModulePromise = null;
         throw error;
       });
@@ -859,7 +859,7 @@ import { iconHtml } from '../ui/operator_icons.js';
         typeof ensureCapability === 'function' ? ensureCapability('quick-fix') : true
       ).then((ok) => {
         if (!ok) return null;
-        return import('../ui/schema_quickfixes.js')
+        return import('xk-core/js/ui/schema_quickfixes.js')
           .then(({ createXrayQuickFixProvider }) => {
             _routingQuickFixProvider = createXrayQuickFixProvider({
               getSemanticOptions: () => getRoutingSemanticValidationConfig().options,

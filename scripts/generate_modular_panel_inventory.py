@@ -210,6 +210,8 @@ class _PanelSurfaceParser(HTMLParser):
 # A module built apart from the panel is imported as `xk-module/<id>`; its
 # source entry is listed in SEPARATE_MODULES of vite.module.config.mjs.
 SEPARATE_MODULE_PREFIX = "xk-module/"
+# A module imports a file of the core as `xk-core/<path under static>`.
+CORE_PUBLIC_PREFIX = "xk-core/"
 SEPARATE_MODULES_BLOCK_RE = re.compile(r"SEPARATE_MODULES\s*=\s*\{(.*?)\n\};", re.DOTALL)
 SEPARATE_MODULE_ENTRY_RE = re.compile(r"['\"]([^'\"]+)['\"]\s*:\s*\{\s*entry\s*:\s*['\"]([^'\"]+)['\"]")
 
@@ -586,6 +588,10 @@ class ModularPanelInventoryGenerator:
             entry = self._separate_module_entries().get(cleaned[len(SEPARATE_MODULE_PREFIX):])
             target = (self.project_root / "static" / entry).resolve() if entry else None
             return target if target is not None and target.is_file() else None
+        if cleaned.startswith(CORE_PUBLIC_PREFIX):
+            # A module reaches the core by its path under static/.
+            target = (self.project_root / "static" / cleaned[len(CORE_PUBLIC_PREFIX):]).resolve()
+            return target if target.is_file() else None
         if not cleaned.startswith("."):
             return None
         candidate = (source.parent / cleaned).resolve()

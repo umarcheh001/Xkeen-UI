@@ -130,6 +130,24 @@ test.describe('Xray module parts on a fresh page', () => {
 
     await expect(page.locator('#routing-template-modal')).toBeVisible();
     await expect(page.locator('#view-routing')).toBeHidden();
+
+    // The Xray entry remembers the part through `xk-core/...module_parts.js`;
+    // the importmap must lead to the instance the core keeps its state in,
+    // not to a second copy of it. The core imports the shared chunk, the
+    // public entry re-exports the same functions from it.
+    const shared = await page.evaluate(async () => {
+      const named = await import('xk-core/js/features/module_parts.js');
+      const chunk = performance
+        .getEntriesByType('resource')
+        .map((entry) => entry.name)
+        .find((name) => /\/frontend-build\/assets\/module_parts-[\w-]+\.js$/.test(name));
+      const core = chunk ? await import(chunk) : named;
+      return {
+        remembered: named.loadedModulePart('engine.xray', 'routing_templates') !== null,
+        sameFunctions: Object.values(core).includes(named.loadedModulePart),
+      };
+    });
+    expect(shared).toEqual({ remembered: true, sameFunctions: true });
     expect(problems).toEqual([]);
   });
 });

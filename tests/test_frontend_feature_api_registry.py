@@ -452,34 +452,34 @@ def test_selected_runtime_adapter_feature_modules_no_longer_read_raw_window_xkee
             "from './xkeen_runtime.js';",
         ],
         "xray_logs.js": [
-            "from './xkeen_runtime.js';",
+            "from 'xk-core/js/features/xkeen_runtime.js';",
         ],
         "backups.js": [
             "from './xkeen_runtime.js';",
         ],
         "github.js": [
-            "from './xkeen_runtime.js';",
+            "from 'xk-core/js/features/xkeen_runtime.js';",
         ],
         "local_io.js": [
-            "from './xkeen_runtime.js';",
+            "from 'xk-core/js/features/xkeen_runtime.js';",
         ],
         "inbounds.js": [
-            "from './xkeen_runtime.js';",
+            "from 'xk-core/js/features/xkeen_runtime.js';",
         ],
         "outbounds.js": [
-            "from './xkeen_runtime.js';",
+            "from 'xk-core/js/features/xkeen_runtime.js';",
         ],
         "restart_log.js": [
             "from './xkeen_runtime.js';",
         ],
         "routing.js": [
-            "from './xkeen_runtime.js';",
+            "from 'xk-core/js/features/xkeen_runtime.js';",
         ],
         "routing_cards.js": [
-            "from './xkeen_runtime.js';",
+            "from 'xk-core/js/features/xkeen_runtime.js';",
         ],
         "routing_templates.js": [
-            "from './xkeen_runtime.js';",
+            "from 'xk-core/js/features/xkeen_runtime.js';",
         ],
         "xkeen_texts.js": [
             "from './xkeen_runtime.js';",

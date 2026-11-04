@@ -5,14 +5,14 @@
 // through the same page-level config shell contract instead of relying on
 // legacy lazy-runtime script injection.
 
-import '../ui/config_dirty_state.js';
-import '../ui/config_shell.js';
+import 'xk-core/js/ui/config_dirty_state.js';
+import 'xk-core/js/ui/config_shell.js';
 import { getRoutingShellApi as getRoutingShellModuleApi } from '../features/routing_shell.js';
 import {
   getXkeenPageApi,
   getXkeenUiConfigShellApi,
   publishXkeenPageApi,
-} from '../features/xkeen_runtime.js';
+} from 'xk-core/js/features/xkeen_runtime.js';
 
 (() => {
   'use strict';

@@ -1,12 +1,12 @@
-import { loadBackupsFeatureApi } from './backup_actions_loader.js';
-import { getRestartLogApi } from './restart_log.js';
+import { loadBackupsFeatureApi } from 'xk-core/js/features/backup_actions_loader.js';
+import { getRestartLogApi } from 'xk-core/js/features/restart_log.js';
 import {
   getXkeenFilePath,
   getXkeenUiConfigShellApi,
   openXkeenJsonEditor,
   syncXkeenBodyScrollLock,
   toastXkeen,
-} from './xkeen_runtime.js';
+} from 'xk-core/js/features/xkeen_runtime.js';
 
 let inboundsModuleApi = null;
 

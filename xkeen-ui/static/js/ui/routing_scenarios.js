@@ -1,4 +1,4 @@
-import { stripJsonComments } from '../util/strip_json_comments.js';
+import { stripJsonComments } from 'xk-core/js/util/strip_json_comments.js';
 import { getRoutingJsoncPreserveApi } from '../features/routing_jsonc_preserve.js';
 
 export const ROUTING_SCENARIO_NORMAL = 'normal';

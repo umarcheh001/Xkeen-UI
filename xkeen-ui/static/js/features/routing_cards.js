@@ -13,7 +13,7 @@ import {
   getXkeenSettingsApi,
   isXkeenDebugRuntime,
   toastXkeen,
-} from './xkeen_runtime.js';
+} from 'xk-core/js/features/xkeen_runtime.js';
 
 let routingCardsModuleApi = null;
 

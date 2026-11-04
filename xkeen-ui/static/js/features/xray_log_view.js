@@ -12,7 +12,7 @@
 // Scroll positions are computed, never read back after a DOM change.
 
 import { parseXrayAccessLine, parseXrayErrorLine, xrayRegistrableDomain } from './xray_log_parser.js';
-import { countryFlag, nodeCountryCode, nodeDisplayName } from '../ui/country_flags.js';
+import { countryFlag, nodeCountryCode, nodeDisplayName } from 'xk-core/js/ui/country_flags.js';
 
 const ROW_H = 32;
 const HEAD_H = 30;

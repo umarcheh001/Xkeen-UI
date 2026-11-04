@@ -430,8 +430,8 @@ def test_formatters_and_xray_preflight_use_direct_imports_in_consumers():
             "await import('../ui/formatters.js');",
         ],
         ROOT / "xkeen-ui" / "static" / "js" / "features" / "routing.js": [
-            "await import('../ui/prettier_loader.js');",
-            "await import('../ui/formatters.js');",
+            "await import('xk-core/js/ui/prettier_loader.js');",
+            "await import('xk-core/js/ui/formatters.js');",
             "return import('../ui/xray_preflight_modal.js');",
         ],
         ROOT / "xkeen-ui" / "static" / "js" / "ui" / "json_editor_modal.js": [
@@ -662,13 +662,13 @@ def test_page_shell_helper_modules_use_xkeen_runtime_adapters_for_page_api_and_s
             "getXkeenPageApi('panelShell')",
         ],
         PAGES_DIR / "config_shell.shared.js": [
-            "from '../features/xkeen_runtime.js';",
+            "from 'xk-core/js/features/xkeen_runtime.js';",
             "getXkeenUiConfigShellApi()",
             "publishXkeenPageApi('configShell', {",
             "getXkeenPageApi('configShell')",
         ],
         PAGES_DIR / "logs_shell.shared.js": [
-            "from '../features/xkeen_runtime.js';",
+            "from 'xk-core/js/features/xkeen_runtime.js';",
             "publishXkeenPageApi('logsShell', {",
             "getXkeenPageApi('logsShell')",
         ],
@@ -1511,7 +1511,7 @@ def test_stage6_consumer_sweep_uses_runtime_page_config_helpers_in_canonical_rea
         },
         ROOT / "xkeen-ui" / "static" / "js" / "features" / "routing_cards" / "rules" / "controls.js": {
             "required": [
-                "import { isXkeenMipsRuntime } from '../../xkeen_runtime.js';",
+                "import { isXkeenMipsRuntime } from 'xk-core/js/features/xkeen_runtime.js';",
                 "return isXkeenMipsRuntime();",
             ],
             "forbidden": [
@@ -1520,7 +1520,7 @@ def test_stage6_consumer_sweep_uses_runtime_page_config_helpers_in_canonical_rea
         },
         ROOT / "xkeen-ui" / "static" / "js" / "features" / "routing_cards" / "rules" / "render.js": {
             "required": [
-                "import { isXkeenMipsRuntime } from '../../xkeen_runtime.js';",
+                "import { isXkeenMipsRuntime } from 'xk-core/js/features/xkeen_runtime.js';",
                 "return isXkeenMipsRuntime();",
             ],
             "forbidden": [

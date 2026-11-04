@@ -1,6 +1,6 @@
 // Entry of the Xray module. It stays light: every part loads on demand, and the
 // core asks for a part through features/module_parts.js.
-import { rememberModulePart } from '../features/module_parts.js';
+import { rememberModulePart } from 'xk-core/js/features/module_parts.js';
 
 export const XRAY_MODULE_PARTS = Object.freeze({
   bundle: () => import('./xray.module.bundle.js'),

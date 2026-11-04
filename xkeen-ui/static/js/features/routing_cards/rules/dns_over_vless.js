@@ -1,11 +1,11 @@
-import { getXkeenCoreHttpApi } from '../../xkeen_runtime.js';
-import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseSummary, guardReleaseText, guardRescueNote } from '../../dns_guard_text.js';
+import { getXkeenCoreHttpApi } from 'xk-core/js/features/xkeen_runtime.js';
+import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseSummary, guardReleaseText, guardRescueNote } from 'xk-core/js/features/dns_guard_text.js';
 import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
 import {
   awaitDnsOperation,
   createDnsOperationNotice,
   newDnsOperationId,
-} from '../../dns_operation_recovery.js';
+} from 'xk-core/js/features/dns_operation_recovery.js';
 
 /* Guarded, one-click DNS-over-VLESS assistant. */
 (function () {

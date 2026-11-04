@@ -1,6 +1,6 @@
-import { isXkeenMipsRuntime } from '../../xkeen_runtime.js';
+import { isXkeenMipsRuntime } from 'xk-core/js/features/xkeen_runtime.js';
 import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
-import { setIcon } from '../../../ui/operator_icons.js';
+import { setIcon } from 'xk-core/js/ui/operator_icons.js';
 
 /*
   routing_cards/rules/render.js

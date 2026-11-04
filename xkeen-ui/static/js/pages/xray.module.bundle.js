@@ -40,7 +40,7 @@ import {
 import { getLocalIoApi } from '../features/local_io.js';
 import { getRoutingShellApi } from '../features/routing_shell.js';
 import { getRoutingCardsNamespace } from '../features/routing_cards_namespace.js';
-import { initCoreSources } from '../features/core_source.js';
+import { initCoreSources } from 'xk-core/js/features/core_source.js';
 
 let routingBundleActivated = false;
 

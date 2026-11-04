@@ -4,13 +4,15 @@ import json
 import subprocess
 from pathlib import Path
 
+from tests.support.node_js import NODE_MODULE_COMMAND
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def run_domain_hints_probe(script: str):
     result = subprocess.run(
-        ["node", "--input-type=module", "-e", script],
+        [*NODE_MODULE_COMMAND, "-e", script],
         cwd=ROOT,
         check=True,
         text=True,

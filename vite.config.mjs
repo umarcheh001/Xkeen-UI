@@ -1,4 +1,6 @@
 import { defineConfig } from 'vite';
+import { createHash } from 'node:crypto';
+import fs from 'node:fs';
 import path from 'node:path';
 
 const repoRoot = path.resolve('.');
@@ -14,9 +16,40 @@ const CANONICAL_PAGE_ENTRIES = {
   mihomo_generator: path.resolve(pageDir, 'mihomo_generator.entry.js'),
 };
 
-// Published as entries of the core build for modules that import it by the name
-// xk-core/<path>. No separate module needs one yet.
-const CORE_PUBLIC_ENTRIES = {};
+const CORE_PUBLIC_SPECIFIER_RE = /\b(?:from|import)\s*\(?\s*['"`]xk-core\/([^'"`?#\s]+)['"`]/g;
+
+function listScripts(dir) {
+  const found = [];
+  for (const item of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, item.name);
+    if (item.isDirectory()) found.push(...listScripts(full));
+    else if (item.isFile() && item.name.endsWith('.js')) found.push(full);
+  }
+  return found;
+}
+
+// Every file of the core that a source names `xk-core/<path under static>`.
+// The core publishes them as entries of its build, so a module built apart
+// reaches the very chunk the core loads, not a copy of it.
+export function collectCorePublicPaths(root) {
+  const jsRoot = path.resolve(root, 'js');
+  const vendorNpm = path.resolve(jsRoot, 'vendor/npm') + path.sep;
+  const paths = new Set();
+  for (const file of listScripts(jsRoot)) {
+    if (file.startsWith(vendorNpm)) continue;
+    const text = fs.readFileSync(file, 'utf8');
+    for (const match of text.matchAll(CORE_PUBLIC_SPECIFIER_RE)) paths.add(match[1]);
+  }
+  return [...paths].sort();
+}
+
+// Entry names stay stable while the paths do; the hash keeps them short.
+const CORE_PUBLIC_ENTRIES = Object.fromEntries(
+  collectCorePublicPaths(staticRoot).map((relative) => [
+    'xk-core-' + createHash('sha1').update(relative).digest('hex').slice(0, 10),
+    path.resolve(staticRoot, relative),
+  ]),
+);
 
 export const EXTERNAL_IMPORT_SPECIFIERS = new Set([
   '@codemirror/autocomplete',
@@ -47,7 +80,7 @@ export const EXTERNAL_IMPORT_SPECIFIERS = new Set([
 
 function isExternalImport(specifier) {
   const name = String(specifier || '');
-  return EXTERNAL_IMPORT_SPECIFIERS.has(name) || /^xk-module\//.test(name);
+  return EXTERNAL_IMPORT_SPECIFIERS.has(name) || /^(?:xk-core|xk-module)\//.test(name);
 }
 
 export default defineConfig({
@@ -62,6 +95,9 @@ export default defineConfig({
     target: 'es2022',
     rollupOptions: {
       input: { ...CANONICAL_PAGE_ENTRIES, ...CORE_PUBLIC_ENTRIES },
+      // A module imports the exports of a public entry, which Vite would
+      // otherwise drop as unused.
+      preserveEntrySignatures: 'strict',
       external: isExternalImport,
       output: {
         entryFileNames: 'assets/[name]-[hash].js',

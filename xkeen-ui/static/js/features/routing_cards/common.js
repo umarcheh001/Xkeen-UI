@@ -1,6 +1,6 @@
 import { getRoutingShellApi as getRoutingShellModuleApi } from '../routing_shell.js';
 import { getRoutingCardsNamespace } from '../routing_cards_namespace.js';
-import { stripJsonComments } from '../../util/strip_json_comments.js';
+import { stripJsonComments } from 'xk-core/js/util/strip_json_comments.js';
 
 /*
   routing_cards/common.js

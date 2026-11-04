@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import posixpath
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -192,6 +195,178 @@ def test_core_reaches_xray_only_through_module_parts() -> None:
     # or a green run proves nothing.
     assert core_files >= 100
     assert allowed_seen
+    assert offenders == []
+
+
+XRAY = "engine.xray"
+
+
+def _js_sources() -> list[tuple[str, Path]]:
+    return [
+        (source.relative_to(STATIC).as_posix(), source)
+        for source in sorted((STATIC / "js").rglob("*.js"))
+        if not source.relative_to(STATIC).as_posix().startswith("js/vendor/npm/")
+    ]
+
+
+def test_xray_sources_reach_core_only_by_public_name() -> None:
+    offenders: list[str] = []
+    xray_files = 0
+    public_names = 0
+
+    for relative, source in _js_sources():
+        if package_owner("static/" + relative) != XRAY:
+            continue
+        xray_files += 1
+        text = _SOURCE_COMMENTS.sub("", source.read_text(encoding="utf-8"))
+        specifiers = static_specifiers(text, strip_comments=False) + _DYNAMIC_IMPORT.findall(text)
+        for specifier in specifiers:
+            if specifier.startswith("xk-core/"):
+                public_names += 1
+                continue
+            target = resolve(relative, specifier.split("?", 1)[0])
+            if target is not None and package_owner("static/" + target) != XRAY:
+                offenders.append(f"{relative} -> {specifier}")
+
+    # The walk must have seen the module and its way into the core.
+    assert xray_files >= 40
+    assert public_names >= 30
+    assert offenders == []
+
+
+def core_public_paths() -> list[str]:
+    """`collectCorePublicPaths` of vite.config.mjs: what the core publishes."""
+
+    if shutil.which("node") is None:
+        pytest.skip("node is not available in this environment")
+    script = (
+        "import { collectCorePublicPaths, staticRoot } from './vite.config.mjs';\n"
+        "console.log(JSON.stringify(collectCorePublicPaths(staticRoot)));\n"
+    )
+    result = subprocess.run(
+        ["node", "--input-type=module"],
+        input=script,
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    return json.loads(result.stdout)
+
+
+# What the Xray module imports from the core build by the name xk-core/<path>.
+# A path here is a promise to every module built against it: renaming or
+# removing one is a release of the panel and of the modules that use it.
+CORE_PUBLIC_SURFACE = [
+    "js/features/backup_actions_loader.js",
+    "js/features/core_source.js",
+    "js/features/dns_guard_text.js",
+    "js/features/dns_operation_recovery.js",
+    "js/features/module_parts.js",
+    "js/features/restart_log.js",
+    "js/features/xkeen_runtime.js",
+    "js/features/xkeen_texts.js",
+    "js/features/xray_log_line_class.js",
+    "js/ui/config_dirty_state.js",
+    "js/ui/config_shell.js",
+    "js/ui/country_flags.js",
+    "js/ui/editor_schema.js",
+    "js/ui/formatters.js",
+    "js/ui/happ_decryptor_link.js",
+    "js/ui/operator_icons.js",
+    "js/ui/prettier_loader.js",
+    "js/ui/schema_quickfixes.js",
+    "js/ui/schema_semantic_validation.js",
+    "js/util/strip_json_comments.js",
+    "js/vendor/codemirror_json_schema.js",
+]
+
+
+def test_core_public_surface_is_listed() -> None:
+    assert core_public_paths() == CORE_PUBLIC_SURFACE
+
+
+def test_core_public_surface_belongs_to_core() -> None:
+    # The core build carries the editor too, and Xray does not install without
+    # it: a profile that has Xray has every package Xray depends on.
+    allowed = set(builder._registry_definition(ROOT, XRAY).dependencies)
+    assert allowed == {"core", "tool.editor"}
+    offenders: list[str] = []
+    paths = core_public_paths()
+    assert "js/features/module_parts.js" in paths
+
+    for public in paths:
+        assert (STATIC / public).is_file(), public
+        by_package = package_owner("static/" + public)
+        by_name = owner("static/" + public)
+        by_name = "tool.editor" if by_name == "editor-full" else by_name
+        if by_package not in allowed or by_name not in allowed:
+            offenders.append(f"{public}: package {by_package}, name {by_name}")
+
+    assert offenders == []
+
+
+# A quoted string that does not start right after a word or another quote, so
+# the gap between two literals on one line is not taken for one.
+_STRING_LITERAL = re.compile(r"""(?<![\w'"`\\])(['"])([^'"`\\\n]{12,}?)\1(?![\w'"`])""")
+_CODE_LIKE = re.compile(r"[(){};=]|\?\s|\|\||&&|\.js$")
+
+
+def _distinctive_literals(public: str, texts: dict[str, str]) -> list[str]:
+    """Plain text literals of one source that no other source of static/js has."""
+
+    found: list[str] = []
+    for match in _STRING_LITERAL.finditer(_SOURCE_COMMENTS.sub("", texts[public])):
+        literal = match.group(2)
+        if _CODE_LIKE.search(literal) or not re.search(r"[A-Za-zА-Яа-я]{4}", literal):
+            continue
+        if literal not in found and all(literal not in text for other, text in texts.items() if other != public):
+            found.append(literal)
+    return found
+
+
+def test_importmap_targets_are_the_chunks_core_loads() -> None:
+    manifest_path = BUILD / ".vite" / "manifest.build.json"
+    if not manifest_path.is_file() or not (BUILD / "assets").is_dir():
+        pytest.skip("frontend build not found: run npm run frontend:build")
+    from services.frontend_importmap import build_core_public_importmap
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    importmap = build_core_public_importmap(PANEL)
+    paths = core_public_paths()
+    texts = {relative: source.read_text(encoding="utf-8") for relative, source in _js_sources()}
+    built = {
+        item.relative_to(STATIC).as_posix(): item.read_text(encoding="utf-8")
+        for item in sorted((BUILD / "assets").glob("*.js"))
+    }
+    offenders: list[str] = []
+    checked_bodies: set[str] = set()
+
+    for public in paths:
+        entry = manifest.get(public)
+        if not isinstance(entry, dict) or entry.get("isEntry") is not True:
+            offenders.append(f"{public}: not an entry of the core build")
+            continue
+        target = importmap.get("xk-core/" + public)
+        if target != f"frontend-build/{entry['file']}":
+            offenders.append(f"{public}: importmap {target!r}, manifest {entry['file']!r}")
+        # The body of a public file is emitted once: the entry itself or a
+        # shared chunk the entry re-exports. A second copy would be a second
+        # instance of its state. A literal that only this source has marks the
+        # body; the minifier keeps such text as it is.
+        for literal in _distinctive_literals(public, texts):
+            holders = [name for name, text in built.items() if literal in text]
+            if holders:
+                checked_bodies.add(public)
+            if len(holders) > 1:
+                offenders.append(f"{public}: {literal!r} in {holders}")
+
+    targets = [value for key, value in importmap.items() if key.startswith("xk-core/js/")]
+    assert len(targets) == len(set(targets))
+    # Most public files have such a mark, or a green run proves nothing.
+    assert len(checked_bodies) >= len(paths) * 2 // 3, sorted(set(paths) - checked_bodies)
     assert offenders == []
 
 

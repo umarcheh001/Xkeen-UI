@@ -7,6 +7,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from tests.support.node_js import NODE_MODULE_COMMAND
+
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,7 +26,7 @@ def run_parser(lines: dict[str, str], fn: str = "parseXrayAccessLine") -> dict:
     console.log(JSON.stringify(out));
     """
     result = subprocess.run(
-        ["node", "--input-type=module", "-e", script],
+        [*NODE_MODULE_COMMAND, "-e", script],
         cwd=ROOT,
         check=True,
         capture_output=True,

@@ -4,13 +4,15 @@ import subprocess
 import textwrap
 from pathlib import Path
 
+from tests.support.node_js import NODE_MODULE_COMMAND
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def run_node(script: str) -> None:
     subprocess.run(
-        ["node", "--input-type=module", "-e", textwrap.dedent(script)],
+        [*NODE_MODULE_COMMAND, "-e", textwrap.dedent(script)],
         cwd=str(ROOT),
         check=True,
         text=True,

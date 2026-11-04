@@ -7,7 +7,7 @@
 import {
   getXkeenPageApi,
   publishXkeenPageApi,
-} from '../features/xkeen_runtime.js';
+} from 'xk-core/js/features/xkeen_runtime.js';
 
 (() => {
   'use strict';
