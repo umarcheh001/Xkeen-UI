@@ -505,6 +505,11 @@
           "path": "static/js/pages/panel.mihomo_header.js",
           "globals": [],
           "lazy_features": []
+        },
+        {
+          "path": "static/js/features/provider_diagnostics.js",
+          "globals": [],
+          "lazy_features": []
         }
       ],
       "direct_init_globals": [],

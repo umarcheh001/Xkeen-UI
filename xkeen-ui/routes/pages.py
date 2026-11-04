@@ -92,6 +92,7 @@ PANEL_COMPOSITION: tuple[PanelCompositionEntry, ...] = (
     PanelCompositionEntry("modal_partials", ("engine.xray",), "panel/modals/routing.html"),
     PanelCompositionEntry("modal_partials", ("tool.terminal",), "panel/modals/commands.html"),
     PanelCompositionEntry("modal_partials", ("core",), "panel/modals/shared.html"),
+    PanelCompositionEntry("modal_partials", ("core",), "panel/modals/provider_diagnostics.html"),
     # The core-source API is registered per engine module, so the controls
     # inside the shared core dialog and their dialogs follow the engine. The
     # dialogs stay right after shared.html to open above the core dialog.

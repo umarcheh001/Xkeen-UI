@@ -10,6 +10,7 @@ import { applyPanelViewRuntime } from './panel.view_runtime.js';
 import { ensurePanelModule } from './panel.module_loader.js';
 import { bootPanelPage } from './panel.bootstrap_tail.bundle.js';
 import { initPanelOperatorHeader } from './panel.mihomo_header.js';
+import { initProviderDiagnostics } from '../features/provider_diagnostics.js';
 
 let _panelFeatureBundlesPromise = null;
 let _panelStartupReleased = false;
@@ -132,6 +133,7 @@ export async function bootPanelScreen() {
     await loadPanelFeatureBundles();
     await waitForDocumentReady();
     bootPanelPage();
+    initProviderDiagnostics();
     await waitForStablePaint();
     void ensurePanelModule('diagnostics-panel', 'after-paint');
   } finally {

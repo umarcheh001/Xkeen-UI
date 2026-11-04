@@ -58,6 +58,7 @@ MODAL_FAMILIES = {
     "inbounds-apply-modal": "confirm-compact-form",
     "routing-dns-over-vless-modal": "confirm-compact-form",
     "mihomo-dns-modal": "confirm-compact-form",
+    "provider-check-modal": "editor-workbench",
     "routing-balancer-help-modal": "drawer-help",
     "xray-snapshot-modal": "editor-workbench",
     "routing-template-modal": "master-detail",

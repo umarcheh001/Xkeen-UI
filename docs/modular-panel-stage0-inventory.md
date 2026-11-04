@@ -36,7 +36,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 | Module ID | Единиц | Размер | Routes | Background | UI surfaces | Removable |
 |---|---:|---:|---:|---:|---:|---|
-| `core` | 665 | 8.63 МБ | 107 | 4 | 37 | нет |
+| `core` | 672 | 8.71 МБ | 112 | 4 | 38 | нет |
 | `engine.xray` | 147 | 3.78 МБ | 64 | 3 | 14 | да |
 | `engine.mihomo` | 147 | 3.30 МБ | 97 | 4 | 6 | да |
 | `tool.editor` | 25 | 814.7 КБ | 0 | 0 | 2 | да |
@@ -48,9 +48,9 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 ## Backend routes и регистрация
 
-- Endpoint declarations: **348**.
-- Файлов с route decorators/WS dispatch: **51**.
-- Точек регистрации: **30**.
+- Endpoint declarations: **353**.
+- Файлов с route decorators/WS dispatch: **52**.
+- Точек регистрации: **31**.
 
 Текущее исключение — RemoteFS регистрируется по capability. FS/FileOps защищены `try/except`, но это ещё не пользовательские module gates. Xray, Mihomo, terminal-related и большая часть tool routes сейчас подключаются eagerly.
 
@@ -77,28 +77,28 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 - Canonical/top-level страниц: **5**.
 - Вкладок `data-view` в `panel.html`: **6**.
-- Статических modal containers в `panel.html`: **53**.
+- Статических modal containers в `panel.html`: **54**.
 - Нормализованный UTF-8 размер `panel.html`: **1.2 КБ**.
 
 Уже существующие границы, пригодные для модульной загрузки:
 
-- `panel-core` → `xkeen-ui/static/js/pages/panel.entry.js`; файлов: 315; modules: `core`, `engine.mihomo`, `engine.xray`, `integration.happ`, `tool.advanced-diagnostics`, `tool.backups`, `tool.editor`, `tool.files`, `tool.terminal`.
-- `panel-routing` → `xkeen-ui/static/js/pages/panel.routing.bundle.js`; файлов: 72; modules: `core`, `engine.xray`, `integration.happ`, `tool.backups`, `tool.editor`.
+- `panel-core` → `xkeen-ui/static/js/pages/panel.entry.js`; файлов: 317; modules: `core`, `engine.mihomo`, `engine.xray`, `integration.happ`, `tool.advanced-diagnostics`, `tool.backups`, `tool.editor`, `tool.files`, `tool.terminal`.
+- `panel-routing` → `xkeen-ui/static/js/pages/panel.routing.bundle.js`; файлов: 73; modules: `core`, `engine.xray`, `integration.happ`, `tool.backups`, `tool.editor`.
 - `panel-mihomo` → `xkeen-ui/static/js/pages/panel.mihomo.bundle.js`; файлов: 25; modules: `core`, `engine.mihomo`, `engine.xray`, `tool.editor`.
-- `terminal-lazy` → `xkeen-ui/static/js/pages/terminal.lazy.entry.js`; файлов: 205; modules: `core`, `engine.mihomo`, `engine.xray`, `integration.happ`, `tool.advanced-diagnostics`, `tool.backups`, `tool.editor`, `tool.files`, `tool.terminal`.
+- `terminal-lazy` → `xkeen-ui/static/js/pages/terminal.lazy.entry.js`; файлов: 206; modules: `core`, `engine.mihomo`, `engine.xray`, `integration.happ`, `tool.advanced-diagnostics`, `tool.backups`, `tool.editor`, `tool.files`, `tool.terminal`.
 - `file-manager-lazy` → `xkeen-ui/static/js/pages/file_manager.lazy.entry.js`; файлов: 34; modules: `core`, `tool.files`.
-- `devtools-page` → `xkeen-ui/static/js/pages/devtools.entry.js`; файлов: 315; modules: `core`, `engine.mihomo`, `engine.xray`, `integration.happ`, `tool.advanced-diagnostics`, `tool.backups`, `tool.editor`, `tool.files`, `tool.terminal`.
+- `devtools-page` → `xkeen-ui/static/js/pages/devtools.entry.js`; файлов: 317; modules: `core`, `engine.mihomo`, `engine.xray`, `integration.happ`, `tool.advanced-diagnostics`, `tool.backups`, `tool.editor`, `tool.files`, `tool.terminal`.
 - `diagnostics-panel` → `xkeen-ui/static/js/pages/panel.diagnostics.bundle.js`; файлов: 23; modules: `core`, `tool.advanced-diagnostics`.
-- `xkeen-page` → `xkeen-ui/static/js/pages/xkeen.entry.js`; файлов: 315; modules: `core`, `engine.mihomo`, `engine.xray`, `integration.happ`, `tool.advanced-diagnostics`, `tool.backups`, `tool.editor`, `tool.files`, `tool.terminal`.
-- `mihomo-generator-page` → `xkeen-ui/static/js/pages/mihomo_generator.entry.js`; файлов: 315; modules: `core`, `engine.mihomo`, `engine.xray`, `integration.happ`, `tool.advanced-diagnostics`, `tool.backups`, `tool.editor`, `tool.files`, `tool.terminal`.
-- `modules-page` → `xkeen-ui/static/js/pages/modules.entry.js`; файлов: 315; modules: `core`, `engine.mihomo`, `engine.xray`, `integration.happ`, `tool.advanced-diagnostics`, `tool.backups`, `tool.editor`, `tool.files`, `tool.terminal`.
+- `xkeen-page` → `xkeen-ui/static/js/pages/xkeen.entry.js`; файлов: 317; modules: `core`, `engine.mihomo`, `engine.xray`, `integration.happ`, `tool.advanced-diagnostics`, `tool.backups`, `tool.editor`, `tool.files`, `tool.terminal`.
+- `mihomo-generator-page` → `xkeen-ui/static/js/pages/mihomo_generator.entry.js`; файлов: 317; modules: `core`, `engine.mihomo`, `engine.xray`, `integration.happ`, `tool.advanced-diagnostics`, `tool.backups`, `tool.editor`, `tool.files`, `tool.terminal`.
+- `modules-page` → `xkeen-ui/static/js/pages/modules.entry.js`; файлов: 317; modules: `core`, `engine.mihomo`, `engine.xray`, `integration.happ`, `tool.advanced-diagnostics`, `tool.backups`, `tool.editor`, `tool.files`, `tool.terminal`.
 
 ## Обнаруженные архитектурные связи
 
 | From | To | Units | Примеры |
 |---|---|---:|---|
-| `core` | `engine.mihomo` | 20 | `xkeen-ui/app_factory.py`<br>`xkeen-ui/run_server.py`<br>`xkeen-ui/routes/__init__.py` |
-| `core` | `engine.xray` | 37 | `xkeen-ui/app.py`<br>`xkeen-ui/app_factory.py`<br>`xkeen-ui/routes/__init__.py` |
+| `core` | `engine.mihomo` | 21 | `xkeen-ui/app_factory.py`<br>`xkeen-ui/run_server.py`<br>`xkeen-ui/routes/__init__.py` |
+| `core` | `engine.xray` | 38 | `xkeen-ui/app.py`<br>`xkeen-ui/app_factory.py`<br>`xkeen-ui/routes/__init__.py` |
 | `core` | `integration.happ` | 9 | `xkeen-ui/routes/__init__.py`<br>`xkeen-ui/services/devtools/env.py`<br>`xkeen-ui/services/subscription_request_profile.py` |
 | `core` | `tool.advanced-diagnostics` | 6 | `xkeen-ui/run_server.py`<br>`xkeen-ui/routes/__init__.py`<br>`xkeen-ui/routes/devtools.py` |
 | `core` | `tool.backups` | 8 | `xkeen-ui/app_factory.py`<br>`xkeen-ui/routes/__init__.py`<br>`tests/test_backup_path_hardening.py` |

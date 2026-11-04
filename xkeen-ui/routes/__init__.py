@@ -208,6 +208,14 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
         )
     )
 
+    if module_active("engine.xray") or module_active("engine.mihomo"):
+        from .provider_diagnostics import create_provider_diagnostics_blueprint
+
+        app.register_blueprint(create_provider_diagnostics_blueprint(
+            xray_configs_dir=ctx.xray_configs_dir,
+            mihomo_config_file=ctx.mihomo_config_file,
+        ))
+
     # WebSocket token issuance belongs to core: operation events and internal
     # restart jobs must work in minimal profiles without tool.terminal.
     if module_active("core"):

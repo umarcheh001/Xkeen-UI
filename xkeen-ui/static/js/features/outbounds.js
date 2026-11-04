@@ -14,6 +14,7 @@ import {
 } from './xkeen_runtime.js';
 import { iconHtml, setIcon } from '../ui/operator_icons.js';
 import { appendHappDecryptorCardLink } from '../ui/happ_decryptor_link.js';
+import { appendProviderDiagnosticsHint } from './provider_diagnostics_hint.js';
 
 let outboundsModuleApi = null;
 
@@ -97,6 +98,7 @@ let outboundsModuleApi = null;
       const kind = String(tone || 'info').trim().toLowerCase();
       const state = kind === 'success' ? 'ok' : (kind === 'loading' ? 'loading' : (kind === 'warning' || kind === 'error' ? kind : ''));
       try { statusEl.textContent = String(message || ''); } catch (e) {}
+      if (kind === 'error') appendProviderDiagnosticsHint(statusEl, message, 'xray', 'outbounds-url');
       try {
         statusEl.classList.toggle('success', kind === 'success');
         statusEl.classList.toggle('warning', kind === 'warning');
@@ -4170,6 +4172,7 @@ let outboundsModuleApi = null;
       if (!el) return;
       try {
         el.textContent = String(msg || '');
+        if (isErr) appendProviderDiagnosticsHint(el, msg, 'xray', POOL_IDS.input);
         el.style.color = isErr ? 'var(--danger, #ef4444)' : '';
       } catch (e) {}
     }
@@ -6381,6 +6384,7 @@ let outboundsModuleApi = null;
       if (!el) return;
       try {
         subsSetStatusContent(el, String(msg || ''), opts);
+        if (isErr) appendProviderDiagnosticsHint(el, msg, 'xray', SUB_IDS.url);
         const warning = !isErr && !!(opts && opts.warning);
         el.classList.toggle('is-error', !!isErr);
         el.classList.toggle('is-warning', warning);
