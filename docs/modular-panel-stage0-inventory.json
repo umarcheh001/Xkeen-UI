@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 665,
-      "size_bytes": 9051873,
+      "size_bytes": 9052769,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -6623,7 +6623,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_boundaries.py",
-      "size_bytes": 6861,
+      "size_bytes": 7757,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],

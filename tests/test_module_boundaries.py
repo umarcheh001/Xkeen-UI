@@ -29,7 +29,33 @@ def owner(path: str) -> str:
     return builder._stage7_module().owner(path)
 
 
-_SOURCE_COMMENTS = re.compile(r"/\*.*?\*/|(?<![:\w'\"`])//[^\n]*", re.S)
+_PACKAGE_OWNERS: dict[str, str] | None = None
+
+
+def package_owner(path: str) -> str:
+    """Owner of a `static/js/...` file by the package map the release is cut by."""
+
+    global _PACKAGE_OWNERS
+    if _PACKAGE_OWNERS is None:
+        ownership = builder.build_module_ownership(ROOT)
+        _PACKAGE_OWNERS = {
+            relative: ("tool.editor" if module_id == "editor-full" else module_id)
+            for module_id, paths in ownership.items()
+            for relative in paths
+        }
+    return _PACKAGE_OWNERS.get(path, "core")
+
+
+def test_logs_shell_belongs_to_xray() -> None:
+    assert package_owner("static/js/pages/logs_shell.shared.js") == "engine.xray"
+
+
+def test_package_owner_follows_overrides() -> None:
+    assert package_owner("static/js/features/github.js") == "engine.xray"
+    assert package_owner("static/js/features/xray_log_line_class.js") == "core"
+
+
+_SOURCE_COMMENTS =re.compile(r"/\*.*?\*/|(?<![:\w'\"`])//[^\n]*", re.S)
 _STATIC_FROM = re.compile(r"""\b(?:import|export)\s*(?:[\w$*{},\s]*?)\s*from\s*["']([^"']+)["']""")
 _STATIC_BARE = re.compile(r"""\bimport\s*["']([^"']+)["']""")
 
@@ -66,7 +92,7 @@ def test_no_static_import_crosses_a_separated_module_boundary() -> None:
     # import the core's (the core is reached by a bare name, `xk-core/...`).
     for source in sorted((STATIC / "js").rglob("*.js")):
         relative = source.relative_to(STATIC).as_posix()
-        who = owner("static/" + relative)
+        who = package_owner("static/" + relative)
         seen_owners.add(who)
         text = source.read_text(encoding="utf-8")
         for specifier in static_specifiers(text, strip_comments=True):
@@ -75,7 +101,7 @@ def test_no_static_import_crosses_a_separated_module_boundary() -> None:
                 if who in modules and specifier.startswith(("assets/", "frontend-build/")):
                     offenders.append(f"{relative} -> {specifier}")
                 continue
-            there = owner("static/" + target)
+            there = package_owner("static/" + target)
             if who != there and (who in modules or there in modules):
                 offenders.append(f"{relative} ({who}) -> {target} ({there})")
 
