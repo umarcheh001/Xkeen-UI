@@ -38,13 +38,13 @@
         "gevent-websocket (optional)"
       ],
       "removable": false,
-      "unit_count": 662,
-      "size_bytes": 9038193,
+      "unit_count": 664,
+      "size_bytes": 9047484,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
         "backend_service": 97,
-        "backend_test": 294,
+        "backend_test": 296,
         "configuration": 12,
         "frontend_bundle": 9,
         "frontend_entrypoint": 4,
@@ -4093,6 +4093,29 @@
     {
       "module_id": "core",
       "kind": "backend_test",
+      "path": "tests/test_cache_real_payloads.py",
+      "size_bytes": 3103,
+      "depends_on": [
+        "engine.xray",
+        "engine.mihomo"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
       "path": "tests/test_check_keys_upstream.py",
       "size_bytes": 5916,
       "depends_on": [
@@ -7422,6 +7445,28 @@
         "gevent-websocket (optional)"
       ],
       "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_panel_init_bytecode_cache_recovery.py",
+      "size_bytes": 6188,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [
+        "XKEEN_UI_PYTHONPYCACHEPREFIX"
+      ],
       "removable": false
     },
     {
@@ -34582,7 +34627,7 @@
       {
         "from": "core",
         "to": "engine.mihomo",
-        "unit_count": 18,
+        "unit_count": 19,
         "examples": [
           "xkeen-ui/app_factory.py",
           "xkeen-ui/run_server.py",
@@ -34591,13 +34636,13 @@
           "xkeen-ui/services/dns_service_lifecycle.py",
           "xkeen-ui/services/xkeen.py",
           "tests/test_amnezia_premium.py",
-          "tests/test_devtools_env_whitelist.py"
+          "tests/test_cache_real_payloads.py"
         ]
       },
       {
         "from": "core",
         "to": "engine.xray",
-        "unit_count": 36,
+        "unit_count": 37,
         "examples": [
           "xkeen-ui/app.py",
           "xkeen-ui/app_factory.py",
@@ -35475,7 +35520,7 @@
       {
         "from": "core",
         "to": "engine.mihomo",
-        "unit_count": 18,
+        "unit_count": 19,
         "examples": [
           "xkeen-ui/app_factory.py",
           "xkeen-ui/run_server.py",
@@ -35484,13 +35529,13 @@
           "xkeen-ui/services/dns_service_lifecycle.py",
           "xkeen-ui/services/xkeen.py",
           "tests/test_amnezia_premium.py",
-          "tests/test_devtools_env_whitelist.py"
+          "tests/test_cache_real_payloads.py"
         ]
       },
       {
         "from": "core",
         "to": "engine.xray",
-        "unit_count": 36,
+        "unit_count": 37,
         "examples": [
           "xkeen-ui/app.py",
           "xkeen-ui/app_factory.py",
