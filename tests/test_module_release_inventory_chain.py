@@ -15,13 +15,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from scripts import build_modular_panel_release as builder
 from scripts.check_module_release import NEEDS_PANEL, _without_module, check_changed_paths
 from scripts.refresh_inventory import in_scope
 
 ROOT = Path(__file__).resolve().parents[1]
-MODULE = "tool.advanced-diagnostics"
-MODULE_FILE = "xkeen-ui/static/js/features/resource_monitor/view.js"
 SIZES = "xkeen-ui/module-sizes.json"
 # what decides the sizes: the module inventory and the sizes synced from it
 GENERATORS = ("generate_modular_panel_inventory.py", "sync_module_sizes.py")
@@ -53,7 +53,11 @@ def _refresh(repo: Path) -> None:
     _git(repo, "add", "-A")
 
 
-def test_module_change_with_refreshed_inventory_passes_both_release_checks(tmp_path):
+@pytest.mark.parametrize(("module", "module_file"), [
+    ("tool.advanced-diagnostics", "xkeen-ui/static/js/features/resource_monitor/view.js"),
+    ("engine.xray", "xkeen-ui/static/js/features/xray_logs.js"),
+])
+def test_module_change_with_refreshed_inventory_passes_both_release_checks(tmp_path, module, module_file):
     repo = tmp_path / "repo"
     _copy_tree(repo)
     _git(repo, "init", "-q")
@@ -61,19 +65,19 @@ def test_module_change_with_refreshed_inventory_passes_both_release_checks(tmp_p
     _git(repo, "commit", "-q", "-m", "base")
     sizes_before = (repo / SIZES).read_bytes()
 
-    with (repo / MODULE_FILE).open("ab") as handle:
-        handle.write(b"\r\n// release change\r\n")
+    with (repo / module_file).open("ab") as handle:
+        handle.write(b"\n// release change\n")
     (repo / "tests" / "test_release_change.py").write_text("def test_release_change():\n    assert True\n", encoding="utf-8")
     _refresh(repo)
     _git(repo, "commit", "-q", "-m", "module change")
 
     changed = _git(repo, "diff", "--name-only", "HEAD~1", "HEAD").split()
     assert SIZES in changed, "хук требует пересчитанных размеров — без них тест ничего не проверяет"
-    owned = builder.build_ownership_map(ROOT)["modules"][MODULE]
+    owned = builder.build_ownership_map(ROOT)["modules"][module]
     assert check_changed_paths(changed, owned) == []
 
-    left, problems = _without_module((repo / SIZES).read_bytes(), MODULE, "module-sizes.json")
-    right, more = _without_module(sizes_before, MODULE, "module-sizes.json")
+    left, problems = _without_module((repo / SIZES).read_bytes(), module, "module-sizes.json")
+    right, more = _without_module(sizes_before, module, "module-sizes.json")
     assert problems == [] and more == []
     assert left == right, "новый тест не должен менять размер core и соседних модулей"
     assert (repo / SIZES).read_bytes() != sizes_before

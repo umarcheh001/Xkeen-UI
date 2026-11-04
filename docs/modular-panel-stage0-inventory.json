@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 666,
-      "size_bytes": 9077025,
+      "size_bytes": 9077164,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -6932,7 +6932,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_release_inventory_chain.py",
-      "size_bytes": 4094,
+      "size_bytes": 4233,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
