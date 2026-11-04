@@ -6,6 +6,7 @@ import { EXTERNAL_IMPORT_SPECIFIERS, staticRoot } from './vite.config.mjs';
 // only its own build files, so the core reaches it by the name xk-module/<id>.
 export const SEPARATE_MODULES = {
   'tool.advanced-diagnostics': { entry: 'js/features/resource_monitor.js' },
+  'engine.xray': { entry: 'js/pages/xray.module.entry.js' },
 };
 
 // Rollup refuses `../` in a file name, so the manifest is written inside outDir

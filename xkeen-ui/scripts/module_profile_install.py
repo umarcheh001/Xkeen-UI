@@ -80,6 +80,8 @@ def owner(path: str) -> str:
     p = path.replace("\\", "/").lower()
     if p.startswith("js/") or p.startswith("schemas/"):
         p = "static/" + p
+    if p == "static/js/pages/panel.routing.bundle.js":
+        return "core"
     name = p.rsplit("/", 1)[-1]
     if name.startswith("_") and p.startswith("static/frontend-build/"):
         name = name[1:]
@@ -96,7 +98,6 @@ def owner(path: str) -> str:
         if "/.vite/" in p or name == "manifest.json":
             return "core"
         for token, module in (
-            ("panel.routing.bundle", "engine.xray"),
             ("panel.mihomo.bundle", "engine.mihomo"),
             ("mihomo_generator", "engine.mihomo"),
             ("terminal.lazy", "tool.terminal"),
@@ -109,8 +110,6 @@ def owner(path: str) -> str:
                 return module
         if any(token in name for token in ("mihomo", "clash")):
             return "engine.mihomo"
-        if any(token in name for token in ("xray", "routing", "inbounds", "outbounds")):
-            return "engine.xray"
         if name.startswith("panel.editor."):
             return "tool.editor"
         return "core"
@@ -238,6 +237,13 @@ def _frontend_files(root: Path, selected: set[str], variant: str) -> tuple[set[s
         key for key, entry in entries.items()
         if isinstance(entry, dict) and owner(str(entry.get("src") or "static/frontend-build/" + str(entry.get("file") or key))) in allowed
     }
+    # Separately built modules are outside the core manifest, but their static
+    # xk-core imports require the same closure as imports from core chunks.
+    for path in build.glob("modules/**/*.js"):
+        if owner(path.relative_to(root).as_posix()) in allowed:
+            for dependency in _built_core_public_imports(build, path.relative_to(build).as_posix()):
+                if dependency in entries:
+                    selected_entries.add(dependency)
     queue = list(selected_entries)
     while queue:
         entry = entries[queue.pop()]

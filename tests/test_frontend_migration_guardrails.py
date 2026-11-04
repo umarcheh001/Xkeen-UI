@@ -537,7 +537,7 @@ def test_xray_module_entry_loads_parts_on_demand_and_the_core_calls_it_through_m
     features = ROOT / "xkeen-ui" / "static" / "js" / "features"
     expectations = {
         features / "module_parts.js": [
-            "'engine.xray': () => import('../pages/xray.module.entry.js'),",
+            "'engine.xray': () => import('xk-module/engine.xray'),",
             "export function loadModulePart(moduleId, part) {",
             "export function loadedModulePart(moduleId, part) {",
             "export function rememberModulePart(moduleId, part, mod) {",
@@ -558,7 +558,7 @@ def test_xray_module_entry_loads_parts_on_demand_and_the_core_calls_it_through_m
             "return bundle.activate(context);",
         ],
         PAGES_DIR / "panel.routing.bundle.js": [
-            "import('./xray.module.entry.js').then((entry) => entry.activate(context))",
+            "import('xk-module/engine.xray').then((entry) => entry.activate(context))",
         ],
         features / "backups.js": [
             "loadModulePart('engine.xray', 'routing')",

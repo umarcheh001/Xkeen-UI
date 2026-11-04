@@ -163,7 +163,7 @@ def test_minimal_profiles_still_leave_optional_modules_out(installed):
                          "pages/file_manager.lazy.entry.js", "pages/panel.editor.monaco.bundle.js",
                          "pages/backups.entry.js", "features/resource_monitor.js",
                          "features/backups.js"],
-        "mihomo-minimal": ["pages/panel.routing.bundle.js", "features/xray_logs.js",
+        "mihomo-minimal": ["features/xray_logs.js",
                            "features/routing_templates.js", "pages/file_manager.lazy.entry.js",
                            "pages/panel.editor.monaco.bundle.js", "pages/backups.entry.js",
                            "features/resource_monitor.js", "features/backups.js"],

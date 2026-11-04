@@ -102,7 +102,7 @@ def test_switching_from_full_quarantines_disabled_payload_and_keeps_user_state(t
     helper.commit_profile(transaction)
 
     assert not (dest / "routes/routing/blueprint.py").exists()
-    assert not (dest / "static/frontend-build/assets/panel.routing.bundle-123.js").exists()
+    assert (dest / "static/frontend-build/assets/panel.routing.bundle-123.js").is_file()
     assert (dest / "routes/mihomo.py").is_file()
     assert (dest / "secret.key").read_text(encoding="utf-8") == "user-secret"
     assert (dest / "xray-jsonc/custom.jsonc").read_text(encoding="utf-8") == "user config"

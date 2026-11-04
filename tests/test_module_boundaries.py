@@ -82,7 +82,27 @@ def resolve(importer: str, specifier: str) -> str | None:
 
 
 def test_separate_modules_table_is_read() -> None:
-    assert separate_modules() == {"tool.advanced-diagnostics": "js/features/resource_monitor.js"}
+    assert separate_modules() == {
+        "tool.advanced-diagnostics": "js/features/resource_monitor.js",
+        "engine.xray": "js/pages/xray.module.entry.js",
+    }
+
+
+def test_xray_build_has_only_its_directory() -> None:
+    manifest = BUILD / '.vite/manifest.build.json'
+    if not manifest.is_file():
+        pytest.skip('frontend build not found')
+    entries = json.loads(manifest.read_text(encoding='utf-8'))
+    assert [entry['src'] for entry in entries.values()
+            if entry.get('src') and owner(entry['src']) == 'engine.xray'] == []
+
+
+def test_build_files_of_xray_names_are_core_outside_the_module() -> None:
+    assert owner('static/js/pages/panel.routing.bundle.js') == 'core'
+    assert owner('static/frontend-build/assets/panel.routing.bundle-X.js') == 'core'
+    assert owner('static/frontend-build/assets/xk-core-0123456789-X.js') == 'core'
+    assert owner('static/frontend-build/modules/engine.xray/routing-X.js') == 'engine.xray'
+    assert owner('static/frontend-build/assets/panel.mihomo.bundle-X.js') == 'engine.mihomo'
 
 
 def test_no_static_import_crosses_a_separated_module_boundary() -> None:
@@ -99,7 +119,7 @@ def test_no_static_import_crosses_a_separated_module_boundary() -> None:
         seen_owners.add(who)
         text = source.read_text(encoding="utf-8")
         for specifier in static_specifiers(text, strip_comments=True):
-            target = resolve(relative, specifier)
+            target = resolve(relative, specifier.split('?', 1)[0])
             if target is None:
                 if who in modules and specifier.startswith(("assets/", "frontend-build/")):
                     offenders.append(f"{relative} -> {specifier}")
@@ -182,6 +202,12 @@ def test_core_reaches_xray_only_through_module_parts() -> None:
         core_files += 1
         text = _SOURCE_COMMENTS.sub("", source.read_text(encoding="utf-8"))
         for specifier in _DYNAMIC_IMPORT.findall(text):
+            if specifier == 'xk-module/engine.xray':
+                if relative in _XRAY_DYNAMIC_IMPORTERS:
+                    allowed_seen.append(relative)
+                else:
+                    offenders.append(f'{relative} -> {specifier}')
+                continue
             target = resolve(relative, specifier.split("?", 1)[0])
             if target is None or package_owner("static/" + target) != "engine.xray":
                 continue

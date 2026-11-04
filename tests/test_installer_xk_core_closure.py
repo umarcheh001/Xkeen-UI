@@ -50,7 +50,7 @@ def test_kept_chunks_find_every_core_public_name(modules: str, variant: str) -> 
     seen = 0
 
     for rel in sorted(files):
-        if not (rel.startswith("static/frontend-build/assets/") and rel.endswith(".js")):
+        if not (rel.startswith("static/frontend-build/") and rel.endswith(".js")):
             continue
         for public in STATIC_CORE_IMPORT.findall((PANEL / rel).read_text(encoding="utf-8")):
             seen += 1

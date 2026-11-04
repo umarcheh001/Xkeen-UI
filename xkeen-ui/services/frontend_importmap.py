@@ -17,7 +17,10 @@ from pathlib import Path
 from typing import Any
 
 
-SOURCE_FALLBACKS = {"tool.advanced-diagnostics": "js/features/resource_monitor.js"}
+SOURCE_FALLBACKS = {
+    "tool.advanced-diagnostics": "js/features/resource_monitor.js",
+    "engine.xray": "js/pages/xray.module.entry.js",
+}
 
 _BUILD_DIRNAME = "frontend-build"
 _MODULE_KEY_PREFIX = "xk-module/"

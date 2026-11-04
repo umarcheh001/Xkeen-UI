@@ -175,6 +175,22 @@ test.describe('Panel sections after a dropped link', () => {
     await expect(page.locator('#xk-resource-dashboard-modal')).toBeHidden();
   });
 
+  test('a missing Xray module offers only a reload', async ({ page }) => {
+    test.setTimeout(90_000);
+    let requests = 0;
+    await page.route(/\/frontend-build\/modules\/engine\.xray\/[^/]+\.js(\?|$)/, (route) => {
+      requests += 1;
+      return route.fulfill({ status: 404, contentType: 'text/plain', body: 'not found' });
+    });
+    await page.goto('/');
+    await selectPanelView(page, 'routing');
+    const notice = page.locator('#toast-container .toast-error');
+    await expect(notice).toContainText(NOTICE, { timeout: 30_000 });
+    expect(requests).toBeGreaterThan(0);
+    await expect(notice.getByRole('button', { name: 'Обновить страницу' })).toBeVisible();
+    await expect(notice.getByRole('button', { name: 'Повторить' })).toHaveCount(0);
+  });
+
   test('unsaved text in the file manager editor counts as an unsaved change', async ({ page }) => {
     test.setTimeout(90_000);
     await page.route('**/api/fs/list?**', async (route) => {

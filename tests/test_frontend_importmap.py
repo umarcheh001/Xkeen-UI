@@ -94,8 +94,18 @@ def test_removed_module_is_absent_without_error(tmp_path: Path) -> None:
 def test_source_fallback_without_build(tmp_path: Path) -> None:
     lay_source(tmp_path)
 
-    assert SOURCE_FALLBACKS == {MODULE_ID: SOURCE_ENTRY}
+    assert SOURCE_FALLBACKS[MODULE_ID] == SOURCE_ENTRY
     assert build_module_importmap(tmp_path, {MODULE_ID}) == {MODULE_KEY: SOURCE_ENTRY}
+
+
+def test_xray_importmap_obeys_activation(tmp_path: Path) -> None:
+    source = tmp_path / 'static/js/pages/xray.module.entry.js'
+    source.parent.mkdir(parents=True)
+    source.write_text('', encoding='utf-8')
+    assert build_module_importmap(tmp_path, {'engine.xray'}) == {
+        'xk-module/engine.xray': 'js/pages/xray.module.entry.js',
+    }
+    assert build_module_importmap(tmp_path, {'core'}) == {}
 
 
 def test_built_module_wins_over_its_source(tmp_path: Path) -> None:
