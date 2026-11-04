@@ -38,13 +38,13 @@
         "gevent-websocket (optional)"
       ],
       "removable": false,
-      "unit_count": 664,
-      "size_bytes": 9047514,
+      "unit_count": 665,
+      "size_bytes": 9051873,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
         "backend_service": 97,
-        "backend_test": 296,
+        "backend_test": 297,
         "configuration": 12,
         "frontend_bundle": 9,
         "frontend_entrypoint": 4,
@@ -1603,7 +1603,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/cache_size.py",
-      "size_bytes": 986,
+      "size_bytes": 1979,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -4097,6 +4097,28 @@
       "size_bytes": 3103,
       "depends_on": [
         "engine.xray",
+        "engine.mihomo"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_cache_size_types.py",
+      "size_bytes": 3366,
+      "depends_on": [
         "engine.mihomo"
       ],
       "starts_background_task": false,
@@ -34627,7 +34649,7 @@
       {
         "from": "core",
         "to": "engine.mihomo",
-        "unit_count": 19,
+        "unit_count": 20,
         "examples": [
           "xkeen-ui/app_factory.py",
           "xkeen-ui/run_server.py",
@@ -35520,7 +35542,7 @@
       {
         "from": "core",
         "to": "engine.mihomo",
-        "unit_count": 19,
+        "unit_count": 20,
         "examples": [
           "xkeen-ui/app_factory.py",
           "xkeen-ui/run_server.py",
