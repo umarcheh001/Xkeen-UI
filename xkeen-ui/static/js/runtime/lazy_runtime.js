@@ -16,6 +16,7 @@ import {
   finishTerminalDebugRun,
   markTerminalDebugState,
 } from '../features/terminal_debug.js';
+import { loadModulePart } from '../features/module_parts.js';
 
 // Narrow lazy runtime adapter for generic deferred bundles and shell-bound feature APIs.
 // Do not add page-specific loaders here; new code must use direct import() or panel-local lazy bindings.
@@ -60,7 +61,7 @@ import {
   const featureLoaders = {
     backups: () => import('../features/backups.js'),
     jsonEditor: () => import('../ui/json_editor_modal.js'),
-    datContents: () => import('../ui/dat_contents_modal.js'),
+    datContents: () => loadModulePart('engine.xray', 'dat_contents_modal'),
   };
 
   function getFeatureLoader(name) {

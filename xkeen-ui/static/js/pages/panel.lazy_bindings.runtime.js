@@ -4,6 +4,7 @@ import {
   isPanelEditorCapabilityActive,
   notifyPanelLoadFailure,
 } from './panel.module_loader.js';
+import { loadModulePart } from '../features/module_parts.js';
 import {
   getXkeenGithubRepoUrl,
   getXkeenLazyRuntimeApi,
@@ -73,13 +74,11 @@ const panelFeatureSpecs = Object.freeze({
     getApi: (mod) => (mod && typeof mod.getServiceStatusApi === 'function') ? mod.getServiceStatusApi() : null,
   },
   routingTemplates: {
-    load: () => import('../features/routing_templates.js'),
+    load: () => loadModulePart('engine.xray', 'routing_templates'),
     getApi: (mod) => (mod && typeof mod.getRoutingTemplatesApi === 'function') ? mod.getRoutingTemplatesApi() : null,
   },
   github: {
-    load: () => import('../features/github.js').then(
-      (mod) => import('../features/compat/github.js').then(() => mod)
-    ),
+    load: () => loadModulePart('engine.xray', 'github'),
     getApi: (mod) => (mod && typeof mod.getGithubApi === 'function') ? mod.getGithubApi() : null,
     init: (api) => {
       if (api && typeof api.init === 'function') {

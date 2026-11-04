@@ -1,5 +1,6 @@
 import { ansiToXkeenHtml, escapeXkeenHtml, getXkeenCommandJobApi, getXkeenUiApi, syncXkeenBodyScrollLock, toastXkeen } from './xkeen_runtime.js';
 import { iconHtml } from '../ui/operator_icons.js';
+import { loadModulePart } from './module_parts.js';
 import { RESTART_SOURCE_META, RESTART_SUMMARY_RE } from './restart_log_sources.js';
 
 let restartLogModuleApi = null;
@@ -514,7 +515,7 @@ let restartLogModuleApi = null;
 
     if (present()) return true;
     try {
-      await import('../ui/xray_preflight_modal.js');
+      await loadModulePart('engine.xray', 'xray_preflight_modal');
     } catch (error) {}
     if (present()) return true;
     try { toastXkeen('Не удалось открыть окно диагностики Xray.', 'error'); } catch (error) {}

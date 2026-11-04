@@ -1,4 +1,5 @@
 import { getRestartLogApi } from '../features/restart_log.js';
+import { loadModulePart } from '../features/module_parts.js';
 import {
   attachXkeenEditorToolbar,
   getXkeenDiffApi,
@@ -1356,14 +1357,14 @@ import {
         // static one made every page with this window load the whole Xray
         // outbounds code, a Mihomo-only panel included.
         if (target === 'inbounds') {
-          const { getInboundsApi } = await import('../features/inbounds.js');
+          const { getInboundsApi } = await loadModulePart('engine.xray', 'inbounds');
           const inboundsApi = getInboundsApi();
           if (inboundsApi && typeof inboundsApi.load === 'function') {
             await inboundsApi.load();
           }
         }
         if (target === 'outbounds') {
-          const { getOutboundsApi } = await import('../features/outbounds.js');
+          const { getOutboundsApi } = await loadModulePart('engine.xray', 'outbounds');
           const outboundsApi = getOutboundsApi();
           if (outboundsApi && typeof outboundsApi.load === 'function') {
             await outboundsApi.load();

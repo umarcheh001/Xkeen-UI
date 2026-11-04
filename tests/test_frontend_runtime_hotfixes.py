@@ -2258,7 +2258,7 @@ def test_routing_field_help_clicks_do_not_leak_to_adjacent_remove_buttons():
     fields = Path('xkeen-ui/static/js/features/routing_cards/rules/fields.js').read_text(encoding='utf-8')
     render = Path('xkeen-ui/static/js/features/routing_cards/rules/render.js').read_text(encoding='utf-8')
     shell = Path('xkeen-ui/static/js/features/routing_cards.js').read_text(encoding='utf-8')
-    bundle = Path('xkeen-ui/static/js/pages/panel.routing.bundle.js').read_text(encoding='utf-8')
+    bundle = Path('xkeen-ui/static/js/pages/xray.module.bundle.js').read_text(encoding='utf-8')
     styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
 
     assert "raw.closest('.routing-help-btn')" in modal

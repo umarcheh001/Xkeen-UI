@@ -76,7 +76,9 @@
   XKeen.ui.hideGlobalXkeenSpinner = XKeen.ui.hideGlobalXkeenSpinner || hideGlobalXkeenSpinner;
 
   function ensureXrayPreflightReady() {
-    return import('./xray_preflight_modal.js');
+    return import('../features/module_parts.js').then(function (parts) {
+      return parts.loadModulePart('engine.xray', 'xray_preflight_modal');
+    });
   }
 
   // ---------- fetch() wrapper: CSRF + spinner for restart-ish actions (moved out of main.js) ----------

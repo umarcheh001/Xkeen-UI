@@ -152,6 +152,8 @@ def test_panel_runtime_bundle_files_exist_for_current_architecture():
         "panel.lazy_bindings.runtime.js",
         "panel.mihomo.bundle.js",
         "panel.routing.bundle.js",
+        "xray.module.bundle.js",
+        "xray.module.entry.js",
         "panel.screen.bootstrap.js",
         "panel.shared_compat.bundle.js",
         "panel.view_runtime.js",
@@ -329,7 +331,7 @@ def test_lazy_runtime_keeps_only_generic_compat_feature_paths():
         "const featureLoaders = {",
         "backups: () => import('../features/backups.js'),",
         "jsonEditor: () => import('../ui/json_editor_modal.js'),",
-        "datContents: () => import('../ui/dat_contents_modal.js'),",
+        "datContents: () => loadModulePart('engine.xray', 'dat_contents_modal'),",
         "const featureModules = Object.create(null);",
         "function loadFeatureModule(name) {",
         "case 'backups': {",
@@ -384,9 +386,8 @@ def test_panel_lazy_bindings_own_panel_specific_feature_loaders():
         "coresStatus: {",
         "import('../features/restart_log.js')",
         "import('../features/service_status.js')",
-        "import('../features/routing_templates.js')",
-        "import('../features/github.js').then(",
-        "import('../features/compat/github.js').then(() => mod)",
+        "loadModulePart('engine.xray', 'routing_templates')",
+        "loadModulePart('engine.xray', 'github')",
         "import('../ui/settings_panel.js')",
         "import('../features/compat/mihomo_import.js').then(() => mod)",
         "import('../features/compat/mihomo_proxy_tools.js').then(() => mod)",
@@ -437,7 +438,11 @@ def test_formatters_and_xray_preflight_use_direct_imports_in_consumers():
             "await import('./formatters.js');",
         ],
         ROOT / "xkeen-ui" / "static" / "js" / "ui" / "spinner_fetch.js": [
-            "return import('./xray_preflight_modal.js');",
+            "import('../features/module_parts.js')",
+            "loadModulePart('engine.xray', 'xray_preflight_modal')",
+        ],
+        ROOT / "xkeen-ui" / "static" / "js" / "features" / "restart_log.js": [
+            "await loadModulePart('engine.xray', 'xray_preflight_modal');",
         ],
     }
     forbidden_fragments = [
@@ -457,7 +462,7 @@ def test_formatters_and_xray_preflight_use_direct_imports_in_consumers():
 
 def test_routing_jsonc_preserve_uses_canonical_import_urls():
     files = [
-        PAGES_DIR / "panel.routing.bundle.js",
+        PAGES_DIR / "xray.module.bundle.js",
         ROOT / "xkeen-ui" / "static" / "js" / "features" / "routing_cards" / "rules" / "apply.js",
         ROOT / "xkeen-ui" / "static" / "js" / "features" / "routing_cards" / "rules" / "model.js",
     ]
@@ -471,7 +476,7 @@ def test_routing_jsonc_preserve_uses_canonical_import_urls():
 
 def test_routing_compat_bridges_use_canonical_import_urls_and_explicit_shell_bridge():
     expectations = {
-        PAGES_DIR / "panel.routing.bundle.js": [
+        PAGES_DIR / "xray.module.bundle.js": [
             "import '../features/routing.js';",
             "import '../features/compat/routing.js';",
             "import '../features/compat/routing_shell.js';",
@@ -499,7 +504,7 @@ def test_routing_compat_bridges_use_canonical_import_urls_and_explicit_shell_bri
         ],
     }
     forbidden = {
-        PAGES_DIR / "panel.routing.bundle.js": [
+        PAGES_DIR / "xray.module.bundle.js": [
             "../features/routing.js?v=",
             "../features/routing_cards.js?v=",
         ],
@@ -525,6 +530,52 @@ def test_routing_compat_bridges_use_canonical_import_urls_and_explicit_shell_bri
             assert fragment not in text, (
                 f"routing compat should use canonical import URLs in {path.relative_to(ROOT).as_posix()}: {fragment}"
             )
+
+
+def test_xray_module_entry_loads_parts_on_demand_and_the_core_calls_it_through_module_parts():
+    features = ROOT / "xkeen-ui" / "static" / "js" / "features"
+    expectations = {
+        features / "module_parts.js": [
+            "'engine.xray': () => import('../pages/xray.module.entry.js'),",
+            "export function loadModulePart(moduleId, part) {",
+            "export function loadedModulePart(moduleId, part) {",
+            "export function rememberModulePart(moduleId, part, mod) {",
+            "export function __setModuleEntriesForTest(table) {",
+            "module is not separate: ",
+        ],
+        PAGES_DIR / "xray.module.entry.js": [
+            "export const XRAY_MODULE_PARTS = Object.freeze({",
+            "bundle: () => import('./xray.module.bundle.js'),",
+            "routing_templates: () => import('../features/routing_templates.js'),",
+            "xray_preflight_modal: () => import('../ui/xray_preflight_modal.js'),",
+            "dat_contents_modal: () => import('../ui/dat_contents_modal.js'),",
+            "github: () => import('../features/github.js').then(",
+            "(mod) => import('../features/compat/github.js').then(() => mod)",
+            "rememberModulePart('engine.xray', part, mod);",
+            "export async function activate(context) {",
+            "return bundle.activate(context);",
+        ],
+        PAGES_DIR / "panel.routing.bundle.js": [
+            "import('./xray.module.entry.js').then((entry) => entry.activate(context))",
+        ],
+        features / "backups.js": [
+            "loadModulePart('engine.xray', 'routing')",
+            "loadModulePart('engine.xray', 'inbounds')",
+            "loadModulePart('engine.xray', 'outbounds')",
+        ],
+        ROOT / "xkeen-ui" / "static" / "js" / "ui" / "json_editor_modal.js": [
+            "await loadModulePart('engine.xray', 'inbounds');",
+            "await loadModulePart('engine.xray', 'outbounds');",
+        ],
+    }
+
+    for path, fragments in expectations.items():
+        text = path.read_text(encoding="utf-8")
+        for fragment in fragments:
+            assert fragment in text, f"missing Xray module part fragment in {path.relative_to(ROOT).as_posix()}: {fragment}"
+    assert not (features / "index.js").exists(), "features/index.js was a dead re-export of the Xray files"
+    module_loader = (PAGES_DIR / "panel.module_loader.js").read_text(encoding="utf-8")
+    assert "'panel-routing': () => import('./panel.routing.bundle.js')," in module_loader
 
 
 def test_selected_page_runtime_modules_use_shared_runtime_adapters_instead_of_raw_window_xkeen_reads():

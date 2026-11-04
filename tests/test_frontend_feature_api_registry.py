@@ -8,25 +8,10 @@ FEATURES_DIR = ROOT / "xkeen-ui" / "static" / "js" / "features"
 INDEX = FEATURES_DIR / "index.js"
 
 
-def test_feature_api_registry_exists_and_tracks_current_top_level_features():
-    assert INDEX.is_file(), "frontend feature API registry should exist"
-
-    text = INDEX.read_text(encoding="utf-8")
-    required_fragments = [
-        "export const featureApiRegistry = Object.freeze({",
-        "backups: backupsApi,",
-        "fileManager: fileManagerApi,",
-        "mihomoPanel: mihomoPanelApi,",
-        "mihomoImport: mihomoImportApi,",
-        "mihomoProxyTools: mihomoProxyToolsApi,",
-        "mihomoHwidSub: mihomoHwidSubApi,",
-        "restartLog: restartLogApi,",
-        "routing: routingApi,",
-        "serviceStatus: serviceStatusApi,",
-        "xrayLogs: xrayLogsApi,",
-    ]
-    for fragment in required_fragments:
-        assert fragment in text, f"missing registry fragment in {INDEX}: {fragment}"
+def test_dead_feature_api_registry_is_removed():
+    # features/index.js re-exported every feature, the Xray ones included, and
+    # nobody imported it; the core reaches Xray only through module_parts.js.
+    assert not INDEX.exists(), "features/index.js should stay removed"
 
 
 def test_selected_feature_modules_export_named_api_wrappers():

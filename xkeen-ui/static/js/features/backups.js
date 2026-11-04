@@ -9,6 +9,7 @@ import {
   toastXkeen,
 } from './xkeen_runtime.js';
 import { getRestartLogApi } from './restart_log.js';
+import { loadModulePart } from './module_parts.js';
 import '../ui/operator_icons.js';
 
 let backupsModuleApi = null;
@@ -44,7 +45,7 @@ let backupsModuleApi = null;
 
   function loadRoutingFeatureModule() {
     if (!routingFeatureModulePromise) {
-      routingFeatureModulePromise = import('./routing.js').catch((error) => {
+      routingFeatureModulePromise = loadModulePart('engine.xray', 'routing').catch((error) => {
         routingFeatureModulePromise = null;
         throw error;
       });
@@ -54,7 +55,7 @@ let backupsModuleApi = null;
 
   function loadInboundsFeatureModule() {
     if (!inboundsFeatureModulePromise) {
-      inboundsFeatureModulePromise = import('./inbounds.js').catch((error) => {
+      inboundsFeatureModulePromise = loadModulePart('engine.xray', 'inbounds').catch((error) => {
         inboundsFeatureModulePromise = null;
         throw error;
       });
@@ -64,7 +65,7 @@ let backupsModuleApi = null;
 
   function loadOutboundsFeatureModule() {
     if (!outboundsFeatureModulePromise) {
-      outboundsFeatureModulePromise = import('./outbounds.js').catch((error) => {
+      outboundsFeatureModulePromise = loadModulePart('engine.xray', 'outbounds').catch((error) => {
         outboundsFeatureModulePromise = null;
         throw error;
       });

@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 665,
-      "size_bytes": 9052769,
+      "size_bytes": 9051913,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -87,16 +87,18 @@
         "xray"
       ],
       "removable": true,
-      "unit_count": 147,
-      "size_bytes": 3964974,
+      "unit_count": 150,
+      "size_bytes": 3974695,
       "kind_counts": {
         "backend_route": 13,
         "backend_service": 20,
         "backend_test": 51,
         "configuration": 4,
         "editor_schema": 4,
+        "frontend_bundle": 1,
+        "frontend_entrypoint": 1,
         "frontend_feature": 38,
-        "frontend_test": 11,
+        "frontend_test": 12,
         "frontend_ui": 1,
         "template": 5
       },
@@ -132,7 +134,7 @@
       ],
       "removable": true,
       "unit_count": 147,
-      "size_bytes": 3437459,
+      "size_bytes": 3437428,
       "kind_counts": {
         "app_runtime": 4,
         "backend_route": 2,
@@ -177,7 +179,7 @@
       ],
       "removable": true,
       "unit_count": 25,
-      "size_bytes": 834212,
+      "size_bytes": 834290,
       "kind_counts": {
         "frontend_javascript": 3,
         "frontend_ui": 22
@@ -287,7 +289,7 @@
       "system_requirements": [],
       "removable": true,
       "unit_count": 8,
-      "size_bytes": 102055,
+      "size_bytes": 102161,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 2,
@@ -5125,7 +5127,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_frontend_feature_api_registry.py",
-      "size_bytes": 26004,
+      "size_bytes": 25469,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -5167,7 +5169,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_frontend_migration_guardrails.py",
-      "size_bytes": 73039,
+      "size_bytes": 75783,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -5230,7 +5232,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_frontend_runtime_hotfixes.py",
-      "size_bytes": 144113,
+      "size_bytes": 144111,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -6623,7 +6625,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_boundaries.py",
-      "size_bytes": 7757,
+      "size_bytes": 9567,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -10576,7 +10578,7 @@
       "module_id": "core",
       "kind": "frontend_bundle",
       "path": "xkeen-ui/static/js/pages/panel.routing.bundle.js",
-      "size_bytes": 2700,
+      "size_bytes": 280,
       "depends_on": [
         "engine.xray"
       ],
@@ -10743,6 +10745,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -10823,6 +10826,9 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
+        "panel-routing",
+        "terminal-lazy",
         "xkeen-page"
       ],
       "system_requirements": [
@@ -10851,6 +10857,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -10879,6 +10886,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -10909,6 +10917,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -10939,6 +10948,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -10969,6 +10979,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -10999,6 +11010,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -11515,35 +11527,11 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
+        "panel-routing",
+        "terminal-lazy",
         "xkeen-page"
       ],
-      "system_requirements": [
-        "python3",
-        "flask",
-        "gevent (optional)",
-        "gevent-websocket (optional)"
-      ],
-      "environment_variables": [],
-      "removable": false
-    },
-    {
-      "module_id": "core",
-      "kind": "frontend_feature",
-      "path": "xkeen-ui/static/js/features/index.js",
-      "size_bytes": 3770,
-      "depends_on": [
-        "tool.backups",
-        "tool.terminal",
-        "tool.files",
-        "engine.xray",
-        "engine.mihomo",
-        "integration.happ"
-      ],
-      "starts_background_task": false,
-      "background_markers": [],
-      "registers_routes": false,
-      "routes": [],
-      "frontend_bundle": [],
       "system_requirements": [
         "python3",
         "flask",
@@ -11596,6 +11584,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -11702,6 +11691,37 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "xkeen-page"
+      ],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "frontend_feature",
+      "path": "xkeen-ui/static/js/features/module_parts.js",
+      "size_bytes": 1072,
+      "depends_on": [
+        "engine.xray"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [
+        "devtools-page",
+        "mihomo-generator-page",
+        "modules-page",
+        "panel-core",
+        "panel-mihomo",
+        "panel-routing",
+        "terminal-lazy",
         "xkeen-page"
       ],
       "system_requirements": [
@@ -11847,10 +11867,8 @@
       "module_id": "core",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/restart_log.js",
-      "size_bytes": 70545,
-      "depends_on": [
-        "engine.xray"
-      ],
+      "size_bytes": 70611,
+      "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
       "registers_routes": false,
@@ -12052,6 +12070,9 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
+        "panel-routing",
+        "terminal-lazy",
         "xkeen-page"
       ],
       "system_requirements": [
@@ -12237,6 +12258,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -12322,6 +12344,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -12445,10 +12468,9 @@
       "module_id": "core",
       "kind": "frontend_javascript",
       "path": "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js",
-      "size_bytes": 39456,
+      "size_bytes": 39452,
       "depends_on": [
         "tool.terminal",
-        "engine.xray",
         "engine.mihomo",
         "integration.happ"
       ],
@@ -13038,6 +13060,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -13139,7 +13162,7 @@
       "module_id": "core",
       "kind": "frontend_runtime",
       "path": "xkeen-ui/static/js/runtime/lazy_runtime.js",
-      "size_bytes": 28019,
+      "size_bytes": 28095,
       "depends_on": [
         "tool.terminal",
         "tool.files",
@@ -14800,6 +14823,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -14964,6 +14988,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -15088,10 +15113,8 @@
       "module_id": "core",
       "kind": "frontend_ui",
       "path": "xkeen-ui/static/js/ui/spinner_fetch.js",
-      "size_bytes": 19062,
-      "depends_on": [
-        "engine.xray"
-      ],
+      "size_bytes": 19169,
+      "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
       "registers_routes": false,
@@ -17559,7 +17582,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_test",
       "path": "tests/test_mihomo_clash_frontend_contract.py",
-      "size_bytes": 33683,
+      "size_bytes": 33652,
       "depends_on": [
         "core",
         "tool.editor"
@@ -22374,6 +22397,66 @@
     },
     {
       "module_id": "engine.xray",
+      "kind": "frontend_bundle",
+      "path": "xkeen-ui/static/js/pages/xray.module.bundle.js",
+      "size_bytes": 2700,
+      "depends_on": [
+        "core",
+        "tool.editor"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [
+        "devtools-page",
+        "mihomo-generator-page",
+        "modules-page",
+        "panel-core",
+        "panel-mihomo",
+        "panel-routing",
+        "terminal-lazy",
+        "xkeen-page"
+      ],
+      "system_requirements": [
+        "xkeen",
+        "xray"
+      ],
+      "environment_variables": [],
+      "removable": true
+    },
+    {
+      "module_id": "engine.xray",
+      "kind": "frontend_entrypoint",
+      "path": "xkeen-ui/static/js/pages/xray.module.entry.js",
+      "size_bytes": 1601,
+      "depends_on": [
+        "core",
+        "tool.editor"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [
+        "devtools-page",
+        "mihomo-generator-page",
+        "modules-page",
+        "panel-core",
+        "panel-mihomo",
+        "panel-routing",
+        "terminal-lazy",
+        "xkeen-page"
+      ],
+      "system_requirements": [
+        "xkeen",
+        "xray"
+      ],
+      "environment_variables": [],
+      "removable": true
+    },
+    {
+      "module_id": "engine.xray",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/inbounds.js",
       "size_bytes": 46861,
@@ -22390,6 +22473,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -22420,6 +22504,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -22449,6 +22534,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -22478,6 +22564,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -22507,6 +22594,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -22536,6 +22624,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -22565,6 +22654,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -22594,6 +22684,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -22623,6 +22714,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -22652,6 +22744,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -22681,6 +22774,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -22710,6 +22804,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -22739,6 +22834,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -22768,6 +22864,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -22797,6 +22894,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -22826,6 +22924,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -22855,6 +22954,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -22884,6 +22984,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -22913,6 +23014,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -22942,6 +23044,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -22971,6 +23074,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -23000,6 +23104,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -23029,6 +23134,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -23058,6 +23164,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -23087,6 +23194,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -23116,6 +23224,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -23145,6 +23254,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -23174,6 +23284,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -23203,6 +23314,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -23232,6 +23344,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -23261,6 +23374,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -23290,6 +23404,9 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
+        "panel-routing",
+        "terminal-lazy",
         "xkeen-page"
       ],
       "system_requirements": [
@@ -23317,6 +23434,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -23346,6 +23464,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -23375,6 +23494,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -23404,6 +23524,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -23433,6 +23554,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -23462,6 +23584,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -23648,6 +23771,27 @@
       "kind": "frontend_test",
       "path": "e2e/panel_operator_xray_preflight.spec.mjs",
       "size_bytes": 2874,
+      "depends_on": [
+        "core",
+        "tool.editor"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "xkeen",
+        "xray"
+      ],
+      "environment_variables": [],
+      "removable": true
+    },
+    {
+      "module_id": "engine.xray",
+      "kind": "frontend_test",
+      "path": "e2e/xray_module_parts.spec.mjs",
+      "size_bytes": 5420,
       "depends_on": [
         "core",
         "tool.editor"
@@ -24342,6 +24486,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -25673,10 +25818,9 @@
       "module_id": "tool.backups",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/backups.js",
-      "size_bytes": 58647,
+      "size_bytes": 58753,
       "depends_on": [
-        "core",
-        "engine.xray"
+        "core"
       ],
       "starts_background_task": false,
       "background_markers": [],
@@ -25687,6 +25831,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -25884,6 +26029,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -25911,6 +26057,7 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
         "panel-routing",
         "terminal-lazy",
         "xkeen-page"
@@ -25964,6 +26111,9 @@
         "mihomo-generator-page",
         "modules-page",
         "panel-core",
+        "panel-mihomo",
+        "panel-routing",
+        "terminal-lazy",
         "xkeen-page"
       ],
       "system_requirements": [
@@ -26192,10 +26342,9 @@
       "module_id": "tool.editor",
       "kind": "frontend_ui",
       "path": "xkeen-ui/static/js/ui/json_editor_modal.js",
-      "size_bytes": 47572,
+      "size_bytes": 47650,
       "depends_on": [
-        "core",
-        "engine.xray"
+        "core"
       ],
       "starts_background_task": false,
       "background_markers": [],
@@ -32217,7 +32366,7 @@
     {
       "id": "panel-core",
       "root": "xkeen-ui/static/js/pages/panel.entry.js",
-      "file_count": 315,
+      "file_count": 318,
       "module_ids": [
         "core",
         "engine.mihomo",
@@ -32328,6 +32477,7 @@
         "xkeen-ui/static/js/features/module_manager/badge.js",
         "xkeen-ui/static/js/features/module_manager/controller.js",
         "xkeen-ui/static/js/features/module_manager/render.js",
+        "xkeen-ui/static/js/features/module_parts.js",
         "xkeen-ui/static/js/features/notification_center.js",
         "xkeen-ui/static/js/features/outbounds.js",
         "xkeen-ui/static/js/features/panel_log_parser.js",
@@ -32448,6 +32598,8 @@
         "xkeen-ui/static/js/pages/top_level_xkeen_screen.js",
         "xkeen-ui/static/js/pages/xkeen.init.js",
         "xkeen-ui/static/js/pages/xkeen.screen.bootstrap.js",
+        "xkeen-ui/static/js/pages/xray.module.bundle.js",
+        "xkeen-ui/static/js/pages/xray.module.entry.js",
         "xkeen-ui/static/js/runtime/lazy_runtime.js",
         "xkeen-ui/static/js/runtime/standalone_lazy.js",
         "xkeen-ui/static/js/terminal/_core.js",
@@ -32550,7 +32702,7 @@
     {
       "id": "panel-routing",
       "root": "xkeen-ui/static/js/pages/panel.routing.bundle.js",
-      "file_count": 72,
+      "file_count": 80,
       "module_ids": [
         "core",
         "engine.xray",
@@ -32561,6 +32713,7 @@
       "files": [
         "xkeen-ui/static/js/features/backup_actions_loader.js",
         "xkeen-ui/static/js/features/backups.js",
+        "xkeen-ui/static/js/features/compat/github.js",
         "xkeen-ui/static/js/features/compat/inbounds.js",
         "xkeen-ui/static/js/features/compat/local_io.js",
         "xkeen-ui/static/js/features/compat/outbounds.js",
@@ -32570,8 +32723,10 @@
         "xkeen-ui/static/js/features/core_source.js",
         "xkeen-ui/static/js/features/dns_guard_text.js",
         "xkeen-ui/static/js/features/dns_operation_recovery.js",
+        "xkeen-ui/static/js/features/github.js",
         "xkeen-ui/static/js/features/inbounds.js",
         "xkeen-ui/static/js/features/local_io.js",
+        "xkeen-ui/static/js/features/module_parts.js",
         "xkeen-ui/static/js/features/outbounds.js",
         "xkeen-ui/static/js/features/restart_log.js",
         "xkeen-ui/static/js/features/restart_log_sources.js",
@@ -32604,7 +32759,9 @@
         "xkeen-ui/static/js/features/routing_cards_namespace.js",
         "xkeen-ui/static/js/features/routing_jsonc_preserve.js",
         "xkeen-ui/static/js/features/routing_shell.js",
+        "xkeen-ui/static/js/features/routing_templates.js",
         "xkeen-ui/static/js/features/xkeen_runtime.js",
+        "xkeen-ui/static/js/features/xkeen_texts.js",
         "xkeen-ui/static/js/features/xray_log_domain_hints.js",
         "xkeen-ui/static/js/features/xray_log_line_class.js",
         "xkeen-ui/static/js/features/xray_log_parser.js",
@@ -32614,9 +32771,12 @@
         "xkeen-ui/static/js/pages/config_shell.shared.js",
         "xkeen-ui/static/js/pages/logs_shell.shared.js",
         "xkeen-ui/static/js/pages/panel.routing.bundle.js",
+        "xkeen-ui/static/js/pages/xray.module.bundle.js",
+        "xkeen-ui/static/js/pages/xray.module.entry.js",
         "xkeen-ui/static/js/ui/config_dirty_state.js",
         "xkeen-ui/static/js/ui/config_shell.js",
         "xkeen-ui/static/js/ui/country_flags.js",
+        "xkeen-ui/static/js/ui/dat_contents_modal.js",
         "xkeen-ui/static/js/ui/editor_schema.js",
         "xkeen-ui/static/js/ui/formatters.js",
         "xkeen-ui/static/js/ui/happ_decryptor_link.js",
@@ -32636,45 +32796,109 @@
     {
       "id": "panel-mihomo",
       "root": "xkeen-ui/static/js/pages/panel.mihomo.bundle.js",
-      "file_count": 25,
+      "file_count": 87,
       "module_ids": [
         "core",
         "engine.mihomo",
         "engine.xray",
+        "integration.happ",
+        "tool.backups",
         "tool.editor"
       ],
       "files": [
+        "xkeen-ui/static/js/features/backup_actions_loader.js",
+        "xkeen-ui/static/js/features/backups.js",
+        "xkeen-ui/static/js/features/compat/github.js",
+        "xkeen-ui/static/js/features/compat/inbounds.js",
+        "xkeen-ui/static/js/features/compat/local_io.js",
         "xkeen-ui/static/js/features/compat/mihomo_panel.js",
+        "xkeen-ui/static/js/features/compat/outbounds.js",
+        "xkeen-ui/static/js/features/compat/routing.js",
+        "xkeen-ui/static/js/features/compat/routing_cards.js",
+        "xkeen-ui/static/js/features/compat/routing_shell.js",
         "xkeen-ui/static/js/features/core_source.js",
         "xkeen-ui/static/js/features/dns_guard_text.js",
         "xkeen-ui/static/js/features/dns_operation_recovery.js",
+        "xkeen-ui/static/js/features/github.js",
+        "xkeen-ui/static/js/features/inbounds.js",
+        "xkeen-ui/static/js/features/local_io.js",
         "xkeen-ui/static/js/features/mihomo_config_operations.js",
         "xkeen-ui/static/js/features/mihomo_dns.js",
         "xkeen-ui/static/js/features/mihomo_import_result.js",
         "xkeen-ui/static/js/features/mihomo_panel.js",
         "xkeen-ui/static/js/features/mihomo_runtime.js",
         "xkeen-ui/static/js/features/mihomo_yaml_patch.js",
+        "xkeen-ui/static/js/features/module_parts.js",
+        "xkeen-ui/static/js/features/outbounds.js",
         "xkeen-ui/static/js/features/restart_log.js",
         "xkeen-ui/static/js/features/restart_log_sources.js",
+        "xkeen-ui/static/js/features/routing.js",
+        "xkeen-ui/static/js/features/routing_cards.js",
+        "xkeen-ui/static/js/features/routing_cards/collapse.js",
+        "xkeen-ui/static/js/features/routing_cards/common.js",
+        "xkeen-ui/static/js/features/routing_cards/dat/api.js",
+        "xkeen-ui/static/js/features/routing_cards/dat/card.js",
+        "xkeen-ui/static/js/features/routing_cards/dat/combo.js",
+        "xkeen-ui/static/js/features/routing_cards/dat/prefs.js",
+        "xkeen-ui/static/js/features/routing_cards/help_docs.js",
+        "xkeen-ui/static/js/features/routing_cards/help_modal.js",
+        "xkeen-ui/static/js/features/routing_cards/ids.js",
+        "xkeen-ui/static/js/features/routing_cards/ns.js",
+        "xkeen-ui/static/js/features/routing_cards/rules/apply.js",
+        "xkeen-ui/static/js/features/routing_cards/rules/balancer_help.js",
+        "xkeen-ui/static/js/features/routing_cards/rules/controls.js",
+        "xkeen-ui/static/js/features/routing_cards/rules/dat_bridge.js",
+        "xkeen-ui/static/js/features/routing_cards/rules/detect.js",
+        "xkeen-ui/static/js/features/routing_cards/rules/dnd_pointer.js",
+        "xkeen-ui/static/js/features/routing_cards/rules/dns_over_vless.js",
+        "xkeen-ui/static/js/features/routing_cards/rules/fields.js",
+        "xkeen-ui/static/js/features/routing_cards/rules/forced_rules_wizard.js",
+        "xkeen-ui/static/js/features/routing_cards/rules/json_modal.js",
+        "xkeen-ui/static/js/features/routing_cards/rules/model.js",
+        "xkeen-ui/static/js/features/routing_cards/rules/quick_balancer.js",
+        "xkeen-ui/static/js/features/routing_cards/rules/render.js",
+        "xkeen-ui/static/js/features/routing_cards/rules/state.js",
+        "xkeen-ui/static/js/features/routing_cards_namespace.js",
+        "xkeen-ui/static/js/features/routing_jsonc_preserve.js",
+        "xkeen-ui/static/js/features/routing_shell.js",
+        "xkeen-ui/static/js/features/routing_templates.js",
         "xkeen-ui/static/js/features/xkeen_runtime.js",
+        "xkeen-ui/static/js/features/xkeen_texts.js",
+        "xkeen-ui/static/js/features/xray_log_domain_hints.js",
+        "xkeen-ui/static/js/features/xray_log_line_class.js",
+        "xkeen-ui/static/js/features/xray_log_parser.js",
+        "xkeen-ui/static/js/features/xray_log_view.js",
+        "xkeen-ui/static/js/features/xray_logs.js",
+        "xkeen-ui/static/js/features/xray_subscription_schedule.js",
+        "xkeen-ui/static/js/pages/config_shell.shared.js",
+        "xkeen-ui/static/js/pages/logs_shell.shared.js",
         "xkeen-ui/static/js/pages/panel.mihomo.bundle.js",
+        "xkeen-ui/static/js/pages/xray.module.bundle.js",
+        "xkeen-ui/static/js/pages/xray.module.entry.js",
+        "xkeen-ui/static/js/ui/config_dirty_state.js",
+        "xkeen-ui/static/js/ui/config_shell.js",
+        "xkeen-ui/static/js/ui/country_flags.js",
+        "xkeen-ui/static/js/ui/dat_contents_modal.js",
         "xkeen-ui/static/js/ui/editor_schema.js",
         "xkeen-ui/static/js/ui/formatters.js",
+        "xkeen-ui/static/js/ui/happ_decryptor_link.js",
         "xkeen-ui/static/js/ui/operator_icons.js",
         "xkeen-ui/static/js/ui/operator_icons_manifest.js",
         "xkeen-ui/static/js/ui/prettier_loader.js",
+        "xkeen-ui/static/js/ui/routing_scenarios.js",
         "xkeen-ui/static/js/ui/schema_quickfixes.js",
         "xkeen-ui/static/js/ui/schema_semantic_validation.js",
         "xkeen-ui/static/js/ui/schema_snippets.js",
         "xkeen-ui/static/js/ui/xray_preflight_modal.js",
         "xkeen-ui/static/js/ui/yaml_schema.js",
+        "xkeen-ui/static/js/util/strip_json_comments.js",
         "xkeen-ui/static/js/vendor/codemirror_json_schema.js"
       ]
     },
     {
       "id": "terminal-lazy",
       "root": "xkeen-ui/static/js/pages/terminal.lazy.entry.js",
-      "file_count": 205,
+      "file_count": 213,
       "module_ids": [
         "core",
         "engine.mihomo",
@@ -32689,6 +32913,7 @@
       "files": [
         "xkeen-ui/static/js/features/backup_actions_loader.js",
         "xkeen-ui/static/js/features/backups.js",
+        "xkeen-ui/static/js/features/compat/github.js",
         "xkeen-ui/static/js/features/compat/inbounds.js",
         "xkeen-ui/static/js/features/compat/local_io.js",
         "xkeen-ui/static/js/features/compat/mihomo_panel.js",
@@ -32729,6 +32954,7 @@
         "xkeen-ui/static/js/features/file_manager/transfers.js",
         "xkeen-ui/static/js/features/file_manager/wire.js",
         "xkeen-ui/static/js/features/file_manager_namespace.js",
+        "xkeen-ui/static/js/features/github.js",
         "xkeen-ui/static/js/features/inbounds.js",
         "xkeen-ui/static/js/features/local_io.js",
         "xkeen-ui/static/js/features/mihomo_config_operations.js",
@@ -32737,6 +32963,7 @@
         "xkeen-ui/static/js/features/mihomo_panel.js",
         "xkeen-ui/static/js/features/mihomo_runtime.js",
         "xkeen-ui/static/js/features/mihomo_yaml_patch.js",
+        "xkeen-ui/static/js/features/module_parts.js",
         "xkeen-ui/static/js/features/outbounds.js",
         "xkeen-ui/static/js/features/resource_monitor.js",
         "xkeen-ui/static/js/features/resource_monitor/canvas_charts.js",
@@ -32791,8 +33018,10 @@
         "xkeen-ui/static/js/features/routing_cards_namespace.js",
         "xkeen-ui/static/js/features/routing_jsonc_preserve.js",
         "xkeen-ui/static/js/features/routing_shell.js",
+        "xkeen-ui/static/js/features/routing_templates.js",
         "xkeen-ui/static/js/features/terminal_debug.js",
         "xkeen-ui/static/js/features/xkeen_runtime.js",
+        "xkeen-ui/static/js/features/xkeen_texts.js",
         "xkeen-ui/static/js/features/xray_log_domain_hints.js",
         "xkeen-ui/static/js/features/xray_log_line_class.js",
         "xkeen-ui/static/js/features/xray_log_parser.js",
@@ -32815,6 +33044,8 @@
         "xkeen-ui/static/js/pages/panel.module_loader.js",
         "xkeen-ui/static/js/pages/panel.routing.bundle.js",
         "xkeen-ui/static/js/pages/terminal.lazy.entry.js",
+        "xkeen-ui/static/js/pages/xray.module.bundle.js",
+        "xkeen-ui/static/js/pages/xray.module.entry.js",
         "xkeen-ui/static/js/terminal/_core.js",
         "xkeen-ui/static/js/terminal/capabilities.js",
         "xkeen-ui/static/js/terminal/chrome.js",
@@ -32860,6 +33091,7 @@
         "xkeen-ui/static/js/ui/config_dirty_state.js",
         "xkeen-ui/static/js/ui/config_shell.js",
         "xkeen-ui/static/js/ui/country_flags.js",
+        "xkeen-ui/static/js/ui/dat_contents_modal.js",
         "xkeen-ui/static/js/ui/diff_engine.js",
         "xkeen-ui/static/js/ui/diff_modal.js",
         "xkeen-ui/static/js/ui/editor_actions.js",
@@ -32942,7 +33174,7 @@
     {
       "id": "devtools-page",
       "root": "xkeen-ui/static/js/pages/devtools.entry.js",
-      "file_count": 315,
+      "file_count": 318,
       "module_ids": [
         "core",
         "engine.mihomo",
@@ -33053,6 +33285,7 @@
         "xkeen-ui/static/js/features/module_manager/badge.js",
         "xkeen-ui/static/js/features/module_manager/controller.js",
         "xkeen-ui/static/js/features/module_manager/render.js",
+        "xkeen-ui/static/js/features/module_parts.js",
         "xkeen-ui/static/js/features/notification_center.js",
         "xkeen-ui/static/js/features/outbounds.js",
         "xkeen-ui/static/js/features/panel_log_parser.js",
@@ -33173,6 +33406,8 @@
         "xkeen-ui/static/js/pages/top_level_xkeen_screen.js",
         "xkeen-ui/static/js/pages/xkeen.init.js",
         "xkeen-ui/static/js/pages/xkeen.screen.bootstrap.js",
+        "xkeen-ui/static/js/pages/xray.module.bundle.js",
+        "xkeen-ui/static/js/pages/xray.module.entry.js",
         "xkeen-ui/static/js/runtime/lazy_runtime.js",
         "xkeen-ui/static/js/runtime/standalone_lazy.js",
         "xkeen-ui/static/js/terminal/_core.js",
@@ -33309,7 +33544,7 @@
     {
       "id": "xkeen-page",
       "root": "xkeen-ui/static/js/pages/xkeen.entry.js",
-      "file_count": 315,
+      "file_count": 318,
       "module_ids": [
         "core",
         "engine.mihomo",
@@ -33420,6 +33655,7 @@
         "xkeen-ui/static/js/features/module_manager/badge.js",
         "xkeen-ui/static/js/features/module_manager/controller.js",
         "xkeen-ui/static/js/features/module_manager/render.js",
+        "xkeen-ui/static/js/features/module_parts.js",
         "xkeen-ui/static/js/features/notification_center.js",
         "xkeen-ui/static/js/features/outbounds.js",
         "xkeen-ui/static/js/features/panel_log_parser.js",
@@ -33540,6 +33776,8 @@
         "xkeen-ui/static/js/pages/xkeen.entry.js",
         "xkeen-ui/static/js/pages/xkeen.init.js",
         "xkeen-ui/static/js/pages/xkeen.screen.bootstrap.js",
+        "xkeen-ui/static/js/pages/xray.module.bundle.js",
+        "xkeen-ui/static/js/pages/xray.module.entry.js",
         "xkeen-ui/static/js/runtime/lazy_runtime.js",
         "xkeen-ui/static/js/runtime/standalone_lazy.js",
         "xkeen-ui/static/js/terminal/_core.js",
@@ -33642,7 +33880,7 @@
     {
       "id": "mihomo-generator-page",
       "root": "xkeen-ui/static/js/pages/mihomo_generator.entry.js",
-      "file_count": 315,
+      "file_count": 318,
       "module_ids": [
         "core",
         "engine.mihomo",
@@ -33753,6 +33991,7 @@
         "xkeen-ui/static/js/features/module_manager/badge.js",
         "xkeen-ui/static/js/features/module_manager/controller.js",
         "xkeen-ui/static/js/features/module_manager/render.js",
+        "xkeen-ui/static/js/features/module_parts.js",
         "xkeen-ui/static/js/features/notification_center.js",
         "xkeen-ui/static/js/features/outbounds.js",
         "xkeen-ui/static/js/features/panel_log_parser.js",
@@ -33873,6 +34112,8 @@
         "xkeen-ui/static/js/pages/top_level_xkeen_screen.js",
         "xkeen-ui/static/js/pages/xkeen.init.js",
         "xkeen-ui/static/js/pages/xkeen.screen.bootstrap.js",
+        "xkeen-ui/static/js/pages/xray.module.bundle.js",
+        "xkeen-ui/static/js/pages/xray.module.entry.js",
         "xkeen-ui/static/js/runtime/lazy_runtime.js",
         "xkeen-ui/static/js/runtime/standalone_lazy.js",
         "xkeen-ui/static/js/terminal/_core.js",
@@ -33975,7 +34216,7 @@
     {
       "id": "modules-page",
       "root": "xkeen-ui/static/js/pages/modules.entry.js",
-      "file_count": 315,
+      "file_count": 318,
       "module_ids": [
         "core",
         "engine.mihomo",
@@ -34086,6 +34327,7 @@
         "xkeen-ui/static/js/features/module_manager/badge.js",
         "xkeen-ui/static/js/features/module_manager/controller.js",
         "xkeen-ui/static/js/features/module_manager/render.js",
+        "xkeen-ui/static/js/features/module_parts.js",
         "xkeen-ui/static/js/features/notification_center.js",
         "xkeen-ui/static/js/features/outbounds.js",
         "xkeen-ui/static/js/features/panel_log_parser.js",
@@ -34206,6 +34448,8 @@
         "xkeen-ui/static/js/pages/top_level_xkeen_screen.js",
         "xkeen-ui/static/js/pages/xkeen.init.js",
         "xkeen-ui/static/js/pages/xkeen.screen.bootstrap.js",
+        "xkeen-ui/static/js/pages/xray.module.bundle.js",
+        "xkeen-ui/static/js/pages/xray.module.entry.js",
         "xkeen-ui/static/js/runtime/lazy_runtime.js",
         "xkeen-ui/static/js/runtime/standalone_lazy.js",
         "xkeen-ui/static/js/terminal/_core.js",
@@ -34649,7 +34893,7 @@
       {
         "from": "core",
         "to": "engine.mihomo",
-        "unit_count": 20,
+        "unit_count": 19,
         "examples": [
           "xkeen-ui/app_factory.py",
           "xkeen-ui/run_server.py",
@@ -34664,7 +34908,7 @@
       {
         "from": "core",
         "to": "engine.xray",
-        "unit_count": 37,
+        "unit_count": 34,
         "examples": [
           "xkeen-ui/app.py",
           "xkeen-ui/app_factory.py",
@@ -34679,7 +34923,7 @@
       {
         "from": "core",
         "to": "integration.happ",
-        "unit_count": 9,
+        "unit_count": 8,
         "examples": [
           "xkeen-ui/routes/__init__.py",
           "xkeen-ui/services/devtools/env.py",
@@ -34687,8 +34931,8 @@
           "tests/test_addons_refresh_on_update.py",
           "tests/test_check_keys_upstream.py",
           "tests/test_module_backend_gates.py",
-          "xkeen-ui/static/js/features/index.js",
-          "xkeen-ui/static/js/pages/devtools.screen.bootstrap.js"
+          "xkeen-ui/static/js/pages/devtools.screen.bootstrap.js",
+          "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js"
         ]
       },
       {
@@ -34707,7 +34951,7 @@
       {
         "from": "core",
         "to": "tool.backups",
-        "unit_count": 8,
+        "unit_count": 7,
         "examples": [
           "xkeen-ui/app_factory.py",
           "xkeen-ui/routes/__init__.py",
@@ -34715,7 +34959,6 @@
           "tests/test_modular_panel_standalone_pages.py",
           "tests/test_module_backend_gates.py",
           "xkeen-ui/static/js/features/backup_actions_loader.js",
-          "xkeen-ui/static/js/features/index.js",
           "xkeen-ui/static/js/runtime/lazy_runtime.js"
         ]
       },
@@ -34737,7 +34980,7 @@
       {
         "from": "core",
         "to": "tool.files",
-        "unit_count": 10,
+        "unit_count": 9,
         "examples": [
           "xkeen-ui/routes/__init__.py",
           "xkeen-ui/services/panel_service_data.py",
@@ -34746,18 +34989,17 @@
           "tests/test_panel_service_data_protection.py",
           "tests/test_panel_state_protection.py",
           "tests/test_remotefs_remove_regressions.py",
-          "xkeen-ui/static/js/features/index.js"
+          "xkeen-ui/static/js/pages/panel.module_loader.js"
         ]
       },
       {
         "from": "core",
         "to": "tool.terminal",
-        "unit_count": 8,
+        "unit_count": 7,
         "examples": [
           "xkeen-ui/run_server.py",
           "xkeen-ui/routes/__init__.py",
           "tests/test_module_backend_gates.py",
-          "xkeen-ui/static/js/features/index.js",
           "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js",
           "xkeen-ui/static/js/pages/panel.module_loader.js",
           "xkeen-ui/static/js/pages/panel_shell.shared.js",
@@ -34828,7 +35070,7 @@
       {
         "from": "engine.xray",
         "to": "core",
-        "unit_count": 147,
+        "unit_count": 150,
         "examples": [
           "xkeen-ui/routes/routing/__init__.py",
           "xkeen-ui/routes/routing/blueprint.py",
@@ -34869,7 +35111,7 @@
       {
         "from": "engine.xray",
         "to": "tool.editor",
-        "unit_count": 147,
+        "unit_count": 150,
         "examples": [
           "xkeen-ui/routes/routing/__init__.py",
           "xkeen-ui/routes/routing/blueprint.py",
@@ -34965,10 +35207,9 @@
       {
         "from": "tool.backups",
         "to": "engine.xray",
-        "unit_count": 2,
+        "unit_count": 1,
         "examples": [
-          "xkeen-ui/routes/backups.py",
-          "xkeen-ui/static/js/features/backups.js"
+          "xkeen-ui/routes/backups.py"
         ]
       },
       {
@@ -34989,10 +35230,9 @@
       {
         "from": "tool.editor",
         "to": "engine.xray",
-        "unit_count": 2,
+        "unit_count": 1,
         "examples": [
-          "xkeen-ui/static/js/ui/dat_contents_modal.js",
-          "xkeen-ui/static/js/ui/json_editor_modal.js"
+          "xkeen-ui/static/js/ui/dat_contents_modal.js"
         ]
       },
       {
@@ -35046,7 +35286,7 @@
       {
         "from": "core",
         "to": "engine.mihomo",
-        "unit_count": 14,
+        "unit_count": 13,
         "examples": [
           "xkeen-ui/app_factory.py",
           "xkeen-ui/run_server.py",
@@ -35061,7 +35301,7 @@
       {
         "from": "core",
         "to": "engine.xray",
-        "unit_count": 23,
+        "unit_count": 20,
         "examples": [
           "xkeen-ui/app.py",
           "xkeen-ui/app_factory.py",
@@ -35076,12 +35316,11 @@
       {
         "from": "core",
         "to": "integration.happ",
-        "unit_count": 6,
+        "unit_count": 5,
         "examples": [
           "xkeen-ui/routes/__init__.py",
           "xkeen-ui/services/devtools/env.py",
           "xkeen-ui/services/subscription_request_profile.py",
-          "xkeen-ui/static/js/features/index.js",
           "xkeen-ui/static/js/pages/devtools.screen.bootstrap.js",
           "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js"
         ]
@@ -35101,12 +35340,11 @@
       {
         "from": "core",
         "to": "tool.backups",
-        "unit_count": 5,
+        "unit_count": 4,
         "examples": [
           "xkeen-ui/app_factory.py",
           "xkeen-ui/routes/__init__.py",
           "xkeen-ui/static/js/features/backup_actions_loader.js",
-          "xkeen-ui/static/js/features/index.js",
           "xkeen-ui/static/js/runtime/lazy_runtime.js"
         ]
       },
@@ -35128,11 +35366,10 @@
       {
         "from": "core",
         "to": "tool.files",
-        "unit_count": 5,
+        "unit_count": 4,
         "examples": [
           "xkeen-ui/routes/__init__.py",
           "xkeen-ui/services/panel_service_data.py",
-          "xkeen-ui/static/js/features/index.js",
           "xkeen-ui/static/js/pages/panel.module_loader.js",
           "xkeen-ui/static/js/runtime/lazy_runtime.js"
         ]
@@ -35140,11 +35377,10 @@
       {
         "from": "core",
         "to": "tool.terminal",
-        "unit_count": 7,
+        "unit_count": 6,
         "examples": [
           "xkeen-ui/run_server.py",
           "xkeen-ui/routes/__init__.py",
-          "xkeen-ui/static/js/features/index.js",
           "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js",
           "xkeen-ui/static/js/pages/panel.module_loader.js",
           "xkeen-ui/static/js/pages/panel_shell.shared.js",
@@ -35214,7 +35450,7 @@
       {
         "from": "engine.xray",
         "to": "core",
-        "unit_count": 85,
+        "unit_count": 87,
         "examples": [
           "xkeen-ui/routes/routing/__init__.py",
           "xkeen-ui/routes/routing/blueprint.py",
@@ -35255,7 +35491,7 @@
       {
         "from": "engine.xray",
         "to": "tool.editor",
-        "unit_count": 85,
+        "unit_count": 87,
         "examples": [
           "xkeen-ui/routes/routing/__init__.py",
           "xkeen-ui/routes/routing/blueprint.py",
@@ -35351,10 +35587,9 @@
       {
         "from": "tool.backups",
         "to": "engine.xray",
-        "unit_count": 2,
+        "unit_count": 1,
         "examples": [
-          "xkeen-ui/routes/backups.py",
-          "xkeen-ui/static/js/features/backups.js"
+          "xkeen-ui/routes/backups.py"
         ]
       },
       {
@@ -35375,10 +35610,9 @@
       {
         "from": "tool.editor",
         "to": "engine.xray",
-        "unit_count": 2,
+        "unit_count": 1,
         "examples": [
-          "xkeen-ui/static/js/ui/dat_contents_modal.js",
-          "xkeen-ui/static/js/ui/json_editor_modal.js"
+          "xkeen-ui/static/js/ui/dat_contents_modal.js"
         ]
       },
       {
@@ -35432,7 +35666,7 @@
       {
         "from": "core",
         "to": "engine.mihomo",
-        "unit_count": 14,
+        "unit_count": 13,
         "examples": [
           "xkeen-ui/app_factory.py",
           "xkeen-ui/run_server.py",
@@ -35447,7 +35681,7 @@
       {
         "from": "core",
         "to": "engine.xray",
-        "unit_count": 23,
+        "unit_count": 20,
         "examples": [
           "xkeen-ui/app.py",
           "xkeen-ui/app_factory.py",
@@ -35462,12 +35696,11 @@
       {
         "from": "core",
         "to": "integration.happ",
-        "unit_count": 6,
+        "unit_count": 5,
         "examples": [
           "xkeen-ui/routes/__init__.py",
           "xkeen-ui/services/devtools/env.py",
           "xkeen-ui/services/subscription_request_profile.py",
-          "xkeen-ui/static/js/features/index.js",
           "xkeen-ui/static/js/pages/devtools.screen.bootstrap.js",
           "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js"
         ]
@@ -35487,12 +35720,11 @@
       {
         "from": "core",
         "to": "tool.backups",
-        "unit_count": 5,
+        "unit_count": 4,
         "examples": [
           "xkeen-ui/app_factory.py",
           "xkeen-ui/routes/__init__.py",
           "xkeen-ui/static/js/features/backup_actions_loader.js",
-          "xkeen-ui/static/js/features/index.js",
           "xkeen-ui/static/js/runtime/lazy_runtime.js"
         ]
       },
@@ -35514,11 +35746,10 @@
       {
         "from": "core",
         "to": "tool.files",
-        "unit_count": 5,
+        "unit_count": 4,
         "examples": [
           "xkeen-ui/routes/__init__.py",
           "xkeen-ui/services/panel_service_data.py",
-          "xkeen-ui/static/js/features/index.js",
           "xkeen-ui/static/js/pages/panel.module_loader.js",
           "xkeen-ui/static/js/runtime/lazy_runtime.js"
         ]
@@ -35526,11 +35757,10 @@
       {
         "from": "core",
         "to": "tool.terminal",
-        "unit_count": 7,
+        "unit_count": 6,
         "examples": [
           "xkeen-ui/run_server.py",
           "xkeen-ui/routes/__init__.py",
-          "xkeen-ui/static/js/features/index.js",
           "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js",
           "xkeen-ui/static/js/pages/panel.module_loader.js",
           "xkeen-ui/static/js/pages/panel_shell.shared.js",
@@ -35542,7 +35772,7 @@
       {
         "from": "core",
         "to": "engine.mihomo",
-        "unit_count": 20,
+        "unit_count": 19,
         "examples": [
           "xkeen-ui/app_factory.py",
           "xkeen-ui/run_server.py",
@@ -35557,7 +35787,7 @@
       {
         "from": "core",
         "to": "engine.xray",
-        "unit_count": 37,
+        "unit_count": 34,
         "examples": [
           "xkeen-ui/app.py",
           "xkeen-ui/app_factory.py",
@@ -35572,7 +35802,7 @@
       {
         "from": "core",
         "to": "integration.happ",
-        "unit_count": 9,
+        "unit_count": 8,
         "examples": [
           "xkeen-ui/routes/__init__.py",
           "xkeen-ui/services/devtools/env.py",
@@ -35580,8 +35810,8 @@
           "tests/test_addons_refresh_on_update.py",
           "tests/test_check_keys_upstream.py",
           "tests/test_module_backend_gates.py",
-          "xkeen-ui/static/js/features/index.js",
-          "xkeen-ui/static/js/pages/devtools.screen.bootstrap.js"
+          "xkeen-ui/static/js/pages/devtools.screen.bootstrap.js",
+          "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js"
         ]
       },
       {
@@ -35600,7 +35830,7 @@
       {
         "from": "core",
         "to": "tool.backups",
-        "unit_count": 8,
+        "unit_count": 7,
         "examples": [
           "xkeen-ui/app_factory.py",
           "xkeen-ui/routes/__init__.py",
@@ -35608,7 +35838,6 @@
           "tests/test_modular_panel_standalone_pages.py",
           "tests/test_module_backend_gates.py",
           "xkeen-ui/static/js/features/backup_actions_loader.js",
-          "xkeen-ui/static/js/features/index.js",
           "xkeen-ui/static/js/runtime/lazy_runtime.js"
         ]
       },
@@ -35630,7 +35859,7 @@
       {
         "from": "core",
         "to": "tool.files",
-        "unit_count": 10,
+        "unit_count": 9,
         "examples": [
           "xkeen-ui/routes/__init__.py",
           "xkeen-ui/services/panel_service_data.py",
@@ -35639,18 +35868,17 @@
           "tests/test_panel_service_data_protection.py",
           "tests/test_panel_state_protection.py",
           "tests/test_remotefs_remove_regressions.py",
-          "xkeen-ui/static/js/features/index.js"
+          "xkeen-ui/static/js/pages/panel.module_loader.js"
         ]
       },
       {
         "from": "core",
         "to": "tool.terminal",
-        "unit_count": 8,
+        "unit_count": 7,
         "examples": [
           "xkeen-ui/run_server.py",
           "xkeen-ui/routes/__init__.py",
           "tests/test_module_backend_gates.py",
-          "xkeen-ui/static/js/features/index.js",
           "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js",
           "xkeen-ui/static/js/pages/panel.module_loader.js",
           "xkeen-ui/static/js/pages/panel_shell.shared.js",
@@ -35724,7 +35952,7 @@
         {
           "from": "core",
           "to": "engine.mihomo",
-          "unit_count": 14,
+          "unit_count": 13,
           "examples": [
             "xkeen-ui/app_factory.py",
             "xkeen-ui/run_server.py",
@@ -35739,7 +35967,7 @@
         {
           "from": "core",
           "to": "engine.xray",
-          "unit_count": 23,
+          "unit_count": 20,
           "examples": [
             "xkeen-ui/app.py",
             "xkeen-ui/app_factory.py",
@@ -35754,12 +35982,11 @@
         {
           "from": "core",
           "to": "integration.happ",
-          "unit_count": 6,
+          "unit_count": 5,
           "examples": [
             "xkeen-ui/routes/__init__.py",
             "xkeen-ui/services/devtools/env.py",
             "xkeen-ui/services/subscription_request_profile.py",
-            "xkeen-ui/static/js/features/index.js",
             "xkeen-ui/static/js/pages/devtools.screen.bootstrap.js",
             "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js"
           ]
@@ -35779,12 +36006,11 @@
         {
           "from": "core",
           "to": "tool.backups",
-          "unit_count": 5,
+          "unit_count": 4,
           "examples": [
             "xkeen-ui/app_factory.py",
             "xkeen-ui/routes/__init__.py",
             "xkeen-ui/static/js/features/backup_actions_loader.js",
-            "xkeen-ui/static/js/features/index.js",
             "xkeen-ui/static/js/runtime/lazy_runtime.js"
           ]
         },
@@ -35806,11 +36032,10 @@
         {
           "from": "core",
           "to": "tool.files",
-          "unit_count": 5,
+          "unit_count": 4,
           "examples": [
             "xkeen-ui/routes/__init__.py",
             "xkeen-ui/services/panel_service_data.py",
-            "xkeen-ui/static/js/features/index.js",
             "xkeen-ui/static/js/pages/panel.module_loader.js",
             "xkeen-ui/static/js/runtime/lazy_runtime.js"
           ]
@@ -35818,11 +36043,10 @@
         {
           "from": "core",
           "to": "tool.terminal",
-          "unit_count": 7,
+          "unit_count": 6,
           "examples": [
             "xkeen-ui/run_server.py",
             "xkeen-ui/routes/__init__.py",
-            "xkeen-ui/static/js/features/index.js",
             "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js",
             "xkeen-ui/static/js/pages/panel.module_loader.js",
             "xkeen-ui/static/js/pages/panel_shell.shared.js",
@@ -35857,7 +36081,7 @@
       "evidence": {
         "tool.editor": {
           "unit_count": 25,
-          "size_bytes": 834212
+          "size_bytes": 834290
         },
         "tool.terminal": {
           "unit_count": 47,

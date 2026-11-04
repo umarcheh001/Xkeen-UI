@@ -100,6 +100,9 @@ _PACKAGE_OWNER_OVERRIDES = {
     "static/js/pages/config_shell.shared.js": "engine.xray",
     # The shell of the Xray logs screen.
     "static/js/pages/logs_shell.shared.js": "engine.xray",
+    # The loader of the Xray module stays in the core and does not change when
+    # the module changes.
+    "static/js/pages/panel.routing.bundle.js": "core",
     "static/js/ui/dat_contents_modal.js": "engine.xray",
     # Schema helpers that only the editors import.
     "static/js/ui/schema_diagnostic_format.js": "tool.editor",

@@ -77,7 +77,6 @@ def test_workspace_uses_operator_sprite_and_has_no_raw_emoji():
 
 def test_mihomo_clash_feature_is_lazy_and_not_in_eager_feature_registry():
     lazy = _text(LAZY)
-    eager = _text(ROOT / "xkeen-ui" / "static" / "js" / "features" / "index.js")
     runtime = _text(VIEW_RUNTIME)
 
     assert "mihomoClash: {" in lazy
@@ -85,7 +84,7 @@ def test_mihomo_clash_feature_is_lazy_and_not_in_eager_feature_registry():
     assert "ensurePanelLazyFeature('mihomoClash')" in runtime
     assert "getPanelLazyFeatureApi('mihomoClash')" in runtime
     assert "getMihomoClashFeatureApi()" in runtime
-    assert "mihomoClash" not in eager
+    assert not (ROOT / "xkeen-ui" / "static" / "js" / "features" / "index.js").exists()
     assert "const mihomoClashTrigger = raw.closest('[data-mihomo-clash-subview], [data-mihomo-clash-action]');" in lazy
     assert "fireDeferredClick(mihomoClashTrigger);" in lazy
 

@@ -55,7 +55,7 @@ def test_package_owner_follows_overrides() -> None:
     assert package_owner("static/js/features/xray_log_line_class.js") == "core"
 
 
-_SOURCE_COMMENTS =re.compile(r"/\*.*?\*/|(?<![:\w'\"`])//[^\n]*", re.S)
+_SOURCE_COMMENTS = re.compile(r"/\*.*?\*/|(?<![:\w'\"`])//[^\n]*", re.S)
 _STATIC_FROM = re.compile(r"""\b(?:import|export)\s*(?:[\w$*{},\s]*?)\s*from\s*["']([^"']+)["']""")
 _STATIC_BARE = re.compile(r"""\bimport\s*["']([^"']+)["']""")
 
@@ -147,6 +147,51 @@ def test_built_bundles_do_not_cross_a_separated_module_boundary() -> None:
 
     assert module_bundles >= 1
     assert core_bundles >= 1
+    assert offenders == []
+
+
+def test_xray_module_files_are_owned_by_xray_and_its_loader_by_the_core() -> None:
+    assert package_owner("static/js/pages/xray.module.entry.js") == "engine.xray"
+    assert package_owner("static/js/pages/xray.module.bundle.js") == "engine.xray"
+    assert package_owner("static/js/pages/panel.routing.bundle.js") == "core"
+    assert package_owner("static/js/features/module_parts.js") == "core"
+
+
+_DYNAMIC_IMPORT = re.compile(r"""\bimport\s*\(\s*["'`]([^"'`$]+)["'`]""")
+
+# The only core files that may name a file of the Xray module in `import()`:
+# the shared bridge of module parts and the loader of the Xray screens.
+_XRAY_DYNAMIC_IMPORTERS = {
+    "js/features/module_parts.js",
+    "js/pages/panel.routing.bundle.js",
+}
+
+
+def test_core_reaches_xray_only_through_module_parts() -> None:
+    offenders: list[str] = []
+    allowed_seen: list[str] = []
+    core_files = 0
+
+    for source in sorted((STATIC / "js").rglob("*.js")):
+        relative = source.relative_to(STATIC).as_posix()
+        if package_owner("static/" + relative) != "core":
+            continue
+        core_files += 1
+        text = _SOURCE_COMMENTS.sub("", source.read_text(encoding="utf-8"))
+        for specifier in _DYNAMIC_IMPORT.findall(text):
+            target = resolve(relative, specifier.split("?", 1)[0])
+            if target is None or package_owner("static/" + target) != "engine.xray":
+                continue
+            crossing = f"{relative} -> {target}"
+            if relative in _XRAY_DYNAMIC_IMPORTERS:
+                allowed_seen.append(crossing)
+            else:
+                offenders.append(crossing)
+
+    # The walk must have looked at core files and found the allowed way in,
+    # or a green run proves nothing.
+    assert core_files >= 100
+    assert allowed_seen
     assert offenders == []
 
 

@@ -1,10 +1,10 @@
 {
   "engine.mihomo": "1.0.0",
-  "engine.xray": "1.0.1",
+  "engine.xray": "1.0.2",
   "integration.happ": "1.0.0",
   "tool.advanced-diagnostics": "1.0.5",
-  "tool.backups": "1.0.0",
-  "tool.editor": "1.0.0",
+  "tool.backups": "1.0.1",
+  "tool.editor": "1.0.1",
   "tool.files": "1.0.0",
   "tool.terminal": "1.0.0"
 }

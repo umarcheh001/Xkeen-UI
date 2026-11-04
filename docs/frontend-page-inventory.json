@@ -208,6 +208,11 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/features/module_parts.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
           "path": "static/js/features/restart_log_sources.js",
           "globals": [],
           "lazy_features": []
@@ -629,9 +634,7 @@
           "jsonEditor": [
             "js/ui/json_editor_modal.js"
           ],
-          "datContents": [
-            "js/ui/dat_contents_modal.js"
-          ]
+          "datContents": []
         },
         "build_managed_features": [
           "xrayLogs",
@@ -841,6 +844,11 @@
         },
         {
           "path": "static/js/features/restart_log.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/features/module_parts.js",
           "globals": [],
           "lazy_features": []
         },
@@ -1222,6 +1230,11 @@
         },
         {
           "path": "static/js/features/restart_log.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/features/module_parts.js",
           "globals": [],
           "lazy_features": []
         },
@@ -1893,6 +1906,11 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/features/module_parts.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
           "path": "static/js/features/restart_log_sources.js",
           "globals": [],
           "lazy_features": []
@@ -2318,6 +2336,11 @@
         },
         {
           "path": "static/js/features/restart_log.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/features/module_parts.js",
           "globals": [],
           "lazy_features": []
         },
