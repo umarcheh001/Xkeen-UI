@@ -11,7 +11,7 @@ import { drawCellGrid, drawLevelChart, drawMirrorChart, redrawColumn } from "./c
 import {
   METRIC_LABELS, RANGE_LABELS, ZONE_NAMES, cellTimes, foldHistory, grid24Model, grid24Summary, grid7Model, leaderLines,
   grid7Summary, hasTariff, levelModel, linkOf, minutesText, mirrorModel, num, stepWords, timesOfColumn, xLabels,
-  hhmm, columnCount, grid7CellTip, historySinceText,
+  hhmm, columnCount, grid7CellTip, grid24CellTip, historySinceText,
 } from "./chart_data.js";
 import { setHtml } from "./tools_format.js";
 
@@ -102,13 +102,10 @@ export function createChartView(host, callbacks = {}) {
         parts.push(`<span class="xkc-tariff">${links.length > 1 ? `Канал · ${esc(link.label)} · ` : ""}${tariffText}</span>`);
         if (reserve) parts.push('<span class="xkc-reserve">резервный канал</span>');
       }
-    } else if (model.kind === "grid7") {
-      // The week is painted smoothly: a scale instead of three swatches.
+    } else {
+      // Both grids are painted smoothly: a scale instead of three swatches.
       parts.push(`<span class="xkc-chip xkc-scale"><span>${esc(ZONE_NAMES[0])}</span><i class="xkc-grad" aria-hidden="true"></i><span>${esc(ZONE_NAMES[2])}</span></span>`);
       parts.push(`<span class="xkc-dim">клетка = ${esc(stepWords(model.cellSeconds))}, цвет — средняя нагрузка${model.metric === "all" ? " самой загруженной метрики" : ""}</span>`);
-    } else {
-      parts.push(legendChip(0, ZONE_NAMES[0]), legendChip(1, ZONE_NAMES[1]), legendChip(2, ZONE_NAMES[2]));
-      parts.push(`<span class="xkc-dim">клетка = ${esc(stepWords(model.cellSeconds))}, цвет — худшее значение за это время</span>`);
     }
     const sinceText = historySinceText(history);
     if (sinceText) parts.push(`<span class="xkc-dim">${esc(sinceText)}</span>`);
@@ -133,7 +130,7 @@ export function createChartView(host, callbacks = {}) {
     if (model.kind === "grid7") {
       labels = [0, 6, 12, 18].map((h, i) => ({ at: i / 4, text: `${String(h).padStart(2, "0")}:00` }));
     } else {
-      labels = xLabels(history, count, history.step_s);
+      labels = xLabels(history, count, history.step_s, cur.folded ? 4 : 6);
     }
     const now = model.kind === "grid7" ? "" : '<span class="now">сейчас</span>';
     axis.innerHTML = `${labels.map((l, i) => `<span class="${i === 0 ? "first" : ""}" style="left:${l.at * 100}%">${esc(l.text)}</span>`).join("")}${now}`;
@@ -197,7 +194,7 @@ export function createChartView(host, callbacks = {}) {
       return `<div class="l">${label ? `<span>${esc(label)}</span>` : ""}<b>${esc(value)}</b></div>`;
     }
     const peak = line.peak ? `<i class="pk${line.peakTone === 2 ? " z2" : ""}"> · ${esc(line.peak)}</i>` : "";
-    return `<div class="l${line.strong ? " st" : ""}${line.muted ? " mu" : ""}"><span>${esc(line.label)}</span><b>${esc(line.value)}${peak}</b></div>`;
+    return `<div class="l${line.strong ? " st" : ""}${line.muted ? " mu" : ""}"><span>${esc(line.label)}</span><b${line.tone === 2 ? ' class="z2"' : ""}>${esc(line.value)}${peak}</b></div>`;
   }
 
   function showTip(x, y, tooltip) {
@@ -245,8 +242,8 @@ export function createChartView(host, callbacks = {}) {
     const { hit, times } = cell;
     const top = cur.history?.top;
     if (model.kind === "grid24") {
-      const lines = model.rows.map((row) => [row.label, row.cells[hit.column] == null ? "нет данных" : row.describe(hit.column)]);
-      return { head: times.head, lines: [...lines, ...leaderLines(top?.[hit.column])] };
+      const cellTip = grid24CellTip(model, hit.column);
+      return { head: times.head, title: cellTip.title, tone: cellTip.tone, lines: [...cellTip.lines, ...leaderLines(top?.[hit.column])] };
     }
     const row = model.rows[hit.row];
     const cellTip = grid7CellTip(model, cur.history, hit.row, hit.column);
@@ -339,7 +336,7 @@ export function createChartView(host, callbacks = {}) {
     tip.hidden = true;
     canvas.style.height = `${height}px`;
     canvas.dataset.kind = model.kind;
-    panel.style.setProperty("--g", model.kind === "grid24" || model.kind === "grid7" ? (phone ? "78px" : "104px") : (phone ? "52px" : "64px"));
+    panel.style.setProperty("--g", model.kind === "grid24" || model.kind === "grid7" ? (phone ? "92px" : "104px") : (phone ? "52px" : "64px"));
     setHtml(info, infoHtml(input, history, model));
     paintGutter(model, height);
 
@@ -352,7 +349,7 @@ export function createChartView(host, callbacks = {}) {
       opts = model.tariffed ? { percent: true, hoverIndex: -1 } : { neutral: true, scaleMax: model.scaleMax, hoverIndex: -1 };
       handle = drawMirrorChart(canvas, model.up, model.down, opts);
     } else {
-      handle = drawCellGrid(canvas, model.rows.map((row) => ({ cells: row.cells, peakDots: row.peakDots, levels: row.levels })), { columns: model.columns });
+      handle = drawCellGrid(canvas, model.rows.map((row) => ({ cells: row.cells, levels: row.levels })), { columns: model.columns });
     }
     cur.handle = handle;
     cur.opts = opts;

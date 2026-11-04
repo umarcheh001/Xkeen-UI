@@ -46,6 +46,7 @@ export const CHART_CSS = `
 .xkc-tip .l.mu b { color: var(--op-muted); font-weight: 500; }
 .xkc-tip .pk { color: var(--op-muted); font-style: normal; font-weight: 500; }
 .xkc-tip .pk.z2 { color: var(--op-danger); font-weight: 650; }
+.xkc-tip .l b.z2 { color: var(--op-danger); }
 .xkc-axis { position: relative; height: 22px; margin: 4px 14px 0 calc(8px + var(--g) + 8px); color: var(--op-muted); font-size: 11px; }
 .xkc-axis span { position: absolute; top: 4px; transform: translateX(-50%); white-space: nowrap; }
 .xkc-axis span.first { transform: none; }

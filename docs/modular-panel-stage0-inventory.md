@@ -36,7 +36,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 | Module ID | Единиц | Размер | Routes | Background | UI surfaces | Removable |
 |---|---:|---:|---:|---:|---:|---|
-| `core` | 662 | 8.62 МБ | 107 | 4 | 37 | нет |
+| `core` | 665 | 8.63 МБ | 107 | 4 | 37 | нет |
 | `engine.xray` | 147 | 3.78 МБ | 64 | 3 | 14 | да |
 | `engine.mihomo` | 147 | 3.30 МБ | 97 | 4 | 6 | да |
 | `tool.editor` | 25 | 814.7 КБ | 0 | 0 | 2 | да |
@@ -44,7 +44,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 | `tool.files` | 85 | 984.7 КБ | 43 | 1 | 1 | да |
 | `tool.backups` | 8 | 99.7 КБ | 14 | 0 | 0 | да |
 | `integration.happ` | 22 | 319.1 КБ | 5 | 0 | 1 | да |
-| `tool.advanced-diagnostics` | 48 | 579.0 КБ | 16 | 0 | 1 | да |
+| `tool.advanced-diagnostics` | 49 | 589.2 КБ | 16 | 0 | 1 | да |
 
 ## Backend routes и регистрация
 
@@ -97,8 +97,8 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 | From | To | Units | Примеры |
 |---|---|---:|---|
-| `core` | `engine.mihomo` | 18 | `xkeen-ui/app_factory.py`<br>`xkeen-ui/run_server.py`<br>`xkeen-ui/routes/__init__.py` |
-| `core` | `engine.xray` | 36 | `xkeen-ui/app.py`<br>`xkeen-ui/app_factory.py`<br>`xkeen-ui/routes/__init__.py` |
+| `core` | `engine.mihomo` | 20 | `xkeen-ui/app_factory.py`<br>`xkeen-ui/run_server.py`<br>`xkeen-ui/routes/__init__.py` |
+| `core` | `engine.xray` | 37 | `xkeen-ui/app.py`<br>`xkeen-ui/app_factory.py`<br>`xkeen-ui/routes/__init__.py` |
 | `core` | `integration.happ` | 9 | `xkeen-ui/routes/__init__.py`<br>`xkeen-ui/services/devtools/env.py`<br>`xkeen-ui/services/subscription_request_profile.py` |
 | `core` | `tool.advanced-diagnostics` | 6 | `xkeen-ui/run_server.py`<br>`xkeen-ui/routes/__init__.py`<br>`xkeen-ui/routes/devtools.py` |
 | `core` | `tool.backups` | 8 | `xkeen-ui/app_factory.py`<br>`xkeen-ui/routes/__init__.py`<br>`tests/test_backup_path_hardening.py` |
@@ -119,7 +119,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 | `integration.happ` | `core` | 22 | `xkeen-ui/routes/happ_decryptor.py`<br>`xkeen-ui/services/happ_decryptor/__init__.py`<br>`xkeen-ui/services/happ_decryptor/engine.py` |
 | `integration.happ` | `engine.mihomo` | 2 | `xkeen-ui/services/mihomo_hwid_sub.py`<br>`xkeen-ui/static/js/features/mihomo_hwid_sub.js` |
 | `integration.happ` | `engine.xray` | 2 | `xkeen-ui/services/happ_decryptor/engine.py`<br>`xkeen-ui/services/mihomo_hwid_sub.py` |
-| `tool.advanced-diagnostics` | `core` | 48 | `xkeen-ui/routes/system_resources.py`<br>`xkeen-ui/services/system_resources_history/__init__.py`<br>`xkeen-ui/services/system_resources_history/collector.py` |
+| `tool.advanced-diagnostics` | `core` | 49 | `xkeen-ui/routes/system_resources.py`<br>`xkeen-ui/services/system_resources_history/__init__.py`<br>`xkeen-ui/services/system_resources_history/collector.py` |
 | `tool.backups` | `core` | 8 | `xkeen-ui/routes/backups.py`<br>`xkeen-ui/services/mihomo_backups.py`<br>`xkeen-ui/services/xray_backups.py` |
 | `tool.backups` | `engine.mihomo` | 1 | `xkeen-ui/services/mihomo_backups.py` |
 | `tool.backups` | `engine.xray` | 2 | `xkeen-ui/routes/backups.py`<br>`xkeen-ui/static/js/features/backups.js` |

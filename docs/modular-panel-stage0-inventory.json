@@ -38,13 +38,13 @@
         "gevent-websocket (optional)"
       ],
       "removable": false,
-      "unit_count": 662,
-      "size_bytes": 9037475,
+      "unit_count": 665,
+      "size_bytes": 9052471,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
         "backend_service": 97,
-        "backend_test": 294,
+        "backend_test": 297,
         "configuration": 12,
         "frontend_bundle": 9,
         "frontend_entrypoint": 4,
@@ -358,12 +358,12 @@
         "ndmc (router diagnostics optional)"
       ],
       "removable": true,
-      "unit_count": 48,
-      "size_bytes": 592872,
+      "unit_count": 49,
+      "size_bytes": 603355,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 9,
-        "backend_test": 13,
+        "backend_test": 14,
         "frontend_feature": 22,
         "frontend_test": 3
       },
@@ -381,8 +381,8 @@
         "xkeen-ui/services/system_resources_history/store.py",
         "xkeen-ui/services/system_resources_history/top_procs.py",
         "xkeen-ui/services/system_resources_history/zones.py",
-        "tests/test_resource_monitor_frontend.py",
-        "tests/test_resource_monitor_model_runtime.py"
+        "tests/test_resource_monitor_day_js.py",
+        "tests/test_resource_monitor_frontend.py"
       ]
     }
   ],
@@ -1603,7 +1603,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/cache_size.py",
-      "size_bytes": 986,
+      "size_bytes": 1979,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -4075,6 +4075,51 @@
       "size_bytes": 3572,
       "depends_on": [
         "engine.xray"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_cache_real_payloads.py",
+      "size_bytes": 3103,
+      "depends_on": [
+        "engine.xray",
+        "engine.mihomo"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_cache_size_types.py",
+      "size_bytes": 3366,
+      "depends_on": [
+        "engine.mihomo"
       ],
       "starts_background_task": false,
       "background_markers": [],
@@ -7427,6 +7472,28 @@
     {
       "module_id": "core",
       "kind": "backend_test",
+      "path": "tests/test_panel_init_bytecode_cache_recovery.py",
+      "size_bytes": 6188,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [
+        "XKEEN_UI_PYTHONPYCACHEPREFIX"
+      ],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
       "path": "tests/test_panel_init_pid_identity.py",
       "size_bytes": 5219,
       "depends_on": [],
@@ -7448,7 +7515,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_panel_init_shutdown.py",
-      "size_bytes": 2997,
+      "size_bytes": 3027,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -14258,7 +14325,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/router_resource_dashboard.spec.mjs",
-      "size_bytes": 107179,
+      "size_bytes": 108495,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -24562,6 +24629,25 @@
     {
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
+      "path": "tests/test_resource_monitor_day_js.py",
+      "size_bytes": 7926,
+      "depends_on": [
+        "core"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "ndmc (router diagnostics optional)"
+      ],
+      "environment_variables": [],
+      "removable": true
+    },
+    {
+      "module_id": "tool.advanced-diagnostics",
+      "kind": "backend_test",
       "path": "tests/test_resource_monitor_frontend.py",
       "size_bytes": 7839,
       "depends_on": [
@@ -24839,7 +24925,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor/canvas_charts.js",
-      "size_bytes": 15352,
+      "size_bytes": 15286,
       "depends_on": [
         "core"
       ],
@@ -24866,7 +24952,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor/chart_css.js",
-      "size_bytes": 6884,
+      "size_bytes": 6930,
       "depends_on": [
         "core"
       ],
@@ -24893,7 +24979,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor/chart_data.js",
-      "size_bytes": 26763,
+      "size_bytes": 29724,
       "depends_on": [
         "core"
       ],
@@ -24920,7 +25006,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor/chart_view.js",
-      "size_bytes": 22100,
+      "size_bytes": 21801,
       "depends_on": [
         "core"
       ],
@@ -25406,7 +25492,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_test",
       "path": "e2e/resource_monitor_charts.spec.mjs",
-      "size_bytes": 9405,
+      "size_bytes": 9320,
       "depends_on": [
         "core"
       ],
@@ -34563,7 +34649,7 @@
       {
         "from": "core",
         "to": "engine.mihomo",
-        "unit_count": 18,
+        "unit_count": 20,
         "examples": [
           "xkeen-ui/app_factory.py",
           "xkeen-ui/run_server.py",
@@ -34572,13 +34658,13 @@
           "xkeen-ui/services/dns_service_lifecycle.py",
           "xkeen-ui/services/xkeen.py",
           "tests/test_amnezia_premium.py",
-          "tests/test_devtools_env_whitelist.py"
+          "tests/test_cache_real_payloads.py"
         ]
       },
       {
         "from": "core",
         "to": "engine.xray",
-        "unit_count": 36,
+        "unit_count": 37,
         "examples": [
           "xkeen-ui/app.py",
           "xkeen-ui/app_factory.py",
@@ -34841,7 +34927,7 @@
       {
         "from": "tool.advanced-diagnostics",
         "to": "core",
-        "unit_count": 48,
+        "unit_count": 49,
         "examples": [
           "xkeen-ui/routes/system_resources.py",
           "xkeen-ui/services/system_resources_history/__init__.py",
@@ -35456,7 +35542,7 @@
       {
         "from": "core",
         "to": "engine.mihomo",
-        "unit_count": 18,
+        "unit_count": 20,
         "examples": [
           "xkeen-ui/app_factory.py",
           "xkeen-ui/run_server.py",
@@ -35465,13 +35551,13 @@
           "xkeen-ui/services/dns_service_lifecycle.py",
           "xkeen-ui/services/xkeen.py",
           "tests/test_amnezia_premium.py",
-          "tests/test_devtools_env_whitelist.py"
+          "tests/test_cache_real_payloads.py"
         ]
       },
       {
         "from": "core",
         "to": "engine.xray",
-        "unit_count": 36,
+        "unit_count": 37,
         "examples": [
           "xkeen-ui/app.py",
           "xkeen-ui/app_factory.py",
@@ -35782,8 +35868,8 @@
           "size_bytes": 1008333
         },
         "tool.advanced-diagnostics": {
-          "unit_count": 48,
-          "size_bytes": 592872
+          "unit_count": 49,
+          "size_bytes": 603355
         }
       },
       "next_stage": "Этапы 4, 5 и 6."

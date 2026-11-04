@@ -9,6 +9,8 @@ RUN_SERVER="$UI_DIR/run_server.py"
 APP_PY="$UI_DIR/app.py"
 PANEL_PORT="__XKEEN_UI_PORT__"
 PYTHONPYCACHEPREFIX="${XKEEN_UI_PYTHONPYCACHEPREFIX:-/opt/var/cache/xkeen-ui-pycache}"
+# Прежнее место кэша байткода (tmpfs) — и запасное, если /opt недоступен.
+LEGACY_PYCACHE="/tmp/xkeen-ui-pycache"
 
 LOG_DIR_DEFAULT="/opt/var/log/xkeen-ui"
 LOG_DIR="$LOG_DIR_DEFAULT"
@@ -109,6 +111,39 @@ warm_bytecode_cache() {
   # задача наследует stdout/stderr родителя и держит их открытыми, а тогда
   # rc.unslung при загрузке ждёт конца компиляции вместо мгновенного возврата.
   ) > /dev/null 2>&1 < /dev/null &
+}
+
+drop_bytecode_after_crash() {
+  # Кэш байткода лежит на флешке и переживает перезагрузку. Пока он жил в
+  # tmpfs, каждая перезагрузка давала чистый кэш; теперь `.pyc`, оборванный
+  # пропажей питания, остался бы навсегда, а Python битый байткод не
+  # пропускает: импорт падает, и панель не поднимается до переустановки.
+  # Метку чистой остановки ставит `stop`; нет её — прошлая остановка была
+  # аварийной, и кэш стирается целиком (прогрев соберёт его заново фоном).
+  # Чужой каталог из XKEEN_UI_PYTHONPYCACHEPREFIX не трогаем никогда.
+  case "$PYTHONPYCACHEPREFIX" in
+    */xkeen-ui-pycache)
+      if [ -f "$PYTHONPYCACHEPREFIX/.clean-stop" ]; then
+        rm -f "$PYTHONPYCACHEPREFIX/.clean-stop" 2>/dev/null || true
+      elif [ -n "$(ls -A "$PYTHONPYCACHEPREFIX" 2>/dev/null)" ]; then
+        rm -rf "$PYTHONPYCACHEPREFIX" 2>/dev/null || true
+        mkdir -p "$PYTHONPYCACHEPREFIX" 2>/dev/null || true
+        audit_boot "[start] bytecode cache dropped: the previous stop was not clean"
+      fi
+      ;;
+  esac
+  # После обновления без перезагрузки прежний кэш в tmpfs держал бы память.
+  if [ "$PYTHONPYCACHEPREFIX" != "$LEGACY_PYCACHE" ] && [ -d "$LEGACY_PYCACHE" ]; then
+    rm -rf "$LEGACY_PYCACHE" 2>/dev/null || true
+  fi
+  return 0
+}
+
+mark_clean_stop() {
+  # Панель остановлена штатно: её кэш байткода цел (см. drop_bytecode_after_crash).
+  [ -d "$PYTHONPYCACHEPREFIX" ] || return 0
+  : > "$PYTHONPYCACHEPREFIX/.clean-stop" 2>/dev/null || true
+  return 0
 }
 
 start_service() {
@@ -216,6 +251,10 @@ start_service() {
     rm -f "$PID_FILE"
   fi
 
+  # Только здесь: панель точно не запущена (при загрузке службу зовут дважды
+  # подряд, и второй вызов не должен стереть кэш у панели первого).
+  drop_bytecode_after_crash
+
   echo "Запуск Xkeen Web UI..."
   export MIHOMO_ROOT="/opt/etc/mihomo"
   export MIHOMO_VALIDATE_CMD='/opt/sbin/mihomo -t -d {root} -f {config}'
@@ -322,6 +361,7 @@ stop_service() {
   else
     pkill -f "$RUN_SERVER" 2>/dev/null || pkill -f "$APP_PY" 2>/dev/null || true
   fi
+  mark_clean_stop
 }
 
 status_service() {

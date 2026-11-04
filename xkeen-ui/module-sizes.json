@@ -2,7 +2,7 @@
   "schema_version": 1,
   "generated_from": "docs/modular-panel-stage0-inventory.json",
   "modules": {
-    "core": 5354341,
+    "core": 5355334,
     "engine.xray": 2993847,
     "engine.mihomo": 2538209,
     "tool.editor": 834212,
@@ -10,6 +10,6 @@
     "tool.files": 1008333,
     "tool.backups": 102055,
     "integration.happ": 198725,
-    "tool.advanced-diagnostics": 383410
+    "tool.advanced-diagnostics": 386052
   }
 }

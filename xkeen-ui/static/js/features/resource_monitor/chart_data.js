@@ -281,65 +281,116 @@ export function mirrorModel(history, linkId, snapshot = null) {
 
 // ---- cell grids ---------------------------------------------------------------
 
-function worstRow(seriesList, i) {
-  const zones = seriesList.map((s) => s.zone[i]).filter((z) => z != null);
-  const cell = zones.length ? Math.max(...zones) : null;
-  const peaks = seriesList.map((s) => s.peak_zone[i]).filter((z) => z != null);
-  return { cell, peak: cell != null && cell < 2 && peaks.includes(2) };
-}
-
-function gridRow(key, label, seriesList, count, describe) {
+// One row of the day: a cell keeps the worst zone of its series (the summary counts
+// by it) and is painted by the smooth level of the averages, as the week is
+// (04.11.2026); short peaks no longer mark it, the hint tells them. «Интернет» has no
+// thresholds and temperature no bands in the history: they keep the zone colours, levels null.
+function gridRow(key, label, named, count, describe, history) {
+  const flat = key === "online" || key === "temp";
   const cells = [];
-  const peakDots = [];
+  const levels = [];
   for (let i = 0; i < count; i += 1) {
-    const { cell, peak } = worstRow(seriesList, i);
+    let cell = null;
+    let level = null;
+    for (const { name, s } of named) {
+      const z = s.zone[i];
+      if (z == null) continue;
+      if (cell == null || z > cell) cell = z;
+      if (flat) continue;
+      const l = levelOf(name, s.avg[i], z, history.bands);
+      if (level == null || l > level) level = l;
+    }
     cells.push(cell);
-    peakDots.push(peak);
+    levels.push(flat ? null : level);
   }
-  return { key, label, cells, peakDots, describe };
+  return { key, label, cells, levels, describe };
 }
 
-const valueLine = (s, i, fmt) => (s.avg[i] == null ? "нет данных" : `в среднем ${fmt(s.avg[i])}, пик ${fmt(s.max[i])}`);
+const named = (history, name) => ({ name, s: seriesOf(history, name) });
+// A peak above «перегрузка» is coloured in the hint.
+const gridPeak = (named, i, text) => (named.some(({ s }) => s.peak_zone[i] === 2) ? { peak: text, peakTone: 2 } : { peak: text });
 
 export function grid24Model(history) {
   const count = columnCount(history);
   const rows = [];
   const plain = (key, label, metric, fmt) => {
-    const s = seriesOf(history, metric);
-    rows.push(gridRow(key, label, [s], count, (i) => valueLine(s, i, fmt)));
+    const n = named(history, metric);
+    rows.push(gridRow(key, label, [n], count, (i) => {
+      if (n.s.avg[i] == null) return { value: "нет данных" };
+      const peak = fmt(n.s.max[i]);
+      return { value: fmt(n.s.avg[i]), ...(peak !== fmt(n.s.avg[i]) ? gridPeak([n], i, `пик ${peak}`) : {}) };
+    }, history));
   };
   plain("cpu", "Процессор", "cpu", pct);
   plain("memory", "Память", "memory", pct);
   for (const link of history?.links || []) {
     const tariffed = hasTariff(link);
-    const up = seriesOf(history, `link_up:${link.id}`);
-    const down = seriesOf(history, `link_down:${link.id}`);
+    const up = named(history, `link_up:${link.id}`);
+    const down = named(history, `link_down:${link.id}`);
     rows.push(gridRow(`link:${link.id}`, `Канал · ${link.label}`, [up, down], count, (i) => {
-      if (!tariffed) return "тариф не указан";
-      if (up.avg[i] == null && down.avg[i] == null) return "нет данных";
-      return `↑ ${pct(up.avg[i])} · ↓ ${pct(down.avg[i])}, пик ↑ ${pct(up.max[i])} · ↓ ${pct(down.max[i])}`;
-    }));
+      if (!tariffed) return { value: "тариф не указан" };
+      if (up.s.avg[i] == null && down.s.avg[i] == null) return { value: "нет данных" };
+      return { value: `↓ ${pct(down.s.avg[i])} / ↑ ${pct(up.s.avg[i])}`, ...gridPeak([up, down], i, `пик ↓ ${pct(down.s.max[i])} / ↑ ${pct(up.s.max[i])}`) };
+    }, history));
   }
   plain("queue", "Очередь задач", "queue", (v) => num(v, 1));
-  const online = seriesOf(history, "online");
-  rows.push(gridRow("online", "Интернет", [online], count, (i) => (online.avg[i] == null ? "нет данных" : online.zone[i] === 0 ? "в сети" : "были перебои")));
-  const temps = Object.keys(history?.metrics || {}).filter((n) => n.startsWith("temp:")).map((n) => seriesOf(history, n));
+  const online = named(history, "online");
+  rows.push(gridRow("online", "Интернет", [online], count, (i) => {
+    if (online.s.avg[i] == null) return { value: "нет данных" };
+    return online.s.zone[i] === 0 ? { value: "в сети" } : { value: "были перебои", tone: 2 };
+  }, history));
+  const temps = Object.keys(history?.metrics || {}).filter((n) => n.startsWith("temp:")).map((n) => named(history, n));
   if (temps.length) {
     rows.push(gridRow("temp", "Температура", temps, count, (i) => {
-      const top = worst(temps.map((s) => s.max[i]));
-      return top == null ? "нет данных" : `до ${num(top)} °C`;
-    }));
+      const top = worst(temps.map(({ s }) => s.max[i]));
+      return top == null ? { value: "нет данных" } : { value: `до ${num(top)} °C` };
+    }, history));
   }
   return { kind: "grid24", rows, columns: count, cellSeconds: history.step_s };
 }
 
+const GRID24_NAMES = { cpu: "процессор", memory: "память", queue: "очередь задач", temp: "температура" };
+
+// The hint of one quarter of the day (04.11.2026): { title, tone, lines }. A title says
+// why the column is coloured, as on the week's «Все»; the rows that make it are bold.
+export function grid24CellTip(model, column) {
+  const load = model.rows.filter((row) => row.key !== "online" && row.cells[column] != null);
+  const zone = load.reduce((top, row) => Math.max(top, row.cells[column]), -1);
+  const level = load.reduce((top, row) => Math.max(top, row.levels[column] ?? row.cells[column]), -1);
+  const floor = zone >= 1 ? zone : NEAR_LEVEL;
+  const warm = level >= NEAR_LEVEL;
+  const hot = (row) => warm && (row.levels[column] ?? row.cells[column] ?? -1) >= floor;
+  const names = load.filter(hot).map((row) => GRID24_NAMES[row.key] || "канал");
+  const lines = model.rows.map((row) => {
+    if (row.cells[column] == null) return { label: row.label, value: "нет данных" };
+    const d = row.describe(column);
+    const out = { label: row.label, value: d.value };
+    if (d.peak) out.peak = d.peak;
+    if (d.peakTone) out.peakTone = d.peakTone;
+    if (d.tone) out.tone = d.tone;
+    if (row.key !== "online" && hot(row)) out.strong = true;
+    return out;
+  });
+  if (zone < 0) return { title: null, tone: null, lines };
+  const word = zone === 2 ? "Перегрузка" : zone === 1 ? "Высокая нагрузка" : warm ? "Близко к высокой" : "Всё в норме";
+  return { title: names.length ? `${word}: ${names.join(", ")}` : word, tone: zone === 2 ? 2 : warm ? 1 : 0, lines };
+}
+
 export function grid24Summary(model, history) {
   const { rows, columns } = model;
+  // As on the week: a day in the norm has no heaviest time; among loaded quarters the warmest wins.
   let heavyAt = null;
   let heavy = 0;
   for (let i = 0; i < columns; i += 1) {
-    const score = rows.reduce((sum, row) => sum + (row.key === "online" ? 0 : row.cells[i] || 0), 0);
-    if (score > heavy) { heavy = score; heavyAt = i; }
+    let zone = -1;
+    let level = 0;
+    for (const row of rows) {
+      if (row.key === "online" || row.cells[i] == null) continue;
+      zone = Math.max(zone, row.cells[i]);
+      level = Math.max(level, row.levels[i] ?? row.cells[i]);
+    }
+    if (zone < 1) continue;
+    if (level > heavy) { heavy = level; heavyAt = i; }
   }
   const red = rows
     .filter((row) => row.key !== "online")
@@ -604,10 +655,11 @@ export function cellTimes(model, history, rowIndex, column) {
   return { from: t, to: t + model.cellSeconds, head: `${date}, ${hhmm(t)}–${hhmm(t + model.cellSeconds)}` };
 }
 
-export function xLabels(history, count, stepS) {
+// `most` labels at the most: a phone keeps four, so that they do not run into each other.
+export function xLabels(history, count, stepS, most = 6) {
   const out = [];
   const total = count;
-  const every = Math.max(1, Math.round(total / 6));
+  const every = Math.max(1, Math.round(total / most));
   for (let i = 0; i < total; i += every) {
     if (total - i < every * 0.6) break;
     out.push({ at: i / total, text: hhmm(history.start + i * stepS) });
