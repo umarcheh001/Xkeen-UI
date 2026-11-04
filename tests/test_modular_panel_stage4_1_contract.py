@@ -102,7 +102,7 @@ def test_stage4_1_contract_covers_shell_screens_modals_and_profiles(tmp_path):
     assert all(item["line"] > 0 for item in screens.values())
 
     modals = {item["id"]: item for item in payload["modals"]}
-    assert len(modals) == 53
+    assert len(modals) == 54
     assert len(modals) == len(payload["modals"])
     assert all(item["line"] > 0 for item in modals.values())
     assert all(item["target_partial"] for item in modals.values())

@@ -59,6 +59,7 @@ DYNAMIC_COMPOSITION_INCLUDE_PATHS: dict[str, tuple[str, ...]] = {
         "panel/modals/routing.html",
         "panel/modals/commands.html",
         "panel/modals/shared.html",
+        "panel/modals/provider_diagnostics.html",
         "panel/modals/core_source_xray.html",
         "panel/modals/core_source_mihomo.html",
         "panel/modals/mihomo.html",

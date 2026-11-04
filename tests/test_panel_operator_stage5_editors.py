@@ -89,7 +89,7 @@ def test_stage5_all_static_modals_are_bound_to_one_of_the_four_family_frames():
 
     expected_counts = {
         "confirm-compact-form": 25,
-        "editor-workbench": 7,
+        "editor-workbench": 8,
         "master-detail": 18,
         "drawer-help": 3,
     }
@@ -98,7 +98,7 @@ def test_stage5_all_static_modals_are_bound_to_one_of_the_four_family_frames():
         template,
     )
 
-    assert len(modal_pairs) == 53
+    assert len(modal_pairs) == 54
     assert {family for _, family in modal_pairs} == set(expected_counts)
     assert {family: sum(mapped == family for _, mapped in modal_pairs) for family in expected_counts} == expected_counts
 

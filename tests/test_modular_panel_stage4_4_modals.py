@@ -45,6 +45,7 @@ MODAL_PARTIALS = {
             "donate-modal", "ui-settings-modal",
         ),
     ),
+    "provider_diagnostics": (("core",), ("provider-check-modal",)),
     "mihomo": (
         ("engine.mihomo",),
         ("mihomo-dns-modal", "mihomo-import-modal", "mihomo-proxy-tools-modal", "mihomo-validation-modal"),
@@ -141,12 +142,12 @@ def test_initial_html_contains_only_modals_of_active_modules(tmp_path, monkeypat
 
     assert modal_set(FULL_MODULE_IDS, "full") == owned(*MODAL_PARTIALS)
     assert modal_set(XRAY_MINIMAL_MODULE_IDS, "xray") == owned(
-        "routing", "shared", "core_source_xray", "editor"
+        "routing", "shared", "provider_diagnostics", "core_source_xray", "editor"
     )
     assert modal_set(MIHOMO_MINIMAL_MODULE_IDS, "mihomo") == owned(
-        "mihomo", "shared", "core_source_mihomo", "editor"
+        "mihomo", "shared", "provider_diagnostics", "core_source_mihomo", "editor"
     )
-    assert modal_set(["core"], "core") == owned("shared")
+    assert modal_set(["core"], "core") == owned("shared", "provider_diagnostics")
 
     # Composite gates: HWID needs Mihomo, the file editor needs the editor.
     with_happ = modal_set([*MIHOMO_MINIMAL_MODULE_IDS, "integration.happ"], "mihomo-happ")

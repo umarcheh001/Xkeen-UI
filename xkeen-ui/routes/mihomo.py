@@ -1783,7 +1783,7 @@ def create_mihomo_blueprint(
         # Both assistants flip the same firmware switch and both want port 53.
         # Turning the second one on would overwrite the first one's record of the
         # original setting, leaving nothing able to put it back.
-        if action == "enable":
+        if action in {"enable", "replace"}:
             conflict = _dns_conflicting_protection(
                 want="mihomo-dns",
                 ui_state_dir=ui_state_dir,

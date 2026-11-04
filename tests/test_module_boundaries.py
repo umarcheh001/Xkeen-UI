@@ -291,6 +291,7 @@ CORE_PUBLIC_SURFACE = [
     "js/features/dns_guard_text.js",
     "js/features/dns_operation_recovery.js",
     "js/features/module_parts.js",
+    "js/features/provider_diagnostics_hint.js",
     "js/features/restart_log.js",
     "js/features/xkeen_runtime.js",
     "js/features/xkeen_texts.js",

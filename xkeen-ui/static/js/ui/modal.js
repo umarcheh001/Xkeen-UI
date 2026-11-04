@@ -356,13 +356,16 @@
     // (protects against cached/old CSS that can leave the handle in normal flow).
     try {
       handleEl.style.position = 'absolute';
-      handleEl.style.right = '6px';
-      handleEl.style.bottom = '6px';
-      handleEl.style.left = 'auto';
+      const verticalOnly = modalEl?.dataset?.modalResizeVertical === '1';
+      handleEl.style.right = verticalOnly ? 'auto' : '6px';
+      handleEl.style.bottom = verticalOnly ? '3px' : '6px';
+      handleEl.style.left = verticalOnly ? '50%' : 'auto';
       handleEl.style.top = 'auto';
       handleEl.style.zIndex = '50';
       handleEl.style.touchAction = 'none';
       handleEl.style.userSelect = 'none';
+      handleEl.style.transform = verticalOnly ? 'translateX(-50%)' : '';
+      handleEl.style.cursor = verticalOnly ? 'ns-resize' : '';
     } catch (e) {}
 
     // A resize affordance is not a semantic action and must never create a
@@ -372,7 +375,7 @@
     try { handleEl.removeAttribute('data-tooltip'); } catch (e3) {}
     try { handleEl.setAttribute('data-tooltip-silent', '1'); } catch (e4) {}
     try {
-      if (!handleEl.getAttribute('aria-label')) handleEl.setAttribute('aria-label', 'Resize');
+      if (!handleEl.getAttribute('aria-label')) handleEl.setAttribute('aria-label', modalEl?.dataset?.modalResizeVertical === '1' ? 'Изменить высоту' : 'Resize');
     } catch (e5) {}
   }
 
@@ -904,7 +907,9 @@
     const maxW = Math.max(MIN_W, window.innerWidth - left - PAD);
     const maxH = Math.max(MIN_H, window.innerHeight - top - PAD);
 
-    const w = Math.max(MIN_W, Math.min(maxW, resize.startW + dx));
+    const w = resize.modal?.dataset?.modalResizeVertical === '1'
+      ? resize.startW
+      : Math.max(MIN_W, Math.min(maxW, resize.startW + dx));
     const h = Math.max(MIN_H, Math.min(maxH, resize.startH + dy));
 
     try {

@@ -163,7 +163,7 @@ def test_stage0_inventory_generator_runs_and_covers_required_contract(generated)
         "commands": "tool.terminal",
         "files": "tool.files",
     }
-    assert len(surfaces["panel_modals"]) == 53
+    assert len(surfaces["panel_modals"]) == 54
 
 
 def test_stage0_inventory_snapshot_and_markdown_match_generator(generated):

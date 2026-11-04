@@ -13,6 +13,7 @@ import { getXkeenFilePath } from './xkeen_runtime.js';
 import { iconHtml } from '../ui/operator_icons.js';
 import { appendHappDecryptorCardLink } from '../ui/happ_decryptor_link.js';
 import { mihomoCountryFlag } from './mihomo_clash/visuals.js';
+import { appendProviderDiagnosticsHint } from './provider_diagnostics_hint.js';
 import {
   beginMihomoImportRequest,
   commitMihomoImportResult,
@@ -822,6 +823,7 @@ let mihomoImportModuleApi = null;
     const hasMsg = !!value.trim();
     const state = kind || (isErr ? 'error' : 'success');
     setStatusContent(el, value, opts);
+    if (hasMsg && state === 'error') appendProviderDiagnosticsHint(el, value, 'mihomo', IDS.input);
     el.classList.toggle('error', hasMsg && state === 'error');
     el.classList.toggle('warning', hasMsg && state === 'warning');
     el.classList.toggle('success', hasMsg && state === 'success');
@@ -3105,6 +3107,7 @@ let mihomoImportModuleApi = null;
     const host = $(IDS.actionStatus);
     if (!host) return;
     host.textContent = String(message || '');
+    if (kind === 'error') appendProviderDiagnosticsHint(host, message, 'mihomo', IDS.input);
     host.className = `xk-mi-action-status ${message ? `is-${kind}` : ''} ${busy ? 'is-busy' : ''}`.trim();
     host.classList.toggle('hidden', !message);
     $(IDS.modal)?.setAttribute('aria-busy', String(!!busy));

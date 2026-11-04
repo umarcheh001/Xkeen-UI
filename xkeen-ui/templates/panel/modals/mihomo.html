@@ -150,13 +150,15 @@ rule-set:github@domain
             </details>
 
             <div class="routing-dns-over-vless-foot mihomo-dns-foot">
-              <p class="modal-hint routing-dns-over-vless-warning">Пользовательский раздел <code>dns:</code> не заменяется пресетом. При возврате DNS прошивке он остаётся в файле с <code>enable: false</code>; один <code>no opkg dns-override</code> не отключает слушатель Mihomo.</p>
+              <p class="modal-hint routing-dns-over-vless-warning">После возврата DNS прошивке пользовательский блок остаётся в файле с <code>enable: false</code>. Его можно восстановить, удалить отдельно или заменить пресетом панели с сохранением исходного файла.</p>
               <p class="routing-dns-over-vless-links">Устройства по‑прежнему используют DNS роутера — Keenetic автоматически направляет запросы в Mihomo.</p>
             </div>
           </div>
         </div>
         <div class="modal-actions routing-dns-over-vless-actions">
           <button type="button" id="mihomo-dns-update" class="btn-secondary" hidden disabled>{{ op_icon('save') }}<span id="mihomo-dns-update-label" class="xk-action-label">Применить изменения</span></button>
+          <button type="button" id="mihomo-dns-clear" class="btn-secondary" hidden disabled>{{ op_icon('trash') }}<span class="xk-action-label">Очистить DNS-блок</span></button>
+          <button type="button" id="mihomo-dns-replace" class="btn-secondary" hidden disabled>{{ op_icon('save') }}<span class="xk-action-label">Применить пресет панели</span></button>
           <button type="button" id="mihomo-dns-cancel" class="btn-secondary" data-operator-dismiss-duplicate="true">Закрыть</button>
           <button type="button" id="mihomo-dns-apply" class="btn-primary" disabled>Проверяем…</button>
         </div>

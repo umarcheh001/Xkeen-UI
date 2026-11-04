@@ -1,0 +1,45 @@
+{% from "panel/macros.html" import op_icon %}
+<div id="provider-check-modal" class="modal hidden" data-operator-modal-family="editor-workbench" data-modal-remember="1" data-modal-resize-vertical="1" role="dialog" aria-modal="true" aria-labelledby="provider-check-title">
+  <div class="modal-content xk-provider-check-content">
+    <div class="modal-header">
+      <span class="modal-title" id="provider-check-title">Диагностика серверов</span>
+      <button type="button" class="modal-close" id="provider-check-close" aria-label="Закрыть" title="Закрыть">{{ op_icon('close') }}</button>
+    </div>
+    <div class="modal-body xk-provider-check-body">
+      <div class="xk-provider-check-head">
+        <div class="xk-provider-check-modes" role="tablist" aria-label="Источник серверов">
+          <button type="button" id="provider-check-mode-current" role="tab" aria-selected="true" class="is-active">Из конфигурации</button>
+          <button type="button" id="provider-check-mode-manual" role="tab" aria-selected="false">Свой ввод</button>
+        </div>
+        <span id="provider-check-route" class="xk-provider-check-route">Маршрут роутера</span>
+      </div>
+      <div id="provider-check-current-panel" class="xk-provider-check-source-panel" role="tabpanel" aria-labelledby="provider-check-mode-current">
+        <div class="xk-provider-check-source-head">
+          <strong id="provider-check-source-title">Сохранённая конфигурация</strong>
+          <button type="button" id="provider-check-refresh" class="btn-secondary btn-icon" aria-label="Обновить серверы" data-tooltip="Заново прочитать сохранённую конфигурацию">{{ op_icon('refresh') }}</button>
+        </div>
+      </div>
+      <div id="provider-check-manual-panel" class="xk-provider-check-source-panel" role="tabpanel" aria-labelledby="provider-check-mode-manual" hidden>
+        <label for="provider-check-input">Адреса, ссылки или подписка</label>
+        <textarea id="provider-check-input" spellcheck="false" autocomplete="off" placeholder="example.com&#10;203.0.113.10:443&#10;vless://…" maxlength="65536"></textarea>
+        <button type="button" id="provider-check-parse" class="btn-secondary">{{ op_icon('search') }}<span>Найти серверы</span></button>
+      </div>
+      <div id="provider-check-status" class="xk-provider-check-status" role="status" aria-live="polite"></div>
+      <div id="provider-check-overview" class="xk-provider-check-overview" hidden>
+        <span><strong id="provider-check-ok-count">0</strong> TCP доступно</span>
+        <span><strong id="provider-check-issue-count">0</strong> Сбои соединения</span>
+        <span><strong id="provider-check-unknown-count">0</strong> Не подтверждено</span>
+      </div>
+      <div class="xk-provider-check-list-head">
+        <span id="provider-check-count">Серверы · 0</span>
+        <label><input type="checkbox" id="provider-check-select-all" checked> Все</label>
+      </div>
+      <div id="provider-check-list" class="xk-provider-check-list" aria-live="polite"></div>
+      <p class="xk-provider-check-caveat">Проверка идёт через текущий маршрут роутера. Таймаут может указывать на фильтрацию, сбой сервера или маршрута; TCP не подтверждает работу прокси. Для UDP показано разрешение DNS. Сравнение с публичным DNS и Cheburcheck запускаются отдельно и передают только имя или IP сервера. Ключ vpn:// запрашивает конфигурацию у Amnezia.</p>
+    </div>
+    <div class="modal-actions xk-provider-check-actions">
+      <button type="button" id="provider-check-run" class="btn-primary" disabled>{{ op_icon('ping') }}<span>Проверить выбранные</span></button>
+      <button type="button" id="provider-check-cancel" class="btn-secondary">Закрыть</button>
+    </div>
+  </div>
+</div>

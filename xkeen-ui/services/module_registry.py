@@ -64,6 +64,7 @@ BLUEPRINT_OWNERS: dict[str, str] = {
     "cores_status": "core",
     "xkeen_lists": "core",
     "config_exchange": "core",
+    "provider_diagnostics": "core",
     "service": "core",
     "devtools": "core",
     "ws_support": "core",

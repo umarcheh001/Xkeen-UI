@@ -74,6 +74,8 @@ def test_existing_runtime_hooks_remain_inside_the_modal():
         "mihomo-dns-listener-state",
         "mihomo-dns-override-state",
         "mihomo-dns-update",
+        "mihomo-dns-clear",
+        "mihomo-dns-replace",
     ):
         assert f'id="{element_id}"' in MODAL, element_id
 
