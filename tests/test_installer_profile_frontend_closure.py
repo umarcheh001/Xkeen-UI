@@ -171,3 +171,12 @@ def test_minimal_profiles_still_leave_optional_modules_out(installed):
     }[profile]
     for name in expected_absent:
         assert not (script_root / name).exists(), f"{profile}: {name}"
+
+
+def test_mihomo_minimal_profile_has_no_xray_module_files(installed):
+    profile, target = installed
+    if profile != "mihomo-minimal":
+        pytest.skip("only the Mihomo profile excludes Xray")
+    build = target / "static/frontend-build"
+    assert not (build / "modules/engine.xray").exists()
+    assert not (build / ".vite/module.engine.xray.json").exists()

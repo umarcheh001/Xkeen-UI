@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 666,
-      "size_bytes": 9076658,
+      "size_bytes": 9077025,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -87,8 +87,8 @@
         "xray"
       ],
       "removable": true,
-      "unit_count": 150,
-      "size_bytes": 3976644,
+      "unit_count": 151,
+      "size_bytes": 3978471,
       "kind_counts": {
         "backend_route": 13,
         "backend_service": 20,
@@ -98,7 +98,7 @@
         "frontend_bundle": 1,
         "frontend_entrypoint": 1,
         "frontend_feature": 38,
-        "frontend_test": 12,
+        "frontend_test": 13,
         "frontend_ui": 1,
         "template": 5
       },
@@ -5817,7 +5817,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_installer_profile_frontend_closure.py",
-      "size_bytes": 7292,
+      "size_bytes": 7659,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -23810,6 +23810,29 @@
     {
       "module_id": "engine.xray",
       "kind": "frontend_test",
+      "path": "e2e/xray_module_absent.spec.mjs",
+      "size_bytes": 1827,
+      "depends_on": [
+        "core",
+        "tool.editor"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "xkeen",
+        "xray"
+      ],
+      "environment_variables": [
+        "XKEEN_E2E_MODULE_PROFILE"
+      ],
+      "removable": true
+    },
+    {
+      "module_id": "engine.xray",
+      "kind": "frontend_test",
       "path": "e2e/xray_module_parts.spec.mjs",
       "size_bytes": 6792,
       "depends_on": [
@@ -35090,7 +35113,7 @@
       {
         "from": "engine.xray",
         "to": "core",
-        "unit_count": 150,
+        "unit_count": 151,
         "examples": [
           "xkeen-ui/routes/routing/__init__.py",
           "xkeen-ui/routes/routing/blueprint.py",
@@ -35131,7 +35154,7 @@
       {
         "from": "engine.xray",
         "to": "tool.editor",
-        "unit_count": 150,
+        "unit_count": 151,
         "examples": [
           "xkeen-ui/routes/routing/__init__.py",
           "xkeen-ui/routes/routing/blueprint.py",
