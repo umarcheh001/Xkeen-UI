@@ -32,11 +32,25 @@ for (const path of ['/', '/devtools']) {
     const imports = await importmaps.evaluateAll((scripts) =>
       Object.assign({}, ...scripts.map((script) => JSON.parse(script.textContent).imports || {}))
     );
-    expect(problems).toEqual([]);
-    expect(failedModules).toEqual([]);
     if (!HAS_XRAY[PROFILE]) {
       expect(Object.keys(imports)).not.toContain('xk-module/engine.xray');
+      if (path === '/') {
+        for (const view of ['routing', 'xray-logs']) {
+          await expect(page.locator(`[data-view="${view}"]`)).toHaveCount(0);
+          await expect(page.locator(`#view-${view}`)).toHaveCount(0);
+        }
+        const menu = page.locator('[aria-controls="xk-mihomo-panel-menu"]');
+        if (await menu.isVisible()) await menu.click();
+        await page.locator('#ui-settings-open-btn:visible').click();
+        await expect(page.locator('#ui-settings-modal')).toBeVisible();
+        await page.locator('#ui-settings-close-btn').click();
+        await expect(page.locator('#ui-settings-modal')).toBeHidden();
+      }
       expect(xrayRequests).toEqual([]);
+    } else {
+      expect(Object.keys(imports)).toContain('xk-module/engine.xray');
     }
+    expect(problems).toEqual([]);
+    expect(failedModules).toEqual([]);
   });
 }
