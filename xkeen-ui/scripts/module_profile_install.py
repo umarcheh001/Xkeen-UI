@@ -206,6 +206,20 @@ def owner(path: str) -> str:
     return "core"
 
 
+# Static forms only, minified ones included: `from"xk-core/..."`, `import"xk-core/..."`.
+_BUILT_CORE_PUBLIC_IMPORT = re.compile(r"""(?:\bfrom|\bimport)\s*["'`]xk-core/([^"'`]+)["'`]""")
+
+
+def _built_core_public_imports(build: Path, filename) -> list[str]:
+    if not isinstance(filename, str) or not filename.endswith((".js", ".mjs")):
+        return []
+    try:
+        text = (build / filename).read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        return []
+    return _BUILT_CORE_PUBLIC_IMPORT.findall(text)
+
+
 def _frontend_files(root: Path, selected: set[str], variant: str) -> tuple[set[str], dict, dict] | None:
     build = root / "static/frontend-build"
     manifest = build / ".vite/manifest.build.json"
@@ -227,6 +241,13 @@ def _frontend_files(root: Path, selected: set[str], variant: str) -> tuple[set[s
     queue = list(selected_entries)
     while queue:
         entry = entries[queue.pop()]
+        # A built chunk names a core file `xk-core/<path>`, which the manifest
+        # does not list among its imports; the entry `<path>` must come along.
+        # `import("xk-core/...")` stays optional, as dynamicImports do.
+        for dependency in _built_core_public_imports(build, entry.get("file")):
+            if dependency in entries and dependency not in selected_entries:
+                selected_entries.add(dependency)
+                queue.append(dependency)
         for dependency in entry.get("imports", []):
             if dependency in entries and dependency not in selected_entries:
                 selected_entries.add(dependency)
@@ -391,15 +412,20 @@ def _include_python_dependencies(source: Path, selected_files: dict[str, Path]) 
                     queue.append(dependency)
 
 
-_JS_FROM_IMPORT = re.compile(r"""\bfrom\s*['"](\.{1,2}/[^'"]+)['"]""")
-_JS_BARE_IMPORT = re.compile(r"""^\s*import\s*['"](\.{1,2}/[^'"]+)['"]""", re.MULTILINE)
-_JS_DYNAMIC_IMPORT = re.compile(r"""\bimport\(\s*['"](\.{1,2}/[^'"]+)['"]\s*\)""")
+# A module reaches a file of the core by the name `xk-core/<path under static>`.
+_CORE_PUBLIC_PREFIX = "xk-core/"
+_JS_FROM_IMPORT = re.compile(r"""\bfrom\s*['"](\.{1,2}/[^'"]+|xk-core/[^'"]+)['"]""")
+_JS_BARE_IMPORT = re.compile(r"""^\s*import\s*['"](\.{1,2}/[^'"]+|xk-core/[^'"]+)['"]""", re.MULTILINE)
+_JS_DYNAMIC_IMPORT = re.compile(r"""\bimport\(\s*['"](\.{1,2}/[^'"]+|xk-core/[^'"]+)['"]\s*\)""")
 _TEMPLATE_STATIC_SCRIPT = re.compile(r"""filename\s*=\s*['"]([^'"]+\.m?js)['"]""")
 
 
 def _js_dependency(rel: str, specifier: str) -> str | None:
     path = specifier.split("?", 1)[0].split("#", 1)[0]
-    dependency = posixpath.normpath(posixpath.join(posixpath.dirname(rel), path))
+    if path.startswith(_CORE_PUBLIC_PREFIX):
+        dependency = posixpath.normpath("static/" + path[len(_CORE_PUBLIC_PREFIX):])
+    else:
+        dependency = posixpath.normpath(posixpath.join(posixpath.dirname(rel), path))
     if not dependency.startswith("static/") or not dependency.endswith((".js", ".mjs")):
         return None
     return dependency

@@ -34,6 +34,7 @@ MODULE_KEY = f"xk-module/{MODULE_ID}"
 SOURCE_ENTRY = "js/features/resource_monitor.js"
 ASSETS_HELPER_KEY = "xkeen_ui_assets"
 SYNC_SCRIPT = ROOT / "scripts" / "sync_frontend_build_manifest.py"
+PANEL_STATIC = ROOT / "xkeen-ui" / "static"
 
 
 def owner(path: str) -> str:
@@ -175,19 +176,51 @@ CORE_BUILD_MANIFEST = {
 }
 
 
-def test_core_public_entries_are_mapped_to_built_files(monkeypatch, tmp_path: Path) -> None:
-    panel_root = tmp_path / "panel"
-    lay_core_build_manifest(panel_root, CORE_BUILD_MANIFEST)
+def lay_page_manifest(panel_root: Path, page_file: str) -> None:
+    """The manifest the pages are served by: a bridge to the sources or a built entry."""
 
-    assert build_core_public_importmap(panel_root) == {
+    vite = panel_root / "static/frontend-build/.vite"
+    vite.mkdir(parents=True, exist_ok=True)
+    (vite / "manifest.json").write_text(
+        json.dumps({"static/js/pages/panel.entry.js": {"file": page_file, "isEntry": True}}), encoding="utf-8"
+    )
+
+
+def test_core_public_entries_are_mapped_to_built_files(tmp_path: Path) -> None:
+    # Only when the pages themselves run the built graph: the core state then
+    # lives in the built chunks.
+    lay_core_build_manifest(tmp_path, CORE_BUILD_MANIFEST)
+    lay_page_manifest(tmp_path, "assets/panel-AbCd1234.js")
+
+    assert build_core_public_importmap(tmp_path) == {
         "xk-core/js/features/xkeen_runtime.js": "frontend-build/assets/xk-core-0123456789-AbCd1234.js",
     }
 
+
+def test_core_prefix_when_pages_run_the_sources_through_bridges(tmp_path: Path) -> None:
+    # A bridge imports ../../js/pages/<page>.entry.js: the core runs from the
+    # sources, so a module must reach the same source files.
+    lay_core_build_manifest(tmp_path, CORE_BUILD_MANIFEST)
+    lay_page_manifest(tmp_path, "assets/panel-bridge.js")
+
+    assert build_core_public_importmap(tmp_path) == {"xk-core/": ""}
+
+
+def test_core_prefix_when_the_page_falls_back_to_the_sources(monkeypatch, tmp_path: Path) -> None:
+    panel_root = tmp_path / "panel"
+    lay_core_build_manifest(panel_root, CORE_BUILD_MANIFEST)
+
     imports = render_imports(monkeypatch, tmp_path, FULL_MODULE_IDS, panel_root)
-    assert imports["xk-core/js/features/xkeen_runtime.js"] == (
-        "/static/frontend-build/assets/xk-core-0123456789-AbCd1234.js"
-    )
-    assert "xk-core/" not in imports
+
+    assert imports["xk-core/"] == "/static/"
+    assert not [key for key in imports if key.startswith("xk-core/js/")]
+
+
+def test_real_build_serves_the_core_public_names_from_the_sources() -> None:
+    if not (PANEL_STATIC / "frontend-build/.vite/manifest.json").is_file():
+        pytest.skip("frontend build not found: run npm run frontend:build")
+
+    assert build_core_public_importmap(ROOT / "xkeen-ui") == {"xk-core/": ""}
 
 
 def test_core_prefix_without_build(monkeypatch, tmp_path: Path) -> None:

@@ -133,21 +133,24 @@ test.describe('Xray module parts on a fresh page', () => {
 
     // The Xray entry remembers the part through `xk-core/...module_parts.js`;
     // the importmap must lead to the instance the core keeps its state in,
-    // not to a second copy of it. The core imports the shared chunk, the
-    // public entry re-exports the same functions from it.
+    // not to a second copy of it. The page loads one body of each shared core
+    // file (its source, or its built chunk), and the public name gives the
+    // functions of that body.
     const shared = await page.evaluate(async () => {
       const named = await import('xk-core/js/features/module_parts.js');
-      const chunk = performance
-        .getEntriesByType('resource')
-        .map((entry) => entry.name)
-        .find((name) => /\/frontend-build\/assets\/module_parts-[\w-]+\.js$/.test(name));
-      const core = chunk ? await import(chunk) : named;
+      const loaded = performance.getEntriesByType('resource').map((entry) => entry.name.split('?')[0]);
+      const bodies = (source, chunk) => loaded.filter((name) => name.endsWith(source) || chunk.test(name));
+      const parts = bodies('/static/js/features/module_parts.js', /\/frontend-build\/assets\/module_parts-[\w-]+\.js$/);
+      const runtime = bodies('/static/js/features/xkeen_runtime.js', /\/frontend-build\/assets\/xkeen_runtime-[\w-]+\.js$/);
+      const core = parts.length === 1 ? await import(parts[0]) : {};
       return {
+        partsBodies: parts.length,
+        runtimeBodies: runtime.length,
         remembered: named.loadedModulePart('engine.xray', 'routing_templates') !== null,
         sameFunctions: Object.values(core).includes(named.loadedModulePart),
       };
     });
-    expect(shared).toEqual({ remembered: true, sameFunctions: true });
+    expect(shared).toEqual({ partsBodies: 1, runtimeBodies: 1, remembered: true, sameFunctions: true });
     expect(problems).toEqual([]);
   });
 });

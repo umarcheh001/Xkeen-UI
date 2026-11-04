@@ -25,6 +25,8 @@ _CORE_KEY_PREFIX = "xk-core/"
 _MANIFEST_PREFIX = "module."
 _MANIFEST_SUFFIX = ".json"
 _CORE_MANIFEST_FILENAME = "manifest.build.json"
+_PAGE_MANIFEST_FILENAME = "manifest.json"
+_BRIDGE_SUFFIX = "-bridge.js"
 
 
 @functools.lru_cache(maxsize=32)
@@ -107,19 +109,43 @@ def _core_public_entries(path: str, mtime_ns: int) -> tuple[tuple[str, str], ...
     return tuple(build_core_importmap(payload, public).items())
 
 
-def build_core_public_importmap(panel_root: Path) -> dict[str, str]:
-    """`xk-core/<path>` of every `js/` entry of the core build.
+@functools.lru_cache(maxsize=8)
+def _pages_run_built_graph(path: str, mtime_ns: int) -> bool:
+    """Whether the page manifest serves built entries rather than bridges.
 
-    A module reaches a file of the core by its source path under `static/`.
-    With a build the name leads to the very chunk the core itself loads, so
-    the shared state exists once. Without a build every such name is the
-    source file itself: the prefix points at `static/`.
+    A bridge (`assets/<page>-bridge.js`) only imports `../../js/pages/...`:
+    the page then runs the core from its sources.
     """
 
-    manifest = Path(panel_root) / "static" / _BUILD_DIRNAME / ".vite" / _CORE_MANIFEST_FILENAME
     try:
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    if not isinstance(payload, Mapping) or not payload:
+        return False
+    files = [item.get("file") if isinstance(item, Mapping) else None for item in payload.values()]
+    return all(isinstance(name, str) and name and not name.endswith(_BRIDGE_SUFFIX) for name in files)
+
+
+def build_core_public_importmap(panel_root: Path) -> dict[str, str]:
+    """`xk-core/<path>` to the very file the core of the page runs.
+
+    A module reaches a file of the core by its source path under `static/`,
+    and its shared state must exist once. While the pages run the sources
+    (no build, a page falling back to the sources, or bridges, which import
+    the sources too) the prefix points at `static/`. Only when the pages run
+    the built graph each name leads to its entry of the core build.
+    """
+
+    vite = Path(panel_root) / "static" / _BUILD_DIRNAME / ".vite"
+    pages = vite / _PAGE_MANIFEST_FILENAME
+    manifest = vite / _CORE_MANIFEST_FILENAME
+    try:
+        pages_mtime_ns = pages.stat().st_mtime_ns
         mtime_ns = manifest.stat().st_mtime_ns
     except OSError:
+        return {_CORE_KEY_PREFIX: ""}
+    if not _pages_run_built_graph(str(pages), pages_mtime_ns):
         return {_CORE_KEY_PREFIX: ""}
     entries = _core_public_entries(str(manifest), mtime_ns)
     return dict(entries) if entries is not None else {_CORE_KEY_PREFIX: ""}

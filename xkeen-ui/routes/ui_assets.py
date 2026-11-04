@@ -905,9 +905,13 @@ class FrontendAssetHelper:
         active = activation.get("active_module_ids", []) if isinstance(activation, dict) else None
         panel_root = Path(self.static_folder).parent
         targets = build_module_importmap(panel_root, active)
-        # An empty target is the prefix `xk-core/` of a panel without a build:
-        # it becomes `/static/`.
-        targets.update(build_core_public_importmap(panel_root))
+        # An empty target is the prefix `xk-core/` of a panel whose pages run
+        # the sources: it becomes `/static/`. A page that falls back to its
+        # sources runs the core from them as well.
+        core = build_core_public_importmap(panel_root)
+        if not all(self.should_use_build_entry(name) for name in _SOURCE_ENTRIES):
+            core = {"xk-core/": ""}
+        targets.update(core)
         return {specifier: url_for("static", filename=target) for specifier, target in targets.items()}
 
     def frontend_page_config(

@@ -9,6 +9,7 @@ imported script installs a panel whose scripts never run: the status stays at
 from __future__ import annotations
 
 import importlib.util
+import json
 import posixpath
 import re
 import shutil
@@ -26,6 +27,9 @@ SCRIPT = SOURCE / "scripts" / "module_profile_install.py"
 FROM_IMPORT = re.compile(r"""\bfrom\s*['"](\.{1,2}/[^'"]+)['"]""")
 BARE_IMPORT = re.compile(r"""^\s*import\s*['"](\.{1,2}/[^'"]+)['"]""", re.MULTILINE)
 DYNAMIC_IMPORT = re.compile(r"""\bimport\(\s*['"](\.{1,2}/[^'"]+)['"]\s*\)""")
+# A built chunk of a module names a core file `xk-core/<path>`; the page finds
+# it through the importmap, which reads the installed manifest.build.json.
+CORE_PUBLIC_IMPORT = re.compile(r"""(?:\bfrom|\bimport)\s*["'`]xk-core/([^"'`]+)["'`]""")
 STATIC_REFERENCE = re.compile(r"""url_for\(\s*['"]static['"]\s*,\s*filename\s*=\s*['"]([^'"]+)['"]""")
 
 PROFILES = ("xray-minimal", "mihomo-minimal", "full")
@@ -87,6 +91,8 @@ def _browser_walk(target: Path, roots: list[str]) -> tuple[set[str], dict[str, s
 
     loaded: set[str] = set()
     missing: dict[str, str] = {}
+    manifest_path = target / "static/frontend-build/.vite/manifest.build.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.is_file() else {}
     queue = list(roots)
     while queue:
         rel = queue.pop()
@@ -102,6 +108,13 @@ def _browser_walk(target: Path, roots: list[str]) -> tuple[set[str], dict[str, s
                 queue.append(dependency)
             else:
                 missing.setdefault(dependency, rel)
+        for public in CORE_PUBLIC_IMPORT.findall(text):
+            entry = manifest.get(public)
+            dependency = "static/frontend-build/" + entry["file"] if isinstance(entry, dict) else None
+            if dependency and (target / dependency).is_file():
+                queue.append(dependency)
+            else:
+                missing.setdefault("xk-core/" + public, rel)
         for specifier in DYNAMIC_IMPORT.findall(text):
             dependency = _resolve(rel, specifier)
             if dependency and (target / dependency).is_file():

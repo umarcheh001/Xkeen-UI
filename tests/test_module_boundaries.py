@@ -297,15 +297,26 @@ def test_core_public_surface_belongs_to_core() -> None:
     paths = core_public_paths()
     assert "js/features/module_parts.js" in paths
 
+    advanced_editor: list[str] = []
     for public in paths:
         assert (STATIC / public).is_file(), public
         by_package = package_owner("static/" + public)
         by_name = owner("static/" + public)
-        by_name = "tool.editor" if by_name == "editor-full" else by_name
+        if by_name == "editor-full":
+            # The installer leaves these out of the light editor unless a kept
+            # file imports them statically: tests/test_installer_xk_core_closure.py
+            # checks that it follows such names.
+            advanced_editor.append(public)
+            by_name = "tool.editor"
         if by_package not in allowed or by_name not in allowed:
             offenders.append(f"{public}: package {by_package}, name {by_name}")
 
     assert offenders == []
+    assert advanced_editor == [
+        "js/ui/prettier_loader.js",
+        "js/ui/schema_quickfixes.js",
+        "js/ui/schema_semantic_validation.js",
+    ]
 
 
 # A quoted string that does not start right after a word or another quote, so
@@ -331,11 +342,14 @@ def test_importmap_targets_are_the_chunks_core_loads() -> None:
     manifest_path = BUILD / ".vite" / "manifest.build.json"
     if not manifest_path.is_file() or not (BUILD / "assets").is_dir():
         pytest.skip("frontend build not found: run npm run frontend:build")
-    from services.frontend_importmap import build_core_public_importmap
+    from services.frontend_importmap import build_core_importmap
 
+    # The pages of today run the sources through bridges, and the importmap
+    # then gives the prefix (tests/test_frontend_importmap.py). This is what a
+    # page running the built graph would get: each entry's own file.
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    importmap = build_core_public_importmap(PANEL)
     paths = core_public_paths()
+    importmap = build_core_importmap(manifest, {public: public for public in paths})
     texts = {relative: source.read_text(encoding="utf-8") for relative, source in _js_sources()}
     built = {
         item.relative_to(STATIC).as_posix(): item.read_text(encoding="utf-8")
