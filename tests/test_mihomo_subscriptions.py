@@ -12,6 +12,26 @@ from mihomo_config_generator import build_full_config
 from services import mihomo_subscriptions as svc
 
 
+def test_remnawave_mihomo_provider_keeps_mapper_fields():
+    payload = """proxies:
+  - name: mapped
+    type: vless
+    server: example.com
+    port: 443
+    udp-443: reject
+    reality-opts:
+      mldsa65-verify: verify-key
+    mux.cool:
+      enabled: true
+"""
+    blocks = svc._provider_proxy_blocks_from_payload(payload)
+    assert len(blocks) == 1
+    mapped = yaml.safe_load(blocks[0])[0]
+    assert mapped["udp-443"] == "reject"
+    assert mapped["reality-opts"]["mldsa65-verify"] == "verify-key"
+    assert mapped["mux.cool"]["enabled"] is True
+
+
 def _outbound(address: str, uuid: str):
     return {
         "tag": "proxy",

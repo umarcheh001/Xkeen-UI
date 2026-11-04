@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import os
+import sys
+import threading
 import time
 from collections import OrderedDict
 
@@ -20,6 +22,7 @@ from .jsonc import strip_json_comments_text
 # и уберечь общий кэш можно было бы только `copy.deepcopy`, который на Python
 # дороже самого `json.loads`.
 _MAX_CACHED_BYTES = 1048576
+_MAX_CACHE_BYTES = 8 * 1024 * 1024
 _MAX_CACHE_ENTRIES = 64
 
 # Штатный способ отладки в этом проекте — правка конфига прямо на роутере по
@@ -29,6 +32,8 @@ _MAX_CACHE_ENTRIES = 64
 _RECENTLY_CHANGED_SECONDS = 1.0
 
 _cache: "OrderedDict[str, tuple]" = OrderedDict()
+_cache_bytes = 0
+_cache_lock = threading.Lock()
 
 
 def read_jsonc_text(path: str) -> str:
@@ -38,6 +43,7 @@ def read_jsonc_text(path: str) -> str:
     решает вызывающий.
     """
 
+    global _cache_bytes
     stat = os.stat(path)
     # inode и устройство в ключе: подменённый целиком файл может совпасть с
     # прежним и по времени, и по размеру.
@@ -47,27 +53,42 @@ def read_jsonc_text(path: str) -> str:
         and (time.time() - stat.st_mtime) >= _RECENTLY_CHANGED_SECONDS
     )
 
-    if cacheable:
+    with _cache_lock:
         hit = _cache.get(path)
-        if hit is not None and hit[0] == key:
+        if cacheable and hit is not None and hit[0] == key:
             _cache.move_to_end(path)
             return hit[1]
+        if hit is not None:
+            _cache_bytes -= hit[2]
+            del _cache[path]
 
     with open(path, "r", encoding="utf-8") as f:
         text = strip_json_comments_text(f.read())
 
     if cacheable:
-        _cache[path] = (key, text)
-        _cache.move_to_end(path)
-        while len(_cache) > _MAX_CACHE_ENTRIES:
-            _cache.popitem(last=False)
+        size = sys.getsizeof(path) + sys.getsizeof(key) + sum(sys.getsizeof(part) for part in key) + sys.getsizeof(text)
+        if size <= _MAX_CACHE_BYTES:
+            with _cache_lock:
+                previous = _cache.pop(path, None)
+                if previous is not None:
+                    _cache_bytes -= previous[2]
+                _cache[path] = (key, text, size)
+                _cache_bytes += size
+                while len(_cache) > _MAX_CACHE_ENTRIES or _cache_bytes > _MAX_CACHE_BYTES:
+                    _, (_, _, old_size) = _cache.popitem(last=False)
+                    _cache_bytes -= old_size
     return text
 
 
-def clear_jsonc_cache() -> None:
+def clear_jsonc_cache() -> int:
     """Сбросить кэш целиком — для тестов и аварийных случаев."""
 
-    _cache.clear()
+    global _cache_bytes
+    with _cache_lock:
+        count = len(_cache)
+        _cache.clear()
+        _cache_bytes = 0
+        return count
 
 
 def load_json(path: str, default=None):

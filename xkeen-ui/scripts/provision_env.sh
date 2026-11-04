@@ -1825,8 +1825,8 @@ provision_cmd_apply() {
 
   provision_command_wrappers
   cleanup_legacy_xray_templates "${XKEEN_UI_LEGACY_XRAY_TEMPLATES_DIR:-/opt/etc/xray/templates}" || true
-  provision_drop_tree_bytecode "$UI_DIR" "${XKEEN_UI_PYTHONPYCACHEPREFIX:-/tmp/xkeen-ui-pycache}" || true
-  provision_drop_libs_bytecode /opt/lib "${XKEEN_UI_PYTHONPYCACHEPREFIX:-/tmp/xkeen-ui-pycache}" || true
+  provision_drop_tree_bytecode "$UI_DIR" "${XKEEN_UI_PYTHONPYCACHEPREFIX:-/opt/var/cache/xkeen-ui-pycache}" || true
+  provision_drop_libs_bytecode /opt/lib "${XKEEN_UI_PYTHONPYCACHEPREFIX:-/opt/var/cache/xkeen-ui-pycache}" || true
 
   # Шаблоны берутся из каталога панели: новые файлы уже разложены.
   if provision_has_module engine.mihomo && [ -d "$UI_DIR/opt/etc/mihomo/templates" ]; then

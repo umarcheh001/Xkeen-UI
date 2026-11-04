@@ -931,6 +931,27 @@
             "x-ui-use-case": "Используйте, только если служебный вход всегда должен идти через один известный proxy/group.",
             "x-ui-example": "proxy: PROXY",
             "x-ui-warning": "Не задавайте одновременно `proxy` и `rule`; при смене имени группы listener перестанет работать."
+          },
+          "finalmask": { "$ref": "#/definitions/prizrakFinalmask", "description": "Prizrak-Core: серверные маски TCP VLESS listener. Должны совпадать с клиентом." },
+          "xhttp-config": {
+            "type": "object",
+            "description": "Prizrak-Core: параметры XHTTP listener и HTTP/2 flow control.",
+            "x-ui-doc-link": "https://docs.prizrak.app/ru/prizrak-core/xhttp/",
+            "properties": {
+              "mux-keep-alive-secs": { "type": "integer", "minimum": 0 },
+              "mux-keep-alive-bytes": { "type": "integer", "minimum": 0 },
+              "h2-flow": {
+                "type": "object",
+                "properties": {
+                  "enabled": { "type": "boolean" },
+                  "max-stream-receive-window": { "type": "integer", "minimum": 65535, "maximum": 1073741824 },
+                  "max-connection-receive-window": { "type": "integer", "minimum": 65535, "maximum": 1073741824 },
+                  "max-connection-send-window": { "type": "integer", "minimum": -1 },
+                  "queue-cuts": { "type": "integer", "minimum": 0 }
+                }
+              },
+              "h2-params": { "type": "object" }
+            }
           }
         }
       }
@@ -976,7 +997,7 @@
         },
         "type": {
           "type": "string",
-          "enum": ["ss", "ssr", "vmess", "vless", "trojan", "hysteria", "hysteria2", "wireguard", "openvpn", "tuic", "trusttunnel", "socks5", "http", "ssh", "snell", "anytls", "mieru", "sudoku", "masque", "shadowquic", "gost-relay", "tailscale", "zerotier", "easytier", "direct", "dns", "reject", "rematch"],
+          "enum": ["ss", "ssr", "vmess", "vless", "trojan", "hysteria", "hysteria2", "wireguard", "openvpn", "tuic", "trusttunnel", "socks5", "http", "ssh", "snell", "anytls", "mieru", "sudoku", "masque", "shadowquic", "gost-relay", "tailscale", "zerotier", "easytier", "direct", "freedom", "dns", "reject", "rematch"],
           "description": "Тип протокола или встроенной политики. Кроме сетевых протоколов Mihomo понимает встроенные `direct` (напрямую), `reject` (оборвать соединение), `dns` (запросы во встроенный DNS) и `rematch` (прогнать соединение по правилам заново), а также mesh-сети `tailscale`, `zerotier` и `easytier` — им `server` и `port` не нужны. `vless`+`reality` и `hysteria2` — современные рекомендуемые варианты."
         },
         "server": {
@@ -1072,7 +1093,7 @@
         },
         "network": {
           "anyOf": [
-            { "type": "string", "enum": ["raw", "tcp", "ws", "grpc", "h2", "http", "xhttp"] },
+            { "type": "string", "enum": ["raw", "tcp", "ws", "grpc", "h2", "http", "xhttp", "mkcp", "kcp"] },
             { "type": "string" }
           ],
           "description": "Значение зависит от типа прокси. У VMess/VLESS/Trojan это транспорт поверх TCP/TLS: `raw` и `tcp` — обычный TCP (так же Mihomo обрабатывает отсутствующее значение), `ws` — WebSocket, `xhttp` — современный HTTP-based transport, `grpc` — gRPC, `h2`/`http` — HTTP/2. У MASQUE это режим соединения (`quic`, `h2`, `h3-l4proxy`), у ZeroTier — идентификатор сети из 16 hex-символов.",
@@ -1115,9 +1136,15 @@
           "description": "Включить проверки доступности TrustTunnel-прокси. В доке Mihomo это показано как `health-check: true`."
         },
         "quic": {
-          "type": "boolean",
-          "default": false,
-          "description": "Включить QUIC-режим для TrustTunnel."
+          "oneOf": [{ "type": "boolean" }, { "type": "string", "enum": ["allow", "reject"] }],
+          "description": "TrustTunnel: boolean для QUIC-режима. Prizrak-Core: алиас `udp-443` со значением `allow` или `reject`; при одновременном указании значения должны совпадать."
+        },
+        "udp-443": {
+          "type": "string",
+          "enum": ["allow", "reject"],
+          "description": "Prizrak-Core r10+: разрешить или отклонить UDP/443 только через этот прокси. `reject` не затрагивает DIRECT и другие UDP-порты; удобно вместо глобального правила блокировки QUIC.",
+          "x-ui-example": "udp-443: reject",
+          "x-ui-doc-link": "https://github.com/legiz-ru/Prizrak-Core/releases/tag/v1.19.33-r10"
         },
         "congestion-controller": {
           "type": "string",
@@ -1368,8 +1395,16 @@
             "support-x25519mlkem768": {
               "type": "boolean",
               "default": false,
-              "description": "Включить поддержку гибридного обмена ключами X25519-MLKEM768 для Reality."
-            }
+              "description": "Совместимость с Mihomo: включить гибридный обмен X25519-MLKEM768. Prizrak-Core игнорирует это старое поле."
+            },
+            "mldsa65-verify": {
+              "type": "string",
+              "description": "Prizrak-Core: base64url ключ проверки ML-DSA-65, полученный от сервера Reality.",
+              "x-ui-doc-link": "https://docs.prizrak.app/ru/prizrak-core/reality/"
+            },
+            "password": { "type": "string", "description": "Prizrak-Core: алиас публичного ключа Reality." },
+            "show": { "type": "boolean", "description": "Prizrak-Core: выводить диагностические сведения Reality." },
+            "master-key-log": { "type": "string", "description": "Prizrak-Core: путь журнала мастер-ключей Reality." }
           }
         },
         "ech-opts": {
@@ -1467,6 +1502,22 @@
           }
         },
         "xhttp-opts": { "$ref": "#/definitions/xhttpOpts" },
+        "mkcp-opts": {
+          "type": "object",
+          "description": "Prizrak-Core: транспорт mKCP для VLESS; UDP-маски finalmask работают с `network: mkcp`/`kcp`.",
+          "x-ui-doc-link": "https://docs.prizrak.app/ru/prizrak-core/finalmask/",
+          "properties": {
+            "mtu": { "type": "integer", "minimum": 1 },
+            "tti": { "type": "integer", "minimum": 1 },
+            "congestion": { "type": "boolean" }
+          }
+        },
+        "finalmask": {
+          "$ref": "#/definitions/prizrakFinalmask",
+          "description": "Prizrak-Core: клиентские TCP/UDP маски VLESS или Trojan. Параметры должны соответствовать серверу."
+        },
+        "fragment": { "$ref": "#/definitions/prizrakFragment" },
+        "sockopt": { "$ref": "#/definitions/prizrakSockopt" },
         "plugin": { "type": "string" },
         "plugin-opts": { "type": "object" },
         "smux": {
@@ -1488,6 +1539,19 @@
                 "down": { "type": "string" }
               }
             }
+          }
+        },
+        "mux.cool": {
+          "type": "object",
+          "description": "Prizrak-Core Mux.Cool. Не включайте одновременно со `smux`.",
+          "x-ui-doc-link": "https://docs.prizrak.app/ru/prizrak-core/mux-cool/",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "max-carriers": { "type": "integer", "minimum": 0 },
+            "max-concurrency": { "type": "integer", "minimum": 0 },
+            "max-connections": { "type": "integer", "minimum": 0 },
+            "xudp-concurrency": { "type": "integer", "minimum": 0 },
+            "xudp-proxy-udp443": { "type": "string", "enum": ["allow", "reject", "skip"] }
           }
         },
 
@@ -1897,7 +1961,9 @@
                   "grpc",
                   "h2",
                   "http",
-                  "xhttp"
+                  "xhttp",
+                  "mkcp",
+                  "kcp"
                 ]
               }
             }
@@ -2031,7 +2097,7 @@
           "if": {
             "required": ["type"],
             "properties": {
-              "type": { "not": { "enum": ["direct", "dns", "reject", "rematch", "tailscale", "zerotier", "easytier", "mieru"] } }
+              "type": { "not": { "enum": ["direct", "freedom", "dns", "reject", "rematch", "tailscale", "zerotier", "easytier", "mieru"] } }
             }
           },
           "then": {
@@ -2382,6 +2448,41 @@
       }
     },
 
+    "prizrakFinalmask": {
+      "type": "object",
+      "description": "Prizrak-Core: маски TCP и UDP. Состав и порядок должны совпадать с сервером.",
+      "x-ui-doc-link": "https://docs.prizrak.app/ru/prizrak-core/finalmask/",
+      "properties": {
+        "tcp": { "type": "array", "items": { "type": "object", "required": ["type"], "properties": { "type": { "type": "string", "enum": ["fragment", "header-custom", "sudoku", "xmc"] } }, "additionalProperties": true } },
+        "udp": { "type": "array", "items": { "type": "object", "required": ["type"], "properties": { "type": { "type": "string", "enum": ["noise", "header-custom", "sudoku", "udphop", "xdns", "xicmp"] } }, "additionalProperties": true } }
+      }
+    },
+    "prizrakFragment": {
+      "type": "object",
+      "description": "Prizrak-Core freedom: фрагментация TCP. Значения должны соответствовать серверу.",
+      "x-ui-doc-link": "https://docs.prizrak.app/ru/prizrak-core/freedom/",
+      "properties": {
+        "packets": { "type": "string" },
+        "length": { "type": ["string", "integer"] },
+        "interval": { "type": ["string", "integer"] },
+        "max-split": { "type": ["string", "integer"] },
+        "split": { "type": "string", "enum": ["length", "sni"] },
+        "wait": { "type": "string", "enum": ["interval", "ack"] },
+        "fallback-delay": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "prizrakSockopt": {
+      "type": "object",
+      "description": "Prizrak-Core freedom: параметры исходящего сокета.",
+      "x-ui-doc-link": "https://docs.prizrak.app/ru/prizrak-core/freedom/",
+      "properties": {
+        "tcp-congestion": { "type": "string" },
+        "tcp-user-timeout": { "type": "integer", "minimum": 0 },
+        "tcp-keep-alive-idle": { "type": "integer", "minimum": 0 },
+        "tcp-keep-alive-interval": { "type": "integer", "minimum": 0 },
+        "custom-sockopt": { "type": "array", "items": { "type": "object", "required": ["opt", "value"], "properties": { "opt": { "type": ["integer", "string"] }, "value": { "type": ["integer", "string"] }, "type": { "type": "string", "enum": ["int", "str"] }, "level": { "type": ["integer", "string"] }, "system": { "type": "string" }, "network": { "type": "string" } } } }
+      }
+    },
     "xhttpOpts": {
       "type": "object",
       "description": "Настройки транспорта XHTTP.",
@@ -2450,6 +2551,17 @@
         },
         "sc-max-each-post-bytes": { "type": ["integer", "string"], "description": "Максимальный размер каждого POST-запроса для stream-up." },
         "sc-min-posts-interval-ms": { "type": ["integer", "string"], "description": "Минимальный интервал между POST-запросами XHTTP в миллисекундах." },
+        "h2-flow-control": { "type": "boolean", "description": "Prizrak-Core: краткая форма включения HTTP/2 flow control. `h2-flow.enabled` имеет приоритет." },
+        "h2-flow": {
+          "type": "object",
+          "description": "Prizrak-Core: окно приёма HTTP/2. Работает только при h2.",
+          "x-ui-doc-link": "https://docs.prizrak.app/ru/prizrak-core/xhttp/",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "max-stream-receive-window": { "type": "integer", "minimum": 65535, "maximum": 1073741824 },
+            "max-connection-receive-window": { "type": "integer", "minimum": 65535, "maximum": 1073741824 }
+          }
+        },
         "reuse-settings": { "$ref": "#/definitions/xhttpReuseSettings" },
         "download-settings": { "$ref": "#/definitions/xhttpDownloadSettings" }
       }
@@ -2484,6 +2596,11 @@
           "examples": [
             "https://sub.example.com/clash/?token=abc123"
           ]
+        },
+        "fallback-urls": {
+          "oneOf": [{ "type": "array", "items": { "type": "string", "format": "uri" } }, { "type": "string", "format": "uri" }],
+          "description": "Prizrak-Core: запасные HTTP(S) адреса подписки при ошибке загрузки основного URL. Список совместим и с r7; строка поддерживается с r8.",
+          "x-ui-doc-link": "https://docs.prizrak.app/ru/prizrak-core/provider-fallback/"
         },
         "path": {
           "type": "string",
@@ -2683,6 +2800,8 @@
               "x-ui-example": "udp: true",
               "x-ui-warning": "Если часть серверов не умеет UDP, массовое включение не сделает их рабочими для UDP."
             },
+            "udp-443": { "type": "string", "enum": ["allow", "reject"], "description": "Prizrak-Core r10+: задать политику UDP/443 для каждого узла подписки. DIRECT вне этой подписки не затрагивается." },
+            "quic": { "type": "string", "enum": ["allow", "reject"], "description": "Prizrak-Core r10+: алиас `udp-443`. Если заданы оба поля, значения должны совпадать." },
             "udp-over-tcp": {
               "type": "boolean",
               "description": "Массово переопределить UDP-over-TCP для Shadowsocks-подобных узлов, если такой режим поддерживается сервером.",
@@ -2949,6 +3068,19 @@
           "x-ui-warning": "В proxy-groups этот URL проверяет только узлы из поля `proxies`; узлы, подключённые через `use`, проверяются health-check provider-а.",
           "examples": ["https://www.gstatic.com/generate_204"]
         },
+        "ping-config": {
+          "type": "object",
+          "description": "Prizrak-Core: реальная проверка доступности узлов группы. Не задавайте несколько блоков для одного URL: используется первый.",
+          "x-ui-doc-link": "https://docs.prizrak.app/ru/prizrak-core/ping-config/",
+          "properties": {
+            "destination": { "type": "string", "format": "uri" },
+            "http-method": { "type": "string", "enum": ["HEAD", "GET"] },
+            "interval": { "oneOf": [{ "type": "number", "minimum": 0 }, { "type": "string" }] },
+            "sampling": { "type": "integer", "minimum": 1, "maximum": 32 },
+            "timeout": { "oneOf": [{ "type": "number", "minimum": 0 }, { "type": "string" }] },
+            "connectivity": { "type": "string", "format": "uri" }
+          }
+        },
         "interval": {
           "type": "integer",
           "description": "Интервал проверки доступности в секундах. Если не `0`, группа периодически запускает проверки.",
@@ -3125,6 +3257,11 @@
             "https://raw.githubusercontent.com/Loyalsoldier/clash-rules/release/reject.txt",
             "https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/youtube.mrs"
           ]
+        },
+        "fallback-urls": {
+          "oneOf": [{ "type": "array", "items": { "type": "string", "format": "uri" } }, { "type": "string", "format": "uri" }],
+          "description": "Prizrak-Core: запасные HTTP(S) адреса загрузки набора правил. Список совместим и с r7; строка поддерживается с r8.",
+          "x-ui-doc-link": "https://docs.prizrak.app/ru/prizrak-core/provider-fallback/"
         },
         "path": {
           "type": "string",

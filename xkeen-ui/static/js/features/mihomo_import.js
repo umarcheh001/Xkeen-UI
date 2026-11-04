@@ -2179,24 +2179,53 @@ let mihomoImportModuleApi = null;
     return s;
   }
 
-  const toYaml = (obj, indent = 0) => {
+  const yamlScalar = (key, value) => {
+    if (key === 'encryption' && value === '') return '""';
+    if (typeof value === 'string' && /[\r\n]/.test(value)) return JSON.stringify(value);
+    return typeof value === 'string' || YAML_STRING_VALUE_KEYS.has(key) ? yamlStringScalar(value) : value;
+  };
+
+  const appendYamlListItem = (lines, item, indent) => {
+    if (item == null || item === '') return;
     const padding = ' '.repeat(indent);
-    return Object.entries(obj).reduce((result, [key, value]) => {
-      if (value == null || (value === '' && key !== 'encryption')) return result;
-      if (Array.isArray(value))
-        return value.length
-          ? result + `${padding}${key}:\n` + value.map((item) => `${padding}  - ${item}`).join('\n') + '\n'
-          : result;
-      if (typeof value === 'object') {
-        const nested = toYaml(value, indent + 2);
-        return nested.trim() ? result + `${padding}${key}:\n${nested}` : result;
+    if (Array.isArray(item)) {
+      lines.push(`${padding}-`);
+      item.forEach((nested) => appendYamlListItem(lines, nested, indent + 2));
+    } else if (typeof item === 'object') {
+      const nested = [];
+      appendYamlMapping(nested, item, indent + 2);
+      if (nested.length) {
+        lines.push(`${padding}- ${nested[0].trimStart()}`);
+        lines.push(...nested.slice(1));
       }
-      const rendered =
-        key === 'encryption' && value === ''
-          ? '""'
-          : (typeof value === 'string' || YAML_STRING_VALUE_KEYS.has(key) ? yamlStringScalar(value) : value);
-      return result + `${padding}${key}: ${rendered}\n`;
-    }, '');
+    } else {
+      lines.push(`${padding}- ${yamlScalar('', item)}`);
+    }
+  };
+
+  const appendYamlMapping = (lines, obj, indent) => {
+    const padding = ' '.repeat(indent);
+    Object.entries(obj).forEach(([key, value]) => {
+      if (value == null || (value === '' && key !== 'encryption')) return;
+      const safeKey = yamlStringScalar(key);
+      if (Array.isArray(value)) {
+        if (!value.length) return;
+        lines.push(`${padding}${safeKey}:`);
+        value.forEach((item) => appendYamlListItem(lines, item, indent + 2));
+      } else if (typeof value === 'object') {
+        const nested = [];
+        appendYamlMapping(nested, value, indent + 2);
+        if (nested.length) lines.push(`${padding}${safeKey}:`, ...nested);
+      } else {
+        lines.push(`${padding}${safeKey}: ${yamlScalar(key, value)}`);
+      }
+    });
+  };
+
+  const toYaml = (obj, indent = 0) => {
+    const lines = [];
+    appendYamlMapping(lines, obj, indent);
+    return lines.length ? `${lines.join('\n')}\n` : '';
   };
 
   const decodeMaybe = (value) => {
@@ -2305,6 +2334,26 @@ let mihomoImportModuleApi = null;
       return Object.keys(out).length ? out : undefined;
     }
     return String(value);
+  };
+
+  const normalizePrizrakTree = (value) => {
+    if (Array.isArray(value)) return value.map(normalizePrizrakTree);
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(Object.entries(value).map(([key, item]) => [
+        String(key).replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase(), normalizePrizrakTree(item),
+      ]));
+    }
+    return value;
+  };
+
+  const normalizePrizrakFinalmask = (source) => {
+    if (!source || typeof source !== 'object') return undefined;
+    const tcp = firstDefined(source, 'tcp', 'tcpmasks', 'tcpMasks');
+    const udp = firstDefined(source, 'udp', 'udpmasks', 'udpMasks');
+    const masks = {};
+    if (Array.isArray(tcp) && tcp.length) masks.tcp = normalizePrizrakTree(tcp);
+    if (Array.isArray(udp) && udp.length) masks.udp = normalizePrizrakTree(udp);
+    return Object.keys(masks).length ? masks : undefined;
   };
 
   const cleanDownloadSettings = (download) => {
@@ -2424,6 +2473,13 @@ let mihomoImportModuleApi = null;
     const downloadSettings = cleanDownloadSettings(firstDefined(extra, 'download-settings', 'downloadSettings'));
     if (downloadSettings) xhttp['download-settings'] = downloadSettings;
 
+    const h2Flow = firstDefined(extra, 'h2-flow', 'h2Flow');
+    if (h2Flow && typeof h2Flow === 'object' && !Array.isArray(h2Flow)) {
+      xhttp['h2-flow'] = normalizePrizrakTree(h2Flow);
+    }
+    const h2FlowControl = boolMaybe(extra, 'h2-flow-control', 'h2FlowControl');
+    if (h2FlowControl !== undefined) xhttp['h2-flow-control'] = h2FlowControl;
+
     return Object.fromEntries(Object.entries(xhttp).filter(([, value]) => value != null && value !== ''));
   };
 
@@ -2458,7 +2514,7 @@ let mihomoImportModuleApi = null;
               publicKey: realityParam(params, 'pbk', 'publicKey', 'public-key', 'public_key'),
               shortId: realityParam(params, 'sid', 'shortId', 'short-id', 'short_id', 'shortid'),
               spiderX: string(params.spx),
-              mldsa65Verify: string(params.pqv),
+              mldsa65Verify: realityParam(params, 'pqv', 'mldsa65Verify', 'mldsa65-verify'),
               supportX25519MLKEM768: boolMaybe(
                 params,
                 'support-x25519mlkem768',
@@ -2508,6 +2564,9 @@ let mihomoImportModuleApi = null;
       protocol: protocol,
       settings: settingsMapper(url, params),
     };
+
+    const udp443 = params['udp-443'] || params.quic;
+    if (udp443 === 'allow' || udp443 === 'reject') baseConfig['udp-443'] = udp443;
 
     if (!['shadowsocks', 'hysteria2'].includes(protocol)) {
       baseConfig.streamSettings = getStreamSettings(params.type || 'tcp', { ...params, sni: params.sni });
@@ -2630,6 +2689,9 @@ let mihomoImportModuleApi = null;
       udp: true,
     };
 
+    const udp443 = firstDefined(proxyConfig, 'udp-443', 'quic');
+    if (udp443 === 'allow' || udp443 === 'reject') common['udp-443'] = udp443;
+
     if (proxyConfig.protocol === 'vless') {
       const enc = String(settings.encryption || '').trim().toLowerCase();
       Object.assign(common, {
@@ -2691,6 +2753,7 @@ let mihomoImportModuleApi = null;
           'short-id': shortId == null ? undefined : String(shortId),
           'support-x25519mlkem768': supportX25519MLKEM768 === true ? true : undefined,
           'spider-x': reality.spiderX == null ? undefined : String(reality.spiderX),
+          'mldsa65-verify': firstDefined(reality, 'mldsa65-verify', 'mldsa65Verify'),
         };
       }
     }
@@ -2714,6 +2777,23 @@ let mihomoImportModuleApi = null;
       };
     } else if (streamSettings.network === 'xhttp') {
       common['xhttp-opts'] = normalizeXhttpOptions(streamSettings.xhttpSettings);
+    } else if (['mkcp', 'kcp'].includes(streamSettings.network)) {
+      const kcp = streamSettings.kcpSettings || streamSettings.mkcpSettings || {};
+      const mtu = firstDefined(kcp, 'mtu', 'clientMtu');
+      const tti = firstDefined(kcp, 'tti', 'clientTti');
+      const congestion = boolMaybe(kcp, 'congestion');
+      const opts = {};
+      if (Number.isInteger(mtu)) opts.mtu = mtu;
+      if (Number.isInteger(tti)) opts.tti = tti;
+      if (congestion !== undefined) opts.congestion = congestion;
+      if (Object.keys(opts).length) common['mkcp-opts'] = opts;
+    }
+
+    if (['vless', 'trojan'].includes(proxyConfig.protocol)) {
+      const finalmask = normalizePrizrakFinalmask(streamSettings.finalmask || proxyConfig.finalmask);
+      if (finalmask) common.finalmask = finalmask;
+      const cool = proxyConfig['mux.cool'] || proxyConfig.mux?.cool;
+      if (cool) common['mux.cool'] = normalizePrizrakTree(cool);
     }
 
     return `  - ${toYaml(common).trim().replace(/\n/g, '\n    ')}`;

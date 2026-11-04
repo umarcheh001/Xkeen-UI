@@ -754,9 +754,12 @@ ui_step "Служба панели и каталоги"
 # upgrade can leave a stdlib .pyc truncated; Python then fails before the UI
 # process can start ("bad marshal data"). A private cache also keeps installer
 # and panel bytecode isolated from package-manager state.
-PYTHONPYCACHEPREFIX="${XKEEN_UI_PYTHONPYCACHEPREFIX:-/tmp/xkeen-ui-pycache}"
+PYTHONPYCACHEPREFIX="${XKEEN_UI_PYTHONPYCACHEPREFIX:-/opt/var/cache/xkeen-ui-pycache}"
+if ! mkdir -p "$PYTHONPYCACHEPREFIX" 2>/dev/null || [ ! -w "$PYTHONPYCACHEPREFIX" ]; then
+  PYTHONPYCACHEPREFIX="/tmp/xkeen-ui-pycache"
+  mkdir -p "$PYTHONPYCACHEPREFIX" 2>/dev/null || true
+fi
 export PYTHONPYCACHEPREFIX
-mkdir -p "$PYTHONPYCACHEPREFIX" 2>/dev/null || true
 
 assert_safe_ui_init_target() {
   _path="$1"

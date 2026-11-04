@@ -241,6 +241,52 @@ def test_convert_vless_reality_preserves_explicit_mlkem_support_only():
     assert parsed["reality-opts"]["support-x25519mlkem768"] is True
 
 
+def test_prizrak_xray_json_preserves_finalmask_mux_and_reality_signature():
+    outbound = _outbound_vless_tcp_reality_vision()
+    outbound["udp-443"] = "reject"
+    outbound["mux"] = {"cool": {"enabled": True, "maxConcurrency": 8}}
+    outbound["streamSettings"]["realitySettings"]["mldsa65Verify"] = "verify-key"
+    outbound["streamSettings"]["finalmask"] = {
+        "tcpmasks": [{"type": "fragment", "settings": {"maxSplit": "2-4"}}],
+        "udpmasks": [{"type": "noise", "settings": {"randRange": "4-8"}}],
+    }
+    parsed = yaml.safe_load(convert_outbound_to_mihomo(outbound, "Prizrak").yaml)[0]
+    assert parsed["udp-443"] == "reject"
+    assert parsed["reality-opts"]["mldsa65-verify"] == "verify-key"
+    assert parsed["finalmask"] == {
+        "tcp": [{"type": "fragment", "settings": {"max-split": "2-4"}}],
+        "udp": [{"type": "noise", "settings": {"rand-range": "4-8"}}],
+    }
+    assert parsed["mux.cool"] == {"enabled": True, "max-concurrency": 8}
+
+
+def test_prizrak_header_custom_mask_keeps_nested_packets_and_crlf():
+    outbound = _outbound_vless_tcp_reality_vision()
+    outbound["streamSettings"]["finalmask"] = {
+        "tcpmasks": [{
+            "type": "header-custom",
+            "settings": {"clients": [[{"packet": "GET / HTTP/1.1\r\n", "type": "str"}, {"rand": 4}]]},
+        }],
+    }
+    parsed = yaml.safe_load(convert_outbound_to_mihomo(outbound, "Masked").yaml)[0]
+    clients = parsed["finalmask"]["tcp"][0]["settings"]["clients"]
+    assert clients == [[{"packet": "GET / HTTP/1.1\r\n", "type": "str"}, {"rand": 4}]]
+
+
+def test_prizrak_mkcp_finalmask_keeps_transport_options():
+    outbound = _outbound_vless_tcp_reality_vision()
+    outbound["streamSettings"]["network"] = "mkcp"
+    outbound["streamSettings"]["security"] = "none"
+    outbound["streamSettings"]["kcpSettings"] = {"clientMtu": 77, "clientTti": 100, "congestion": False}
+    outbound["streamSettings"]["finalmask"] = {
+        "udp": [{"type": "xdns", "resolvers": ["t.example.com:aaaa+udp://77.88.8.8:53"]}],
+    }
+    parsed = yaml.safe_load(convert_outbound_to_mihomo(outbound, "DNS").yaml)[0]
+    assert parsed["network"] == "mkcp"
+    assert parsed["mkcp-opts"] == {"mtu": 77, "tti": 100, "congestion": False}
+    assert parsed["finalmask"]["udp"][0]["resolvers"] == ["t.example.com:aaaa+udp://77.88.8.8:53"]
+
+
 def test_convert_vless_grpc_without_service_omits_empty_grpc_opts():
     result = convert_outbound_to_mihomo(_outbound_vless_grpc_without_service(), "Grpc-Node")
     assert result is not None

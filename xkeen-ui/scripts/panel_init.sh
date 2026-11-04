@@ -8,7 +8,7 @@ PYTHON_BIN="/opt/bin/python3"
 RUN_SERVER="$UI_DIR/run_server.py"
 APP_PY="$UI_DIR/app.py"
 PANEL_PORT="__XKEEN_UI_PORT__"
-PYTHONPYCACHEPREFIX="${XKEEN_UI_PYTHONPYCACHEPREFIX:-/tmp/xkeen-ui-pycache}"
+PYTHONPYCACHEPREFIX="${XKEEN_UI_PYTHONPYCACHEPREFIX:-/opt/var/cache/xkeen-ui-pycache}"
 
 LOG_DIR_DEFAULT="/opt/var/log/xkeen-ui"
 LOG_DIR="$LOG_DIR_DEFAULT"
@@ -93,8 +93,8 @@ panel_pid() {
 }
 
 warm_bytecode_cache() {
-  # Кэш байткода живёт в PYTHONPYCACHEPREFIX, то есть в tmpfs, и перезагрузка
-  # роутера стирает его целиком. Импорты у панели ленивые, поэтому часть
+  # Кэш байткода живёт на накопителе /opt (или в /tmp, если /opt недоступен).
+  # Импорты у панели ленивые, поэтому часть
   # компиляции 226 модулей достаётся первому человеку, открывшему страницу
   # (замер на ARMv8: 2,9 с вхолодную против 0,23 с с готовым кэшем; на слабых
   # роутерах кратно больше). Догоняем это фоном, пока страницу ещё не открыли.
@@ -117,10 +117,13 @@ start_service() {
   # PATH/LD_LIBRARY_PATH point at /opt/{bin,sbin,lib} and Python's native
   # extensions can dlopen() Entware libraries.
   [ -f "/opt/etc/profile" ] && . /opt/etc/profile >/dev/null 2>&1 || true
-  # Bypass potentially truncated Entware stdlib bytecode after interrupted
-  # upgrades. Keep the cache in a writable, panel-specific directory.
+  # Keep the private bytecode cache off tmpfs when /opt is writable. Python
+  # validates source timestamps and writes .pyc files with atomic replacement.
+  if ! mkdir -p "$PYTHONPYCACHEPREFIX" 2>/dev/null || [ ! -w "$PYTHONPYCACHEPREFIX" ]; then
+    PYTHONPYCACHEPREFIX="/tmp/xkeen-ui-pycache"
+    mkdir -p "$PYTHONPYCACHEPREFIX" 2>/dev/null || true
+  fi
   export PYTHONPYCACHEPREFIX
-  mkdir -p "$PYTHONPYCACHEPREFIX" 2>/dev/null || true
   case ":$PATH:" in
     *":/opt/bin:"*) ;;
     *) PATH="/opt/bin:/opt/sbin:$PATH"; export PATH ;;

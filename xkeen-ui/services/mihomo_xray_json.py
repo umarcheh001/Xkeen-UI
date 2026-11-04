@@ -17,12 +17,14 @@ Transports/security supported for VLESS:
 
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from .mihomo_proxy_parsers import (
     ProxyParseResult,
     _build_xhttp_opts,
     _mapping_bool,
+    _prizrak_udp443,
     parse_proxy_uri,
     _yaml_append_key,
     _yaml_list,
@@ -61,16 +63,16 @@ def convert_outbound_to_mihomo(
     stream = outbound.get("streamSettings") or {}
 
     if proto == "vless":
-        return _convert_vless(settings, stream, name)
+        return _convert_vless(settings, stream, name, outbound)
     if proto == "trojan":
-        return _convert_trojan(settings, stream, name)
+        return _convert_trojan(settings, stream, name, outbound)
     if proto in {"hysteria", "hysteria2", "hy2"}:
         return _convert_hysteria2(settings, stream, name, proto)
     return None
 
 
 def _convert_vless(
-    settings: Dict[str, Any], stream: Dict[str, Any], name: str
+    settings: Dict[str, Any], stream: Dict[str, Any], name: str, outbound: Dict[str, Any]
 ) -> Optional[ProxyParseResult]:
     vnext_list = settings.get("vnext") if isinstance(settings, dict) else None
     if not isinstance(vnext_list, list) or not vnext_list:
@@ -135,6 +137,7 @@ def _convert_vless(
         public_key = str(rs.get("publicKey") or "").strip()
         short_id = rs.get("shortId")
         spider_x = str(rs.get("spiderX") or "").strip()
+        mldsa = _first_text(rs.get("mldsa65Verify"), rs.get("mldsa65-verify"))
 
         yaml_lines.append("  tls: true")
         if sni:
@@ -144,6 +147,8 @@ def _convert_vless(
             yaml_lines.append(f"    public-key: {_yaml_str(public_key)}")
         if short_id is not None:
             yaml_lines.append(f"    short-id: {_yaml_str(short_id)}")
+        if mldsa:
+            yaml_lines.append(f"    mldsa65-verify: {_yaml_str(mldsa)}")
         if _mapping_bool(
             rs,
             "support-x25519mlkem768",
@@ -209,7 +214,22 @@ def _convert_vless(
         if host:
             yaml_lines.append("    headers:")
             yaml_lines.append(f"      Host: {_yaml_str(host)}")
+    elif network in {"mkcp", "kcp"}:
+        kcp = _as_mapping(stream.get("kcpSettings") or stream.get("mkcpSettings"))
+        opts: Dict[str, Any] = {}
+        for key, aliases in {
+            "mtu": ("mtu", "clientMtu"),
+            "tti": ("tti", "clientTti"),
+            "congestion": ("congestion",),
+        }.items():
+            value = _first_value(*(kcp.get(alias) for alias in aliases))
+            if isinstance(value, (bool, int)):
+                opts[key] = value
+        if opts:
+            _yaml_append_key(yaml_lines, 2, "mkcp-opts", opts)
     # network == "tcp" — bare, no transport opts (typical for reality+vision)
+
+    _append_prizrak_proxy_options(yaml_lines, stream, outbound)
 
     yaml = "\n".join(yaml_lines) + "\n"
     return ProxyParseResult(name=name, yaml=yaml)
@@ -234,8 +254,44 @@ def _as_mapping(value: Any) -> Dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def _prizrak_key(key: Any) -> str:
+    text = str(key)
+    return re.sub(r"(?<=[a-z0-9])([A-Z])", r"-\1", text).lower()
+
+
+def _normalize_prizrak_tree(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {_prizrak_key(key): _normalize_prizrak_tree(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_normalize_prizrak_tree(item) for item in value]
+    return value
+
+
+def _append_prizrak_proxy_options(lines: List[str], stream: Dict[str, Any], outbound: Dict[str, Any]) -> None:
+    udp443 = _prizrak_udp443(outbound.get("udp-443") or outbound.get("quic"))
+    if udp443:
+        lines.append(f"  udp-443: {udp443}")
+
+    finalmask = _as_mapping(stream.get("finalmask") or outbound.get("finalmask"))
+    masks: Dict[str, Any] = {}
+    for target, aliases in {
+        "tcp": ("tcp", "tcpmasks", "tcpMasks"),
+        "udp": ("udp", "udpmasks", "udpMasks"),
+    }.items():
+        source = next((finalmask[key] for key in aliases if isinstance(finalmask.get(key), list)), None)
+        if source:
+            masks[target] = _normalize_prizrak_tree(source)
+    if masks:
+        _yaml_append_key(lines, 2, "finalmask", masks)
+
+    mux = _as_mapping(outbound.get("mux"))
+    cool = _as_mapping(outbound.get("mux.cool") or mux.get("cool"))
+    if cool:
+        _yaml_append_key(lines, 2, "mux.cool", _normalize_prizrak_tree(cool))
+
+
 def _convert_trojan(
-    settings: Dict[str, Any], stream: Dict[str, Any], name: str
+    settings: Dict[str, Any], stream: Dict[str, Any], name: str, outbound: Dict[str, Any]
 ) -> Optional[ProxyParseResult]:
     servers = settings.get("servers") if isinstance(settings, dict) else None
     server_config = servers[0] if isinstance(servers, list) and servers and isinstance(servers[0], dict) else {}
@@ -303,6 +359,7 @@ def _convert_trojan(
     elif network not in {"tcp"}:
         return None
 
+    _append_prizrak_proxy_options(yaml_lines, stream, outbound)
     return ProxyParseResult(name=name, yaml="\n".join(yaml_lines) + "\n")
 
 
