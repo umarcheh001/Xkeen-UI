@@ -7,8 +7,9 @@ INSTALLER = Path("xkeen-ui/install.sh")
 def test_installer_isolates_python_cache_before_first_python_process():
     text = INSTALLER.read_text(encoding="utf-8")
 
-    prefix = 'PYTHONPYCACHEPREFIX="${XKEEN_UI_PYTHONPYCACHEPREFIX:-/tmp/xkeen-ui-pycache}"'
+    prefix = 'PYTHONPYCACHEPREFIX="${XKEEN_UI_PYTHONPYCACHEPREFIX:-/opt/var/cache/xkeen-ui-pycache}"'
     assert prefix in text
+    assert 'PYTHONPYCACHEPREFIX="/tmp/xkeen-ui-pycache"' in text
     # The first Python process of the installer is the check of the libraries.
     assert text.index(prefix) < text.index("provision_python_libs_check\n")
     assert "export PYTHONPYCACHEPREFIX" in text
@@ -18,9 +19,10 @@ def test_generated_init_script_isolates_panel_runtime_python_cache():
     # The service text lives in its own file of the panel now.
     init_script = Path("xkeen-ui/scripts/panel_init.sh").read_text(encoding="utf-8")
 
-    assert 'PYTHONPYCACHEPREFIX="${XKEEN_UI_PYTHONPYCACHEPREFIX:-/tmp/xkeen-ui-pycache}"' in init_script
+    assert 'PYTHONPYCACHEPREFIX="${XKEEN_UI_PYTHONPYCACHEPREFIX:-/opt/var/cache/xkeen-ui-pycache}"' in init_script
+    assert 'PYTHONPYCACHEPREFIX="/tmp/xkeen-ui-pycache"' in init_script
     assert "export PYTHONPYCACHEPREFIX" in init_script
-    assert 'mkdir -p "$PYTHONPYCACHEPREFIX" 2>/dev/null || true' in init_script
+    assert 'if ! mkdir -p "$PYTHONPYCACHEPREFIX" 2>/dev/null' in init_script
     assert init_script.index("export PYTHONPYCACHEPREFIX") < init_script.index('nohup "$PYTHON_BIN" "$TARGET"')
 
 

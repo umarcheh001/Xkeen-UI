@@ -406,7 +406,8 @@ remove_moved_dir "$CUSTOM_BACKUP_DIR" "/opt/var/backups/xkeen-ui"
 if [ "$PURGE" = "1" ]; then
   remove_moved_dir "$CUSTOM_REMOTEFS_DIR" "/opt/var/lib/xkeen-ui/remotefs"
 fi
-remove_moved_dir "$CUSTOM_PYCACHE_DIR" "/tmp/xkeen-ui-pycache"
+remove_moved_dir "$CUSTOM_PYCACHE_DIR" "/opt/var/cache/xkeen-ui-pycache"
+remove_tree "$ROOT/opt/var/cache/xkeen-ui-pycache"
 for leftover in "$TMP_DIR"/xkeen-ui-pycache "$TMP_DIR"/xkeen-ui-update* "$TMP_DIR"/xkeen-ui-backups \
     "$TMP_DIR"/xkeen-ui-remotefs "$TMP_DIR"/xkeen-init-*; do
   [ -e "$leftover" ] && remove_tree "$leftover"

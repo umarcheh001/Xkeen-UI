@@ -81,6 +81,44 @@ def test_common_cache_is_bounded_and_expires_entries():
     assert cache.stats()["misses"] == 4
 
 
+def test_common_cache_limits_retained_bytes_without_dropping_responses():
+    cache = MihomoClashCache(max_entries=8, max_bytes=700)
+    first = {"value": "a" * 300}
+    second = {"value": "b" * 300}
+
+    assert cache.get_or_set("first", lambda: first, ttl_seconds=60) == first
+    assert cache.get_or_set("second", lambda: second, ttl_seconds=60) == second
+    stats = cache.stats()
+    assert stats["bytes"] <= stats["max_bytes"] == 700
+    assert stats["entries"] == 1
+    assert stats["evictions"] == 1
+    assert cache.fetch("second", lambda: pytest.fail("recent entry was evicted"), ttl_seconds=60).hit
+
+
+def test_common_cache_does_not_retain_oversize_payload():
+    cache = MihomoClashCache(max_bytes=100)
+    payload = {"value": "x" * 500}
+
+    assert cache.get_or_set("large", lambda: payload, ttl_seconds=60) == payload
+    assert cache.get_or_set("large", lambda: payload, ttl_seconds=60) == payload
+    assert cache.stats()["entries"] == 0
+    assert cache.stats()["skipped_oversize"] == 2
+
+
+def test_common_cache_discards_expired_entries_on_other_key_hit():
+    clock = _Clock()
+    cache = MihomoClashCache(clock=clock)
+    cache.get_or_set("short", lambda: {"value": 1}, ttl_seconds=1)
+    cache.get_or_set("long", lambda: {"value": 2}, ttl_seconds=20)
+    clock.value = 6
+
+    assert cache.fetch("long", lambda: pytest.fail("long entry expired"), ttl_seconds=20).hit
+    assert cache.stats()["entries"] == 1
+    assert cache.stats()["expirations"] == 1
+    assert cache.invalidate() == 1
+    assert cache.stats()["bytes"] == 0
+
+
 def test_common_cache_invalidation_does_not_reinsert_inflight_mutation_result():
     cache = MihomoClashCache()
     started = threading.Event()

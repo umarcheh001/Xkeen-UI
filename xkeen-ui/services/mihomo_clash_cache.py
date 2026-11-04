@@ -27,9 +27,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
+from services.cache_size import cache_value_size
+
 
 MIHOMO_CLASH_CACHE_SCHEMA_VERSION = 1
 DEFAULT_CACHE_MAX_ENTRIES = 128
+DEFAULT_CACHE_MAX_BYTES = 16 * 1024 * 1024
+EXPIRY_SWEEP_SECONDS = 5.0
 
 
 @dataclass(frozen=True)
@@ -68,6 +72,7 @@ class _CacheEntry:
     value: Any
     expires_at: float | None
     generation: tuple[int, int]
+    size_bytes: int
 
 
 class _Flight:
@@ -96,12 +101,16 @@ class MihomoClashCache:
         self,
         *,
         max_entries: int = DEFAULT_CACHE_MAX_ENTRIES,
+        max_bytes: int = DEFAULT_CACHE_MAX_BYTES,
         clock: Callable[[], float] = time.monotonic,
     ):
         self.max_entries = max(1, int(max_entries))
+        self.max_bytes = max(1, int(max_bytes))
         self._clock = clock
         self._lock = threading.RLock()
         self._entries: OrderedDict[tuple[Any, ...], _CacheEntry] = OrderedDict()
+        self._bytes = 0
+        self._next_expiry_sweep = float("-inf")
         self._inflight: dict[tuple[Any, ...], _Flight] = {}
         self._global_generation = 0
         self._namespace_generations: dict[str, int] = {}
@@ -109,7 +118,24 @@ class MihomoClashCache:
         self._misses = 0
         self._waiters = 0
         self._evictions = 0
+        self._expirations = 0
+        self._skipped_oversize = 0
         self._invalidations = 0
+
+    def _pop_entry_locked(self, key: tuple[Any, ...]) -> _CacheEntry | None:
+        entry = self._entries.pop(key, None)
+        if entry is not None:
+            self._bytes -= entry.size_bytes
+        return entry
+
+    def _expire_entries_locked(self, now: float, *, force: bool = False) -> None:
+        if not force and now < self._next_expiry_sweep:
+            return
+        self._next_expiry_sweep = now + EXPIRY_SWEEP_SECONDS
+        for key, entry in list(self._entries.items()):
+            if entry.expires_at is not None and entry.expires_at <= now:
+                self._pop_entry_locked(key)
+                self._expirations += 1
 
     @staticmethod
     def _key_tuple(key: MihomoCacheKey | tuple[Any, ...] | str) -> tuple[Any, ...]:
@@ -141,6 +167,7 @@ class MihomoClashCache:
         while True:
             with self._lock:
                 now = float(self._clock())
+                self._expire_entries_locked(now)
                 entry = self._entries.get(cache_key)
                 if entry is not None and (
                     entry.expires_at is None or entry.expires_at > now
@@ -149,7 +176,8 @@ class MihomoClashCache:
                     self._hits += 1
                     return MihomoCacheLookup(_copy(entry.value), True, waited)
                 if entry is not None:
-                    self._entries.pop(cache_key, None)
+                    self._pop_entry_locked(cache_key)
+                    self._expirations += 1
 
                 flight = self._inflight.get(cache_key)
                 if flight is None:
@@ -202,6 +230,10 @@ class MihomoClashCache:
                 flight.event.set()
             raise
 
+        # Copy and size the DTO outside the lock: large snapshots must not
+        # delay unrelated cache hits or invalidations.
+        cached_value = _copy(value)
+        size_bytes = cache_value_size(cached_value, self.max_bytes)
         with self._lock:
             current = self._inflight.get(cache_key)
             if current is flight:
@@ -214,18 +246,25 @@ class MihomoClashCache:
                 self._global_generation,
                 self._namespace_generations.get(namespace, 0),
             )
-            if current is flight and flight.generation == current_generation:
+            if current is flight and flight.generation == current_generation and size_bytes <= self.max_bytes:
+                self._expire_entries_locked(float(self._clock()), force=True)
                 expires_at = None if ttl is None else float(self._clock()) + ttl
+                self._pop_entry_locked(cache_key)
                 self._entries[cache_key] = _CacheEntry(
-                    value=_copy(value),
+                    value=cached_value,
                     expires_at=expires_at,
                     generation=current_generation,
+                    size_bytes=size_bytes,
                 )
+                self._bytes += size_bytes
                 self._entries.move_to_end(cache_key)
-                while len(self._entries) > self.max_entries:
-                    self._entries.popitem(last=False)
+                while len(self._entries) > self.max_entries or self._bytes > self.max_bytes:
+                    oldest = next(iter(self._entries))
+                    self._pop_entry_locked(oldest)
                     self._evictions += 1
-            flight.value = _copy(value)
+            elif current is flight and size_bytes > self.max_bytes:
+                self._skipped_oversize += 1
+            flight.value = cached_value
             flight.event.set()
         return MihomoCacheLookup(value, False, False)
 
@@ -274,7 +313,7 @@ class MihomoClashCache:
                     continue
                 if target is not None and fingerprint != target:
                     continue
-                self._entries.pop(raw_key, None)
+                self._pop_entry_locked(raw_key)
                 removed += 1
             self._invalidations += removed or 1
             return removed
@@ -284,15 +323,20 @@ class MihomoClashCache:
 
     def stats(self) -> dict[str, int]:
         with self._lock:
+            self._expire_entries_locked(float(self._clock()))
             return {
                 "schema_version": MIHOMO_CLASH_CACHE_SCHEMA_VERSION,
                 "entries": len(self._entries),
                 "max_entries": self.max_entries,
+                "bytes": self._bytes,
+                "max_bytes": self.max_bytes,
                 "inflight": len(self._inflight),
                 "hits": self._hits,
                 "misses": self._misses,
                 "waiters": self._waiters,
                 "evictions": self._evictions,
+                "expirations": self._expirations,
+                "skipped_oversize": self._skipped_oversize,
                 "invalidations": self._invalidations,
             }
 
@@ -378,6 +422,7 @@ def invalidate_shared_mihomo_cache(
 
 
 __all__ = [
+    "DEFAULT_CACHE_MAX_BYTES",
     "DEFAULT_CACHE_MAX_ENTRIES",
     "MIHOMO_CLASH_CACHE_SCHEMA_VERSION",
     "MihomoCacheKey",

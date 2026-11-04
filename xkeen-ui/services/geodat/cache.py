@@ -8,10 +8,14 @@ This is intentionally process-local and best-effort.
 import os
 import threading
 import time
+from collections import OrderedDict
 from typing import Any, Dict, Tuple
 
+from services.cache_size import cache_value_size
 
-_GEODAT_CACHE: Dict[Tuple[Any, ...], Tuple[float, Any]] = {}
+MAX_GEODAT_CACHE_BYTES = 8 * 1024 * 1024
+_GEODAT_CACHE: OrderedDict[Tuple[Any, ...], Tuple[float, float, Any, int]] = OrderedDict()
+_GEODAT_CACHE_BYTES = 0
 _GEODAT_CACHE_LOCK = threading.Lock()
 _GEODAT_INFLIGHT: Dict[Tuple[Any, ...], threading.Event] = {}
 _GEODAT_INFLIGHT_LOCK = threading.Lock()
@@ -20,13 +24,16 @@ _GEODAT_INFLIGHT_LOCK = threading.Lock()
 def clear_geodat_cache() -> int:
     """Drop completed geodat payloads without disturbing in-flight work."""
 
+    global _GEODAT_CACHE_BYTES
     with _GEODAT_CACHE_LOCK:
         count = len(_GEODAT_CACHE)
         _GEODAT_CACHE.clear()
+        _GEODAT_CACHE_BYTES = 0
         return count
 
 
 def _geodat_cache_get(key: Tuple[Any, ...], ttl_s: int) -> Any | None:
+    global _GEODAT_CACHE_BYTES
     if ttl_s <= 0:
         return None
     now = time.time()
@@ -34,33 +41,37 @@ def _geodat_cache_get(key: Tuple[Any, ...], ttl_s: int) -> Any | None:
         v = _GEODAT_CACHE.get(key)
         if not v:
             return None
-        ts, payload = v
-        if (now - ts) > ttl_s:
-            try:
-                del _GEODAT_CACHE[key]
-            except Exception:
-                pass
+        ts, expires_at, payload, size = v
+        if (now - ts) > ttl_s or now > expires_at:
+            del _GEODAT_CACHE[key]
+            _GEODAT_CACHE_BYTES -= size
             return None
+        _GEODAT_CACHE.move_to_end(key)
         return payload
 
 
 def _geodat_cache_set(key: Tuple[Any, ...], payload: Any, ttl_s: int, *, max_items: int = 256) -> None:
+    global _GEODAT_CACHE_BYTES
     if ttl_s <= 0:
         return
+    size = cache_value_size((key, payload), MAX_GEODAT_CACHE_BYTES)
+    now = time.time()
     try:
         with _GEODAT_CACHE_LOCK:
-            _GEODAT_CACHE[key] = (time.time(), payload)
-            # very small in-memory LRU-ish eviction
-            if len(_GEODAT_CACHE) > max_items:
-                # delete ~25% oldest; sort a snapshot to avoid holding the lock
-                # during an expensive sort - snapshot is already under the lock
-                try:
-                    items = sorted(_GEODAT_CACHE.items(), key=lambda kv: kv[1][0])
-                    n_del = max(1, int(max_items * 0.25))
-                    for k, _ in items[:n_del]:
-                        _GEODAT_CACHE.pop(k, None)
-                except Exception:
-                    pass
+            for old_key, (_, expires_at, _, old_size) in list(_GEODAT_CACHE.items()):
+                if now > expires_at:
+                    del _GEODAT_CACHE[old_key]
+                    _GEODAT_CACHE_BYTES -= old_size
+            old = _GEODAT_CACHE.pop(key, None)
+            if old is not None:
+                _GEODAT_CACHE_BYTES -= old[3]
+            if size > MAX_GEODAT_CACHE_BYTES:
+                return
+            _GEODAT_CACHE[key] = (now, now + ttl_s, payload, size)
+            _GEODAT_CACHE_BYTES += size
+            while len(_GEODAT_CACHE) > max(1, max_items) or _GEODAT_CACHE_BYTES > MAX_GEODAT_CACHE_BYTES:
+                _, (_, _, _, old_size) = _GEODAT_CACHE.popitem(last=False)
+                _GEODAT_CACHE_BYTES -= old_size
     except Exception:
         return
 

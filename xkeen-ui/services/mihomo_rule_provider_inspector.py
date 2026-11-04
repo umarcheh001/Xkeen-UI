@@ -15,6 +15,7 @@ import selectors
 import shutil
 import stat
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -23,6 +24,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from services.cache_size import cache_value_size
 
 try:
     import yaml as _yaml
@@ -41,7 +44,9 @@ MAX_RULE_CHARS = 4096
 MAX_YAML_NODES = 50_000
 MAX_YAML_ALIASES = 1_000
 MAX_CACHE_ENTRIES = 8
+MAX_CACHE_BYTES = 8 * 1024 * 1024
 MAX_TRACE_MATCH_CACHE_ENTRIES = 256
+MAX_TRACE_MATCH_CACHE_BYTES = 1 * 1024 * 1024
 MAX_TRACE_MATCH_RULES = 250_000
 CONVERT_TIMEOUT_SECONDS = 12
 _ALLOWED_FORMATS = {"yaml", "text", "mrs"}
@@ -78,16 +83,23 @@ class _CachedRules:
     mtime_ns: int | None
 
 
-_cache: OrderedDict[tuple[Any, ...], _CachedRules] = OrderedDict()
-_trace_match_cache: OrderedDict[tuple[Any, ...], tuple[str, str]] = OrderedDict()
+_cache: OrderedDict[tuple[Any, ...], tuple[_CachedRules, int]] = OrderedDict()
+_cache_bytes = 0
+_trace_match_cache: OrderedDict[tuple[Any, ...], tuple[tuple[str, str], int]] = OrderedDict()
+_trace_match_cache_bytes = 0
 _cache_lock = threading.Lock()
 _mrs_converter_lock = threading.Lock()
 
 
-def clear_rule_provider_inspector_cache() -> None:
+def clear_rule_provider_inspector_cache() -> int:
+    global _cache_bytes, _trace_match_cache_bytes
     with _cache_lock:
+        count = len(_cache) + len(_trace_match_cache)
         _cache.clear()
         _trace_match_cache.clear()
+        _cache_bytes = 0
+        _trace_match_cache_bytes = 0
+        return count
 
 
 def _read_bounded(
@@ -638,18 +650,28 @@ def _mrs_data_for_match(
 
 def _trace_match_cache_get(key: tuple[Any, ...]) -> tuple[str, str] | None:
     with _cache_lock:
-        value = _trace_match_cache.get(key)
-        if value is not None:
+        entry = _trace_match_cache.get(key)
+        if entry is not None:
             _trace_match_cache.move_to_end(key)
-        return value
+            return entry[0]
+        return None
 
 
 def _trace_match_cache_put(key: tuple[Any, ...], value: tuple[str, str]) -> None:
+    global _trace_match_cache_bytes
+    size = cache_value_size((key, value), MAX_TRACE_MATCH_CACHE_BYTES)
     with _cache_lock:
-        _trace_match_cache[key] = value
+        old = _trace_match_cache.pop(key, None)
+        if old is not None:
+            _trace_match_cache_bytes -= old[1]
+        if size > MAX_TRACE_MATCH_CACHE_BYTES:
+            return
+        _trace_match_cache[key] = (value, size)
+        _trace_match_cache_bytes += size
         _trace_match_cache.move_to_end(key)
-        while len(_trace_match_cache) > MAX_TRACE_MATCH_CACHE_ENTRIES:
-            _trace_match_cache.popitem(last=False)
+        while len(_trace_match_cache) > MAX_TRACE_MATCH_CACHE_ENTRIES or _trace_match_cache_bytes > MAX_TRACE_MATCH_CACHE_BYTES:
+            _, (_, old_size) = _trace_match_cache.popitem(last=False)
+            _trace_match_cache_bytes -= old_size
 
 
 def _strip_outer_parentheses(value: str) -> str:
@@ -894,18 +916,28 @@ def match_rule_provider(
 
 def _cache_get(key: tuple[Any, ...]) -> _CachedRules | None:
     with _cache_lock:
-        value = _cache.get(key)
-        if value is not None:
+        entry = _cache.get(key)
+        if entry is not None:
             _cache.move_to_end(key)
-        return value
+            return entry[0]
+        return None
 
 
 def _cache_put(key: tuple[Any, ...], value: _CachedRules) -> None:
+    global _cache_bytes
+    size = sys.getsizeof(value) + cache_value_size((key, value.rules), MAX_CACHE_BYTES)
     with _cache_lock:
-        _cache[key] = value
+        old = _cache.pop(key, None)
+        if old is not None:
+            _cache_bytes -= old[1]
+        if size > MAX_CACHE_BYTES:
+            return
+        _cache[key] = (value, size)
+        _cache_bytes += size
         _cache.move_to_end(key)
-        while len(_cache) > MAX_CACHE_ENTRIES:
-            _cache.popitem(last=False)
+        while len(_cache) > MAX_CACHE_ENTRIES or _cache_bytes > MAX_CACHE_BYTES:
+            _, (_, old_size) = _cache.popitem(last=False)
+            _cache_bytes -= old_size
 
 
 def _load_rules(spec: _ProviderSpec, mihomo_binary: str | None) -> tuple[_CachedRules, bool]:

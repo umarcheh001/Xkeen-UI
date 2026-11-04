@@ -64,6 +64,7 @@ PANEL_FILES = {
     "opt/var/log/xkeen-ui-install.log.prev": "log\n",
     "opt/var/lib/xkeen-ui/update/status.json": "{}\n",
     "opt/var/lib/xkeen-ui/update/lock": "{}\n",
+    "opt/var/cache/xkeen-ui-pycache/opt/etc/xkeen-ui/app.cpython-313.pyc": "pyc\n",
     "opt/var/lib/xkeen-ui/update/panel-archive/abc.tar.gz": "archive\n",
     "opt/var/backups/xkeen-ui/backup-1.tar.gz": "backup\n",
     "tmp/xkeen-ui-pycache/opt/etc/xkeen-ui/app.cpython-313.pyc": "pyc\n",

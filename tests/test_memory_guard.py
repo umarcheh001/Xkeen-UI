@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import sys
+from types import SimpleNamespace
+
+from services.memory_guard import _clear_runtime_caches
 from services.memory_guard import MIB, MemoryGuard, resolve_memory_budget_bytes
 
 
@@ -9,6 +13,30 @@ def test_auto_budget_is_router_sized_and_bounded():
     assert resolve_memory_budget_bytes("auto", 4 * 1024 * MIB) == 256 * MIB
     assert resolve_memory_budget_bytes("192", 512 * MIB) == 192 * MIB
     assert resolve_memory_budget_bytes("off", 512 * MIB) is None
+
+
+def test_pressure_clear_includes_loaded_rule_provider_cache(monkeypatch):
+    calls = []
+    monkeypatch.setitem(
+        sys.modules,
+        "services.mihomo_rule_provider_inspector",
+        SimpleNamespace(clear_rule_provider_inspector_cache=lambda: calls.append("clear") or 3),
+    )
+
+    assert _clear_runtime_caches()["rule_providers"] == 3
+    assert calls == ["clear"]
+
+
+def test_pressure_clear_includes_loaded_jsonc_cache(monkeypatch):
+    calls = []
+    monkeypatch.setitem(
+        sys.modules,
+        "utils.jsonio",
+        SimpleNamespace(clear_jsonc_cache=lambda: calls.append("clear") or 2),
+    )
+
+    assert _clear_runtime_caches()["jsonc"] == 2
+    assert calls == ["clear"]
 
 
 def test_guard_reclaims_caches_when_rss_nears_budget():

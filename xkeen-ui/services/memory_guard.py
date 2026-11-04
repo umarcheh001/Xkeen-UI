@@ -11,6 +11,7 @@ process crash.
 from __future__ import annotations
 
 import gc
+import sys
 import threading
 import time
 from typing import Any, Callable, Mapping
@@ -94,31 +95,44 @@ def _clear_runtime_caches() -> dict[str, int]:
     """Clear reconstructible payload caches without touching active jobs."""
 
     cleared: dict[str, int] = {}
-    try:
-        from services.xray_log_api import clear_log_cache
-
-        cleared["xray_logs"] = int(clear_log_cache())
-    except Exception:
-        pass
-    try:
-        from services.mihomo_clash_cache import get_shared_mihomo_clash_cache
-
-        cleared["mihomo"] = int(get_shared_mihomo_clash_cache().clear())
-    except Exception:
-        pass
-    try:
-        from services.geodat.cache import clear_geodat_cache
-
-        cleared["geodat"] = int(clear_geodat_cache())
-    except Exception:
-        pass
-    try:
-        from services.mihomo_egress_info import reset_mihomo_egress_info_cache
-
-        reset_mihomo_egress_info_cache()
-        cleared["egress"] = 1
-    except Exception:
-        pass
+    # Importing a missing service under pressure can increase RSS instead.
+    xray_logs = sys.modules.get("services.xray_log_api")
+    if xray_logs is not None:
+        try:
+            cleared["xray_logs"] = int(xray_logs.clear_log_cache())
+        except Exception:
+            pass
+    mihomo_cache = sys.modules.get("services.mihomo_clash_cache")
+    if mihomo_cache is not None:
+        try:
+            cleared["mihomo"] = int(mihomo_cache.get_shared_mihomo_clash_cache().clear())
+        except Exception:
+            pass
+    inspector = sys.modules.get("services.mihomo_rule_provider_inspector")
+    if inspector is not None:
+        try:
+            cleared["rule_providers"] = int(inspector.clear_rule_provider_inspector_cache())
+        except Exception:
+            pass
+    geodat_cache = sys.modules.get("services.geodat.cache")
+    if geodat_cache is not None:
+        try:
+            cleared["geodat"] = int(geodat_cache.clear_geodat_cache())
+        except Exception:
+            pass
+    jsonio = sys.modules.get("utils.jsonio")
+    if jsonio is not None:
+        try:
+            cleared["jsonc"] = int(jsonio.clear_jsonc_cache())
+        except Exception:
+            pass
+    mihomo_egress = sys.modules.get("services.mihomo_egress_info")
+    if mihomo_egress is not None:
+        try:
+            mihomo_egress.reset_mihomo_egress_info_cache()
+            cleared["egress"] = 1
+        except Exception:
+            pass
     return cleared
 
 

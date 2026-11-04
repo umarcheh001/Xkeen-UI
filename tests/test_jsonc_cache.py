@@ -18,10 +18,12 @@ from __future__ import annotations
 
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
 from utils.jsonio import read_jsonc_text
+from utils import jsonio
 
 
 def _write(path, text: str, *, age_seconds: float = 3600.0) -> None:
@@ -88,6 +90,36 @@ class TestInvalidation:
 
 
 class TestGuards:
+    def test_total_byte_budget_preserves_recent_config(self, tmp_path, monkeypatch) -> None:
+        jsonio.clear_jsonc_cache()
+        paths = [tmp_path / f"conf{index}.json" for index in range(3)]
+        try:
+            for path in paths:
+                _write(path, '{"a": 1}')
+            read_jsonc_text(str(paths[0]))
+            first_size = jsonio._cache_bytes
+            monkeypatch.setattr(jsonio, "_MAX_CACHE_BYTES", first_size * 2)
+            read_jsonc_text(str(paths[1]))
+            read_jsonc_text(str(paths[0]))
+            read_jsonc_text(str(paths[2]))
+            assert str(paths[0]) in jsonio._cache
+            assert str(paths[1]) not in jsonio._cache
+            assert jsonio._cache_bytes <= jsonio._MAX_CACHE_BYTES
+        finally:
+            jsonio.clear_jsonc_cache()
+
+    def test_concurrent_reads_do_not_double_count_bytes(self, tmp_path) -> None:
+        jsonio.clear_jsonc_cache()
+        path = tmp_path / "shared.json"
+        _write(path, '{"a": 1}')
+        try:
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                assert list(pool.map(read_jsonc_text, [str(path)] * 32)) == ['{"a": 1}'] * 32
+            assert len(jsonio._cache) == 1
+            assert jsonio._cache_bytes == next(iter(jsonio._cache.values()))[2]
+        finally:
+            jsonio.clear_jsonc_cache()
+
     def test_large_file_is_not_cached(self, tmp_path, monkeypatch) -> None:
         # Файл в 8 байт при пороге 4 кэшу не положен.
         monkeypatch.setattr("utils.jsonio._MAX_CACHED_BYTES", 4)
