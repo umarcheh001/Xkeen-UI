@@ -294,7 +294,8 @@ export function drawAvailabilityStrip(canvas, cells) {
   return { kind: "strip", plot, count, paint, columnAt: (x) => columnIndex(x, plot, count) };
 }
 
-// rows: { label, cells: (zone|null)[], peakDots: boolean[] }[]; opts.columns cells per row.
+// rows: { label, cells: (zone|null)[], levels?: (number|null)[] }[]; opts.columns cells per row.
+// A cell with a level is painted smoothly, without one by its zone (04.11.2026: no peak dots).
 // cellAt(x, y) -> { row, column, index } or null outside the grid.
 export function drawCellGrid(canvas, rows, opts = {}) {
   const { ctx, width, height, colors } = prepare(canvas);
@@ -332,10 +333,6 @@ export function drawCellGrid(canvas, rows, opts = {}) {
       ctx.fillStyle = zoneColor(colors, zone);
       ctx.fillRect(x, y, cellW - gap, cellH - gap);
     }
-    if (cell && cell.peak) {
-      ctx.fillStyle = colors.zones[2];
-      ctx.fillRect(x + (cellW - gap) / 2 - 1, y + 1, 2, 2);
-    }
   };
 
   ctx.fillStyle = colors.muted;
@@ -345,7 +342,7 @@ export function drawCellGrid(canvas, rows, opts = {}) {
   list.forEach((row, r) => {
     if (row.label) ctx.fillText(row.label, left - 4, r * cellH + cellH / 2);
     (row.cells || []).forEach((zone, c) => {
-      paint(r * columns + c, { zone: zone ?? null, peak: Boolean(row.peakDots?.[c]), level: row.levels?.[c] ?? null }, false);
+      paint(r * columns + c, { zone: zone ?? null, level: row.levels?.[c] ?? null }, false);
     });
   });
 
@@ -364,7 +361,7 @@ export function drawCellGrid(canvas, rows, opts = {}) {
 }
 
 // Repaint a single column (level/mini/strip: series column object or zone; mirror:
-// { up, down }; grid: index = row * columns + column, column = zone or { zone, peak }).
+// { up, down }; grid: index = row * columns + column, column = zone or { zone, level }).
 export function redrawColumn(handle, index, column) {
   if (!handle || typeof handle.paint !== "function" || index < 0 || index >= handle.count) return;
   handle.paint(index, column, true);

@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 660,
-      "size_bytes": 9028989,
+      "size_bytes": 9030305,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -358,12 +358,12 @@
         "ndmc (router diagnostics optional)"
       ],
       "removable": true,
-      "unit_count": 48,
-      "size_bytes": 592872,
+      "unit_count": 49,
+      "size_bytes": 603355,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 9,
-        "backend_test": 13,
+        "backend_test": 14,
         "frontend_feature": 22,
         "frontend_test": 3
       },
@@ -381,8 +381,8 @@
         "xkeen-ui/services/system_resources_history/store.py",
         "xkeen-ui/services/system_resources_history/top_procs.py",
         "xkeen-ui/services/system_resources_history/zones.py",
-        "tests/test_resource_monitor_frontend.py",
-        "tests/test_resource_monitor_model_runtime.py"
+        "tests/test_resource_monitor_day_js.py",
+        "tests/test_resource_monitor_frontend.py"
       ]
     }
   ],
@@ -14219,7 +14219,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/router_resource_dashboard.spec.mjs",
-      "size_bytes": 107179,
+      "size_bytes": 108495,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -24523,6 +24523,25 @@
     {
       "module_id": "tool.advanced-diagnostics",
       "kind": "backend_test",
+      "path": "tests/test_resource_monitor_day_js.py",
+      "size_bytes": 7926,
+      "depends_on": [
+        "core"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "ndmc (router diagnostics optional)"
+      ],
+      "environment_variables": [],
+      "removable": true
+    },
+    {
+      "module_id": "tool.advanced-diagnostics",
+      "kind": "backend_test",
       "path": "tests/test_resource_monitor_frontend.py",
       "size_bytes": 7839,
       "depends_on": [
@@ -24800,7 +24819,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor/canvas_charts.js",
-      "size_bytes": 15352,
+      "size_bytes": 15286,
       "depends_on": [
         "core"
       ],
@@ -24827,7 +24846,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor/chart_css.js",
-      "size_bytes": 6884,
+      "size_bytes": 6930,
       "depends_on": [
         "core"
       ],
@@ -24854,7 +24873,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor/chart_data.js",
-      "size_bytes": 26763,
+      "size_bytes": 29724,
       "depends_on": [
         "core"
       ],
@@ -24881,7 +24900,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor/chart_view.js",
-      "size_bytes": 22100,
+      "size_bytes": 21801,
       "depends_on": [
         "core"
       ],
@@ -25367,7 +25386,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_test",
       "path": "e2e/resource_monitor_charts.spec.mjs",
-      "size_bytes": 9405,
+      "size_bytes": 9320,
       "depends_on": [
         "core"
       ],
@@ -34802,7 +34821,7 @@
       {
         "from": "tool.advanced-diagnostics",
         "to": "core",
-        "unit_count": 48,
+        "unit_count": 49,
         "examples": [
           "xkeen-ui/routes/system_resources.py",
           "xkeen-ui/services/system_resources_history/__init__.py",
@@ -35743,8 +35762,8 @@
           "size_bytes": 1008333
         },
         "tool.advanced-diagnostics": {
-          "unit_count": 48,
-          "size_bytes": 592872
+          "unit_count": 49,
+          "size_bytes": 603355
         }
       },
       "next_stage": "Этапы 4, 5 и 6."

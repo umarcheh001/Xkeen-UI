@@ -146,10 +146,10 @@ test('cell grid hit-testing for 96 cells and 7 day rows', async ({ page }) => {
   const r = await inPage(page, `
     const canvas = make(960, 40);
     const cells = Array.from({ length: 96 }, (_, i) => (i === 3 ? null : i % 3));
-    const grid = charts.drawCellGrid(canvas, [{ label: '', cells, peakDots: cells.map(() => false) }], { columns: 96 });
+    const grid = charts.drawCellGrid(canvas, [{ label: '', cells }], { columns: 96 });
     const first = grid.cellAt(5, 5), last = grid.cellAt(955, 5), edge = grid.cellAt(960, 5), under = grid.cellAt(5, 41), gapEdge = grid.cellAt(10, 5);
     const week = make(480, 140);
-    const rows = Array.from({ length: 7 }, (_, d) => ({ label: 'd' + d, cells: Array.from({ length: 48 }, () => 0), peakDots: Array.from({ length: 48 }, () => false) }));
+    const rows = Array.from({ length: 7 }, (_, d) => ({ label: 'd' + d, cells: Array.from({ length: 48 }, () => 0) }));
     const g2 = charts.drawCellGrid(week, rows, { columns: 48 });
     const left = g2.plot.left, w = g2.plot.width / 48, h = g2.plot.height / 7;
     return { first, last, edge, under, gapEdge,

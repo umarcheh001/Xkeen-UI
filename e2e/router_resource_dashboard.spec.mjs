@@ -842,6 +842,10 @@ test('range buttons change column count', async ({ page }) => {
   expect(day.columns).toBe(96);
   expect(day.rows).toBe(6);
   await expect(view.locator('.xkc-tabs')).toBeHidden();
+  // 04.11.2026: the day is painted smoothly, as the week: a scale instead of three swatches
+  await expect(view.locator('.xkc-info .xkc-grad')).toBeVisible();
+  await expect(view.locator('.xkc-info')).toContainText('цвет — средняя нагрузка');
+  await expect(view.locator('.xkc-info')).not.toContainText('худшее значение');
   // 7 d: seven day rows, the tabs come back with "Все" chosen
   await view.locator('.xkc-b[data-range="7d"]').click();
   await expect(view.locator('.xkc-canvas')).toHaveAttribute('data-kind', 'grid7');
@@ -1234,6 +1238,8 @@ test('24 h cell opens 6 h with highlight, the last hour opens 1 h; 7 d last day 
   let p = await clickCell(80);
   await page.mouse.move(p.x, p.y);
   await expect(view.locator('.xkc-tip')).toContainText('Процессор');
+  // the hint of the day says why the column has its colour
+  await expect(view.locator('.xkc-tip .t')).toHaveText(/^(Всё в норме|Близко к высокой|Высокая нагрузка|Перегрузка)/);
   await page.mouse.click(p.x, p.y);
   await expect(view.locator('.xkc-canvas')).toHaveAttribute('data-kind', 'level');
   await expect(view.locator('.xkc-b[data-range="6h"]')).toHaveAttribute('aria-pressed', 'true');
@@ -1353,6 +1359,12 @@ test('phone draws half as many columns', async ({ page }) => {
   expect((await chartInfo(view)).columns).toBe(30);
   await view.locator('.xkc-b[data-range="24h"]').click();
   expect((await chartInfo(view)).columns).toBe(48);
+  // 04.11.2026: the row names fit the gutter, the time labels of the axis do not overlap
+  const fit = await view.locator('.xkc-gutter .rl').evaluateAll(els => els.map(el => { const range = document.createRange(); range.selectNodeContents(el); return { text: el.textContent, cut: range.getBoundingClientRect().width > el.clientWidth + 0.5 }; }));
+  expect(fit.filter(row => row.cut)).toEqual([]);
+  const boxes = await view.locator('.xkc-axis span').evaluateAll(els => els.map(el => { const r = el.getBoundingClientRect(); return { text: el.textContent, left: r.left, right: r.right }; }));
+  const overlaps = boxes.slice(1).filter((box, i) => box.left < boxes[i].right + 2).map(box => box.text);
+  expect(overlaps).toEqual([]);
   const scroll = await page.evaluate(() => {
     const body = document.querySelector('#xk-resource-dashboard-modal .modal-body');
     return { body: body.scrollWidth - body.clientWidth, doc: document.documentElement.scrollWidth - innerWidth };
