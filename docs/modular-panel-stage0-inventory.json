@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 666,
-      "size_bytes": 9077164,
+      "size_bytes": 9078473,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -88,7 +88,7 @@
       ],
       "removable": true,
       "unit_count": 151,
-      "size_bytes": 3979209,
+      "size_bytes": 3979872,
       "kind_counts": {
         "backend_route": 13,
         "backend_service": 20,
@@ -5817,7 +5817,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_installer_profile_frontend_closure.py",
-      "size_bytes": 7659,
+      "size_bytes": 8948,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -6645,7 +6645,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_boundaries.py",
-      "size_bytes": 18530,
+      "size_bytes": 18550,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -23834,7 +23834,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_test",
       "path": "e2e/xray_module_parts.spec.mjs",
-      "size_bytes": 6792,
+      "size_bytes": 7455,
       "depends_on": [
         "core",
         "tool.editor"

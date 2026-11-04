@@ -28,11 +28,12 @@ FROM_IMPORT = re.compile(r"""\bfrom\s*['"](\.{1,2}/[^'"]+)['"]""")
 BARE_IMPORT = re.compile(r"""^\s*import\s*['"](\.{1,2}/[^'"]+)['"]""", re.MULTILINE)
 DYNAMIC_IMPORT = re.compile(r"""\bimport\(\s*['"](\.{1,2}/[^'"]+)['"]\s*\)""")
 # A built chunk of a module names a core file `xk-core/<path>`; the page finds
-# it through the importmap, which reads the installed manifest.build.json.
+# it through the importmap prefix `xk-core/` -> `/static/`.
 CORE_PUBLIC_IMPORT = re.compile(r"""(?:\bfrom|\bimport)\s*["'`]xk-core/([^"'`]+)["'`]""")
 STATIC_REFERENCE = re.compile(r"""url_for\(\s*['"]static['"]\s*,\s*filename\s*=\s*['"]([^'"]+)['"]""")
 
-PROFILES = ("xray-minimal", "mihomo-minimal", "full")
+PROFILES = (("xray-minimal", "light"), ("xray-minimal", "full"),
+            ("mihomo-minimal", "light"), ("full", "full"))
 
 
 def _helper():
@@ -45,10 +46,11 @@ def _helper():
 
 @pytest.fixture(scope="module", params=PROFILES)
 def installed(request, tmp_path_factory, profile_source):
-    target = tmp_path_factory.mktemp(request.param) / "panel"
+    profile, variant = request.param
+    target = tmp_path_factory.mktemp(f"{profile}-{variant}") / "panel"
     helper = _helper()
-    helper.commit_profile(helper.apply_profile(profile_source, target, request.param))
-    return request.param, target
+    helper.commit_profile(helper.apply_profile(profile_source, target, profile, editor_variant=variant))
+    return profile, target
 
 
 @pytest.fixture(scope="module")
@@ -91,8 +93,6 @@ def _browser_walk(target: Path, roots: list[str]) -> tuple[set[str], dict[str, s
 
     loaded: set[str] = set()
     missing: dict[str, str] = {}
-    manifest_path = target / "static/frontend-build/.vite/manifest.build.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.is_file() else {}
     queue = list(roots)
     while queue:
         rel = queue.pop()
@@ -109,9 +109,8 @@ def _browser_walk(target: Path, roots: list[str]) -> tuple[set[str], dict[str, s
             else:
                 missing.setdefault(dependency, rel)
         for public in CORE_PUBLIC_IMPORT.findall(text):
-            entry = manifest.get(public)
-            dependency = "static/frontend-build/" + entry["file"] if isinstance(entry, dict) else None
-            if dependency and (target / dependency).is_file():
+            dependency = "static/" + public
+            if (target / dependency).is_file():
                 queue.append(dependency)
             else:
                 missing.setdefault("xk-core/" + public, rel)
@@ -127,6 +126,21 @@ def _bridges(target: Path) -> list[str]:
     return sorted(path.relative_to(target).as_posix() for path in assets.glob("*-bridge.js"))
 
 
+def test_browser_walk_detects_missing_runtime_core_source(tmp_path):
+    build = tmp_path / "static/frontend-build"
+    (build / ".vite").mkdir(parents=True)
+    (build / "assets").mkdir()
+    (build / "assets/core.js").write_text("export {}", encoding="utf-8")
+    (build / ".vite/manifest.build.json").write_text(
+        json.dumps({"js/features/shared.js": {"file": "assets/core.js"}}), encoding="utf-8"
+    )
+    root = "static/frontend-build/module.js"
+    (tmp_path / root).write_text('import "xk-core/js/features/shared.js";', encoding="utf-8")
+
+    _, missing = _browser_walk(tmp_path, [root])
+    assert missing == {"xk-core/js/features/shared.js": root}
+
+
 def test_pages_of_an_installed_profile_have_every_static_import(installed):
     profile, target = installed
     bridges = _bridges(target)
@@ -137,6 +151,18 @@ def test_pages_of_an_installed_profile_have_every_static_import(installed):
     assert missing == {}, profile
     assert "static/js/pages/panel.entry.js" in loaded, profile
     assert "static/js/pages/panel.module_loader.js" in loaded, profile
+
+
+def test_installed_xray_chunks_find_their_runtime_core_sources(installed):
+    profile, target = installed
+    if profile == "mihomo-minimal":
+        pytest.skip("only profiles with Xray load its chunks")
+    module = target / "static/frontend-build/modules/engine.xray"
+    chunks = sorted(path.relative_to(target).as_posix() for path in module.glob("*.js"))
+    assert chunks, profile
+    loaded, missing = _browser_walk(target, chunks)
+    assert "static/js/features/module_parts.js" in loaded, profile
+    assert missing == {}, profile
 
 
 def test_installed_templates_reference_only_installed_static_files(installed):
@@ -169,6 +195,9 @@ def test_minimal_profiles_still_leave_optional_modules_out(installed):
                            "features/resource_monitor.js", "features/backups.js"],
         "full": [],
     }[profile]
+    variant = json.loads((target / "install-profile.json").read_text(encoding="utf-8"))["editor_variant"]
+    if variant != "light" and "pages/panel.editor.monaco.bundle.js" in expected_absent:
+        expected_absent.remove("pages/panel.editor.monaco.bundle.js")
     for name in expected_absent:
         assert not (script_root / name).exists(), f"{profile}: {name}"
 

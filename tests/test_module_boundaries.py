@@ -94,7 +94,7 @@ def test_xray_build_has_only_its_directory() -> None:
         pytest.skip('frontend build not found')
     entries = json.loads(manifest.read_text(encoding='utf-8'))
     assert [entry['src'] for entry in entries.values()
-            if entry.get('src') and owner(entry['src']) == 'engine.xray'] == []
+            if entry.get('src') and package_owner('static/' + entry['src']) == 'engine.xray'] == []
 
 
 def test_build_files_of_xray_names_are_core_outside_the_module() -> None:

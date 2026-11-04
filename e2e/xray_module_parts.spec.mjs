@@ -14,7 +14,10 @@ async function openPanelAwayFromXray(page, options = {}) {
     if (message.type() !== 'error') return;
     // The bench answers 503 to the terminal token and to the router sensors;
     // the browser reports those answers, they are not script errors.
-    if (/^Failed to load resource: the server responded with a status of 503\b/.test(message.text())) return;
+    const location = message.location().url;
+    const expectedUrl = location && new URL(location).origin === new URL(page.url()).origin
+      && ['/api/ws-token', '/api/system/resources'].includes(new URL(location).pathname);
+    if (expectedUrl && /^Failed to load resource: the server responded with a status of 503\b/.test(message.text())) return;
     problems.push(`console error: ${message.text()}`);
   });
 
@@ -37,6 +40,13 @@ async function openPanelAwayFromXray(page, options = {}) {
 }
 
 test.describe('Xray module parts on a fresh page', () => {
+  test('unexpected 503 responses remain visible as errors', async ({ page }) => {
+    await page.route('**/api/unexpected-module-failure', (route) => route.fulfill({ status: 503 }));
+    const problems = await openPanelAwayFromXray(page);
+    await page.evaluate(() => fetch('/api/unexpected-module-failure'));
+    await expect.poll(() => problems.some((problem) => problem.includes('status of 503'))).toBe(true);
+  });
+
   test('the restart journal opens the Xray preflight window', async ({ page }) => {
     await page.route(`**/api/operation-diagnostics/${PREFLIGHT_REF}`, async (route) => {
       await route.fulfill({
