@@ -55,16 +55,44 @@ def _yaml_list(items) -> str:
     return "[" + ", ".join(_yaml_str(x) for x in items) + "]"
 
 
+def _yaml_nested_str(value: Any) -> str:
+    if isinstance(value, str) and ("\r" in value or "\n" in value):
+        return json.dumps(value, ensure_ascii=True)
+    return _yaml_str(value)
+
+
+def _yaml_append_list_item(lines: List[str], indent: int, item: Any) -> None:
+    pad = " " * indent
+    if isinstance(item, dict):
+        nested: List[str] = []
+        for key, value in item.items():
+            _yaml_append_key(nested, indent + 2, str(key), value)
+        if nested:
+            lines.append(f"{pad}- {nested[0].lstrip()}")
+            lines.extend(nested[1:])
+    elif isinstance(item, list):
+        lines.append(f"{pad}-")
+        for child in item:
+            _yaml_append_list_item(lines, indent + 2, child)
+    elif isinstance(item, bool):
+        lines.append(f"{pad}- {'true' if item else 'false'}")
+    elif isinstance(item, (int, float)):
+        lines.append(f"{pad}- {item}")
+    else:
+        lines.append(f"{pad}- {_yaml_nested_str(item)}")
+
+
 def _yaml_append_key(lines: List[str], indent: int, key: str, value: Any) -> None:
     """Append a nested YAML key/value pair using safe scalars."""
     if value is None or value == "":
         return
 
     pad = " " * indent
+    safe_key = _yaml_str(key)
     if isinstance(value, dict):
         if not value:
             return
-        lines.append(f"{pad}{key}:")
+        lines.append(f"{pad}{safe_key}:")
         for sub_key, sub_value in value.items():
             _yaml_append_key(lines, indent + 2, str(sub_key), sub_value)
         return
@@ -73,25 +101,20 @@ def _yaml_append_key(lines: List[str], indent: int, key: str, value: Any) -> Non
         items = [item for item in value if item not in (None, "")]
         if not items:
             return
-        lines.append(f"{pad}{key}:")
+        lines.append(f"{pad}{safe_key}:")
         for item in items:
-            if isinstance(item, bool):
-                lines.append(f"{pad}  - {'true' if item else 'false'}")
-            elif isinstance(item, (int, float)) and not isinstance(item, bool):
-                lines.append(f"{pad}  - {item}")
-            else:
-                lines.append(f"{pad}  - {_yaml_str(item)}")
+            _yaml_append_list_item(lines, indent + 2, item)
         return
 
     if isinstance(value, bool):
-        lines.append(f"{pad}{key}: {'true' if value else 'false'}")
+        lines.append(f"{pad}{safe_key}: {'true' if value else 'false'}")
         return
 
     if isinstance(value, (int, float)) and not isinstance(value, bool):
-        lines.append(f"{pad}{key}: {value}")
+        lines.append(f"{pad}{safe_key}: {value}")
         return
 
-    lines.append(f"{pad}{key}: {_yaml_str(value)}")
+    lines.append(f"{pad}{safe_key}: {_yaml_nested_str(value)}")
 
 
 def _mapping_first(mapping: Any, *keys: str, default: Any = None) -> Any:
@@ -149,6 +172,11 @@ def _query_bool(mapping: Dict[str, str], *keys: str) -> Optional[bool]:
     if text in {"0", "false", "no", "off"}:
         return False
     return None
+
+
+def _prizrak_udp443(value: Any) -> str:
+    value = str(value or "").strip().lower()
+    return value if value in {"allow", "reject"} else ""
 
 
 def _append_reality_pq_support_from_query(lines: List[str], mapping: Dict[str, str]) -> None:
@@ -430,6 +458,25 @@ def _build_xhttp_opts(path: str, host: str, mode: str, extra: Any) -> Dict[str, 
     if download_settings:
         opts["download-settings"] = download_settings
 
+    h2_flow = _mapping_first(extra, "h2-flow", "h2Flow", default=None)
+    if isinstance(h2_flow, dict):
+        flow = {}
+        enabled = _mapping_bool(h2_flow, "enabled")
+        if enabled is not None:
+            flow["enabled"] = enabled
+        for target, aliases in {
+            "max-stream-receive-window": ("max-stream-receive-window", "maxStreamReceiveWindow"),
+            "max-connection-receive-window": ("max-connection-receive-window", "maxConnectionReceiveWindow"),
+        }.items():
+            value = _mapping_first(h2_flow, *aliases, default=None)
+            if isinstance(value, int) and not isinstance(value, bool):
+                flow[target] = value
+        if flow:
+            opts["h2-flow"] = flow
+    flow_control = _mapping_bool(extra, "h2-flow-control", "h2FlowControl")
+    if flow_control is not None:
+        opts["h2-flow-control"] = flow_control
+
     return opts
 
 
@@ -542,6 +589,9 @@ def parse_vless(link: str, custom_name: Optional[str] = None) -> ProxyParseResul
     yaml_lines.append(f"  network: {_yaml_str(type_)}")
     yaml_lines.append("  udp: true")
     yaml_lines.append("  packet-encoding: xudp")
+    udp443 = _prizrak_udp443(_query_first(qs, "udp-443", "quic"))
+    if udp443:
+        yaml_lines.append(f"  udp-443: {udp443}")
     tfo = _query_bool(qs, "tfo", "tcpFastOpen")
     if tfo is not None:
         yaml_lines.append(f"  tfo: {'true' if tfo else 'false'}")
@@ -564,6 +614,9 @@ def parse_vless(link: str, custom_name: Optional[str] = None) -> ProxyParseResul
             yaml_lines.append(f"    public-key: {_yaml_str(public_key)}")
         if short_id:
             yaml_lines.append(f"    short-id: {_yaml_str(short_id)}")
+        mldsa = _query_first(qs, "pqv", "mldsa65Verify", "mldsa65-verify")
+        if mldsa:
+            yaml_lines.append(f"    mldsa65-verify: {_yaml_str(mldsa)}")
         _append_reality_pq_support_from_query(yaml_lines, qs)
         if spx:
             yaml_lines.append(f"    spider-x: {_yaml_str(spx)}")
@@ -1296,6 +1349,9 @@ def parse_trojan(link: str, custom_name: Optional[str] = None) -> ProxyParseResu
     yaml_lines.append(f"  port: {port}")
     yaml_lines.append(f"  password: {_yaml_str(password)}")
     yaml_lines.append("  udp: true")
+    udp443 = _prizrak_udp443(_qs_first(qs, "udp-443", "") or _qs_first(qs, "quic", ""))
+    if udp443:
+        yaml_lines.append(f"  udp-443: {udp443}")
 
     if security in {"tls", "reality"}:
         yaml_lines.append("  tls: true")
@@ -1315,6 +1371,9 @@ def parse_trojan(link: str, custom_name: Optional[str] = None) -> ProxyParseResu
                 yaml_lines.append(f"    public-key: {_yaml_str(pbk)}")
             if sid:
                 yaml_lines.append(f"    short-id: {_yaml_str(sid)}")
+            mldsa = unquote(_qs_first(qs, "pqv", "") or _qs_first(qs, "mldsa65Verify", ""))
+            if mldsa:
+                yaml_lines.append(f"    mldsa65-verify: {_yaml_str(mldsa)}")
             _append_reality_pq_support_from_qs(yaml_lines, qs)
 
     yaml_lines.append(f"  network: {_yaml_str(net)}")

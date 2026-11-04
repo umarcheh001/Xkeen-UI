@@ -66,6 +66,103 @@ def test_mihomo_yaml_schema_runtime_accepts_basic_valid_config():
     assert result["diagnostics"] == []
 
 
+def test_mihomo_yaml_schema_runtime_accepts_prizrak_extensions():
+    result = _run_mihomo_yaml_schema("""proxies:
+  - name: direct-fragmented
+    type: freedom
+    fragment:
+      packets: tlshello
+      length: 100-200
+      split: sni
+    sockopt:
+      tcp-congestion: bbr
+      custom-sockopt:
+        - opt: "15"
+          type: int
+          value: "1"
+  - name: prizrak
+    type: vless
+    server: edge.example.com
+    port: 443
+    uuid: 11111111-1111-1111-1111-111111111111
+    network: xhttp
+    tls: true
+    servername: edge.example.com
+    client-fingerprint: chrome
+    udp-443: reject
+    reality-opts:
+      public-key: server-key
+      mldsa65-verify: verify-key
+    xhttp-opts:
+      h2-flow:
+        enabled: true
+        max-stream-receive-window: 16777216
+    finalmask:
+      tcp:
+        - type: fragment
+          settings:
+            max-split: 2-4
+    mux.cool:
+      enabled: true
+      xudp-proxy-udp443: skip
+proxy-providers:
+  sub:
+    type: http
+    url: https://example.com/sub
+    interval: 21600
+    fallback-urls:
+      - https://backup.example.com/sub
+    override:
+      udp-443: reject
+proxy-groups:
+  - name: smart
+    type: smart
+    proxies: [prizrak, DIRECT]
+    url: https://example.com/generate_204
+    ping-config:
+      destination: https://example.com/generate_204
+      http-method: HEAD
+      interval: 30s
+      sampling: 3
+      timeout: 5s
+rule-providers:
+  list:
+    type: http
+    behavior: domain
+    url: https://example.com/list
+    interval: 86400
+    fallback-urls: https://backup.example.com/list
+rules:
+  - MATCH,smart
+""")
+    assert result["ok"] is True, result["diagnostics"]
+    assert result["diagnostics"] == []
+
+
+def test_mihomo_semantic_validation_rejects_conflicting_prizrak_options():
+    if shutil.which("node") is None:
+        pytest.skip("node is not available")
+    script = """
+import { validateMihomoConfigSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';
+const result = validateMihomoConfigSemantics({
+  proxies: [{ name: 'node', type: 'vless', server: 'example.com', port: 443,
+    'udp-443': 'reject', quic: 'allow', smux: { enabled: true }, 'mux.cool': { enabled: true } }],
+  'proxy-providers': { sub: { type: 'http', url: 'https://example.com/sub', interval: 3600,
+    override: { 'udp-443': 'reject', quic: 'allow' } } },
+});
+console.log(JSON.stringify(result.map((item) => item.code)));
+"""
+    completed = subprocess.run(
+        ["node", "--input-type=module"], input=script, capture_output=True,
+        cwd=ROOT, text=True, check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    codes = json.loads(completed.stdout)
+    assert "prizrak-udp443-conflict" in codes
+    assert "prizrak-provider-udp443-conflict" in codes
+    assert "prizrak-mux-conflict" in codes
+
+
 def test_mihomo_yaml_schema_runtime_accepts_sniffer_protocol_shorthand_with_empty_yaml_nodes():
     result = _run_mihomo_yaml_schema(
         "\n".join([

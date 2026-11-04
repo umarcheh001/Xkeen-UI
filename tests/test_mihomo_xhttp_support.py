@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
 from pathlib import Path
 from urllib.parse import quote
 
@@ -30,6 +32,83 @@ def test_parse_vless_supports_xhttp_transport_for_mihomo():
     assert "mode: stream-up" in result.yaml
     assert "servername: edge.example.com" in result.yaml
     assert "tfo" not in yaml.safe_load(result.yaml)[0]
+
+
+def test_prizrak_vless_uri_preserves_reality_h2_flow_and_targeted_quic():
+    extra = quote(json.dumps({
+        "h2Flow": {"enabled": True, "maxStreamReceiveWindow": 16777216},
+        "h2FlowControl": False,
+    }))
+    link = (
+        "vless://11111111-1111-1111-1111-111111111111@example.com:443"
+        f"?type=xhttp&security=reality&pbk=key&pqv=verify-key&udp-443=reject&extra={extra}"
+    )
+    parsed = yaml.safe_load(parse_vless(link).yaml)[0]
+    assert parsed["udp-443"] == "reject"
+    assert parsed["reality-opts"]["mldsa65-verify"] == "verify-key"
+    assert parsed["xhttp-opts"]["h2-flow"] == {
+        "enabled": True, "max-stream-receive-window": 16777216,
+    }
+    assert parsed["xhttp-opts"]["h2-flow-control"] is False
+
+
+def test_prizrak_trojan_uri_accepts_quic_alias_without_global_rule():
+    parsed = yaml.safe_load(parse_trojan(
+        "trojan://secret@example.com:443?security=reality&pbk=key&pqv=verify-key&quic=reject"
+    ).yaml)[0]
+    assert parsed["udp-443"] == "reject"
+    assert parsed["reality-opts"]["mldsa65-verify"] == "verify-key"
+
+
+def test_browser_import_preserves_prizrak_uri_fields():
+    if shutil.which("node") is None:
+        pytest.skip("node is not available")
+    extra = quote(json.dumps({"h2Flow": {"enabled": True, "maxStreamReceiveWindow": 16777216}}))
+    uri = (
+        "vless://11111111-1111-1111-1111-111111111111@example.com:443"
+        f"?type=xhttp&security=reality&pbk=key&pqv=verify-key&udp-443=reject&extra={extra}#test"
+    )
+    script = f"""
+globalThis.window = {{ XKeen: {{}} }};
+globalThis.document = {{ addEventListener() {{}}, querySelector() {{ return null; }}, getElementById() {{ return null; }} }};
+const module = await import('./xkeen-ui/static/js/features/mihomo_import.js');
+console.log(JSON.stringify(module.generateMihomoImportConfig({json.dumps(uri)})));
+"""
+    result = subprocess.run(
+        ["node", "--input-type=module"], input=script, cwd=ROOT,
+        text=True, capture_output=True, check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    parsed = yaml.safe_load(json.loads(result.stdout)["content"])[0]
+    assert parsed["udp-443"] == "reject"
+    assert parsed["reality-opts"]["mldsa65-verify"] == "verify-key"
+    assert parsed["xhttp-opts"]["h2-flow"] == {
+        "enabled": True, "max-stream-receive-window": 16777216,
+    }
+
+
+def test_browser_yaml_serializer_handles_nested_prizrak_finalmask():
+    if shutil.which("node") is None:
+        pytest.skip("node is not available")
+    script = """
+import fs from 'node:fs';
+const source = fs.readFileSync('./xkeen-ui/static/js/features/mihomo_import.js', 'utf8');
+const start = source.indexOf('  const YAML_STRING_VALUE_KEYS');
+const end = source.indexOf('  const decodeMaybe', start);
+const toYaml = new Function(`${source.slice(start, end)}; return toYaml;`)();
+console.log(JSON.stringify(toYaml({
+  'mux.cool': { enabled: true },
+  finalmask: { tcp: [{ type: 'header-custom', clients: [[{ packet: 'GET /\\r\\n', type: 'str' }]] }] },
+})));
+"""
+    result = subprocess.run(
+        ["node", "--input-type=module"], input=script, cwd=ROOT,
+        text=True, capture_output=True, check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    parsed = yaml.safe_load(json.loads(result.stdout))
+    assert parsed["mux.cool"] == {"enabled": True}
+    assert parsed["finalmask"]["tcp"][0]["clients"] == [[{"packet": "GET /\r\n", "type": "str"}]]
 
 
 def test_vless_uri_xhttp_keeps_packet_placement_and_explicit_false_values():
@@ -267,7 +346,7 @@ def test_frontend_xray_json_bulk_preview_keeps_blank_lines_between_proxies():
 def test_frontend_mihomo_import_skips_empty_grpc_opts_objects():
     src = (ROOT / "xkeen-ui/static/js/features/mihomo_import.js").read_text(encoding="utf-8")
 
-    assert "const nested = toYaml(value, indent + 2);" in src
+    assert "if (nested.length) lines.push(`${padding}${safeKey}:`, ...nested);" in src
     assert "if (grpcServiceName) common['grpc-opts']" in src
 
 

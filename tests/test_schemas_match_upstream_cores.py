@@ -1,13 +1,13 @@
-"""Схемы редакторов сверены с исходниками ядер 18.09.2026.
+"""Схемы редакторов сверены с исходниками Mihomo и Prizrak-Core.
 
 Источники (ветки Meta и Alpha у Mihomo дают одинаковые списки):
 - Mihomo: `adapter/parser.go` (ParseProxy), `adapter/outboundgroup/parser.go`;
+- Prizrak-Core: `adapter/parser.go` (тип `freedom`);
 - Xray-core: `infra/conf/transport_internet.go` (транспорты, sockopt),
   `infra/conf/freedom.go` (domainStrategy исходящего freedom).
 
 Тесты держат перечисления в схемах вровень с тем, что ядро действительно умеет:
-лишнее значение — подсказка конфига, который ядро не запустит, недостающее —
-ложная ошибка в редакторе на рабочем конфиге.
+расширения форка учитываются отдельно от базового Mihomo.
 """
 
 from __future__ import annotations
@@ -33,6 +33,7 @@ MIHOMO_PROXY_TYPES = {
     "direct", "dns", "reject", "rematch", "ssh", "mieru", "anytls", "sudoku",
     "masque", "trusttunnel", "openvpn", "tailscale", "zerotier", "easytier",
 }
+PRIZRAK_PROXY_TYPES = {"freedom"}
 
 # Типы, которые никуда не звонят: встроенные обработчики и mesh-сети.
 MIHOMO_SERVERLESS_TYPES = {
@@ -66,7 +67,7 @@ def test_mihomo_proxy_types_cover_every_type_the_core_parses():
     proxy = _load(MIHOMO)["definitions"]["proxy"]
     types = set(proxy["properties"]["type"]["enum"])
 
-    assert types == MIHOMO_PROXY_TYPES
+    assert types == MIHOMO_PROXY_TYPES | PRIZRAK_PROXY_TYPES
 
 
 def test_mihomo_asks_for_server_and_port_only_from_types_that_dial_out():
@@ -81,7 +82,7 @@ def test_mihomo_asks_for_server_and_port_only_from_types_that_dial_out():
     excluded = set(rules[0]["if"]["properties"]["type"]["not"]["enum"])
     # Безсерверные типы плюс mieru: у него порт бывает диапазоном, поэтому
     # требование server/port для него вынесено в собственное правило.
-    assert excluded == MIHOMO_SERVERLESS_TYPES | {"mieru"}
+    assert excluded == MIHOMO_SERVERLESS_TYPES | {"mieru"} | PRIZRAK_PROXY_TYPES
 
 
 def test_mihomo_proxy_groups_drop_the_relay_type_removed_from_the_core():

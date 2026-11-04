@@ -423,6 +423,19 @@ function validateMihomoProxyCompat(target, proxies) {
       ? proxy['h2-opts'].host.map(cleanName).filter(Boolean)
       : [];
 
+    const udp443 = cleanName(proxy['udp-443']);
+    const quicAlias = typeof proxy.quic === 'string' ? cleanName(proxy.quic) : '';
+    if (udp443 && quicAlias && udp443 !== quicAlias) {
+      pushDiagnostic(target, createYamlDiagnostic(path.concat('quic'), '`quic` и `udp-443` должны иметь одинаковое значение.', {
+        source: 'mihomo-semantic', code: 'prizrak-udp443-conflict',
+      }));
+    }
+    if (proxy['mux.cool']?.enabled === true && proxy.smux?.enabled === true) {
+      pushDiagnostic(target, createYamlDiagnostic(path.concat('mux.cool'), '`mux.cool` нельзя включать одновременно со `smux`.', {
+        source: 'mihomo-semantic', code: 'prizrak-mux-conflict',
+      }));
+    }
+
     const networkBlocks = [
       ['ws-opts', ['ws'], 'ws'],
       ['grpc-opts', ['grpc'], 'grpc'],
@@ -566,6 +579,17 @@ export function validateMihomoConfigSemantics(data, options = {}) {
   validateMihomoProxyCompat(diagnostics, proxies);
   validateProviderShape(diagnostics, proxyProviders, 'proxy-providers', 'proxy');
   validateProviderShape(diagnostics, ruleProviders, 'rule-providers', 'rule');
+  Object.entries(proxyProviders).forEach(([name, provider]) => {
+    const override = provider && provider.override;
+    if (!isPlainObject(override)) return;
+    const udp443 = cleanName(override['udp-443']);
+    const quicAlias = cleanName(override.quic);
+    if (udp443 && quicAlias && udp443 !== quicAlias) {
+      pushDiagnostic(diagnostics, createYamlDiagnostic(['proxy-providers', name, 'override', 'quic'], '`quic` и `udp-443` должны иметь одинаковое значение.', {
+        source: 'mihomo-semantic', code: 'prizrak-provider-udp443-conflict',
+      }));
+    }
+  });
 
   Object.keys(proxyProviders).forEach((name) => {
     const provider = proxyProviders[name];
