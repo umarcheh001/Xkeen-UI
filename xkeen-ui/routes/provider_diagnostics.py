@@ -8,6 +8,7 @@ from services.provider_diagnostics import (
     compare_public_dns,
     current_mihomo_targets,
     compare_tls_path,
+    compare_resource_paths,
     lookup_public_lists,
     parse_source,
     probe_proxy_context,
@@ -78,6 +79,17 @@ def create_provider_diagnostics_blueprint(*, xray_configs_dir: str, mihomo_confi
             return jsonify({"ok": False, "error": "Некорректная проверка прокси."}), 400
         try:
             result = probe_proxy_context(payload.get("ref"), payload.get("index"))
+        except ValueError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+        return jsonify({"ok": True, "result": result})
+
+    @bp.post("/api/provider-diagnostics/resource-compare")
+    def resource_compare():
+        payload = request.get_json(silent=True) or {}
+        if not isinstance(payload, dict):
+            return jsonify({"ok": False, "error": "Некорректная проверка ресурса."}), 400
+        try:
+            result = compare_resource_paths(payload)
         except ValueError as exc:
             return jsonify({"ok": False, "error": str(exc)}), 400
         return jsonify({"ok": True, "result": result})

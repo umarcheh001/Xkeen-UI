@@ -37,6 +37,12 @@
           <span class="xk-provider-check-stat is-unknown"><strong id="provider-check-unknown-count">0</strong><span>Не подтверждено</span></span>
         </div>
       </div>
+      <div class="xk-provider-check-resource-bar">
+        <label for="provider-check-resource-url">Сайт для сравнения</label>
+        <input id="provider-check-resource-url" type="text" inputmode="url" autocomplete="url" spellcheck="false" maxlength="2048" aria-describedby="provider-check-resource-hint provider-check-resource-feedback" placeholder="kino.watch или https://site.ru/page">
+        <p id="provider-check-resource-hint">Например, <strong>kino.watch</strong>. Нажмите «Сравнить доступ» у нужного сервера: панель проверит сайт напрямую и через него. Ссылка подписки выше нужна только для поиска серверов.</p>
+        <p id="provider-check-resource-feedback" role="alert"></p>
+      </div>
       <div id="provider-check-status" class="xk-provider-check-status" role="status" aria-live="polite"></div>
       <div class="xk-provider-check-list-head">
         <div class="xk-provider-check-list-heading"><strong>Серверы</strong><span id="provider-check-count">0</span></div>
@@ -46,7 +52,7 @@
       <div id="provider-check-more-wrap" class="xk-provider-check-more-wrap" hidden>
         <button type="button" id="provider-check-more" class="btn-secondary" data-tooltip="Загрузить следующую часть серверов из сохранённых конфигураций Xray">Показать ещё</button>
       </div>
-      <details class="xk-provider-check-caveat"><summary>Как читать результаты</summary><p>Проверка выполняется процессом панели через его системный маршрут; путь клиентских устройств может отличаться. Сравнение TLS закрепляет один IP и дважды проверяет рукопожатие с SNI и без него; контрольный адрес показывает доступность независимого TLS. Сертификаты при этом сравнении не проверяются. Наблюдения дают признаки, а не доказательство причины: сервер и маршрут тоже могут менять ответы. Запросы к публичному DNS и Cheburcheck выполняются по кнопке и передают имя сервера внешним сервисам. TCP и стандартный TLS не подтверждают работу прокси. Кнопка «Проверить прокси» запускает временное ядро Xray или Mihomo и проверяет HTTPS-запрос через выбранный узел; результат зависит от маршрута панели и доступности контрольного адреса. Ключ vpn:// запрашивает конфигурацию у Amnezia.</p></details>
+      <details class="xk-provider-check-caveat"><summary>Как читать результаты</summary><p>Проверка выполняется процессом панели через его системный маршрут; путь клиентских устройств может отличаться. Сравнение TLS дважды проверяет рукопожатие с SNI и без него на каждом из двух адресов сервера, если они доступны; контрольный адрес показывает доступность независимого TLS. Сертификаты при этом сравнении не проверяются. Разные исходы по IP или отказ без SNI не подтверждают фильтрацию. Наблюдения дают признаки, а не доказательство причины: сервер и маршрут тоже могут менять ответы. Запросы к публичному DNS и Cheburcheck выполняются по кнопке и передают имя сервера внешним сервисам. TCP и стандартный TLS не подтверждают работу прокси. «Проверить прокси» запускает временное ядро и проверяет контрольный HTTPS-адрес. «Сравнить доступ» проверяет введённый публичный URL напрямую и через выбранный узел к одному IP; URL и имя ресурса передаются узлу и Cheburcheck. Редиректы не выполняются. Запись в реестре и наблюдаемая доступность показаны отдельно. Ключ vpn:// запрашивает конфигурацию у Amnezia.</p></details>
     </div>
     <div class="modal-actions xk-provider-check-actions">
       <button type="button" id="provider-check-run" class="btn-primary" data-tooltip="Проверить DNS, TCP и, где настроен, стандартный TLS из процесса панели" disabled>{{ op_icon('ping') }}<span>Проверить выбранные</span></button>

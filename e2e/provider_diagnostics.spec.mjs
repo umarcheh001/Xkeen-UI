@@ -55,8 +55,12 @@ test('Xray toolbar opens server diagnostics and runs selected checks', async ({ 
   await page.route('**/api/provider-diagnostics/compare-tls', async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 200));
     return route.fulfill({ json: { ok: true, result: {
-    status: 'ok', verdict: 'tls_sni_filtering', confidence: 'medium', target_ip: '198.51.100.10', sni: 'front.example.org',
+    status: 'ok', verdict: 'tls_sni_filtering', confidence: 'medium', reason: 'consistent_sni_pattern', target_ip: '198.51.100.10', sni: 'front.example.org', rounds_per_ip: 2,
     trials: { with_sni: ['tls_error', 'tls_error'], without_sni: ['tls_ok', 'tls_ok'] },
+    address_results: [
+      { ip: '198.51.100.10', with_sni: ['tls_error', 'tls_error'], without_sni: ['tls_ok', 'tls_ok'], pattern: 'sni_only_failure' },
+      { ip: '198.51.100.11', with_sni: ['tls_error', 'tls_error'], without_sni: ['tls_ok', 'tls_ok'], pattern: 'sni_only_failure' },
+    ],
     control: { ip: '1.1.1.1', result: 'tls_ok' }, registry: { status: 'ok', domain: '', subnets: [] },
     } } });
   });
@@ -100,13 +104,16 @@ test('Xray toolbar opens server diagnostics and runs selected checks', async ({ 
   await expect(page.getByRole('button', { name: 'Сравнить TLS/SNI' }).first()).toHaveClass(/is-loading/);
   await expect(page.locator('.xk-provider-check-comparison').first()).toContainText('Признаки фильтрации TLS/SNI');
   await expect(page.locator('.xk-provider-check-comparison').first()).toContainText('Уверенность: средняя');
+  await expect(page.locator('.xk-provider-check-comparison-ip').first()).toContainText('198.51.100.10');
+  await expect(page.locator('.xk-provider-check-comparison-ip')).toHaveCount(2);
   await page.getByRole('button', { name: 'Сравнить DNS' }).first().click();
   await expect(page.locator('.xk-provider-check-dns-compare').first()).toContainText('Google DNS (A)');
   await page.getByRole('button', { name: 'Проверить списки' }).first().click();
+  await expect(page.locator('.xk-provider-check-public-lists').first()).toContainText('Проверен сервер: edge.example.org');
   await expect(page.locator('.xk-provider-check-public-lists').first()).toContainText('В реестре заблокированных ресурсов');
   await expect(page.locator('.xk-provider-check-public-lists').first()).toContainText('AS64500');
   await expect(page.locator('.xk-provider-check-row').first()).toHaveClass(/is-registry-blocked/);
-  await expect(page.locator('.xk-provider-check-registry-badge')).toContainText('В реестре блокировок');
+  await expect(page.locator('.xk-provider-check-registry-badge')).toContainText('Сервер в реестре');
   for (const action of await page.locator('.xk-provider-check-detail-actions').first().locator('button, a').all()) {
     await expect(action).toHaveAttribute('data-tooltip', /.+/);
   }
@@ -301,6 +308,8 @@ test('manual subscription shows every server and loading state', async ({ page }
 });
 
 test('manual proxy link can be checked through the proxy before TCP checks', async ({ page }) => {
+  let finishComparison;
+  const comparisonPending = new Promise((resolve) => { finishComparison = resolve; });
   await page.route('**/api/provider-diagnostics/parse', (route) => route.fulfill({ json: {
     ok: true, targets: [{ name: 'Private', host: 'edge.example.org', port: 443,
       network: 'tcp', protocol: 'vless', tls: true, tls_mode: 'standard', source: 'Ссылка',
@@ -311,6 +320,16 @@ test('manual proxy link can be checked through the proxy before TCP checks', asy
     await new Promise((resolve) => setTimeout(resolve, 150));
     return route.fulfill({ json: { ok: true, result: {
       status: 'ok', delay_ms: 86, message: 'Прокси передал HTTPS-запрос к контрольному адресу.',
+    } } });
+  });
+  await page.route('**/api/provider-diagnostics/resource-compare', async (route) => {
+    expect(route.request().postDataJSON()).toEqual({ url: 'https://kino.watch/', ref: 'opaque-reference', index: 0 });
+    await comparisonPending;
+    return route.fulfill({ json: { ok: true, result: {
+      status: 'ok', resource_host: 'kino.watch', network: { verdict: 'both_reachable', confidence: 'high' },
+      direct: { status: 'http_response', http_status: 200, connected_ip: '8.8.8.8', dns_ips: ['8.8.8.8'], tcp_ms: 10, tls_ms: 20 },
+      proxy: { status: 'http_response', http_status: 200, connected_ip: '8.8.8.8', tcp_ms: 30, tls_ms: 40 },
+      registry: { status: 'ok', listed: true, match: 'kino.watch' },
     } } });
   });
   await page.goto('/');
@@ -325,6 +344,24 @@ test('manual proxy link can be checked through the proxy before TCP checks', asy
   await expect(proxyButton).toHaveClass(/is-loading/);
   await expect(page.locator('.xk-provider-check-proxy-status')).toContainText('Прокси работает · 86 мс');
   await expect(page.locator('.xk-provider-check-row-state')).toContainText('Не проверен');
+  await expect(page.locator('#provider-check-resource-hint')).toContainText('Ссылка подписки выше нужна только для поиска серверов');
+  const resourceButton = page.getByRole('button', { name: 'Сравнить доступ' });
+  await resourceButton.click();
+  await expect(page.locator('#provider-check-resource-feedback')).toContainText('например kino.watch');
+  await expect(page.locator('#provider-check-resource-url')).toBeFocused();
+  await page.locator('#provider-check-resource-url').fill('kino.watch');
+  await expect(page.locator('#provider-check-resource-feedback')).toBeEmpty();
+  await resourceButton.click();
+  await expect(page.locator('#provider-check-resource-url')).toHaveValue('https://kino.watch/');
+  await expect(resourceButton).toHaveClass(/is-loading/);
+  await expect(page.locator('.xk-provider-check-resource-result')).toContainText('Проверяем kino.watch напрямую и через этот прокси');
+  await expect(page.locator('#provider-check-status')).toContainText('Сравниваем доступ к kino.watch');
+  finishComparison();
+  await expect(page.locator('.xk-provider-check-resource-result')).toContainText('Сеть: Успешный ответ напрямую и через прокси');
+  await expect(page.locator('.xk-provider-check-resource-result')).toContainText('Реестр сайта kino.watch: запись найдена');
+  await expect(page.locator('#provider-check-status')).toContainText('Сравнение kino.watch завершено');
+  await page.locator('.xk-provider-check-resource-result').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: 'test-results/provider-diagnostics-resource-desktop.png', fullPage: false });
 });
 
 test('Mihomo proxy check starts the selected engine and shows its result', async ({ page }) => {
@@ -349,4 +386,31 @@ test('Mihomo proxy check starts the selected engine and shows its result', async
   await proxyButton.click();
   await expect(proxyButton).toHaveClass(/is-loading/);
   await expect(page.locator('.xk-provider-check-proxy-status')).toContainText('Прокси работает · 54 мс');
+});
+
+test('resource comparison remains readable on a phone', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route('**/api/provider-diagnostics/targets?core=mihomo', (route) => route.fulfill({ json: {
+    ok: true, targets: [{ name: 'Private', host: 'edge.example.org', port: 443,
+      network: 'tcp', protocol: 'vless', tls: true, source: 'config.yaml',
+      proxy_ref: 'mihomo-reference', proxy_index: 0, proxy_engine: 'mihomo' }],
+  } }));
+  await page.route('**/api/provider-diagnostics/resource-compare', (route) => route.fulfill({ json: {
+    ok: true, result: {
+      status: 'ok', resource_host: 'kino.watch', network: { verdict: 'proxy_only', confidence: 'medium' },
+      direct: { status: 'tls_error', connected_ip: '8.8.8.8', dns_ips: ['8.8.8.8'], tcp_ms: 30 },
+      proxy: { status: 'http_response', connected_ip: '8.8.8.8', http_status: 200, tcp_ms: 50, tls_ms: 60 },
+      registry: { status: 'ok', listed: true, match: 'kino.watch' },
+    },
+  } }));
+  await page.goto('/');
+  await selectPanelView(page, 'mihomo');
+  await openMihomoConfig(page);
+  await page.locator('[data-provider-check-core="mihomo"]').click();
+  await page.locator('#provider-check-resource-url').fill('https://kino.watch/');
+  await page.getByRole('button', { name: 'Сравнить доступ' }).click();
+  await expect(page.locator('.xk-provider-check-resource-result')).toContainText('Через прокси доступен, напрямую нет');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
+  await expect(page.locator('.xk-provider-check-resource-result')).toBeInViewport();
+  await page.screenshot({ path: 'test-results/provider-diagnostics-resource-mobile.png', fullPage: false });
 });

@@ -13,7 +13,7 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, MutableMapping
 
 from services.module_registry import MODULE_IDS
 
@@ -21,6 +21,21 @@ from services.module_registry import MODULE_IDS
 def enabled() -> bool:
     value = str(os.environ.get("XKEEN_UI_LOCAL_DEMO") or "").strip().lower()
     return value in {"1", "true", "yes", "on"}
+
+
+def configure_local_core_binaries(
+    project_root: str | os.PathLike[str], *, environ: MutableMapping[str, str] | None = None
+) -> dict[str, str]:
+    """Expose locally downloaded diagnostic cores to a checkout's panel process."""
+    env = environ if environ is not None else os.environ
+    binaries = Path(project_root) / ".tmp" / "diagnostics-cores"
+    configured = {}
+    for variable, name in (("XKEEN_XRAY_BINARY", "xray"), ("MIHOMO_BIN", "mihomo")):
+        candidate = binaries / name
+        if variable not in env and candidate.is_file() and os.access(candidate, os.X_OK):
+            env[variable] = str(candidate)
+            configured[name] = str(candidate)
+    return configured
 
 
 def _write_if_missing(path: Path, payload: object) -> None:

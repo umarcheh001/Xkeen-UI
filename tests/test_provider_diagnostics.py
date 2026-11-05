@@ -1,8 +1,10 @@
 import io
+from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import socket
 import ssl
 import sys
+import threading
 
 import pytest
 from flask import Flask
@@ -10,6 +12,7 @@ from flask import Flask
 from routes.provider_diagnostics import create_provider_diagnostics_blueprint
 from services.provider_diagnostics import (
     compare_public_dns,
+    compare_resource_paths,
     compare_tls_path,
     current_mihomo_targets,
     current_xray_targets,
@@ -27,7 +30,7 @@ from services.provider_diagnostics import (
     ("tls_error", "tls_ok", "tls_ok", False, "tls_sni_filtering"),
     ("timeout", "timeout", "tls_ok", False, "server_unresponsive"),
     ("tls_error", "tls_ok", "timeout", False, "undetermined"),
-    ("tls_ok", "tls_ok", "tls_ok", True, "registry_confirmed"),
+    ("tls_ok", "tls_ok", "tls_ok", True, "undetermined"),
 ])
 def test_comparative_tls_verdicts(monkeypatch, with_sni, without_sni, control, registry, expected):
     from services import provider_diagnostics
@@ -48,10 +51,61 @@ def test_comparative_tls_verdicts(monkeypatch, with_sni, without_sni, control, r
     })
     result = compare_tls_path(make_target("edge.example.org", 443, tls=True, sni="front.example.org"))
     assert result["verdict"] == expected
+    assert result["registry"]["listed"] is registry
     assert result["target_ip"] == "198.51.100.30"
     assert seen == [("1.1.1.1", "cloudflare-dns.com"),
                     ("198.51.100.30", "front.example.org"), ("198.51.100.30", None),
                     ("198.51.100.30", "front.example.org"), ("198.51.100.30", None)]
+
+
+@pytest.mark.parametrize(("second_with", "second_without", "expected", "confidence", "reason"), [
+    ("tls_error", "tls_ok", "tls_sni_filtering", "medium", "consistent_sni_pattern"),
+    ("tls_ok", "tls_error", "undetermined", "low", "different_ip_results"),
+])
+def test_comparative_tls_repeats_across_distinct_ips(monkeypatch, second_with, second_without, expected, confidence, reason):
+    from services import provider_diagnostics as diagnostics
+
+    addresses = [
+        (socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, 443))
+        for ip in ("198.51.100.30", "198.51.100.30", "198.51.100.31", "198.51.100.32")
+    ]
+    monkeypatch.setattr(diagnostics.socket, "getaddrinfo", lambda *_args, **_kwargs: addresses)
+    attempts = []
+
+    def attempt(address, *, server_name):
+        ip = address[4][0]
+        attempts.append((ip, server_name))
+        if ip == "1.1.1.1":
+            return "tls_ok"
+        if ip == "198.51.100.30":
+            return "tls_error" if server_name else "tls_ok"
+        return second_with if server_name else second_without
+
+    monkeypatch.setattr(diagnostics, "_tls_comparison_attempt", attempt)
+    monkeypatch.setattr(diagnostics, "lookup_public_lists", lambda _raw: {"status": "unavailable"})
+    result = diagnostics.compare_tls_path(make_target("edge.example.org", 443, tls=True, sni="front.example.org"))
+
+    assert result["verdict"] == expected
+    assert result["confidence"] == confidence
+    assert result["reason"] == reason
+    assert result["rounds_per_ip"] == 2
+    assert [item["ip"] for item in result["address_results"]] == ["198.51.100.30", "198.51.100.31"]
+    assert all(len(item["with_sni"]) == len(item["without_sni"]) == 2 for item in result["address_results"])
+    assert len(attempts) == 9
+    assert not any(ip == "198.51.100.32" for ip, _ in attempts)
+
+
+def test_comparative_tls_without_sni_failure_is_not_filtering(monkeypatch):
+    from services import provider_diagnostics as diagnostics
+
+    address = (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("198.51.100.30", 443))
+    monkeypatch.setattr(diagnostics.socket, "getaddrinfo", lambda *_args, **_kwargs: [address])
+    monkeypatch.setattr(diagnostics, "_tls_comparison_attempt", lambda _address, *, server_name: "tls_ok" if server_name else "tls_error")
+    monkeypatch.setattr(diagnostics, "lookup_public_lists", lambda _raw: {"status": "unavailable"})
+
+    result = diagnostics.compare_tls_path(make_target("edge.example.org", 443, tls=True, sni="front.example.org"))
+    assert result["verdict"] == "undetermined"
+    assert result["address_results"][0]["pattern"] == "tls_reachable"
 
 
 def test_comparative_tls_requires_public_dns_evidence_for_dns_verdict(monkeypatch):
@@ -366,6 +420,135 @@ def test_manual_mihomo_link_uses_mihomo_proxy_context(tmp_path):
     assert target["proxy_engine"] == "mihomo"
     assert target["proxy_ref"] and target["proxy_index"] == 0
     assert "11111111-1111" not in response.get_data(as_text=True)
+
+
+@pytest.mark.parametrize(("direct", "proxy", "listed", "expected"), [
+    ({"status": "http_response", "http_status": 200}, {"status": "http_response", "http_status": 200}, True, "both_reachable"),
+    ({"status": "tcp_error"}, {"status": "http_response", "http_status": 200}, False, "proxy_only"),
+    ({"status": "http_response", "http_status": 451, "block_page_hint": True}, {"status": "http_response", "http_status": 200}, True, "direct_block_page"),
+    ({"status": "http_response", "http_status": 403}, {"status": "http_response", "http_status": 200}, False, "different_response"),
+])
+def test_resource_comparison_separates_network_and_registry(monkeypatch, direct, proxy, listed, expected):
+    from services import provider_diagnostics as diagnostics
+
+    address = (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.8.8", 443))
+    monkeypatch.setattr(diagnostics, "_resource_addresses", lambda host, port: [address])
+    monkeypatch.setattr(diagnostics, "_resource_http_request", lambda _parts, *, address: direct)
+    monkeypatch.setattr(diagnostics, "_resource_via_proxy", lambda _entry, _parts, address: proxy)
+    monkeypatch.setattr(diagnostics, "lookup_public_lists", lambda _raw: {
+        "status": "ok", "listed": listed, "registry_domain": "kino.watch" if listed else "",
+    })
+    ref = diagnostics.register_proxy_context([{"protocol": "freedom", "settings": {"secret": "private"}}], 1)
+    result = compare_resource_paths({"url": "https://kino.watch/path?token=private", "ref": ref, "index": 0})
+    assert result["network"]["verdict"] == expected
+    assert result["registry"]["listed"] is listed
+    assert "private" not in json.dumps(result)
+
+
+def test_resource_comparison_rejects_local_and_mixed_dns(monkeypatch):
+    from services import provider_diagnostics as diagnostics
+
+    for url in ("http://127.0.0.1/", "http://localhost/", "http://user:pass@kino.watch/"):
+        with pytest.raises(ValueError):
+            diagnostics._resource_url(url)
+    assert diagnostics._resource_url("https://kino.watch/страница")[3] == "/%D1%81%D1%82%D1%80%D0%B0%D0%BD%D0%B8%D1%86%D0%B0"
+    monkeypatch.setattr(diagnostics.socket, "getaddrinfo", lambda *_args, **_kwargs: [
+        (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.8.8", 443)),
+        (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 443)),
+    ])
+    with pytest.raises(ValueError, match="локальный"):
+        diagnostics._resource_addresses("kino.watch", 443)
+
+
+def test_resource_comparison_uses_public_dns_after_local_failure(monkeypatch):
+    from services import provider_diagnostics as diagnostics
+
+    monkeypatch.setattr(diagnostics, "_resource_addresses", lambda _host, _port: [])
+    monkeypatch.setattr(diagnostics, "compare_public_dns", lambda _raw: {
+        "status": "ok", "public": ["8.8.8.8"],
+    })
+    seen = []
+
+    def request(_parts, *, address):
+        seen.append(address[4][0])
+        return {"status": "http_response", "http_status": 200, "connected_ip": address[4][0]}
+
+    def via_proxy(_entry, _parts, address):
+        seen.append(address[4][0])
+        return {"status": "http_response", "http_status": 200, "connected_ip": address[4][0]}
+
+    monkeypatch.setattr(diagnostics, "_resource_http_request", request)
+    monkeypatch.setattr(diagnostics, "_resource_via_proxy", via_proxy)
+    monkeypatch.setattr(diagnostics, "lookup_public_lists", lambda _raw: {"status": "unavailable"})
+    ref = diagnostics.register_proxy_context([{"protocol": "freedom"}], 1)
+    result = diagnostics.compare_resource_paths({"url": "https://kino.watch/", "ref": ref, "index": 0})
+    assert seen == ["8.8.8.8", "8.8.8.8"]
+    assert result["network"]["verdict"] == "local_dns_failure"
+    assert result["direct"]["dns_source"] == "public_fallback"
+
+
+def test_resource_comparison_route_returns_separate_verdicts_without_secrets(monkeypatch, tmp_path):
+    from services import provider_diagnostics as diagnostics
+
+    monkeypatch.setattr(diagnostics, "_resource_addresses", lambda _host, port: [
+        (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.8.8", port)),
+    ])
+    monkeypatch.setattr(diagnostics, "_resource_http_request", lambda _parts, *, address: {
+        "status": "http_response", "http_status": 200, "connected_ip": address[4][0],
+    })
+    monkeypatch.setattr(diagnostics, "_resource_via_proxy", lambda _entry, _parts, address: {
+        "status": "http_response", "http_status": 200, "connected_ip": address[4][0],
+    })
+    monkeypatch.setattr(diagnostics, "lookup_public_lists", lambda _raw: {
+        "status": "ok", "listed": True, "registry_domain": "kino.watch",
+    })
+    app = Flask(__name__)
+    app.register_blueprint(create_provider_diagnostics_blueprint(
+        xray_configs_dir=str(tmp_path), mihomo_config_file=str(tmp_path / "config.yaml")
+    ))
+    ref = diagnostics.register_proxy_context([{"protocol": "vless", "password": "private-secret"}], 1)
+    response = app.test_client().post("/api/provider-diagnostics/resource-compare", json={
+        "url": "https://kino.watch/?token=private-token", "ref": ref, "index": 0,
+    })
+    assert response.status_code == 200
+    assert response.json["result"]["network"]["verdict"] == "both_reachable"
+    assert response.json["result"]["registry"]["listed"] is True
+    assert "private-secret" not in response.get_data(as_text=True)
+    assert "private-token" not in response.get_data(as_text=True)
+
+
+def test_resource_http_probe_does_not_follow_redirect_and_uses_pinned_proxy_ip():
+    from services import provider_diagnostics as diagnostics
+
+    seen = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            seen.append((self.path, self.headers.get("Host")))
+            self.send_response(451 if self.path == "/blocked" else 200)
+            if self.path == "/blocked":
+                self.send_header("Location", "https://other.example/path")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        def log_message(self, *_args):
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    worker = threading.Thread(target=server.serve_forever, daemon=True)
+    worker.start()
+    try:
+        address = (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", server.server_port))
+        direct = diagnostics._resource_http_request(("http", "kino.watch", server.server_port, "/blocked"), address=address)
+        proxy = diagnostics._resource_http_request(("http", "kino.watch", 80, "/"), address=(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.8.8", 80)), proxy_port=server.server_port)
+    finally:
+        server.shutdown()
+        worker.join(timeout=2)
+        server.server_close()
+    assert direct["http_status"] == 451 and direct["block_page_hint"] is True
+    assert direct["redirect_host"] == "other.example"
+    assert proxy["http_status"] == 200
+    assert seen == [("/blocked", f"kino.watch:{server.server_port}"), ("http://8.8.8.8:80/", "kino.watch")]
 
 
 def test_mihomo_json_subscription_works_without_yaml(monkeypatch, tmp_path):

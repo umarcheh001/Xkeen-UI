@@ -37,7 +37,6 @@ const LABELS = {
 };
 
 const COMPARISON_LABELS = {
-  registry_confirmed: ['Запись в реестре подтверждена', 'high'],
   tls_sni_filtering: ['Признаки фильтрации TLS/SNI', 'medium'],
   dns_failure: ['Сбой DNS', 'medium'],
   server_unresponsive: ['Сервер не отвечает', 'medium'],
@@ -55,6 +54,19 @@ function setButtonBusy(button, busy, label = '') {
   if (label) button.dataset.loadingLabel = label;
 }
 
+function comparisonResourceUrl(input) {
+  const raw = input.value.trim();
+  if (!raw) throw new Error('Укажите сайт для сравнения, например kino.watch.');
+  const candidate = /^[a-z][a-z\d+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`;
+  let parsed;
+  try { parsed = new URL(candidate); } catch { throw new Error('Укажите адрес сайта, например kino.watch или https://kino.watch/.'); }
+  if (!['http:', 'https:'].includes(parsed.protocol) || !parsed.hostname || parsed.username || parsed.password) {
+    throw new Error('Нужен публичный HTTP(S) адрес сайта без логина и пароля.');
+  }
+  input.value = parsed.href;
+  return parsed;
+}
+
 function appendFact(list, label, value) {
   const term = document.createElement('dt');
   term.textContent = label;
@@ -63,15 +75,19 @@ function appendFact(list, label, value) {
   list.append(term, description);
 }
 
-function paintPublicLists(output, result) {
+function paintPublicLists(output, result, host) {
   output.replaceChildren();
+  const target = document.createElement('span');
+  target.className = 'xk-provider-check-list-target';
+  target.textContent = `Проверен сервер: ${result.host || host}`;
+  output.append(target);
   const row = output.closest('.xk-provider-check-row');
   if (row) {
     row.classList.remove('is-registry-blocked');
     row.querySelector('.xk-provider-check-registry-badge')?.remove();
   }
   if (result.status !== 'ok') {
-    output.textContent = result.message || 'Проверка по спискам не выполнена.';
+    output.append(document.createTextNode(result.message || 'Проверка по спискам не выполнена.'));
     return;
   }
   const registryMatches = [result.registry_domain, ...(result.blocked_subnets || [])].filter(Boolean);
@@ -80,7 +96,7 @@ function paintPublicLists(output, result) {
   if (registryBlocked && row) {
     const badge = document.createElement('span');
     badge.className = 'xk-provider-check-registry-badge';
-    badge.textContent = 'В реестре блокировок';
+    badge.textContent = 'Сервер в реестре';
     row.querySelector('.xk-provider-check-meta')?.append(badge);
   }
   const verdict = document.createElement('strong');
@@ -97,13 +113,13 @@ function paintPublicLists(output, result) {
   const facts = document.createElement('dl');
   if (registryBlocked) {
     const term = document.createElement('dt');
-    term.textContent = 'Реестр';
+    term.textContent = 'Реестр сервера';
     const description = document.createElement('dd');
     description.className = 'xk-provider-check-registry-match';
     description.textContent = registryMatches.join(', ');
     facts.append(term, description);
   } else {
-    appendFact(facts, 'Реестр', 'Совпадений не найдено');
+    appendFact(facts, 'Реестр сервера', 'Совпадений не найдено');
   }
   appendFact(facts, 'CDN', (result.cdn_providers || []).map((provider) => `${provider.name}${provider.networks?.length ? ` · ${provider.networks.join(', ')}` : ''}`).join('; ') || 'Совпадений не найдено');
   if (result.ips?.length) appendFact(facts, 'IP', result.ips.join(', '));
@@ -122,22 +138,102 @@ function paintTlsComparison(output, result) {
   const confidence = result.confidence || fallbackConfidence;
   const heading = document.createElement('strong');
   heading.className = `is-verdict-${result.verdict}`;
-  heading.textContent = label;
+  heading.textContent = `Сеть: ${label}`;
   const confidenceText = { high: 'высокая', medium: 'средняя', low: 'низкая' }[confidence] || confidence;
   const confidenceLine = document.createElement('span');
   confidenceLine.className = 'xk-provider-check-comparison-confidence';
-  confidenceLine.textContent = `Уверенность: ${confidenceText}`;
+  const addresses = result.address_results?.length ? result.address_results
+    : result.target_ip ? [{ ip: result.target_ip, ...result.trials }] : [];
+  confidenceLine.textContent = `Уверенность: ${confidenceText} · ${addresses.length} IP · по ${result.rounds_per_ip || 2} пары проб`;
   output.append(heading, confidenceLine);
+  const notes = {
+    consistent_sni_pattern: 'Повторяемый признак на проверенных IP; причина всё ещё требует подтверждения.',
+    different_ip_results: 'Адреса ответили по-разному, общий вывод о фильтрации не подтверждён.',
+    control_failed: 'Контрольный TLS не прошёл, сравнение не позволяет установить причину.',
+    local_dns_failed: 'Локальный DNS не разрешил имя, публичный DNS нашёл адрес.',
+  };
+  if (notes[result.reason]) {
+    const note = document.createElement('span');
+    note.className = 'xk-provider-check-comparison-note';
+    note.textContent = notes[result.reason];
+    output.append(note);
+  }
+  const ipRows = document.createElement('div');
+  ipRows.className = 'xk-provider-check-comparison-ips';
+  for (const address of addresses) {
+    const row = document.createElement('div');
+    row.className = 'xk-provider-check-comparison-ip';
+    const ip = document.createElement('code');
+    ip.textContent = address.ip;
+    const withSni = document.createElement('span');
+    withSni.textContent = `С SNI: ${(address.with_sni || []).map((item) => ATTEMPT_LABELS[item] || item).join(' · ') || 'не выполнено'}`;
+    const withoutSni = document.createElement('span');
+    withoutSni.textContent = `Без SNI: ${(address.without_sni || []).map((item) => ATTEMPT_LABELS[item] || item).join(' · ') || 'не выполнено'}`;
+    row.append(ip, withSni, withoutSni);
+    ipRows.append(row);
+  }
+  if (addresses.length) output.append(ipRows);
   const facts = document.createElement('dl');
-  appendFact(facts, 'IP', result.target_ip || 'Не разрешён');
   appendFact(facts, 'SNI', result.sni || 'Не настроен');
-  appendFact(facts, 'С SNI', (result.trials?.with_sni || []).map((item) => ATTEMPT_LABELS[item] || item).join(' · ') || 'Не выполнено');
-  appendFact(facts, 'Без SNI', (result.trials?.without_sni || []).map((item) => ATTEMPT_LABELS[item] || item).join(' · ') || 'Не выполнено');
+  if (!addresses.length) appendFact(facts, 'IP', 'Не разрешён');
   appendFact(facts, 'Контроль', `${result.control?.ip || '1.1.1.1'} · ${ATTEMPT_LABELS[result.control?.result] || 'не выполнено'}`);
   if (result.dns_comparison?.public?.length) appendFact(facts, 'Публичный DNS', result.dns_comparison.public.join(', '));
-  if (result.registry?.status === 'ok') appendFact(facts, 'Реестр', result.registry.domain || result.registry.subnets?.join(', ') || 'Совпадений нет');
-  else if (result.registry?.status && result.registry.status !== 'skipped') appendFact(facts, 'Реестр', 'Ответ не получен');
+  if (result.registry?.status === 'ok') appendFact(facts, 'Реестр SNI', `${result.registry.target || result.sni}: ${result.registry.listed ? `запись найдена: ${result.registry.domain || result.registry.subnets?.join(', ') || 'совпадение'}` : 'совпадений нет'}`);
+  else if (result.registry?.status && result.registry.status !== 'skipped') appendFact(facts, 'Реестр SNI', `${result.registry.target || result.sni}: ответ не получен`);
   output.append(facts);
+}
+
+function paintResourceComparison(output, result) {
+  output.replaceChildren();
+  if (!result || result.status !== 'ok') {
+    output.textContent = result?.message || 'Сравнение ресурса не выполнено.';
+    return;
+  }
+  const resource = document.createElement('span');
+  resource.className = 'xk-provider-check-resource-name';
+  resource.textContent = `Проверен сайт: ${result.resource_host}`;
+  const networkLabels = {
+    local_dns_failure: 'Сбой локального DNS; по публичному IP ресурс ответил',
+    direct_block_page: 'Признаки страницы блокировки напрямую',
+    proxy_only: 'Через прокси доступен, напрямую нет',
+    both_reachable: 'Успешный ответ напрямую и через прокси',
+    both_http_errors: 'Оба пути вернули ошибку HTTP',
+    different_response: 'Ответы отличаются',
+    direct_only: 'Напрямую доступен, через прокси нет',
+    undetermined: 'Причина недоступности не установлена',
+  };
+  const statusLabels = {
+    dns_error: 'Сбой DNS', tcp_error: 'Сбой TCP', tls_error: 'Сбой TLS', tls_cert_error: 'Сертификат не прошёл проверку',
+    http_error: 'HTTP-ответ не получен', proxy_error: 'Прокси отклонил запрос',
+    core_unavailable: 'Ядро не найдено', core_start_failed: 'Ядро не запустилось',
+    skipped_dns: 'Пропущено из-за DNS',
+  };
+  const heading = document.createElement('strong');
+  heading.textContent = `Сеть: ${networkLabels[result.network?.verdict] || networkLabels.undetermined}`;
+  heading.className = `is-network-${result.network?.verdict || 'undetermined'}`;
+  const confidence = { high: 'высокая', medium: 'средняя', low: 'низкая' }[result.network?.confidence] || 'низкая';
+  const summary = document.createElement('span');
+  summary.textContent = `Уверенность: ${confidence} · один IP: ${result.direct?.connected_ip || 'не определён'}${result.direct?.dns_source === 'public_fallback' ? ' · публичный DNS' : ''}`;
+  const registry = document.createElement('strong');
+  registry.className = `is-registry-${result.registry?.listed ? 'listed' : 'other'}`;
+  registry.textContent = result.registry?.status === 'ok'
+    ? `Реестр сайта ${result.resource_host}: ${result.registry.listed ? `запись найдена${result.registry.match ? ` (${result.registry.match})` : ''}` : 'совпадений нет'}`
+    : `Реестр сайта ${result.resource_host}: проверить не удалось`;
+  const facts = document.createElement('dl');
+  appendFact(facts, 'DNS', result.direct?.dns_source === 'public_fallback'
+    ? `Локальный DNS не ответил · публичный: ${result.direct?.dns_ips?.join(', ') || 'нет адреса'}`
+    : result.direct?.dns_ips?.join(', ') || 'Адрес не получен');
+  for (const [label, path] of [['Напрямую', result.direct], ['Через прокси', result.proxy]]) {
+    const stages = [statusLabels[path?.status] || (path?.http_status ? `HTTP ${path.http_status}` : 'Не выполнено')];
+    if (path?.tcp_ms != null) stages.push(`TCP ${path.tcp_ms} мс`);
+    if (path?.tls_ms != null) stages.push(`TLS ${path.tls_ms} мс`);
+    if (path?.http_status && path?.status !== 'http_response') stages.push(`HTTP ${path.http_status}`);
+    if (path?.block_page_hint) stages.push('признаки блок-страницы');
+    if (path?.certificate_name) stages.push(`сертификат: ${path.certificate_name}`);
+    if (path?.redirect_host) stages.push(`редирект: ${path.redirect_host}`);
+    appendFact(facts, label, stages.join(' · '));
+  }
+  output.append(resource, heading, summary, registry, facts);
 }
 
 export function initProviderDiagnostics() {
@@ -232,14 +328,14 @@ export function initProviderDiagnostics() {
     if (result.tls && result.network === 'tcp' && (result.tls_mode === 'standard' || !result.tls_mode) && !compareName.includes(':') && !/^\d+(?:\.\d+){3}$/.test(compareName)) {
       const compareTls = document.createElement('button');
       compareTls.type = 'button';
-      responsiveLabel(compareTls, 'Сравнить TLS/SNI', 'TLS/SNI', 'Сравнить два TLS-рукопожатия к одному IP с настроенным SNI и без него, плюс контрольный адрес');
+      responsiveLabel(compareTls, 'Сравнить TLS/SNI', 'TLS/SNI', 'Повторить TLS-рукопожатия с SNI и без него на двух IP сервера и проверить контрольный адрес');
       const comparison = document.createElement('div');
       comparison.className = 'xk-provider-check-comparison';
       compareTls.addEventListener('click', async () => {
         setButtonBusy(compareTls, true, 'Сравниваем TLS/SNI…');
         comparison.textContent = 'Сравниваем TLS/SNI…';
         try {
-          const data = await api('/api/provider-diagnostics/compare-tls', result, AbortSignal.timeout(25000));
+          const data = await api('/api/provider-diagnostics/compare-tls', result, AbortSignal.timeout(35000));
           paintTlsComparison(comparison, data.result);
         } catch (error) {
           comparison.textContent = error.message || 'Сравнительная проверка не выполнена.';
@@ -287,7 +383,7 @@ export function initProviderDiagnostics() {
         output.textContent = 'Запрос к Cheburcheck…';
         try {
           const data = await api('/api/provider-diagnostics/public-lists', { host }, AbortSignal.timeout(9000));
-          paintPublicLists(output, data.result);
+          paintPublicLists(output, data.result, host);
         } catch (error) {
           output.textContent = error.message || 'Проверка по спискам не выполнена.';
         } finally {
@@ -379,6 +475,47 @@ export function initProviderDiagnostics() {
           }
         });
         meta.append(proxyButton);
+        const resourceButton = document.createElement('button');
+        resourceButton.type = 'button';
+        resourceButton.className = 'xk-provider-check-proxy-button';
+        resourceButton.innerHTML = iconHtml('search');
+        responsiveLabel(resourceButton, 'Сравнить доступ', 'Доступ', 'Сравнить введённый URL напрямую и через этот прокси к одному публичному IP; имя будет передано Cheburcheck');
+        resourceButton.addEventListener('click', async () => {
+          const input = $('provider-check-resource-url');
+          const feedback = $('provider-check-resource-feedback');
+          const output = row.querySelector('.xk-provider-check-resource-result');
+          let resource;
+          try {
+            resource = comparisonResourceUrl(input);
+          } catch (error) {
+            feedback.textContent = error.message;
+            input.setAttribute('aria-invalid', 'true');
+            output.replaceChildren();
+            input.focus();
+            return;
+          }
+          feedback.textContent = '';
+          input.removeAttribute('aria-invalid');
+          setButtonBusy(resourceButton, true, 'Сравниваем доступ…');
+          output.classList.add('is-loading');
+          output.textContent = `Проверяем ${resource.hostname} напрямую и через этот прокси…`;
+          output.scrollIntoView({ block: 'nearest' });
+          status(`Сравниваем доступ к ${resource.hostname} через выбранный сервер…`);
+          try {
+            const data = await api('/api/provider-diagnostics/resource-compare', { url: resource.href, ref: target.proxy_ref, index: target.proxy_index }, AbortSignal.timeout(45000));
+            paintResourceComparison(output, data.result);
+            status(data.result?.status === 'ok'
+              ? `Сравнение ${resource.hostname} завершено. Результат показан у выбранного сервера.`
+              : data.result?.message || 'Сравнение не выполнено.', data.result?.status !== 'ok');
+          } catch (error) {
+            output.textContent = error.name === 'TimeoutError' ? 'Время сравнения истекло.' : error.message || 'Сравнение не выполнено.';
+            status(output.textContent, true);
+          } finally {
+            output.classList.remove('is-loading');
+            setButtonBusy(resourceButton, false);
+          }
+        });
+        meta.append(resourceButton);
       }
       identity.append(title, endpoint);
       main.append(identity, meta);
@@ -387,7 +524,11 @@ export function initProviderDiagnostics() {
       const details = document.createElement('details');
       details.className = 'xk-provider-check-details';
       details.hidden = true;
-      row.append(check, main, state, details);
+      const resourceOutput = document.createElement('div');
+      resourceOutput.className = 'xk-provider-check-resource-result';
+      resourceOutput.setAttribute('role', 'status');
+      resourceOutput.setAttribute('aria-live', 'polite');
+      row.append(check, main, state, resourceOutput, details);
       list.appendChild(row);
       paintResult(index);
     });
@@ -577,6 +718,10 @@ export function initProviderDiagnostics() {
     try { await parseManual(); } finally { setButtonBusy($('provider-check-parse'), false); }
   });
   $('provider-check-run').addEventListener('click', () => void run());
+  $('provider-check-resource-url').addEventListener('input', () => {
+    $('provider-check-resource-feedback').textContent = '';
+    $('provider-check-resource-url').removeAttribute('aria-invalid');
+  });
   $('provider-check-more').addEventListener('click', () => void loadMoreCurrent());
   $('provider-check-select-all').addEventListener('change', (event) => {
     modal.querySelectorAll('[data-provider-check-index]').forEach((input) => { input.checked = event.target.checked; });

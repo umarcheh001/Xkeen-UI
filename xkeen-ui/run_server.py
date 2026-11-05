@@ -20,6 +20,16 @@ import traceback
 if sys.platform == "darwin" and "XKEEN_UI_LOCAL_DEMO" not in os.environ:
     os.environ["XKEEN_UI_LOCAL_DEMO"] = "1"
 
+if sys.platform == "darwin":
+    from pathlib import Path
+
+    from services.local_module_demo import configure_local_core_binaries, enabled as local_demo_enabled
+
+    if local_demo_enabled():
+        _local_cores = configure_local_core_binaries(Path(__file__).resolve().parent.parent)
+        for _core_name, _binary_path in _local_cores.items():
+            print(f"[local demo] {_core_name}: {_binary_path}", flush=True)
+
 GEVENT_AVAILABLE = True
 GEVENT_IMPORT_ERROR = None
 try:
