@@ -26,28 +26,24 @@ from services.xkeen import control_xkeen_action
 
 
 def _pidof(name: str) -> List[int]:
-    """Return list of PIDs for a process name using `pidof` or empty list."""
-    try:
-        res = subprocess.run(
-            ["pidof", name],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-        )
+    """Return process ids using router ``pidof`` or macOS/BSD ``pgrep``."""
+    for command in (("pidof", name), ("pgrep", "-x", name)):
+        try:
+            res = subprocess.run(
+                list(command),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                timeout=1.0,
+            )
+        except FileNotFoundError:
+            continue
+        except Exception:
+            continue
         if res.returncode != 0:
-            return []
-        raw = (res.stdout or "").strip()
-        if not raw:
-            return []
-        pids: List[int] = []
-        for part in raw.split():
-            try:
-                pids.append(int(part))
-            except Exception:
-                continue
-        return pids
-    except Exception:
-        return []
+            continue
+        return [int(part) for part in str(res.stdout or "").split() if part.isdigit()]
+    return []
 
 
 # Restarts must not overlap: the web UI can issue several enable/disable calls in

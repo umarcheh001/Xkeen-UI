@@ -38,13 +38,13 @@
         "gevent-websocket (optional)"
       ],
       "removable": false,
-      "unit_count": 674,
-      "size_bytes": 9304008,
+      "unit_count": 675,
+      "size_bytes": 9315579,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 20,
         "backend_service": 98,
-        "backend_test": 300,
+        "backend_test": 301,
         "configuration": 12,
         "frontend_bundle": 9,
         "frontend_entrypoint": 4,
@@ -134,7 +134,7 @@
       ],
       "removable": true,
       "unit_count": 147,
-      "size_bytes": 3459050,
+      "size_bytes": 3459219,
       "kind_counts": {
         "app_runtime": 4,
         "backend_route": 2,
@@ -322,7 +322,7 @@
       ],
       "removable": true,
       "unit_count": 22,
-      "size_bytes": 326896,
+      "size_bytes": 327600,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 6,
@@ -466,7 +466,7 @@
       "module_id": "core",
       "kind": "app_runtime",
       "path": "xkeen-ui/run_server.py",
-      "size_bytes": 10327,
+      "size_bytes": 10983,
       "depends_on": [
         "tool.terminal",
         "engine.mihomo",
@@ -1868,7 +1868,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/cores.py",
-      "size_bytes": 27286,
+      "size_bytes": 28171,
       "depends_on": [
         "engine.xray"
       ],
@@ -1888,6 +1888,7 @@
         "XKEEN_CORE_START_GRACE_AFTER_RUNNING_MS",
         "XKEEN_CORE_START_TIMEOUT",
         "XKEEN_CORE_SWITCH_TIMEOUT",
+        "XKEEN_XRAY_BINARY",
         "XKEEN_XRAY_TEST_TIMEOUT"
       ],
       "removable": false
@@ -2368,7 +2369,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/happ_links.py",
-      "size_bytes": 26362,
+      "size_bytes": 26635,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -2519,7 +2520,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/local_module_demo.py",
-      "size_bytes": 2685,
+      "size_bytes": 9050,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -2533,7 +2534,10 @@
         "gevent-websocket (optional)"
       ],
       "environment_variables": [
+        "XKEEN_GEODAT_BIN",
+        "XKEEN_HAPP_DECRYPTOR_CMD",
         "XKEEN_UI_LOCAL_DEMO",
+        "XKEEN_UI_LOCAL_MIHOMO_MOCK",
         "XKEEN_XRAY_BINARY"
       ],
       "removable": false
@@ -3711,7 +3715,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/xkeen.py",
-      "size_bytes": 9414,
+      "size_bytes": 9458,
       "depends_on": [
         "engine.mihomo"
       ],
@@ -4448,6 +4452,28 @@
         "gevent-websocket (optional)"
       ],
       "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_cores_local_paths.py",
+      "size_bytes": 1117,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [
+        "XKEEN_XRAY_BINARY"
+      ],
       "removable": false
     },
     {
@@ -6112,7 +6138,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_local_demo_cores.py",
-      "size_bytes": 810,
+      "size_bytes": 2695,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -6126,6 +6152,9 @@
         "gevent-websocket (optional)"
       ],
       "environment_variables": [
+        "XKEEN_GEODAT_BIN",
+        "XKEEN_HAPP_DECRYPTOR_CMD",
+        "XKEEN_UI_LOCAL_MIHOMO_MOCK",
         "XKEEN_XRAY_BINARY"
       ],
       "removable": false
@@ -11996,7 +12025,7 @@
       "module_id": "core",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/provider_diagnostics.js",
-      "size_bytes": 43184,
+      "size_bytes": 43530,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -17557,7 +17586,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_service",
       "path": "xkeen-ui/services/mihomo_runtime.py",
-      "size_bytes": 16398,
+      "size_bytes": 16567,
       "depends_on": [
         "core",
         "tool.editor"
@@ -24332,7 +24361,7 @@
       "module_id": "integration.happ",
       "kind": "backend_service",
       "path": "xkeen-ui/services/happ_decryptor/engine.py",
-      "size_bytes": 16875,
+      "size_bytes": 17173,
       "depends_on": [
         "core",
         "engine.xray"
@@ -24443,7 +24472,7 @@
       "module_id": "integration.happ",
       "kind": "backend_test",
       "path": "tests/test_happ_decryptor_engine.py",
-      "size_bytes": 15282,
+      "size_bytes": 15688,
       "depends_on": [
         "core"
       ],

@@ -23,12 +23,26 @@ if sys.platform == "darwin" and "XKEEN_UI_LOCAL_DEMO" not in os.environ:
 if sys.platform == "darwin":
     from pathlib import Path
 
-    from services.local_module_demo import configure_local_core_binaries, enabled as local_demo_enabled
+    from services.local_module_demo import (
+        configure_local_core_binaries,
+        configure_local_runtime,
+        configure_local_tools,
+        ensure_local_mihomo_api,
+        enabled as local_demo_enabled,
+    )
 
     if local_demo_enabled():
-        _local_cores = configure_local_core_binaries(Path(__file__).resolve().parent.parent)
+        _local_project_root = Path(__file__).resolve().parent.parent
+        configure_local_runtime(_local_project_root)
+        _local_cores = configure_local_core_binaries(_local_project_root)
+        _local_tools = configure_local_tools(_local_project_root)
+        _local_mihomo_api = ensure_local_mihomo_api(_local_project_root)
+        if _local_mihomo_api.get("started") or _local_mihomo_api.get("ready"):
+            print(f"[local demo] mihomo API: {_local_mihomo_api}", flush=True)
         for _core_name, _binary_path in _local_cores.items():
             print(f"[local demo] {_core_name}: {_binary_path}", flush=True)
+        for _tool_name, _tool_info in _local_tools.items():
+            print(f"[local demo] {_tool_name}: {_tool_info}", flush=True)
 
 GEVENT_AVAILABLE = True
 GEVENT_IMPORT_ERROR = None

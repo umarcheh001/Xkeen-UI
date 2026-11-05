@@ -270,6 +270,15 @@ def test_detect_kind(tmp_path):
     assert engine.detect_kind(str(tmp_path / "missing")) == "missing"
 
 
+def test_detect_kind_accepts_macho_only_on_macos(tmp_path, monkeypatch):
+    binary = tmp_path / "happ-decrypt-universal"
+    binary.write_bytes(b"\xcf\xfa\xed\xfe" + b"\0" * 160)
+    monkeypatch.setattr(engine.sys, "platform", "darwin")
+    assert engine.detect_kind(str(binary)) == "native"
+    monkeypatch.setattr(engine.sys, "platform", "linux")
+    assert engine.detect_kind(str(binary)) == "other"
+
+
 def test_verify_keys_with_engine_accepts_complete_usable_set(tmp_path):
     run = FakeRun(selftest=(0, json.dumps(FULL_SELFTEST), ""))
     engine.verify_keys_with_engine("/bin/engine", str(tmp_path), run)

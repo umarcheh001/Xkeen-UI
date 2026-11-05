@@ -46,6 +46,16 @@ const ATTEMPT_LABELS = {
   tls_ok: 'TLS прошёл', tls_error: 'TLS прерван', timeout: 'таймаут', refused: 'отказ TCP', unreachable: 'нет маршрута',
 };
 
+function formatAttempts(attempts) {
+  const labels = (Array.isArray(attempts) ? attempts : [])
+    .map((item) => ATTEMPT_LABELS[item] || item)
+    .filter(Boolean);
+  if (!labels.length) return 'не выполнено';
+  const counts = new Map();
+  for (const label of labels) counts.set(label, (counts.get(label) || 0) + 1);
+  return [...counts.entries()].map(([label, count]) => count > 1 ? `${label} ×${count}` : label).join(' · ');
+}
+
 function setButtonBusy(button, busy, label = '') {
   if (!button) return;
   button.classList.toggle('is-loading', busy);
@@ -77,10 +87,13 @@ function appendFact(list, label, value) {
 
 function paintPublicLists(output, result, host) {
   output.replaceChildren();
-  const target = document.createElement('span');
-  target.className = 'xk-provider-check-list-target';
-  target.textContent = `Проверен сервер: ${result.host || host}`;
-  output.append(target);
+  const checkedHost = String(result?.host || host || '').trim();
+  if (checkedHost) {
+    const target = document.createElement('span');
+    target.className = 'xk-provider-check-list-target';
+    target.textContent = `Проверен сервер: ${checkedHost}`;
+    output.append(target);
+  }
   const row = output.closest('.xk-provider-check-row');
   if (row) {
     row.classList.remove('is-registry-blocked');
@@ -118,8 +131,6 @@ function paintPublicLists(output, result, host) {
     description.className = 'xk-provider-check-registry-match';
     description.textContent = registryMatches.join(', ');
     facts.append(term, description);
-  } else {
-    appendFact(facts, 'Реестр сервера', 'Совпадений не найдено');
   }
   appendFact(facts, 'CDN', (result.cdn_providers || []).map((provider) => `${provider.name}${provider.networks?.length ? ` · ${provider.networks.join(', ')}` : ''}`).join('; ') || 'Совпадений не найдено');
   if (result.ips?.length) appendFact(facts, 'IP', result.ips.join(', '));
@@ -166,9 +177,9 @@ function paintTlsComparison(output, result) {
     const ip = document.createElement('code');
     ip.textContent = address.ip;
     const withSni = document.createElement('span');
-    withSni.textContent = `С SNI: ${(address.with_sni || []).map((item) => ATTEMPT_LABELS[item] || item).join(' · ') || 'не выполнено'}`;
+    withSni.textContent = `С SNI: ${formatAttempts(address.with_sni)}`;
     const withoutSni = document.createElement('span');
-    withoutSni.textContent = `Без SNI: ${(address.without_sni || []).map((item) => ATTEMPT_LABELS[item] || item).join(' · ') || 'не выполнено'}`;
+    withoutSni.textContent = `Без SNI: ${formatAttempts(address.without_sni)}`;
     row.append(ip, withSni, withoutSni);
     ipRows.append(row);
   }
@@ -178,8 +189,9 @@ function paintTlsComparison(output, result) {
   if (!addresses.length) appendFact(facts, 'IP', 'Не разрешён');
   appendFact(facts, 'Контроль', `${result.control?.ip || '1.1.1.1'} · ${ATTEMPT_LABELS[result.control?.result] || 'не выполнено'}`);
   if (result.dns_comparison?.public?.length) appendFact(facts, 'Публичный DNS', result.dns_comparison.public.join(', '));
-  if (result.registry?.status === 'ok') appendFact(facts, 'Реестр SNI', `${result.registry.target || result.sni}: ${result.registry.listed ? `запись найдена: ${result.registry.domain || result.registry.subnets?.join(', ') || 'совпадение'}` : 'совпадений нет'}`);
-  else if (result.registry?.status && result.registry.status !== 'skipped') appendFact(facts, 'Реестр SNI', `${result.registry.target || result.sni}: ответ не получен`);
+  const registryTarget = String(result.registry?.target || result.sni || '').trim();
+  if (registryTarget && result.registry?.status === 'ok') appendFact(facts, 'Реестр SNI', `${registryTarget}: ${result.registry.listed ? `запись найдена: ${result.registry.domain || result.registry.subnets?.join(', ') || 'совпадение'}` : 'совпадений нет'}`);
+  else if (registryTarget && result.registry?.status && result.registry.status !== 'skipped') appendFact(facts, 'Реестр SNI', `${registryTarget}: ответ не получен`);
   output.append(facts);
 }
 
