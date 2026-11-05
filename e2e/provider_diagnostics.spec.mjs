@@ -1,7 +1,7 @@
 import { test, expect, selectPanelView, openMihomoConfig } from './fixtures.mjs';
 
 const TARGETS = [
-  { name: 'Edge', host: 'edge.example.org', port: 443, network: 'tcp', protocol: 'vless', source: '04_outbounds.json', tls: false },
+  { name: 'Edge', host: 'edge.example.org', port: 443, network: 'tcp', protocol: 'vless', source: '04_outbounds.json', tls: true, tls_mode: 'standard', sni: 'front.example.org' },
   { name: 'AWG', host: 'awg.example', port: 51820, network: 'udp', protocol: 'wireguard', source: '04_outbounds.json', tls: false },
 ];
 
@@ -12,21 +12,23 @@ async function expectCompactDetailActions(page) {
     const icon = container.querySelector('a .xk-provider-check-external-icon')?.getBoundingClientRect();
     return { right: frame.right, actions: actions.map((item) => ({ top: item.top, right: item.right, width: item.width, height: item.height })), iconCenter: icon ? icon.left + icon.width / 2 : null };
   });
-  expect(geometry.actions).toHaveLength(4);
+  expect(geometry.actions).toHaveLength(5);
   expect(Math.max(...geometry.actions.map((item) => item.top)) - Math.min(...geometry.actions.map((item) => item.top))).toBeLessThan(1);
   expect(Math.max(...geometry.actions.map((item) => item.right))).toBeLessThanOrEqual(geometry.right + 1);
   expect(Math.max(...geometry.actions.map((item) => item.width)) - Math.min(...geometry.actions.map((item) => item.width))).toBeLessThan(1);
   expect(Math.max(...geometry.actions.map((item) => item.height)), JSON.stringify(geometry)).toBeLessThanOrEqual(30);
-  const link = geometry.actions[3];
+  const link = geometry.actions[4];
   expect(Math.abs(geometry.iconCenter - (link.right - link.width / 2))).toBeLessThan(1);
 }
 
 test('Xray toolbar opens server diagnostics and runs selected checks', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('xkeen-theme', 'dark'));
   await page.route('**/api/provider-diagnostics/targets?core=xray', (route) => route.fulfill({ json: { ok: true, targets: TARGETS } }));
   const checked = [];
-  await page.route('**/api/provider-diagnostics/probe', (route) => {
+  await page.route('**/api/provider-diagnostics/probe', async (route) => {
     const target = route.request().postDataJSON();
     checked.push(target.host);
+    await new Promise((resolve) => setTimeout(resolve, 200));
     return route.fulfill({ json: { ok: true, result: {
       ...target,
       status: target.network === 'udp' ? 'udp_unknown' : 'reachable',
@@ -34,6 +36,10 @@ test('Xray toolbar opens server diagnostics and runs selected checks', async ({ 
       addresses: ['198.51.100.10'],
       dns_ms: 9,
       tcp_ms: target.network === 'udp' ? undefined : 12,
+      tls_ms: target.tls ? 18 : undefined,
+      source_ip: target.network === 'udp' ? undefined : '192.0.2.10',
+      connected_ip: target.network === 'udp' ? undefined : '198.51.100.10',
+      sni_sent: target.tls ? true : undefined,
     } } });
   });
   await page.route('**/api/provider-diagnostics/dns-compare', (route) => route.fulfill({ json: {
@@ -46,23 +52,64 @@ test('Xray toolbar opens server diagnostics and runs selected checks', async ({ 
       ips: ['203.0.113.10'], organization: 'Example Hosting', asn: 'AS64500', location: 'RU',
     },
   } }));
+  await page.route('**/api/provider-diagnostics/compare-tls', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    return route.fulfill({ json: { ok: true, result: {
+    status: 'ok', verdict: 'tls_sni_filtering', confidence: 'medium', target_ip: '198.51.100.10', sni: 'front.example.org',
+    trials: { with_sni: ['tls_error', 'tls_error'], without_sni: ['tls_ok', 'tls_ok'] },
+    control: { ip: '1.1.1.1', result: 'tls_ok' }, registry: { status: 'ok', domain: '', subnets: [] },
+    } } });
+  });
   await page.goto('/');
   await selectPanelView(page, 'routing');
   await page.locator('[data-provider-check-core="xray"]').click();
   await expect(page.locator('#provider-check-modal')).toBeVisible();
+  for (const id of ['provider-check-close', 'provider-check-mode-current', 'provider-check-mode-manual', 'provider-check-refresh', 'provider-check-parse', 'provider-check-run', 'provider-check-cancel']) {
+    await expect(page.locator(`#${id}`)).toHaveAttribute('data-tooltip', /.+/);
+  }
+  await page.locator('#provider-check-mode-manual').hover();
+  await expect(page.locator('#xk-tooltip-portal')).toContainText('Ввести адреса серверов');
   await expect(page.locator('.xk-provider-check-row')).toHaveCount(2);
   await expect(page.locator('#provider-check-run')).toBeEnabled();
+  await page.locator('#provider-check-select-all').uncheck();
+  await expect(page.locator('#provider-check-run')).toBeDisabled();
+  await page.locator('[data-provider-check-index="0"]').check();
+  await expect(page.locator('#provider-check-run')).toBeEnabled();
+  await expect(page.locator('#provider-check-select-all')).toHaveJSProperty('indeterminate', true);
+  await page.locator('#provider-check-select-all').check();
   await page.locator('#provider-check-run').click();
+  await expect(page.locator('#provider-check-run')).toHaveClass(/is-loading/);
   await expect(page.locator('#provider-check-status')).toContainText('проверено 2');
   await expect(page.locator('.xk-provider-check-row-state.is-reachable')).toHaveCount(1);
   await expect(page.locator('.xk-provider-check-row-state.is-udp_unknown')).toHaveCount(1);
+  const summaryLayout = await page.evaluate(() => {
+    const source = document.querySelector('#provider-check-current-panel').getBoundingClientRect();
+    const stats = document.querySelector('#provider-check-overview').getBoundingClientRect();
+    const cards = [...document.querySelectorAll('.xk-provider-check-stat')].map((item) => item.getBoundingClientRect());
+    return { source, stats, cards };
+  });
+  expect(Math.abs(summaryLayout.source.top - summaryLayout.stats.top)).toBeLessThan(2);
+  expect(summaryLayout.stats.left).toBeGreaterThan(summaryLayout.source.right);
+  expect(Math.max(...summaryLayout.cards.map((card) => card.top)) - Math.min(...summaryLayout.cards.map((card) => card.top))).toBeLessThan(2);
+  await page.screenshot({ path: 'test-results/provider-diagnostics-summary-desktop.png', fullPage: false });
   await page.locator('.xk-provider-check-details').first().locator('summary').click();
   await expect(page.locator('.xk-provider-check-details').first()).toContainText('DNS');
+  await expect(page.locator('.xk-provider-check-details').first()).toContainText('front.example.org');
+  await expect(page.locator('.xk-provider-check-details').first()).toContainText('192.0.2.10');
+  await page.getByRole('button', { name: 'Сравнить TLS/SNI' }).first().click();
+  await expect(page.getByRole('button', { name: 'Сравнить TLS/SNI' }).first()).toHaveClass(/is-loading/);
+  await expect(page.locator('.xk-provider-check-comparison').first()).toContainText('Признаки фильтрации TLS/SNI');
+  await expect(page.locator('.xk-provider-check-comparison').first()).toContainText('Уверенность: средняя');
   await page.getByRole('button', { name: 'Сравнить DNS' }).first().click();
   await expect(page.locator('.xk-provider-check-dns-compare').first()).toContainText('Google DNS (A)');
   await page.getByRole('button', { name: 'Проверить списки' }).first().click();
-  await expect(page.locator('.xk-provider-check-public-lists').first()).toContainText('Есть совпадение в списках');
+  await expect(page.locator('.xk-provider-check-public-lists').first()).toContainText('В реестре заблокированных ресурсов');
   await expect(page.locator('.xk-provider-check-public-lists').first()).toContainText('AS64500');
+  await expect(page.locator('.xk-provider-check-row').first()).toHaveClass(/is-registry-blocked/);
+  await expect(page.locator('.xk-provider-check-registry-badge')).toContainText('В реестре блокировок');
+  for (const action of await page.locator('.xk-provider-check-detail-actions').first().locator('button, a').all()) {
+    await expect(action).toHaveAttribute('data-tooltip', /.+/);
+  }
   await expect(page.locator('#provider-check-ok-count')).toHaveText('1');
   await expect(page.locator('#provider-check-run')).toBeInViewport();
   await expect(page.locator('#provider-check-cancel')).toBeInViewport();
@@ -107,6 +154,11 @@ test('Mihomo diagnostics accepts manual sources on a phone', async ({ page }) =>
     status: 'ok', listed: false, registry_domain: '', blocked_subnets: [], cdn_providers: [],
     ips: ['203.0.113.10'], organization: 'Example Hosting', asn: 'AS64500', location: 'RU',
   } } }));
+  await page.route('**/api/provider-diagnostics/compare-tls', (route) => route.fulfill({ json: { ok: true, result: {
+    status: 'ok', verdict: 'undetermined', confidence: 'low', target_ip: '203.0.113.10', sni: 'example.com',
+    trials: { with_sni: ['tls_ok', 'tls_ok'], without_sni: ['tls_ok', 'tls_ok'] },
+    control: { ip: '1.1.1.1', result: 'tls_ok' }, registry: { status: 'ok', domain: '', subnets: [] },
+  } } }));
   await page.route('**/api/provider-diagnostics/parse', (route) => {
     expect(route.request().postDataJSON().source).toBe('example.com\n203.0.113.10:8443');
     return route.fulfill({ json: { ok: true, targets: [
@@ -140,9 +192,17 @@ test('Mihomo diagnostics accepts manual sources on a phone', async ({ page }) =>
   await page.screenshot({ path: 'test-results/provider-diagnostics-mobile.png', fullPage: false });
   await page.locator('#provider-check-run').click();
   await expect(page.locator('.xk-provider-check-row-state.is-reachable')).toHaveCount(2);
+  const mobileSummary = await page.evaluate(() => ({
+    sourceBottom: document.querySelector('#provider-check-manual-panel').getBoundingClientRect().bottom,
+    statsTop: document.querySelector('#provider-check-overview').getBoundingClientRect().top,
+  }));
+  expect(mobileSummary.statsTop).toBeGreaterThanOrEqual(mobileSummary.sourceBottom);
   await page.locator('.xk-provider-check-details').first().locator('summary').click();
+  await page.getByRole('button', { name: 'Сравнить TLS/SNI' }).first().click();
+  await expect(page.locator('.xk-provider-check-comparison').first()).toContainText('Причина не установлена');
   await page.getByRole('button', { name: 'Проверить списки' }).first().click();
   await expect(page.locator('.xk-provider-check-public-lists').first()).toContainText('Совпадений в списках не найдено');
+  await expect(page.locator('.xk-provider-check-row').first()).not.toHaveClass(/is-registry-blocked/);
   await expect(page.locator('#provider-check-run')).toBeInViewport();
   await expect(page.getByRole('button', { name: 'Проверить списки' }).first()).toBeInViewport();
   await expectCompactDetailActions(page);
@@ -166,4 +226,127 @@ test('a failed diagnostic request is not reported as a blocked server', async ({
   await expect(page.locator('#provider-check-issue-count')).toHaveText('0');
   await page.locator('.xk-provider-check-details summary').click();
   await expect(page.locator('.xk-provider-check-details dt')).toHaveText('Запрос');
+});
+
+test('saved Xray diagnostics shows servers from every outbound file', async ({ page }) => {
+  const sources = [
+    ['04_outbounds.auth.quattro-cloud.ru.json', 107],
+    ['04_outbounds.cdn.pecan.run-2.json', 17],
+    ['04_outbounds.cdn.pecan.run.json', 17],
+  ];
+  const targets = sources.flatMap(([source, count]) => Array.from({ length: count }, (_, index) => ({
+    name: `${source}-${index}`, host: `edge-${index}.example.org`, port: 443,
+    network: 'tcp', protocol: 'vless', source, tls: true, tls_mode: 'standard',
+  })));
+  await page.route('**/api/provider-diagnostics/targets?core=xray', (route) => route.fulfill({ json: {
+    ok: true, targets, has_more: false,
+  } }));
+  await page.goto('/');
+  await selectPanelView(page, 'routing');
+  await page.locator('[data-provider-check-core="xray"]').click();
+  await expect(page.locator('.xk-provider-check-row')).toHaveCount(141);
+  await expect(page.locator('#provider-check-count')).toHaveText('141');
+  await expect(page.locator('#provider-check-status')).toContainText('Найдено серверов: 141');
+  await expect(page.locator('#provider-check-more-wrap')).toBeHidden();
+  for (const [source, count] of sources) {
+    await expect(page.locator('.xk-provider-check-row').filter({ hasText: source })).toHaveCount(count);
+  }
+});
+
+test('saved Xray diagnostics loads further pages without losing selection', async ({ page }) => {
+  const target = (name) => ({ name, host: `${name}.example.org`, port: 443, network: 'tcp', protocol: 'vless', source: '04_outbounds.json', tls: true });
+  await page.route('**/api/provider-diagnostics/targets?core=xray', (route) => route.fulfill({ json: {
+    ok: true, targets: [target('first'), target('second')], has_more: true, next_offset: 2,
+  } }));
+  await page.route('**/api/provider-diagnostics/targets?core=xray&offset=2', (route) => route.fulfill({ json: {
+    ok: true, targets: [target('third')], has_more: false, next_offset: 3,
+  } }));
+  await page.goto('/');
+  await selectPanelView(page, 'routing');
+  await page.locator('[data-provider-check-core="xray"]').click();
+  await expect(page.locator('#provider-check-more-wrap')).toBeVisible();
+  await page.locator('[data-provider-check-index="1"]').uncheck();
+  await page.locator('#provider-check-more').click();
+  await expect(page.locator('.xk-provider-check-row')).toHaveCount(3);
+  await expect(page.locator('#provider-check-count')).toHaveText('3');
+  await expect(page.locator('[data-provider-check-index="0"]')).toBeChecked();
+  await expect(page.locator('[data-provider-check-index="1"]')).not.toBeChecked();
+  await expect(page.locator('[data-provider-check-index="2"]')).not.toBeChecked();
+  await expect(page.locator('#provider-check-more-wrap')).toBeHidden();
+});
+
+test('manual subscription shows every server and loading state', async ({ page }) => {
+  const targets = Array.from({ length: 107 }, (_, index) => ({
+    name: `Node ${index + 1}`, host: `node-${index + 1}.example.org`, port: 443,
+    network: 'tcp', protocol: 'vless', source: 'Ссылка', tls: true,
+  }));
+  await page.route('**/api/provider-diagnostics/parse', async (route) => {
+    expect(route.request().postDataJSON().source).toBe('https://provider.example/subscription/private-token');
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    return route.fulfill({ json: {
+      ok: true, targets, warnings: ['Подписка получена с HWID-заголовками.'], truncated: false,
+    } });
+  });
+  await page.goto('/');
+  await selectPanelView(page, 'routing');
+  await page.locator('[data-provider-check-core="xray"]').click();
+  await page.locator('#provider-check-mode-manual').click();
+  await page.locator('#provider-check-input').fill('https://provider.example/subscription/private-token');
+  await page.locator('#provider-check-parse').click();
+  await expect(page.locator('#provider-check-parse')).toHaveClass(/is-loading/);
+  await expect(page.locator('.xk-provider-check-row')).toHaveCount(107);
+  await expect(page.locator('#provider-check-status')).toContainText('Найдено серверов: 107');
+  await expect(page.locator('#provider-check-status')).not.toContainText('Лимит ручного ввода');
+  await expect(page.locator('#provider-check-run')).toBeEnabled();
+});
+
+test('manual proxy link can be checked through the proxy before TCP checks', async ({ page }) => {
+  await page.route('**/api/provider-diagnostics/parse', (route) => route.fulfill({ json: {
+    ok: true, targets: [{ name: 'Private', host: 'edge.example.org', port: 443,
+      network: 'tcp', protocol: 'vless', tls: true, tls_mode: 'standard', source: 'Ссылка',
+      proxy_ref: 'opaque-reference', proxy_index: 0 }], warnings: [], truncated: false,
+  } }));
+  await page.route('**/api/provider-diagnostics/proxy-probe', async (route) => {
+    expect(route.request().postDataJSON()).toEqual({ ref: 'opaque-reference', index: 0 });
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    return route.fulfill({ json: { ok: true, result: {
+      status: 'ok', delay_ms: 86, message: 'Прокси передал HTTPS-запрос к контрольному адресу.',
+    } } });
+  });
+  await page.goto('/');
+  await selectPanelView(page, 'routing');
+  await page.locator('[data-provider-check-core="xray"]').click();
+  await page.locator('#provider-check-mode-manual').click();
+  await page.locator('#provider-check-input').fill('vless://private@example.org:443');
+  await page.locator('#provider-check-parse').click();
+  const proxyButton = page.getByRole('button', { name: 'Проверить прокси' });
+  await expect(proxyButton).toBeVisible();
+  await proxyButton.click();
+  await expect(proxyButton).toHaveClass(/is-loading/);
+  await expect(page.locator('.xk-provider-check-proxy-status')).toContainText('Прокси работает · 86 мс');
+  await expect(page.locator('.xk-provider-check-row-state')).toContainText('Не проверен');
+});
+
+test('Mihomo proxy check starts the selected engine and shows its result', async ({ page }) => {
+  await page.route('**/api/provider-diagnostics/targets?core=mihomo', (route) => route.fulfill({ json: {
+    ok: true, targets: [{ name: 'Private', host: 'edge.example.org', port: 443,
+      network: 'tcp', protocol: 'vless', tls: true, tls_mode: 'standard', source: 'config.yaml',
+      proxy_ref: 'mihomo-reference', proxy_index: 0, proxy_engine: 'mihomo' }],
+  } }));
+  await page.route('**/api/provider-diagnostics/proxy-probe', async (route) => {
+    expect(route.request().postDataJSON()).toEqual({ ref: 'mihomo-reference', index: 0 });
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    return route.fulfill({ json: { ok: true, result: {
+      status: 'ok', delay_ms: 54, message: 'Прокси передал HTTPS-запрос к контрольному адресу.',
+    } } });
+  });
+  await page.goto('/');
+  await selectPanelView(page, 'mihomo');
+  await openMihomoConfig(page);
+  await page.locator('[data-provider-check-core="mihomo"]').click();
+  const proxyButton = page.getByRole('button', { name: 'Проверить прокси' });
+  await expect(proxyButton).toHaveAttribute('data-tooltip', /Mihomo/);
+  await proxyButton.click();
+  await expect(proxyButton).toHaveClass(/is-loading/);
+  await expect(page.locator('.xk-provider-check-proxy-status')).toContainText('Прокси работает · 54 мс');
 });

@@ -8,6 +8,7 @@ export function appendProviderDiagnosticsHint(container, message, core, sourceIn
   const button = document.createElement('button');
   button.type = 'button';
   button.textContent = 'Проверить серверы';
+  button.dataset.tooltip = 'Открыть диагностику адресов из редактора от имени процесса панели';
   button.addEventListener('click', () => {
     document.dispatchEvent(new CustomEvent('xk-provider-check-open', {
       detail: { core, source: document.getElementById(sourceInputId)?.value?.trim() || '' },

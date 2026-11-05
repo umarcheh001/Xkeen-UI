@@ -31,6 +31,9 @@ _TXID_RE = re.compile(r"^\d{8}-\d{6}-[0-9a-f]{8}$")
 
 
 def xray_binary() -> str:
+    configured = str(os.environ.get("XKEEN_XRAY_BINARY") or "")
+    if configured and os.path.isfile(configured) and os.access(configured, os.X_OK):
+        return configured
     if os.path.exists("/opt/sbin/xray"):
         return "/opt/sbin/xray"
     return str(shutil.which("xray") or "")

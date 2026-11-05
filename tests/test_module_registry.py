@@ -18,6 +18,7 @@ from services.module_registry import (
     STATE_SCHEMA_VERSION,
     ModuleRegistry,
     ModuleRegistryError,
+    core_binary_available,
 )
 from services.self_update.state import get_update_paths, release_lock, try_acquire_lock
 
@@ -36,6 +37,18 @@ def _registry(tmp_path: Path, *, available: bool = True) -> ModuleRegistry:
 
 def _module(payload: dict, module_id: str) -> dict:
     return next(item for item in payload["modules"] if item["id"] == module_id)
+
+
+def test_explicit_core_binaries_are_available_to_registry(tmp_path):
+    binary = tmp_path / "xray"
+    binary.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    binary.chmod(0o755)
+    assert core_binary_available("xray", which=lambda _name: None, environ={
+        "XKEEN_XRAY_BINARY": str(binary),
+    }) is True
+    assert core_binary_available("xray", which=lambda _name: None, environ={
+        "XKEEN_XRAY_BINARY": str(tmp_path / "missing"),
+    }) is False
 
 
 def test_missing_state_migrates_to_legacy_full_and_exposes_full_registry(tmp_path):

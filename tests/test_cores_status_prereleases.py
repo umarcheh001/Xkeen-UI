@@ -65,6 +65,23 @@ def _mock_installed_cores(monkeypatch):
     monkeypatch.setattr(cores_status, "_run_cmd", fake_run_cmd)
 
 
+def test_explicit_core_binaries_are_reported_in_status(monkeypatch, tmp_path):
+    binaries = {}
+    for core in ("xray", "mihomo"):
+        binary = tmp_path / core
+        binary.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        binary.chmod(0o755)
+        binaries[core] = str(binary)
+    monkeypatch.setenv("XKEEN_XRAY_BINARY", binaries["xray"])
+    monkeypatch.setenv("MIHOMO_BIN", binaries["mihomo"])
+    monkeypatch.setattr(cores_status, "_run_cmd", lambda command, **_kwargs: (
+        0, "Xray 26.10.31" if command[0] == binaries["xray"] else "Mihomo Meta v1.19.33"
+    ))
+    payload = _make_cores_status_client(tmp_path).get("/api/cores/updates").get_json()
+    assert payload["installed"]["xray"]["version"] == "26.10.31"
+    assert payload["installed"]["mihomo"]["version"] == "1.19.33"
+
+
 def _wait_for_background_refresh(client, *, timeout_s: float = 2.5):
     deadline = time.time() + timeout_s
     last_payload = None

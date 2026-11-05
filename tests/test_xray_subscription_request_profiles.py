@@ -131,6 +131,26 @@ def test_auto_profile_keeps_adaptive_retry(monkeypatch):
     assert meta["fetch_mode"] == "hwid"
 
 
+def test_diagnostics_fetch_limits_timeout_and_header_retries(monkeypatch):
+    from services import xray_subscriptions as subs
+
+    calls = []
+
+    def fake_fetch(_url, request_headers=None, **kwargs):
+        calls.append((dict(request_headers or {}), kwargs.get("timeout_seconds")))
+        return "", {}
+
+    monkeypatch.setattr(subs, "fetch_subscription_body", fake_fetch)
+    monkeypatch.setattr(subs, "_subscription_request_variants", lambda: [
+        ("hwid", {"x-hwid": "DEVICE"}, "retry"),
+        ("happ", {"User-Agent": "Happ"}, "retry"),
+    ])
+    subs.fetch_subscription_body_for_xray(
+        "https://example.test/sub", timeout_seconds=6, max_request_variants=2
+    )
+    assert calls == [({}, 6), ({"x-hwid": "DEVICE"}, 6), ({"User-Agent": "Happ"}, 6)]
+
+
 def test_auto_profile_uses_xray_user_agent_for_hwid_variant(monkeypatch):
     from services import subscription_request_profile as profiles
     from services import xray_subscriptions as subs

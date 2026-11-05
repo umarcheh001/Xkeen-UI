@@ -141,6 +141,25 @@ def test_fetch_subscription_body_uses_mihomo_proxy_first_for_fake_ip_dns(monkeyp
     assert calls == [17890]
 
 
+def test_fake_ip_fallback_does_not_retry_the_same_proxy_twice(monkeypatch):
+    from services import xray_subscriptions as subs
+    from services.url_policy import URLPolicy
+
+    calls = []
+
+    def fake_read(_url, *, policy, timeout, max_bytes, request_headers=None, proxy_port=None):
+        calls.append(proxy_port)
+        raise TimeoutError("unreachable")
+
+    monkeypatch.setattr(subs, "_subscription_policy", lambda: URLPolicy(("example.test",)))
+    monkeypatch.setattr(subs, "_read_subscription_response", fake_read)
+    monkeypatch.setattr(subs, "_subscription_mihomo_proxy_port", lambda: 17890)
+    monkeypatch.setattr(subs, "_subscription_host_uses_mihomo_fake_ip", lambda _url: True)
+    with pytest.raises(TimeoutError):
+        subs._fetch_subscription_body_once("https://example.test/sub", timeout_seconds=6)
+    assert calls == [17890, None]
+
+
 def test_fetch_subscription_body_does_not_proxy_retry_http_errors(monkeypatch):
     from services import xray_subscriptions as subs
     from services.url_policy import URLPolicy

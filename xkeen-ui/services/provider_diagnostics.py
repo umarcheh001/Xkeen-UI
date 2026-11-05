@@ -4,10 +4,15 @@ from __future__ import annotations
 
 import ipaddress
 import json
+import subprocess
 import re
+import secrets
 import socket
+import ssl
+import tempfile
 import threading
 import time
+from collections import OrderedDict
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.parse import urlencode
@@ -18,10 +23,19 @@ from utils.jsonc import strip_json_comments_text
 
 
 MAX_SOURCE_BYTES = 65_536
-MAX_TARGETS = 24
+MAX_TARGETS = 200
+MAX_SAVED_XRAY_PAGE_SIZE = 200
 _PROBE_SLOTS = threading.BoundedSemaphore(2)
 _DNS_COMPARE_SLOTS = threading.BoundedSemaphore(1)
 _LIST_LOOKUP_SLOTS = threading.BoundedSemaphore(1)
+_COMPARE_PROBE_SLOTS = threading.BoundedSemaphore(1)
+_PROXY_PROBE_SLOTS = threading.BoundedSemaphore(2)
+_PROXY_CONTEXT_LOCK = threading.Lock()
+_PROXY_CONTEXTS: OrderedDict[str, tuple[float, list[dict | None]]] = OrderedDict()
+_PROXY_CONTEXT_TTL = 600
+_PROXY_CONTEXT_LIMIT = 32
+_CONTROL_IP = "1.1.1.1"
+_CONTROL_SNI = "cloudflare-dns.com"
 _UDP_PROTOCOLS = {"hysteria", "hysteria2", "hy2", "tuic", "wireguard", "anytls-quic"}
 _SKIP_PROTOCOLS = {"direct", "freedom", "blackhole", "dns", "reject", "selector", "url-test", "fallback", "load-balance"}
 _HOST_RE = re.compile(r"^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*\.?$")
@@ -44,7 +58,7 @@ def _host(value: object) -> str:
     return ascii_host
 
 
-def make_target(host: object, port: object, *, name: object = "", protocol: object = "", network: object = "tcp", tls: bool = False, source: object = "") -> dict:
+def make_target(host: object, port: object, *, name: object = "", protocol: object = "", network: object = "tcp", tls: bool = False, sni: object = "", tls_mode: str = "", verify_tls: bool = True, source: object = "") -> dict:
     clean_host = _host(host)
     try:
         clean_port = int(port)
@@ -56,24 +70,31 @@ def make_target(host: object, port: object, *, name: object = "", protocol: obje
     if clean_network not in {"tcp", "udp"}:
         raise ValueError("Неизвестный сетевой протокол.")
     clean_name = str(name or clean_host).strip()[:100]
+    clean_mode = str(tls_mode or ("standard" if tls else "none")).lower()
+    if clean_mode not in {"none", "standard", "reality"}:
+        raise ValueError("Неизвестный режим TLS.")
+    clean_sni = _host(sni) if sni else ""
     return {
         "name": clean_name,
         "host": clean_host,
         "port": clean_port,
         "protocol": str(protocol or "").strip().lower()[:32],
         "network": clean_network,
-        "tls": bool(tls) and clean_network == "tcp",
+        "tls": clean_mode == "standard" and clean_network == "tcp",
+        "tls_mode": clean_mode if clean_network == "tcp" else "none",
+        "sni": clean_sni if clean_network == "tcp" and clean_mode != "none" else "",
+        "verify_tls": bool(verify_tls),
         "source": str(source or "").strip()[:100],
     }
 
 
-def _add(targets: list[dict], target: dict) -> None:
-    key = (target["host"], target["port"], target["network"])
-    if len(targets) < MAX_TARGETS and not any((item["host"], item["port"], item["network"]) == key for item in targets):
+def _add(targets: list[dict], target: dict, *, limit: int = MAX_TARGETS) -> None:
+    key = (target["host"], target["port"], target["network"], target["tls_mode"], target["sni"], target["verify_tls"])
+    if len(targets) < limit and not any((item["host"], item["port"], item["network"], item["tls_mode"], item["sni"], item["verify_tls"]) == key for item in targets):
         targets.append(target)
 
 
-def xray_outbound_targets(obj: object, *, source: str = "Xray") -> list[dict]:
+def xray_outbound_targets(obj: object, *, source: str = "Xray", limit: int = MAX_TARGETS, keep_outbounds: bool = False, probe_outbounds: list[dict | None] | None = None) -> list[dict]:
     if isinstance(obj, list):
         outbounds = obj
     elif isinstance(obj, dict):
@@ -89,6 +110,11 @@ def xray_outbound_targets(obj: object, *, source: str = "Xray") -> list[dict]:
             continue
         settings = outbound.get("settings") if isinstance(outbound.get("settings"), dict) else {}
         stream = outbound.get("streamSettings") if isinstance(outbound.get("streamSettings"), dict) else {}
+        security = str(stream.get("security") or "none").lower()
+        tls_mode = "standard" if security == "tls" else "reality" if security == "reality" else "none"
+        security_settings = stream.get("realitySettings" if tls_mode == "reality" else "tlsSettings")
+        security_settings = security_settings if isinstance(security_settings, dict) else {}
+        sni = security_settings.get("serverName") or security_settings.get("server_name") or ""
         network = "udp" if protocol in _UDP_PROTOCOLS or str(stream.get("network") or "").lower() in {"quic", "kcp"} else "tcp"
         name = outbound.get("tag") or protocol or "Узел Xray"
         endpoints: list[dict] = []
@@ -101,27 +127,49 @@ def xray_outbound_targets(obj: object, *, source: str = "Xray") -> list[dict]:
                 endpoints.append(container)
         for endpoint in endpoints:
             try:
-                _add(targets, make_target(endpoint.get("address") or endpoint.get("server"), endpoint.get("port"), name=name, protocol=protocol, network=network, source=source))
+                target = make_target(endpoint.get("address") or endpoint.get("server"), endpoint.get("port"), name=name, protocol=protocol, network=network, tls_mode=tls_mode, sni=sni, verify_tls=security_settings.get("allowInsecure") is not True, source=source)
+                if keep_outbounds:
+                    targets.append(target)
+                    if probe_outbounds is not None:
+                        probe_outbounds.append(outbound)
+                else:
+                    previous_count = len(targets)
+                    _add(targets, target, limit=limit)
+                    if probe_outbounds is not None and len(targets) > previous_count:
+                        probe_outbounds.append(outbound)
             except ValueError:
                 continue
+            if len(targets) >= limit:
+                break
+        if len(targets) >= limit:
+            break
     return targets
 
 
-def current_xray_targets(configs_dir: str) -> list[dict]:
+def read_current_xray_targets(configs_dir: str, *, offset: int = 0, probe_outbounds: list[dict | None] | None = None) -> dict:
     root = Path(configs_dir)
     targets: list[dict] = []
     if not root.is_dir():
-        return targets
+        return {"targets": [], "has_more": False, "next_offset": offset}
+    needed = offset + MAX_SAVED_XRAY_PAGE_SIZE + 1
     for path in sorted(root.glob("*.json"))[:100]:
         try:
             if path.stat().st_size > 2_000_000:
                 continue
             obj = json.loads(strip_json_comments_text(path.read_text(encoding="utf-8-sig")))
-            for item in xray_outbound_targets(obj, source=path.name):
-                _add(targets, item)
+            targets.extend(xray_outbound_targets(obj, source=path.name, limit=needed - len(targets), keep_outbounds=True, probe_outbounds=probe_outbounds))
         except (OSError, UnicodeError, ValueError):
             continue
-    return targets
+        if len(targets) >= needed:
+            break
+    page = targets[offset:offset + MAX_SAVED_XRAY_PAGE_SIZE]
+    if probe_outbounds is not None:
+        probe_outbounds[:] = probe_outbounds[offset:offset + MAX_SAVED_XRAY_PAGE_SIZE]
+    return {"targets": page, "has_more": len(targets) > offset + len(page), "next_offset": offset + len(page)}
+
+
+def current_xray_targets(configs_dir: str) -> list[dict]:
+    return read_current_xray_targets(configs_dir)["targets"]
 
 
 def _yaml_scalar(value: str) -> str:
@@ -155,7 +203,7 @@ def _mihomo_blocks(text: str) -> tuple[list[dict], list[dict]]:
                 stripped = stripped[2:]
             if current is not None and ":" in stripped:
                 key, value = stripped.split(":", 1)
-                if key in {"name", "type", "server", "port"} and value.strip():
+                if key in {"name", "type", "server", "port", "tls", "servername", "sni", "reality-opts", "skip-cert-verify"} and (value.strip() or key == "reality-opts"):
                     current[key] = _yaml_scalar(value)
         elif section == "proxy-providers":
             if indent <= 2 and stripped.endswith(":"):
@@ -167,31 +215,78 @@ def _mihomo_blocks(text: str) -> tuple[list[dict], list[dict]]:
     return proxies, providers
 
 
-def mihomo_text_targets(text: str, *, source: str = "config.yaml") -> list[dict]:
-    try:
-        import yaml  # Optional on the router.
+def _mihomo_proxy_yaml_blocks(text: str) -> list[str]:
+    blocks: list[str] = []
+    in_proxies = False
+    item_indent: int | None = None
+    current: list[str] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        indent = len(line) - len(line.lstrip())
+        if stripped and not line.lstrip().startswith("#") and indent == 0:
+            if current:
+                blocks.append("\n".join(current))
+                current = []
+            in_proxies = stripped == "proxies:"
+            item_indent = None
+            continue
+        if not in_proxies:
+            continue
+        if stripped.startswith("- ") and (item_indent is None or indent == item_indent):
+            if current:
+                blocks.append("\n".join(current))
+            item_indent = indent
+            current = [line]
+        elif current:
+            current.append(line)
+    if current:
+        blocks.append("\n".join(current))
+    return blocks
 
-        obj = yaml.safe_load(text)
-    except ImportError:
-        obj = None
-    except Exception:
-        obj = None
+
+def mihomo_text_targets(text: str, *, source: str = "config.yaml", probe_proxies: list[dict | None] | None = None) -> list[dict]:
+    obj = None
+    if text.lstrip().startswith(("{", "[")):
+        try:
+            obj = json.loads(text)
+        except ValueError:
+            pass
+    if obj is None:
+        try:
+            import yaml  # Optional on the router.
+
+            obj = yaml.safe_load(text)
+        except ImportError:
+            pass
+        except Exception:
+            pass
     if isinstance(obj, dict):
         proxies = obj.get("proxies") if isinstance(obj.get("proxies"), list) else []
         raw_providers = obj.get("proxy-providers")
         providers = [{"name": name, **item} for name, item in raw_providers.items() if isinstance(item, dict)] if isinstance(raw_providers, dict) else []
     else:
         proxies, providers = _mihomo_blocks(text)
+    raw_proxy_blocks = _mihomo_proxy_yaml_blocks(text) if not isinstance(obj, dict) else []
     targets: list[dict] = []
-    for item in proxies:
+    for proxy_index, item in enumerate(proxies):
         if not isinstance(item, dict):
             continue
         protocol = str(item.get("type") or "").lower()
         if protocol in _SKIP_PROTOCOLS:
             continue
         network = "udp" if protocol in _UDP_PROTOCOLS else "tcp"
+        reality = bool(item.get("reality-opts")) or "reality-opts" in item
+        tls_value = item.get("tls")
+        tls_enabled = (protocol == "trojan" if tls_value is None else str(tls_value).lower() == "true")
+        tls_mode = "reality" if reality else "standard" if tls_enabled else "none"
         try:
-            _add(targets, make_target(item.get("server"), item.get("port"), name=item.get("name"), protocol=protocol, network=network, source=source))
+            previous_count = len(targets)
+            _add(targets, make_target(item.get("server"), item.get("port"), name=item.get("name"), protocol=protocol, network=network, tls_mode=tls_mode, sni=item.get("servername") or item.get("sni") or "", verify_tls=str(item.get("skip-cert-verify") or "").lower() != "true", source=source))
+            if probe_proxies is not None and len(targets) > previous_count and isinstance(obj, dict):
+                probe_proxies.append({"_diagnostics_engine": "mihomo", "proxy": item})
+            elif probe_proxies is not None and len(targets) > previous_count:
+                raw_block = raw_proxy_blocks[proxy_index] if proxy_index < len(raw_proxy_blocks) else ""
+                probe_proxies.append({"_diagnostics_engine": "mihomo", "proxy_yaml": raw_block, "name": item.get("name")} if raw_block else None)
         except ValueError:
             continue
     for provider in providers:
@@ -199,19 +294,22 @@ def mihomo_text_targets(text: str, *, source: str = "config.yaml") -> list[dict]
         if url.startswith(("https://", "http://")):
             try:
                 parsed = urlsplit(url)
+                previous_count = len(targets)
                 _add(targets, make_target(parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80), name=provider.get("name"), protocol="subscription", tls=parsed.scheme == "https", source=source))
+                if probe_proxies is not None and len(targets) > previous_count:
+                    probe_proxies.append(None)
             except ValueError:
                 continue
     return targets
 
 
-def current_mihomo_targets(config_file: str) -> list[dict]:
+def current_mihomo_targets(config_file: str, *, probe_proxies: list[dict | None] | None = None) -> list[dict]:
     path = Path(config_file)
     try:
         if path.stat().st_size > 2_000_000:
             return []
         text = path.read_text(encoding="utf-8-sig")
-        targets = mihomo_text_targets(text, source=path.name)
+        targets = mihomo_text_targets(text, source=path.name, probe_proxies=probe_proxies)
         root = path.parent.resolve()
         _, providers = _mihomo_blocks(text)
         for provider in providers[:20]:
@@ -222,8 +320,12 @@ def current_mihomo_targets(config_file: str) -> list[dict]:
                 provider_file = (root / cached).resolve()
                 if not provider_file.is_relative_to(root) or not provider_file.is_file() or provider_file.stat().st_size > 2_000_000:
                     continue
-                for item in mihomo_text_targets(provider_file.read_text(encoding="utf-8-sig"), source=provider_file.name):
+                cached_proxies: list[dict | None] = []
+                for index, item in enumerate(mihomo_text_targets(provider_file.read_text(encoding="utf-8-sig"), source=provider_file.name, probe_proxies=cached_proxies)):
+                    previous_count = len(targets)
                     _add(targets, item)
+                    if probe_proxies is not None and len(targets) > previous_count:
+                        probe_proxies.append(cached_proxies[index] if index < len(cached_proxies) else None)
             except (OSError, UnicodeError):
                 continue
         return targets
@@ -247,7 +349,7 @@ def _plain_target(line: str) -> dict:
     return make_target(line, 443, tls=True, protocol="web", source="Ввод")
 
 
-def parse_source(source: str, *, allow_fetch: bool = True) -> dict:
+def parse_source(source: str, *, allow_fetch: bool = True, probe_outbounds: list[dict | None] | None = None, core: str = "xray") -> dict:
     if len(source.encode("utf-8")) > (MAX_SOURCE_BYTES if allow_fetch else 2_000_000):
         raise ValueError("Слишком большой источник для диагностики.")
     text = source.strip()
@@ -263,32 +365,56 @@ def parse_source(source: str, *, allow_fetch: bool = True) -> dict:
         except ValueError:
             obj = None
         if isinstance(obj, (dict, list)):
-            for item in xray_outbound_targets(obj, source="Ввод"):
+            parsed_outbounds: list[dict | None] = []
+            for item, outbound in zip(xray_outbound_targets(obj, source="Ввод", probe_outbounds=parsed_outbounds), parsed_outbounds):
+                previous_count = len(targets)
                 _add(targets, item)
+                if probe_outbounds is not None and len(targets) > previous_count:
+                    probe_outbounds.append(outbound)
             if not targets:
                 from services.xray_subscriptions import build_subscription_json_outbounds
 
                 try:
                     outbounds, _, _ = build_subscription_json_outbounds(text, tag_prefix="diagnostics")
-                    for item in xray_outbound_targets(outbounds, source="Подписка"):
+                    parsed_outbounds = []
+                    for item, outbound in zip(xray_outbound_targets(outbounds, source="Подписка", probe_outbounds=parsed_outbounds), parsed_outbounds):
+                        previous_count = len(targets)
                         _add(targets, item)
+                        if probe_outbounds is not None and len(targets) > previous_count:
+                            probe_outbounds.append(outbound)
                 except ValueError:
                     pass
             if isinstance(obj, dict) and ("proxies" in obj or "proxy-providers" in obj):
-                for item in mihomo_text_targets(text, source="Ввод"):
+                parsed_proxies: list[dict | None] = []
+                for index, item in enumerate(mihomo_text_targets(text, source="Ввод", probe_proxies=parsed_proxies)):
+                    previous_count = len(targets)
                     _add(targets, item)
+                    if probe_outbounds is not None and len(targets) > previous_count:
+                        probe_outbounds.append(parsed_proxies[index] if index < len(parsed_proxies) else None)
     if "proxies:" in text or "proxy-providers:" in text:
-        for item in mihomo_text_targets(text, source="Ввод"):
+        parsed_proxies = []
+        for index, item in enumerate(mihomo_text_targets(text, source="Ввод", probe_proxies=parsed_proxies)):
+            previous_count = len(targets)
             _add(targets, item)
+            if probe_outbounds is not None and len(targets) > previous_count:
+                probe_outbounds.append(parsed_proxies[index] if index < len(parsed_proxies) else None)
     if not targets and ("[Interface]" in text or re.search(r"(?mi)^remote\s+\S+", text)):
         from services.mihomo_proxy_parsers import parse_openvpn, parse_wireguard
 
         parser = parse_wireguard if "[Interface]" in text else parse_openvpn
         parsed = parser(text)
-        for item in mihomo_text_targets("proxies:\n" + parsed.yaml, source="Ввод"):
+        parsed_proxies = []
+        for index, item in enumerate(mihomo_text_targets("proxies:\n" + parsed.yaml, source="Ввод", probe_proxies=parsed_proxies)):
+            previous_count = len(targets)
             _add(targets, item)
+            if probe_outbounds is not None and len(targets) > previous_count:
+                probe_outbounds.append(parsed_proxies[index] if index < len(parsed_proxies) else None)
 
     links: list[str] = []
+    subscription_url = bool(re.search(
+        r"/(?:sub|subscription|subscribe)(?:/|$)",
+        urlsplit(text).path.lower(),
+    )) if text.lower().startswith(("https://", "http://")) and len(text.splitlines()) == 1 else False
     if re.search(r"(?:vless|trojan|vmess|ss|hysteria2?|hy2)://", text, re.IGNORECASE) or (len(text) > 80 and "\n" not in text and not text.startswith(("http://", "https://", "vpn://"))):
         from services.xray_subscriptions import parse_subscription_links
 
@@ -299,19 +425,32 @@ def parse_source(source: str, *, allow_fetch: bool = True) -> dict:
 
         truncated = len(links) > MAX_TARGETS
         for link in links[:MAX_TARGETS]:
+            parsed_outbound = None
             try:
                 outbound = build_proxy_outbound_from_link(link, "Узел")
                 parsed_targets = xray_outbound_targets(outbound, source="Ссылка")
+                if parsed_targets:
+                    parsed_outbound = outbound
             except ValueError:
                 parsed_targets = []
+            if core == "mihomo":
+                try:
+                    proxy = parse_proxy_uri(link)
+                    parsed_outbound = {"_diagnostics_engine": "mihomo", "proxy_yaml": proxy.yaml, "name": proxy.name}
+                except ValueError:
+                    pass
             if not parsed_targets:
                 try:
                     proxy = parse_proxy_uri(link)
                     parsed_targets = mihomo_text_targets("proxies:\n" + proxy.yaml, source="Ссылка")
+                    parsed_outbound = {"_diagnostics_engine": "mihomo", "proxy_yaml": proxy.yaml, "name": proxy.name}
                 except ValueError:
                     parsed_targets = []
             for item in parsed_targets:
+                previous_count = len(targets)
                 _add(targets, item)
+                if probe_outbounds is not None and len(targets) > previous_count:
+                    probe_outbounds.append(parsed_outbound)
         if not targets:
             warnings.append("Ссылки распознаны, но адреса серверов извлечь не удалось.")
 
@@ -322,8 +461,12 @@ def parse_source(source: str, *, allow_fetch: bool = True) -> dict:
         try:
             config = import_connection_key(text)
             parsed = parse_wireguard(config)
-            for item in mihomo_text_targets("proxies:\n" + parsed.yaml, source="Amnezia Premium"):
+            parsed_proxies = []
+            for index, item in enumerate(mihomo_text_targets("proxies:\n" + parsed.yaml, source="Amnezia Premium", probe_proxies=parsed_proxies)):
+                previous_count = len(targets)
                 _add(targets, item)
+                if probe_outbounds is not None and len(targets) > previous_count:
+                    probe_outbounds.append(parsed_proxies[index] if index < len(parsed_proxies) else None)
         except Exception:
             warnings.append("Не удалось получить конфигурацию Amnezia Premium. Проверьте ключ и доступ к сервису.")
 
@@ -337,18 +480,25 @@ def parse_source(source: str, *, allow_fetch: bool = True) -> dict:
         from services.xray_subscriptions import fetch_subscription_body_for_xray
 
         try:
-            body, _, _ = fetch_subscription_body_for_xray(text)
+            body, _, fetch_meta = fetch_subscription_body_for_xray(
+                text, timeout_seconds=6, max_request_variants=2
+            )
             if len(body.encode("utf-8")) > 2_000_000:
                 raise ValueError("Подписка слишком большая для диагностики.")
-            nested = parse_source(body, allow_fetch=False)
+            nested_outbounds: list[dict | None] = []
+            nested = parse_source(body, allow_fetch=False, probe_outbounds=nested_outbounds, core=core)
             targets = nested["targets"]
+            if probe_outbounds is not None:
+                probe_outbounds.extend(nested_outbounds)
             warnings.extend(nested["warnings"])
+            warnings.extend(fetch_meta.get("warnings") or [])
+            truncated = nested["truncated"]
         except Exception:
             warnings.append("Не удалось получить или разобрать подписку; проверьте её доступ и авторизацию.")
-        if not targets and text.lower().startswith(("https://", "http://")):
+        if not targets and text.lower().startswith(("https://", "http://")) and not subscription_url:
             _add(targets, _plain_target(text))
 
-    if not targets and not links and not text.lower().startswith(("happ://", "vpn://")):
+    if not targets and not links and not subscription_url and not text.lower().startswith(("happ://", "vpn://")):
         lines = [line.strip() for line in text.splitlines() if line.strip()]
         truncated = len(lines) > MAX_TARGETS
         if not any(line.startswith(("{", "- ", "#")) for line in lines[:MAX_TARGETS]):
@@ -362,8 +512,144 @@ def parse_source(source: str, *, allow_fetch: bool = True) -> dict:
     return {"targets": targets, "warnings": warnings, "truncated": truncated}
 
 
+def register_proxy_context(outbounds: list[dict | None], target_count: int) -> str:
+    if not any(isinstance(item, dict) for item in outbounds):
+        return ""
+    token = secrets.token_urlsafe(32)
+    now = time.monotonic()
+    entries = (outbounds[:target_count] + [None] * target_count)[:target_count]
+    with _PROXY_CONTEXT_LOCK:
+        for key, (expires_at, _) in list(_PROXY_CONTEXTS.items()):
+            if expires_at <= now:
+                del _PROXY_CONTEXTS[key]
+        while len(_PROXY_CONTEXTS) >= _PROXY_CONTEXT_LIMIT:
+            _PROXY_CONTEXTS.popitem(last=False)
+        _PROXY_CONTEXTS[token] = (now + _PROXY_CONTEXT_TTL, entries)
+    return token
+
+
+def _mihomo_probe_config(entry: dict, port: int) -> str:
+    from services.mihomo_proxy_parsers import _yaml_append_list_item, _yaml_str
+
+    proxy = entry.get("proxy")
+    proxy_yaml = entry.get("proxy_yaml")
+    name = str(entry.get("name") or (proxy.get("name") if isinstance(proxy, dict) else "") or "diagnostics-node")
+    lines = [
+        f"mixed-port: {port}",
+        "allow-lan: false",
+        "mode: rule",
+        "log-level: warning",
+        "proxies:",
+    ]
+    if isinstance(proxy, dict):
+        _yaml_append_list_item(lines, 2, {**proxy, "name": name})
+    elif isinstance(proxy_yaml, str) and proxy_yaml.strip():
+        lines.extend(proxy_yaml.rstrip().splitlines())
+    else:
+        raise ValueError("Параметры прокси Mihomo не найдены.")
+    lines.extend([
+        "proxy-groups:",
+        "  - name: xkeen-diagnostics",
+        "    type: select",
+        "    proxies:",
+        f"      - {_yaml_str(name)}",
+        "rules:",
+        "  - MATCH,xkeen-diagnostics",
+    ])
+    return "\n".join(lines) + "\n"
+
+
+def _probe_mihomo_proxy(entry: dict) -> dict:
+    from services.mihomo_runtime import _mihomo_binary
+    from services.xray_observatory import DEFAULT_PROBE_URL
+    from services.xray_subscriptions import (
+        _probe_once_via_local_proxy,
+        _reserve_local_port,
+        _terminate_process,
+        _wait_for_local_port,
+    )
+
+    binary = _mihomo_binary()
+    if not binary:
+        return {"status": "unavailable", "message": "Для проверки прокси на панели нужен установленный Mihomo."}
+    with tempfile.TemporaryDirectory(prefix="xkeen-mihomo-diagnostics-") as temp_dir:
+        port = _reserve_local_port()
+        config_path = Path(temp_dir) / "probe.yaml"
+        config_path.write_text(_mihomo_probe_config(entry, port), encoding="utf-8")
+        process = subprocess.Popen(
+            [binary, "-d", temp_dir, "-f", str(config_path)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            if not _wait_for_local_port(port, process, 4):
+                return {"status": "unavailable", "message": "Временный Mihomo не запустился с параметрами этого узла."}
+            delay_ms, _ = _probe_once_via_local_proxy(port, DEFAULT_PROBE_URL, 4.0)
+            if delay_ms is None:
+                delay_ms, _ = _probe_once_via_local_proxy(port, "https://cp.cloudflare.com/generate_204", 4.0)
+            if delay_ms is not None:
+                return {"status": "ok", "delay_ms": delay_ms, "message": "Прокси передал HTTPS-запрос к контрольному адресу."}
+            return {"status": "failed", "message": "Запрос через прокси не прошёл. Проверьте параметры узла и маршрут панели."}
+        finally:
+            _terminate_process(process)
+
+
+def probe_proxy_context(token: str, index: int) -> dict:
+    if not isinstance(token, str) or len(token) > 100 or not isinstance(index, int):
+        raise ValueError("Некорректная проверка прокси.")
+    with _PROXY_CONTEXT_LOCK:
+        cached = _PROXY_CONTEXTS.get(token)
+        if cached is None or cached[0] <= time.monotonic() or not 0 <= index < len(cached[1]):
+            raise ValueError("Данные прокси устарели. Загрузите список серверов заново.")
+        outbound = cached[1][index]
+    if not isinstance(outbound, dict):
+        return {"status": "unsupported", "message": "Для этого формата протокольная проверка пока недоступна."}
+    if not _PROXY_PROBE_SLOTS.acquire(blocking=False):
+        return {"status": "busy", "message": "Уже выполняются проверки прокси. Повторите через несколько секунд."}
+    try:
+        if outbound.get("_diagnostics_engine") == "mihomo":
+            return _probe_mihomo_proxy(outbound)
+        from services.xray_observatory import DEFAULT_PROBE_URL
+        from services.xray_subscriptions import _find_xray_binary, _probe_outbounds_batch
+
+        binary = _find_xray_binary()
+        if not binary:
+            return {"status": "unavailable", "message": "Для проверки прокси на панели нужен установленный Xray."}
+        result = _probe_outbounds_batch(
+            xray_bin=binary,
+            targets=[{"key": "diagnostics", "tag": "diagnostics", "outbound": {**outbound, "tag": "diagnostics"}}],
+            probe_url=DEFAULT_PROBE_URL,
+            timeout_value=4.0,
+            concurrency=1,
+        ).get("diagnostics") or {}
+        if result.get("delay_ms") is not None:
+            return {
+                "status": "ok",
+                "delay_ms": result["delay_ms"],
+                "message": "Прокси передал HTTPS-запрос к контрольному адресу.",
+            }
+        failure_messages = {
+            "timeout": "Запрос через прокси превысил время ожидания.",
+            "connection_refused": "Соединение через прокси отклонено.",
+            "connection_reset": "Соединение через прокси было сброшено.",
+            "network_unreachable": "Маршрут к серверу прокси недоступен.",
+            "dns_error": "Через прокси не удалось разрешить имя контрольного адреса.",
+            "tls_certificate_error": "Сертификат при запросе через прокси не прошёл проверку.",
+            "tls_access_denied": "TLS-запрос через прокси был отклонён.",
+        }
+        return {
+            "status": "failed",
+            "message": failure_messages.get(result.get("error_code"), "Запрос через прокси не прошёл. Проверьте параметры узла и маршрут панели."),
+        }
+    except Exception:
+        return {"status": "unavailable", "message": "Проверка прокси не выполнена. Повторите запрос позже."}
+    finally:
+        _PROXY_PROBE_SLOTS.release()
+
+
 def probe_target(raw: dict) -> dict:
-    target = make_target(raw.get("host"), raw.get("port"), name=raw.get("name"), protocol=raw.get("protocol"), network=raw.get("network"), tls=raw.get("tls") is True, source=raw.get("source"))
+    target = make_target(raw.get("host"), raw.get("port"), name=raw.get("name"), protocol=raw.get("protocol"), network=raw.get("network"), tls=raw.get("tls") is True, tls_mode=raw.get("tls_mode") or "", sni=raw.get("sni") or "", verify_tls=raw.get("verify_tls") is not False, source=raw.get("source"))
     if not _PROBE_SLOTS.acquire(blocking=False):
         return {**target, "status": "busy", "message": "Идут другие проверки. Повторите чуть позже."}
     try:
@@ -391,17 +677,26 @@ def probe_target(raw: dict) -> dict:
                     connection_started = time.monotonic()
                     connection.connect(address)
                     tcp_ms = round((time.monotonic() - connection_started) * 1000)
+                    connection_info = {"connected_ip": address[0], "source_ip": connection.getsockname()[0]}
                     if target["tls"]:
-                        import ssl
-
                         try:
                             tls_started = time.monotonic()
-                            with ssl.create_default_context().wrap_socket(connection, server_hostname=target["host"]):
+                            tls_name = target["sni"] or target["host"]
+                            connection_info["sni_sent"] = not _is_ip_address(tls_name)
+                            context = ssl.create_default_context()
+                            if not target["verify_tls"]:
+                                context.check_hostname = False
+                                context.verify_mode = ssl.CERT_NONE
+                            with context.wrap_socket(connection, server_hostname=tls_name):
                                 pass
+                        except ssl.SSLCertVerificationError:
+                            return {**base, **connection_info, "status": "tls_cert_error", "tcp_ms": tcp_ms, "message": "TLS ответил, но сертификат не прошёл проверку. Это не указывает на блокировку."}
                         except OSError:
-                            return {**base, "status": "tls_error", "tcp_ms": tcp_ms, "message": "TCP доступен, но стандартный TLS не прошёл. Проверьте SNI и сертификат."}
-                        return {**base, "status": "reachable", "tcp_ms": tcp_ms, "tls_ms": round((time.monotonic() - tls_started) * 1000), "message": "TCP и стандартный TLS доступны."}
-                    return {**base, "status": "reachable", "tcp_ms": tcp_ms, "message": "Соединение установлено."}
+                            return {**base, **connection_info, "status": "tls_error", "tcp_ms": tcp_ms, "message": "TCP доступен, но стандартный TLS не прошёл. Это не доказывает фильтрацию; проверьте SNI и сертификат."}
+                        certificate_note = " Сертификат не проверялся по настройке узла." if not target["verify_tls"] else ""
+                        return {**base, **connection_info, "status": "reachable", "tcp_ms": tcp_ms, "tls_ms": round((time.monotonic() - tls_started) * 1000), "message": f"TCP и стандартный TLS доступны.{certificate_note} Работа прокси не проверялась."}
+                    message = "TCP доступен. REALITY и работа прокси не проверялись." if target["tls_mode"] == "reality" else "TCP доступен. Работа прокси не проверялась."
+                    return {**base, **connection_info, "status": "reachable", "tcp_ms": tcp_ms, "message": message}
             except socket.timeout:
                 failures.append("timeout")
             except ConnectionRefusedError:
@@ -417,6 +712,89 @@ def probe_target(raw: dict) -> dict:
         return {**base, "status": status, "message": messages[status]}
     finally:
         _PROBE_SLOTS.release()
+
+
+def _tls_comparison_attempt(address: tuple, *, server_name: str | None) -> str:
+    family, socktype, proto, _, endpoint = address
+    try:
+        with socket.socket(family, socktype, proto) as connection:
+            connection.settimeout(2)
+            connection.connect(endpoint)
+            context = ssl.create_default_context()
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_NONE
+            try:
+                with context.wrap_socket(connection, server_hostname=server_name):
+                    return "tls_ok"
+            except (socket.timeout, TimeoutError):
+                return "timeout"
+            except (ssl.SSLError, OSError):
+                return "tls_error"
+    except (socket.timeout, TimeoutError):
+        return "timeout"
+    except ConnectionRefusedError:
+        return "refused"
+    except OSError:
+        return "unreachable"
+
+
+def compare_tls_path(raw: dict) -> dict:
+    target = make_target(raw.get("host"), raw.get("port"), network=raw.get("network"), tls=raw.get("tls") is True, tls_mode=raw.get("tls_mode") or "", sni=raw.get("sni") or "")
+    if target["network"] != "tcp" or target["tls_mode"] != "standard":
+        raise ValueError("Сравнение SNI доступно только для стандартного TLS поверх TCP.")
+    sni = target["sni"] or target["host"]
+    if _is_ip_address(sni):
+        raise ValueError("Для сравнения нужен домен SNI.")
+    if not _COMPARE_PROBE_SLOTS.acquire(blocking=False):
+        return {"status": "busy", "message": "Идёт другая сравнительная проверка."}
+    try:
+        control_address = (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", (_CONTROL_IP, 443))
+        control = _tls_comparison_attempt(control_address, server_name=_CONTROL_SNI)
+        try:
+            addresses = socket.getaddrinfo(target["host"], target["port"], type=socket.SOCK_STREAM)
+            address = next((item for item in addresses if item[0] in {socket.AF_INET, socket.AF_INET6}), None)
+        except OSError:
+            address = None
+        trials = {"with_sni": [], "without_sni": []}
+        if address:
+            for _ in range(2):
+                trials["with_sni"].append(_tls_comparison_attempt(address, server_name=sni))
+                trials["without_sni"].append(_tls_comparison_attempt(address, server_name=None))
+
+        dns_comparison = {"status": "skipped"}
+        if not address and not _is_ip_address(target["host"]):
+            try:
+                dns_comparison = compare_public_dns({"host": target["host"]})
+            except ValueError:
+                pass
+        try:
+            registry = lookup_public_lists({"host": sni})
+        except ValueError:
+            registry = {"status": "skipped"}
+        listed = registry.get("status") == "ok" and registry.get("listed") is True and bool(registry.get("registry_domain") or registry.get("blocked_subnets"))
+        sni_failed = trials["with_sni"] and all(item == "tls_error" for item in trials["with_sni"])
+        no_sni_ok = trials["without_sni"] and all(item == "tls_ok" for item in trials["without_sni"])
+        target_down = address and all(item == "timeout" for values in trials.values() for item in values)
+        if listed:
+            verdict, confidence = "registry_confirmed", "high"
+        elif not address and control == "tls_ok" and dns_comparison.get("status") == "ok" and dns_comparison.get("public"):
+            verdict, confidence = "dns_failure", "medium"
+        elif control == "tls_ok" and sni_failed and no_sni_ok:
+            verdict, confidence = "tls_sni_filtering", "medium"
+        elif control == "tls_ok" and target_down:
+            verdict, confidence = "server_unresponsive", "medium"
+        else:
+            verdict, confidence = "undetermined", "low"
+        return {
+            "status": "ok", "verdict": verdict, "confidence": confidence,
+            "target_ip": address[4][0] if address else None, "port": target["port"], "sni": sni,
+            "trials": trials, "control": {"ip": _CONTROL_IP, "sni": _CONTROL_SNI, "result": control},
+            "dns_comparison": {"status": dns_comparison.get("status"), "public": dns_comparison.get("public") or []},
+            "registry": {"status": registry.get("status"), "target": sni,
+                         "domain": registry.get("registry_domain") or "", "subnets": registry.get("blocked_subnets") or []},
+        }
+    finally:
+        _COMPARE_PROBE_SLOTS.release()
 
 
 def compare_public_dns(raw: dict) -> dict:

@@ -724,16 +724,18 @@ def create_cores_status_blueprint(ui_state_dir: str) -> Blueprint:
     def _detect_installed() -> Dict[str, Dict[str, Any]]:
         out: Dict[str, Dict[str, Any]] = {}
 
-        xray_bin = "/opt/sbin/xray"
-        xray_exists = os.path.exists(xray_bin)
+        configured_xray = os.environ.get("XKEEN_XRAY_BINARY")
+        xray_bin = configured_xray or "/opt/sbin/xray"
+        xray_exists = (os.path.isfile(xray_bin) and os.access(xray_bin, os.X_OK)) if configured_xray else os.path.exists(xray_bin)
         if xray_exists:
             rc, txt = _run_cmd([xray_bin, "-version"], timeout_s=2.5)
             out["xray"] = {"installed": True, "version": _parse_xray_version(txt), "rc": rc}
         else:
             out["xray"] = {"installed": False, "version": None, "rc": 127}
 
-        mihomo_bin = "/opt/sbin/mihomo"
-        mihomo_exists = os.path.exists(mihomo_bin)
+        configured_mihomo = os.environ.get("MIHOMO_BIN")
+        mihomo_bin = configured_mihomo or "/opt/sbin/mihomo"
+        mihomo_exists = (os.path.isfile(mihomo_bin) and os.access(mihomo_bin, os.X_OK)) if configured_mihomo else os.path.exists(mihomo_bin)
         if mihomo_exists:
             rc, txt = _run_cmd([mihomo_bin, "-v"], timeout_s=2.5)
             out["mihomo"] = {"installed": True, "version": _parse_mihomo_version(txt), "rc": rc}
