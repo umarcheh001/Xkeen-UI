@@ -4,7 +4,7 @@ import { test, expect } from './fixtures.mjs';
 const PROFILE = String(process.env.XKEEN_E2E_MODULE_PROFILE || 'full').toLowerCase();
 
 const EXPECTED_BUNDLES = {
-  full: ['panel-core', 'panel-routing', 'panel-mihomo', 'terminal-lazy', 'file-manager-lazy', 'diagnostics-panel', 'editor-runtime', 'editor-codemirror', 'editor-monaco', 'editor-diff'],
+  full: ['panel-core', 'panel-routing', 'panel-mihomo', 'terminal-lazy', 'file-manager-lazy', 'diagnostics-panel', 'server-diagnostics-panel', 'editor-runtime', 'editor-codemirror', 'editor-monaco', 'editor-diff'],
   'xray-minimal': ['panel-core', 'panel-routing', 'editor-runtime', 'editor-codemirror'],
   'mihomo-minimal': ['panel-core', 'panel-mihomo', 'editor-runtime', 'editor-codemirror'],
   'core-only': ['panel-core'],

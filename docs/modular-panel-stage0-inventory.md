@@ -36,7 +36,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 | Module ID | Единиц | Размер | Routes | Background | UI surfaces | Removable |
 |---|---:|---:|---:|---:|---:|---|
-| `core` | 670 | 8.70 МБ | 107 | 4 | 37 | нет |
+| `core` | 670 | 8.71 МБ | 107 | 4 | 37 | нет |
 | `engine.xray` | 151 | 3.80 МБ | 64 | 3 | 14 | да |
 | `engine.mihomo` | 147 | 3.30 МБ | 97 | 4 | 6 | да |
 | `tool.editor` | 25 | 814.7 КБ | 0 | 0 | 2 | да |
@@ -45,7 +45,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 | `tool.backups` | 8 | 99.8 КБ | 14 | 0 | 0 | да |
 | `integration.happ` | 22 | 319.9 КБ | 5 | 0 | 1 | да |
 | `tool.advanced-diagnostics` | 49 | 589.2 КБ | 16 | 0 | 1 | да |
-| `tool.server-diagnostics` | 15 | 240.6 КБ | 8 | 0 | 1 | да |
+| `tool.server-diagnostics` | 15 | 242.4 КБ | 8 | 0 | 1 | да |
 
 ## Backend routes и регистрация
 

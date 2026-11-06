@@ -36,7 +36,10 @@ test('operator stylesheet is isolated and loaded last', async ({ page }) => {
   await expect(page.locator('body')).toHaveClass(/\bpanel-page\b/);
 
   const stylesheets = await page.evaluate(() => {
-    return Array.from(document.styleSheets).map((sheet) => sheet.href || 'inline');
+    // A stylesheet of an optional module refines the operator styles and comes after them.
+    return Array.from(document.styleSheets)
+      .map((sheet) => sheet.href || 'inline')
+      .filter((href) => !/\/static\/server-diagnostics\.css/.test(href));
   });
   expect(stylesheets.at(-1)).toContain('/static/panel-operator.css');
 

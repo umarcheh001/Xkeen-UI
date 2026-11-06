@@ -97,6 +97,18 @@ def test_vless_link_without_xray_is_refused_not_crashed(monkeypatch):
         parse_source("vless://00000000-0000-0000-0000-000000000000@example.com:443", allow_fetch=False, core="mihomo")
 
 
+def test_mihomo_proxy_probe_without_xray_says_what_is_missing(monkeypatch):
+    # The Mihomo probe borrows the local proxy helpers of the Xray module. On a
+    # Mihomo-only router a retry never helps, so the answer must name the module.
+    monkeypatch.setitem(sys.modules, "services.xray_observatory", None)
+    monkeypatch.setitem(sys.modules, "services.xray_subscriptions", None)
+    token = provider_diagnostics.register_proxy_context(
+        [{"_diagnostics_engine": "mihomo", "name": "node", "type": "ss", "server": "example.com", "port": 443}], 1
+    )
+    with pytest.raises(EngineUnavailable, match="нужен модуль Xray"):
+        provider_diagnostics.probe_proxy_context(token, 0)
+
+
 def test_engine_refusal_is_a_value_error_the_routes_turn_into_400():
     assert issubclass(EngineUnavailable, ValueError)
 

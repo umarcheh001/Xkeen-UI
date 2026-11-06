@@ -193,7 +193,7 @@ PANEL_FRONTEND_MODULES: tuple[PanelFrontendModule, ...] = (
     PanelFrontendModule(
         "server-diagnostics-panel",
         ("tool.server-diagnostics",),
-        "after-paint",
+        "startup",
         (),
         ("provider-check-modal",),
         ("/api/provider-diagnostics",),

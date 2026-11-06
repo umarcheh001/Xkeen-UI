@@ -166,6 +166,17 @@ def _state_file_updates(panel_root: Path, plan: Plan) -> dict[str, bytes]:
         recorded = (*MODULE_ORDER, *sorted(selected - set(MODULE_ORDER)))
         modules_state = _load(Path(panel_root) / "modules.json")
         modules_state = dict(modules_state) if isinstance(modules_state, dict) else {"schema_version": 1}
+        request = modules_state.get(PHYSICAL_REQUEST_KEY)
+        if (
+            plan.scope == "profile"
+            and profile == "custom"
+            and isinstance(request, dict)
+            and request.get("profile") in ("full", "legacy-full")
+            and selected & OPTIONAL_MODULES
+        ):
+            # Full with a chosen optional module is laid as its exact set; the
+            # owner asked for Full, and Full is the name that stays.
+            profile = str(request["profile"])
         if plan.scope == "profile" or not isinstance(modules_state.get("profile"), str):
             # A transition applies the requested profile. An update keeps the
             # owner's settings: the profile label and the editor variant there

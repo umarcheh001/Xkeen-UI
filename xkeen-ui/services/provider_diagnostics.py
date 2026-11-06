@@ -675,6 +675,10 @@ def probe_proxy_context(token: str, index: int) -> dict:
             "status": "failed",
             "message": failure_messages.get(result.get("error_code"), "Запрос через прокси не прошёл. Проверьте параметры узла и маршрут панели."),
         }
+    except ImportError:
+        # The code of an engine module is missing: a retry never helps, the
+        # guard of the entry point names the module instead.
+        raise
     except Exception:
         return {"status": "unavailable", "message": "Проверка прокси не выполнена. Повторите запрос позже."}
     finally:

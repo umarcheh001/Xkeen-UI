@@ -676,6 +676,11 @@ def _read_requested_profile(state_dir: Path) -> tuple[str, list[str] | None, str
             "the requested physical profile cannot be read",
         ) from error
     selected = [module_id for module_id in MODULE_IDS if module_id in modules]
+    if profile in PRESETS and set(selected) != set(PRESETS[profile]):
+        # A preset with the optional modules the owner chose: the preset of the
+        # release leaves them out, so the exact set is laid. The label of the
+        # preset stays (install_state keeps the name of the request).
+        return "custom", selected, editor_variant
     return profile, selected if profile == "custom" else None, editor_variant
 
 

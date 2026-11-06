@@ -132,7 +132,9 @@ export async function bootPanelScreen() {
     await loadPanelFeatureBundles();
     await waitForDocumentReady();
     bootPanelPage();
-    void ensurePanelModule('server-diagnostics-panel', 'after-paint');
+    // The window was ready with the page before it became a module: a click on
+    // "Servers" right after the page shows must open it, so wait for it here.
+    await ensurePanelModule('server-diagnostics-panel', 'startup');
     await waitForStablePaint();
     void ensurePanelModule('diagnostics-panel', 'after-paint');
   } finally {

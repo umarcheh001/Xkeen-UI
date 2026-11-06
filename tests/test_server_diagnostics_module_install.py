@@ -181,6 +181,28 @@ def test_panel_update_keeps_installed_optional_module(tmp_path):
     assert MODULE_ID in plan.installed_after
 
 
+def test_applying_full_again_keeps_the_chosen_module_on_disk(tmp_path):
+    from services.module_transactions.plan import build_profile_transition_plan
+    from tests.test_physical_profile_request import _listing
+
+    panel = _full_panel(tmp_path, WITH_MODULE, chosen=True)
+    ModuleRegistry(str(panel.state), which=lambda _name: "/bin/tool").set_profile("full")
+    release = make_release()
+    plan = build_profile_transition_plan(
+        panel_root=panel.root,
+        state_dir=panel.state,
+        catalog=release.catalog,
+        target_archive=_listing(tmp_path, release),
+        architecture=ARCHITECTURE,
+        free_bytes=1 << 40,
+    )
+    assert MODULE_ID in plan.installed_after
+    assert not {"routes/provider_diagnostics.py", "services/provider_diagnostics.py"} & set(plan.files_remove)
+    updates = install_state.state_file_updates(panel.root, plan)
+    assert json.loads(updates["modules.json"])["profile"] == "full"
+    assert json.loads(updates["install-profile.json"])["profile"] == "full"
+
+
 def test_manager_install_of_optional_module_marks_choice_and_keeps_full_name(tmp_path):
     panel = _full_panel(tmp_path, FULL, chosen=False)
     plan = build_plan("install", MODULE_ID, **panel.kwargs)

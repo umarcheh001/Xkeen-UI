@@ -17,8 +17,10 @@ test.describe('Operator Console Stage 0 runtime contract', () => {
       await expect(page.locator('body')).toHaveClass(/\bpanel-page\b/);
 
       const contract = await page.evaluate(() => {
-        const links = Array.from(document.querySelectorAll('link[rel~="stylesheet"]'));
-        const sheets = Array.from(document.styleSheets);
+        // A stylesheet of an optional module refines the operator styles and comes after them.
+        const core = (href) => !/\/static\/server-diagnostics\.css/.test(href || '');
+        const links = Array.from(document.querySelectorAll('link[rel~="stylesheet"]')).filter((link) => core(link.href));
+        const sheets = Array.from(document.styleSheets).filter((sheet) => core(sheet.href));
         return {
           lastLink: links.at(-1)?.href || '',
           lastSheet: sheets.at(-1)?.href || '',
