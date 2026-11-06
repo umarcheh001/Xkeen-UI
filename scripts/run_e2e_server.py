@@ -48,6 +48,19 @@ E2E_MODULE_PROFILES: dict[str, tuple[str, ...]] = {
         "tool.backups",
         "integration.happ",
         "tool.advanced-diagnostics",
+        "tool.server-diagnostics",
+    ),
+    # Full without the optional server diagnostics: no window, buttons or hint.
+    "no-server-diagnostics": (
+        "core",
+        "engine.xray",
+        "engine.mihomo",
+        "tool.editor",
+        "tool.terminal",
+        "tool.files",
+        "tool.backups",
+        "integration.happ",
+        "tool.advanced-diagnostics",
     ),
     # Everything but the diagnostics window: the panel must open without it.
     "no-diagnostics": (
@@ -66,6 +79,8 @@ E2E_MODULE_PROFILES: dict[str, tuple[str, ...]] = {
     # The file manager without the terminal: its "terminal here" controls must stay hidden.
     "files-no-terminal": ("core", "tool.editor", "engine.xray", "tool.files"),
 }
+
+OPTIONAL_E2E_MODULES = frozenset({"tool.server-diagnostics"})
 
 
 DEFAULT_UI_SETTINGS = """{
@@ -139,8 +154,14 @@ def _seed_runtime_fixture(profile: str, active_module_ids: tuple[str, ...]) -> N
                 "profile": f"e2e-{profile}",
                 "restart_required": False,
                 "editor": {"variant": "full" if profile == "full" else "light"},
+                # An optional module the stand runs was chosen explicitly:
+                # without the mark the panel switches it off at start.
                 "modules": {
-                    module_id: {"enabled": module_id in active_module_ids}
+                    module_id: (
+                        {"enabled": True, "chosen": True}
+                        if module_id in active_module_ids and module_id in OPTIONAL_E2E_MODULES
+                        else {"enabled": module_id in active_module_ids}
+                    )
                     for module_id in E2E_MODULE_PROFILES["full"]
                 },
             },

@@ -19,12 +19,19 @@ from .plan import PHYSICAL_REQUEST_KEY, Plan
 MODULE_ORDER = (
     "core", "engine.xray", "engine.mihomo", "tool.editor", "tool.terminal",
     "tool.files", "tool.backups", "integration.happ", "tool.advanced-diagnostics",
+    "tool.server-diagnostics",
 )
+# Mirrors services.module_registry: installed only by an explicit choice.
+OPTIONAL_MODULES = frozenset({"tool.server-diagnostics"})
 _FRONTEND_BUILD = "static/frontend-build/"
 _MANIFEST_PATHS = {
     "bridge": _FRONTEND_BUILD + ".vite/manifest.json",
     "build": _FRONTEND_BUILD + ".vite/manifest.build.json",
 }
+
+
+def _keeps_preset_name(label: Any, module_id: str) -> bool:
+    return module_id in OPTIONAL_MODULES and label in ("full", "legacy-full")
 
 
 def _dump(value: Any) -> bytes:
@@ -247,12 +254,21 @@ def _state_file_updates(panel_root: Path, plan: Plan) -> dict[str, bytes]:
         if isinstance(modules_state.get("modules"), dict):
             # A preset would be applied again by the next panel update and
             # undo this operation; the actual set is a custom profile now.
-            modules_state["profile"] = "custom"
+            # An optional module on top of a preset keeps the preset's name:
+            # the update lays a preset with optional modules as their exact set.
+            if not _keeps_preset_name(modules_state.get("profile"), plan.module_id):
+                modules_state["profile"] = "custom"
             # An explicit module operation is newer than any profile request.
             modules_state.pop(PHYSICAL_REQUEST_KEY, None)
             item = modules_state["modules"].get(plan.module_id)
             item = dict(item) if isinstance(item, dict) else {}
             item["enabled"] = present
+            if plan.module_id in OPTIONAL_MODULES:
+                if present:
+                    item["chosen"] = True
+                else:
+                    item.pop("chosen", None)
+                item.pop("off_reason", None)
             modules_state["modules"][plan.module_id] = item
             updates["modules.json"] = _dump(modules_state)
 
@@ -269,7 +285,8 @@ def _state_file_updates(panel_root: Path, plan: Plan) -> dict[str, bytes]:
     if not isinstance(profile, dict):
         profile = {"schema_version": 1, "editor_variant": variant}
     known = [module for module in MODULE_ORDER if module in installed_after]
-    profile["profile"] = "custom"
+    if not _keeps_preset_name(profile.get("profile"), plan.module_id):
+        profile["profile"] = "custom"
     profile["module_ids"] = known + sorted(installed_after - set(MODULE_ORDER))
     updates["install-profile.json"] = _dump(
         {key: profile[key] for key in ("schema_version", "profile", "module_ids", "editor_variant") if key in profile}

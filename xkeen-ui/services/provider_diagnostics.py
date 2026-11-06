@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import ipaddress
 import http.client
 import json
@@ -43,6 +44,32 @@ _TLS_COMPARE_ROUNDS = 2
 _UDP_PROTOCOLS = {"hysteria", "hysteria2", "hy2", "tuic", "wireguard", "anytls-quic"}
 _SKIP_PROTOCOLS = {"direct", "freedom", "blackhole", "dns", "reject", "selector", "url-test", "fallback", "load-balance"}
 _HOST_RE = re.compile(r"^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*\.?$")
+
+
+class EngineUnavailable(ValueError):
+    """A check needs the code of an engine module that is not installed."""
+
+
+def _needs_engines(function):
+    """Turn a missing engine module into a clear refusal instead of a crash.
+
+    The module depends only on core, while parsing a link or probing a proxy
+    borrows the code of the Xray or Mihomo module. The routes answer 400 to a
+    ValueError, so the window shows what to install.
+    """
+
+    @functools.wraps(function)
+    def wrapper(*args, **kwargs):
+        try:
+            return function(*args, **kwargs)
+        except ImportError as error:
+            name = str(getattr(error, "name", "") or "")
+            if not name.startswith("services."):
+                raise
+            engine = "Mihomo" if "mihomo" in name else "Xray" if "xray" in name else "Xray или Mihomo"
+            raise EngineUnavailable(f"Для этой проверки нужен модуль {engine}.") from error
+
+    return wrapper
 
 
 def _host(value: object) -> str:
@@ -353,6 +380,7 @@ def _plain_target(line: str) -> dict:
     return make_target(line, 443, tls=True, protocol="web", source="Ввод")
 
 
+@_needs_engines
 def parse_source(source: str, *, allow_fetch: bool = True, probe_outbounds: list[dict | None] | None = None, core: str = "xray") -> dict:
     if len(source.encode("utf-8")) > (MAX_SOURCE_BYTES if allow_fetch else 2_000_000):
         raise ValueError("Слишком большой источник для диагностики.")
@@ -599,6 +627,7 @@ def _probe_mihomo_proxy(entry: dict) -> dict:
             _terminate_process(process)
 
 
+@_needs_engines
 def probe_proxy_context(token: str, index: int) -> dict:
     if not isinstance(token, str) or len(token) > 100 or not isinstance(index, int):
         raise ValueError("Некорректная проверка прокси.")
@@ -785,6 +814,7 @@ def _resource_via_proxy(entry: dict, parts: tuple[str, str, int, str], address: 
             _terminate_process(process)
 
 
+@_needs_engines
 def compare_resource_paths(raw: dict) -> dict:
     parts = _resource_url(raw.get("url"))
     token, index = raw.get("ref"), raw.get("index")

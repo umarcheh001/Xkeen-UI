@@ -397,6 +397,7 @@ def test_frontend_asset_helper_exposes_normalized_page_config_contract():
             "hasXray": True,
             "hasMihomo": False,
             "hasTerminal": False,
+            "hasServerDiagnostics": False,
             "isMips": False,
             "multiCore": True,
             "mihomoConfigExists": True,

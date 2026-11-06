@@ -123,6 +123,18 @@
       "requires_restart": true,
       "removable": true,
       "can_disable": true
+    },
+    {
+      "id": "tool.server-diagnostics",
+      "name": "Диагностика серверов",
+      "version": "1.0.0",
+      "dependencies": [
+        "core"
+      ],
+      "conflicts": [],
+      "requires_restart": true,
+      "removable": true,
+      "can_disable": true
     }
   ],
   "profiles": {

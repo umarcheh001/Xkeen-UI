@@ -85,6 +85,7 @@ def test_separate_modules_table_is_read() -> None:
     assert separate_modules() == {
         "tool.advanced-diagnostics": "js/features/resource_monitor.js",
         "engine.xray": "js/pages/xray.module.entry.js",
+        "tool.server-diagnostics": "js/features/provider_diagnostics.js",
     }
 
 

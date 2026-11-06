@@ -790,6 +790,8 @@ def _full_scope_plan(
         # An update keeps what is installed, switched on or not: a module that
         # is switched off is updated with the rest and stays switched off.
         profile, editor_variant = installed_profile, installed_editor_variant
+        # Optional modules on top of a preset are laid as the exact set: the
+        # preset of the release would leave them out.
         if profile in PRESETS and set(PRESETS[profile]) == set(installed_profile_modules):
             requested_modules = None
         else:

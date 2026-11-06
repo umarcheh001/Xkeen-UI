@@ -208,7 +208,9 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
         )
     )
 
-    if module_active("engine.xray") or module_active("engine.mihomo"):
+    # The checks send server addresses to outside services: only with the
+    # module the owner chose, and only with an engine whose servers they check.
+    if module_active("tool.server-diagnostics") and (module_active("engine.xray") or module_active("engine.mihomo")):
         from .provider_diagnostics import create_provider_diagnostics_blueprint
 
         app.register_blueprint(create_provider_diagnostics_blueprint(

@@ -76,6 +76,7 @@ def test_stage8_contract_generator_covers_boundaries_and_acceptance_matrix(tmp_p
         "tool.backups",
         "integration.happ",
         "tool.advanced-diagnostics",
+        "tool.server-diagnostics",
     ]
     assert payload["profiles"]["xray-minimal"]["module_ids"] == [
         "core",

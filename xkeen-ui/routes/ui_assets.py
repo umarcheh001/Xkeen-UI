@@ -50,6 +50,7 @@ _PAGE_CONFIG_FLAG_DEFAULTS = {
     "hasXray": False,
     "hasMihomo": False,
     "hasTerminal": False,
+    "hasServerDiagnostics": False,
     "isMips": False,
     "multiCore": False,
     "mihomoConfigExists": False,

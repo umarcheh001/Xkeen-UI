@@ -20,6 +20,7 @@ from typing import Any
 SOURCE_FALLBACKS = {
     "tool.advanced-diagnostics": "js/features/resource_monitor.js",
     "engine.xray": "js/pages/xray.module.entry.js",
+    "tool.server-diagnostics": "js/features/provider_diagnostics.js",
 }
 
 _BUILD_DIRNAME = "frontend-build"

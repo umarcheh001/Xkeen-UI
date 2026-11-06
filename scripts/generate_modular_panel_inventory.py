@@ -81,6 +81,13 @@ MODULE_SPECS: dict[str, dict[str, Any]] = {
         "system_requirements": ["ndmc (router diagnostics optional)"],
         "removable": True,
     },
+    "tool.server-diagnostics": {
+        "name": "Диагностика серверов",
+        "description": "Окно проверки серверов из конфигураций Xray и Mihomo; часть проверок обращается к внешним сервисам.",
+        "depends_on": ["core"],
+        "system_requirements": [],
+        "removable": True,
+    },
 }
 
 MODULE_ORDER = tuple(MODULE_SPECS)
@@ -93,6 +100,7 @@ FRONTEND_ROOTS: dict[str, str] = {
     "file-manager-lazy": "static/js/pages/file_manager.lazy.entry.js",
     "devtools-page": "static/js/pages/devtools.entry.js",
     "diagnostics-panel": "static/js/pages/panel.diagnostics.bundle.js",
+    "server-diagnostics-panel": "static/js/pages/panel.server_diagnostics.bundle.js",
     "xkeen-page": "static/js/pages/xkeen.entry.js",
     "mihomo-generator-page": "static/js/pages/mihomo_generator.entry.js",
     "modules-page": "static/js/pages/modules.entry.js",
@@ -405,7 +413,13 @@ class ModularPanelInventoryGenerator:
         p = rel.lower().replace("\\", "/")
         name = Path(p).name
 
-        if (
+        if any(token in name for token in ("provider_diagnostics", "server_diagnostics", "server-diagnostics")) and name not in {
+            "provider_diagnostics_hint.js",
+            "panel.server_diagnostics.bundle.js",
+        }:
+            # Mirrors module_profile_install.owner: the hint and the loader stay in core.
+            module_id = "tool.server-diagnostics"
+        elif (
             "happ_decryptor" in p
             or "mihomo_hwid" in p
             or "/routes/happ" in p
@@ -1028,6 +1042,8 @@ class ModularPanelInventoryGenerator:
 
     def _module_for_surface_id(self, surface_id: str) -> str:
         value = surface_id.lower()
+        if any(token in value for token in ("provider-check", "provider-diagnostics", "server-diagnostics")):
+            return "tool.server-diagnostics"
         if "happ" in value or "hwid" in value:
             return "integration.happ"
         if "mihomo" in value or "clash" in value:

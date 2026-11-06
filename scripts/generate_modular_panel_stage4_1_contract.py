@@ -33,7 +33,11 @@ MODULE_IDS = (
     "tool.backups",
     "integration.happ",
     "tool.advanced-diagnostics",
+    "tool.server-diagnostics",
 )
+# Installed only by an explicit choice, never by a preset.
+OPTIONAL_MODULE_IDS = ("tool.server-diagnostics",)
+FULL_MODULE_IDS = tuple(module_id for module_id in MODULE_IDS if module_id not in OPTIONAL_MODULE_IDS)
 
 VIEW_SPECS: tuple[dict[str, Any], ...] = (
     {
@@ -311,6 +315,7 @@ MODAL_PARTIALS = {
     "tool.files": "xkeen-ui/templates/panel/modals/files.html",
     "integration.happ": "xkeen-ui/templates/panel/modals/happ.html",
     "tool.advanced-diagnostics": "xkeen-ui/templates/panel/modals/diagnostics.html",
+    "tool.server-diagnostics": "xkeen-ui/templates/panel/modals/provider_diagnostics.html",
 }
 
 MODAL_PARTIAL_OVERRIDES = {
@@ -326,19 +331,20 @@ MODAL_DEPENDENCIES = {
     "tool.files": ["core", "tool.files"],
     "integration.happ": ["core", "engine.mihomo", "integration.happ"],
     "tool.advanced-diagnostics": ["core", "tool.advanced-diagnostics"],
+    "tool.server-diagnostics": ["core", "tool.server-diagnostics"],
 }
 
 PROFILE_SPECS: tuple[dict[str, Any], ...] = (
     {
         "id": "legacy-full",
         "kind": "legacy",
-        "active_module_ids": list(MODULE_IDS),
+        "active_module_ids": list(FULL_MODULE_IDS),
         "description": "Старые установки сохраняют полный набор поставляемых модулей.",
     },
     {
         "id": "full",
         "kind": "custom",
-        "active_module_ids": list(MODULE_IDS),
+        "active_module_ids": list(FULL_MODULE_IDS),
         "description": "Полный профиль с тем же составом UI, что и Legacy.",
     },
     {

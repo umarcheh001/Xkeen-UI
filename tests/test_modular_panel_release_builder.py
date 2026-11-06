@@ -619,7 +619,7 @@ def test_complete_bundle_is_reproducible_and_passes_static_preflight(tmp_path: P
         assert (inputs.output_dir / name).read_bytes() == (second.inputs.output_dir / name).read_bytes()
 
     catalog = json.loads(first.catalog_path.read_text(encoding="utf-8"))
-    assert len(catalog["modules"]) == 9
+    assert len(catalog["modules"]) == 10
     for architecture in catalog["panel"]["architectures"]:
         checked_panel = validate_panel_archive(
             first.panel.path,

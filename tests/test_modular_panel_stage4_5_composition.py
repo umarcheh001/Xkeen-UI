@@ -54,7 +54,6 @@ def test_page_context_filters_each_surface_by_declared_owners():
     assert _paths(xray, "modal_partials") == [
         "panel/modals/routing.html",
         "panel/modals/shared.html",
-        "panel/modals/provider_diagnostics.html",
         "panel/modals/core_source_xray.html",
         "panel/modals/editor.html",
     ]
@@ -67,7 +66,6 @@ def test_page_context_filters_each_surface_by_declared_owners():
     ]
     assert _paths(mihomo, "modal_partials") == [
         "panel/modals/shared.html",
-        "panel/modals/provider_diagnostics.html",
         "panel/modals/core_source_mihomo.html",
         "panel/modals/mihomo.html",
         "panel/modals/editor.html",
@@ -77,7 +75,7 @@ def test_page_context_filters_each_surface_by_declared_owners():
 
     assert _paths(core, "screen_partials") == ["panel/screens/xkeen.html"]
     assert _paths(core, "header_summary_partials") == ["panel/slots/resource_monitor_unavailable.html"]
-    assert _paths(core, "modal_partials") == ["panel/modals/shared.html", "panel/modals/provider_diagnostics.html"]
+    assert _paths(core, "modal_partials") == ["panel/modals/shared.html"]
     assert _paths(core, "core_source_control_partials") == []
     assert _navigation_sections(core) == ["xkeen", "donate"]
 
@@ -113,6 +111,9 @@ def test_composition_declares_only_known_static_template_paths():
         "panel/modals/files_editor.html",
         "panel/modals/editor.html",
         "panel/slots/xray_badge.html",
+        "panel/slots/server_diagnostics_xray.html",
+        "panel/slots/server_diagnostics_mihomo.html",
+        "panel/slots/server_diagnostics_head.html",
         "panel/slots/resource_monitor_unavailable.html",
         "panel/slots/diagnostics_summary.html",
         "panel/slots/diagnostics_actions.html",

@@ -31,6 +31,19 @@ def test_dependency_cannot_be_removed_and_selection_survives_back():
     assert "нельзя выключить" in output.getvalue()
 
 
+def test_server_diagnostics_is_offered_unchecked_with_its_warning():
+    menu = load_menu()
+    output = io.StringIO()
+    selected = menu.choose(io.StringIO("1\n\n1\n"), output, interactive_keys=False)
+    text = output.getvalue()
+    assert "[ ] 9. Диагностика серверов" in text
+    assert "нужен Xray или Mihomo; обращается к внешним сервисам" in text
+    assert "tool.server-diagnostics" not in selected
+
+    chosen = menu.choose(io.StringIO("1\n9\n\n1\n"), io.StringIO(), interactive_keys=False)
+    assert chosen == ["core", "engine.xray", "tool.editor", "tool.server-diagnostics"]
+
+
 def test_installer_defers_optional_questions_until_profile_is_known():
     installer = (Path(__file__).resolve().parents[1] / "xkeen-ui/install.sh").read_text(encoding="utf-8")
     invocation = installer.index("\nchoose_panel_profile\n")
@@ -86,7 +99,7 @@ def test_non_ascii_key_is_not_treated_as_enter():
     with os.fdopen(read_fd, "r") as inp:
         selected = menu.choose(inp, output, interactive_keys=True)
     assert selected == ["core", "engine.xray", "tool.editor", "tool.files"]
-    assert "Введите номер от 1 до 8" in output.getvalue()
+    assert "Введите номер от 1 до 9" in output.getvalue()
 
 
 def test_basic_terminals_use_numbered_fallback():

@@ -46,6 +46,9 @@ DYNAMIC_COMPOSITION_INCLUDE_PATHS: dict[str, tuple[str, ...]] = {
         "panel/slots/core_source_xray.html",
         "panel/slots/core_source_mihomo.html",
     ),
+    "server_diagnostics_xray_partial": ("panel/slots/server_diagnostics_xray.html",),
+    "server_diagnostics_mihomo_partial": ("panel/slots/server_diagnostics_mihomo.html",),
+    "head_style_partial": ("panel/slots/server_diagnostics_head.html",),
     "pre_screen_modal_partial": ("panel/modals/diagnostics.html",),
     "screen_partial": (
         "panel/screens/routing.html",

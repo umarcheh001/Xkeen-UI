@@ -72,6 +72,7 @@ OWNERSHIP: dict[str, tuple[str, ...]] = {
     ),
     "integration.happ": ("routes/happ_decryptor.py", "services/happ_decryptor/__init__.py"),
     "tool.advanced-diagnostics": ("routes/system_resources.py", "static/js/features/resource_monitor.js"),
+    "tool.server-diagnostics": ("routes/provider_diagnostics.py", "services/provider_diagnostics.py"),
 }
 
 FRONTEND = {
@@ -167,6 +168,8 @@ def make_panel(
     *,
     version: str = VERSION,
     installed: tuple[str, ...] = ("core", "tool.editor", "engine.xray"),
+    profile: str = "xray-minimal",
+    editor_variant: str = "light",
 ) -> Panel:
     root = tmp_path / "xkeen-ui"
     root.mkdir(parents=True)
@@ -194,9 +197,9 @@ def make_panel(
         _json_bytes(
             {
                 "schema_version": 1,
-                "profile": "xray-minimal",
+                "profile": profile,
                 "restart_required": False,
-                "editor": {"variant": "light"},
+                "editor": {"variant": editor_variant},
                 "modules": {module: {"enabled": module in installed} for module in MODULE_ORDER},
             }
         )
@@ -208,9 +211,9 @@ def make_panel(
         _json_bytes(
             {
                 "schema_version": 1,
-                "profile": "xray-minimal",
+                "profile": profile,
                 "module_ids": [module for module in MODULE_ORDER if module in installed],
-                "editor_variant": "light",
+                "editor_variant": editor_variant,
             }
         )
     )

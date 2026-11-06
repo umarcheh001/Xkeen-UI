@@ -33,7 +33,8 @@ NEW_FILES = ("routes/traffic_map.py", "static/js/pages/traffic_map.entry.js")
 WITH_NEW_MODULE = {**OWNERSHIP, NEW_MODULE: NEW_FILES}
 NEW_DEFINITION = {NEW_MODULE: {"requires": ["core"], "conflicts": [], "requires_restart": True}}
 
-ALL_KNOWN = tuple(OWNERSHIP)
+# The full preset: every known module but the optional one, which takes a choice.
+ALL_KNOWN = tuple(module for module in OWNERSHIP if module != "tool.server-diagnostics")
 
 
 def _catalog(panel, release):

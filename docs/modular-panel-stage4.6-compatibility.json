@@ -156,9 +156,32 @@
     {
       "collection": "modal_partials",
       "owners": [
-        "core"
+        "tool.server-diagnostics"
       ],
       "template": "panel/modals/provider_diagnostics.html"
+    },
+    {
+      "collection": "head_style_partials",
+      "owners": [
+        "tool.server-diagnostics"
+      ],
+      "template": "panel/slots/server_diagnostics_head.html"
+    },
+    {
+      "collection": "server_diagnostics_xray_partials",
+      "owners": [
+        "tool.server-diagnostics",
+        "engine.xray"
+      ],
+      "template": "panel/slots/server_diagnostics_xray.html"
+    },
+    {
+      "collection": "server_diagnostics_mihomo_partials",
+      "owners": [
+        "tool.server-diagnostics",
+        "engine.mihomo"
+      ],
+      "template": "panel/slots/server_diagnostics_mihomo.html"
     },
     {
       "collection": "core_source_control_partials",
@@ -416,7 +439,6 @@
         "github-catalog-modal",
         "donate-modal",
         "ui-settings-modal",
-        "provider-check-modal",
         "mihomo-dns-modal",
         "mihomo-import-modal",
         "mihomo-proxy-tools-modal",
@@ -447,7 +469,9 @@
         "fm-editor-modal",
         "json-editor-modal"
       ],
-      "forbidden_modal_ids": [],
+      "forbidden_modal_ids": [
+        "provider-check-modal"
+      ],
       "forbidden_dom_ids": [],
       "required_data_attributes": {
         "view-routing": {
@@ -601,7 +625,6 @@
         "github-catalog-modal",
         "donate-modal",
         "ui-settings-modal",
-        "provider-check-modal",
         "mihomo-dns-modal",
         "mihomo-import-modal",
         "mihomo-proxy-tools-modal",
@@ -632,7 +655,9 @@
         "fm-editor-modal",
         "json-editor-modal"
       ],
-      "forbidden_modal_ids": [],
+      "forbidden_modal_ids": [
+        "provider-check-modal"
+      ],
       "forbidden_dom_ids": [],
       "required_data_attributes": {
         "view-routing": {
@@ -747,7 +772,6 @@
         "github-catalog-modal",
         "donate-modal",
         "ui-settings-modal",
-        "provider-check-modal",
         "json-editor-modal"
       ],
       "forbidden_modal_ids": [
@@ -757,6 +781,7 @@
         "ssh-edit-modal",
         "ssh-confirm-modal",
         "ssh-transfer-modal",
+        "provider-check-modal",
         "mihomo-dns-modal",
         "mihomo-import-modal",
         "mihomo-proxy-tools-modal",
@@ -880,7 +905,6 @@
         "github-catalog-modal",
         "donate-modal",
         "ui-settings-modal",
-        "provider-check-modal",
         "mihomo-dns-modal",
         "mihomo-import-modal",
         "mihomo-proxy-tools-modal",
@@ -906,6 +930,7 @@
         "ssh-edit-modal",
         "ssh-confirm-modal",
         "ssh-transfer-modal",
+        "provider-check-modal",
         "mihomo-hwid-modal",
         "fm-upload-conflict-modal",
         "fm-connect-modal",
@@ -1002,8 +1027,7 @@
         "github-export-modal",
         "github-catalog-modal",
         "donate-modal",
-        "ui-settings-modal",
-        "provider-check-modal"
+        "ui-settings-modal"
       ],
       "forbidden_modal_ids": [
         "xk-resource-dashboard-modal",
@@ -1024,6 +1048,7 @@
         "ssh-edit-modal",
         "ssh-confirm-modal",
         "ssh-transfer-modal",
+        "provider-check-modal",
         "mihomo-dns-modal",
         "mihomo-import-modal",
         "mihomo-proxy-tools-modal",

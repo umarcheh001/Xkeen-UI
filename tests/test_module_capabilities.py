@@ -6,7 +6,7 @@ from flask import Flask
 
 from routes.capabilities import create_capabilities_blueprint
 from services.capabilities import detect_capabilities, extend_capabilities_with_modules
-from services.module_registry import MODULE_DEFINITIONS, MODULE_IDS, ModuleRegistry
+from services.module_registry import MODULE_DEFINITIONS, MODULE_IDS, PROFILE_PRESETS, ModuleRegistry
 
 
 def _available_which(name: str) -> str:
@@ -33,8 +33,8 @@ def test_module_capabilities_preserve_legacy_payload_and_add_registry_projection
     meta = payload["moduleRegistry"]
     assert meta["available"] is True
     assert meta["runtime_gates_active"] is False
-    assert meta["configured_module_ids"] == list(MODULE_IDS)
-    assert meta["effective_module_ids"] == list(MODULE_IDS)
+    assert meta["configured_module_ids"] == list(PROFILE_PRESETS["full"])
+    assert meta["effective_module_ids"] == list(PROFILE_PRESETS["full"])
 
     modules = payload["modules"]
     assert payload["editor"] == {

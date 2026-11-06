@@ -22,6 +22,7 @@
 | `tool.backups` | `core` | yes | yes |
 | `integration.happ` | `core` | yes | yes |
 | `tool.advanced-diagnostics` | `core` | yes | yes |
+| `tool.server-diagnostics` | `core` | yes | yes |
 
 Legacy install root: `/opt/etc/xkeen-ui`. Managed payload roots: `core/`, `routes/`, `services/`, `static/`, `templates/`, `scripts/`.
 State files, `secret.key`, runtime/config directories and Mihomo profiles/backups остаются пользовательскими данными.

@@ -577,6 +577,9 @@ PY
     # the ticker before reading so it cannot overwrite the menu or the answer.
     ui_input_begin
     PROFILE_INPUT_ACTIVE=1
+    # A new install: the owner picks the profile here, and only then is asked
+    # about the optional modules (choose_server_diagnostics_option).
+    PROFILE_MENU_SHOWN=1
     printf '  %bПрофиль панели%b\n' "$UI_BOLD" "$UI_RESET" >&3 2>/dev/null || true
     printf '      1) Full\n' >&3 2>/dev/null || true
     printf '      2) Xray Minimal\n' >&3 2>/dev/null || true
@@ -634,9 +637,35 @@ PY
   ui_line "$(printf '  %bПрофиль:%b     %s' "$UI_DIM" "$UI_RESET" "$PROFILE_CHOICE")"
 }
 
+ui_can_ask() {
+  [ -t 0 ] && [ -r /dev/tty ]
+}
+
+# «Диагностика серверов» не входит в профиль Full: её проверки отправляют
+# адреса серверов во внешние сервисы. Вопрос задаётся только при новой
+# установке, когда Full выбран в меню; модуль ставится только явным «да».
+# Без терминала и при обновлении вопроса нет — модуль не ставится.
+choose_server_diagnostics_option() {
+  XKEEN_UI_INSTALL_OPTIONAL="${XKEEN_UI_INSTALL_OPTIONAL:-}"
+  if [ "${PROFILE_MENU_SHOWN:-0}" = "1" ] && [ "$PROFILE_CHOICE" = "full" ] \
+      && [ -z "$XKEEN_UI_INSTALL_OPTIONAL" ] && ui_can_ask; then
+    printf '  %bДополнение%b   Диагностика серверов\n' "$UI_BOLD" "$UI_RESET" >&3 2>/dev/null || true
+    ui_info "Проверки отправляют адреса серверов во внешние сервисы (dns.google, cheburcheck.ru)."
+    ui_info "Нужен модуль Xray или Mihomo."
+    ui_confirm "" "Поставить «Диагностику серверов»?" || fail_install "Ввод ответа прерван."
+    if [ "$UI_CONFIRM_YES" = "1" ]; then
+      XKEEN_UI_INSTALL_OPTIONAL="tool.server-diagnostics"
+    fi
+  fi
+  export XKEEN_UI_INSTALL_OPTIONAL
+}
+
 profile_has_module() {
   case "$PROFILE_CHOICE" in
-    full|legacy-full) return 0 ;;
+    full|legacy-full)
+      [ "$1" != "tool.server-diagnostics" ] && return 0
+      case ",${XKEEN_UI_INSTALL_OPTIONAL:-}," in *",$1,"*) return 0 ;; *) return 1 ;; esac
+      ;;
     xray-minimal) [ "$1" = "core" ] || [ "$1" = "engine.xray" ] || [ "$1" = "tool.editor" ] ;;
     mihomo-minimal) [ "$1" = "core" ] || [ "$1" = "engine.mihomo" ] || [ "$1" = "tool.editor" ] ;;
     custom) case ",$XKEEN_UI_INSTALL_MODULES," in *",$1,"*) return 0 ;; *) return 1 ;; esac ;;
@@ -909,6 +938,7 @@ provision_python_libs_install || fail_install "${PROVISION_ERROR:-Не удал�
 provision_wget_ssl || true
 choose_panel_profile
 [ ! -t 0 ] || ui_input_begin
+choose_server_diagnostics_option
 if profile_has_module engine.xray; then
   choose_geodat_option
 fi
@@ -1598,6 +1628,7 @@ PROFILE_TRANSACTION_ACTIVE=1
 if ! "$PYTHON_BIN" "$INSTALL_PROFILE_HELPER" apply \
     --source "$SRC_DIR" --target "$UI_DIR" --profile "$PROFILE_CHOICE" \
     --module-ids "${XKEEN_UI_INSTALL_MODULES:-}" --transaction "$PROFILE_TRANSACTION" \
+    ${XKEEN_UI_INSTALL_OPTIONAL:+--with-optional "$XKEEN_UI_INSTALL_OPTIONAL"} \
     $PROFILE_APPLY_OPTIONS; then
   # Helper сам вернул прежние файлы; панель при этом не перезапускаем.
   PROFILE_TRANSACTION_ACTIVE=0

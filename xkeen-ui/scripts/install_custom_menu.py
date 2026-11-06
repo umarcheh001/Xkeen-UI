@@ -15,6 +15,7 @@ MODULES = (
     ("tool.backups", "Резервные копии", "создание и восстановление копий"),
     ("integration.happ", "Ссылки подписок", "работа с защищёнными ссылками"),
     ("tool.advanced-diagnostics", "Расширенная диагностика", "окно диагностики роутера"),
+    ("tool.server-diagnostics", "Диагностика серверов", "нужен Xray или Mihomo; обращается к внешним сервисам"),
 )
 ENGINES = {"engine.xray", "engine.mihomo"}
 
@@ -112,11 +113,11 @@ def choose(inp, out, interactive_keys=False, color=False, core_available=None):
             continue
         if key == "toggle":
             index = cursor
-        elif key in tuple(str(n) for n in range(1, 9)):
+        elif key in tuple(str(n) for n in range(1, len(MODULES) + 1)):
             index = int(key) - 1
             cursor = index
         else:
-            notice, level = "Введите номер от 1 до 8.", "warning"
+            notice, level = "Введите номер от 1 до %d." % len(MODULES), "warning"
             continue
         module = MODULES[index][0]
         if module == "tool.editor" and module in selected and selected & ENGINES:

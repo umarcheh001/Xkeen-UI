@@ -403,4 +403,4 @@ def test_apply_of_a_full_install_request_launches_the_transition(tmp_path):
     service.apply("profile-transition", None, reviewed["plan_id"])
 
     assert reviewed["target_profile"]["profile"] == "full"
-    assert launcher.plans[-1].installed_after == tuple(MODULE_ORDER)
+    assert launcher.plans[-1].installed_after == tuple(m for m in MODULE_ORDER if m != "tool.server-diagnostics")

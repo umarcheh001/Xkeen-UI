@@ -64,7 +64,7 @@ BLUEPRINT_OWNERS: dict[str, str] = {
     "cores_status": "core",
     "xkeen_lists": "core",
     "config_exchange": "core",
-    "provider_diagnostics": "core",
+    "provider_diagnostics": "tool.server-diagnostics",
     "service": "core",
     "devtools": "core",
     "ws_support": "core",
@@ -114,6 +114,10 @@ _MODULE_INSTALL_MARKERS: dict[str, tuple[str, ...]] = {
     "tool.advanced-diagnostics": (
         "xkeen-ui/routes/system_resources.py",
         "xkeen-ui/static/js/features/resource_monitor.js",
+    ),
+    "tool.server-diagnostics": (
+        "xkeen-ui/routes/provider_diagnostics.py",
+        "xkeen-ui/services/provider_diagnostics.py",
     ),
 }
 
@@ -324,9 +328,35 @@ MODULE_DEFINITIONS: tuple[ModuleDefinition, ...] = (
         frontend_bundles=("diagnostics-panel",),
         navigation_views=(),
     ),
+    ModuleDefinition(
+        id="tool.server-diagnostics",
+        name="Диагностика серверов",
+        description=(
+            "Проверка доступности серверов из конфигураций Xray и Mihomo. Нужен модуль Xray или Mihomo. "
+            "Часть проверок отправляет адреса серверов во внешние сервисы (dns.google, cheburcheck.ru)."
+        ),
+        version=REGISTRY_VERSION,
+        dependencies=("core",),
+        conflicts=(),
+        system_requirements=(),
+        size_bytes=_module_size("tool.server-diagnostics"),
+        removable=True,
+        can_disable=True,
+        requires_restart=True,
+        frontend_bundles=("server-diagnostics-panel",),
+        navigation_views=(),
+    ),
 )
 
 MODULE_IDS = tuple(definition.id for definition in MODULE_DEFINITIONS)
+
+SERVER_DIAGNOSTICS_MODULE_ID = "tool.server-diagnostics"
+# Modules no preset installs: each needs an explicit choice of the owner, which
+# the state keeps as ``chosen``. A set "preset + some of these" keeps the name
+# of the preset.
+OPTIONAL_PROFILE_MODULES: frozenset[str] = frozenset({SERVER_DIAGNOSTICS_MODULE_ID})
+CHOSEN_KEY = "chosen"
+_FULL_MODULE_IDS = tuple(module_id for module_id in MODULE_IDS if module_id not in OPTIONAL_PROFILE_MODULES)
 
 
 # What a module id looks like. A release newer than this build may name modules
@@ -343,8 +373,8 @@ _DEFINITIONS_BY_ID = {definition.id: definition for definition in MODULE_DEFINIT
 # use the same module graph. ``custom`` is intentionally resolved from the
 # request because it has no fixed module set.
 PROFILE_PRESETS: dict[str, tuple[str, ...]] = {
-    LEGACY_FULL_PROFILE: MODULE_IDS,
-    "full": MODULE_IDS,
+    LEGACY_FULL_PROFILE: _FULL_MODULE_IDS,
+    "full": _FULL_MODULE_IDS,
     "xray-minimal": ("core", "engine.xray", "tool.editor"),
     "mihomo-minimal": ("core", "engine.mihomo", "tool.editor"),
     CUSTOM_PROFILE: (),
@@ -355,7 +385,7 @@ _MAX_LAST_ERROR_CHARS = 1024
 def module_set_name(module_ids: Any) -> str:
     """The preset a set of modules amounts to, whatever label is stored."""
 
-    ids = set(module_ids)
+    ids = set(module_ids) - OPTIONAL_PROFILE_MODULES
     for name in ("full", "xray-minimal", "mihomo-minimal"):
         if ids == set(PROFILE_PRESETS[name]):
             return name
@@ -378,6 +408,10 @@ ENGINE_CORES: dict[str, str] = {"engine.xray": "xray", "engine.mihomo": "mihomo"
 # The installer switched the module off because its core was not on the router.
 # The tile then says so once the core appears; a switch by hand forgets it.
 OFF_REASON_CORE_MISSING = "core_missing"
+# An optional module came without an explicit choice (an older panel updated
+# with the preset "full" lays every module of the new release): it stays
+# installed but switched off until the owner switches it on.
+OFF_REASON_NOT_CHOSEN = "not_chosen"
 
 
 def _is_executable(path: str) -> bool:
@@ -496,6 +530,26 @@ class ModuleRegistry:
                 if item.pop("blocked_reason", None) is not None:
                     changed = True
             self._deferred_blocked = set()
+            for module_id in sorted(OPTIONAL_PROFILE_MODULES):
+                item = state["modules"][module_id]
+                if not item.get("enabled") or item.get(CHOSEN_KEY) is True:
+                    continue
+                if not self._is_module_installed(module_id):
+                    continue
+                item["enabled"] = False
+                item["off_reason"] = OFF_REASON_NOT_CHOSEN
+                changed = True
+                try:
+                    from core.logging import core_log_once
+
+                    core_log_once(
+                        "info",
+                        "module_not_chosen_switched_off",
+                        "optional module came without an explicit choice and is switched off",
+                        module_id=module_id,
+                    )
+                except Exception:
+                    pass
             try:
                 from services.cores import core_runtime
 
@@ -547,7 +601,7 @@ class ModuleRegistry:
         safe_mode = str(self._environ_value(SAFE_MODE_ENV) or "").strip().lower()
         if safe_mode == LEGACY_FULL_PROFILE:
             installed_ids = [
-                module_id for module_id in MODULE_IDS if self._is_module_installed(module_id)
+                module_id for module_id in _FULL_MODULE_IDS if self._is_module_installed(module_id)
             ]
             return {
                 "schema_version": STATE_SCHEMA_VERSION,
@@ -617,7 +671,7 @@ class ModuleRegistry:
             # the same safe legacy-full activation and expose the failure for
             # diagnostics, but never import a module whose files are gone.
             installed_ids = [
-                module_id for module_id in MODULE_IDS if self._is_module_installed(module_id)
+                module_id for module_id in _FULL_MODULE_IDS if self._is_module_installed(module_id)
             ]
             if "core" not in installed_ids:
                 installed_ids.insert(0, "core")
@@ -859,6 +913,12 @@ class ModuleRegistry:
                 dependency_changed = self._enable_dependencies(normalized_id, state)
 
             changed = current_enabled != enabled or (enabled and dependency_changed)
+            if enabled and normalized_id in OPTIONAL_PROFILE_MODULES:
+                module_item = state["modules"][normalized_id]
+                if module_item.get(CHOSEN_KEY) is not True or module_item.get("off_reason"):
+                    module_item[CHOSEN_KEY] = True
+                    module_item.pop("off_reason", None)
+                    normalized = True
             if changed:
                 if MODULE_SWITCH_BASELINE_KEY not in state:
                     state[MODULE_SWITCH_BASELINE_KEY] = switch_baseline
@@ -969,6 +1029,19 @@ class ModuleRegistry:
                 raise ModuleRegistryError("state_schema_newer", "Состояние модулей создано более новой версией панели.", status=409)
 
             before = self._snapshot_from_state(state)
+            if profile != CUSTOM_PROFILE:
+                # A preset keeps the optional modules the owner chose and runs.
+                requested |= {
+                    module_id
+                    for module_id in OPTIONAL_PROFILE_MODULES
+                    if state["modules"][module_id].get(CHOSEN_KEY) is True
+                    and bool(state["modules"][module_id]["enabled"])
+                }
+            chosen_now = {
+                module_id
+                for module_id in requested & OPTIONAL_PROFILE_MODULES
+                if state["modules"][module_id].get(CHOSEN_KEY) is not True
+            }
             baseline_cleared = state.pop(MODULE_SWITCH_BASELINE_KEY, None) is not None
             changed = state["profile"] != profile or state["editor"]["variant"] != variant or any(
                 bool(state["modules"][module_id]["enabled"]) != (module_id in requested)
@@ -979,6 +1052,9 @@ class ModuleRegistry:
             for module_id in MODULE_IDS:
                 state["modules"][module_id]["enabled"] = module_id in requested
                 state["modules"][module_id].pop("blocked_reason", None)
+            for module_id in chosen_now:
+                state["modules"][module_id][CHOSEN_KEY] = True
+                state["modules"][module_id].pop("off_reason", None)
             if changed:
                 state["restart_required"] = True
             # A profile is the one explicit way to ask for another set of
@@ -990,7 +1066,7 @@ class ModuleRegistry:
             }
             request_changed = state.get(PHYSICAL_REQUEST_KEY) != request
             state[PHYSICAL_REQUEST_KEY] = request
-            if changed or normalized or baseline_cleared or request_changed:
+            if changed or normalized or baseline_cleared or request_changed or chosen_now:
                 self._write_state_locked(state)
 
             after = self._snapshot_from_state(state)
@@ -1195,7 +1271,8 @@ class ModuleRegistry:
         modules: dict[str, dict[str, Any]] = {}
         for definition in MODULE_DEFINITIONS:
             raw_item = raw_modules.get(definition.id) if isinstance(raw_modules, dict) else None
-            enabled = True
+            # A state written before an optional module existed never chose it.
+            enabled = definition.id not in OPTIONAL_PROFILE_MODULES
             last_error: str | None = None
 
             if legacy_enabled is not None:
@@ -1234,6 +1311,17 @@ class ModuleRegistry:
             if isinstance(raw_item, dict) and raw_item.get("off_reason") is not None:
                 if not enabled and raw_item.get("off_reason") == OFF_REASON_CORE_MISSING:
                     item["off_reason"] = OFF_REASON_CORE_MISSING
+                elif (
+                    not enabled
+                    and definition.id in OPTIONAL_PROFILE_MODULES
+                    and raw_item.get("off_reason") == OFF_REASON_NOT_CHOSEN
+                ):
+                    item["off_reason"] = OFF_REASON_NOT_CHOSEN
+                else:
+                    changed = True
+            if isinstance(raw_item, dict) and raw_item.get(CHOSEN_KEY) is not None:
+                if definition.id in OPTIONAL_PROFILE_MODULES and raw_item.get(CHOSEN_KEY) is True:
+                    item[CHOSEN_KEY] = True
                 else:
                     changed = True
             if last_error:
@@ -1307,7 +1395,9 @@ class ModuleRegistry:
             "profile": LEGACY_FULL_PROFILE,
             "restart_required": False,
             "editor": {"variant": "full"},
-            "modules": {module_id: {"enabled": True} for module_id in MODULE_IDS},
+            "modules": {
+                module_id: {"enabled": module_id not in OPTIONAL_PROFILE_MODULES} for module_id in MODULE_IDS
+            },
         }
 
     @staticmethod
@@ -1479,8 +1569,8 @@ class ModuleRegistry:
                 payload["last_error"] = last_error
             if isinstance(blocked_reason, str) and blocked_reason:
                 payload["blocked_reason"] = blocked_reason
-            if module_state.get("off_reason") == OFF_REASON_CORE_MISSING and not requested_enabled:
-                payload["off_reason"] = OFF_REASON_CORE_MISSING
+            if module_state.get("off_reason") in (OFF_REASON_CORE_MISSING, OFF_REASON_NOT_CHOSEN) and not requested_enabled:
+                payload["off_reason"] = module_state["off_reason"]
 
             resolving.remove(module_id)
             results[module_id] = payload

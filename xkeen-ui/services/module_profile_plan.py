@@ -7,12 +7,12 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Collection, Mapping, Sequence
 
-from services.module_registry import MODULE_DEFINITIONS, MODULE_IDS, is_module_id
+from services.module_registry import MODULE_DEFINITIONS, MODULE_IDS, OPTIONAL_PROFILE_MODULES, is_module_id
 
 
 PRESETS: Mapping[str, tuple[str, ...]] = {
-    "full": tuple(MODULE_IDS),
-    "legacy-full": tuple(MODULE_IDS),
+    "full": tuple(module_id for module_id in MODULE_IDS if module_id not in OPTIONAL_PROFILE_MODULES),
+    "legacy-full": tuple(module_id for module_id in MODULE_IDS if module_id not in OPTIONAL_PROFILE_MODULES),
     "xray-minimal": ("core", "engine.xray", "tool.editor"),
     "mihomo-minimal": ("core", "engine.mihomo", "tool.editor"),
 }
@@ -171,7 +171,7 @@ def _selected_for_release(
     """What a profile means in a release whose modules differ from this build's.
 
     The full profile is everything the release has: a module the release added
-    comes with it. A chosen set stays what the owner chose — less the modules
+    comes with it, unless it is optional — that one takes an explicit choice. A chosen set stays what the owner chose — less the modules
     the release no longer has, plus whatever the chosen ones now require.
     """
 
@@ -179,7 +179,7 @@ def _selected_for_release(
     if profile in {"full", "legacy-full"}:
         if requested is not None:
             _fail("profile_modules_forbidden", "canonical profiles do not accept module_ids")
-        selected = set(present)
+        selected = set(present) - OPTIONAL_PROFILE_MODULES
     elif profile in PRESETS:
         if requested is not None:
             _fail("profile_modules_forbidden", "canonical profiles do not accept module_ids")

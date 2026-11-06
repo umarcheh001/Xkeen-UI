@@ -25,16 +25,26 @@ if str(_PACKAGE_ROOT) not in sys.path:
     sys.path.insert(0, str(_PACKAGE_ROOT))
 
 from services.module_profile_plan import ProfilePlanError, build_profile_target, user_owned as _profile_user_owned
-from services.module_registry import ENGINE_CORES, OFF_REASON_CORE_MISSING, core_binary_available
+from services.module_registry import (
+    CHOSEN_KEY,
+    ENGINE_CORES,
+    OFF_REASON_CORE_MISSING,
+    OFF_REASON_NOT_CHOSEN,
+    OPTIONAL_PROFILE_MODULES,
+    core_binary_available,
+)
 
 
 MODULE_IDS = (
     "core", "engine.xray", "engine.mihomo", "tool.editor", "tool.terminal",
     "tool.files", "tool.backups", "integration.happ", "tool.advanced-diagnostics",
+    "tool.server-diagnostics",
 )
+# No preset installs an optional module: it takes an explicit choice.
+_FULL_MODULE_IDS = tuple(module for module in MODULE_IDS if module not in OPTIONAL_PROFILE_MODULES)
 PRESETS = {
-    "full": MODULE_IDS,
-    "legacy-full": MODULE_IDS,
+    "full": _FULL_MODULE_IDS,
+    "legacy-full": _FULL_MODULE_IDS,
     "xray-minimal": ("core", "engine.xray", "tool.editor"),
     "mihomo-minimal": ("core", "engine.mihomo", "tool.editor"),
 }
@@ -48,6 +58,7 @@ INSTALL_MARKERS = {
     "tool.backups": ("routes/backups.py",),
     "integration.happ": ("routes/happ_decryptor.py", "services/happ_decryptor/__init__.py"),
     "tool.advanced-diagnostics": ("routes/system_resources.py", "static/js/features/resource_monitor.js"),
+    "tool.server-diagnostics": ("routes/provider_diagnostics.py", "services/provider_diagnostics.py"),
 }
 OWNERSHIP_OVERRIDES = "module-ownership-overrides.json"
 STATE_FILES = {"modules.json", "module-installed.json", "install-profile.json", "install-managed.json", OWNERSHIP_OVERRIDES}
@@ -75,11 +86,24 @@ _SEPARATE_MODULE_BUILD_FILE = re.compile(
 )
 
 
+_SERVER_DIAGNOSTICS_TOKENS = ("provider_diagnostics", "server_diagnostics", "server-diagnostics")
+_SERVER_DIAGNOSTICS_CORE_FILES = frozenset({
+    "static/js/features/provider_diagnostics_hint.js",
+    "static/js/pages/panel.server_diagnostics.bundle.js",
+})
+
+
 def owner(path: str) -> str:
     """Conservative file ownership: ambiguous shared files stay with core."""
     p = path.replace("\\", "/").lower()
     if p.startswith("js/") or p.startswith("schemas/"):
         p = "static/" + p
+    # The server diagnostics window, its styles and button slots. The hint in
+    # the engine error messages and the loader of the module stay in the core.
+    if not p.startswith("static/frontend-build/") and any(
+        token in p.rsplit("/", 1)[-1] for token in _SERVER_DIAGNOSTICS_TOKENS
+    ):
+        return "core" if p.removesuffix(".gz") in _SERVER_DIAGNOSTICS_CORE_FILES else "tool.server-diagnostics"
     if p == "static/js/pages/panel.routing.bundle.js":
         return "core"
     name = p.rsplit("/", 1)[-1]
@@ -534,7 +558,7 @@ def _physical_profile(raw, source: str):
     ):
         return None
     ordered = [module for module in MODULE_IDS if module in modules]
-    if profile != "custom" and set(PRESETS[profile]) != set(ordered):
+    if profile != "custom" and set(PRESETS[profile]) != set(ordered) - OPTIONAL_PROFILE_MODULES:
         # The record names a preset but something else is installed: what is
         # installed wins, a preset must not quietly add or take modules away.
         profile = "custom"
@@ -580,8 +604,22 @@ def _keep_switches(document: dict, old_state, selected) -> dict:
             item = old_modules.get(module)
             if module != "core" and isinstance(item, dict) and item.get("enabled") is False:
                 result["modules"][module]["enabled"] = False
-                if item.get("off_reason") == OFF_REASON_CORE_MISSING:
-                    result["modules"][module]["off_reason"] = OFF_REASON_CORE_MISSING
+                if item.get("off_reason") in (OFF_REASON_CORE_MISSING, OFF_REASON_NOT_CHOSEN):
+                    result["modules"][module]["off_reason"] = item["off_reason"]
+            if module in OPTIONAL_PROFILE_MODULES and isinstance(item, dict) and item.get(CHOSEN_KEY) is True:
+                result["modules"][module][CHOSEN_KEY] = True
+    return result
+
+
+def _mark_chosen(document: dict, chosen) -> dict:
+    """Optional modules the owner named in this install keep the mark of the choice."""
+
+    result = json.loads(json.dumps(document))
+    for module in chosen:
+        item = result["modules"].get(module)
+        if isinstance(item, dict) and item.get("enabled"):
+            item[CHOSEN_KEY] = True
+            item.pop("off_reason", None)
     return result
 
 
@@ -618,10 +656,16 @@ def apply_profile(
     editor_variant=None,
     keep_switches: bool = False,
     detect_core=core_binary_available,
+    with_optional=(),
 ) -> Path:
     source, target = Path(source).resolve(), Path(target).resolve()
     if source == target or source in target.parents or target in source.parents:
         raise ProfileInstallError("source and target must be separate directories")
+    extras = set(with_optional or ())
+    if extras and profile not in ("full", "legacy-full"):
+        raise ProfileInstallError("optional modules are added to the full profile only")
+    if extras - OPTIONAL_PROFILE_MODULES:
+        raise ProfileInstallError(f"not an optional module: {sorted(extras - OPTIONAL_PROFILE_MODULES)}")
     selected = _selected(profile, module_ids)
     variant = "full" if profile in ("full", "legacy-full") else "light"
     old_state_path = target / "modules.json"
@@ -635,6 +679,22 @@ def apply_profile(
                     variant = old_variant
         except (OSError, ValueError, AttributeError):
             old_state = None
+    if keep_switches and profile in ("full", "legacy-full") and isinstance(old_state, dict):
+        # An update keeps the optional modules the owner chose before.
+        old_modules = old_state.get("modules") if isinstance(old_state.get("modules"), dict) else {}
+        extras |= {
+            module for module in OPTIONAL_PROFILE_MODULES
+            if isinstance(old_modules.get(module), dict) and old_modules[module].get(CHOSEN_KEY) is True
+        }
+    # Optional modules the owner names now: the choice is explicit.
+    explicit = set(extras) if with_optional else set()
+    if profile == "custom":
+        explicit |= selected & OPTIONAL_PROFILE_MODULES
+    selected |= extras
+    plan_profile, plan_modules = profile, module_ids
+    if extras:
+        plan_profile = "custom"
+        plan_modules = [module for module in MODULE_IDS if module in selected]
     if editor_variant is not None:
         if editor_variant not in _EDITOR_VARIANTS:
             raise ProfileInstallError(f"unknown editor variant: {editor_variant}")
@@ -643,8 +703,8 @@ def apply_profile(
     try:
         profile_target = build_profile_target(
             source,
-            profile=profile,
-            module_ids=module_ids,
+            profile=plan_profile,
+            module_ids=plan_modules,
             editor_variant=variant,
         )
     except ProfilePlanError as error:
@@ -739,10 +799,15 @@ def apply_profile(
                 _write_json(target / "static/frontend-build/.vite/manifest.json", frontend[2])
         if profile_target is not None:
             for filename, document in profile_target.state_files.items():
+                if filename in ("modules.json", "install-profile.json") and isinstance(document, dict):
+                    # A preset with optional modules was laid as their exact set.
+                    document = {**document, "profile": profile}
                 if filename == "modules.json" and keep_switches:
                     document = _keep_switches(dict(document), old_state, selected)
                 elif filename == "modules.json":
                     document = _engines_by_cores(dict(document), profile, selected, detect_core)
+                if filename == "modules.json":
+                    document = _mark_chosen(document, explicit)
                 _write_json(target / filename, document)
         else:
             modules_document = _state(profile, selected, variant)
@@ -750,7 +815,7 @@ def apply_profile(
                 modules_document = _keep_switches(modules_document, old_state, selected)
             else:
                 modules_document = _engines_by_cores(modules_document, profile, selected, detect_core)
-            _write_json(target / "modules.json", modules_document)
+            _write_json(target / "modules.json", _mark_chosen(modules_document, explicit))
             _write_json(target / "module-installed.json", {"schema_version": 1, "modules": {
                 module: module in selected and all((target / marker).is_file() for marker in INSTALL_MARKERS[module])
                 for module in MODULE_IDS
@@ -818,6 +883,7 @@ def main(argv=None):
     parser.add_argument("--transaction")
     parser.add_argument("--editor-variant")
     parser.add_argument("--keep-switches", action="store_true")
+    parser.add_argument("--with-optional", action="append", default=[])
     args = parser.parse_args(argv)
     if args.action == "current":
         current = current_install(args.target)
@@ -840,6 +906,7 @@ def main(argv=None):
             transaction_root=args.transaction,
             editor_variant=args.editor_variant,
             keep_switches=args.keep_switches,
+            with_optional=[module for item in args.with_optional for module in item.split(",") if module],
         )
     elif args.action == "rollback":
         rollback_profile(args.transaction)

@@ -61,6 +61,7 @@ OLD_TAG = "v3.0.2"
 OLD_VERSION = OLD_TAG.removeprefix("v")
 NEW_VERSION = "3.1.0"
 DIAGNOSTICS = "tool.advanced-diagnostics"
+SERVER_DIAGNOSTICS = "tool.server-diagnostics"
 # Новые метки установки модуля диагностики: DevTools теперь у core.
 DIAGNOSTICS_MARKERS = ("routes/system_resources.py", "static/js/features/resource_monitor.js")
 DEVTOOLS_FILES = ("routes/devtools.py", "templates/devtools.html", "static/js/pages/devtools.entry.js")
@@ -469,13 +470,34 @@ def test_module_switch_survives_panel_update(old_code: OldCode, old_tree, new_ar
     _update_with_old_code(old_code, panel, new_archive)
 
     after = _json(panel / "modules.json")
-    assert {module_id: entry.get("enabled") for module_id, entry in after["modules"].items()} == switches
+    assert {
+        module_id: entry.get("enabled")
+        for module_id, entry in after["modules"].items()
+        if module_id != SERVER_DIAGNOSTICS
+    } == switches
     modules = _registry(panel)
     for module_id in ("tool.files", DIAGNOSTICS):
         assert modules[module_id]["installed"] is True
         assert modules[module_id]["enabled"] is False
     # A switched-off module is updated with the rest and stays switched off.
     assert (panel / "routes" / "system_resources.py").is_file()
+
+
+def test_optional_module_laid_by_old_full_update_starts_switched_off(
+    old_code: OldCode, old_tree, new_archive: NewRelease
+) -> None:
+    # The old panel reads "full" as every module of the new release and lays
+    # the optional one without asking. The new panel switches it off at start.
+    panel = old_tree("full")
+
+    _update_with_old_code(old_code, panel, new_archive)
+
+    registry = ModuleRegistry(str(panel), which=lambda _name: "/bin/tool")
+    registry.initialize_for_startup()
+    item = _json(panel / "modules.json")["modules"][SERVER_DIAGNOSTICS]
+    assert item.get("enabled") is False
+    assert item.get("off_reason") == "not_chosen"
+    assert SERVER_DIAGNOSTICS not in registry.runtime_activation()["active_module_ids"]
 
 
 # --- новая панель после перехода ------------------------------------------------------------

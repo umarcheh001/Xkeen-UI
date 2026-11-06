@@ -25,6 +25,7 @@ EXPECTED_MODULES = {
     "tool.backups",
     "integration.happ",
     "tool.advanced-diagnostics",
+    "tool.server-diagnostics",
 }
 
 REQUIRED_UNIT_FIELDS = {
@@ -142,6 +143,7 @@ def test_stage0_inventory_generator_runs_and_covers_required_contract(generated)
         "modules-page",
         "devtools-page",
         "diagnostics-panel",
+        "server-diagnostics-panel",
         "xkeen-page",
         "mihomo-generator-page",
     }

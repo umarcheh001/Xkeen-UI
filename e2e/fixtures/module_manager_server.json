@@ -56,7 +56,8 @@
       "tool.files": "Файловый менеджер",
       "tool.backups": "Резервные копии",
       "integration.happ": "Расшифровка подписок",
-      "tool.advanced-diagnostics": "Расширенная диагностика"
+      "tool.advanced-diagnostics": "Расширенная диагностика",
+      "tool.server-diagnostics": "Диагностика серверов"
     },
     "modules": [
       {
@@ -468,6 +469,37 @@
         "signing_key_id": "release-2026",
         "name": "Файловый менеджер",
         "description": "Файлы на роутере и на удалённых серверах: правка, копирование, архивы, USB-накопители.",
+        "module_version": "1.0.0",
+        "installed_version": null,
+        "installed": false,
+        "lifecycle_actions": [
+          "install"
+        ],
+        "update_available": false
+      },
+      {
+        "id": "tool.server-diagnostics",
+        "version": "2.10.0",
+        "channel": "stable",
+        "panel_api": "1",
+        "module_api": "1",
+        "min_core": "1.0.0",
+        "architectures": [
+          "aarch64",
+          "mips",
+          "mipsel"
+        ],
+        "requires": [
+          "core"
+        ],
+        "conflicts": [],
+        "requires_restart": true,
+        "archive": "xkeen-module-tool.server-diagnostics-2.10.0.tar.gz",
+        "size": 4096,
+        "sha256": "97555842c5822ebdc05e767470ef1d5cb0fc0ea12b12b53adc748cfb0697a10e",
+        "signing_key_id": "release-2026",
+        "name": "Диагностика серверов",
+        "description": "Проверка доступности серверов из конфигураций Xray и Mihomo. Нужен модуль Xray или Mihomo. Часть проверок отправляет адреса серверов во внешние сервисы (dns.google, cheburcheck.ru).",
         "module_version": "1.0.0",
         "installed_version": null,
         "installed": false,
@@ -994,7 +1026,8 @@
       "tool.files": "Файловый менеджер",
       "tool.backups": "Резервные копии",
       "integration.happ": "Расшифровка подписок",
-      "tool.advanced-diagnostics": "Расширенная диагностика"
+      "tool.advanced-diagnostics": "Расширенная диагностика",
+      "tool.server-diagnostics": "Диагностика серверов"
     },
     "modules": [
       {
@@ -1462,6 +1495,37 @@
         "update_available": false
       },
       {
+        "id": "tool.server-diagnostics",
+        "version": "2.10.0",
+        "channel": "stable",
+        "panel_api": "1",
+        "module_api": "1",
+        "min_core": "1.0.0",
+        "architectures": [
+          "aarch64",
+          "mips",
+          "mipsel"
+        ],
+        "requires": [
+          "core"
+        ],
+        "conflicts": [],
+        "requires_restart": true,
+        "archive": "xkeen-module-tool.server-diagnostics-2.10.0.tar.gz",
+        "size": 4096,
+        "sha256": "97555842c5822ebdc05e767470ef1d5cb0fc0ea12b12b53adc748cfb0697a10e",
+        "signing_key_id": "release-2026",
+        "name": "Диагностика серверов",
+        "description": "Проверка доступности серверов из конфигураций Xray и Mihomo. Нужен модуль Xray или Mihomo. Часть проверок отправляет адреса серверов во внешние сервисы (dns.google, cheburcheck.ru).",
+        "module_version": "1.0.0",
+        "installed_version": null,
+        "installed": false,
+        "lifecycle_actions": [
+          "install"
+        ],
+        "update_available": false
+      },
+      {
         "id": "tool.terminal",
         "version": "2.10.0",
         "channel": "stable",
@@ -1781,7 +1845,8 @@
       "tool.files": "Файловый менеджер",
       "tool.backups": "Резервные копии",
       "integration.happ": "Расшифровка подписок",
-      "tool.advanced-diagnostics": "Расширенная диагностика"
+      "tool.advanced-diagnostics": "Расширенная диагностика",
+      "tool.server-diagnostics": "Диагностика серверов"
     },
     "modules": [
       {
@@ -2282,6 +2347,37 @@
         "update_available": false
       },
       {
+        "id": "tool.server-diagnostics",
+        "version": "2.10.0",
+        "channel": "stable",
+        "panel_api": "1",
+        "module_api": "1",
+        "min_core": "1.0.0",
+        "architectures": [
+          "aarch64",
+          "mips",
+          "mipsel"
+        ],
+        "requires": [
+          "core"
+        ],
+        "conflicts": [],
+        "requires_restart": true,
+        "archive": "xkeen-module-tool.server-diagnostics-2.10.0.tar.gz",
+        "size": 4096,
+        "sha256": "97555842c5822ebdc05e767470ef1d5cb0fc0ea12b12b53adc748cfb0697a10e",
+        "signing_key_id": "release-2026",
+        "name": "Диагностика серверов",
+        "description": "Проверка доступности серверов из конфигураций Xray и Mihomo. Нужен модуль Xray или Mihomo. Часть проверок отправляет адреса серверов во внешние сервисы (dns.google, cheburcheck.ru).",
+        "module_version": "1.0.0",
+        "installed_version": null,
+        "installed": false,
+        "lifecycle_actions": [
+          "install"
+        ],
+        "update_available": false
+      },
+      {
         "id": "tool.terminal",
         "version": "2.10.0",
         "channel": "stable",
@@ -2751,7 +2847,8 @@
       "tool.files": "Файловый менеджер",
       "tool.backups": "Резервные копии",
       "integration.happ": "Расшифровка подписок",
-      "tool.advanced-diagnostics": "Расширенная диагностика"
+      "tool.advanced-diagnostics": "Расширенная диагностика",
+      "tool.server-diagnostics": "Диагностика серверов"
     },
     "modules": [
       {

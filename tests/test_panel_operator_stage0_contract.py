@@ -170,7 +170,14 @@ def test_operator_stylesheet_is_last_owned_and_fully_scoped():
         r"<link\b[^>]*\brel=[\"']stylesheet[\"'][^>]*>", template, flags=re.IGNORECASE | re.DOTALL
     )
     assert stylesheet_tags
-    assert "panel-operator.css" in stylesheet_tags[-1]
+    # A stylesheet of an optional module comes only with the module and refines
+    # the operator styles, so it may follow them; nothing of the core may.
+    module_stylesheets = ("server-diagnostics.css",)
+    core_tags = [tag for tag in stylesheet_tags if not any(name in tag for name in module_stylesheets)]
+    assert "panel-operator.css" in core_tags[-1]
+    assert stylesheet_tags[len(core_tags):] == [
+        tag for tag in stylesheet_tags if any(name in tag for name in module_stylesheets)
+    ]
     assert template.count("panel-operator.css") == 1
     assert re.search(r"<body\b[^>]*\bclass=[\"'][^\"']*\bpanel-page\b", template)
 

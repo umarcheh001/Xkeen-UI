@@ -7,6 +7,7 @@ import { EXTERNAL_IMPORT_SPECIFIERS, staticRoot } from './vite.config.mjs';
 export const SEPARATE_MODULES = {
   'tool.advanced-diagnostics': { entry: 'js/features/resource_monitor.js' },
   'engine.xray': { entry: 'js/pages/xray.module.entry.js' },
+  'tool.server-diagnostics': { entry: 'js/features/provider_diagnostics.js' },
 };
 
 // Rollup refuses `../` in a file name, so the manifest is written inside outDir

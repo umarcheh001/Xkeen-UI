@@ -45,6 +45,7 @@ const MODULE_ICONS = {
   'tool.backups': 'archive',
   'integration.happ': 'subscriptions',
   'tool.advanced-diagnostics': 'statistics',
+  'tool.server-diagnostics': 'ping',
 };
 
 function moduleIcon(moduleId) {
@@ -436,7 +437,17 @@ function coreStrip(item) {
 
 // The tile says nothing below the description while the module works as the
 // switch shows. A line appears only for what the switch cannot tell.
-function tileNotice(item, names) {
+// The server diagnostics checks the servers of Xray or Mihomo: without an
+// engine the module has nothing to check.
+const SERVER_DIAGNOSTICS = 'tool.server-diagnostics';
+const NEEDS_ENGINE_TEXT = 'Нужен модуль Xray или Mihomo';
+
+function engineIn(modules, key) {
+  return (Array.isArray(modules) ? modules : [])
+    .some((module) => ENGINE_CORE_NAMES[module?.id] && module[key] === true);
+}
+
+function tileNotice(item, names, snapshot = null) {
   if (item.lock_reason === 'last_engine') return { tone: 'lock', text: 'Единственное ядро — не выключается' };
   if (item.id === 'tool.editor' && item.can_disable !== true) {
     return { tone: 'lock', text: 'Нужен, пока включено ядро' };
@@ -448,6 +459,13 @@ function tileNotice(item, names) {
     return item.available === true
       ? { tone: 'info', text: `Ядро ${core} найдено — модуль можно включить` }
       : { tone: 'muted', text: `Ядра ${core} на роутере нет — модуль выключен` };
+  }
+  if (item.id === SERVER_DIAGNOSTICS) {
+    // Came with an update of the panel, nobody chose it: it waits switched off.
+    if (item.off_reason === 'not_chosen' && item.enabled !== true) {
+      return { tone: 'muted', text: 'Выключен: не выбирался при установке' };
+    }
+    if (snapshot && !engineIn(snapshot.modules, 'enabled')) return { tone: 'info', text: NEEDS_ENGINE_TEXT };
   }
   return moduleProblem(item, names);
 }
@@ -606,7 +624,7 @@ function moduleTile(item, snapshot, names, {
     tile.append(tileRefusal(item, refusal, onDismissRefusal));
     return tile;
   }
-  const notice = tileNotice(item, names);
+  const notice = tileNotice(item, names, snapshot);
   if (waits) {
     tile.append(withPanelFoot(notice));
   } else if (offer || updatingTo !== null) {
@@ -1375,6 +1393,7 @@ export function renderAvailable(host, catalog, onPlan = () => {}, busy = false, 
   list.append(listHeader);
   const core = modules.find((item) => item.id === 'core');
   if (core) list.append(catalogCoreStrip(core));
+  const noEngine = !engineIn(modules, 'installed');
   // What can be done comes first; the rest goes under its own line, dimmed.
   const tiles = modules.filter((item) => item.id !== 'core')
     .map((item) => ({ item, action: catalogAction(item, readOnly, withPanel) }));
@@ -1383,7 +1402,7 @@ export function renderAvailable(host, catalog, onPlan = () => {}, busy = false, 
   const rest = tiles.filter((tile) => !tile.action || tile.action === WITH_PANEL);
   const draw = (group, quiet) => {
     const grid = node('div', 'modules-grid');
-    for (const { item, action } of group) grid.append(catalogTile(item, action, names, { onPlan, busy, quiet }));
+    for (const { item, action } of group) grid.append(catalogTile(item, action, names, { onPlan, busy, quiet, noEngine }));
     return grid;
   };
   if (actionable.length && rest.length) {
@@ -1437,7 +1456,7 @@ function catalogCoreStrip(item) {
 
 // A tile of the catalog looks as one of the installed modules: icon, name,
 // version, description; the bottom line holds what can be done with it.
-function catalogTile(item, action, names, { onPlan, busy, quiet }) {
+function catalogTile(item, action, names, { onPlan, busy, quiet, noEngine = false }) {
   const label = item.name || item.id;
   const tile = node('article', 'modules-tile modules-catalog-tile');
   tile.dataset.moduleId = item.id;
@@ -1457,6 +1476,7 @@ function catalogTile(item, action, names, { onPlan, busy, quiet }) {
   const meta = [];
   if (Array.isArray(requires) && requires.length) meta.push(`Нужны модули: ${moduleList(requires, names)}`);
   if (Array.isArray(item.conflicts) && item.conflicts.length) meta.push(`Конфликтуют: ${moduleList(item.conflicts, names)}`);
+  if (item.id === SERVER_DIAGNOSTICS && action === 'install' && noEngine) meta.push(NEEDS_ENGINE_TEXT);
   if (meta.length) {
     const block = node('div', 'modules-tile-metas');
     for (const text of meta) block.append(node('p', 'modules-tile-meta', text));

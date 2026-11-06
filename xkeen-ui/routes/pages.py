@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from flask import Flask, make_response, redirect, render_template, url_for
 from services.capabilities import detect_terminal_state
 from services.cores import detect_available_cores
-from services.module_registry import EDITOR_CAPABILITIES, EDITOR_VARIANTS, MODULE_IDS
+from services.module_registry import EDITOR_CAPABILITIES, EDITOR_VARIANTS, MODULE_IDS, OPTIONAL_PROFILE_MODULES
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,7 +92,20 @@ PANEL_COMPOSITION: tuple[PanelCompositionEntry, ...] = (
     PanelCompositionEntry("modal_partials", ("engine.xray",), "panel/modals/routing.html"),
     PanelCompositionEntry("modal_partials", ("tool.terminal",), "panel/modals/commands.html"),
     PanelCompositionEntry("modal_partials", ("core",), "panel/modals/shared.html"),
-    PanelCompositionEntry("modal_partials", ("core",), "panel/modals/provider_diagnostics.html"),
+    PanelCompositionEntry("modal_partials", ("tool.server-diagnostics",), "panel/modals/provider_diagnostics.html"),
+    # The "Servers" buttons of the engine screens belong to the module: a change
+    # of a button is a release of the module, not of the engines.
+    PanelCompositionEntry("head_style_partials", ("tool.server-diagnostics",), "panel/slots/server_diagnostics_head.html"),
+    PanelCompositionEntry(
+        "server_diagnostics_xray_partials",
+        ("tool.server-diagnostics", "engine.xray"),
+        "panel/slots/server_diagnostics_xray.html",
+    ),
+    PanelCompositionEntry(
+        "server_diagnostics_mihomo_partials",
+        ("tool.server-diagnostics", "engine.mihomo"),
+        "panel/slots/server_diagnostics_mihomo.html",
+    ),
     # The core-source API is registered per engine module, so the controls
     # inside the shared core dialog and their dialogs follow the engine. The
     # dialogs stay right after shared.html to open above the core dialog.
@@ -178,6 +191,15 @@ PANEL_FRONTEND_MODULES: tuple[PanelFrontendModule, ...] = (
         (),
     ),
     PanelFrontendModule(
+        "server-diagnostics-panel",
+        ("tool.server-diagnostics",),
+        "after-paint",
+        (),
+        ("provider-check-modal",),
+        ("/api/provider-diagnostics",),
+        (),
+    ),
+    PanelFrontendModule(
         "editor-runtime",
         ("tool.editor",),
         # The screens with an editor ask for it before they initialise.
@@ -238,7 +260,10 @@ def build_panel_frontend_modules(
 ) -> dict[str, object]:
     """Return the client-safe frontend activation descriptor for the panel."""
 
-    active = frozenset(MODULE_IDS if active_module_ids is None else active_module_ids)
+    # Without a registry the panel shows what a full install had: an optional
+    # module takes an explicit choice, which only the registry knows.
+    legacy = frozenset(MODULE_IDS) - OPTIONAL_PROFILE_MODULES
+    active = frozenset(legacy if active_module_ids is None else active_module_ids)
     requested_variant = str(editor_variant or "").strip().lower()
     if requested_variant not in EDITOR_VARIANTS:
         requested_variant = (
@@ -281,7 +306,9 @@ def _build_panel_page_context(active_module_ids: set[str] | None) -> dict[str, o
     active = None if active_module_ids is None else frozenset(str(module_id) for module_id in active_module_ids)
 
     def is_allowed(owners: tuple[str, ...]) -> bool:
-        return active is None or set(owners) <= active
+        if active is None:
+            return not set(owners) & OPTIONAL_PROFILE_MODULES
+        return set(owners) <= active
 
     context: dict[str, object] = {
         "active_module_ids": [] if active is None else sorted(active),
@@ -296,6 +323,9 @@ def _build_panel_page_context(active_module_ids: set[str] | None) -> dict[str, o
         "routing_side_card_partials": [],
         "routing_file_action_partials": [],
         "core_source_control_partials": [],
+        "server_diagnostics_xray_partials": [],
+        "server_diagnostics_mihomo_partials": [],
+        "head_style_partials": [],
         "unmanaged_core_source_engines": [],
         "unmanaged_core_source_partials": [],
         "pre_screen_modal_partials": [],
@@ -401,6 +431,7 @@ def _detect_panel_core_ui(active_module_ids: set[str] | None = None) -> dict[str
         has_diagnostics = "tool.advanced-diagnostics" in active_module_ids
         has_editor = "tool.editor" in active_module_ids
         has_happ = "integration.happ" in active_module_ids
+        has_server_diagnostics = "tool.server-diagnostics" in active_module_ids and (has_xray or has_mihomo)
         available_cores = [
             core
             for core, module_id in (("xray", "engine.xray"), ("mihomo", "engine.mihomo"))
@@ -425,6 +456,7 @@ def _detect_panel_core_ui(active_module_ids: set[str] | None = None) -> dict[str
             "has_diagnostics": has_diagnostics,
             "has_editor": has_editor,
             "has_happ": has_happ,
+            "has_server_diagnostics": has_server_diagnostics,
             "multi_core": len(available_cores) > 1,
             "panel_sections_whitelist": ",".join(effective_sections) if effective_sections else "__none__",
         }
@@ -466,6 +498,8 @@ def _detect_panel_core_ui(active_module_ids: set[str] | None = None) -> dict[str
         "has_diagnostics": True,
         "has_editor": True,
         "has_happ": True,
+        # Only the registry knows the explicit choice an optional module takes.
+        "has_server_diagnostics": False,
         "multi_core": len(available_cores) > 1,
         "panel_sections_whitelist": ",".join(effective_sections) if effective_sections else "__none__",
     }

@@ -63,10 +63,10 @@ def test_missing_state_migrates_to_legacy_full_and_exposes_full_registry(tmp_pat
     assert payload["schema_version"] == STATE_SCHEMA_VERSION
     assert payload["profile"] == LEGACY_FULL_PROFILE
     assert payload["runtime_gates_active"] is False
-    assert payload["configured_module_ids"] == list(MODULE_IDS)
-    assert payload["effective_module_ids"] == list(MODULE_IDS)
+    assert payload["configured_module_ids"] == list(PROFILE_PRESETS["full"])
+    assert payload["effective_module_ids"] == list(PROFILE_PRESETS["full"])
     assert [item["id"] for item in payload["modules"]] == list(MODULE_IDS)
-    assert all(item["status"] == "enabled" for item in payload["modules"])
+    assert all(item["status"] == "enabled" for item in payload["modules"] if item["id"] != "tool.server-diagnostics")
     assert payload["editor"] == {
         "variant": "full",
         "active_variant": "full",
@@ -81,7 +81,7 @@ def test_missing_state_migrates_to_legacy_full_and_exposes_full_registry(tmp_pat
         "profile": LEGACY_FULL_PROFILE,
         "restart_required": False,
         "editor": {"variant": "full"},
-        "modules": {module_id: {"enabled": True} for module_id in MODULE_IDS},
+        "modules": {module_id: {"enabled": module_id != "tool.server-diagnostics"} for module_id in MODULE_IDS},
     }
 
 
@@ -384,7 +384,7 @@ def test_runtime_activation_preserves_legacy_full_and_gates_custom_profiles(tmp_
 
     assert legacy_activation["legacy_compatibility"] is True
     assert legacy_activation["runtime_gates_active"] is True
-    assert legacy_activation["active_module_ids"] == list(MODULE_IDS)
+    assert legacy_activation["active_module_ids"] == list(PROFILE_PRESETS["full"])
 
     custom = _registry(tmp_path / "custom")
     custom.get_registry()
@@ -425,7 +425,7 @@ def test_corrupt_state_is_backed_up_and_recovers_to_legacy_full(tmp_path):
     payload = registry.get_registry()
 
     assert payload["profile"] == LEGACY_FULL_PROFILE
-    assert payload["configured_module_ids"] == list(MODULE_IDS)
+    assert payload["configured_module_ids"] == list(PROFILE_PRESETS["full"])
     assert payload["recovery_reason"] == "corrupt_state"
     assert list(tmp_path.glob("modules.json.bad.*"))
 
@@ -478,7 +478,7 @@ def test_environment_safe_mode_forces_legacy_full_runtime_activation(tmp_path):
 
     assert activation["safe_mode"] is True
     assert activation["safe_mode_reason"] == "environment"
-    assert activation["active_module_ids"] == list(MODULE_IDS)
+    assert activation["active_module_ids"] == list(PROFILE_PRESETS["full"])
 
 
 def test_startup_blocks_deferred_disable_of_running_core(tmp_path, monkeypatch):
@@ -669,7 +669,7 @@ def test_module_api_contract_and_mutations(tmp_path):
     listed = client.get("/api/modules")
     assert listed.status_code == 200
     assert listed.headers["Cache-Control"] == "no-store"
-    assert listed.get_json()["effective_module_ids"] == list(MODULE_IDS)
+    assert listed.get_json()["effective_module_ids"] == list(PROFILE_PRESETS["full"])
     assert listed.get_json()["editor"]["variant"] == "full"
 
     editor = client.patch("/api/modules/editor", json={"variant": "light"})
@@ -737,7 +737,7 @@ def test_profile_presets_are_canonical_and_include_expected_modules():
         "engine.mihomo",
         "tool.editor",
     )
-    assert set(PROFILE_PRESETS["full"]) == set(MODULE_IDS)
+    assert set(PROFILE_PRESETS["full"]) == set(MODULE_IDS) - {"tool.server-diagnostics"}
 
 
 def test_profile_transition_is_atomic_and_returns_restart_diff(tmp_path):

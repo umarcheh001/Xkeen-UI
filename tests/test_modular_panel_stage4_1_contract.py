@@ -136,7 +136,7 @@ def test_stage4_1_contract_covers_shell_screens_modals_and_profiles(tmp_path):
     profiles = {item["id"]: item for item in payload["profiles"]}
     assert set(profiles) == {"legacy-full", "full", "xray-minimal", "mihomo-minimal"}
     assert profiles["legacy-full"]["forbidden_views"] == []
-    assert profiles["full"]["forbidden_modal_ids"] == []
+    assert profiles["full"]["forbidden_modal_ids"] == ["provider-check-modal"]
     assert profiles["xray-minimal"]["expected_views"] == ["routing", "xkeen", "xray-logs"]
     assert profiles["xray-minimal"]["forbidden_views"] == ["mihomo", "commands", "files"]
     assert "fm-editor-modal" in profiles["xray-minimal"]["forbidden_modal_ids"]

@@ -1,4 +1,4 @@
-import { iconHtml } from '../ui/operator_icons.js';
+import { iconHtml } from 'xk-core/js/ui/operator_icons.js';
 
 const $ = (id) => document.getElementById(id);
 

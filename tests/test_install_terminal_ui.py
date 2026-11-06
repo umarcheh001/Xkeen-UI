@@ -418,3 +418,84 @@ def test_installer_only_reports_success_after_service_health_check():
     assert 'restart 3>&-' in text, "the detached service must not inherit the terminal UI descriptor"
     assert text.index(health_check) < text.index(success)
     assert 'INSTALL_FINISHED=1' in text
+
+
+def _server_diagnostics_question(
+    *, menu_shown: str, profile: str, answers: list[str], can_ask: bool = True
+) -> subprocess.CompletedProcess:
+    answers_file = Path("server-diagnostics-answers.txt")
+    answers_file.write_bytes("".join(f"{item}\n" for item in answers).encode("utf-8"))
+    script = "\n".join(
+        (
+            "set -eu",
+            "exec 3>&1",
+            'UI_BOLD=""',
+            'UI_RESET=""',
+            f"PROFILE_MENU_SHOWN={menu_shown}",
+            f"PROFILE_CHOICE={profile}",
+            "XKEEN_UI_INSTALL_OPTIONAL=",
+            f"ANSWERS={shlex.quote(str(answers_file))}",
+            "ui_can_ask() { " + ("return 0" if can_ask else "return 1") + "; }",
+            'ui_info() { printf "info:%s\\n" "$1"; }',
+            'fail_install() { printf "fail:%s\\n" "$1"; exit 1; }',
+            # Mirrors ui_confirm: only y or n ends the question.
+            "ui_confirm() {",
+            '  printf "ask:%s\\n" "$2"',
+            "  while IFS= read -r answer; do",
+            '    case "$answer" in y) UI_CONFIRM_YES=1; return 0 ;; n) UI_CONFIRM_YES=0; return 0 ;; esac',
+            '    printf "again\\n"',
+            "  done < \"$ANSWERS\"",
+            "  return 1",
+            "}",
+            _function("choose_server_diagnostics_option"),
+            "choose_server_diagnostics_option",
+            'printf "optional:%s\\n" "$XKEEN_UI_INSTALL_OPTIONAL"',
+        )
+    )
+    try:
+        return subprocess.run([_shell(), "-c", script], capture_output=True, text=True, encoding="utf-8")
+    finally:
+        answers_file.unlink(missing_ok=True)
+
+
+def test_full_from_the_menu_asks_about_server_diagnostics_and_needs_an_explicit_yes():
+    proc = _server_diagnostics_question(menu_shown="1", profile="full", answers=["", "y"])
+
+    assert proc.returncode == 0, proc.stderr
+    assert "info:Проверки отправляют адреса серверов во внешние сервисы (dns.google, cheburcheck.ru)." in proc.stdout
+    assert "info:Нужен модуль Xray или Mihomo." in proc.stdout
+    assert "ask:Поставить «Диагностику серверов»?" in proc.stdout
+    assert "again" in proc.stdout
+    assert proc.stdout.rstrip().endswith("optional:tool.server-diagnostics")
+
+
+def test_full_from_the_menu_without_yes_installs_no_server_diagnostics():
+    proc = _server_diagnostics_question(menu_shown="1", profile="full", answers=["n"])
+
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.rstrip().endswith("optional:")
+
+
+@pytest.mark.parametrize(
+    "menu_shown,profile,can_ask",
+    [
+        ("0", "full", True),  # an update or XKEEN_UI_INSTALL_PROFILE: no menu, no question
+        ("1", "xray-minimal", True),
+        ("1", "custom", True),
+        ("1", "full", False),  # no terminal
+    ],
+)
+def test_server_diagnostics_question_is_only_for_full_chosen_in_the_menu(menu_shown, profile, can_ask):
+    proc = _server_diagnostics_question(menu_shown=menu_shown, profile=profile, answers=["y"], can_ask=can_ask)
+
+    assert proc.returncode == 0, proc.stderr
+    assert "ask:" not in proc.stdout
+    assert proc.stdout.rstrip().endswith("optional:")
+
+
+def test_installer_passes_the_choice_to_the_profile_helper():
+    text = _text()
+
+    assert "choose_server_diagnostics_option\n" in text[text.index("\nchoose_panel_profile\n"):]
+    assert '${XKEEN_UI_INSTALL_OPTIONAL:+--with-optional "$XKEEN_UI_INSTALL_OPTIONAL"}' in text
+    assert "PROFILE_MENU_SHOWN=1" in _function("choose_panel_profile")

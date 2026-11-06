@@ -47,8 +47,8 @@ def _panel(tmp_path: Path) -> Path:
 @pytest.mark.parametrize(
     ("profile", "module_ids", "variant"),
     [
-        ("full", tuple(MODULE_IDS), "full"),
-        ("legacy-full", tuple(MODULE_IDS), "full"),
+        ("full", tuple(m for m in MODULE_IDS if m != "tool.server-diagnostics"), "full"),
+        ("legacy-full", tuple(m for m in MODULE_IDS if m != "tool.server-diagnostics"), "full"),
         ("xray-minimal", ("core", "engine.xray", "tool.editor"), "light"),
         ("mihomo-minimal", ("core", "engine.mihomo", "tool.editor"), "light"),
     ],
