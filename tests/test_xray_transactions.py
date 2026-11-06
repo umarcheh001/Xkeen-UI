@@ -12,6 +12,14 @@ import pytest
 from services import xray_transactions as tx
 
 
+def test_explicit_xray_binary_is_used_for_config_checks(monkeypatch, tmp_path: Path):
+    binary = tmp_path / "xray"
+    binary.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    binary.chmod(0o755)
+    monkeypatch.setenv("XKEEN_XRAY_BINARY", str(binary))
+    assert tx.xray_binary() == str(binary)
+
+
 def test_disk_snapshot_brings_back_changed_files_and_removes_new_ones(tmp_path: Path):
     kept = tmp_path / "05_routing.json"
     absent = tmp_path / "02_dns.json"

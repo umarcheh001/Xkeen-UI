@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 import time
@@ -137,13 +138,49 @@ class CoreSwitchError(RuntimeError):
 
 
 def detect_available_cores() -> List[str]:
-    """Return list of available cores based on presence of binaries."""
+    """Return cores whose configured or system binary is executable."""
+
+    def _available(configured: object, names: tuple[str, ...]) -> bool:
+        for candidate in (str(configured or "").strip(), *names):
+            if not candidate:
+                continue
+            if os.path.isabs(candidate):
+                if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                    return True
+            elif shutil.which(candidate):
+                return True
+        return False
+
     cores: List[str] = []
-    if os.path.exists("/opt/sbin/xray"):
+    if _available(os.environ.get("XKEEN_XRAY_BINARY"), ("/opt/sbin/xray", "/opt/bin/xray", "xray")):
         cores.append("xray")
-    if os.path.exists("/opt/sbin/mihomo"):
+    if _available(os.environ.get("MIHOMO_BIN"), ("/opt/sbin/mihomo", "/opt/bin/mihomo", "mihomo")):
         cores.append("mihomo")
     return cores
+
+
+def _process_ids(name: str) -> tuple[int, ...]:
+    """Return process ids using ``pidof`` or macOS/BSD ``pgrep``."""
+
+    for command in (("pidof", name), ("pgrep", "-x", name)):
+        try:
+            result = subprocess.run(
+                list(command),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                timeout=1.0,
+            )
+        except FileNotFoundError:
+            continue
+        except Exception:
+            continue
+        if result.returncode != 0:
+            continue
+        ids = tuple(sorted({int(item) for item in str(result.stdout or "").split() if item.isdigit()}))
+        if ids:
+            return ids
+    return ()
 
 
 def detect_running_cores() -> Tuple[str, ...]:
@@ -153,22 +190,7 @@ def detect_running_cores() -> Tuple[str, ...]:
     collapsed to the first name in a fixed ``xray, mihomo`` order: doing so
     makes the UI announce Xray while Mihomo is the engine XKeen is bringing up.
     """
-    detected: list[str] = []
-    try:
-        for core_name in ("xray", "mihomo"):
-            try:
-                res = subprocess.run(
-                    ["pidof", core_name],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.DEVNULL,
-                )
-                if res.returncode == 0:
-                    detected.append(core_name)
-            except FileNotFoundError:
-                continue
-    except Exception:
-        return ()
-    return tuple(detected)
+    return tuple(core_name for core_name in ("xray", "mihomo") if _process_ids(core_name))
 
 
 @dataclass(frozen=True)

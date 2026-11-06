@@ -96,16 +96,21 @@ def _mihomo_binary() -> str | None:
 
 
 def _mihomo_running() -> bool:
-    try:
-        result = subprocess.run(
-            ["pidof", "mihomo"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=1.0,
-        )
-        return result.returncode == 0
-    except (FileNotFoundError, OSError, subprocess.SubprocessError):
-        return False
+    for command in (("pidof", "mihomo"), ("pgrep", "-x", "mihomo")):
+        try:
+            result = subprocess.run(
+                list(command),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=1.0,
+            )
+        except FileNotFoundError:
+            continue
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if result.returncode == 0:
+            return True
+    return False
 
 
 def start_mihomo_standalone(

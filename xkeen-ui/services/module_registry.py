@@ -396,7 +396,12 @@ def core_binary_available(core: str, *, which=shutil.which, environ=None) -> boo
 
     env = environ if environ is not None else os.environ
     if core == "xray":
-        return bool(_is_executable("/opt/sbin/xray") or _is_executable("/opt/bin/xray") or which("xray"))
+        return bool(
+            _is_executable(str(env.get("XKEEN_XRAY_BINARY") or ""))
+            or _is_executable("/opt/sbin/xray")
+            or _is_executable("/opt/bin/xray")
+            or which("xray")
+        )
     if core == "mihomo":
         return bool(
             _is_executable("/opt/sbin/mihomo")

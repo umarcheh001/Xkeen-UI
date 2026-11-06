@@ -30,19 +30,29 @@ def read_restart_log(log_file: str, limit: int = 100) -> List[str]:
 def detect_xkeen_runtime_core() -> str:
     """Return the currently running xkeen-managed core name, if detected."""
     for core_name in ("xray", "mihomo"):
+        if _process_ids(core_name):
+            return core_name
+    return ""
+
+
+def _process_ids(name: str) -> tuple[int, ...]:
+    """Return process ids using the router's pidof or macOS pgrep."""
+    for command in (("pidof", name), ("pgrep", "-x", name)):
         try:
-            res = subprocess.run(
-                ["pidof", core_name],
+            result = subprocess.run(
+                list(command),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
+                text=True,
+                timeout=1.0,
             )
         except FileNotFoundError:
             continue
         except Exception:
             continue
-        if res.returncode == 0:
-            return core_name
-    return ""
+        if result.returncode == 0:
+            return tuple(sorted({int(item) for item in str(result.stdout or "").split() if item.isdigit()}))
+    return ()
 
 
 def is_xkeen_running() -> bool:
@@ -56,20 +66,7 @@ def _xkeen_runtime_identity() -> tuple[str, tuple[int, ...]]:
     if not core:
         return "", ()
     try:
-        result = subprocess.run(
-            ["pidof", core],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-            timeout=1.0,
-        )
-        pids = tuple(
-            sorted(
-                int(token)
-                for token in str(result.stdout or "").split()
-                if token.isdigit()
-            )
-        )
+        pids = _process_ids(core)
     except Exception:
         pids = ()
     return core, pids

@@ -1412,7 +1412,12 @@ def _can_retry_subscription_via_mihomo_proxy(exc: BaseException) -> bool:
     return isinstance(exc, (TimeoutError, OSError))
 
 
-def _fetch_subscription_body_once(url: str, request_headers: Dict[str, str] | None = None) -> Tuple[str, Dict[str, str]]:
+def _fetch_subscription_body_once(
+    url: str,
+    request_headers: Dict[str, str] | None = None,
+    *,
+    timeout_seconds: int | None = None,
+) -> Tuple[str, Dict[str, str]]:
     url_s = str(url or "").strip()
     policy = _subscription_policy()
     ok, reason = is_url_allowed(url_s, policy)
@@ -1424,6 +1429,8 @@ def _fetch_subscription_body_once(url: str, request_headers: Dict[str, str] | No
         timeout = max(3, min(120, int(os.environ.get("XKEEN_SUBSCRIPTION_FETCH_TIMEOUT", str(timeout)))))
     except Exception:
         timeout = DEFAULT_FETCH_TIMEOUT_SECONDS
+    if timeout_seconds is not None:
+        timeout = max(3, min(timeout, int(timeout_seconds)))
 
     max_bytes = DEFAULT_MAX_BODY_BYTES
     try:
@@ -1434,9 +1441,11 @@ def _fetch_subscription_body_once(url: str, request_headers: Dict[str, str] | No
     # Avoid spending the full subscription timeout on a synthetic fake-IP
     # destination. The loopback proxy has the original hostname in CONNECT and
     # resolves it in Mihomo, so it is both quicker and semantically correct.
+    proxy_tried_first = False
     if _subscription_host_uses_mihomo_fake_ip(url_s):
         proxy_port = _subscription_mihomo_proxy_port()
         if proxy_port is not None:
+            proxy_tried_first = True
             try:
                 return _read_subscription_via_mihomo_proxy(
                     url_s,
@@ -1460,7 +1469,7 @@ def _fetch_subscription_body_once(url: str, request_headers: Dict[str, str] | No
             request_headers=request_headers,
         )
     except Exception as direct_error:
-        if not _can_retry_subscription_via_mihomo_proxy(direct_error):
+        if proxy_tried_first or not _can_retry_subscription_via_mihomo_proxy(direct_error):
             raise
         proxy_port = _subscription_mihomo_proxy_port()
         if proxy_port is None:
@@ -1511,6 +1520,7 @@ def _resolve_happ_subscription_source(
     headers: Dict[str, str] | None = None,
     request_headers: Dict[str, str] | None = None,
     profile_headers: bool = False,
+    timeout_seconds: int | None = None,
 ) -> Dict[str, Any] | None:
     content_type = (headers or {}).get("content-type") if isinstance(headers, dict) else None
     body_text = str(body or "")
@@ -1550,6 +1560,7 @@ def _resolve_happ_subscription_source(
             request_headers=merged_headers,
             profile_headers=profile_headers,
             _happ_depth=1,
+            timeout_seconds=timeout_seconds,
         )
         return {
             "body": fetched_body,
@@ -1569,6 +1580,7 @@ def fetch_subscription_body(
     *,
     profile_headers: bool = False,
     _happ_depth: int = 0,
+    timeout_seconds: int | None = None,
 ) -> Tuple[str, Dict[str, str]]:
     """Download a subscription; ``profile_headers`` marks headers the owner set."""
     url_s = happ_links.normalize_happ_deep_link(url)
@@ -1576,14 +1588,18 @@ def fetch_subscription_body(
         raise RuntimeError("happ_helper_resolution_loop")
     if happ_links.is_happ_deep_link(url_s):
         resolved = _resolve_happ_subscription_source(
-            url_s, request_headers=request_headers, profile_headers=profile_headers
+            url_s, request_headers=request_headers, profile_headers=profile_headers,
+            timeout_seconds=timeout_seconds,
         )
         if resolved:
             return str(resolved.get("body") or ""), dict(resolved.get("headers") or {})
         raise RuntimeError("happ_helper_empty")
 
     try:
-        body, headers = _fetch_subscription_body_once(url_s, request_headers=request_headers)
+        fetch_kwargs = {"timeout_seconds": timeout_seconds} if timeout_seconds is not None else {}
+        body, headers = _fetch_subscription_body_once(
+            url_s, request_headers=request_headers, **fetch_kwargs
+        )
     except urllib.error.HTTPError as exc:
         # A number of Happ subscription endpoints intentionally answer with an
         # HTTP redirect whose Location is a ``happ://crypt*`` deep-link.  The
@@ -1604,6 +1620,7 @@ def fetch_subscription_body(
                 location,
                 request_headers=request_headers,
                 profile_headers=profile_headers,
+                timeout_seconds=timeout_seconds,
             )
             if resolved:
                 return str(resolved.get("body") or ""), dict(resolved.get("headers") or {})
@@ -1623,6 +1640,7 @@ def fetch_subscription_body(
             headers=headers,
             request_headers=request_headers,
             profile_headers=profile_headers,
+            timeout_seconds=timeout_seconds,
         )
     except RuntimeError as exc:
         if happ_links.extract_happ_links(body):
@@ -1991,11 +2009,16 @@ def _subscription_request_variants() -> List[Tuple[str, Dict[str, str], str]]:
 def _try_subscription_request_variants(
     url: str,
     variants: List[Tuple[str, Dict[str, str], str]],
+    *,
+    timeout_seconds: int | None = None,
 ) -> Tuple[Tuple[str, Dict[str, str], Dict[str, Any]] | None, List[str]]:
     errors: List[str] = []
     for fetch_mode, request_headers, success_message in variants:
         try:
-            body, headers = fetch_subscription_body(url, request_headers=request_headers)
+            fetch_kwargs = {"timeout_seconds": timeout_seconds} if timeout_seconds is not None else {}
+            body, headers = fetch_subscription_body(
+                url, request_headers=request_headers, **fetch_kwargs
+            )
         except Exception as exc:
             errors.append(f"{fetch_mode}:{exc}")
             continue
@@ -2032,6 +2055,8 @@ def fetch_subscription_body_for_xray(
     url: str,
     *,
     request_profile: Dict[str, Any] | None = None,
+    timeout_seconds: int | None = None,
+    max_request_variants: int | None = None,
 ) -> Tuple[str, Dict[str, str], Dict[str, Any]]:
     """Fetch subscription text, retrying with HWID headers when needed.
 
@@ -2044,13 +2069,18 @@ def fetch_subscription_body_for_xray(
     url = happ_links.normalize_happ_deep_link(url)
     profile = normalize_request_profile(request_profile)
     profile_mode = profile["mode"]
+    fetch_kwargs = {"timeout_seconds": timeout_seconds} if timeout_seconds is not None else {}
+
+    def request_variants():
+        items = _subscription_request_variants()
+        return items[:max_request_variants] if max_request_variants is not None else items
 
     if profile_mode in {"custom", "disabled"}:
         selected_headers = (
             request_headers_for_profile(profile) if profile_mode == "custom" else {}
         )
         body, headers = fetch_subscription_body(
-            url, request_headers=selected_headers, profile_headers=profile_mode == "custom"
+            url, request_headers=selected_headers, profile_headers=profile_mode == "custom", **fetch_kwargs
         )
         hwid_headers = _subscription_hwid_response_headers(headers)
         warnings = _subscription_happ_resolution_warnings(headers)
@@ -2066,7 +2096,7 @@ def fetch_subscription_body_for_xray(
     body = ""
     headers: Dict[str, str] = {}
     try:
-        body, headers = fetch_subscription_body(url)
+        body, headers = fetch_subscription_body(url, **fetch_kwargs)
     except RuntimeError as exc:
         reason = str(exc or "").strip()
         if (
@@ -2080,7 +2110,9 @@ def fetch_subscription_body_for_xray(
         direct_fetch_error = exc
 
     if direct_fetch_error is not None:
-        result, _errors = _try_subscription_request_variants(url, _subscription_request_variants())
+        result, _errors = _try_subscription_request_variants(
+            url, request_variants(), timeout_seconds=timeout_seconds
+        )
         if result is not None:
             return result
         raise direct_fetch_error
@@ -2113,7 +2145,9 @@ def fetch_subscription_body_for_xray(
     if not needs_hwid:
         return body, headers, meta
 
-    result, retry_errors = _try_subscription_request_variants(url, _subscription_request_variants())
+    result, retry_errors = _try_subscription_request_variants(
+        url, request_variants(), timeout_seconds=timeout_seconds
+    )
     if result is not None:
         return result
     if retry_errors:
@@ -7239,7 +7273,9 @@ def refresh_due_subscriptions(
 
 
 def _find_xray_binary() -> str | None:
-    for cand in ("/opt/sbin/xray", "/opt/bin/xray", "xray"):
+    for cand in (os.environ.get("XKEEN_XRAY_BINARY"), "/opt/sbin/xray", "/opt/bin/xray", "xray"):
+        if not cand:
+            continue
         try:
             resolved = shutil.which(cand) if os.path.basename(cand) == cand else cand
         except Exception:

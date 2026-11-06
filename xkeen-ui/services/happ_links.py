@@ -126,7 +126,14 @@ def _bundled_helper_command_parts() -> List[str]:
 def _is_native_binary(path: str) -> bool:
     try:
         with open(path, "rb") as f:
-            return f.read(4) == b"\x7fELF"
+            header = f.read(4)
+        if header == b"\x7fELF":
+            return True
+        return sys.platform == "darwin" and header in {
+            b"\xfe\xed\xfa\xce", b"\xce\xfa\xed\xfe",
+            b"\xfe\xed\xfa\xcf", b"\xcf\xfa\xed\xfe",
+            b"\xca\xfe\xba\xbe", b"\xbe\xba\xfe\xca",
+        }
     except OSError:
         return False
 

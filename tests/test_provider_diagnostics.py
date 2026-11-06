@@ -1,6 +1,10 @@
 import io
+from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import socket
+import ssl
+import sys
+import threading
 
 import pytest
 from flask import Flask
@@ -8,13 +12,117 @@ from flask import Flask
 from routes.provider_diagnostics import create_provider_diagnostics_blueprint
 from services.provider_diagnostics import (
     compare_public_dns,
+    compare_resource_paths,
+    compare_tls_path,
     current_mihomo_targets,
     current_xray_targets,
     lookup_public_lists,
     make_target,
     parse_source,
     probe_target,
+    read_current_xray_targets,
+    mihomo_text_targets,
+    xray_outbound_targets,
 )
+
+
+@pytest.mark.parametrize(("with_sni", "without_sni", "control", "registry", "expected"), [
+    ("tls_error", "tls_ok", "tls_ok", False, "tls_sni_filtering"),
+    ("timeout", "timeout", "tls_ok", False, "server_unresponsive"),
+    ("tls_error", "tls_ok", "timeout", False, "undetermined"),
+    ("tls_ok", "tls_ok", "tls_ok", True, "undetermined"),
+])
+def test_comparative_tls_verdicts(monkeypatch, with_sni, without_sni, control, registry, expected):
+    from services import provider_diagnostics
+
+    address = (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("198.51.100.30", 443))
+    monkeypatch.setattr(provider_diagnostics.socket, "getaddrinfo", lambda *_args, **_kwargs: [address])
+    seen = []
+
+    def attempt(item, *, server_name):
+        seen.append((item[4][0], server_name))
+        if item[4][0] == "1.1.1.1":
+            return control
+        return with_sni if server_name else without_sni
+
+    monkeypatch.setattr(provider_diagnostics, "_tls_comparison_attempt", attempt)
+    monkeypatch.setattr(provider_diagnostics, "lookup_public_lists", lambda raw: {
+        "status": "ok", "listed": registry, "registry_domain": raw["host"] if registry else "", "blocked_subnets": [],
+    })
+    result = compare_tls_path(make_target("edge.example.org", 443, tls=True, sni="front.example.org"))
+    assert result["verdict"] == expected
+    assert result["registry"]["listed"] is registry
+    assert result["target_ip"] == "198.51.100.30"
+    assert seen == [("1.1.1.1", "cloudflare-dns.com"),
+                    ("198.51.100.30", "front.example.org"), ("198.51.100.30", None),
+                    ("198.51.100.30", "front.example.org"), ("198.51.100.30", None)]
+
+
+@pytest.mark.parametrize(("second_with", "second_without", "expected", "confidence", "reason"), [
+    ("tls_error", "tls_ok", "tls_sni_filtering", "medium", "consistent_sni_pattern"),
+    ("tls_ok", "tls_error", "undetermined", "low", "different_ip_results"),
+])
+def test_comparative_tls_repeats_across_distinct_ips(monkeypatch, second_with, second_without, expected, confidence, reason):
+    from services import provider_diagnostics as diagnostics
+
+    addresses = [
+        (socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, 443))
+        for ip in ("198.51.100.30", "198.51.100.30", "198.51.100.31", "198.51.100.32")
+    ]
+    monkeypatch.setattr(diagnostics.socket, "getaddrinfo", lambda *_args, **_kwargs: addresses)
+    attempts = []
+
+    def attempt(address, *, server_name):
+        ip = address[4][0]
+        attempts.append((ip, server_name))
+        if ip == "1.1.1.1":
+            return "tls_ok"
+        if ip == "198.51.100.30":
+            return "tls_error" if server_name else "tls_ok"
+        return second_with if server_name else second_without
+
+    monkeypatch.setattr(diagnostics, "_tls_comparison_attempt", attempt)
+    monkeypatch.setattr(diagnostics, "lookup_public_lists", lambda _raw: {"status": "unavailable"})
+    result = diagnostics.compare_tls_path(make_target("edge.example.org", 443, tls=True, sni="front.example.org"))
+
+    assert result["verdict"] == expected
+    assert result["confidence"] == confidence
+    assert result["reason"] == reason
+    assert result["rounds_per_ip"] == 2
+    assert [item["ip"] for item in result["address_results"]] == ["198.51.100.30", "198.51.100.31"]
+    assert all(len(item["with_sni"]) == len(item["without_sni"]) == 2 for item in result["address_results"])
+    assert len(attempts) == 9
+    assert not any(ip == "198.51.100.32" for ip, _ in attempts)
+
+
+def test_comparative_tls_without_sni_failure_is_not_filtering(monkeypatch):
+    from services import provider_diagnostics as diagnostics
+
+    address = (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("198.51.100.30", 443))
+    monkeypatch.setattr(diagnostics.socket, "getaddrinfo", lambda *_args, **_kwargs: [address])
+    monkeypatch.setattr(diagnostics, "_tls_comparison_attempt", lambda _address, *, server_name: "tls_ok" if server_name else "tls_error")
+    monkeypatch.setattr(diagnostics, "lookup_public_lists", lambda _raw: {"status": "unavailable"})
+
+    result = diagnostics.compare_tls_path(make_target("edge.example.org", 443, tls=True, sni="front.example.org"))
+    assert result["verdict"] == "undetermined"
+    assert result["address_results"][0]["pattern"] == "tls_reachable"
+
+
+def test_comparative_tls_requires_public_dns_evidence_for_dns_verdict(monkeypatch):
+    from services import provider_diagnostics
+
+    monkeypatch.setattr(provider_diagnostics.socket, "getaddrinfo", lambda *_args, **_kwargs: (_ for _ in ()).throw(socket.gaierror("failed")))
+    monkeypatch.setattr(provider_diagnostics, "_tls_comparison_attempt", lambda *_args, **_kwargs: "tls_ok")
+    monkeypatch.setattr(provider_diagnostics, "lookup_public_lists", lambda *_args: {"status": "unavailable"})
+    monkeypatch.setattr(provider_diagnostics, "compare_public_dns", lambda *_args: {"status": "ok", "public": ["198.51.100.30"]})
+    raw = make_target("edge.example.org", 443, tls=True)
+    result = compare_tls_path(raw)
+    assert result["verdict"] == "dns_failure"
+    assert result["trials"] == {"with_sni": [], "without_sni": []}
+    monkeypatch.setattr(provider_diagnostics, "compare_public_dns", lambda *_args: {"status": "unavailable"})
+    assert compare_tls_path(raw)["verdict"] == "undetermined"
+    with pytest.raises(ValueError, match="стандартного TLS"):
+        compare_tls_path(make_target("edge.example.org", 443, tls_mode="reality"))
 
 
 def test_saved_xray_and_mihomo_targets_are_read_without_credentials(tmp_path):
@@ -64,6 +172,50 @@ proxy-providers:
     assert "secret" not in json.dumps(xray + mihomo_targets)
 
 
+def test_saved_xray_targets_include_all_files_after_first_24(tmp_path):
+    configs = tmp_path / "xray"
+    configs.mkdir()
+    (configs / "04_outbounds.json").write_text('{"outbounds":[]}', encoding="utf-8")
+    counts = {"04_outbounds.auth.quattro-cloud.ru.json": 107,
+              "04_outbounds.cdn.pecan.run-2.json": 17,
+              "04_outbounds.cdn.pecan.run.json": 17}
+    for filename, count in counts.items():
+        outbounds = [{"tag": f"{filename}-{index}", "protocol": "vless",
+                      "settings": {"vnext": [{"address": "shared.example.org", "port": 443}]}}
+                     for index in range(count)]
+        (configs / filename).write_text(json.dumps({"outbounds": outbounds}), encoding="utf-8")
+
+    result = read_current_xray_targets(str(configs))
+    assert result["has_more"] is False
+    assert len(result["targets"]) == 141
+    assert {source: sum(item["source"] == source for item in result["targets"]) for source in counts} == counts
+    assert len({item["name"] for item in result["targets"]}) == 141
+
+
+def test_saved_xray_targets_load_all_pages_across_files(tmp_path):
+    configs = tmp_path / "xray"
+    configs.mkdir()
+    for source in ("04_outbounds.a.json", "04_outbounds.b.json", "04_outbounds.c.json"):
+        outbounds = [{"tag": f"{source}-{index}", "protocol": "vless",
+                      "settings": {"vnext": [{"address": f"edge-{index}.example.org", "port": 443}]}}
+                     for index in range(90)]
+        (configs / source).write_text(json.dumps({"outbounds": outbounds}), encoding="utf-8")
+
+    first = read_current_xray_targets(str(configs))
+    second = read_current_xray_targets(str(configs), offset=first["next_offset"])
+    assert len(first["targets"]) == 200
+    assert first["has_more"] is True
+    assert first["next_offset"] == 200
+    assert len(second["targets"]) == 70
+    assert second["has_more"] is False
+    assert second["next_offset"] == 270
+    all_targets = first["targets"] + second["targets"]
+    assert {source: sum(item["source"] == source for item in all_targets)
+            for source in ("04_outbounds.a.json", "04_outbounds.b.json", "04_outbounds.c.json")} == {
+                "04_outbounds.a.json": 90, "04_outbounds.b.json": 90, "04_outbounds.c.json": 90,
+            }
+
+
 def test_manual_addresses_and_share_links_use_existing_parsers():
     plain = parse_source("example.com\n203.0.113.10:8443\n[2001:db8::1]:443")
     assert [(item["host"], item["port"]) for item in plain["targets"]] == [
@@ -76,13 +228,66 @@ def test_manual_addresses_and_share_links_use_existing_parsers():
     assert "11111111" not in json.dumps(result)
 
 
+def test_xray_targets_keep_tls_sni_and_distinct_security_modes():
+    def outbound(tag, security, sni):
+        return {
+            "tag": tag, "protocol": "vless",
+            "settings": {"vnext": [{"address": "198.51.100.10", "port": 443}]},
+            "streamSettings": {"security": security, ("realitySettings" if security == "reality" else "tlsSettings"): {"serverName": sni, "allowInsecure": tag == "TLS B"}},
+        }
+
+    targets = xray_outbound_targets({"outbounds": [
+        outbound("TLS A", "tls", "front-a.example.org"),
+        outbound("TLS B", "tls", "front-b.example.org"),
+        outbound("Reality", "reality", "front-c.example.org"),
+    ]})
+    assert [(item["tls_mode"], item["sni"], item["tls"]) for item in targets] == [
+        ("standard", "front-a.example.org", True),
+        ("standard", "front-b.example.org", True),
+        ("reality", "front-c.example.org", False),
+    ]
+    assert "publicKey" not in json.dumps(targets)
+    assert [item["verify_tls"] for item in targets] == [True, False, True]
+
+
+@pytest.mark.parametrize("without_yaml", [False, True])
+def test_mihomo_targets_keep_tls_sni_with_or_without_yaml(monkeypatch, without_yaml):
+    if without_yaml:
+        monkeypatch.setitem(sys.modules, "yaml", None)
+    text = """proxies:
+  - name: TLS
+    type: vless
+    server: 198.51.100.20
+    port: 443
+    tls: true
+    servername: front.example.org
+    skip-cert-verify: true
+  - name: Reality
+    type: vless
+    server: reality.example.org
+    port: 443
+    tls: true
+    sni: reality-front.example.org
+    reality-opts:
+      public-key: secret
+"""
+    targets = mihomo_text_targets(text)
+    assert [(item["tls_mode"], item["sni"], item["tls"]) for item in targets] == [
+        ("standard", "front.example.org", True),
+        ("reality", "reality-front.example.org", False),
+    ]
+    assert "secret" not in json.dumps(targets)
+    assert [item["verify_tls"] for item in targets] == [False, True]
+
+
 def test_subscription_fetch_is_one_level_and_does_not_echo_url(monkeypatch):
     from services import xray_subscriptions
 
     calls = []
 
-    def fetch(url):
+    def fetch(url, **kwargs):
         calls.append(url)
+        assert kwargs == {"timeout_seconds": 6, "max_request_variants": 2}
         return "example.org\n198.51.100.8:443", {}, {}
 
     monkeypatch.setattr(xray_subscriptions, "fetch_subscription_body_for_xray", fetch)
@@ -90,6 +295,292 @@ def test_subscription_fetch_is_one_level_and_does_not_echo_url(monkeypatch):
     assert calls == ["https://provider.example/sub?token=private"]
     assert [item["host"] for item in result["targets"]] == ["example.org", "198.51.100.8"]
     assert "private" not in json.dumps(result)
+
+
+def test_manual_subscription_keeps_107_servers_and_no_secret(monkeypatch):
+    from services import xray_subscriptions
+
+    links = "\n".join(
+        f"vless://11111111-1111-1111-1111-111111111111@node-{index}.example:443?security=tls#Node-{index}"
+        for index in range(107)
+    )
+    monkeypatch.setattr(
+        xray_subscriptions, "fetch_subscription_body_for_xray",
+        lambda _url, **_kwargs: (links, {}, {"warnings": []}),
+    )
+    result = parse_source("https://provider.example/subscription/private-token#My nodes")
+    assert len(result["targets"]) == 107
+    assert result["truncated"] is False
+    assert result["targets"][-1]["host"] == "node-106.example"
+    assert "private-token" not in json.dumps(result)
+
+
+def test_manual_proxy_probe_uses_cached_outbound_without_exposing_credentials(monkeypatch, tmp_path):
+    from services import xray_subscriptions
+
+    seen = []
+    monkeypatch.setattr(xray_subscriptions, "_find_xray_binary", lambda: "/usr/bin/xray")
+
+    def fake_probe(*, xray_bin, targets, probe_url, timeout_value, concurrency):
+        seen.append(targets[0]["outbound"])
+        assert xray_bin == "/usr/bin/xray"
+        assert probe_url == "https://www.gstatic.com/generate_204"
+        return {"diagnostics": {"delay_ms": 86}}
+
+    monkeypatch.setattr(xray_subscriptions, "_probe_outbounds_batch", fake_probe)
+    app = Flask(__name__)
+    app.register_blueprint(create_provider_diagnostics_blueprint(
+        xray_configs_dir=str(tmp_path), mihomo_config_file=str(tmp_path / "mihomo.yaml")
+    ))
+    client = app.test_client()
+    link = "vless://11111111-1111-1111-1111-111111111111@edge.example:443?encryption=none&security=tls#Private"
+    parsed = client.post("/api/provider-diagnostics/parse", json={"source": link})
+    assert parsed.status_code == 200
+    target = parsed.json["targets"][0]
+    assert target["proxy_ref"] and target["proxy_index"] == 0
+    assert "11111111-1111" not in parsed.get_data(as_text=True)
+    checked = client.post("/api/provider-diagnostics/proxy-probe", json={
+        "ref": target["proxy_ref"], "index": target["proxy_index"],
+    })
+    assert checked.json["result"]["status"] == "ok"
+    assert checked.json["result"]["delay_ms"] == 86
+    assert "11111111-1111" not in checked.get_data(as_text=True)
+    assert seen[0]["settings"]["vnext"][0]["users"][0]["id"] == "11111111-1111-1111-1111-111111111111"
+    stale = client.post("/api/provider-diagnostics/proxy-probe", json={"ref": "invalid", "index": 0})
+    assert stale.status_code == 400
+
+
+def test_saved_xray_target_offers_proxy_probe_without_credentials(tmp_path):
+    configs = tmp_path / "xray"
+    configs.mkdir()
+    (configs / "04_outbounds.json").write_text(json.dumps({"outbounds": [{
+        "tag": "Private", "protocol": "vless", "settings": {"vnext": [{
+            "address": "edge.example", "port": 443, "users": [{"id": "private-uuid"}],
+        }]},
+    }]}), encoding="utf-8")
+    app = Flask(__name__)
+    app.register_blueprint(create_provider_diagnostics_blueprint(
+        xray_configs_dir=str(configs), mihomo_config_file=str(tmp_path / "mihomo.yaml")
+    ))
+    response = app.test_client().get("/api/provider-diagnostics/targets?core=xray")
+    assert response.status_code == 200
+    assert response.json["targets"][0]["proxy_ref"]
+    assert response.json["targets"][0]["proxy_index"] == 0
+    assert "private-uuid" not in response.get_data(as_text=True)
+
+
+@pytest.mark.parametrize("without_yaml", [False, True])
+def test_saved_mihomo_target_offers_proxy_probe_without_credentials(monkeypatch, tmp_path, without_yaml):
+    from services import provider_diagnostics
+
+    if without_yaml:
+        monkeypatch.setitem(sys.modules, "yaml", None)
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        "proxies:\n  - name: Private\n    type: vless\n    server: edge.example\n"
+        "    port: 443\n    uuid: private-uuid\n    tls: true\n"
+        "    reality-opts:\n      public-key: private-key\n",
+        encoding="utf-8",
+    )
+    seen = []
+    monkeypatch.setattr(provider_diagnostics, "_probe_mihomo_proxy", lambda entry: seen.append(entry) or {
+        "status": "ok", "delay_ms": 42, "message": "Прокси работает.",
+    })
+    app = Flask(__name__)
+    app.register_blueprint(create_provider_diagnostics_blueprint(
+        xray_configs_dir=str(tmp_path), mihomo_config_file=str(config)
+    ))
+    client = app.test_client()
+    response = client.get("/api/provider-diagnostics/targets?core=mihomo")
+    assert response.status_code == 200
+    target = response.json["targets"][0]
+    assert target["proxy_ref"] and target["proxy_index"] == 0
+    assert target["proxy_engine"] == "mihomo"
+    assert "private-uuid" not in response.get_data(as_text=True)
+    assert "private-key" not in response.get_data(as_text=True)
+    checked = client.post("/api/provider-diagnostics/proxy-probe", json={
+        "ref": target["proxy_ref"], "index": target["proxy_index"],
+    })
+    assert checked.json["result"]["status"] == "ok"
+    assert seen[0]["_diagnostics_engine"] == "mihomo"
+    assert "private-uuid" in json.dumps(seen[0])
+
+
+def test_manual_mihomo_link_uses_mihomo_proxy_context(tmp_path):
+    app = Flask(__name__)
+    app.register_blueprint(create_provider_diagnostics_blueprint(
+        xray_configs_dir=str(tmp_path), mihomo_config_file=str(tmp_path / "config.yaml")
+    ))
+    link = "vless://11111111-1111-1111-1111-111111111111@edge.example:443?encryption=none&security=tls#Private"
+    response = app.test_client().post("/api/provider-diagnostics/parse", json={
+        "source": link, "core": "mihomo",
+    })
+    assert response.status_code == 200
+    target = response.json["targets"][0]
+    assert target["proxy_engine"] == "mihomo"
+    assert target["proxy_ref"] and target["proxy_index"] == 0
+    assert "11111111-1111" not in response.get_data(as_text=True)
+
+
+@pytest.mark.parametrize(("direct", "proxy", "listed", "expected"), [
+    ({"status": "http_response", "http_status": 200}, {"status": "http_response", "http_status": 200}, True, "both_reachable"),
+    ({"status": "tcp_error"}, {"status": "http_response", "http_status": 200}, False, "proxy_only"),
+    ({"status": "http_response", "http_status": 451, "block_page_hint": True}, {"status": "http_response", "http_status": 200}, True, "direct_block_page"),
+    ({"status": "http_response", "http_status": 403}, {"status": "http_response", "http_status": 200}, False, "different_response"),
+])
+def test_resource_comparison_separates_network_and_registry(monkeypatch, direct, proxy, listed, expected):
+    from services import provider_diagnostics as diagnostics
+
+    address = (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.8.8", 443))
+    monkeypatch.setattr(diagnostics, "_resource_addresses", lambda host, port: [address])
+    monkeypatch.setattr(diagnostics, "_resource_http_request", lambda _parts, *, address: direct)
+    monkeypatch.setattr(diagnostics, "_resource_via_proxy", lambda _entry, _parts, address: proxy)
+    monkeypatch.setattr(diagnostics, "lookup_public_lists", lambda _raw: {
+        "status": "ok", "listed": listed, "registry_domain": "kino.watch" if listed else "",
+    })
+    ref = diagnostics.register_proxy_context([{"protocol": "freedom", "settings": {"secret": "private"}}], 1)
+    result = compare_resource_paths({"url": "https://kino.watch/path?token=private", "ref": ref, "index": 0})
+    assert result["network"]["verdict"] == expected
+    assert result["registry"]["listed"] is listed
+    assert "private" not in json.dumps(result)
+
+
+def test_resource_comparison_rejects_local_and_mixed_dns(monkeypatch):
+    from services import provider_diagnostics as diagnostics
+
+    for url in ("http://127.0.0.1/", "http://localhost/", "http://user:pass@kino.watch/"):
+        with pytest.raises(ValueError):
+            diagnostics._resource_url(url)
+    assert diagnostics._resource_url("https://kino.watch/страница")[3] == "/%D1%81%D1%82%D1%80%D0%B0%D0%BD%D0%B8%D1%86%D0%B0"
+    monkeypatch.setattr(diagnostics.socket, "getaddrinfo", lambda *_args, **_kwargs: [
+        (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.8.8", 443)),
+        (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 443)),
+    ])
+    with pytest.raises(ValueError, match="локальный"):
+        diagnostics._resource_addresses("kino.watch", 443)
+
+
+def test_resource_comparison_uses_public_dns_after_local_failure(monkeypatch):
+    from services import provider_diagnostics as diagnostics
+
+    monkeypatch.setattr(diagnostics, "_resource_addresses", lambda _host, _port: [])
+    monkeypatch.setattr(diagnostics, "compare_public_dns", lambda _raw: {
+        "status": "ok", "public": ["8.8.8.8"],
+    })
+    seen = []
+
+    def request(_parts, *, address):
+        seen.append(address[4][0])
+        return {"status": "http_response", "http_status": 200, "connected_ip": address[4][0]}
+
+    def via_proxy(_entry, _parts, address):
+        seen.append(address[4][0])
+        return {"status": "http_response", "http_status": 200, "connected_ip": address[4][0]}
+
+    monkeypatch.setattr(diagnostics, "_resource_http_request", request)
+    monkeypatch.setattr(diagnostics, "_resource_via_proxy", via_proxy)
+    monkeypatch.setattr(diagnostics, "lookup_public_lists", lambda _raw: {"status": "unavailable"})
+    ref = diagnostics.register_proxy_context([{"protocol": "freedom"}], 1)
+    result = diagnostics.compare_resource_paths({"url": "https://kino.watch/", "ref": ref, "index": 0})
+    assert seen == ["8.8.8.8", "8.8.8.8"]
+    assert result["network"]["verdict"] == "local_dns_failure"
+    assert result["direct"]["dns_source"] == "public_fallback"
+
+
+def test_resource_comparison_route_returns_separate_verdicts_without_secrets(monkeypatch, tmp_path):
+    from services import provider_diagnostics as diagnostics
+
+    monkeypatch.setattr(diagnostics, "_resource_addresses", lambda _host, port: [
+        (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.8.8", port)),
+    ])
+    monkeypatch.setattr(diagnostics, "_resource_http_request", lambda _parts, *, address: {
+        "status": "http_response", "http_status": 200, "connected_ip": address[4][0],
+    })
+    monkeypatch.setattr(diagnostics, "_resource_via_proxy", lambda _entry, _parts, address: {
+        "status": "http_response", "http_status": 200, "connected_ip": address[4][0],
+    })
+    monkeypatch.setattr(diagnostics, "lookup_public_lists", lambda _raw: {
+        "status": "ok", "listed": True, "registry_domain": "kino.watch",
+    })
+    app = Flask(__name__)
+    app.register_blueprint(create_provider_diagnostics_blueprint(
+        xray_configs_dir=str(tmp_path), mihomo_config_file=str(tmp_path / "config.yaml")
+    ))
+    ref = diagnostics.register_proxy_context([{"protocol": "vless", "password": "private-secret"}], 1)
+    response = app.test_client().post("/api/provider-diagnostics/resource-compare", json={
+        "url": "https://kino.watch/?token=private-token", "ref": ref, "index": 0,
+    })
+    assert response.status_code == 200
+    assert response.json["result"]["network"]["verdict"] == "both_reachable"
+    assert response.json["result"]["registry"]["listed"] is True
+    assert "private-secret" not in response.get_data(as_text=True)
+    assert "private-token" not in response.get_data(as_text=True)
+
+
+def test_resource_http_probe_does_not_follow_redirect_and_uses_pinned_proxy_ip():
+    from services import provider_diagnostics as diagnostics
+
+    seen = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            seen.append((self.path, self.headers.get("Host")))
+            self.send_response(451 if self.path == "/blocked" else 200)
+            if self.path == "/blocked":
+                self.send_header("Location", "https://other.example/path")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        def log_message(self, *_args):
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    worker = threading.Thread(target=server.serve_forever, daemon=True)
+    worker.start()
+    try:
+        address = (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", server.server_port))
+        direct = diagnostics._resource_http_request(("http", "kino.watch", server.server_port, "/blocked"), address=address)
+        proxy = diagnostics._resource_http_request(("http", "kino.watch", 80, "/"), address=(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.8.8", 80)), proxy_port=server.server_port)
+    finally:
+        server.shutdown()
+        worker.join(timeout=2)
+        server.server_close()
+    assert direct["http_status"] == 451 and direct["block_page_hint"] is True
+    assert direct["redirect_host"] == "other.example"
+    assert proxy["http_status"] == 200
+    assert seen == [("/blocked", f"kino.watch:{server.server_port}"), ("http://8.8.8.8:80/", "kino.watch")]
+
+
+def test_mihomo_json_subscription_works_without_yaml(monkeypatch, tmp_path):
+    monkeypatch.setitem(sys.modules, "yaml", None)
+    app = Flask(__name__)
+    app.register_blueprint(create_provider_diagnostics_blueprint(
+        xray_configs_dir=str(tmp_path), mihomo_config_file=str(tmp_path / "config.yaml")
+    ))
+    source = json.dumps({"proxies": [{
+        "name": "Private", "type": "vless", "server": "edge.example", "port": 443,
+        "uuid": "private-uuid",
+    }]})
+    response = app.test_client().post("/api/provider-diagnostics/parse", json={
+        "source": source, "core": "mihomo",
+    })
+    assert response.status_code == 200
+    assert response.json["targets"][0]["proxy_engine"] == "mihomo"
+    assert response.json["targets"][0]["proxy_ref"]
+    assert "private-uuid" not in response.get_data(as_text=True)
+
+
+def test_failed_subscription_is_not_reported_as_provider_server(monkeypatch):
+    from services import xray_subscriptions
+
+    def fail(_url, **_kwargs):
+        raise TimeoutError("private-token")
+
+    monkeypatch.setattr(xray_subscriptions, "fetch_subscription_body_for_xray", fail)
+    result = parse_source("https://provider.example/subscription/private-token")
+    assert result["targets"] == []
+    assert "private-token" not in json.dumps(result)
+    assert "Не удалось получить" in result["warnings"][0]
 
 
 def test_amnezia_key_uses_existing_importer_without_returning_key(monkeypatch):
@@ -127,6 +618,129 @@ def test_tcp_probe_succeeds_and_udp_is_explicitly_unverified():
     udp = probe_target(make_target("127.0.0.1", 51820, network="udp"))
     assert udp["status"] == "udp_unknown"
     assert "блокиров" not in udp["message"]
+
+
+def test_standard_tls_probe_uses_configured_sni_and_reports_socket_path(monkeypatch):
+    from services import provider_diagnostics
+
+    seen = []
+
+    class FakeSocket:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def settimeout(self, _timeout):
+            pass
+
+        def connect(self, address):
+            seen.append(address)
+
+        def getsockname(self):
+            return ("192.0.2.10", 45678)
+
+    class FakeTls:
+        def wrap_socket(self, _socket, *, server_hostname):
+            seen.append(server_hostname)
+            return FakeSocket()
+
+    monkeypatch.setattr(provider_diagnostics.socket, "getaddrinfo", lambda *_args, **_kwargs: [
+        (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("198.51.100.30", 443)),
+    ])
+    monkeypatch.setattr(provider_diagnostics.socket, "socket", lambda *_args: FakeSocket())
+    monkeypatch.setattr("ssl.create_default_context", lambda: FakeTls())
+    result = probe_target(make_target("edge.example.org", 443, tls=True, sni="front.example.org"))
+    assert seen == [("198.51.100.30", 443), "front.example.org"]
+    assert (result["connected_ip"], result["source_ip"], result["status"]) == ("198.51.100.30", "192.0.2.10", "reachable")
+    assert result["sni_sent"] is True
+
+    seen.clear()
+    ip_result = probe_target(make_target("198.51.100.30", 443, tls=True))
+    assert ip_result["sni_sent"] is False
+
+
+def test_reality_probe_reports_tcp_only(monkeypatch):
+    from services import provider_diagnostics
+
+    class FakeSocket:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def settimeout(self, _timeout):
+            pass
+
+        def connect(self, _address):
+            pass
+
+        def getsockname(self):
+            return ("192.0.2.10", 45678)
+
+    monkeypatch.setattr(provider_diagnostics.socket, "getaddrinfo", lambda *_args, **_kwargs: [
+        (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("198.51.100.30", 443)),
+    ])
+    monkeypatch.setattr(provider_diagnostics.socket, "socket", lambda *_args: FakeSocket())
+    result = probe_target(make_target("edge.example.org", 443, tls_mode="reality", sni="front.example.org"))
+    assert result["status"] == "reachable"
+    assert result["tls"] is False
+    assert "REALITY" in result["message"]
+
+
+def test_certificate_failure_is_separate_from_handshake_failure(monkeypatch):
+    from services import provider_diagnostics
+
+    class FakeSocket:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def settimeout(self, _timeout):
+            pass
+
+        def connect(self, _address):
+            pass
+
+        def getsockname(self):
+            return ("192.0.2.10", 45678)
+
+    class FakeTls:
+        def __init__(self):
+            self.check_hostname = True
+            self.verify_mode = ssl.CERT_REQUIRED
+
+        def wrap_socket(self, _socket, *, server_hostname):
+            assert server_hostname == "front.example.org"
+            if self.verify_mode == ssl.CERT_REQUIRED:
+                raise ssl.SSLCertVerificationError("bad certificate")
+            return FakeSocket()
+
+    contexts = []
+
+    def context():
+        instance = FakeTls()
+        contexts.append(instance)
+        return instance
+
+    monkeypatch.setattr(provider_diagnostics.socket, "getaddrinfo", lambda *_args, **_kwargs: [
+        (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("198.51.100.30", 443)),
+    ])
+    monkeypatch.setattr(provider_diagnostics.socket, "socket", lambda *_args: FakeSocket())
+    monkeypatch.setattr(provider_diagnostics.ssl, "create_default_context", context)
+    raw = make_target("edge.example.org", 443, tls=True, sni="front.example.org")
+    failed = probe_target(raw)
+    assert failed["status"] == "tls_cert_error"
+    assert "не указывает на блокировку" in failed["message"]
+    raw["verify_tls"] = False
+    reachable = probe_target(raw)
+    assert reachable["status"] == "reachable"
+    assert contexts[-1].check_hostname is False
+    assert contexts[-1].verify_mode == ssl.CERT_NONE
 
 
 def test_public_dns_comparison_is_opt_in_and_rejects_local_names(monkeypatch):
@@ -190,6 +804,11 @@ def test_invalid_target_is_rejected(host, port):
         make_target(host, port)
 
 
+def test_invalid_tls_mode_is_rejected():
+    with pytest.raises(ValueError, match="режим TLS"):
+        make_target("example.com", 443, tls_mode=["standard"])
+
+
 def test_api_exposes_saved_targets_and_checks_input(tmp_path):
     configs = tmp_path / "configs"
     configs.mkdir()
@@ -200,6 +819,7 @@ def test_api_exposes_saved_targets_and_checks_input(tmp_path):
     ))
     client = app.test_client()
     assert client.get("/api/provider-diagnostics/targets?core=xray").json["targets"] == []
+    assert client.get("/api/provider-diagnostics/targets?core=xray&offset=bad").status_code == 400
     assert client.post("/api/provider-diagnostics/parse", json={"source": "example.com"}).json["targets"][0]["host"] == "example.com"
     assert client.post("/api/provider-diagnostics/probe", json={"host": "bad host", "port": 443}).status_code == 400
     assert client.post("/api/provider-diagnostics/dns-compare", json={"host": "router.local"}).status_code == 400

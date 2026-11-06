@@ -10,6 +10,7 @@ import shutil
 import struct
 import subprocess
 import tempfile
+import sys
 from pathlib import Path
 from typing import Any, Callable
 
@@ -30,6 +31,14 @@ Run = Callable[[list, float], "tuple[int, str, str]"]
 
 _ELF_MACHINE_AARCH64 = 183
 _ELF_MACHINE_MIPS = 8
+
+
+def _is_macho_header(header: bytes) -> bool:
+    return header[:4] in {
+        b"\xfe\xed\xfa\xce", b"\xce\xfa\xed\xfe",
+        b"\xfe\xed\xfa\xcf", b"\xcf\xfa\xed\xfe",
+        b"\xca\xfe\xba\xbe", b"\xbe\xba\xfe\xca",
+    }
 
 
 def default_bin_path() -> str:
@@ -139,7 +148,7 @@ def detect_kind(bin_path: str) -> str:
             head = f.read(160)
     except OSError:
         return "other"
-    if head[:4] == b"\x7fELF":
+    if head[:4] == b"\x7fELF" or (sys.platform == "darwin" and _is_macho_header(head)):
         return "native"
     first_line = head.split(b"\n", 1)[0]
     if first_line.startswith(b"#!") and b"node" in first_line:
