@@ -420,6 +420,56 @@ def test_installer_only_reports_success_after_service_health_check():
     assert 'INSTALL_FINISHED=1' in text
 
 
+def test_profile_menu_has_no_default_and_asks_again_on_enter():
+    body = _function("choose_panel_profile")
+
+    assert "Выбор [1-4]: " in body
+    assert "Выбор [1]" not in body
+    assert "''|1)" not in body
+    assert "1) PROFILE_CHOICE=\"full\"; break ;;" in body
+    # A closed input must end the install, not spin in the loop without a default.
+    assert 'IFS= read -r PROFILE_ANSWER < /dev/tty || fail_install "Ввод ответа прерван."' in body
+    # Without a terminal nobody can be asked: the unattended default stays Full.
+    assert '[ -n "$PROFILE_CHOICE" ] || PROFILE_CHOICE="full"' in body
+
+
+def test_profile_menu_enter_repeats_the_question_in_a_terminal():
+    script_bin = _require_gnu_script()
+
+    script = "\n".join(
+        (
+            "set -eu",
+            "exec 3>&1",
+            f"SRC_DIR={shlex.quote(str(ROOT / 'xkeen-ui'))}",
+            "UI_DIR=/tmp/xkeen-profile-menu-enter-missing",
+            "PYTHON_BIN=python3",
+            'UI_DIM=""',
+            'UI_RESET=""',
+            'UI_BOLD=""',
+            'ui_input_begin() { :; }',
+            'ui_input_end() { :; }',
+            'ui_line() { :; }',
+            'fail_install() { printf "fail:%s\\n" "$1"; exit 1; }',
+            _function("choose_panel_profile"),
+            "choose_panel_profile",
+            'printf "chosen:%s\\n" "$PROFILE_CHOICE"',
+        )
+    )
+    proc = subprocess.run(
+        [script_bin, "-qec", f"sh -c {shlex.quote(script)}", "/dev/null"],
+        input="\n1\n",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    output = proc.stdout.replace("\r\n", "\n")
+    assert proc.returncode == 0, proc.stderr
+    assert output.count("Выбор [1-4]: ") == 2
+    assert "Введите число от 1 до 4." in output
+    assert "chosen:full" in output
+
+
 def _server_diagnostics_question(
     *, menu_shown: str, profile: str, answers: list[str], can_ask: bool = True
 ) -> subprocess.CompletedProcess:

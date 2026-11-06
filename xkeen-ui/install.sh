@@ -586,10 +586,10 @@ PY
     printf '      3) Mihomo Minimal\n' >&3 2>/dev/null || true
     printf '      4) Custom\n' >&3 2>/dev/null || true
     while :; do
-      printf '      Выбор [1]: ' >&3 2>/dev/null || true
-      IFS= read -r PROFILE_ANSWER < /dev/tty || PROFILE_ANSWER=""
+      printf '      Выбор [1-4]: ' >&3 2>/dev/null || true
+      IFS= read -r PROFILE_ANSWER < /dev/tty || fail_install "Ввод ответа прерван."
       case "$PROFILE_ANSWER" in
-        ''|1) PROFILE_CHOICE="full"; break ;;
+        1) PROFILE_CHOICE="full"; break ;;
         2) PROFILE_CHOICE="xray-minimal"; break ;;
         3) PROFILE_CHOICE="mihomo-minimal"; break ;;
         4) PROFILE_CHOICE="custom"; break ;;
