@@ -94,8 +94,40 @@ def _dependency_changes(previous: Mapping[str, Any] | None, current: Mapping[str
     }
 
 
-def _has_dependency_changes(changes: Mapping[str, list[str]]) -> bool:
-    return any(changes.get(key) for key in changes)
+def _module_changes(payload: Mapping[str, Any], installed: set[str], known: Mapping[str, Any]) -> list[dict[str, str]]:
+    """Installed modules whose own version the new panel raises, in its catalog order.
+
+    ``version`` of a catalog entry is the release's and rises for every module;
+    only ``module_version`` tells a changed module. A catalog without it (a
+    release built before it was published) lists none rather than all.
+    """
+
+    from services.module_package_contract import compare_semver
+
+    have = payload.get("installed_module_versions")
+    have = have if isinstance(have, Mapping) else {}
+    changes: list[dict[str, str]] = []
+    for target in payload.get("target_modules", []):
+        if not isinstance(target, Mapping):
+            continue
+        module_id, new, old = target.get("id"), target.get("module_version"), None
+        if isinstance(module_id, str):
+            old = have.get(module_id)
+        if module_id not in installed or not isinstance(new, str) or not isinstance(old, str):
+            continue
+        try:
+            if compare_semver(new, old) <= 0:
+                continue
+        except Exception:
+            continue
+        definition = known.get(module_id)
+        changes.append({
+            "module_id": module_id,
+            "name": definition.name if definition is not None else module_id,
+            "from": old,
+            "to": new,
+        })
+    return changes
 
 
 class NotificationCenter:
@@ -358,12 +390,20 @@ class NotificationCenter:
         if payload.get("requires_installer") is not True:
             module_updates = []
 
+        from services.module_registry import MODULE_DEFINITIONS
+
+        known = {definition.id: definition for definition in MODULE_DEFINITIONS}
+        installed = set(_safe_module_list(payload.get("installed_module_ids")))
         target_version = str(payload.get("target_version") or "")
         source_version = str(payload.get("source_version") or "")
         records: list[dict[str, Any]] = list(module_updates)
         target_panel = payload.get("target_panel")
         if target_version:
             panel_size = target_panel.get("size") if isinstance(target_panel, Mapping) else None
+            module_changes = _module_changes(payload, installed, known)
+            message = "Обновление панели проверит совместимость и сохранит выбранный профиль."
+            if module_changes:
+                message += " Вместе с ней обновятся модули:"
             records.append(
                 {
                     "id": _record_id("panel-update", None, target_version, channel),
@@ -372,28 +412,26 @@ class NotificationCenter:
                     "version": target_version,
                     "source_version": source_version,
                     "title": "Доступна новая версия панели",
-                    "message": "Обновление панели проверит совместимость и сохранит выбранный профиль.",
+                    "message": message,
                     "size": panel_size if isinstance(panel_size, int) and panel_size > 0 else None,
                     "requires_restart": True,
                     "requires_installer": payload.get("requires_installer") is True,
+                    "module_changes": module_changes,
                 }
             )
-
-        from services.module_package_contract import compare_semver
-        from services.module_registry import MODULE_DEFINITIONS
 
         # Without the installed release catalog nothing tells a new module
         # from one the panel always had: keep only the panel note.
         if payload.get("baseline_error"):
             return records
 
-        known = {definition.id: definition for definition in MODULE_DEFINITIONS}
-        installed = set(_safe_module_list(payload.get("installed_module_ids")))
         previous = {
-            str(item.get("id")): item
+            str(item.get("id"))
             for item in payload.get("current_modules", [])
             if isinstance(item, Mapping) and isinstance(item.get("id"), str)
         }
+        # A module the panel already had is told of inside the panel note: it
+        # comes with the panel and is not updated on its own.
         for target in payload.get("target_modules", []):
             if not isinstance(target, Mapping):
                 continue
@@ -401,51 +439,28 @@ class NotificationCenter:
             version = target.get("version")
             if not isinstance(module_id, str) or not isinstance(version, str):
                 continue
-            baseline = previous.get(module_id)
-            changes = _dependency_changes(baseline, target)
-            is_new = baseline is None
-            version_changed = False
-            if baseline is not None and isinstance(baseline.get("version"), str):
-                try:
-                    version_changed = compare_semver(version, str(baseline["version"])) > 0
-                except Exception:
-                    version_changed = version != str(baseline.get("version"))
-            if is_new and module_id in installed:
-                continue
-            if is_new:
-                kind = "module-new"
-            elif module_id in installed and (version_changed or _has_dependency_changes(changes)):
-                kind = "module-update"
-            else:
+            if module_id in previous or module_id in installed:
                 continue
             definition = known.get(module_id)
             module_name = definition.name if definition is not None else "Новый официальный модуль"
             records.append(
                 {
-                    "id": _record_id(kind, module_id, version, channel),
-                    "kind": kind,
+                    "id": _record_id("module-new", module_id, version, channel),
+                    "kind": "module-new",
                     "channel": channel,
                     "module_id": module_id,
                     "version": version,
                     "source_version": source_version,
-                    "title": (
-                        f"Новый модуль: {module_name}"
-                        if kind == "module-new"
-                        else f"Изменён модуль: {module_name}"
-                    ),
+                    "title": f"Новый модуль: {module_name}",
                     "message": (
-                        (
-                            "Этот модуль станет доступен после обновления панели; "
-                            "текущая панель ещё не знает его состав."
-                            if definition is None
-                            else "Этот модуль станет доступен после обновления панели."
-                        )
-                        if kind == "module-new"
-                        else "Изменения войдут в обновление панели; отдельное обновление модуля не запускается."
+                        "Этот модуль станет доступен после обновления панели; "
+                        "текущая панель ещё не знает его состав."
+                        if definition is None
+                        else "Этот модуль станет доступен после обновления панели."
                     ),
                     "size": target.get("size") if isinstance(target.get("size"), int) and target["size"] > 0 else None,
                     "requires_restart": target.get("requires_restart") is True,
-                    "dependency_changes": changes,
+                    "dependency_changes": _dependency_changes(None, target),
                     "requires_panel_update": True,
                 }
             )

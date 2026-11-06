@@ -36,6 +36,8 @@ _SEMVER_RE = re.compile(
     r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
 )
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+# A module's own version, as in module-versions.json: no prerelease part.
+_MODULE_OWN_VERSION_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 _HOOK_NAMES = {"install.sh", "uninstall.sh", "install", "uninstall"}
 
 
@@ -288,6 +290,15 @@ def validate_catalog_entry(
     if signing_key_id not in trusted_keys:
         _fail("catalog_signing_key_unknown", "catalog signing key is not trusted", signing_key_id=signing_key_id)
 
+    # The module's own version (``version`` is the release's). Optional: the
+    # catalogs of releases built before it was published have none.
+    own_version: dict[str, str] = {}
+    if "module_version" in entry:
+        module_version = entry["module_version"]
+        if not isinstance(module_version, str) or not _MODULE_OWN_VERSION_RE.fullmatch(module_version):
+            _fail("catalog_module_version_invalid", "module_version must be MAJOR.MINOR.PATCH", module_id=module_id)
+        own_version["module_version"] = module_version
+
     return {
         "id": module_id,
         "version": version,
@@ -303,6 +314,7 @@ def validate_catalog_entry(
         "size": size,
         "sha256": sha256,
         "signing_key_id": signing_key_id,
+        **own_version,
     }
 
 

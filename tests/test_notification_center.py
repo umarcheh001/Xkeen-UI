@@ -67,15 +67,15 @@ def test_notification_center_deduplicates_and_persists_local_state(tmp_path: Pat
 
     first = center.check(force_refresh=True)
     assert lifecycle.calls == [True]
-    assert first["unread_count"] == 3
+    assert first["unread_count"] == 2
     kinds = {record["kind"] for record in first["records"]}
-    assert kinds == {"panel-update", "module-update", "module-new"}
+    assert kinds == {"panel-update", "module-new"}
 
-    record_id = next(record["id"] for record in first["records"] if record["kind"] == "module-update")
+    record_id = next(record["id"] for record in first["records"] if record["kind"] == "module-new")
     center.set_record_state(record_id, "dismiss")
     second = center.check(force_refresh=False)
     assert lifecycle.calls == [True, False]
-    assert second["unread_count"] == 2
+    assert second["unread_count"] == 1
     assert record_id not in {record["id"] for record in second["records"]}
 
     raw = json.loads((tmp_path / "module-notifications.json").read_text(encoding="utf-8"))
@@ -117,14 +117,14 @@ def test_notification_center_channel_state_isolated(tmp_path: Path):
 
     result = center.check()
     assert result["channel"] == "prerelease"
-    assert result["unread_count"] == 3
+    assert result["unread_count"] == 2
 
 
 def test_records_of_an_older_panel_vanish_and_poll_right_after_update(tmp_path: Path):
     version = ["2.10.0"]
     lifecycle = FakeLifecycle(_payload())
     center = NotificationCenter(lifecycle, state_dir=tmp_path, now=lambda: 2_000.0, panel_version=lambda: version[0])
-    assert center.check(background=True)["unread_count"] == 3
+    assert center.check(background=True)["unread_count"] == 2
 
     # The panel was updated to the advertised release and restarted ten
     # minutes later, long before the daily background gate opens again.
@@ -154,7 +154,7 @@ def test_unchanged_panel_version_keeps_the_daily_gate(tmp_path: Path):
     center.check(background=True)
     result = center.check(background=True)
     assert lifecycle.calls == [False]
-    assert result["unread_count"] == 3
+    assert result["unread_count"] == 2
 
 
 def test_baseline_failure_does_not_announce_modules_as_new(tmp_path: Path):
@@ -282,7 +282,7 @@ def test_manual_check_during_a_background_poll_returns_its_result(tmp_path: Path
     worker.join(5)
     # The manual check waited for the running poll instead of showing the
     # state from before it, and did not ask the catalog a second time.
-    assert result["unread_count"] == 3
+    assert result["unread_count"] == 2
     assert lifecycle.calls == [False]
 
 
@@ -440,3 +440,92 @@ def test_module_update_record_follows_what_the_router_has_installed(tmp_path: Pa
     panel.path("module-installed.json").write_text(json.dumps(record), encoding="utf-8")
 
     assert center.snapshot()["records"] == []
+
+
+# --- Модули в обновлении панели -------------------------------------------------
+
+
+def _target(module_id, module_version=None):
+    entry = {"id": module_id, "version": "3.0.3-beta.22", "size": 1000, "requires": ["core"], "conflicts": [],
+             "requires_restart": True}
+    if module_id == "core":
+        entry["requires"] = []
+    if module_version is not None:
+        entry["module_version"] = module_version
+    return entry
+
+
+def _panel_with_modules(target_modules, installed_versions):
+    payload = _payload("prerelease")
+    installed = ["core", *installed_versions]
+    payload.update(
+        source_version="3.0.3-beta.21",
+        target_version="3.0.3-beta.22",
+        installed_module_ids=installed,
+        installed_module_versions=dict(installed_versions),
+        current_modules=[_target(module_id) | {"version": "3.0.3-beta.21"} for module_id in installed],
+        target_modules=target_modules,
+    )
+    return payload
+
+
+def test_a_new_panel_lists_only_the_modules_whose_own_version_rose(tmp_path: Path):
+    # As on 10.1 on 06.11.2026: a new beta changed one module, not all nine.
+    payload = _panel_with_modules(
+        [
+            _target("core"),
+            _target("engine.xray", "1.0.3"),
+            _target("tool.advanced-diagnostics", "1.0.5"),
+            _target("integration.happ", "1.0.1"),
+        ],
+        {"engine.xray": "1.0.3", "tool.advanced-diagnostics": "1.0.5", "integration.happ": "1.0.0"},
+    )
+    center = NotificationCenter(FakeLifecycle(payload), state_dir=tmp_path, now=lambda: 2_000.0)
+
+    records = center.check(force_refresh=True)["records"]
+
+    assert [record["kind"] for record in records] == ["panel-update"]
+    panel = records[0]
+    assert panel["module_changes"] == [
+        {"module_id": "integration.happ", "name": "Расшифровка подписок", "from": "1.0.0", "to": "1.0.1"},
+    ]
+    assert panel["message"].endswith("Вместе с ней обновятся модули:")
+    assert "3.0.3-beta.22" not in json.dumps(panel["module_changes"])
+
+
+def test_a_module_updated_on_its_own_past_the_new_panel_is_not_listed(tmp_path: Path):
+    payload = _panel_with_modules([_target("core"), _target("engine.xray", "1.0.3")], {"engine.xray": "1.0.4"})
+    center = NotificationCenter(FakeLifecycle(payload), state_dir=tmp_path, now=lambda: 2_000.0)
+
+    panel = center.check(force_refresh=True)["records"][0]
+
+    assert panel["module_changes"] == []
+    assert "Вместе с ней" not in panel["message"]
+
+
+def test_a_catalog_without_module_versions_lists_no_module(tmp_path: Path):
+    # A release built before module versions entered the catalog: saying
+    # nothing is better than calling every module changed.
+    payload = _panel_with_modules(
+        [_target("core"), _target("engine.xray"), _target("tool.advanced-diagnostics")],
+        {"engine.xray": "1.0.3", "tool.advanced-diagnostics": "1.0.5"},
+    )
+    center = NotificationCenter(FakeLifecycle(payload), state_dir=tmp_path, now=lambda: 2_000.0)
+
+    records = center.check(force_refresh=True)["records"]
+
+    assert [record["kind"] for record in records] == ["panel-update"]
+    assert records[0]["module_changes"] == []
+
+
+def test_notification_catalog_tells_the_installed_module_versions(tmp_path: Path):
+    from services.module_versions import read_installed_module_versions
+    from tests.support.module_lifecycle import make_service
+    from tests.support.module_tx import make_panel, make_release
+
+    panel = make_panel(tmp_path)
+    service, _catalog = make_service(panel, make_release())
+
+    payload = service.notification_catalog(force_refresh=True)
+
+    assert payload["installed_module_versions"] == read_installed_module_versions(panel.state, panel.root)

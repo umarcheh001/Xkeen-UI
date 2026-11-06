@@ -168,6 +168,23 @@ def test_catalog_document_accepts_matching_prerelease_identity() -> None:
     assert normalized["channel"] == normalized["modules"][0]["channel"] == "prerelease"
 
 
+def test_catalog_entry_keeps_the_module_own_version() -> None:
+    document = _catalog_document(modules=[_catalog(size=1, sha256="a" * 64, module_version="1.4.2")])
+
+    normalized = validate_catalog_document(document, release_version="1.2.3", signing_key_id="release-2026")
+
+    assert normalized["modules"][0]["module_version"] == "1.4.2"
+    # A catalog of an older release has no such field and stays valid.
+    plain = validate_catalog_document(_catalog_document(), release_version="1.2.3", signing_key_id="release-2026")
+    assert "module_version" not in plain["modules"][0]
+
+
+@pytest.mark.parametrize("value", ("1.2", "1.0.0-beta.1", 3, None, ""))
+def test_catalog_entry_rejects_a_malformed_module_version(value: object) -> None:
+    with pytest.raises(ModulePackageContractError, match="catalog_module_version_invalid"):
+        validate_catalog_entry(_catalog(size=1, sha256="a" * 64, module_version=value))
+
+
 @pytest.mark.parametrize(
     ("panel", "code"),
     [

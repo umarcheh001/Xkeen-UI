@@ -518,6 +518,29 @@ def test_prerelease_bundle_marks_catalog_and_module_manifest(tmp_path: Path) -> 
     assert manifest["channel"] == "prerelease"
 
 
+def test_catalog_carries_each_module_own_version(tmp_path: Path) -> None:
+    # The notification center compares a module's own version with the one the
+    # router has; the release version alone would call every module changed.
+    builder = _load_builder()
+    package = tmp_path / "xkeen-ui"
+    for relative in ("install.sh", "services/module_registry.py", "static/js/pages/terminal.lazy.entry.js"):
+        path = package / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("payload\n", encoding="utf-8")
+    (tmp_path / "module-versions.json").write_text(json.dumps({"tool.terminal": "1.4.2"}), encoding="utf-8")
+
+    bundle = builder.build_release(builder.ReleaseInputs(
+        root=tmp_path, output_dir=tmp_path / "dist", version="1.2.3",
+        source_date_epoch=1_700_000_000, source_commit="a" * 40,
+    ))
+    catalog = json.loads(bundle.catalog_path.read_text(encoding="utf-8"))
+    entries = {entry["id"]: entry for entry in catalog["modules"]}
+    assert entries["tool.terminal"]["module_version"] == "1.4.2"
+    assert entries["tool.terminal"]["version"] == "1.2.3"
+    # core is the panel: it has no version of its own.
+    assert "module_version" not in entries["core"]
+
+
 def test_release_builder_supports_plan_level_function_signature(tmp_path: Path) -> None:
     builder = _load_builder()
     package = tmp_path / "xkeen-ui"

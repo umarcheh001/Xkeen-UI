@@ -397,7 +397,11 @@ def test_old_panel_reads_new_catalog(old_code: OldCode, new_catalog: NewRelease,
         platform_architecture=ARCHITECTURE,
         core_version=OLD_VERSION,
     ).get_release_catalog(NEW_VERSION)
-    assert snapshot["catalog"] == json.loads(json.dumps(current.catalog))
+    # Except a module's own version, which the old reader drops: it predates it.
+    current_catalog = json.loads(json.dumps(current.catalog))
+    for entry in current_catalog["modules"]:
+        assert entry.pop("module_version", None) or entry["id"] == "core"
+    assert snapshot["catalog"] == current_catalog
     assert [entry["id"] for entry in snapshot["catalog"]["modules"]] == [
         entry["id"] for entry in new_catalog.catalog["modules"]
     ]

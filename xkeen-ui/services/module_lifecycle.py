@@ -880,6 +880,9 @@ class ModuleLifecycleService:
                 ],
                 "target_panel": target_panel,
                 "baseline_error": baseline_error,
+                # What the router has, modules updated on their own included:
+                # a new panel lists only the modules whose own version rises.
+                "installed_module_versions": read_installed_module_versions(self.state_dir, self.panel_root),
                 # Updates of single modules inside the installed release.
                 **self._module_update_check(
                     client, source_version, force_refresh=bool(force_refresh),

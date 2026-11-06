@@ -770,14 +770,39 @@ def build_module_archive(
     return _built_asset(path)
 
 
-def _catalog_entry(manifest: Mapping[str, Any], asset: BuiltAsset) -> dict[str, Any]:
-    return {
+def _catalog_entry(
+    manifest: Mapping[str, Any], asset: BuiltAsset, module_versions: Mapping[str, str] | None = None
+) -> dict[str, Any]:
+    entry = {
         **manifest,
         "archive": asset.path.name,
         "size": asset.size,
         "sha256": asset.sha256,
         "signing_key_id": "release-2026",
     }
+    # The module's own version beside the release's: the notification center
+    # tells which modules a new panel really changes. core is the panel itself.
+    if module_versions is not None and manifest["id"] != "core":
+        entry["module_version"] = str(module_versions.get(str(manifest["id"]), BASE_MODULE_VERSION))
+    return entry
+
+
+BASE_MODULE_VERSION = "1.0.0"
+
+
+def _module_versions(root: Path) -> dict[str, str]:
+    try:
+        data = json.loads(module_versions_bytes(root).decode("utf-8"))
+    except (UnicodeDecodeError, ValueError) as error:
+        raise ReleaseBuildError(f"{MODULE_VERSIONS_FILENAME} is not valid JSON: {error}") from error
+    if not isinstance(data, dict) or not all(
+        isinstance(value, str) and _MODULE_VERSION_RE.fullmatch(value) for value in data.values()
+    ):
+        raise ReleaseBuildError(f"{MODULE_VERSIONS_FILENAME} must map module ids to MAJOR.MINOR.PATCH")
+    return {str(key): value for key, value in data.items()}
+
+
+_MODULE_VERSION_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 
 
 def _panel_catalog_entry(panel: BuiltAsset, inputs: ReleaseInputs) -> dict[str, Any]:
@@ -905,6 +930,7 @@ def build_release(
 
     panel = build_panel_archive(root, output_dir, version=inputs.version, epoch=inputs.source_date_epoch)
     ownership = build_module_ownership(root)
+    module_versions = _module_versions(root)
     modules: list[BuiltAsset] = []
     catalog_entries: list[dict[str, Any]] = []
     for module_id in sorted(module_id for module_id, paths in ownership.items() if paths):
@@ -929,7 +955,7 @@ def build_release(
             channel=inputs.channel,
         )
         modules.append(asset)
-        catalog_entries.append(_catalog_entry(manifest, asset))
+        catalog_entries.append(_catalog_entry(manifest, asset, module_versions))
 
     catalog_path = output_dir / "catalog.json"
     _write_json(

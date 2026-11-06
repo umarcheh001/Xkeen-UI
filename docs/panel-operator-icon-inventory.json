@@ -3544,7 +3544,7 @@
           "accessible_label": "Хранилище"
         },
         {
-          "location": "xkeen-ui/static/js/features/notification_center.js:L387",
+          "location": "xkeen-ui/static/js/features/notification_center.js:L398",
           "control_type": "runtime-action",
           "accessible_label": "Хранилище"
         },

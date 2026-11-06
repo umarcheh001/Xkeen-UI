@@ -83,6 +83,35 @@ test('notification center is core-owned, text-safe, and does not fetch archives'
   await expect(trigger.locator('.xk-notification-trigger__count')).toHaveText('0');
 });
 
+test('panel note lists the modules it changes with their own versions', async ({ page }) => {
+  await mockLifecycle(page);
+  const panel = {
+    ...record('e'.repeat(64), 'panel-update', 'Доступна новая версия панели',
+      'Обновление панели проверит совместимость и сохранит выбранный профиль. Вместе с ней обновятся модули:'),
+    version: '3.0.3-beta.22',
+    dependency_changes: {},
+    module_changes: [
+      { module_id: 'engine.mihomo', name: 'Mihomo', from: '1.0.2', to: '1.0.3' },
+      { module_id: 'integration.happ', name: '<b>Расшифровка подписок</b>', from: '1.0.0', to: '1.0.1' },
+    ],
+  };
+  await page.route('**/api/notifications**', (route) => route.fulfill({ json: {
+    ok: true, channel: 'prerelease', records: [panel], unread_count: 1,
+    status: { last_success_at: 1_791_700_000, freshness: 'fresh' },
+  } }));
+
+  await page.goto('/modules');
+  await page.locator('.xk-notification-trigger').click();
+  const card = page.locator('.xk-notification-record');
+  await expect(card).toHaveCount(1);
+  const items = card.locator('.xk-notification-modules li');
+  await expect(items).toHaveText(['Mihomo: 1.0.2 → 1.0.3', '<b>Расшифровка подписок</b>: 1.0.0 → 1.0.1']);
+  await expect(card.locator('b')).toHaveCount(0);
+  // The list sits between the message and the version line.
+  const order = await card.evaluate((node) => [...node.children].map((child) => child.tagName));
+  expect(order.slice(0, 4)).toEqual(['STRONG', 'P', 'UL', 'SMALL']);
+});
+
 // Where the bell lives: always in sight, never inside a menu or past the
 // screen edge, and its window is drawn above the page rather than in the header.
 function mockCenter(page) {

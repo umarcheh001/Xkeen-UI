@@ -167,6 +167,16 @@ body .xk-notification-popover .xk-notification-record p,
 body .xk-notification-popover .xk-notification-record small { margin: 0; color: var(--op-muted, #94a3b8); }
 body .xk-notification-popover .xk-notification-record p { font-size: 12px; line-height: 1.4; }
 body .xk-notification-popover .xk-notification-record small { font-size: 11px; line-height: 1.35; }
+/* The modules a new panel brings with a version of their own. */
+body .xk-notification-popover .xk-notification-modules {
+  display: grid;
+  gap: 2px;
+  margin: 0 0 2px;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--op-text, inherit);
+}
 
 /* The record's buttons split its width into equal parts, whatever their labels. */
 body .xk-notification-popover .xk-notification-record__actions {

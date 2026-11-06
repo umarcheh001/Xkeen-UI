@@ -312,6 +312,17 @@ export function initNotificationCenter() {
         );
       }
       card.append(title, message);
+      const changes = Array.isArray(record.module_changes) ? record.module_changes : [];
+      if (changes.length) {
+        const modules = document.createElement('ul');
+        modules.className = 'xk-notification-modules';
+        changes.forEach((change) => {
+          const item = document.createElement('li');
+          item.textContent = `${text(change?.name || change?.module_id)}: ${text(change?.from)} → ${text(change?.to)}`;
+          modules.append(item);
+        });
+        card.append(modules);
+      }
       if (meta.textContent) card.append(meta);
       card.append(actions);
       list.append(card);
