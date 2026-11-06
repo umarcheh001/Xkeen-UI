@@ -1,7 +1,7 @@
 {
   "engine.mihomo": "1.0.3",
   "engine.xray": "1.0.4",
-  "integration.happ": "1.0.0",
+  "integration.happ": "1.0.1",
   "tool.advanced-diagnostics": "1.0.5",
   "tool.backups": "1.0.1",
   "tool.editor": "1.0.2",
