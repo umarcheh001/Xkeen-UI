@@ -471,7 +471,7 @@ def test_profile_menu_enter_repeats_the_question_in_a_terminal():
 
 
 def _server_diagnostics_question(
-    *, menu_shown: str, profile: str, answers: list[str], can_ask: bool = True
+    *, menu_shown: str, profile: str, answers: list[str], can_ask: bool = True, preset: str = ""
 ) -> subprocess.CompletedProcess:
     answers_file = Path("server-diagnostics-answers.txt")
     answers_file.write_bytes("".join(f"{item}\n" for item in answers).encode("utf-8"))
@@ -483,7 +483,7 @@ def _server_diagnostics_question(
             'UI_RESET=""',
             f"PROFILE_MENU_SHOWN={menu_shown}",
             f"PROFILE_CHOICE={profile}",
-            "XKEEN_UI_INSTALL_OPTIONAL=",
+            f"XKEEN_UI_INSTALL_OPTIONAL={shlex.quote(preset)}",
             f"ANSWERS={shlex.quote(str(answers_file))}",
             "ui_can_ask() { " + ("return 0" if can_ask else "return 1") + "; }",
             'ui_info() { printf "info:%s\\n" "$1"; }',
@@ -541,6 +541,33 @@ def test_server_diagnostics_question_is_only_for_full_chosen_in_the_menu(menu_sh
     assert proc.returncode == 0, proc.stderr
     assert "ask:" not in proc.stdout
     assert proc.stdout.rstrip().endswith("optional:")
+
+
+@pytest.mark.parametrize("profile", ["custom", "xray-minimal", "mihomo-minimal"])
+def test_optional_module_from_the_environment_is_refused_early_outside_full(profile):
+    proc = _server_diagnostics_question(
+        menu_shown="0", profile=profile, answers=[], preset="tool.server-diagnostics"
+    )
+
+    assert proc.returncode == 1
+    assert "fail:XKEEN_UI_INSTALL_OPTIONAL действует только с профилем Full" in proc.stdout
+    assert "XKEEN_UI_INSTALL_MODULES" in proc.stdout
+
+
+def test_unknown_optional_module_from_the_environment_is_refused():
+    proc = _server_diagnostics_question(menu_shown="0", profile="full", answers=[], preset="tool.nothing")
+
+    assert proc.returncode == 1
+    assert "fail:Неизвестный дополнительный модуль: tool.nothing" in proc.stdout
+
+
+def test_optional_module_from_the_environment_is_kept_with_full():
+    proc = _server_diagnostics_question(
+        menu_shown="0", profile="full", answers=[], preset="tool.server-diagnostics"
+    )
+
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.rstrip().endswith("optional:tool.server-diagnostics")
 
 
 def test_installer_passes_the_choice_to_the_profile_helper():

@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from .ownership_overrides import OVERRIDES_FILENAME, overrides_document, parse_overrides
-from .plan import PHYSICAL_REQUEST_KEY, Plan
+from .plan import PHYSICAL_REQUEST_KEY, PRESETS, Plan
 
 
 # Same order as ``MODULE_IDS`` of the profile installer; a test keeps them equal.
@@ -166,17 +166,19 @@ def _state_file_updates(panel_root: Path, plan: Plan) -> dict[str, bytes]:
         recorded = (*MODULE_ORDER, *sorted(selected - set(MODULE_ORDER)))
         modules_state = _load(Path(panel_root) / "modules.json")
         modules_state = dict(modules_state) if isinstance(modules_state, dict) else {"schema_version": 1}
-        request = modules_state.get(PHYSICAL_REQUEST_KEY)
-        if (
-            plan.scope == "profile"
-            and profile == "custom"
-            and isinstance(request, dict)
-            and request.get("profile") in ("full", "legacy-full")
-            and selected & OPTIONAL_MODULES
-        ):
-            # Full with a chosen optional module is laid as its exact set; the
-            # owner asked for Full, and Full is the name that stays.
-            profile = str(request["profile"])
+        if profile == "custom" and selected & OPTIONAL_MODULES:
+            # Full with a chosen optional module is laid as its exact set (the
+            # preset of a release leaves it out); Full is the name that stays,
+            # for a transition the owner asked for and for an update alike.
+            request = modules_state.get(PHYSICAL_REQUEST_KEY)
+            installed_profile = _load(Path(panel_root) / "install-profile.json")
+            asked = (
+                request.get("profile") if plan.scope == "profile" and isinstance(request, dict)
+                else installed_profile.get("profile") if isinstance(installed_profile, dict)
+                else None
+            )
+            if asked in ("full", "legacy-full") and selected - OPTIONAL_MODULES == set(PRESETS[asked]):
+                profile = str(asked)
         if plan.scope == "profile" or not isinstance(modules_state.get("profile"), str):
             # A transition applies the requested profile. An update keeps the
             # owner's settings: the profile label and the editor variant there

@@ -558,7 +558,10 @@ def _physical_profile(raw, source: str):
     ):
         return None
     ordered = [module for module in MODULE_IDS if module in modules]
-    if profile != "custom" and set(PRESETS[profile]) != set(ordered) - OPTIONAL_PROFILE_MODULES:
+    # Only Full takes optional modules on top (with_optional); any other preset
+    # with one is the owner's own set and is installed as it stands.
+    optional = OPTIONAL_PROFILE_MODULES if profile in ("full", "legacy-full") else frozenset()
+    if profile != "custom" and set(PRESETS[profile]) != set(ordered) - optional:
         # The record names a preset but something else is installed: what is
         # installed wins, a preset must not quietly add or take modules away.
         profile = "custom"

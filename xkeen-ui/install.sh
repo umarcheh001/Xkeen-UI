@@ -647,6 +647,17 @@ ui_can_ask() {
 # Без терминала и при обновлении вопроса нет — модуль не ставится.
 choose_server_diagnostics_option() {
   XKEEN_UI_INSTALL_OPTIONAL="${XKEEN_UI_INSTALL_OPTIONAL:-}"
+  # Значение из окружения проверяется до начала работ, а не на шаге установки.
+  if [ -n "$XKEEN_UI_INSTALL_OPTIONAL" ]; then
+    case "$PROFILE_CHOICE" in
+      full|legacy-full) ;;
+      *) fail_install "XKEEN_UI_INSTALL_OPTIONAL действует только с профилем Full. Для профиля Custom добавьте модуль в XKEEN_UI_INSTALL_MODULES." ;;
+    esac
+    case "$XKEEN_UI_INSTALL_OPTIONAL" in
+      tool.server-diagnostics) ;;
+      *) fail_install "Неизвестный дополнительный модуль: $XKEEN_UI_INSTALL_OPTIONAL" ;;
+    esac
+  fi
   if [ "${PROFILE_MENU_SHOWN:-0}" = "1" ] && [ "$PROFILE_CHOICE" = "full" ] \
       && [ -z "$XKEEN_UI_INSTALL_OPTIONAL" ] && ui_can_ask; then
     printf '  %bДополнение%b   Диагностика серверов\n' "$UI_BOLD" "$UI_RESET" >&3 2>/dev/null || true

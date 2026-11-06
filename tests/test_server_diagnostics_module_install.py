@@ -215,6 +215,26 @@ def test_manager_install_of_optional_module_marks_choice_and_keeps_full_name(tmp
     assert module_set_name(enabled) == "full"
 
 
+def test_only_full_keeps_its_name_with_the_optional_module():
+    helper = _installer()
+    record = lambda profile, modules: helper._physical_profile(  # noqa: E731
+        {"profile": profile, "module_ids": modules, "editor_variant": "light"}, "installed"
+    )
+    minimal = ["core", "engine.mihomo", "tool.editor"]
+    # A minimal preset with the module is no preset: its update must keep the module.
+    assert record("mihomo-minimal", [*minimal, MODULE_ID])["profile"] == "custom"
+    assert record("mihomo-minimal", minimal)["profile"] == "mihomo-minimal"
+    assert record("full", [*FULL, MODULE_ID])["profile"] == "full"
+
+
+def test_panel_update_of_full_with_module_keeps_the_full_name_on_disk(tmp_path):
+    panel = _full_panel(tmp_path, WITH_MODULE, chosen=True)
+    plan = _update_plan(tmp_path, panel)
+    updates = install_state.state_file_updates(panel.root, plan)
+    assert json.loads(updates["install-profile.json"])["profile"] == "full"
+    assert json.loads(updates["modules.json"])["profile"] == "full"
+
+
 def test_registry_reads_installer_choice(tmp_path):
     helper = _installer()
     dest = tmp_path / "installed"
