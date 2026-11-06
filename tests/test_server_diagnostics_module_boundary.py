@@ -87,6 +87,19 @@ def test_module_without_engines_registers_nothing(tmp_path):
     assert _api_status(ids, tmp_path / "api") == 404
 
 
+def _bundle_keys(html: str) -> set[str]:
+    return {bundle["key"] for bundle in page_config(html)["frontendModules"]["bundles"]}
+
+
+def test_window_bundle_loads_only_with_an_engine(tmp_path):
+    # Without Xray and Mihomo there is nothing to check: the window is not loaded.
+    assert "server-diagnostics-panel" not in _bundle_keys(render_panel(["core", MODULE_ID], tmp_path / "none"))
+    assert "server-diagnostics-panel" in _bundle_keys(
+        render_panel(["core", "tool.editor", "engine.mihomo", MODULE_ID], tmp_path / "mihomo")
+    )
+    assert "server-diagnostics-panel" not in _bundle_keys(render_panel(FULL_MODULE_IDS, tmp_path / "without"))
+
+
 def test_module_api_answers_with_module(tmp_path):
     assert _api_status(WITH, tmp_path) != 404
 

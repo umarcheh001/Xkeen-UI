@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 670,
-      "size_bytes": 9130999,
+      "size_bytes": 9131346,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -397,7 +397,7 @@
       "system_requirements": [],
       "removable": true,
       "unit_count": 15,
-      "size_bytes": 249254,
+      "size_bytes": 249910,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 1,
@@ -1126,7 +1126,7 @@
       "module_id": "core",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/pages.py",
-      "size_bytes": 27311,
+      "size_bytes": 27658,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -29107,7 +29107,7 @@
       "module_id": "tool.server-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_server_diagnostics_module_boundary.py",
-      "size_bytes": 5860,
+      "size_bytes": 6516,
       "depends_on": [
         "core"
       ],

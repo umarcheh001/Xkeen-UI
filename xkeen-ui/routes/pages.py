@@ -134,6 +134,8 @@ PANEL_NAVIGATION: tuple[PanelNavigationEntry, ...] = (
 )
 
 
+_BUNDLES_NEEDING_AN_ENGINE = frozenset({"server-diagnostics-panel"})
+
 PANEL_FRONTEND_MODULES: tuple[PanelFrontendModule, ...] = (
     PanelFrontendModule(
         "panel-core",
@@ -282,11 +284,15 @@ def build_panel_frontend_modules(
         if str(capability).strip()
     )
     capability_set = set(capabilities)
+    has_engine = bool(active & {"engine.xray", "engine.mihomo"})
     bundles = [
         entry.as_payload()
         for entry in PANEL_FRONTEND_MODULES
         if set(entry.owners) <= active
         and set(entry.capabilities) <= capability_set
+        # The server diagnostics checks the servers of an engine: without one
+        # there are no buttons, and the window is not loaded.
+        and (entry.key not in _BUNDLES_NEEDING_AN_ENGINE or has_engine)
     ]
     return {
         "version": 1,
