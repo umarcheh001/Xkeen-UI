@@ -210,6 +210,34 @@ def test_pre_push_ignores_branches_deletions_and_module_tags(tmp_path, monkeypat
     assert checker.check_pushed_tags(tmp_path, lines) == 0
 
 
+def test_ownership_of_an_older_tree_does_not_leak_into_the_current_one():
+    # The check builds the ownership of the previous panel tag first. Its classifier
+    # imports that tree's services; the current classifier must get its own, not the
+    # cached older registry (which lacks the names a newer installer imports).
+    import sys
+    from pathlib import Path
+
+    import pytest
+
+    root = Path(__file__).resolve().parents[1]
+    older = "dcd2d179"  # before tool.server-diagnostics: its registry has no CHOSEN_KEY
+    if subprocess.run(["git", "cat-file", "-e", older + "^{commit}"], cwd=root).returncode != 0:
+        pytest.skip("the older commit is not in this checkout")
+    script = (
+        "import sys; sys.path.insert(0, sys.argv[1]);"
+        "from pathlib import Path;"
+        "from scripts import check_module_versions_for_release as c;"
+        "from scripts.check_module_release import _module_ownership;"
+        "c._old_ownership(Path(sys.argv[1]), sys.argv[2]);"
+        "print(sorted(_module_ownership(Path(sys.argv[1])))[-1])"
+    )
+    proc = subprocess.run(
+        [sys.executable, "-c", script, str(root), older], capture_output=True, text=True, encoding="utf-8"
+    )
+    assert proc.returncode == 0, proc.stderr[-2000:]
+    assert proc.stdout.strip() == "tool.terminal"
+
+
 def test_pre_push_hook_runs_both_checks_on_one_input():
     from pathlib import Path
 

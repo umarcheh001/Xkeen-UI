@@ -9,6 +9,7 @@ updater is introduced.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import ast
 import functools
 import gzip
@@ -269,10 +270,41 @@ def _stage7_module(root: Path | None = None) -> Any:
         raise ReleaseBuildError("cannot load Stage 7 ownership classifier")
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
+    with _own_panel_packages(stage7_path.parents[1]):
+        spec.loader.exec_module(module)
     if stage7_path == _STAGE7_PATH:
         _STAGE7_MODULE = module
     return module
+
+
+# Top-level packages of the panel the classifier imports at load time.
+_PANEL_PACKAGES = ("services", "utils", "core", "routes", "middleware")
+
+
+@contextlib.contextmanager
+def _own_panel_packages(package_root: Path):
+    """Load a classifier against the panel packages of its own tree.
+
+    The version check builds the ownership of an older tree first; without this
+    the newer classifier would get that tree's cached `services.*` and miss the
+    names added since.
+    """
+
+    def ours(name: str) -> bool:
+        return name.split(".", 1)[0] in _PANEL_PACKAGES
+
+    saved = {name: loaded for name, loaded in sys.modules.items() if ours(name)}
+    for name in saved:
+        del sys.modules[name]
+    root = str(package_root)
+    sys.path.insert(0, root)
+    try:
+        yield
+    finally:
+        sys.path.remove(root)
+        for name in [name for name in sys.modules if ours(name)]:
+            del sys.modules[name]
+        sys.modules.update(saved)
 
 
 def _is_ignored_package_path(relative: str) -> bool:
