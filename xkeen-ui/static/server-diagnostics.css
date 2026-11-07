@@ -53,9 +53,9 @@ body.panel-page .xk-provider-check-row-state { font-size: 12px; font-weight: 650
 body.panel-page .xk-provider-check-row-state small { display: block; margin-top: 3px; font-weight: 400; }
 body.panel-page .xk-provider-check-row-state.is-reachable { color: var(--op-success-strong); }
 body.panel-page .xk-provider-check-row-state.is-timeout, body.panel-page .xk-provider-check-row-state.is-udp_unknown { color: var(--op-warning-strong); }
-body.panel-page .xk-provider-check-row-state.is-tls_error, body.panel-page .xk-provider-check-row-state.is-tls_cert_error { color: var(--op-warning-strong); }
+body.panel-page .xk-provider-check-row-state.is-tls_error, body.panel-page .xk-provider-check-row-state.is-tls_timeout, body.panel-page .xk-provider-check-row-state.is-tls_cert_error { color: var(--op-warning-strong); }
 body.panel-page .xk-provider-check-row-state.is-dns_error, body.panel-page .xk-provider-check-row-state.is-unreachable { color: var(--op-danger); }
-body.panel-page .xk-provider-check-row-state.is-probe_error, body.panel-page .xk-provider-check-row-state.is-busy { color: var(--op-muted); }
+body.panel-page .xk-provider-check-row-state.is-probe_error, body.panel-page .xk-provider-check-row-state.is-route_unverified, body.panel-page .xk-provider-check-row-state.is-busy { color: var(--op-muted); }
 body.panel-page .xk-provider-check-details { grid-column: 1 / -1; min-width: 0; padding: 4px 0 0 34px; border-top: 1px solid var(--op-border); font-size: 12px; }
 body.panel-page .xk-provider-check-details[hidden] { display: none; }
 body.panel-page .xk-provider-check-details summary { width: fit-content; color: var(--op-accent); cursor: pointer; font-weight: 600; }
@@ -277,7 +277,7 @@ body.panel-page .xk-provider-check-row-state::before {
   border-radius: 50%; background: var(--op-muted); vertical-align: 1px;
 }
 body.panel-page .xk-provider-check-row-state.is-reachable::before { background: var(--op-success); }
-body.panel-page .xk-provider-check-row-state:is(.is-timeout, .is-tls_error, .is-tls_cert_error, .is-udp_unknown)::before { background: var(--op-warning); }
+body.panel-page .xk-provider-check-row-state:is(.is-timeout, .is-tls_error, .is-tls_timeout, .is-tls_cert_error, .is-udp_unknown)::before { background: var(--op-warning); }
 body.panel-page .xk-provider-check-row-state:is(.is-refused, .is-unreachable, .is-dns_error)::before { background: var(--op-danger); }
 body.panel-page .xk-provider-check-latency { display: inline-block; margin-left: 7px; font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; color: var(--op-muted); }
 body.panel-page .xk-provider-check-row-state small { max-width: 230px; margin-top: 4px; line-height: 1.3; }
@@ -302,7 +302,10 @@ body.panel-page .xk-provider-check-resource-result > strong { font-size: 12px; c
 body.panel-page .xk-provider-check-resource-name { font-weight: 650; color: var(--op-muted); }
 body.panel-page .xk-provider-check-resource-result > strong.is-network-direct_block_page,
 body.panel-page .xk-provider-check-resource-result > strong.is-registry-listed { color: var(--op-danger); }
-body.panel-page .xk-provider-check-resource-result > strong.is-network-proxy_only { color: var(--op-warning-strong); }
+body.panel-page .xk-provider-check-resource-result > strong.is-network-proxy_only,
+body.panel-page .xk-provider-check-resource-result > strong.is-network-both_redirects,
+body.panel-page .xk-provider-check-resource-result > strong.is-network-proxy_redirect_only,
+body.panel-page .xk-provider-check-resource-result > strong.is-network-direct_unverified { color: var(--op-warning-strong); }
 body.panel-page .xk-provider-check-resource-result > strong.is-network-both_reachable { color: var(--op-success-strong); }
 body.panel-page .xk-provider-check-resource-result dl {
   display: grid; grid-template-columns: 85px minmax(0, 1fr); gap: 4px 9px; margin: 2px 0 0;

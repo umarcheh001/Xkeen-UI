@@ -3,6 +3,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import socket
 import ssl
+import subprocess
 import sys
 import threading
 
@@ -26,20 +27,29 @@ from services.provider_diagnostics import (
 )
 
 
+@pytest.fixture
+def direct_route(monkeypatch):
+    from services import provider_diagnostics
+
+    monkeypatch.setattr(provider_diagnostics, "_xkeen_direct_mark", lambda: 0)
+
+
 @pytest.mark.parametrize(("with_sni", "without_sni", "control", "registry", "expected"), [
     ("tls_error", "tls_ok", "tls_ok", False, "tls_sni_filtering"),
+    ("tls_timeout", "tls_ok", "tls_ok", False, "tls_sni_filtering"),
     ("timeout", "timeout", "tls_ok", False, "server_unresponsive"),
+    ("tcp_timeout", "tcp_timeout", "tls_ok", False, "server_unresponsive"),
     ("tls_error", "tls_ok", "timeout", False, "undetermined"),
     ("tls_ok", "tls_ok", "tls_ok", True, "undetermined"),
 ])
-def test_comparative_tls_verdicts(monkeypatch, with_sni, without_sni, control, registry, expected):
+def test_comparative_tls_verdicts(monkeypatch, direct_route, with_sni, without_sni, control, registry, expected):
     from services import provider_diagnostics
 
     address = (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("198.51.100.30", 443))
     monkeypatch.setattr(provider_diagnostics.socket, "getaddrinfo", lambda *_args, **_kwargs: [address])
     seen = []
 
-    def attempt(item, *, server_name):
+    def attempt(item, *, server_name, bypass_mark=0):
         seen.append((item[4][0], server_name))
         if item[4][0] == "1.1.1.1":
             return control
@@ -53,16 +63,17 @@ def test_comparative_tls_verdicts(monkeypatch, with_sni, without_sni, control, r
     assert result["verdict"] == expected
     assert result["registry"]["listed"] is registry
     assert result["target_ip"] == "198.51.100.30"
-    assert seen == [("1.1.1.1", "cloudflare-dns.com"),
-                    ("198.51.100.30", "front.example.org"), ("198.51.100.30", None),
-                    ("198.51.100.30", "front.example.org"), ("198.51.100.30", None)]
+    expected_rounds = 1 if with_sni == "tls_ok" else 2
+    assert seen == [("1.1.1.1", "cloudflare-dns.com"), *(
+        [("198.51.100.30", "front.example.org"), ("198.51.100.30", None)] * expected_rounds
+    )]
 
 
 @pytest.mark.parametrize(("second_with", "second_without", "expected", "confidence", "reason"), [
     ("tls_error", "tls_ok", "tls_sni_filtering", "medium", "consistent_sni_pattern"),
     ("tls_ok", "tls_error", "undetermined", "low", "different_ip_results"),
 ])
-def test_comparative_tls_repeats_across_distinct_ips(monkeypatch, second_with, second_without, expected, confidence, reason):
+def test_comparative_tls_repeats_across_distinct_ips(monkeypatch, direct_route, second_with, second_without, expected, confidence, reason):
     from services import provider_diagnostics as diagnostics
 
     addresses = [
@@ -72,7 +83,7 @@ def test_comparative_tls_repeats_across_distinct_ips(monkeypatch, second_with, s
     monkeypatch.setattr(diagnostics.socket, "getaddrinfo", lambda *_args, **_kwargs: addresses)
     attempts = []
 
-    def attempt(address, *, server_name):
+    def attempt(address, *, server_name, bypass_mark=0):
         ip = address[4][0]
         attempts.append((ip, server_name))
         if ip == "1.1.1.1":
@@ -90,17 +101,19 @@ def test_comparative_tls_repeats_across_distinct_ips(monkeypatch, second_with, s
     assert result["reason"] == reason
     assert result["rounds_per_ip"] == 2
     assert [item["ip"] for item in result["address_results"]] == ["198.51.100.30", "198.51.100.31"]
-    assert all(len(item["with_sni"]) == len(item["without_sni"]) == 2 for item in result["address_results"])
-    assert len(attempts) == 9
+    assert len(result["address_results"][0]["with_sni"]) == len(result["address_results"][0]["without_sni"]) == 2
+    expected_second_rounds = 2 if second_with != "tls_ok" else 1
+    assert len(result["address_results"][1]["with_sni"]) == len(result["address_results"][1]["without_sni"]) == expected_second_rounds
+    assert len(attempts) == 1 + 4 + 2 * expected_second_rounds
     assert not any(ip == "198.51.100.32" for ip, _ in attempts)
 
 
-def test_comparative_tls_without_sni_failure_is_not_filtering(monkeypatch):
+def test_comparative_tls_without_sni_failure_is_not_filtering(monkeypatch, direct_route):
     from services import provider_diagnostics as diagnostics
 
     address = (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("198.51.100.30", 443))
     monkeypatch.setattr(diagnostics.socket, "getaddrinfo", lambda *_args, **_kwargs: [address])
-    monkeypatch.setattr(diagnostics, "_tls_comparison_attempt", lambda _address, *, server_name: "tls_ok" if server_name else "tls_error")
+    monkeypatch.setattr(diagnostics, "_tls_comparison_attempt", lambda _address, *, server_name, bypass_mark=0: "tls_ok" if server_name else "tls_error")
     monkeypatch.setattr(diagnostics, "lookup_public_lists", lambda _raw: {"status": "unavailable"})
 
     result = diagnostics.compare_tls_path(make_target("edge.example.org", 443, tls=True, sni="front.example.org"))
@@ -108,7 +121,39 @@ def test_comparative_tls_without_sni_failure_is_not_filtering(monkeypatch):
     assert result["address_results"][0]["pattern"] == "tls_reachable"
 
 
-def test_comparative_tls_requires_public_dns_evidence_for_dns_verdict(monkeypatch):
+def test_comparative_tls_stops_after_healthy_first_ip(monkeypatch, direct_route):
+    from services import provider_diagnostics as diagnostics
+
+    addresses = [
+        (socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, 443))
+        for ip in ("198.51.100.30", "198.51.100.31")
+    ]
+    monkeypatch.setattr(diagnostics.socket, "getaddrinfo", lambda *_args, **_kwargs: addresses)
+    attempts = []
+
+    def attempt(address, *, server_name, bypass_mark=0):
+        attempts.append((address[4][0], server_name, bypass_mark))
+        return "tls_ok"
+
+    monkeypatch.setattr(diagnostics, "_tls_comparison_attempt", attempt)
+    monkeypatch.setattr(diagnostics, "lookup_public_lists", lambda _raw: {"status": "skipped"})
+    result = diagnostics.compare_tls_path(make_target("edge.example.org", 443, tls=True, sni="front.example.org"))
+    assert result["attempts_total"] == 3
+    assert result["rounds_per_ip"] == 1
+    assert [item["ip"] for item in result["address_results"]] == ["198.51.100.30"]
+    assert all(ip != "198.51.100.31" for ip, _, _ in attempts)
+
+
+def test_comparative_tls_refuses_unverified_route(monkeypatch):
+    from services import provider_diagnostics as diagnostics
+
+    monkeypatch.setattr(diagnostics, "_xkeen_direct_mark", lambda: None)
+    monkeypatch.setattr(diagnostics, "_tls_comparison_attempt", lambda *_args, **_kwargs: pytest.fail("must not connect"))
+    result = diagnostics.compare_tls_path(make_target("edge.example.org", 443, tls=True, sni="front.example.org"))
+    assert result["status"] == "route_unverified"
+
+
+def test_comparative_tls_requires_public_dns_evidence_for_dns_verdict(monkeypatch, direct_route):
     from services import provider_diagnostics
 
     monkeypatch.setattr(provider_diagnostics.socket, "getaddrinfo", lambda *_args, **_kwargs: (_ for _ in ()).throw(socket.gaierror("failed")))
@@ -424,6 +469,8 @@ def test_manual_mihomo_link_uses_mihomo_proxy_context(tmp_path):
 
 @pytest.mark.parametrize(("direct", "proxy", "listed", "expected"), [
     ({"status": "http_response", "http_status": 200}, {"status": "http_response", "http_status": 200}, True, "both_reachable"),
+    ({"status": "http_response", "http_status": 301}, {"status": "http_response", "http_status": 301}, True, "both_redirects"),
+    ({"status": "tls_timeout"}, {"status": "http_response", "http_status": 301}, True, "proxy_redirect_only"),
     ({"status": "tcp_error"}, {"status": "http_response", "http_status": 200}, False, "proxy_only"),
     ({"status": "http_response", "http_status": 451, "block_page_hint": True}, {"status": "http_response", "http_status": 200}, True, "direct_block_page"),
     ({"status": "http_response", "http_status": 403}, {"status": "http_response", "http_status": 200}, False, "different_response"),
@@ -433,7 +480,8 @@ def test_resource_comparison_separates_network_and_registry(monkeypatch, direct,
 
     address = (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.8.8", 443))
     monkeypatch.setattr(diagnostics, "_resource_addresses", lambda host, port: [address])
-    monkeypatch.setattr(diagnostics, "_resource_http_request", lambda _parts, *, address: direct)
+    monkeypatch.setattr(diagnostics, "_xkeen_direct_mark", lambda: 0)
+    monkeypatch.setattr(diagnostics, "_resource_http_request", lambda _parts, *, address, bypass_mark=0: direct)
     monkeypatch.setattr(diagnostics, "_resource_via_proxy", lambda _entry, _parts, address: proxy)
     monkeypatch.setattr(diagnostics, "lookup_public_lists", lambda _raw: {
         "status": "ok", "listed": listed, "registry_domain": "kino.watch" if listed else "",
@@ -469,7 +517,7 @@ def test_resource_comparison_uses_public_dns_after_local_failure(monkeypatch):
     })
     seen = []
 
-    def request(_parts, *, address):
+    def request(_parts, *, address, bypass_mark=0):
         seen.append(address[4][0])
         return {"status": "http_response", "http_status": 200, "connected_ip": address[4][0]}
 
@@ -478,6 +526,7 @@ def test_resource_comparison_uses_public_dns_after_local_failure(monkeypatch):
         return {"status": "http_response", "http_status": 200, "connected_ip": address[4][0]}
 
     monkeypatch.setattr(diagnostics, "_resource_http_request", request)
+    monkeypatch.setattr(diagnostics, "_xkeen_direct_mark", lambda: 0)
     monkeypatch.setattr(diagnostics, "_resource_via_proxy", via_proxy)
     monkeypatch.setattr(diagnostics, "lookup_public_lists", lambda _raw: {"status": "unavailable"})
     ref = diagnostics.register_proxy_context([{"protocol": "freedom"}], 1)
@@ -487,13 +536,115 @@ def test_resource_comparison_uses_public_dns_after_local_failure(monkeypatch):
     assert result["direct"]["dns_source"] == "public_fallback"
 
 
+@pytest.mark.parametrize(("output_rules", "chain_rules", "expected"), [
+    ("-P OUTPUT ACCEPT\n", "", 0),
+    ("-A OUTPUT -p tcp -m conntrack ! --ctstate INVALID -m comment --comment xkeen_rule -j xkeen_out\n", "-A xkeen_out -m mark --mark 0xff -m comment --comment xkeen_rule -j RETURN\n-A xkeen_out -p tcp -m comment --comment xkeen_rule -j REDIRECT --to-ports 5000\n", 0xff),
+    ("-A OUTPUT -p tcp -j xkeen_out\n", "-A xkeen_out -p tcp -j REDIRECT --to-ports 5000\n", None),
+    ("-A OUTPUT -p tcp -j xkeen_out\n", "-A xkeen_out -p tcp -j REDIRECT --to-ports 5000\n-A xkeen_out -m mark --mark 0xff -j RETURN\n", None),
+])
+def test_resource_direct_mark_requires_early_firewall_exclusion(monkeypatch, output_rules, chain_rules, expected):
+    from services import provider_diagnostics as diagnostics
+
+    monkeypatch.setattr(diagnostics.sys, "platform", "linux")
+
+    def run(args, **_kwargs):
+        return subprocess.CompletedProcess(args, 0, output_rules if args[-1] == "OUTPUT" else chain_rules, "")
+
+    monkeypatch.setattr(diagnostics.subprocess, "run", run)
+    assert diagnostics._xkeen_direct_mark() == expected
+
+
+def test_resource_direct_probe_refuses_to_fall_back_when_socket_mark_fails(monkeypatch):
+    from services import provider_diagnostics as diagnostics
+
+    class UnmarkedSocket:
+        def settimeout(self, _value):
+            pass
+
+        def setsockopt(self, *_args):
+            raise PermissionError("SO_MARK denied")
+
+        def connect(self, _endpoint):
+            pytest.fail("unmarked socket must not connect")
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(diagnostics.socket, "socket", lambda *_args: UnmarkedSocket())
+    address = (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.8.8", 443))
+    result = diagnostics._resource_http_request(("https", "kino.watch", 443, "/"), address=address, bypass_mark=0xff)
+    assert result["status"] == "route_unverified"
+
+
+def test_resource_direct_probe_marks_socket_before_connect(monkeypatch):
+    from services import provider_diagnostics as diagnostics
+
+    events = []
+
+    class MarkedSocket:
+        def settimeout(self, _value):
+            pass
+
+        def setsockopt(self, level, option, value):
+            events.append(("mark", level, option, value))
+
+        def connect(self, endpoint):
+            events.append(("connect", endpoint))
+            raise ConnectionRefusedError
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(diagnostics.socket, "socket", lambda *_args: MarkedSocket())
+    address = (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.8.8", 443))
+    result = diagnostics._resource_http_request(("https", "kino.watch", 443, "/"), address=address, bypass_mark=0xff)
+    assert result["status"] == "tcp_error"
+    assert events == [
+        ("mark", socket.SOL_SOCKET, getattr(socket, "SO_MARK", 36), 0xff),
+        ("connect", ("8.8.8.8", 443)),
+    ]
+
+
+def test_resource_direct_probe_reports_tls_timeout(monkeypatch):
+    from services import provider_diagnostics as diagnostics
+
+    class TimeoutContext:
+        def wrap_socket(self, *_args, **_kwargs):
+            raise TimeoutError
+
+    monkeypatch.setattr(diagnostics.ssl, "create_default_context", lambda: TimeoutContext())
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen()
+        address = (socket.AF_INET, socket.SOCK_STREAM, 6, "", listener.getsockname())
+        result = diagnostics._resource_http_request(("https", "kino.watch", 443, "/"), address=address)
+    assert result["status"] == "tls_timeout"
+
+
+def test_resource_comparison_does_not_claim_proxy_only_when_direct_route_is_unverified(monkeypatch):
+    from services import provider_diagnostics as diagnostics
+
+    address = (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.8.8", 443))
+    monkeypatch.setattr(diagnostics, "_resource_addresses", lambda _host, _port: [address])
+    monkeypatch.setattr(diagnostics, "_xkeen_direct_mark", lambda: None)
+    monkeypatch.setattr(diagnostics, "_resource_http_request", lambda *_args, **_kwargs: pytest.fail("unverified direct path must not connect"))
+    monkeypatch.setattr(diagnostics, "_resource_via_proxy", lambda *_args: {"status": "http_response", "http_status": 200})
+    monkeypatch.setattr(diagnostics, "lookup_public_lists", lambda _raw: {"status": "unavailable"})
+    ref = diagnostics.register_proxy_context([{"protocol": "vless"}], 1)
+    result = diagnostics.compare_resource_paths({"url": "https://kino.watch/", "ref": ref, "index": 0})
+    assert result["direct"]["status"] == "route_unverified"
+    assert result["network"] == {"verdict": "direct_unverified", "confidence": "low"}
+    assert result["proxy"]["http_status"] == 200
+
+
 def test_resource_comparison_route_returns_separate_verdicts_without_secrets(monkeypatch, tmp_path):
     from services import provider_diagnostics as diagnostics
 
     monkeypatch.setattr(diagnostics, "_resource_addresses", lambda _host, port: [
         (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.8.8", port)),
     ])
-    monkeypatch.setattr(diagnostics, "_resource_http_request", lambda _parts, *, address: {
+    monkeypatch.setattr(diagnostics, "_xkeen_direct_mark", lambda: 0)
+    monkeypatch.setattr(diagnostics, "_resource_http_request", lambda _parts, *, address, bypass_mark=0: {
         "status": "http_response", "http_status": 200, "connected_ip": address[4][0],
     })
     monkeypatch.setattr(diagnostics, "_resource_via_proxy", lambda _entry, _parts, address: {
@@ -607,7 +758,7 @@ def test_tailscale_source_reports_that_there_is_no_fixed_endpoint():
     assert "tskey-secret" not in json.dumps(result)
 
 
-def test_tcp_probe_succeeds_and_udp_is_explicitly_unverified():
+def test_tcp_probe_succeeds_and_udp_is_explicitly_unverified(direct_route):
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
         listener.listen(1)
@@ -620,7 +771,119 @@ def test_tcp_probe_succeeds_and_udp_is_explicitly_unverified():
     assert "блокиров" not in udp["message"]
 
 
-def test_standard_tls_probe_uses_configured_sni_and_reports_socket_path(monkeypatch):
+def test_tcp_probe_marks_socket_before_connect_and_refuses_unmarked_route(monkeypatch):
+    from services import provider_diagnostics as diagnostics
+
+    address = (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("198.51.100.30", 443))
+    monkeypatch.setattr(diagnostics.socket, "getaddrinfo", lambda *_args, **_kwargs: [address])
+    events = []
+
+    class ProbeSocket:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            pass
+
+        def settimeout(self, _value):
+            pass
+
+        def setsockopt(self, *_args):
+            events.append("mark")
+
+        def connect(self, _endpoint):
+            events.append("connect")
+            raise ConnectionRefusedError
+
+    monkeypatch.setattr(diagnostics.socket, "socket", lambda *_args: ProbeSocket())
+    monkeypatch.setattr(diagnostics, "_xkeen_direct_mark", lambda: 0xff)
+    assert diagnostics.probe_target(make_target("edge.example.org", 443))["status"] == "refused"
+    assert events == ["mark", "connect"]
+
+    monkeypatch.setattr(diagnostics, "_mark_direct_socket", lambda *_args: False)
+    events.clear()
+    result = diagnostics.probe_target(make_target("edge.example.org", 443))
+    assert result["status"] == "route_unverified"
+    assert events == []
+
+
+def test_tls_comparison_attempt_distinguishes_tcp_and_tls_timeouts(monkeypatch):
+    from services import provider_diagnostics as diagnostics
+
+    address = (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("198.51.100.30", 443))
+    events = []
+
+    class ProbeSocket:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            pass
+
+        def settimeout(self, _value):
+            pass
+
+        def setsockopt(self, *_args):
+            events.append("mark")
+
+        def connect(self, _endpoint):
+            events.append("connect")
+            if stage == "tcp":
+                raise TimeoutError
+
+    class TimeoutContext:
+        check_hostname = True
+        verify_mode = ssl.CERT_REQUIRED
+
+        def wrap_socket(self, *_args, **_kwargs):
+            raise TimeoutError
+
+    monkeypatch.setattr(diagnostics.socket, "socket", lambda *_args: ProbeSocket())
+    monkeypatch.setattr(diagnostics.ssl, "create_default_context", lambda: TimeoutContext())
+    for stage, expected in (("tcp", "tcp_timeout"), ("tls", "tls_timeout")):
+        events.clear()
+        assert diagnostics._tls_comparison_attempt(address, server_name="front.example.org", bypass_mark=0xff) == expected
+        assert events == ["mark", "connect"]
+    monkeypatch.setattr(diagnostics, "_mark_direct_socket", lambda *_args: False)
+    events.clear()
+    assert diagnostics._tls_comparison_attempt(address, server_name="front.example.org", bypass_mark=0xff) == "route_unverified"
+    assert events == []
+
+
+def test_standard_tls_probe_reports_handshake_timeout(monkeypatch, direct_route):
+    from services import provider_diagnostics as diagnostics
+
+    class ProbeSocket:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            pass
+
+        def settimeout(self, _value):
+            pass
+
+        def connect(self, _endpoint):
+            pass
+
+        def getsockname(self):
+            return ("192.0.2.10", 45678)
+
+    class TimeoutContext:
+        def wrap_socket(self, *_args, **_kwargs):
+            raise TimeoutError
+
+    monkeypatch.setattr(diagnostics.socket, "getaddrinfo", lambda *_args, **_kwargs: [
+        (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("198.51.100.30", 443)),
+    ])
+    monkeypatch.setattr(diagnostics.socket, "socket", lambda *_args: ProbeSocket())
+    monkeypatch.setattr(diagnostics.ssl, "create_default_context", lambda: TimeoutContext())
+    result = diagnostics.probe_target(make_target("edge.example.org", 443, tls=True, sni="front.example.org"))
+    assert result["status"] == "tls_timeout"
+    assert result["tcp_ms"] >= 0
+
+
+def test_standard_tls_probe_uses_configured_sni_and_reports_socket_path(monkeypatch, direct_route):
     from services import provider_diagnostics
 
     seen = []
@@ -661,7 +924,7 @@ def test_standard_tls_probe_uses_configured_sni_and_reports_socket_path(monkeypa
     assert ip_result["sni_sent"] is False
 
 
-def test_reality_probe_reports_tcp_only(monkeypatch):
+def test_reality_probe_reports_tcp_only(monkeypatch, direct_route):
     from services import provider_diagnostics
 
     class FakeSocket:
@@ -690,7 +953,7 @@ def test_reality_probe_reports_tcp_only(monkeypatch):
     assert "REALITY" in result["message"]
 
 
-def test_certificate_failure_is_separate_from_handshake_failure(monkeypatch):
+def test_certificate_failure_is_separate_from_handshake_failure(monkeypatch, direct_route):
     from services import provider_diagnostics
 
     class FakeSocket:

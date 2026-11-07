@@ -397,7 +397,7 @@
       "system_requirements": [],
       "removable": true,
       "unit_count": 15,
-      "size_bytes": 249910,
+      "size_bytes": 271219,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 1,
@@ -29068,7 +29068,7 @@
       "module_id": "tool.server-diagnostics",
       "kind": "backend_service",
       "path": "xkeen-ui/services/provider_diagnostics.py",
-      "size_bytes": 61868,
+      "size_bytes": 67372,
       "depends_on": [
         "core",
         "engine.mihomo",
@@ -29087,7 +29087,7 @@
       "module_id": "tool.server-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_provider_diagnostics.py",
-      "size_bytes": 37205,
+      "size_bytes": 48592,
       "depends_on": [
         "core"
       ],
@@ -29160,7 +29160,7 @@
       "module_id": "tool.server-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/provider_diagnostics.js",
-      "size_bytes": 43538,
+      "size_bytes": 44571,
       "depends_on": [
         "core"
       ],
@@ -29202,7 +29202,7 @@
       "module_id": "tool.server-diagnostics",
       "kind": "frontend_test",
       "path": "e2e/provider_diagnostics.spec.mjs",
-      "size_bytes": 29265,
+      "size_bytes": 32048,
       "depends_on": [
         "core"
       ],
@@ -29238,7 +29238,7 @@
       "module_id": "tool.server-diagnostics",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/server-diagnostics.css",
-      "size_bytes": 32835,
+      "size_bytes": 33248,
       "depends_on": [
         "core"
       ],
@@ -29255,7 +29255,7 @@
       "module_id": "tool.server-diagnostics",
       "kind": "template",
       "path": "xkeen-ui/templates/panel/modals/provider_diagnostics.html",
-      "size_bytes": 8354,
+      "size_bytes": 8543,
       "depends_on": [
         "core"
       ],

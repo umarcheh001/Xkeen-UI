@@ -31,9 +31,9 @@ async function api(url, payload, signal) {
 }
 
 const LABELS = {
-  reachable: 'TCP доступен', tls_error: 'TCP доступен · TLS ошибка', tls_cert_error: 'TLS: ошибка сертификата', timeout: 'Таймаут',
-  refused: 'Отказ соединения', unreachable: 'Нет соединения', dns_error: 'Ошибка DNS',
-  udp_unknown: 'UDP не подтверждён', busy: 'Занято', probe_error: 'Проверка не выполнена',
+  reachable: 'TCP доступен', tls_error: 'TCP доступен · TLS ошибка', tls_timeout: 'TCP доступен · TLS таймаут', tls_cert_error: 'TLS: ошибка сертификата', timeout: 'TCP: таймаут',
+  refused: 'TCP: отказ соединения', unreachable: 'TCP: нет соединения', dns_error: 'Ошибка DNS',
+  udp_unknown: 'UDP не подтверждён', route_unverified: 'Прямой путь не проверен', busy: 'Занято', probe_error: 'Проверка не выполнена',
 };
 
 const COMPARISON_LABELS = {
@@ -43,7 +43,8 @@ const COMPARISON_LABELS = {
   undetermined: ['Причина не установлена', 'low'],
 };
 const ATTEMPT_LABELS = {
-  tls_ok: 'TLS прошёл', tls_error: 'TLS прерван', timeout: 'таймаут', refused: 'отказ TCP', unreachable: 'нет маршрута',
+  tls_ok: 'TLS прошёл', tls_error: 'TLS прерван', tls_timeout: 'таймаут TLS', tcp_timeout: 'таймаут TCP', timeout: 'таймаут',
+  refused: 'отказ TCP', unreachable: 'нет маршрута', route_unverified: 'прямой путь не проверен',
 };
 
 function formatAttempts(attempts) {
@@ -155,7 +156,8 @@ function paintTlsComparison(output, result) {
   confidenceLine.className = 'xk-provider-check-comparison-confidence';
   const addresses = result.address_results?.length ? result.address_results
     : result.target_ip ? [{ ip: result.target_ip, ...result.trials }] : [];
-  confidenceLine.textContent = `Уверенность: ${confidenceText} · ${addresses.length} IP · по ${result.rounds_per_ip || 2} пары проб`;
+  const attemptsTotal = result.attempts_total ?? (1 + addresses.reduce((count, address) => count + (address.with_sni?.length || 0) + (address.without_sni?.length || 0), 0));
+  confidenceLine.textContent = `Уверенность: ${confidenceText} · ${addresses.length} IP · TLS-попыток: ${attemptsTotal}`;
   output.append(heading, confidenceLine);
   const notes = {
     consistent_sni_pattern: 'Повторяемый признак на проверенных IP; причина всё ещё требует подтверждения.',
@@ -209,16 +211,20 @@ function paintResourceComparison(output, result) {
     direct_block_page: 'Признаки страницы блокировки напрямую',
     proxy_only: 'Через прокси доступен, напрямую нет',
     both_reachable: 'Успешный ответ напрямую и через прокси',
+    both_redirects: 'Оба пути вернули редирект; доступ к сайту не подтверждён',
+    proxy_redirect_only: 'Через прокси получен редирект, напрямую HTTP-ответа нет',
+    direct_unverified: 'Прямой путь не проверен: обход правил роутера недоступен',
     both_http_errors: 'Оба пути вернули ошибку HTTP',
     different_response: 'Ответы отличаются',
     direct_only: 'Напрямую доступен, через прокси нет',
     undetermined: 'Причина недоступности не установлена',
   };
   const statusLabels = {
-    dns_error: 'Сбой DNS', tcp_error: 'Сбой TCP', tls_error: 'Сбой TLS', tls_cert_error: 'Сертификат не прошёл проверку',
+    dns_error: 'Сбой DNS', tcp_error: 'Сбой TCP', tls_error: 'Сбой TLS', tls_timeout: 'Таймаут TLS', tls_cert_error: 'Сертификат не прошёл проверку',
     http_error: 'HTTP-ответ не получен', proxy_error: 'Прокси отклонил запрос',
     core_unavailable: 'Ядро не найдено', core_start_failed: 'Ядро не запустилось',
     skipped_dns: 'Пропущено из-за DNS',
+    route_unverified: 'Прямой путь не проверен',
   };
   const heading = document.createElement('strong');
   heading.textContent = `Сеть: ${networkLabels[result.network?.verdict] || networkLabels.undetermined}`;
@@ -276,8 +282,8 @@ export function initProviderDiagnostics() {
     overview.hidden = results.size === 0;
     const values = [...results.values()];
     $('provider-check-ok-count').textContent = String(values.filter((item) => item.status === 'reachable').length);
-    $('provider-check-issue-count').textContent = String(values.filter((item) => ['timeout', 'refused', 'unreachable', 'dns_error', 'tls_error', 'tls_cert_error'].includes(item.status)).length);
-    $('provider-check-unknown-count').textContent = String(values.filter((item) => ['udp_unknown', 'busy', 'probe_error'].includes(item.status)).length);
+    $('provider-check-issue-count').textContent = String(values.filter((item) => ['timeout', 'refused', 'unreachable', 'dns_error', 'tls_error', 'tls_timeout', 'tls_cert_error'].includes(item.status)).length);
+    $('provider-check-unknown-count').textContent = String(values.filter((item) => ['udp_unknown', 'route_unverified', 'busy', 'probe_error'].includes(item.status)).length);
   }
 
   function paintResult(index) {
@@ -323,7 +329,7 @@ export function initProviderDiagnostics() {
       appendFact(facts, 'DNS', result.status === 'dns_error' ? 'Имя не разрешено' : `${(result.addresses || []).join(', ') || 'Нет ответа'}${result.dns_ms != null ? ` · ${result.dns_ms} мс` : ''}`);
       if (result.connected_ip) appendFact(facts, 'Сокет', `${result.source_ip || 'Адрес панели не определён'} → ${result.connected_ip}`);
       appendFact(facts, result.network === 'udp' ? 'UDP' : 'TCP', result.network === 'udp' ? 'Протокольная проверка не выполнялась' : (result.tcp_ms != null ? `Подключено за ${result.tcp_ms} мс` : result.message || 'Подключение не установлено'));
-      if (result.tls) appendFact(facts, 'TLS', `${result.tls_ms != null ? `Рукопожатие за ${result.tls_ms} мс` : result.status === 'tls_cert_error' ? 'Сертификат не прошёл проверку' : result.status === 'tls_error' ? 'Рукопожатие не прошло' : 'Не выполнено'} · ${result.sni_sent === false ? 'SNI не отправлен (IP-адрес)' : `SNI: ${result.sni || result.host}`}${result.verify_tls === false ? ' · сертификат не проверялся' : ''}`);
+      if (result.tls) appendFact(facts, 'TLS', `${result.tls_ms != null ? `Рукопожатие за ${result.tls_ms} мс` : result.status === 'tls_cert_error' ? 'Сертификат не прошёл проверку' : result.status === 'tls_timeout' ? 'Таймаут рукопожатия' : result.status === 'tls_error' ? 'Рукопожатие не прошло' : 'Не выполнено'} · ${result.sni_sent === false ? 'SNI не отправлен (IP-адрес)' : `SNI: ${result.sni || result.host}`}${result.verify_tls === false ? ' · сертификат не проверялся' : ''}`);
       else if (result.tls_mode === 'reality') appendFact(facts, 'REALITY', `SNI: ${result.sni || result.host} · протокольная проверка не выполнялась`);
     }
     details.append(summary, facts);
@@ -340,7 +346,7 @@ export function initProviderDiagnostics() {
     if (result.tls && result.network === 'tcp' && (result.tls_mode === 'standard' || !result.tls_mode) && !compareName.includes(':') && !/^\d+(?:\.\d+){3}$/.test(compareName)) {
       const compareTls = document.createElement('button');
       compareTls.type = 'button';
-      responsiveLabel(compareTls, 'Сравнить TLS/SNI', 'TLS/SNI', 'Повторить TLS-рукопожатия с SNI и без него на двух IP сервера и проверить контрольный адрес');
+      responsiveLabel(compareTls, 'Сравнить TLS/SNI', 'TLS/SNI', 'Сравнить TLS с SNI и без него; при неоднозначном результате повторить проверку и второй IP');
       const comparison = document.createElement('div');
       comparison.className = 'xk-provider-check-comparison';
       compareTls.addEventListener('click', async () => {

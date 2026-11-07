@@ -55,11 +55,11 @@ test('Xray toolbar opens server diagnostics and runs selected checks', async ({ 
   await page.route('**/api/provider-diagnostics/compare-tls', async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 200));
     return route.fulfill({ json: { ok: true, result: {
-    status: 'ok', verdict: 'tls_sni_filtering', confidence: 'medium', reason: 'consistent_sni_pattern', target_ip: '198.51.100.10', sni: 'front.example.org', rounds_per_ip: 2,
-    trials: { with_sni: ['tls_error', 'tls_error'], without_sni: ['tls_ok', 'tls_ok'] },
+    status: 'ok', verdict: 'tls_sni_filtering', confidence: 'medium', reason: 'consistent_sni_pattern', target_ip: '198.51.100.10', sni: 'front.example.org', rounds_per_ip: 2, attempts_total: 9,
+    trials: { with_sni: ['tls_timeout', 'tls_timeout'], without_sni: ['tls_ok', 'tls_ok'] },
     address_results: [
-      { ip: '198.51.100.10', with_sni: ['tls_error', 'tls_error'], without_sni: ['tls_ok', 'tls_ok'], pattern: 'sni_only_failure' },
-      { ip: '198.51.100.11', with_sni: ['tls_error', 'tls_error'], without_sni: ['tls_ok', 'tls_ok'], pattern: 'sni_only_failure' },
+      { ip: '198.51.100.10', with_sni: ['tls_timeout', 'tls_timeout'], without_sni: ['tls_ok', 'tls_ok'], pattern: 'sni_only_failure' },
+      { ip: '198.51.100.11', with_sni: ['tls_timeout', 'tls_timeout'], without_sni: ['tls_ok', 'tls_ok'], pattern: 'sni_only_failure' },
     ],
     control: { ip: '1.1.1.1', result: 'tls_ok' }, registry: { status: 'ok', domain: '', subnets: [] },
     } } });
@@ -104,6 +104,8 @@ test('Xray toolbar opens server diagnostics and runs selected checks', async ({ 
   await expect(page.getByRole('button', { name: 'Сравнить TLS/SNI' }).first()).toHaveClass(/is-loading/);
   await expect(page.locator('.xk-provider-check-comparison').first()).toContainText('Признаки фильтрации TLS/SNI');
   await expect(page.locator('.xk-provider-check-comparison').first()).toContainText('Уверенность: средняя');
+  await expect(page.locator('.xk-provider-check-comparison').first()).toContainText('TLS-попыток: 9');
+  await expect(page.locator('.xk-provider-check-comparison').first()).toContainText('таймаут TLS');
   await expect(page.locator('.xk-provider-check-comparison-ip').first()).toContainText('198.51.100.10');
   await expect(page.locator('.xk-provider-check-comparison-ip')).toHaveCount(2);
   await page.getByRole('button', { name: 'Сравнить DNS' }).first().click();
@@ -235,6 +237,27 @@ test('a failed diagnostic request is not reported as a blocked server', async ({
   await expect(page.locator('.xk-provider-check-details dt')).toHaveText('Запрос');
 });
 
+test('an unverified direct route stays out of reachable and blocked counts', async ({ page }) => {
+  await page.route('**/api/provider-diagnostics/targets?core=xray', (route) => route.fulfill({ json: { ok: true, targets: [TARGETS[0]] } }));
+  await page.route('**/api/provider-diagnostics/probe', (route) => route.fulfill({ json: { ok: true, result: {
+    ...TARGETS[0], status: 'route_unverified', message: 'Прямой путь не проверен: метку сокета установить не удалось.',
+    addresses: ['198.51.100.10'], dns_ms: 2,
+  } } }));
+  await page.route('**/api/provider-diagnostics/compare-tls', (route) => route.fulfill({ json: { ok: true, result: {
+    status: 'route_unverified', message: 'Прямой путь не проверен: обход правил роутера недоступен.',
+  } } }));
+  await page.goto('/');
+  await selectPanelView(page, 'routing');
+  await page.locator('[data-provider-check-core="xray"]').click();
+  await page.locator('#provider-check-run').click();
+  await expect(page.locator('.xk-provider-check-row-state.is-route_unverified')).toContainText('Прямой путь не проверен');
+  await expect(page.locator('#provider-check-unknown-count')).toHaveText('1');
+  await expect(page.locator('#provider-check-ok-count')).toHaveText('0');
+  await page.locator('.xk-provider-check-details summary').click();
+  await page.getByRole('button', { name: 'Сравнить TLS/SNI' }).click();
+  await expect(page.locator('.xk-provider-check-comparison')).toContainText('Прямой путь не проверен');
+});
+
 test('saved Xray diagnostics shows servers from every outbound file', async ({ page }) => {
   const sources = [
     ['04_outbounds.auth.quattro-cloud.ru.json', 107],
@@ -309,6 +332,8 @@ test('manual subscription shows every server and loading state', async ({ page }
 
 test('manual proxy link can be checked through the proxy before TCP checks', async ({ page }) => {
   let finishComparison;
+  let comparisonStatus = 200;
+  let directTimedOut = false;
   const comparisonPending = new Promise((resolve) => { finishComparison = resolve; });
   await page.route('**/api/provider-diagnostics/parse', (route) => route.fulfill({ json: {
     ok: true, targets: [{ name: 'Private', host: 'edge.example.org', port: 443,
@@ -326,9 +351,11 @@ test('manual proxy link can be checked through the proxy before TCP checks', asy
     expect(route.request().postDataJSON()).toEqual({ url: 'https://kino.watch/', ref: 'opaque-reference', index: 0 });
     await comparisonPending;
     return route.fulfill({ json: { ok: true, result: {
-      status: 'ok', resource_host: 'kino.watch', network: { verdict: 'both_reachable', confidence: 'high' },
-      direct: { status: 'http_response', http_status: 200, connected_ip: '8.8.8.8', dns_ips: ['8.8.8.8'], tcp_ms: 10, tls_ms: 20 },
-      proxy: { status: 'http_response', http_status: 200, connected_ip: '8.8.8.8', tcp_ms: 30, tls_ms: 40 },
+      status: 'ok', resource_host: 'kino.watch', network: { verdict: directTimedOut ? 'proxy_redirect_only' : comparisonStatus === 301 ? 'both_redirects' : 'both_reachable', confidence: comparisonStatus === 200 ? 'high' : 'low' },
+      direct: directTimedOut
+        ? { status: 'tls_timeout', connected_ip: '8.8.8.8', dns_ips: ['8.8.8.8'], tcp_ms: 10 }
+        : { status: 'http_response', http_status: comparisonStatus, connected_ip: '8.8.8.8', dns_ips: ['8.8.8.8'], tcp_ms: 10, tls_ms: 20 },
+      proxy: { status: 'http_response', http_status: comparisonStatus, connected_ip: '8.8.8.8', tcp_ms: 30, tls_ms: 40 },
       registry: { status: 'ok', listed: true, match: 'kino.watch' },
     } } });
   });
@@ -362,6 +389,13 @@ test('manual proxy link can be checked through the proxy before TCP checks', asy
   await expect(page.locator('#provider-check-status')).toContainText('Сравнение kino.watch завершено');
   await page.locator('.xk-provider-check-resource-result').scrollIntoViewIfNeeded();
   await page.screenshot({ path: 'test-results/provider-diagnostics-resource-desktop.png', fullPage: false });
+  comparisonStatus = 301;
+  await resourceButton.click();
+  await expect(page.locator('.xk-provider-check-resource-result')).toContainText('Оба пути вернули редирект; доступ к сайту не подтверждён');
+  directTimedOut = true;
+  await resourceButton.click();
+  await expect(page.locator('.xk-provider-check-resource-result')).toContainText('Через прокси получен редирект, напрямую HTTP-ответа нет');
+  await expect(page.locator('.xk-provider-check-resource-result')).toContainText('Таймаут TLS');
 });
 
 test('Mihomo proxy check starts the selected engine and shows its result', async ({ page }) => {
