@@ -11,10 +11,10 @@
 - Stage 0 inventory: `docs/modular-panel-stage0-inventory.json`;
 - machine-readable contract: `docs/modular-panel-stage4.1-contract.json`;
 - пересборка: `python .\scripts\generate_modular_panel_stage4_1_contract.py --root .`;
-- UTF-8 размер: `452745` байт;
-- строк: `5904`;
-- статических `id`: `1356`, дубликатов: `0`;
-- SHA-256 текущего baseline: `cd43fd7f82f67d36fe0791ee105b395ab1a5f65c1ae31af09732c9966e6a09bb`.
+- UTF-8 размер: `453024` байт;
+- строк: `5909`;
+- статических `id`: `1361`, дубликатов: `0`;
+- SHA-256 текущего baseline: `055de607263fbb714ab03f2204a929017c9c0167c6c92485b8d2eefa828d8cea`.
 
 ## Правила composition
 
@@ -111,9 +111,9 @@ head → startup → header → navigation → global_controls → screens → m
 | fm-progress-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5665 |
 | fm-ops-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5686 |
 | fm-volumes-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5717 |
-| fm-help-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5739 |
-| fm-editor-modal | tool.editor | tool.editor | owned | xkeen-ui/templates/panel/modals/files_editor.html | 5805 |
-| json-editor-modal | tool.editor | tool.editor | owned | xkeen-ui/templates/panel/modals/editor.html | 5842 |
+| fm-help-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5744 |
+| fm-editor-modal | tool.editor | tool.editor | owned | xkeen-ui/templates/panel/modals/files_editor.html | 5810 |
+| json-editor-modal | tool.editor | tool.editor | owned | xkeen-ui/templates/panel/modals/editor.html | 5847 |
 
 ## Mixed boundaries и решения
 

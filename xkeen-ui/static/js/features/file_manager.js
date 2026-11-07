@@ -156,24 +156,7 @@ import { getFileManagerApiRoot, getFileManagerNamespace } from './file_manager_n
       try {
         const su = data.storageUsb || {};
         if (volumesBtn) {
-          // TEMP: hide "Диски" UI by default.
-          // Reason: `ndmc show usb` output differs across firmware versions; on some devices
-          // parsing/enrichment may be unreliable (showing mounted volumes as unmounted).
-          // You can force-enable for debugging with:
-          //   - URL: ?usbdisks=1
-          //   - or localStorage: xkeen.fm.usbdisks=1
-          let forceEnable = false;
-          try {
-            const sp = new URLSearchParams(String((window.location && window.location.search) || ''));
-            forceEnable = (sp.get('usbdisks') === '1');
-          } catch (e) {}
-          try {
-            if (!forceEnable && window.localStorage) {
-              forceEnable = (String(window.localStorage.getItem('xkeen.fm.usbdisks') || '') === '1');
-            }
-          } catch (e2) {}
-
-          if (forceEnable && su && su.enabled) {
+          if (su && su.enabled) {
             try { if (volumesBtn.dataset) delete volumesBtn.dataset.xkForceHidden; } catch (e3) {}
             show(volumesBtn);
           } else {

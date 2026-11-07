@@ -700,15 +700,20 @@
   </div>
 </div>
 
-<!-- File Manager: USB volumes (mount/unmount) -->
-<div id="fm-volumes-modal" class="modal hidden" data-operator-modal-family="master-detail" role="dialog" aria-modal="true" aria-label="Диски / Тома">
-    <div class="modal-content xk-modal-width xk-modal-width-920">
+<!-- File Manager: USB storage -->
+<div id="fm-volumes-modal" class="modal hidden" data-operator-modal-family="master-detail" data-modal-key="fm-volumes-v2" role="dialog" aria-modal="true" aria-label="Накопители и разделы">
+    <div class="modal-content xk-modal-width">
     <div class="modal-header">
-      <span class="modal-title">Диски / Тома (USB)</span>
-      <button type="button" class="modal-close" id="fm-volumes-close-btn" aria-label="Close" title="Закрыть">{{ op_icon('close') }}</button>
+      <span class="modal-title">Накопители и разделы</span>
+        <button type="button" class="modal-close" id="fm-volumes-close-btn" aria-label="Закрыть" title="Закрыть">{{ op_icon('close') }}</button>
     </div>
     <div class="modal-body">
-      <div class="xk-modal-gap-10 xk-modal-mb-10" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap;">
+        <div id="fm-volumes-progress" class="fm-volumes-progress hidden" role="status" aria-live="polite">
+          <span class="fm-volumes-progress-wheel" aria-hidden="true"></span>
+          <div><strong id="fm-volumes-progress-title"></strong><span id="fm-volumes-progress-detail"></span></div>
+          <span id="fm-volumes-progress-time" class="fm-volumes-progress-time" aria-hidden="true"></span>
+        </div>
+      <div class="fm-volumes-toolbar xk-modal-gap-10 xk-modal-mb-10">
         <div class="xk-modal-gap-8" style="display:flex; align-items:center; flex-wrap:wrap;">
           <button type="button" class="btn-secondary btn-icon" id="fm-volumes-refresh-btn" title="Обновить список дисков" aria-label="Обновить список дисков">{{ op_icon('refresh') }}</button>
           <span id="fm-volumes-spinner" class="hidden" style="opacity:.85;">{{ op_icon('loading') }}</span>
@@ -717,7 +722,7 @@
       </div>
 
       <div id="fm-volumes-list"></div>
-      <div class="status xk-modal-mt-10" style="opacity:.75;">Команды: <code>show usb</code>, <code>system mount &lt;fs&gt;</code>, <code>system no mount &lt;fs&gt;</code>.</div>
+      <div id="fm-volumes-action" class="fm-volumes-action hidden"></div>
     </div>
   </div>
 </div>

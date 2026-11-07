@@ -277,6 +277,11 @@ MODULE_DEFINITIONS: tuple[ModuleDefinition, ...] = (
         system_requirements=(
             _requirement("lftp", optional=True),
             _requirement("ndmc", optional=True),
+            _requirement("blkid", optional=True),
+            _requirement("parted", optional=True),
+            _requirement("tune2fs", optional=True),
+            _requirement("fatlabel", optional=True),
+            _requirement("ntfslabel", optional=True),
         ),
         size_bytes=_module_size("tool.files"),
         removable=True,

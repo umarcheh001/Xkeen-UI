@@ -86,7 +86,7 @@ def test_routes_use_stable_error_codes_instead_of_raw_exception_text():
     assert '"write_failed"' in xray_configs
     assert '"preview_failed"' in mihomo
     assert '"settings_load_failed"' in ui_settings
-    assert '"storage_list_failed"' in storage_usb
+    assert '"rci_unavailable"' in (ROOT / "xkeen-ui" / "services" / "storage_usb.py").read_text(encoding="utf-8")
     assert '"template_write_failed"' in routing_templates
     assert '"restart_schedule_failed"' in routing_config
 

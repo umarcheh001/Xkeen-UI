@@ -966,6 +966,7 @@ ui_step "Файловый менеджер"
 if profile_has_module tool.files; then
   command -v lftp >/dev/null 2>&1 || ui_info "Добавляю файловый менеджер..."
   provision_file_manager || fail_install "${PROVISION_ERROR:-Не удалось подготовить файловый менеджер.}"
+  provision_storage_tools || ui_warning "Утилиты накопителей недоступны: разметка и смена меток будут отключены."
 fi
 
 

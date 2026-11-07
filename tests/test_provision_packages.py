@@ -26,8 +26,11 @@ case "$FAKE_OPKG:$1" in
   ok:install)
     shift
     for package in "$@"; do
-      printf '#!/bin/sh\\nexit 0\\n' > "$FAKE_BIN/$package"
-      chmod +x "$FAKE_BIN/$package"
+      tool="$package"
+      [ "$package" = dosfstools ] && tool=fatlabel
+      [ "$package" = ntfs-3g-utils ] && tool=ntfslabel
+      printf '#!/bin/sh\\nexit 0\\n' > "$FAKE_BIN/$tool"
+      chmod +x "$FAKE_BIN/$tool"
     done
     exit 0 ;;
 esac
@@ -133,7 +136,7 @@ def test_the_installer_and_the_update_share_the_two_steps():
     installer = INSTALLER.read_text(encoding="utf-8")
     shared = LIB.read_text(encoding="utf-8")
 
-    for name in ("provision_file_manager", "provision_sysmon_utils"):
+    for name in ("provision_file_manager", "provision_storage_tools", "provision_sysmon_utils"):
         assert name + "() {" in shared
         assert name + "() {" not in installer
         assert name in installer
@@ -141,10 +144,10 @@ def test_the_installer_and_the_update_share_the_two_steps():
     # откатывает обновление, а источник пакетов может отвечать долго.
     prepare = shared[shared.index("provision_cmd_prepare() {"):]
     prepare = prepare[: prepare.index("\n}\n")]
-    assert "provision_file_manager" in prepare and "provision_sysmon_utils" in prepare
+    assert all(name in prepare for name in ("provision_file_manager", "provision_storage_tools", "provision_sysmon_utils"))
     apply = shared[shared.index("provision_cmd_apply() {"):]
     apply = apply[: apply.index("\n}\n")]
-    assert "provision_file_manager" not in apply and "provision_sysmon_utils" not in apply
+    assert all(name not in apply for name in ("provision_file_manager", "provision_storage_tools", "provision_sysmon_utils"))
     # Пакеты ставятся в одном месте — в общем скрипте.
     assert "opkg install lftp" not in installer.replace("provision_opkg install lftp", "")
     assert "provision_opkg install lftp" not in installer
@@ -193,7 +196,9 @@ def test_installing_the_file_manager_from_the_panel_brings_lftp(tmp_path):
     proc, calls = _packages(tmp_path, "tool.files")
 
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert calls == ["update", "install lftp"]
+    assert "install lftp" in calls
+    assert any(call.startswith("install ") and all(package in call for package in
+               ("parted", "tune2fs", "ntfs-3g-utils")) for call in calls)
     # Пакет доставлен: сообщать исполнителю не о чем.
     assert "[note]" not in proc.stdout
 

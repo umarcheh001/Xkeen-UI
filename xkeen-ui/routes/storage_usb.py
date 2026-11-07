@@ -1,107 +1,62 @@
-"""USB storage API (mount/unmount + list).
-
-Minimal endpoints used by the File Manager UI:
-  - GET  /api/storage/usb
-  - POST /api/storage/usb/mount   {"name": "..."}
-  - POST /api/storage/usb/unmount {"name": "..."}
-
-Auth/CSRF:
-  Protected by the global auth guard in services/auth_setup.py.
-  POST requests require X-CSRF-Token.
-"""
+"""Authenticated USB storage API. POST endpoints use the global CSRF guard."""
 
 from __future__ import annotations
 
-from typing import Any
-
 from flask import Blueprint, jsonify, request
 
-from routes.common.errors import error_response, exception_response
+from services.storage_usb import (
+    edit_partitions,
+    eject_disk,
+    list_usb_filesystems,
+    operate_partition,
+    repartition_disk,
+    set_volume_label,
+)
 
 
 def create_storage_usb_blueprint() -> Blueprint:
     bp = Blueprint("storage_usb", __name__)
 
     @bp.get("/api/storage/usb")
-    def api_storage_usb_list():
-        try:
-            from services.storage_usb import list_usb_filesystems
-            payload = list_usb_filesystems()
-        except Exception as e:  # noqa: BLE001
-            return exception_response(
-                "Не удалось получить список USB-накопителей.",
-                500,
-                ok=False,
-                code="storage_list_failed",
-                hint="Подробности смотрите в server logs.",
-                exc=e,
-                log_tag="storage_usb.list_failed",
-            )
+    def list_storage():
+        payload = list_usb_filesystems()
+        return jsonify(payload), 200 if payload["ok"] else 503
 
-        if not payload.get("ok"):
-            code = str(payload.get("code") or "error")
-            status = 503 if code in ("ndmc_missing", "ndmc_failed") else 400
-            return jsonify(payload), status
-        return jsonify(payload), 200
-
-    def _name_from_json() -> str:
-        data: Any = request.get_json(silent=True)
+    @bp.post("/api/storage/usb/<action>")
+    def operate_storage(action: str):
+        data = request.get_json(silent=True)
         if not isinstance(data, dict):
-            return ""
-        return str(data.get("name") or "").strip()
-
-    @bp.post("/api/storage/usb/mount")
-    def api_storage_usb_mount():
-        name = _name_from_json()
-        if not name:
-            return jsonify({"ok": False, "code": "bad_request", "message": "name is required"}), 400
-
-        try:
-            from services.storage_usb import mount_filesystem
-            payload = mount_filesystem(name)
-        except Exception as e:  # noqa: BLE001
-            return exception_response(
-                "Не удалось смонтировать USB-накопитель.",
-                500,
-                ok=False,
-                code="mount_failed",
-                hint="Подробности смотрите в server logs.",
-                exc=e,
-                log_tag="storage_usb.mount_failed",
-                name=name,
+            return jsonify({"ok": False, "code": "bad_request", "message": "Нужен JSON-объект."}), 400
+        media_id = str(data.get("media_id") or "")
+        partition_id = str(data.get("partition_id") or "")
+        uuid = str(data.get("uuid") or "")
+        if action in {"mount", "unmount", "check", "format"}:
+            payload = operate_partition(action, media_id, partition_id, uuid,
+                                        fstype=str(data.get("fstype") or ""),
+                                        confirm=str(data.get("confirm") or ""))
+        elif action == "label":
+            payload = set_volume_label(media_id, partition_id, uuid, str(data.get("label") or ""))
+        elif action == "eject":
+            payload = eject_disk(media_id, str(data.get("serial") or ""))
+        elif action == "repartition":
+            payload = repartition_disk(media_id, str(data.get("serial") or ""),
+                                       data.get("expected_parts"), data.get("sizes_mib"),
+                                       str(data.get("confirm") or ""))
+        elif action in {"add", "delete", "split", "merge"}:
+            payload = edit_partitions(
+                action, media_id, str(data.get("serial") or ""), data.get("expected_parts"),
+                partition_id=partition_id, uuid=uuid,
+                other_id=str(data.get("other_id") or ""), other_uuid=str(data.get("other_uuid") or ""),
+                start_sector=data.get("start_sector", -1), size_mib=data.get("size_mib", 0),
+                confirm=str(data.get("confirm") or ""),
             )
-
-        if not payload.get("ok"):
-            code = str(payload.get("code") or "error")
-            status = 503 if code in ("ndmc_missing", "ndmc_failed") else 400
-            return jsonify(payload), status
-        return jsonify(payload), 200
-
-    @bp.post("/api/storage/usb/unmount")
-    def api_storage_usb_unmount():
-        name = _name_from_json()
-        if not name:
-            return jsonify({"ok": False, "code": "bad_request", "message": "name is required"}), 400
-
-        try:
-            from services.storage_usb import unmount_filesystem
-            payload = unmount_filesystem(name)
-        except Exception as e:  # noqa: BLE001
-            return exception_response(
-                "Не удалось размонтировать USB-накопитель.",
-                500,
-                ok=False,
-                code="unmount_failed",
-                hint="Подробности смотрите в server logs.",
-                exc=e,
-                log_tag="storage_usb.unmount_failed",
-                name=name,
-            )
-
-        if not payload.get("ok"):
-            code = str(payload.get("code") or "error")
-            status = 503 if code in ("ndmc_missing", "ndmc_failed") else 400
-            return jsonify(payload), status
-        return jsonify(payload), 200
+        else:
+            return jsonify({"ok": False, "code": "bad_request", "message": "Неизвестная операция."}), 404
+        if payload["ok"]:
+            return jsonify(payload), 200
+        code = payload.get("code")
+        status = 503 if code in {"rci_unavailable", "rci_failed"} else 409 if code in {
+            "opkg_protected", "stale_target", "must_unmount", "invalid_state", "disk_in_use"} else 400
+        return jsonify(payload), status
 
     return bp

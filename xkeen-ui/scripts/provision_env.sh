@@ -1710,6 +1710,35 @@ provision_file_manager() {
   return 0
 }
 
+provision_storage_tools() {
+  # USB-операции доступны через прошивку; Entware нужен для разметки и меток.
+  _st_missing=""
+  command -v blkid >/dev/null 2>&1 || _st_missing="$_st_missing blkid"
+  command -v parted >/dev/null 2>&1 || _st_missing="$_st_missing parted"
+  command -v tune2fs >/dev/null 2>&1 || _st_missing="$_st_missing tune2fs"
+  command -v fatlabel >/dev/null 2>&1 || _st_missing="$_st_missing dosfstools"
+  command -v ntfslabel >/dev/null 2>&1 || _st_missing="$_st_missing ntfs-3g-utils"
+  [ -n "$_st_missing" ] || return 0
+
+  echo "[*] Устанавливаю утилиты накопителей:$_st_missing"
+  if ! ensure_opkg_bin || ! provision_opkg_update; then
+    provision_fail "Не удалось подготовить Entware для утилит накопителей:$_st_missing."
+    return 1
+  fi
+  # shellcheck disable=SC2086
+  if ! provision_opkg install $_st_missing; then
+    provision_fail "Не удалось установить утилиты накопителей:$_st_missing."
+    return 1
+  fi
+  for _st_tool in blkid parted tune2fs fatlabel ntfslabel; do
+    if ! command -v "$_st_tool" >/dev/null 2>&1; then
+      provision_fail "Утилита $_st_tool не найдена после установки."
+      return 1
+    fi
+  done
+  return 0
+}
+
 provision_sysmon_utils() {
   # Утилиты для подробного вывода системного монитора. Монитор работает и без
   # них, поэтому любая неудача здесь — только строка в журнале.
@@ -1792,6 +1821,11 @@ provision_cmd_packages() {
         # увидит, чего не хватило, а не только то, что модуль установлен.
         echo "[note] package_missing lftp"
       fi
+      if ! provision_storage_tools; then
+        for _st_package in $_st_missing; do
+          echo "[note] package_missing $_st_package"
+        done
+      fi
       ;;
   esac
   provision_opkg_cleanup 2>/dev/null || true
@@ -1812,6 +1846,7 @@ provision_cmd_prepare() {
   PROVISION_MODULES="$(provision_installed_modules)"
   if provision_has_module tool.files; then
     provision_file_manager || echo "[*] lftp для файлового менеджера доставить не удалось; обновление продолжается."
+    provision_storage_tools || echo "[*] Утилиты накопителей доставить не удалось; обновление продолжается."
   fi
   provision_sysmon_utils || true
   provision_opkg_cleanup 2>/dev/null || true

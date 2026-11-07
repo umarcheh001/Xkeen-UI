@@ -38,8 +38,8 @@
         "gevent-websocket (optional)"
       ],
       "removable": false,
-      "unit_count": 671,
-      "size_bytes": 9140778,
+      "unit_count": 672,
+      "size_bytes": 9177513,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -51,7 +51,7 @@
         "frontend_feature": 45,
         "frontend_javascript": 40,
         "frontend_runtime": 2,
-        "frontend_test": 78,
+        "frontend_test": 79,
         "frontend_ui": 18,
         "stylesheet": 9,
         "template": 34
@@ -253,15 +253,16 @@
         "ndmc (USB optional)"
       ],
       "removable": true,
-      "unit_count": 85,
-      "size_bytes": 1008333,
+      "unit_count": 86,
+      "size_bytes": 1083337,
       "kind_counts": {
         "backend_route": 22,
         "backend_service": 32,
+        "backend_test": 1,
         "frontend_entrypoint": 1,
         "frontend_feature": 30
       },
-      "route_count": 43,
+      "route_count": 42,
       "background_task_count": 1,
       "ui_surface_count": 1,
       "representative_paths": [
@@ -2739,7 +2740,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_registry.py",
-      "size_bytes": 74867,
+      "size_bytes": 75127,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -5050,7 +5051,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_exception_detail_sanitization_contracts.py",
-      "size_bytes": 5663,
+      "size_bytes": 5727,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -8427,7 +8428,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_provision_packages.py",
-      "size_bytes": 9221,
+      "size_bytes": 9586,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -10424,7 +10425,7 @@
       "module_id": "core",
       "kind": "configuration",
       "path": "xkeen-ui/install.sh",
-      "size_bytes": 77408,
+      "size_bytes": 77583,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -13754,6 +13755,28 @@
     {
       "module_id": "core",
       "kind": "frontend_test",
+      "path": "e2e/file_manager_storage.spec.mjs",
+      "size_bytes": 16483,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [
+        "XKEEN_STORAGE_VISUAL"
+      ],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "frontend_test",
       "path": "e2e/file_manager_terminal_controls.spec.mjs",
       "size_bytes": 1343,
       "depends_on": [],
@@ -15602,7 +15625,7 @@
       "module_id": "core",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/panel-operator.css",
-      "size_bytes": 827211,
+      "size_bytes": 843834,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -15622,7 +15645,7 @@
       "module_id": "core",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/styles.css",
-      "size_bytes": 887243,
+      "size_bytes": 889729,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -15984,7 +16007,7 @@
       "module_id": "core",
       "kind": "template",
       "path": "xkeen-ui/templates/panel/modals/files.html",
-      "size_bytes": 49719,
+      "size_bytes": 49992,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -16144,7 +16167,7 @@
       "module_id": "core",
       "kind": "template",
       "path": "xkeen-ui/templates/panel/screens/files.html",
-      "size_bytes": 7560,
+      "size_bytes": 7566,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -27468,7 +27491,7 @@
       "module_id": "tool.files",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/storage_usb.py",
-      "size_bytes": 3819,
+      "size_bytes": 2832,
       "depends_on": [
         "core"
       ],
@@ -27483,12 +27506,7 @@
         },
         {
           "method": "POST",
-          "path": "/api/storage/usb/mount",
-          "decorator": "bp.post"
-        },
-        {
-          "method": "POST",
-          "path": "/api/storage/usb/unmount",
+          "path": "/api/storage/usb/<action>",
           "decorator": "bp.post"
         }
       ],
@@ -28138,7 +28156,27 @@
       "module_id": "tool.files",
       "kind": "backend_service",
       "path": "xkeen-ui/services/storage_usb.py",
-      "size_bytes": 14794,
+      "size_bytes": 40386,
+      "depends_on": [
+        "core"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "lftp (remote optional)",
+        "ndmc (USB optional)"
+      ],
+      "environment_variables": [],
+      "removable": true
+    },
+    {
+      "module_id": "tool.files",
+      "kind": "backend_test",
+      "path": "tests/test_storage_usb.py",
+      "size_bytes": 17061,
       "depends_on": [
         "core"
       ],
@@ -28186,7 +28224,7 @@
       "module_id": "tool.files",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/file_manager.js",
-      "size_bytes": 16796,
+      "size_bytes": 15954,
       "depends_on": [
         "core"
       ],
@@ -28890,7 +28928,7 @@
       "module_id": "tool.files",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/file_manager/storage.js",
-      "size_bytes": 12362,
+      "size_bytes": 46542,
       "depends_on": [
         "core"
       ],
@@ -30568,7 +30606,7 @@
     }
   ],
   "routes": {
-    "endpoint_count": 356,
+    "endpoint_count": 355,
     "files_with_routes": 52,
     "endpoint_files": [
       {
@@ -32591,12 +32629,7 @@
           },
           {
             "method": "POST",
-            "path": "/api/storage/usb/mount",
-            "decorator": "bp.post"
-          },
-          {
-            "method": "POST",
-            "path": "/api/storage/usb/unmount",
+            "path": "/api/storage/usb/<action>",
             "decorator": "bp.post"
           }
         ]
@@ -35884,7 +35917,7 @@
       {
         "from": "tool.files",
         "to": "core",
-        "unit_count": 85,
+        "unit_count": 86,
         "examples": [
           "xkeen-ui/routes/fileops/__init__.py",
           "xkeen-ui/routes/fileops/blueprint.py",
@@ -36833,8 +36866,8 @@
           "size_bytes": 483327
         },
         "tool.files": {
-          "unit_count": 85,
-          "size_bytes": 1008333
+          "unit_count": 86,
+          "size_bytes": 1083337
         },
         "tool.advanced-diagnostics": {
           "unit_count": 49,
