@@ -415,6 +415,33 @@ test.describe('Curated core source selection', () => {
     await expect(action).toBeDisabled();
   });
 
+  test('a stale installed tag does not offer an update to the running version', async ({ page }) => {
+    let payload = clone(xrayProfiles);
+    payload.data.state.detected_version = '26.10.31';
+    payload.data.state.installed_release_tag = 'v26.10.17';
+    payload.data.profiles[0].release.stable.tag = 'v26.10.31';
+    await page.route('**/api/xray/core-profiles', async (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(payload) }));
+    await openView(page, 'routing');
+    await openCoreManagement(page);
+    const card = page.locator('[data-core-source][data-core-engine="xray"]');
+    const status = card.locator('[data-core-source-status] .xk-core-release');
+    const action = card.locator('[data-core-source-action="prepare"]');
+
+    await expect(status).toHaveClass(/is-ok/);
+    await expect(status).toContainText('Установлена последняя версия');
+    await expect(action).toHaveText('Переустановить');
+
+    // A different build of the running version is still a real update.
+    payload = clone(payload);
+    payload.data.state.installed_release_tag = 'v26.10.31-uwu.1';
+    payload.data.profiles[0].release.stable.tag = 'v26.10.31-uwu.2';
+    await card.getByRole('button', { name: 'Выбрать источник' }).click();
+    await page.locator('#xray-core-source-modal').getByRole('button', { name: 'Закрыть выбор источника' }).click();
+    await expect(status).toHaveClass(/is-update/);
+    await expect(status).toContainText('26.10.31-uwu.1 → 26.10.31-uwu.2');
+    await expect(action).toHaveText('Обновить до 26.10.31-uwu.2');
+  });
+
   test('source cards: the chosen one shows its file and names the install button', async ({ page }) => {
     let saved = null;
     await page.route('**/api/xray/core-profiles', async (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(xrayProfiles) }));

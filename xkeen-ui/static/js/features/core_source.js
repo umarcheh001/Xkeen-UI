@@ -228,12 +228,18 @@ function releaseState(data, selectedProfile, coreInstalled) {
       button: { label: `Установить ${shortTag(tag)}`, primary: true, icon: 'download' },
     };
   }
-  let order = compareVersions(installedVersion, latestVersion);
-  // A fork can publish a new build of the same upstream version.
-  if (order === 0 && state.installed_release_tag && shortTag(state.installed_release_tag) !== shortTag(tag)) order = -1;
+  const order = compareVersions(installedVersion, latestVersion);
+  const recordedVersion = versionNumbers(state.installed_release_tag);
+  // The recorded tag may lag behind a binary updated outside the panel.
+  // Compare tags only when they describe the running version; forks can
+  // publish distinct builds of the same upstream version.
+  const newerBuild = order === 0 && recordedVersion
+    && compareVersions(recordedVersion, installedVersion) === 0
+    && shortTag(state.installed_release_tag) !== shortTag(tag);
   const pre = release.stable?.prerelease ? ' · предварительный' : '';
-  if (order < 0) {
-    const from = state.detected_version ? installedVersion.join('.') : shortTag(state.installed_release_tag);
+  if (order < 0 || newerBuild) {
+    const from = newerBuild ? shortTag(state.installed_release_tag)
+      : state.detected_version ? installedVersion.join('.') : shortTag(state.installed_release_tag);
     return {
       kind: 'update', icon: 'download', title: 'Доступно обновление', note: `${from} → ${shortTag(tag)}${pre}`, stale,
       button: { label: `Обновить до ${shortTag(tag)}`, primary: true, icon: 'download' },
