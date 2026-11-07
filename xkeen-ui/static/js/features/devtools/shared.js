@@ -13,6 +13,7 @@ import { getDevtoolsNamespace, setDevtoolsNamespaceApi } from '../devtools_names
   const CORE_DOM = (XK.core && XK.core.dom) ? XK.core.dom : null;
   const CORE_HTTP = (XK.core && XK.core.http) ? XK.core.http : null;
   const UI = (XK.ui && XK.ui.sharedPrimitives) ? XK.ui.sharedPrimitives : null;
+  const READ_TIMEOUT_MS = 12000;
 
   function toast(msg, isError) {
     try {
@@ -24,17 +25,19 @@ import { getDevtoolsNamespace, setDevtoolsNamespaceApi } from '../devtools_names
   }
 
   async function getJSON(url) {
-    try {
-      if (UI && typeof UI.getJSON === 'function') return await UI.getJSON(url);
-      if (CORE_HTTP && typeof CORE_HTTP.fetchJSON === 'function') {
-        return await CORE_HTTP.fetchJSON(url, { cache: 'no-store' });
-      }
-    } catch (e) {
-      // Fall back to legacy implementation below
+    if (CORE_HTTP && typeof CORE_HTTP.fetchJSON === 'function') {
+      return CORE_HTTP.fetchJSON(url, { cache: 'no-store', timeoutMs: READ_TIMEOUT_MS, retry: 0 });
     }
-    const res = await fetch(url, { cache: 'no-store' });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), READ_TIMEOUT_MS);
+    let res;
     let data = null;
-    try { data = await res.json(); } catch (e) {}
+    try {
+      res = await fetch(url, { cache: 'no-store', signal: controller.signal });
+      data = await res.json();
+    } finally {
+      clearTimeout(timer);
+    }
     if (!res.ok) {
       const err = (data && data.error) ? String(data.error) : ('HTTP ' + res.status);
       throw new Error(err);

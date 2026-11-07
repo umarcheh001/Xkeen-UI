@@ -444,17 +444,15 @@ let serviceStatusModuleApi = null;
         cache: 'no-store',
         signal: controller ? controller.signal : undefined,
       });
+      if (!res.ok) throw new Error('status http error: ' + res.status);
+      const data = await res.json();
+      return {
+        serviceStatus: data && data.running ? 'running' : 'stopped',
+        currentCore: normalizeCore(data && data.core ? data.core : null),
+      };
     } finally {
       if (timer) clearTimeout(timer);
     }
-
-    if (!res.ok) throw new Error('status http error: ' + res.status);
-    const data = await res.json().catch(() => ({}));
-
-    return {
-      serviceStatus: data && data.running ? 'running' : 'stopped',
-      currentCore: normalizeCore(data && data.core ? data.core : null),
-    };
   }
 
   async function clearRestartLogUi() {

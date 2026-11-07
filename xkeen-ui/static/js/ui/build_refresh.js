@@ -8,8 +8,8 @@
 // no-store) carries the build stamp, and this script:
 //   - remembers which static files this browser has loaded (they are what may
 //     sit in its cache, including lazily imported modules);
-//   - when the stamp changes, refetches them with cache: 'reload', which
-//     overwrites the cached copies, and reloads the page once.
+//   - when the stamp changes, revalidates them with bounded concurrency and
+//     reloads the page after every request has succeeded.
 (() => {
   'use strict';
 
@@ -22,6 +22,8 @@
   const SEEN_KEY = 'xkeen-ui-static-seen-v1';
   const SEEN_LIMIT = 800;
   const REFETCH_TIMEOUT_MS = 15000;
+  const REFETCH_CONCURRENCY = 4;
+  const LOAD_FALLBACK_MS = 8000;
 
   // Same rule as routes/ui_assets.py (_IMMUTABLE_ASSET_ROOTS and
   // _HASHED_ASSET_BASENAME_RE): such files are unique per build already.
@@ -59,7 +61,7 @@
   function readSeen() {
     try {
       const parsed = JSON.parse(storage.getItem(SEEN_KEY) || '[]');
-      return Array.isArray(parsed) ? parsed.filter((item) => typeof item === 'string') : [];
+      return Array.isArray(parsed) ? parsed.map(trackedKey).filter(Boolean).slice(-SEEN_LIMIT) : [];
     } catch (e) {
       return [];
     }
@@ -111,13 +113,6 @@
 
   const previous = storage.getItem(STAMP_KEY);
   if (previous === stamp) return;
-
-  // Store first: whatever happens below, the next load must not loop.
-  try {
-    storage.setItem(STAMP_KEY, stamp);
-  } catch (e) {
-    return;
-  }
   const seenBefore = readSeen();
 
   function servedFromCache() {
@@ -131,33 +126,65 @@
     return keys;
   }
 
-  function refetch(key) {
-    return fetch(key, { cache: 'reload', credentials: 'same-origin' })
-      .then((res) => res.arrayBuffer().then(() => (res.status === 404 ? key : '')))
-      .catch(() => '');
-  }
-
-  function refresh() {
+  async function refresh() {
     const cachedNow = servedFromCache();
     const keys = Array.from(new Set(seenBefore.concat(cachedNow)));
     // A browser that meets the stamp for the first time only needs a reload
     // when this very page actually ran something from its cache.
     const needsReload = previous !== null || cachedNow.length > 0;
-    if (!keys.length) return Promise.resolve(false);
-
-    const all = Promise.all(keys.map(refetch)).then((gone) => {
-      const drop = new Set(gone.filter(Boolean));
-      if (drop.size) writeSeen(readSeen().filter((key) => !drop.has(key)));
-    });
-    const timeout = new Promise((resolve) => setTimeout(resolve, REFETCH_TIMEOUT_MS));
-    return Promise.race([all, timeout]).then(() => {
-      if (needsReload) location.reload();
-      return needsReload;
-    });
+    if (keys.length) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), REFETCH_TIMEOUT_MS);
+      const gone = new Set();
+      let next = 0;
+      let failed = false;
+      async function worker() {
+        while (next < keys.length && !failed && !controller.signal.aborted) {
+          const key = keys[next++];
+          try {
+            const response = await fetch(key, {
+              cache: 'no-cache', credentials: 'same-origin', signal: controller.signal,
+            });
+            if (response.status === 404) {
+              gone.add(key);
+            } else if (!response.ok) {
+              failed = true;
+              controller.abort();
+            } else {
+              await response.arrayBuffer();
+            }
+          } catch (e) {
+            failed = true;
+            controller.abort();
+          }
+        }
+      }
+      try {
+        await Promise.all(Array.from({ length: Math.min(REFETCH_CONCURRENCY, keys.length) }, worker));
+      } finally {
+        clearTimeout(timer);
+      }
+      if (gone.size) writeSeen(readSeen().filter((key) => !gone.has(key)));
+      if (failed || controller.signal.aborted) return false;
+    }
+    try {
+      storage.setItem(STAMP_KEY, stamp);
+    } catch (e) {
+      return false;
+    }
+    if (needsReload) location.reload();
+    return needsReload;
   }
 
   const done = new Promise((resolve) => {
-    const run = () => refresh().then(resolve, () => resolve(false));
+    let started = false;
+    const fallback = setTimeout(run, LOAD_FALLBACK_MS);
+    function run() {
+      if (started) return;
+      started = true;
+      clearTimeout(fallback);
+      refresh().then(resolve, () => resolve(false));
+    }
     if (document.readyState === 'complete') run();
     else window.addEventListener('load', run, { once: true });
   });

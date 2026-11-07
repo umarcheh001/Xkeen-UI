@@ -13,6 +13,8 @@ function normalizedError(code, message, status = 0) {
 // answer nor an error over a tunnel; after this long it counts as a lost
 // connection, and the window asks again instead of waiting for ever.
 export const POLL_TIMEOUT_MS = 10000;
+const READ_TIMEOUT_MS = 12000;
+const CATALOG_TIMEOUT_MS = 30000;
 
 export function createModuleLifecycleClient(fetchImpl = fetch) {
   async function request(path, method = 'GET', body, { timeoutMs = 0 } = {}) {
@@ -46,15 +48,16 @@ export function createModuleLifecycleClient(fetchImpl = fetch) {
   }
 
   return {
-    loadInstalled: () => request('/installed'),
-    loadUpdateChannel: () => request('/update-channel'),
+    loadInstalled: () => request('/installed', 'GET', undefined, { timeoutMs: READ_TIMEOUT_MS }),
+    loadUpdateChannel: () => request('/update-channel', 'GET', undefined, { timeoutMs: READ_TIMEOUT_MS }),
     setUpdateChannel: (channel) => request('/update-channel', 'POST', { channel }),
     loadStatus: () => request('/operations/status', 'GET', undefined, { timeoutMs: POLL_TIMEOUT_MS }),
-    loadAvailable: () => request('/available'),
+    loadAvailable: () => request('/available', 'GET', undefined, { timeoutMs: CATALOG_TIMEOUT_MS }),
     checkPanelUpdate: (forceRefresh = false) => request(
       '/panel/update-check',
       'POST',
       { force_refresh: Boolean(forceRefresh) },
+      { timeoutMs: CATALOG_TIMEOUT_MS },
     ),
     plan: (operation, moduleId) => request('/operations/plan', 'POST', { operation, ...(moduleId ? { module_id: moduleId } : {}) }),
     // A panel update is prepared in the background; its plan comes with the end.

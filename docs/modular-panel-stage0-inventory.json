@@ -38,8 +38,8 @@
         "gevent-websocket (optional)"
       ],
       "removable": false,
-      "unit_count": 670,
-      "size_bytes": 9132653,
+      "unit_count": 671,
+      "size_bytes": 9138772,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -51,7 +51,7 @@
         "frontend_feature": 45,
         "frontend_javascript": 40,
         "frontend_runtime": 2,
-        "frontend_test": 77,
+        "frontend_test": 78,
         "frontend_ui": 18,
         "stylesheet": 9,
         "template": 34
@@ -11474,7 +11474,7 @@
       "module_id": "core",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/devtools/shared.js",
-      "size_bytes": 12514,
+      "size_bytes": 12604,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -11750,7 +11750,7 @@
       "module_id": "core",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/module_manager/api.js",
-      "size_bytes": 3933,
+      "size_bytes": 4192,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -12102,7 +12102,7 @@
       "module_id": "core",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/service_status.js",
-      "size_bytes": 62148,
+      "size_bytes": 62140,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -13383,6 +13383,26 @@
         "panel-core",
         "xkeen-page"
       ],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "frontend_test",
+      "path": "e2e/build_refresh_recovery.spec.mjs",
+      "size_bytes": 4981,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
       "system_requirements": [
         "python3",
         "flask",
@@ -14969,7 +14989,7 @@
       "module_id": "core",
       "kind": "frontend_ui",
       "path": "xkeen-ui/static/js/ui/build_refresh.js",
-      "size_bytes": 6005,
+      "size_bytes": 6802,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
