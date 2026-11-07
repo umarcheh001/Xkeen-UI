@@ -26964,7 +26964,7 @@ body.panel-page #fm-volumes-modal .fm-layout-row-controls input[type="range"] {
 body.panel-page #fm-volumes-modal .fm-layout-row-controls input[type="range"]::-webkit-slider-runnable-track {
   height: 6px;
   border-radius: 3px;
-  background: linear-gradient(to right, var(--op-accent) var(--fm-range-fill, 50%), var(--op-surface-3) var(--fm-range-fill, 50%));
+  background: var(--op-surface-3);
 }
 body.panel-page #fm-volumes-modal .fm-layout-row-controls input[type="range"]::-webkit-slider-thumb {
   appearance: none;

@@ -105,12 +105,12 @@
           "accessible_label": "Предупреждение"
         },
         {
-          "location": "xkeen-ui/static/js/features/file_manager/storage.js:L295",
+          "location": "xkeen-ui/static/js/features/file_manager/storage.js:L294",
           "control_type": "runtime-action",
           "accessible_label": "Предупреждение"
         },
         {
-          "location": "xkeen-ui/static/js/features/file_manager/storage.js:L339",
+          "location": "xkeen-ui/static/js/features/file_manager/storage.js:L338",
           "control_type": "runtime-action",
           "accessible_label": "Предупреждение"
         },
@@ -248,12 +248,12 @@
           "accessible_label": "Назад"
         },
         {
-          "location": "xkeen-ui/static/js/features/file_manager/storage.js:L292",
+          "location": "xkeen-ui/static/js/features/file_manager/storage.js:L291",
           "control_type": "runtime-action",
           "accessible_label": "Назад"
         },
         {
-          "location": "xkeen-ui/static/js/features/file_manager/storage.js:L338",
+          "location": "xkeen-ui/static/js/features/file_manager/storage.js:L337",
           "control_type": "runtime-action",
           "accessible_label": "Назад"
         },
@@ -2163,7 +2163,7 @@
           "accessible_label": "Список"
         },
         {
-          "location": "xkeen-ui/static/js/features/file_manager/storage.js:L295",
+          "location": "xkeen-ui/static/js/features/file_manager/storage.js:L294",
           "control_type": "runtime-action",
           "accessible_label": "Список"
         },

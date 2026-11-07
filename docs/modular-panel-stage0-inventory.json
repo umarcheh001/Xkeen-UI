@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 672,
-      "size_bytes": 9177513,
+      "size_bytes": 9177486,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -254,7 +254,7 @@
       ],
       "removable": true,
       "unit_count": 86,
-      "size_bytes": 1083337,
+      "size_bytes": 1083227,
       "kind_counts": {
         "backend_route": 22,
         "backend_service": 32,
@@ -7735,7 +7735,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_panel_operator_stage0_contract.py",
-      "size_bytes": 11022,
+      "size_bytes": 11092,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -15625,7 +15625,7 @@
       "module_id": "core",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/panel-operator.css",
-      "size_bytes": 843834,
+      "size_bytes": 843737,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -28928,7 +28928,7 @@
       "module_id": "tool.files",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/file_manager/storage.js",
-      "size_bytes": 46542,
+      "size_bytes": 46432,
       "depends_on": [
         "core"
       ],
@@ -36867,7 +36867,7 @@
         },
         "tool.files": {
           "unit_count": 86,
-          "size_bytes": 1083337
+          "size_bytes": 1083227
         },
         "tool.advanced-diagnostics": {
           "unit_count": 49,

@@ -239,7 +239,6 @@ import { iconHtml } from 'xk-core/js/ui/operator_icons.js';
       const input = panel.querySelector(`[data-size-input="${index}"]`);
       slider.max = String(max);
       slider.value = String(amount);
-      slider.style.setProperty('--fm-range-fill', `${max === 64 ? 100 : 100 * (amount - 64) / (max - 64)}%`);
       input.max = String((max / 1024).toFixed(4));
       input.value = String(Number((amount / 1024).toFixed(2)));
     });

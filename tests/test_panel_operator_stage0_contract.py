@@ -139,9 +139,10 @@ def test_stage0_inventory_classifies_all_inline_styles_and_dom_hooks(tmp_path):
 
     # The official stable/pre-release Commands actions are part of the
     # canonical panel contract again. The Xray logs menu dropped its last
-    # inline opacity when it was redesigned.
-    assert inline["attribute_count"] == 206
-    assert sum(inline["attribute_kind_counts"].values()) == 206
+    # inline opacity when it was redesigned. The USB modal removes two more
+    # presentation-only inline styles.
+    assert inline["attribute_count"] == 204
+    assert sum(inline["attribute_kind_counts"].values()) == 204
     assert inline["attribute_kind_counts"]["state-visibility-hook"] > 0
     assert inline["attribute_kind_counts"]["presentation-geometry"] > 0
     assert inline["attribute_kind_counts"]["mixed-state-and-presentation"] > 0
