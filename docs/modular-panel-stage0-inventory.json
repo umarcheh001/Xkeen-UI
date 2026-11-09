@@ -398,7 +398,7 @@
       "system_requirements": [],
       "removable": true,
       "unit_count": 17,
-      "size_bytes": 355664,
+      "size_bytes": 372203,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 2,
@@ -29267,7 +29267,7 @@
       "module_id": "tool.server-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/provider_diagnostics.js",
-      "size_bytes": 59792,
+      "size_bytes": 65225,
       "depends_on": [
         "core"
       ],
@@ -29309,7 +29309,7 @@
       "module_id": "tool.server-diagnostics",
       "kind": "frontend_test",
       "path": "e2e/provider_diagnostics.spec.mjs",
-      "size_bytes": 37749,
+      "size_bytes": 41579,
       "depends_on": [
         "core"
       ],
@@ -29345,7 +29345,7 @@
       "module_id": "tool.server-diagnostics",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/server-diagnostics.css",
-      "size_bytes": 35434,
+      "size_bytes": 42100,
       "depends_on": [
         "core"
       ],
@@ -29362,7 +29362,7 @@
       "module_id": "tool.server-diagnostics",
       "kind": "template",
       "path": "xkeen-ui/templates/panel/modals/provider_diagnostics.html",
-      "size_bytes": 11509,
+      "size_bytes": 12119,
       "depends_on": [
         "core"
       ],
