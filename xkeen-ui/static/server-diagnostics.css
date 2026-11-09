@@ -441,3 +441,17 @@ body.panel-page #provider-check-modal .xk-provider-check-actions button { min-he
   body.panel-page .xk-provider-check-source-row:has(#provider-check-current-panel:not([hidden])):has(#provider-check-overview:not([hidden])) { display: block; }
   body.panel-page .xk-provider-check-source-row:has(#provider-check-current-panel:not([hidden])) .xk-provider-check-overview { margin-top: 10px; }
 }
+/* Optional transfer checks remain inside the selected server card. */
+body.panel-page .xk-provider-check-advanced-settings { margin: 12px 0; color: var(--op-muted); font-size: 12px; }
+body.panel-page .xk-provider-check-advanced-settings summary { cursor: pointer; }
+body.panel-page .xk-provider-check-advanced-settings label { display: block; margin: 10px 0 5px; }
+body.panel-page #provider-check-ports { box-sizing: border-box; width: min(100%, 280px); min-height: 32px; padding: 5px 8px; border: 1px solid var(--op-border-strong); border-radius: 5px; color: var(--op-text); background: var(--op-surface); }
+body.panel-page .xk-provider-check-advanced-settings p { margin: 7px 0; line-height: 1.5; }
+body.panel-page .xk-provider-check-advanced-result { grid-column: 1 / -1; min-width: 0; padding: 12px; border: 1px solid var(--op-border); border-radius: 6px; background: var(--op-surface-2); overflow-wrap: anywhere; font-size: 12px; line-height: 1.5; }
+body.panel-page .xk-provider-check-advanced-result:empty { display: none; }
+body.panel-page .xk-provider-check-advanced-result p { margin: 7px 0; }
+body.panel-page .xk-provider-check-advanced-result dl { display: grid; grid-template-columns: minmax(80px, 120px) minmax(0, 1fr); gap: 5px 10px; }
+body.panel-page .xk-provider-check-advanced-result :is(dt, dd) { margin: 0; min-width: 0; }
+body.panel-page .xk-provider-check-advanced-result dt { color: var(--op-muted); }
+body.panel-page .xk-provider-check-advanced-address { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--op-border); }
+body.panel-page .xk-provider-check-advanced-result summary { cursor: pointer; padding: 5px 0; }

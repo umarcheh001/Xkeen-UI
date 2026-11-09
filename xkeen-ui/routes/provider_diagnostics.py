@@ -16,6 +16,7 @@ from services.provider_diagnostics import (
     read_current_xray_targets,
     register_proxy_context,
 )
+from services.provider_diagnostics_extended import advanced_probe
 
 
 def create_provider_diagnostics_blueprint(*, xray_configs_dir: str, mihomo_config_file: str) -> Blueprint:
@@ -33,7 +34,7 @@ def create_provider_diagnostics_blueprint(*, xray_configs_dir: str, mihomo_confi
                 return jsonify({"ok": False, "error": "Некорректная страница серверов."}), 400
             outbounds = []
             result = read_current_xray_targets(xray_configs_dir, offset=offset, probe_outbounds=outbounds)
-            ref = register_proxy_context(outbounds, len(result["targets"]))
+            ref = register_proxy_context(outbounds, len(result["targets"]), result["targets"])
             if ref:
                 for index, (target, outbound) in enumerate(zip(result["targets"], outbounds)):
                     if outbound is not None:
@@ -42,7 +43,7 @@ def create_provider_diagnostics_blueprint(*, xray_configs_dir: str, mihomo_confi
             outbounds = []
             items = current_mihomo_targets(mihomo_config_file, probe_proxies=outbounds)
             result = {"targets": items, "has_more": False, "next_offset": len(items)}
-            ref = register_proxy_context(outbounds, len(items))
+            ref = register_proxy_context(outbounds, len(items), items)
             if ref:
                 for index, (target, outbound) in enumerate(zip(items, outbounds)):
                     if outbound is not None:
@@ -64,13 +65,24 @@ def create_provider_diagnostics_blueprint(*, xray_configs_dir: str, mihomo_confi
             result = parse_source(payload["source"], probe_outbounds=outbounds, core=core)
         except ValueError as exc:
             return jsonify({"ok": False, "error": str(exc)}), 400
-        ref = register_proxy_context(outbounds, len(result["targets"]))
+        ref = register_proxy_context(outbounds, len(result["targets"]), result["targets"])
         if ref:
             for index, (target, outbound) in enumerate(zip(result["targets"], outbounds)):
                 if outbound is not None:
                     engine = outbound.get("_diagnostics_engine", "xray")
                     target.update(proxy_ref=ref, proxy_index=index, proxy_engine=engine)
         return jsonify({"ok": True, **result})
+
+    @bp.post("/api/provider-diagnostics/advanced-probe")
+    def advanced():
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return jsonify({"ok": False, "error": "Некорректная расширенная проверка."}), 400
+        try:
+            result = advanced_probe(payload)
+        except ValueError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+        return jsonify({"ok": True, "result": result})
 
     @bp.post("/api/provider-diagnostics/proxy-probe")
     def proxy_probe():

@@ -45,11 +45,11 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 | `tool.backups` | 8 | 99.8 КБ | 14 | 0 | 0 | да |
 | `integration.happ` | 22 | 325.0 КБ | 5 | 0 | 2 | да |
 | `tool.advanced-diagnostics` | 49 | 589.2 КБ | 16 | 0 | 1 | да |
-| `tool.server-diagnostics` | 15 | 265.4 КБ | 8 | 0 | 1 | да |
+| `tool.server-diagnostics` | 17 | 322.7 КБ | 9 | 0 | 1 | да |
 
 ## Backend routes и регистрация
 
-- Endpoint declarations: **355**.
+- Endpoint declarations: **356**.
 - Файлов с route decorators/WS dispatch: **52**.
 - Точек регистрации: **31**.
 
@@ -131,7 +131,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 | `tool.files` | `core` | 86 | `xkeen-ui/routes/fileops/__init__.py`<br>`xkeen-ui/routes/fileops/blueprint.py`<br>`xkeen-ui/routes/fileops/endpoints_http.py` |
 | `tool.files` | `engine.xray` | 1 | `xkeen-ui/routes/fs/endpoints_transfer.py` |
 | `tool.files` | `tool.backups` | 1 | `xkeen-ui/routes/fs/blueprint.py` |
-| `tool.server-diagnostics` | `core` | 15 | `xkeen-ui/routes/provider_diagnostics.py`<br>`xkeen-ui/services/provider_diagnostics.py`<br>`tests/test_provider_diagnostics.py` |
+| `tool.server-diagnostics` | `core` | 17 | `xkeen-ui/routes/provider_diagnostics.py`<br>`xkeen-ui/services/provider_diagnostics.py`<br>`xkeen-ui/services/provider_diagnostics_extended.py` |
 | `tool.server-diagnostics` | `engine.mihomo` | 1 | `xkeen-ui/services/provider_diagnostics.py` |
 | `tool.server-diagnostics` | `engine.xray` | 1 | `xkeen-ui/services/provider_diagnostics.py` |
 | `tool.terminal` | `core` | 47 | `xkeen-ui/routes/commands.py`<br>`xkeen-ui/services/ws_pty.py`<br>`tests/test_ws_pty_replay.py` |

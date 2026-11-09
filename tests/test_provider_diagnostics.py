@@ -37,10 +37,10 @@ def direct_route(monkeypatch):
 @pytest.mark.parametrize(("with_sni", "without_sni", "control", "registry", "expected"), [
     ("tls_error", "tls_ok", "tls_ok", False, "tls_sni_filtering"),
     ("tls_timeout", "tls_ok", "tls_ok", False, "tls_sni_filtering"),
-    ("timeout", "timeout", "tls_ok", False, "server_unresponsive"),
-    ("tcp_timeout", "tcp_timeout", "tls_ok", False, "server_unresponsive"),
+    ("timeout", "timeout", "tls_ok", False, "tcp_unresponsive"),
+    ("tcp_timeout", "tcp_timeout", "tls_ok", False, "tcp_unresponsive"),
     ("tls_error", "tls_ok", "timeout", False, "undetermined"),
-    ("tls_ok", "tls_ok", "tls_ok", True, "undetermined"),
+    ("tls_ok", "tls_ok", "tls_ok", True, "tls_reachable"),
 ])
 def test_comparative_tls_verdicts(monkeypatch, direct_route, with_sni, without_sni, control, registry, expected):
     from services import provider_diagnostics
@@ -51,7 +51,7 @@ def test_comparative_tls_verdicts(monkeypatch, direct_route, with_sni, without_s
 
     def attempt(item, *, server_name, bypass_mark=0):
         seen.append((item[4][0], server_name))
-        if item[4][0] == "1.1.1.1":
+        if item[4][0] in {"1.1.1.1", "8.8.8.8"}:
             return control
         return with_sni if server_name else without_sni
 
@@ -64,7 +64,7 @@ def test_comparative_tls_verdicts(monkeypatch, direct_route, with_sni, without_s
     assert result["registry"]["listed"] is registry
     assert result["target_ip"] == "198.51.100.30"
     expected_rounds = 1 if with_sni == "tls_ok" else 2
-    assert seen == [("1.1.1.1", "cloudflare-dns.com"), *(
+    assert seen == [("1.1.1.1", "cloudflare-dns.com"), ("8.8.8.8", "dns.google"), *(
         [("198.51.100.30", "front.example.org"), ("198.51.100.30", None)] * expected_rounds
     )]
 
@@ -86,7 +86,7 @@ def test_comparative_tls_repeats_across_distinct_ips(monkeypatch, direct_route, 
     def attempt(address, *, server_name, bypass_mark=0):
         ip = address[4][0]
         attempts.append((ip, server_name))
-        if ip == "1.1.1.1":
+        if ip in {"1.1.1.1", "8.8.8.8"}:
             return "tls_ok"
         if ip == "198.51.100.30":
             return "tls_error" if server_name else "tls_ok"
@@ -104,7 +104,7 @@ def test_comparative_tls_repeats_across_distinct_ips(monkeypatch, direct_route, 
     assert len(result["address_results"][0]["with_sni"]) == len(result["address_results"][0]["without_sni"]) == 2
     expected_second_rounds = 2 if second_with != "tls_ok" else 1
     assert len(result["address_results"][1]["with_sni"]) == len(result["address_results"][1]["without_sni"]) == expected_second_rounds
-    assert len(attempts) == 1 + 4 + 2 * expected_second_rounds
+    assert len(attempts) == 2 + 4 + 2 * expected_second_rounds
     assert not any(ip == "198.51.100.32" for ip, _ in attempts)
 
 
@@ -117,11 +117,11 @@ def test_comparative_tls_without_sni_failure_is_not_filtering(monkeypatch, direc
     monkeypatch.setattr(diagnostics, "lookup_public_lists", lambda _raw: {"status": "unavailable"})
 
     result = diagnostics.compare_tls_path(make_target("edge.example.org", 443, tls=True, sni="front.example.org"))
-    assert result["verdict"] == "undetermined"
+    assert result["verdict"] == "tls_reachable"
     assert result["address_results"][0]["pattern"] == "tls_reachable"
 
 
-def test_comparative_tls_stops_after_healthy_first_ip(monkeypatch, direct_route):
+def test_comparative_tls_checks_second_ip_even_after_healthy_first(monkeypatch, direct_route):
     from services import provider_diagnostics as diagnostics
 
     addresses = [
@@ -138,10 +138,10 @@ def test_comparative_tls_stops_after_healthy_first_ip(monkeypatch, direct_route)
     monkeypatch.setattr(diagnostics, "_tls_comparison_attempt", attempt)
     monkeypatch.setattr(diagnostics, "lookup_public_lists", lambda _raw: {"status": "skipped"})
     result = diagnostics.compare_tls_path(make_target("edge.example.org", 443, tls=True, sni="front.example.org"))
-    assert result["attempts_total"] == 3
+    assert result["attempts_total"] == 6
     assert result["rounds_per_ip"] == 1
-    assert [item["ip"] for item in result["address_results"]] == ["198.51.100.30"]
-    assert all(ip != "198.51.100.31" for ip, _, _ in attempts)
+    assert [item["ip"] for item in result["address_results"]] == ["198.51.100.30", "198.51.100.31"]
+    assert any(ip == "198.51.100.31" for ip, _, _ in attempts)
 
 
 def test_comparative_tls_refuses_unverified_route(monkeypatch):

@@ -5,6 +5,53 @@ const TARGETS = [
   { name: 'AWG', host: 'awg.example', port: 51820, network: 'udp', protocol: 'wireguard', source: '04_outbounds.json', tls: false },
 ];
 
+for (const width of [1440, 390]) {
+  test(`extended diagnostics shows repeatable stalls and port results at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 960 });
+    await page.route('**/api/provider-diagnostics/targets?core=xray', (route) => route.fulfill({ json: {
+      ok: true, targets: [{ ...TARGETS[0], proxy_ref: 'opaque-ref', proxy_index: 0 }],
+    } }));
+    let request;
+    await page.route('**/api/provider-diagnostics/advanced-probe', async (route) => {
+      request = route.request().postDataJSON();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const stalled = { status: 'transfer_timeout', stage: 'body', bytes_received: 18000, requested_bytes: 262144, first_byte_ms: 140, last_progress_ms: 170, total_ms: 4200 };
+      return route.fulfill({ json: { ok: true, result: {
+        status: 'ok', engine: 'xray', network: 'tcp', total_ms: 26000,
+        address_results: [{ ip: '198.51.100.10', family: 'IPv4', core_status: 'ok', transport_verified: true,
+          diagnosis: { verdict: 'byte_limit_pattern', confidence: 'medium', approx_bytes: 18000, message: 'На независимых площадках повторяется остановка после похожего объёма. Есть признаки ограничения передачи; причина не подтверждена.' },
+          ports: [{ port: 443, status: 'reachable', tcp_ms: 12 }, { port: 22, status: 'reachable', tcp_ms: 10 }, { port: 8443, status: 'timeout' }],
+          tests: ['Cloudflare', 'HTTPBingo / Fly.io'].map((control) => ({ control, destination_ip: '8.8.8.8', direct: { status: 'transfer_ok', bytes_received: 262144, requested_bytes: 262144 }, small: { status: 'transfer_ok', bytes_received: 8192, requested_bytes: 8192 }, attempts: [stalled, stalled, stalled], paced: { ...stalled, requested_bytes: 65536 } })),
+        }, { ip: '2001:db8::1', family: 'IPv6', core_status: 'ok', transport_verified: false,
+          diagnosis: { verdict: 'undetermined', confidence: 'low', message: 'Передача не подтверждена.' }, ports: [{ port: 443, status: 'timeout' }], tests: [] }],
+      } } });
+    });
+    await page.goto('/');
+    await selectPanelView(page, 'routing');
+    await page.locator('[data-provider-check-core="xray"]').click();
+    await page.locator('.xk-provider-check-advanced-settings summary').click();
+    await page.locator('#provider-check-ports').fill('22,8443');
+    const button = page.getByRole('button', { name: 'Расширенная проверка', exact: true });
+    await button.click();
+    await expect(button).toHaveClass(/is-loading/);
+    const output = page.locator('.xk-provider-check-advanced-result');
+    await expect(output).toContainText('Остановка около 17,6 КБ');
+    await expect(output).toContainText('IPv6 · 2001:db8::1');
+    await expect(output).toContainText('TCP :8443');
+    await expect(output).toContainText('причина не подтверждена');
+    expect(request.ref).toBe('opaque-ref');
+    expect(request.ports).toBe('22,8443');
+    await output.getByText('Cloudflare · 8.8.8.8', { exact: true }).click();
+    await expect(output).toContainText('последние данные: 170 мс');
+    await expect(output).toContainText('256 КБ · 3');
+    await expect(button).toBeEnabled();
+    const overflow = await output.evaluate((element) => element.scrollWidth > element.clientWidth + 1);
+    expect(overflow).toBe(false);
+    await output.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `test-results/provider-diagnostics-extended-${width}.png`, fullPage: false });
+  });
+}
+
 async function expectCompactDetailActions(page) {
   const geometry = await page.locator('.xk-provider-check-details').first().locator('.xk-provider-check-detail-actions').evaluate((container) => {
     const frame = container.getBoundingClientRect();
@@ -369,7 +416,7 @@ test('manual proxy link can be checked through the proxy before TCP checks', asy
   await expect(proxyButton).toBeVisible();
   await proxyButton.click();
   await expect(proxyButton).toHaveClass(/is-loading/);
-  await expect(page.locator('.xk-provider-check-proxy-status')).toContainText('Прокси работает · 86 мс');
+  await expect(page.locator('.xk-provider-check-proxy-status')).toContainText('Короткий запрос прошёл · 86 мс');
   await expect(page.locator('.xk-provider-check-row-state')).toContainText('Не проверен');
   await expect(page.locator('#provider-check-resource-hint')).toContainText('Ссылка подписки выше нужна только для поиска серверов');
   const resourceButton = page.getByRole('button', { name: 'Сравнить доступ' });
@@ -419,7 +466,7 @@ test('Mihomo proxy check starts the selected engine and shows its result', async
   await expect(proxyButton).toHaveAttribute('data-tooltip', /Mihomo/);
   await proxyButton.click();
   await expect(proxyButton).toHaveClass(/is-loading/);
-  await expect(page.locator('.xk-provider-check-proxy-status')).toContainText('Прокси работает · 54 мс');
+  await expect(page.locator('.xk-provider-check-proxy-status')).toContainText('Короткий запрос прошёл · 54 мс');
 });
 
 test('resource comparison remains readable on a phone', async ({ page }) => {

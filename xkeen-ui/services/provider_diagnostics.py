@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import functools
+from contextlib import contextmanager
 import ipaddress
 import http.client
 import json
@@ -36,11 +37,10 @@ _COMPARE_PROBE_SLOTS = threading.BoundedSemaphore(1)
 _PROXY_PROBE_SLOTS = threading.BoundedSemaphore(2)
 _RESOURCE_PROBE_SLOTS = threading.BoundedSemaphore(2)
 _PROXY_CONTEXT_LOCK = threading.Lock()
-_PROXY_CONTEXTS: OrderedDict[str, tuple[float, list[dict | None]]] = OrderedDict()
+_PROXY_CONTEXTS: OrderedDict[str, tuple[float, list[dict | None], list[dict]]] = OrderedDict()
 _PROXY_CONTEXT_TTL = 600
 _PROXY_CONTEXT_LIMIT = 32
-_CONTROL_IP = "1.1.1.1"
-_CONTROL_SNI = "cloudflare-dns.com"
+_TLS_CONTROLS = (("1.1.1.1", "cloudflare-dns.com"), ("8.8.8.8", "dns.google"))
 _TLS_COMPARE_IP_LIMIT = 2
 _TLS_COMPARE_ROUNDS = 2
 _UDP_PROTOCOLS = {"hysteria", "hysteria2", "hy2", "tuic", "wireguard", "anytls-quic"}
@@ -158,6 +158,15 @@ def xray_outbound_targets(obj: object, *, source: str = "Xray", limit: int = MAX
         for container in (settings, outbound.get("hysteriaSettings"), outbound.get("wireguardSettings")):
             if isinstance(container, dict) and (container.get("address") or container.get("server")):
                 endpoints.append(container)
+        if protocol == "wireguard":
+            for peer in settings.get("peers", []) if isinstance(settings.get("peers"), list) else []:
+                if isinstance(peer, dict) and isinstance(peer.get("endpoint"), str):
+                    try:
+                        endpoint = urlsplit("//" + peer["endpoint"])
+                        if endpoint.hostname and endpoint.port:
+                            endpoints.append({"address": endpoint.hostname, "port": endpoint.port})
+                    except ValueError:
+                        pass
         for endpoint in endpoints:
             try:
                 target = make_target(endpoint.get("address") or endpoint.get("server"), endpoint.get("port"), name=name, protocol=protocol, network=network, tls_mode=tls_mode, sni=sni, verify_tls=security_settings.get("allowInsecure") is not True, source=source)
@@ -546,20 +555,35 @@ def parse_source(source: str, *, allow_fetch: bool = True, probe_outbounds: list
     return {"targets": targets, "warnings": warnings, "truncated": truncated}
 
 
-def register_proxy_context(outbounds: list[dict | None], target_count: int) -> str:
+def register_proxy_context(outbounds: list[dict | None], target_count: int, targets: list[dict] | None = None) -> str:
     if not any(isinstance(item, dict) for item in outbounds):
         return ""
     token = secrets.token_urlsafe(32)
     now = time.monotonic()
     entries = (outbounds[:target_count] + [None] * target_count)[:target_count]
     with _PROXY_CONTEXT_LOCK:
-        for key, (expires_at, _) in list(_PROXY_CONTEXTS.items()):
+        for key, cached in list(_PROXY_CONTEXTS.items()):
+            expires_at = cached[0]
             if expires_at <= now:
                 del _PROXY_CONTEXTS[key]
         while len(_PROXY_CONTEXTS) >= _PROXY_CONTEXT_LIMIT:
             _PROXY_CONTEXTS.popitem(last=False)
-        _PROXY_CONTEXTS[token] = (now + _PROXY_CONTEXT_TTL, entries)
+        _PROXY_CONTEXTS[token] = (now + _PROXY_CONTEXT_TTL, entries, targets or [])
     return token
+
+
+def _proxy_context(token: str, index: int) -> tuple[dict, dict | None]:
+    if not isinstance(token, str) or len(token) > 100 or type(index) is not int:
+        raise ValueError("Некорректная проверка прокси.")
+    with _PROXY_CONTEXT_LOCK:
+        cached = _PROXY_CONTEXTS.get(token)
+        if cached is None or cached[0] <= time.monotonic() or not 0 <= index < len(cached[1]):
+            raise ValueError("Данные прокси устарели. Загрузите список серверов заново.")
+        entry = cached[1][index]
+        target = cached[2][index] if index < len(cached[2]) else None
+    if not isinstance(entry, dict):
+        raise ValueError("Для этого сервера проверка через прокси недоступна.")
+    return entry, target
 
 
 def _mihomo_probe_config(entry: dict, port: int) -> str:
@@ -719,11 +743,12 @@ def _resource_addresses(host: str, port: int) -> list[tuple]:
     return addresses[:4]
 
 
-def _xkeen_direct_mark() -> int | None:
+def _xkeen_direct_mark(*, ipv6: bool = False) -> int | None:
     # Only mark the probe after confirming XKeen returns that mark before REDIRECT.
     if not sys.platform.startswith("linux"):
         return 0
-    for binary in ("/opt/sbin/iptables", "iptables"):
+    tool = "ip6tables" if ipv6 else "iptables"
+    for binary in ("/opt/sbin/" + tool, tool):
         try:
             output = subprocess.run([binary, "-t", "nat", "-S", "OUTPUT"], capture_output=True, text=True, timeout=2)
         except FileNotFoundError:
@@ -754,6 +779,13 @@ def _xkeen_direct_mark() -> int | None:
     return None
 
 
+def _address_direct_mark(address: tuple, ipv4_mark: int | None) -> int | None:
+    # IPv4 OUTPUT exclusions say nothing about the IPv6 firewall.
+    if address[0] == socket.AF_INET6 and sys.platform.startswith("linux"):
+        return _xkeen_direct_mark(ipv6=True)
+    return ipv4_mark
+
+
 def _mark_direct_socket(connection: socket.socket, bypass_mark: int) -> bool:
     if not bypass_mark:
         return True
@@ -764,15 +796,29 @@ def _mark_direct_socket(connection: socket.socket, bypass_mark: int) -> bool:
         return False
 
 
-def _resource_http_request(parts: tuple[str, str, int, str], *, address: tuple | None = None, proxy_port: int | None = None, bypass_mark: int = 0) -> dict:
+def _resource_http_request(parts: tuple[str, str, int, str], *, address: tuple | None = None, proxy_port: int | None = None, bypass_mark: int = 0, transfer_bytes: int = 0, duration: float = 12, paced: bool = False) -> dict:
     scheme, host, port, path = parts
     started = time.monotonic()
     result: dict = {"status": "tcp_error", "dns": "через прокси" if proxy_port else "локальный", "tcp_ms": None, "tls_ms": None, "http_status": None}
     sock = None
+    timer = None
+    expired = threading.Event()
+    stage = "tcp"
+    if transfer_bytes:
+        result.update(requested_bytes=transfer_bytes, bytes_received=0, first_byte_ms=None, last_progress_ms=None, checkpoints=[])
+
+    def expire():
+        expired.set()
+        if sock is not None:
+            try:
+                sock.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+
     try:
-        endpoint = ("127.0.0.1", proxy_port) if proxy_port else address[4][:2]
+        endpoint = ("127.0.0.1", proxy_port) if proxy_port else address[4]
         if proxy_port:
-            sock = socket.create_connection(endpoint, timeout=4)
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(4)
         else:
             sock = socket.socket(address[0], address[1], address[2])
@@ -780,7 +826,11 @@ def _resource_http_request(parts: tuple[str, str, int, str], *, address: tuple |
             if not _mark_direct_socket(sock, bypass_mark):
                 result["status"] = "route_unverified"
                 return result
-            sock.connect(endpoint)
+        if transfer_bytes:
+            timer = threading.Timer(duration, expire)
+            timer.daemon = True
+            timer.start()
+        sock.connect(endpoint)
         result["tcp_ms"] = round((time.monotonic() - started) * 1000)
         pinned_ip = address[4][0]
         result["connected_ip"] = pinned_ip
@@ -788,6 +838,7 @@ def _resource_http_request(parts: tuple[str, str, int, str], *, address: tuple |
         if port != (443 if scheme == "https" else 80):
             host_authority += f":{port}"
         if proxy_port and scheme == "https":
+            stage = "proxy_connect"
             connect_authority = f"[{pinned_ip}]:{port}" if ":" in pinned_ip else f"{pinned_ip}:{port}"
             sock.sendall(f"CONNECT {connect_authority} HTTP/1.1\r\nHost: {host_authority}\r\n\r\n".encode("ascii"))
             tunnel = http.client.HTTPResponse(sock)
@@ -796,9 +847,15 @@ def _resource_http_request(parts: tuple[str, str, int, str], *, address: tuple |
                 result.update(status="proxy_error", http_status=tunnel.status)
                 return result
         if scheme == "https":
+            stage = "tls"
             tls_started = time.monotonic()
             try:
-                sock = ssl.create_default_context().wrap_socket(sock, server_hostname=host)
+                context = ssl.create_default_context()
+                if transfer_bytes:
+                    sock = context.wrap_socket(sock, server_hostname=host, do_handshake_on_connect=False)
+                    sock.do_handshake()
+                else:
+                    sock = context.wrap_socket(sock, server_hostname=host)
             except ssl.SSLCertVerificationError:
                 result["status"] = "tls_cert_error"
                 return result
@@ -815,13 +872,39 @@ def _resource_http_request(parts: tuple[str, str, int, str], *, address: tuple |
                 result["certificate_name"] = str(names[0])[:253]
         pinned_authority = f"[{pinned_ip}]" if ":" in pinned_ip else pinned_ip
         request_path = f"http://{pinned_authority}:{port}{path}" if proxy_port and scheme == "http" else path
-        sock.sendall(f"GET {request_path} HTTP/1.1\r\nHost: {host_authority}\r\nUser-Agent: Xkeen-UI-Diagnostics/1\r\nAccept: */*\r\nConnection: close\r\n\r\n".encode("ascii"))
+        stage = "http_headers"
+        sock.sendall(f"GET {request_path} HTTP/1.1\r\nHost: {host_authority}\r\nUser-Agent: Xkeen-UI-Diagnostics/1\r\nAccept: */*\r\nAccept-Encoding: identity\r\nConnection: close\r\n\r\n".encode("ascii"))
         response = http.client.HTTPResponse(sock)
         response.begin()
         result.update(status="http_response", http_status=response.status)
         location = response.getheader("Location")
         if location:
             result["redirect_host"] = urlsplit(location).hostname or host
+        if transfer_bytes:
+            if response.status != 200 or response.getheader("Content-Encoding", "identity").lower() != "identity":
+                result["status"] = "unexpected_response"
+                return result
+            stage = "body"
+            while result["bytes_received"] < transfer_bytes:
+                chunk = response.read1(min(4096, transfer_bytes - result["bytes_received"]))
+                if not chunk:
+                    result["status"] = "transfer_timeout" if expired.is_set() else "transfer_short"
+                    break
+                elapsed = round((time.monotonic() - started) * 1000)
+                if result["first_byte_ms"] is None:
+                    result["first_byte_ms"] = elapsed
+                before = result["bytes_received"]
+                result["bytes_received"] += len(chunk)
+                result["last_progress_ms"] = elapsed
+                for threshold in (4096, 8192, 16384, 20480, 32768, 65536, 131072, 262144):
+                    if before < threshold <= result["bytes_received"]:
+                        result["checkpoints"].append({"bytes": threshold, "ms": elapsed})
+                if expired.is_set():
+                    result["status"] = "transfer_timeout"
+                    break
+            else:
+                result["status"] = "transfer_ok"
+            return result
         sample = response.read(4096)
         text = sample.decode("utf-8", errors="ignore").lower()
         result["block_page_hint"] = response.status == 451 or any(marker in text for marker in (
@@ -830,23 +913,34 @@ def _resource_http_request(parts: tuple[str, str, int, str], *, address: tuple |
         ))
     except socket.gaierror:
         result["status"] = "dns_error"
-    except (OSError, http.client.HTTPException):
+    except (OSError, http.client.HTTPException) as error:
         result["status"] = "http_error" if result["tcp_ms"] is not None else "tcp_error"
+        if transfer_bytes:
+            result["status"] = ("transfer_timeout" if expired.is_set() or isinstance(error, TimeoutError)
+                                else "transfer_reset" if isinstance(error, ConnectionResetError)
+                                else "transfer_error")
     finally:
+        if timer is not None:
+            timer.cancel()
         if sock is not None:
             sock.close()
         result["total_ms"] = round((time.monotonic() - started) * 1000)
+        if transfer_bytes:
+            result["stage"] = stage
+            result["paced"] = paced
     return result
 
 
-def _resource_via_proxy(entry: dict, parts: tuple[str, str, int, str], address: tuple) -> dict:
+@contextmanager
+def _resource_proxy_session(entry: dict):
     from services.xray_subscriptions import _reserve_local_port, _start_probe_process, _terminate_process, _wait_for_local_port, _build_batch_probe_config, _find_xray_binary
-    from services.mihomo_runtime import _mihomo_binary
-
     mihomo = entry.get("_diagnostics_engine") == "mihomo"
+    if mihomo:
+        from services.mihomo_runtime import _mihomo_binary
     binary = _mihomo_binary() if mihomo else _find_xray_binary()
     if not binary:
-        return {"status": "core_unavailable"}
+        yield {"status": "core_unavailable"}
+        return
     with tempfile.TemporaryDirectory(prefix="xkeen-resource-diagnostics-") as temp_dir:
         port = _reserve_local_port()
         process = None
@@ -865,15 +959,24 @@ def _resource_via_proxy(entry: dict, parts: tuple[str, str, int, str], address: 
         except (OSError, subprocess.SubprocessError):
             if process is not None:
                 _terminate_process(process)
-            return {"status": "core_start_failed"}
+            yield {"status": "core_start_failed"}
+            return
         if not ready:
             if mihomo:
                 _terminate_process(process)
-            return {"status": "core_start_failed"}
+            yield {"status": "core_start_failed"}
+            return
         try:
-            return _resource_http_request(parts, address=address, proxy_port=port)
+            yield {"status": "ok", "port": port}
         finally:
             _terminate_process(process)
+
+
+def _resource_via_proxy(entry: dict, parts: tuple[str, str, int, str], address: tuple) -> dict:
+    with _resource_proxy_session(entry) as session:
+        if session["status"] != "ok":
+            return session
+        return _resource_http_request(parts, address=address, proxy_port=session["port"])
 
 
 @_needs_engines
@@ -903,7 +1006,7 @@ def compare_resource_paths(raw: dict) -> dict:
                 addresses = [(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", (public_ips[0], port))]
                 dns_source = "public_fallback"
         if addresses:
-            bypass_mark = _xkeen_direct_mark()
+            bypass_mark = _address_direct_mark(addresses[0], _xkeen_direct_mark())
             direct = (_resource_http_request(parts, address=addresses[0], bypass_mark=bypass_mark)
                       if bypass_mark is not None else {"status": "route_unverified"})
         else:
@@ -946,6 +1049,65 @@ def compare_resource_paths(raw: dict) -> dict:
         _RESOURCE_PROBE_SLOTS.release()
 
 
+def _distinct_addresses(addresses: list, limit: int = 4) -> list:
+    """Keep both IP families even when a resolver lists all IPv4 addresses first."""
+    families = {socket.AF_INET: [], socket.AF_INET6: []}
+    seen = set()
+    for item in addresses:
+        if item[0] in families and item[4][0] not in seen:
+            families[item[0]].append(item)
+            seen.add(item[4][0])
+    ordered = []
+    for index in range(limit):
+        for items in families.values():
+            if index < len(items):
+                ordered.append(items[index])
+    return ordered[:limit]
+
+
+def _probe_address(target: dict, address: tuple, bypass_mark: int, *, timeout: float = 2.5) -> dict:
+    family, socktype, proto, _, endpoint = address
+    result = {"ip": endpoint[0], "family": "IPv6" if family == socket.AF_INET6 else "IPv4", "stage": "tcp"}
+    started = time.monotonic()
+    try:
+        with socket.socket(family, socktype, proto) as connection:
+            connection.settimeout(timeout)
+            if not _mark_direct_socket(connection, bypass_mark):
+                return {**result, "status": "route_unverified"}
+            connection.connect(endpoint)
+            result.update(tcp_ms=round((time.monotonic() - started) * 1000), connected_ip=endpoint[0], source_ip=connection.getsockname()[0])
+            if target["tls"]:
+                result["stage"] = "tls"
+                tls_started = time.monotonic()
+                tls_name = target["sni"] or target["host"]
+                result["sni_sent"] = not _is_ip_address(tls_name)
+                context = ssl.create_default_context()
+                if not target["verify_tls"]:
+                    context.check_hostname = False
+                    context.verify_mode = ssl.CERT_NONE
+                try:
+                    with context.wrap_socket(connection, server_hostname=tls_name):
+                        pass
+                except ssl.SSLCertVerificationError:
+                    return {**result, "status": "tls_cert_error"}
+                except TimeoutError:
+                    return {**result, "status": "tls_timeout"}
+                except ConnectionResetError:
+                    return {**result, "status": "tls_reset"}
+                except OSError:
+                    return {**result, "status": "tls_error"}
+                result["tls_ms"] = round((time.monotonic() - tls_started) * 1000)
+            return {**result, "status": "reachable", "stage": "complete"}
+    except TimeoutError:
+        return {**result, "status": "timeout"}
+    except ConnectionRefusedError:
+        return {**result, "status": "refused"}
+    except ConnectionResetError:
+        return {**result, "status": "reset"}
+    except OSError:
+        return {**result, "status": "unreachable"}
+
+
 def probe_target(raw: dict) -> dict:
     target = make_target(raw.get("host"), raw.get("port"), name=raw.get("name"), protocol=raw.get("protocol"), network=raw.get("network"), tls=raw.get("tls") is True, tls_mode=raw.get("tls_mode") or "", sni=raw.get("sni") or "", verify_tls=raw.get("verify_tls") is not False, source=raw.get("source"))
     if not _PROBE_SLOTS.acquire(blocking=False):
@@ -955,66 +1117,40 @@ def probe_target(raw: dict) -> dict:
         try:
             addresses = socket.getaddrinfo(target["host"], target["port"], type=socket.SOCK_STREAM if target["network"] == "tcp" else socket.SOCK_DGRAM)
         except OSError:
-            return {**target, "status": "dns_error", "message": "DNS не разрешил имя сервера."}
-        unique: list[tuple] = []
-        for item in addresses:
-            if item[4][0] not in [entry[4][0] for entry in unique]:
-                unique.append(item)
-            if len(unique) >= 3:
-                break
-        dns_ms = round((time.monotonic() - started) * 1000)
-        address_labels = [item[4][0] for item in unique]
-        base = {**target, "addresses": address_labels, "dns_ms": dns_ms}
+            return {**target, "status": "dns_error", "stage": "dns", "message": "DNS не разрешил имя сервера."}
+        unique = _distinct_addresses(addresses)
+        base = {**target, "addresses": [item[4][0] for item in unique], "dns_ms": round((time.monotonic() - started) * 1000)}
         if target["network"] == "udp":
             return {**base, "status": "udp_unknown", "message": "Адрес разрешён. Доступность UDP нельзя подтвердить без протокольного обмена."}
         bypass_mark = _xkeen_direct_mark()
         if bypass_mark is None:
             return {**base, "status": "route_unverified", "message": "Прямой путь не проверен: обход правил роутера недоступен."}
-        failures: list[str] = []
-        for family, socktype, proto, _, address in unique[:2]:
-            try:
-                with socket.socket(family, socktype, proto) as connection:
-                    connection.settimeout(2.5)
-                    if not _mark_direct_socket(connection, bypass_mark):
-                        return {**base, "status": "route_unverified", "message": "Прямой путь не проверен: метку сокета установить не удалось."}
-                    connection_started = time.monotonic()
-                    connection.connect(address)
-                    tcp_ms = round((time.monotonic() - connection_started) * 1000)
-                    connection_info = {"connected_ip": address[0], "source_ip": connection.getsockname()[0]}
-                    if target["tls"]:
-                        try:
-                            tls_started = time.monotonic()
-                            tls_name = target["sni"] or target["host"]
-                            connection_info["sni_sent"] = not _is_ip_address(tls_name)
-                            context = ssl.create_default_context()
-                            if not target["verify_tls"]:
-                                context.check_hostname = False
-                                context.verify_mode = ssl.CERT_NONE
-                            with context.wrap_socket(connection, server_hostname=tls_name):
-                                pass
-                        except ssl.SSLCertVerificationError:
-                            return {**base, **connection_info, "status": "tls_cert_error", "tcp_ms": tcp_ms, "message": "TLS ответил, но сертификат не прошёл проверку. Это не указывает на блокировку."}
-                        except TimeoutError:
-                            return {**base, **connection_info, "status": "tls_timeout", "tcp_ms": tcp_ms, "message": "TCP доступен, но TLS-рукопожатие не ответило вовремя. Это признак сбоя на этапе TLS, а не доказательство блокировки."}
-                        except OSError:
-                            return {**base, **connection_info, "status": "tls_error", "tcp_ms": tcp_ms, "message": "TCP доступен, но стандартный TLS не прошёл. Это не доказывает фильтрацию; проверьте SNI и сертификат."}
-                        certificate_note = " Сертификат не проверялся по настройке узла." if not target["verify_tls"] else ""
-                        return {**base, **connection_info, "status": "reachable", "tcp_ms": tcp_ms, "tls_ms": round((time.monotonic() - tls_started) * 1000), "message": f"TCP и стандартный TLS доступны.{certificate_note} Работа прокси не проверялась."}
-                    message = "TCP доступен. REALITY и работа прокси не проверялись." if target["tls_mode"] == "reality" else "TCP доступен. Работа прокси не проверялась."
-                    return {**base, **connection_info, "status": "reachable", "tcp_ms": tcp_ms, "message": message}
-            except socket.timeout:
-                failures.append("timeout")
-            except ConnectionRefusedError:
-                failures.append("refused")
-            except OSError:
-                failures.append("unreachable")
-        status = "timeout" if "timeout" in failures else ("refused" if "refused" in failures else "unreachable")
+        attempts = []
+        for address in unique:
+            family_mark = _address_direct_mark(address, bypass_mark)
+            attempts.append(_probe_address(target, address, family_mark) if family_mark is not None else {"ip": address[4][0], "family": "IPv6" if address[0] == socket.AF_INET6 else "IPv4", "status": "route_unverified", "stage": "tcp"})
+            if attempts[-1]["status"] == "route_unverified":
+                return {**base, "status": "route_unverified", "address_results": attempts, "message": "Прямой путь не проверен: метку сокета установить не удалось."}
+        priority = ("reachable", "tls_cert_error", "tls_timeout", "tls_reset", "tls_error", "timeout", "refused", "reset", "unreachable")
+        primary = next((item for status in priority for item in attempts if item["status"] == status), {"status": "unreachable"})
         messages = {
+            "reachable": "TCP и стандартный TLS доступны. Работа прокси не проверялась." if target["tls"] else "TCP доступен. REALITY и работа прокси не проверялись." if target["tls_mode"] == "reality" else "TCP доступен. Работа прокси не проверялась.",
+            "tls_cert_error": "TLS ответил, но сертификат не прошёл проверку. Это не указывает на блокировку.",
+            "tls_timeout": "TCP доступен, но TLS-рукопожатие не ответило вовремя. Причина не установлена.",
+            "tls_reset": "TCP доступен, соединение сброшено на этапе TLS. Причина не установлена.",
+            "tls_error": "TCP доступен, но стандартный TLS не прошёл. Проверьте SNI и сертификат; фильтрация не подтверждена.",
             "timeout": "TCP не ответил вовремя. Возможна фильтрация, но это не доказательство блокировки.",
             "refused": "Сервер отклонил TCP-подключение. Порт может быть закрыт.",
+            "reset": "TCP-соединение сброшено. Причина не установлена.",
             "unreachable": "Нет маршрута или соединение не удалось установить.",
         }
-        return {**base, "status": status, "message": messages[status]}
+        message = messages[primary["status"]]
+        mixed = len({item["status"] for item in attempts}) > 1
+        if mixed:
+            message += " Адреса ответили по-разному; смотрите результаты по IP."
+        if primary["status"] == "reachable" and target["tls"] and not target["verify_tls"]:
+            message += " Сертификат не проверялся по настройке узла."
+        return {**base, **primary, "address_results": attempts, "mixed_addresses": mixed, "message": message}
     finally:
         _PROBE_SLOTS.release()
 
@@ -1054,8 +1190,10 @@ def _tls_trials_pattern(trials: dict[str, list[str]]) -> str:
         return "sni_only_failure"
     if all(item == "tls_ok" for item in with_sni):
         return "tls_reachable"
-    if all(item in {"tcp_timeout", "tls_timeout", "timeout"} for item in with_sni + without_sni):
-        return "unresponsive"
+    if all(item in {"tcp_timeout", "timeout"} for item in with_sni + without_sni):
+        return "tcp_unresponsive"
+    if all(item == "tls_timeout" for item in with_sni + without_sni):
+        return "tls_stalled"
     return "mixed"
 
 
@@ -1072,40 +1210,38 @@ def compare_tls_path(raw: dict) -> dict:
         bypass_mark = _xkeen_direct_mark()
         if bypass_mark is None:
             return {"status": "route_unverified", "message": "Прямой путь не проверен: обход правил роутера недоступен."}
-        control_address = (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", (_CONTROL_IP, 443))
-        control = _tls_comparison_attempt(control_address, server_name=_CONTROL_SNI, bypass_mark=bypass_mark)
-        if control == "route_unverified":
-            return {"status": "route_unverified", "message": "Прямой путь не проверен: метку сокета установить не удалось."}
+        controls = []
+        for ip, name in _TLS_CONTROLS:
+            control_address = (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", (ip, 443))
+            control = _tls_comparison_attempt(control_address, server_name=name, bypass_mark=bypass_mark)
+            if control == "route_unverified":
+                return {"status": "route_unverified", "message": "Прямой путь не проверен: метку сокета установить не удалось."}
+            controls.append({"ip": ip, "sni": name, "result": control})
+        control_ok = any(item["result"] == "tls_ok" for item in controls)
         addresses = []
         try:
-            seen_ips = set()
-            for address in socket.getaddrinfo(target["host"], target["port"], type=socket.SOCK_STREAM):
-                if address[0] not in {socket.AF_INET, socket.AF_INET6} or address[4][0] in seen_ips:
-                    continue
-                seen_ips.add(address[4][0])
-                addresses.append(address)
-                if len(addresses) == _TLS_COMPARE_IP_LIMIT:
-                    break
+            addresses = _distinct_addresses(socket.getaddrinfo(target["host"], target["port"], type=socket.SOCK_STREAM), _TLS_COMPARE_IP_LIMIT)
         except OSError:
             pass
         address_results = []
         for address in addresses:
+            family_mark = _address_direct_mark(address, bypass_mark)
+            if family_mark is None:
+                return {"status": "route_unverified", "message": "Прямой IPv6-путь не проверен: исключение в межсетевом экране недоступно."}
             trials = {"with_sni": [], "without_sni": []}
             for _ in range(_TLS_COMPARE_ROUNDS):
-                with_sni = _tls_comparison_attempt(address, server_name=sni, bypass_mark=bypass_mark)
-                without_sni = _tls_comparison_attempt(address, server_name=None, bypass_mark=bypass_mark)
+                with_sni = _tls_comparison_attempt(address, server_name=sni, bypass_mark=family_mark)
+                without_sni = _tls_comparison_attempt(address, server_name=None, bypass_mark=family_mark)
                 if "route_unverified" in {with_sni, without_sni}:
                     return {"status": "route_unverified", "message": "Прямой путь не проверен: метку сокета установить не удалось."}
                 trials["with_sni"].append(with_sni)
                 trials["without_sni"].append(without_sni)
                 pattern = _tls_trials_pattern(trials)
-                if pattern not in {"sni_only_failure", "unresponsive"}:
+                if pattern not in {"sni_only_failure", "tcp_unresponsive", "tls_stalled"}:
                     break
             address_results.append({"ip": address[4][0], **trials, "pattern": pattern})
-            if pattern == "tls_reachable":
-                break
         rounds_per_ip = max((len(item["with_sni"]) for item in address_results), default=0)
-        attempts_total = 1 + sum(len(item["with_sni"]) + len(item["without_sni"]) for item in address_results)
+        attempts_total = len(controls) + sum(len(item["with_sni"]) + len(item["without_sni"]) for item in address_results)
 
         dns_comparison = {"status": "skipped"}
         if not addresses and not _is_ip_address(target["host"]):
@@ -1118,14 +1254,18 @@ def compare_tls_path(raw: dict) -> dict:
         except ValueError:
             registry = {"status": "skipped"}
         patterns = [item["pattern"] for item in address_results]
-        if not addresses and control == "tls_ok" and dns_comparison.get("status") == "ok" and dns_comparison.get("public"):
+        if not addresses and control_ok and dns_comparison.get("status") == "ok" and dns_comparison.get("public"):
             verdict, confidence, reason = "dns_failure", "medium", "local_dns_failed"
-        elif control == "tls_ok" and patterns and all(item == "sni_only_failure" for item in patterns):
+        elif control_ok and patterns and all(item == "sni_only_failure" for item in patterns):
             verdict, confidence, reason = "tls_sni_filtering", "medium" if len(patterns) > 1 else "low", "consistent_sni_pattern"
-        elif control == "tls_ok" and patterns and all(item == "unresponsive" for item in patterns):
-            verdict, confidence, reason = "server_unresponsive", "medium" if len(patterns) > 1 else "low", "all_ips_timeout"
+        elif control_ok and patterns and all(item == "tcp_unresponsive" for item in patterns):
+            verdict, confidence, reason = "tcp_unresponsive", "low", "all_ips_tcp_timeout"
+        elif control_ok and patterns and all(item == "tls_stalled" for item in patterns):
+            verdict, confidence, reason = "tls_stalled", "low", "all_ips_tls_timeout"
+        elif patterns and all(item == "tls_reachable" for item in patterns):
+            verdict, confidence, reason = "tls_reachable", "medium", "tls_succeeded"
         else:
-            reason = "control_failed" if control != "tls_ok" else "different_ip_results" if len(set(patterns)) > 1 else "insufficient_evidence"
+            reason = "control_failed" if not control_ok else "different_ip_results" if len(set(patterns)) > 1 else "insufficient_evidence"
             verdict, confidence = "undetermined", "low"
         primary = address_results[0] if address_results else {"with_sni": [], "without_sni": []}
         return {
@@ -1133,7 +1273,7 @@ def compare_tls_path(raw: dict) -> dict:
             "target_ip": addresses[0][4][0] if addresses else None, "port": target["port"], "sni": sni,
             "trials": {"with_sni": primary["with_sni"], "without_sni": primary["without_sni"]},
             "address_results": address_results, "rounds_per_ip": rounds_per_ip, "attempts_total": attempts_total,
-            "control": {"ip": _CONTROL_IP, "sni": _CONTROL_SNI, "result": control},
+            "control": controls[0], "controls": controls,
             "dns_comparison": {"status": dns_comparison.get("status"), "public": dns_comparison.get("public") or []},
             "registry": {"status": registry.get("status"), "target": sni,
                          "listed": registry.get("listed") is True,
