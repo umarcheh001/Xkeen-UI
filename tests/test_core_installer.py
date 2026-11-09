@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import gzip
 import importlib
 import io
 import json
@@ -350,6 +351,205 @@ def test_prepare_rejects_inactive_core(tmp_path):
         install.prepare("xray")
 
     assert exc_info.value.code == "inactive_core"
+
+
+def test_first_install_keeps_other_core_running_without_restart(tmp_path):
+    install, store, target = _installer(tmp_path, running="mihomo")
+    target.unlink()
+    restarts = []
+    install.restart = lambda *_args, **_kwargs: restarts.append(True)
+
+    prepared = install.prepare("xray")
+    operation = _wait_for_terminal(install, install.apply("xray", prepared["confirmation_id"])["operation_id"])
+
+    assert operation["status"] == "succeeded"
+    assert target.read_bytes() == b"new-xray"
+    assert store.get("xray")["installed_release_tag"] == "v26.3.27"
+    assert restarts == []
+
+
+@pytest.mark.parametrize("engine", ["xray", "mihomo"])
+def test_first_install_validates_temporary_file_before_publication(tmp_path, engine):
+    install, _store, xray_target = _installer(tmp_path, running="mihomo" if engine == "xray" else "xray")
+    if engine == "xray":
+        xray_target.unlink()
+        target = xray_target
+    else:
+        target = tmp_path / "mihomo"
+        payload = gzip.compress(b"new-mihomo", mtime=0)
+        release = _release_for(b"unused")
+        release["asset"] = {"name": "mihomo-linux-amd64.gz", "url": "https://example.test/mihomo.gz"}
+        release["checksum"]["sha256"] = hashlib.sha256(payload).hexdigest()
+        install.release_resolver = lambda *_args, **_kwargs: release
+        install.downloader = lambda *_args, **_kwargs: payload
+    observed = []
+    def validate(command, **_kwargs):
+        observed.append((target.exists(), command[0] != str(target)))
+        return 1, "bad binary"
+    install.run_command = validate
+    prepared = install.prepare(engine)
+    operation_id = install.apply(engine, prepared["confirmation_id"])["operation_id"]
+    deadline = time.monotonic() + 3
+    while time.monotonic() < deadline:
+        operation = install.status(engine, operation_id)
+        if operation["status"] in {"succeeded", "failed", "rolled_back"}:
+            break
+        time.sleep(.01)
+    assert observed == [(False, True)]
+    assert operation["status"] == "failed"
+    assert not target.exists()
+
+
+@pytest.mark.parametrize("engine", ["xray", "mihomo"])
+def test_first_install_keeps_published_file_if_saving_state_fails(tmp_path, monkeypatch, engine):
+    install, store, target = _installer(tmp_path, running="mihomo" if engine == "xray" else "xray")
+    if engine == "xray":
+        target.unlink()
+        expected = b"new-xray"
+    else:
+        target = tmp_path / "mihomo"
+        expected = b"new-mihomo"
+        payload = gzip.compress(expected, mtime=0)
+        release = _release_for(b"unused")
+        release["asset"] = {"name": "mihomo-linux-amd64.gz", "url": "https://example.test/mihomo.gz"}
+        release["checksum"]["sha256"] = hashlib.sha256(payload).hexdigest()
+        install.release_resolver = lambda *_args, **_kwargs: release
+        install.downloader = lambda *_args, **_kwargs: payload
+    monkeypatch.setattr(store, "set_installed", lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("disk error")))
+    prepared = install.prepare(engine)
+    operation_id = install.apply(engine, prepared["confirmation_id"])["operation_id"]
+    deadline = time.monotonic() + 3
+    while time.monotonic() < deadline:
+        operation = install.status(engine, operation_id)
+        if operation["status"] in {"succeeded", "failed", "rolled_back"}:
+            break
+        time.sleep(.01)
+    assert operation["status"] == "failed"
+    assert target.read_bytes() == expected
+
+
+def test_first_install_never_deletes_file_replaced_after_publication(tmp_path, monkeypatch):
+    install, store, target = _installer(tmp_path, running="mihomo")
+    target.unlink()
+    def replace_and_fail(*_args, **_kwargs):
+        replacement = tmp_path / "external"
+        replacement.write_bytes(b"external")
+        replacement.replace(target)
+        raise OSError("disk error")
+    monkeypatch.setattr(store, "set_installed", replace_and_fail)
+    prepared = install.prepare("xray")
+    operation = _wait_for_terminal(install, install.apply("xray", prepared["confirmation_id"])["operation_id"])
+    assert operation["status"] == "failed"
+    assert target.read_bytes() == b"external"
+
+
+def test_first_install_mihomo_keeps_xray_running(tmp_path):
+    install, store, _target = _installer(tmp_path, running="xray")
+    payload = gzip.compress(b"new-mihomo", mtime=0)
+    release = _release_for(b"unused")
+    release["asset"] = {"name": "mihomo-linux-amd64.gz", "url": "https://example.test/mihomo.gz"}
+    release["checksum"]["sha256"] = hashlib.sha256(payload).hexdigest()
+    release["binary_name"] = "mihomo"
+    install.release_resolver = lambda *_args, **_kwargs: release
+    install.downloader = lambda *_args, **_kwargs: payload
+    restarts = []
+    install.restart = lambda *_args, **_kwargs: restarts.append(True)
+    prepared = install.prepare("mihomo")
+    operation_id = install.apply("mihomo", prepared["confirmation_id"])["operation_id"]
+    deadline = time.monotonic() + 3
+    while time.monotonic() < deadline:
+        operation = install.status("mihomo", operation_id)
+        if operation["status"] in {"succeeded", "failed", "rolled_back"}:
+            break
+        time.sleep(.01)
+    assert operation["status"] == "succeeded"
+    assert (tmp_path / "mihomo").read_bytes() == b"new-mihomo"
+    assert store.get("mihomo")["installed_profile_id"] == "official"
+    assert restarts == []
+
+
+def test_failed_first_install_never_restarts_stopped_service(tmp_path):
+    install, _store, target = _installer(tmp_path, running=None, preflight=(1, "bad binary"))
+    target.unlink()
+    restarts = []
+    install.restart = lambda *_args, **_kwargs: restarts.append(True)
+    prepared = install.prepare("xray")
+    operation = _wait_for_terminal(install, install.apply("xray", prepared["confirmation_id"])["operation_id"])
+    assert operation["status"] == "failed"
+    assert not target.exists()
+    assert restarts == []
+
+
+def test_first_install_refuses_file_created_after_confirmation(tmp_path):
+    install, _store, target = _installer(tmp_path, running="mihomo")
+    target.unlink()
+    prepared = install.prepare("xray")
+    target.write_bytes(b"external")
+    with pytest.raises(installer_module.CoreInstallError) as exc:
+        install.apply("xray", prepared["confirmation_id"])
+    assert exc.value.code == "core_already_installed"
+    assert target.read_bytes() == b"external"
+
+
+def test_first_install_rollback_does_not_remove_concurrent_replacement(tmp_path):
+    install, _store, target = _installer(tmp_path, running="mihomo")
+    target.unlink()
+    def replace_during_validation(*_args, **_kwargs):
+        replacement = tmp_path / "replacement"
+        replacement.write_bytes(b"external")
+        replacement.replace(target)
+        return 1, "failed"
+    install.run_command = replace_during_validation
+    prepared = install.prepare("xray")
+    _wait_for_terminal(install, install.apply("xray", prepared["confirmation_id"])["operation_id"])
+    assert target.read_bytes() == b"external"
+
+
+def test_first_install_does_not_mark_concurrent_replacement_as_verified(tmp_path):
+    install, store, target = _installer(tmp_path, running="mihomo")
+    target.unlink()
+    def replace_during_validation(*_args, **_kwargs):
+        replacement = tmp_path / "replacement"
+        replacement.write_bytes(b"external")
+        replacement.replace(target)
+        return 0, "ok"
+    install.run_command = replace_during_validation
+    prepared = install.prepare("xray")
+    operation = _wait_for_terminal(install, install.apply("xray", prepared["confirmation_id"])["operation_id"])
+    assert operation["status"] == "failed"
+    assert target.read_bytes() == b"external"
+    assert not store.get("xray")["installed_profile_id"]
+
+
+def test_first_install_does_not_publish_if_validation_fails_during_core_switch(tmp_path):
+    install, _store, target = _installer(tmp_path, running="mihomo")
+    target.unlink()
+    active = {"core": "mihomo"}
+    install.running_core = lambda: active["core"]
+    def switch_during_validation(*_args, **_kwargs):
+        active["core"] = "xray"
+        return 1, "failed"
+    install.run_command = switch_during_validation
+    prepared = install.prepare("xray")
+    _wait_for_terminal(install, install.apply("xray", prepared["confirmation_id"])["operation_id"])
+    assert not target.exists()
+
+
+def test_first_install_stops_when_module_disabled_during_download(tmp_path):
+    install, _store, target = _installer(tmp_path, running="mihomo")
+    target.unlink()
+    allowed = {"value": True}
+    original_downloader = install.downloader
+    install.allow_first_install = lambda _engine: allowed["value"]
+    def download(*args, **kwargs):
+        payload = original_downloader(*args, **kwargs)
+        allowed["value"] = False
+        return payload
+    install.downloader = download
+    prepared = install.prepare("xray")
+    operation = _wait_for_terminal(install, install.apply("xray", prepared["confirmation_id"])["operation_id"])
+    assert operation["status"] == "failed"
+    assert not target.exists()
 
 
 def test_prepare_during_a_core_hand_off_waits_for_the_owner(tmp_path):

@@ -306,7 +306,7 @@ def build_panel_frontend_modules(
     }
 
 
-def _build_panel_page_context(active_module_ids: set[str] | None) -> dict[str, object]:
+def _build_panel_page_context(active_module_ids: set[str] | None, installable_missing_cores: set[str] | None = None) -> dict[str, object]:
     """Select server-owned panel surfaces from the Stage 3 activation result."""
 
     active = None if active_module_ids is None else frozenset(str(module_id) for module_id in active_module_ids)
@@ -329,6 +329,8 @@ def _build_panel_page_context(active_module_ids: set[str] | None) -> dict[str, o
         "routing_side_card_partials": [],
         "routing_file_action_partials": [],
         "core_source_control_partials": [],
+        "installable_missing_cores": sorted((installable_missing_cores or set()) & {"xray", "mihomo"}),
+        "engine_module_states": {},
         "server_diagnostics_xray_partials": [],
         "server_diagnostics_mihomo_partials": [],
         "head_style_partials": [],
@@ -341,6 +343,10 @@ def _build_panel_page_context(active_module_ids: set[str] | None) -> dict[str, o
     for entry in PANEL_COMPOSITION:
         if is_allowed(entry.owners):
             context[entry.collection].append(entry.template)
+    for core in sorted((installable_missing_cores or set()) & {"xray", "mihomo"}):
+        if active is not None and f"engine.{core}" not in active:
+            context["core_source_control_partials"].append(f"panel/slots/core_source_{core}.html")
+            context["modal_partials"].append(f"panel/modals/core_source_{core}.html")
 
     navigation_items: list[dict[str, object]] = []
     active_view_selected = False
@@ -595,7 +601,8 @@ def register_pages_routes(
             _fm_right_default = "/tmp/mnt"
 
         _core_ui = _detect_panel_core_ui(active_module_ids)
-        page_context = _build_panel_page_context(active_module_ids)
+        page_context = _build_panel_page_context(active_module_ids, set((module_activation or {}).get("installable_missing_cores", [])))
+        page_context["engine_module_states"] = (module_activation or {}).get("engine_module_states", {})
         if active_module_ids is not None:
             active_engines = {
                 core for core, module_id in (("xray", "engine.xray"), ("mihomo", "engine.mihomo"))

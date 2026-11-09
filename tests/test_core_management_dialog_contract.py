@@ -34,7 +34,7 @@ def test_source_controls_are_rendered_by_the_shared_core_modal():
     for engine, label in (("xray", "Xray"), ("mihomo", "Mihomo")):
         slot = (templates / f"slots/core_source_{engine}.html").read_text(encoding="utf-8")
         dialogs = (templates / f"modals/core_source_{engine}.html").read_text(encoding="utf-8")
-        assert f"render_core_source_controls('{engine}', '{label}')" in slot
+        assert f"render_core_source_controls('{engine}', '{label}', '{engine}' in page_context.installable_missing_cores)" in slot
         assert f"render_core_source_modals('{engine}', '{label}')" in dialogs
     assert 'data-core-source data-core-engine="{{ engine_id }}"' in SOURCE
 

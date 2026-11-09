@@ -183,6 +183,12 @@ function releaseState(data, selectedProfile, coreInstalled) {
       button: { label: 'Проверить и установить', primary: true, icon: 'download', disabled: true },
     };
   }
+  if (!coreInstalled) {
+    return {
+      kind: 'update', icon: 'download', title: 'Ядро не установлено', note: `доступен ${tag}`, stale,
+      button: { label: `Установить ${shortTag(tag)}`, primary: true, icon: 'download' },
+    };
+  }
   const profiles = data.profiles || [];
   const group = sourceGroup(profiles, selectedProfile.profile_id);
   // A channel of the installed source is not another source: its release is
@@ -216,12 +222,6 @@ function releaseState(data, selectedProfile, coreInstalled) {
   }
   const installedVersion = versionNumbers(state.detected_version) || versionNumbers(state.installed_release_tag);
   const latestVersion = versionNumbers(tag);
-  if (!coreInstalled && !installedVersion) {
-    return {
-      kind: 'update', icon: 'download', title: 'Ядро не установлено', note: `доступен ${tag}`, stale,
-      button: { label: `Установить ${shortTag(tag)}`, primary: true, icon: 'download' },
-    };
-  }
   if (!installedVersion || !latestVersion) {
     return {
       kind: 'info', icon: 'info', title: 'Доступен релиз', note: tag, stale,
@@ -415,6 +415,7 @@ export function initCoreSource(root) {
   let activeOperationId = null;
   let terminalOperationId = null;
   let operationStatus = 'idle';
+  let refreshGeneration = 0;
 
   const progressPanel = installModal?.querySelector('[data-core-install-progress]');
   const progressBar = installModal?.querySelector('[data-core-install-progress-bar]');
@@ -425,25 +426,29 @@ export function initCoreSource(root) {
   const installDetails = installModal?.querySelector('[data-core-install-details]');
   const applyButton = installModal?.querySelector('[data-core-source-action="apply"]');
 
-  const phaseIndex = (phase) => INSTALL_STEPS.findIndex(([id]) => id === phase);
+  const operationSteps = (firstInstall) => firstInstall
+    ? [['download', 'Загрузка релиза'], ['verify', 'Проверка SHA-256'], ['backup', 'Сохранение состояния'], ['preflight', 'Проверка ядра'], ['replace', 'Установка файла']]
+    : INSTALL_STEPS;
 
   const renderOperation = (operation) => {
     if (!operation || !progressPanel) return;
     const status = String(operation.status || 'running');
     const phase = String(operation.phase || 'download');
-    const label = String(operation.phase_label || INSTALL_STEPS.find(([id]) => id === phase)?.[1] || 'Установка ядра');
+    const firstInstall = Boolean(operation.first_install || confirmation?.first_install);
+    const steps = operationSteps(firstInstall);
+    const label = String((firstInstall && steps.find(([id]) => id === phase)?.[1]) || operation.phase_label || steps.find(([id]) => id === phase)?.[1] || 'Установка ядра');
     const progress = Number.isFinite(Number(operation.progress)) ? Math.max(0, Math.min(100, Number(operation.progress))) : 0;
-    const currentIndex = phaseIndex(phase);
+    const currentIndex = steps.findIndex(([id]) => id === phase);
     operationStatus = status;
     progressPanel.hidden = false;
     progressPanel.setAttribute('aria-busy', status === 'running' ? 'true' : 'false');
     if (progressBar) progressBar.value = progress;
     text(progressPercent, `${Math.round(progress)}%`);
     text(progressPhase, label);
-    text(progressNote, status === 'running' ? 'Окно можно закрыть, операция продолжится на роутере.' : (status === 'succeeded' ? 'Новая версия прошла проверку и запущена.' : 'Предыдущая версия сохранена или восстановлена.'));
+    text(progressNote, status === 'running' ? 'Окно можно закрыть, операция продолжится на роутере.' : (status === 'succeeded' ? (firstInstall ? 'Ядро установлено; текущая служба не перезапускалась.' : 'Новая версия прошла проверку и запущена.') : (firstInstall ? 'Установка не завершена.' : 'Предыдущая версия сохранена или восстановлена.')));
     if (progressSteps) {
       progressSteps.replaceChildren();
-      INSTALL_STEPS.forEach(([id, stepLabel], index) => {
+      steps.forEach(([id, stepLabel], index) => {
         const item = document.createElement('li');
         item.dataset.state = status === 'succeeded' || (currentIndex >= 0 && index < currentIndex) ? 'done' : (id === phase ? 'active' : 'pending');
         item.textContent = stepLabel;
@@ -459,6 +464,7 @@ export function initCoreSource(root) {
       progressPanel.hidden = true;
       progressPanel.setAttribute('aria-busy', 'false');
     }
+    installModal?.querySelector('[data-core-source-action="restart-panel"]')?.setAttribute('hidden', '');
     if (installDetails) installDetails.hidden = false;
     if (applyButton) {
       applyButton.disabled = false;
@@ -472,6 +478,9 @@ export function initCoreSource(root) {
   const fillConfirmation = (nextConfirmation) => {
     confirmation = nextConfirmation;
     if (!confirmation) return;
+    text(installModal?.querySelector('[data-core-install-description]'), confirmation.first_install
+      ? 'Ядро будет установлено без переключения и перезапуска текущей службы.'
+      : 'Текущий бинарник и состояние профиля будут сохранены. При ошибке проверки или запуска панель вернёт предыдущую версию.');
     if (installDetails) {
       installDetails.replaceChildren();
       for (const [label, value] of [
@@ -507,15 +516,42 @@ export function initCoreSource(root) {
   };
 
   const refresh = async () => {
-    const response = await request(`${endpoint}/core-profiles`);
+    const generation = ++refreshGeneration;
+    const prepareButton = root.querySelector('[data-core-source-action="prepare"]');
+    if (prepareButton) prepareButton.disabled = true;
+    let response;
+    try {
+      response = await request(`${endpoint}/core-profiles`);
+    } catch (error) {
+      if (generation !== refreshGeneration) return;
+      throw error;
+    }
+    if (generation !== refreshGeneration) return;
     data = response.data;
     selected = data.state?.selected_profile_id || 'official';
     const selectedProfile = data.profiles?.find((profile) => profile.profile_id === selected);
     const coreInstalled = root.dataset.coreInstalled !== 'false';
-    const release = releaseState(data, selectedProfile, coreInstalled);
+    const missing = !coreInstalled && !data.state?.detected_version;
+    const restartNeeded = root.dataset.firstInstall === 'true' && !missing;
+    root.querySelector('[data-core-restart-needed]')?.toggleAttribute('hidden', !restartNeeded);
+    const sourceButton = root.querySelector('[data-core-source-action="open"]');
+    if (sourceButton) sourceButton.disabled = restartNeeded;
+    root.querySelector('[data-core-source-summary]')?.toggleAttribute('hidden', missing);
+    for (const selector of ['[data-core-first-install-note]', '[data-core-first-install-source]', '[data-core-first-install-hint]']) {
+      root.querySelector(selector)?.toggleAttribute('hidden', !missing);
+    }
+    text(root.querySelector('[data-core-first-source]'), profileLabel(data.profiles, selected));
+    const release = releaseState(data, selectedProfile, !missing);
+    const firstStatus = root.querySelector('[data-core-first-status]');
+    const retry = root.querySelector('[data-core-source-action="retry"]');
+    if (firstStatus) {
+      firstStatus.hidden = !missing || !release.button.disabled;
+      text(firstStatus, release.button.disabled ? [release.title || 'Источник недоступен', release.note].filter(Boolean).join(': ') : '');
+    }
+    if (retry) retry.hidden = !missing || !release.button.disabled;
     const updateButton = root.querySelector('[data-core-source-action="prepare"]');
     if (updateButton) {
-      updateButton.disabled = Boolean(release.button.disabled) || data.state?.last_status === 'running';
+      updateButton.disabled = restartNeeded || Boolean(release.button.disabled) || data.state?.last_status === 'running';
       updateButton.dataset.releasePrimary = release.button.primary ? '1' : '0';
       applyUpdateEmphasis(updateButton);
       const use = updateButton.querySelector('use');
@@ -548,6 +584,22 @@ export function initCoreSource(root) {
     renderProfiles(sourceModal, data, selected);
   };
 
+  const showRefreshError = (error) => {
+    const message = error.message || 'Источник недоступен';
+    const updateButton = root.querySelector('[data-core-source-action="prepare"]');
+    if (updateButton) updateButton.disabled = true;
+    text(root.querySelector('[data-core-source-status]'), message);
+    const firstStatus = root.querySelector('[data-core-first-status]');
+    if (root.dataset.coreInstalled === 'false' && firstStatus) {
+      firstStatus.hidden = false;
+      text(firstStatus, message);
+      root.querySelector('[data-core-source-action="retry"]')?.removeAttribute('hidden');
+    }
+  };
+  root.addEventListener('xkeen:core-installation-state', () => {
+    refresh().catch(showRefreshError);
+  });
+
   const setMessage = (scope, message) => text(scope?.querySelector('[data-core-source-message], [data-core-install-message]'), message || '');
 
   const poll = async (operationId) => {
@@ -564,12 +616,16 @@ export function initCoreSource(root) {
       renderOperation(operation);
       if (['succeeded', 'failed', 'rolled_back'].includes(operation.status)) {
         activeOperationId = null;
-        const message = operation.status === 'succeeded' ? 'Ядро успешно обновлено.' : (operation.error || 'Установка не завершена; предыдущая версия восстановлена.');
+        const firstInstall = Boolean(operation.first_install || confirmation?.first_install);
+        const message = operation.status === 'succeeded' ? (firstInstall ? 'Ядро установлено. Для подключения модуля перезапустите панель.' : 'Ядро успешно обновлено.') : (operation.error || 'Установка не завершена.');
         if (terminalOperationId !== operation.operation_id) {
           toastXkeen(message, operation.status === 'succeeded' ? 'success' : 'error');
           terminalOperationId = operation.operation_id;
         }
         text(installModal?.querySelector('[data-core-install-message]'), message);
+        if (operation.status === 'succeeded' && firstInstall) {
+          installModal?.querySelector('[data-core-source-action="restart-panel"]')?.removeAttribute('hidden');
+        }
         if (applyButton) {
           applyButton.disabled = false;
           applyButton.removeAttribute('aria-busy');
@@ -593,11 +649,23 @@ export function initCoreSource(root) {
     if (!button) return;
     const action = button.dataset.coreSourceAction;
     try {
+      if (action === 'restart-panel') {
+        button.disabled = true;
+        try {
+          await request('/api/modules/restart', { method: 'POST', body: '{}' });
+          text(root.querySelector('[data-core-restart-needed] p'), 'Панель перезапускается. Обновите страницу через несколько секунд.');
+        } catch (error) {
+          button.disabled = false;
+          text(root.querySelector('[data-core-restart-needed] p'), error.message || 'Не удалось перезапустить панель.');
+        }
+        return;
+      }
+      if (action === 'retry') { await refresh(); return; }
       if (action === 'open') { modalOpen(sourceModal, true); await refresh(); return; }
       if (action === 'prepare') {
         await prepareInstallation();
       }
-    } catch (error) { toastXkeen(error.message || 'Операция недоступна.', 'error'); }
+    } catch (error) { if (action === 'retry') showRefreshError(error); else toastXkeen(error.message || 'Операция недоступна.', 'error'); }
   });
 
   sourceModal?.addEventListener('click', async (event) => {
@@ -654,6 +722,17 @@ export function initCoreSource(root) {
     const button = event.target.closest('[data-core-source-action]');
     if (!button) return;
     if (button.dataset.coreSourceAction === 'close-confirm') { modalOpen(installModal, false); return; }
+    if (button.dataset.coreSourceAction === 'restart-panel') {
+      button.disabled = true;
+      try {
+        await request('/api/modules/restart', { method: 'POST', body: '{}' });
+        text(installModal.querySelector('[data-core-install-message]'), 'Панель перезапускается. Обновите страницу через несколько секунд.');
+      } catch (error) {
+        button.disabled = false;
+        text(installModal.querySelector('[data-core-install-message]'), error.message || 'Не удалось перезапустить панель.');
+      }
+      return;
+    }
     if (button.dataset.coreSourceAction !== 'apply' || !confirmation) return;
     if (['succeeded', 'failed', 'rolled_back'].includes(operationStatus)) { modalOpen(installModal, false); return; }
     button.disabled = true;
@@ -676,7 +755,7 @@ export function initCoreSource(root) {
     }
   });
 
-  refresh().catch((error) => text(root.querySelector('[data-core-source-status]'), error.message || 'Источник недоступен'));
+  refresh().catch(showRefreshError);
 }
 
 export function initCoreSources(scope = document, engineId = '') {

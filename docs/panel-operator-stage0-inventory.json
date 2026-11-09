@@ -8455,7 +8455,7 @@
       "xray-snapshot-status",
       "xray-snapshot-title"
     ],
-    "data_attribute_count": 677,
+    "data_attribute_count": 679,
     "data_attributes": [
       {
         "locator": "header.panel-header.panel-header-shell@L99",
@@ -11041,6 +11041,16 @@
         "locator": "div.xk-core-source-control.xk-core-source-control-absent@L3995",
         "name": "data-core-absent",
         "value": ""
+      },
+      {
+        "locator": "div.xk-core-source-control.xk-core-source-control-absent@L3995",
+        "name": "data-mihomo-module-state",
+        "value": "{{ page_context.engine_module_states.get('mihomo', '') }}"
+      },
+      {
+        "locator": "div.xk-core-source-control.xk-core-source-control-absent@L3995",
+        "name": "data-xray-module-state",
+        "value": "{{ page_context.engine_module_states.get('xray', '') }}"
       },
       {
         "locator": "p@L3996",

@@ -11,10 +11,11 @@
 </section>
 {%- endmacro %}
 
-{% macro render_core_source_controls(engine_id, engine_label) -%}
-<section class="xk-core-source-control" data-core-source data-core-engine="{{ engine_id }}" aria-labelledby="{{ engine_id }}-core-source-title">
+{% macro render_core_source_controls(engine_id, engine_label, missing=false) -%}
+<section class="xk-core-source-control" data-core-source data-core-engine="{{ engine_id }}"{% if missing %} data-core-installed="false" data-first-install="true"{% endif %} aria-labelledby="{{ engine_id }}-core-source-title">
   <h3 id="{{ engine_id }}-core-source-title" class="xk-visually-hidden">Сборка {{ engine_label }}</h3>
-  <dl class="xk-core-source-facts" data-core-source-summary>
+  <p data-core-first-install-note{% if not missing %} hidden{% endif %}>Ядро {{ engine_label }} не установлено.</p>
+  <dl class="xk-core-source-facts" data-core-source-summary{% if missing %} hidden{% endif %}>
     <dt>Версия</dt>
     <dd data-core-source-version>Проверяем</dd>
     <dt>Установлено из</dt>
@@ -24,6 +25,8 @@
     <dt>Состояние</dt>
     <dd class="xk-core-source-status" data-core-source-status role="status" aria-live="polite">Загружаем состояние</dd>
   </dl>
+  <p data-core-first-install-source{% if not missing %} hidden{% endif %}>Источник: <strong data-core-first-source>Проверяем</strong></p>
+  <p data-core-first-status role="status" hidden></p>
   <div class="xk-core-source-actions" aria-label="Действия с ядром {{ engine_label }}">
     <button type="button" class="btn-secondary xk-core-source-action" data-core-source-action="open" data-tooltip="Выбрать проверенный источник сборки">
       {{ op_icon('github') }}<span>Выбрать источник</span>
@@ -31,6 +34,12 @@
     <button type="button" class="btn-primary xk-core-source-action" data-core-source-action="prepare" data-tooltip="Проверить релиз и подготовить безопасную установку" disabled>
       {{ op_icon('download') }}<span data-core-source-prepare-label>Проверить и установить</span>
     </button>
+  </div>
+  <button type="button" class="btn-secondary" data-core-source-action="retry" hidden>Повторить проверку</button>
+  <p data-core-first-install-hint{% if not missing %} hidden{% endif %}>Текущее ядро продолжит работать.</p>
+  <div data-core-restart-needed hidden>
+    <p>Ядро установлено. Чтобы подключить модуль, перезапустите панель.</p>
+    <button type="button" class="btn-secondary" data-core-source-action="restart-panel">Перезапустить панель</button>
   </div>
 </section>
 {%- endmacro %}
@@ -62,7 +71,7 @@
     <div class="modal-header">
       <div>
         <h2 id="{{ engine_id }}-core-install-title">Подтвердить установку {{ engine_label }}</h2>
-        <p class="modal-description">Текущий бинарник и состояние профиля будут сохранены. При ошибке проверки или запуска панель вернёт предыдущую версию.</p>
+        <p class="modal-description" data-core-install-description>Текущий бинарник и состояние профиля будут сохранены. При ошибке проверки или запуска панель вернёт предыдущую версию.</p>
       </div>
       <button type="button" class="btn-secondary btn-icon" data-core-source-action="close-confirm" aria-label="Закрыть подтверждение" data-tooltip="Закрыть">{{ op_icon('close') }}</button>
     </div>
@@ -80,6 +89,7 @@
         <ol class="xk-core-install-steps" data-core-install-steps aria-label="Этапы установки"></ol>
       </section>
       <div class="xk-core-source-message" data-core-install-message role="status" aria-live="polite"></div>
+      <button type="button" class="btn-secondary" data-core-source-action="restart-panel" hidden>Перезапустить панель</button>
     </div>
     <div class="modal-actions xk-core-source-modal-actions">
       <button type="button" class="btn-secondary" data-core-source-action="close-confirm" data-tooltip="Отменить установку и закрыть подтверждение"><span data-core-source-button-label>Отмена</span></button>

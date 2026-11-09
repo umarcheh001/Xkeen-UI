@@ -636,10 +636,20 @@ class ModuleRegistry:
             legacy_compatibility = snapshot.get("profile") == LEGACY_FULL_PROFILE
             active: list[str] = []
             inactive: dict[str, str] = {}
+            installable_missing_cores: list[str] = []
+            engine_module_states: dict[str, str] = {}
             for item in snapshot.get("modules", []):
                 module_id = str(item.get("id") or "").strip()
                 if not module_id:
                     continue
+                core_id = module_id.removeprefix("engine.")
+                if module_id in ENGINE_MODULE_IDS:
+                    engine_module_states[core_id] = str(item.get("status") or "unavailable")
+                if (module_id in ENGINE_MODULE_IDS and item.get("installed") and item.get("enabled")
+                        and item.get("status") == "unavailable"
+                        and item.get("missing_requirement_ids") == [core_id]
+                        and not item.get("unavailable_dependency_ids")):
+                    installable_missing_cores.append(core_id)
                 if not bool(item.get("enabled")) and not item.get("blocked_reason"):
                     inactive[module_id] = str(item.get("reason") or "user_disabled")
                 elif (
@@ -662,6 +672,8 @@ class ModuleRegistry:
                 "legacy_compatibility": legacy_compatibility,
                 "runtime_gates_active": True,
                 "active_module_ids": active,
+                "installable_missing_cores": installable_missing_cores,
+                "engine_module_states": engine_module_states,
                 "inactive_modules": inactive,
                 "restart_required": bool(snapshot.get("restart_required")),
                 **(

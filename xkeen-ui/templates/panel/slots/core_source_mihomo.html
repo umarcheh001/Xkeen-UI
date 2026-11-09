@@ -1,2 +1,2 @@
 {% from "panel/core_source.html" import render_core_source_controls %}
-            {{ render_core_source_controls('mihomo', 'Mihomo') }}
+            {{ render_core_source_controls('mihomo', 'Mihomo', 'mihomo' in page_context.installable_missing_cores) }}

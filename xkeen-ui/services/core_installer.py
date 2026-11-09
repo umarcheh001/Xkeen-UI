@@ -107,6 +107,7 @@ class CoreInstaller:
         resolve_timeout_s: float = 8.0,
         release_cache_ttl_s: float = _RELEASE_CACHE_TTL_S,
         latest_tag_resolver: Callable[..., str | None] = latest_release_tag,
+        allow_first_install: Callable[[str], bool] | None = None,
     ):
         self.state_store = state_store
         self.binary_paths = {str(key): os.path.abspath(str(value)) for key, value in binary_paths.items()}
@@ -127,6 +128,7 @@ class CoreInstaller:
         self.release_cache_ttl_s = max(0.0, float(release_cache_ttl_s))
         self.unavailable_cache_ttl_s = min(self.release_cache_ttl_s, _UNAVAILABLE_RELEASE_CACHE_TTL_S)
         self.latest_tag_resolver = latest_tag_resolver
+        self.allow_first_install = allow_first_install
         self._plans: dict[str, dict[str, Any]] = {}
         self._operations: dict[str, dict[str, Any]] = {}
         self._stale_revalidation_until: dict[str, float] = {}
@@ -192,7 +194,12 @@ class CoreInstaller:
 
     def prepare(self, engine_id: str) -> dict[str, Any]:
         profile = get_profile(engine_id, self.selected_profile_id(engine_id))
-        self._require_active(engine_id)
+        target = self.binary_paths.get(engine_id)
+        first_install = bool(target and not os.path.lexists(target))
+        if first_install:
+            self._require_absent(engine_id)
+        else:
+            self._require_active(engine_id)
         # The profile chooser has already resolved and verified release
         # metadata (including SHA-256). Reuse that cache for the short-lived
         # confirmation plan instead of repeating a GitHub lookup after every
@@ -206,6 +213,7 @@ class CoreInstaller:
         plan = {
             "confirmation_id": confirmation_id,
             "engine_id": engine_id,
+            "first_install": first_install,
             "profile": profile_view(profile),
             "release": release,
             "created_at": time.time(),
@@ -216,11 +224,14 @@ class CoreInstaller:
         return self._public_plan(plan)
 
     def apply(self, engine_id: str, confirmation_id: str) -> dict[str, Any]:
-        self._require_active(engine_id)
         with self._guard:
             plan = self._plans.get(str(confirmation_id))
             if not plan or plan.get("engine_id") != engine_id or float(plan.get("expires_at", 0)) < time.time():
                 raise CoreInstallError("confirmation_expired", "Подтверждение устарело. Подготовьте установку заново.")
+            if plan.get("first_install"):
+                self._require_absent(engine_id)
+            else:
+                self._require_active(engine_id)
             if self._busy:
                 raise CoreInstallError("operation_in_progress", "Установка другого ядра уже выполняется.")
             self._busy = True
@@ -229,6 +240,7 @@ class CoreInstaller:
             self._operations[operation_id] = {
                 "operation_id": operation_id,
                 "engine_id": engine_id,
+                "first_install": bool(plan.get("first_install")),
                 "status": "running",
                 "phase": "download",
                 "phase_label": _PHASE_LABELS["download"],
@@ -321,10 +333,26 @@ class CoreInstaller:
         return {
             "confirmation_id": plan["confirmation_id"],
             "engine_id": plan["engine_id"],
+            "first_install": bool(plan.get("first_install")),
             "profile": plan["profile"],
             "release": self._public_release(plan["release"]),
             "expires_at": plan["expires_at"],
         }
+
+    def _require_absent(self, engine_id: str) -> None:
+        if self.allow_first_install is not None and not self.allow_first_install(engine_id):
+            raise CoreInstallError("module_unavailable", "Модуль управления ядром выключен или недоступен.")
+        target = self.binary_paths.get(engine_id)
+        if not target or os.path.lexists(target):
+            raise CoreInstallError("core_already_installed", "Состояние ядра изменилось. Повторите установку.")
+        if self.settled_core is not None:
+            runtime, active = self.settled_core()
+            if getattr(runtime, "switching", False):
+                raise CoreInstallError("core_switching", "Идёт смена ядра. Повторите позже.")
+        else:
+            active = self.running_core()
+        if active == engine_id:
+            raise CoreInstallError("core_already_running", "Ядро уже работает. Повторите проверку.")
 
     def _require_active(self, engine_id: str) -> None:
         if engine_id not in {"xray", "mihomo"}:
@@ -360,8 +388,8 @@ class CoreInstaller:
         with self._guard:
             self._operations[operation_id].update(changes)
 
-    def _phase(self, operation_id: str, engine_id: str, phase: str) -> None:
-        progress = _PHASE_PROGRESS.get(phase, 0)
+    def _phase(self, operation_id: str, engine_id: str, phase: str, *, progress_override: int | None = None) -> None:
+        progress = _PHASE_PROGRESS.get(phase, 0) if progress_override is None else progress_override
         phase_label = _PHASE_LABELS.get(phase, phase)
         self._set_operation(operation_id, phase=phase, phase_label=phase_label, progress=progress)
         self.state_store.set_runtime(
@@ -384,6 +412,8 @@ class CoreInstaller:
         prior_state = self.state_store.snapshot()
         had_backup = False
         replaced = False
+        first_identity = None
+        first_install = bool(plan.get("first_install"))
         current_phase = "download"
         try:
             if not target:
@@ -402,7 +432,10 @@ class CoreInstaller:
             binary = self._extract(bytes(payload), str(release["asset"]["name"]), profile.binary_name)
             if not binary:
                 raise CoreInstallError("binary_missing", "В архиве нет бинарного файла ядра.")
-            self._require_active(engine_id)
+            if first_install:
+                self._require_absent(engine_id)
+            else:
+                self._require_active(engine_id)
             current_phase = "backup"
             self._phase(operation_id, engine_id, "backup")
             os.makedirs(backup_dir, exist_ok=True)
@@ -423,35 +456,54 @@ class CoreInstaller:
                     os.chmod(temp_path, 0o755)
                 except OSError:
                     pass
-                self._require_active(engine_id)
-                os.replace(temp_path, target)
+                if first_install:
+                    current_phase = "preflight"
+                    self._phase(operation_id, engine_id, current_phase, progress_override=58)
+                    command = [temp_path, "version" if engine_id == "xray" else "-v"]
+                    code, output = self.run_command(command, timeout_s=self.resolve_timeout_s)
+                    if int(code) != 0:
+                        raise CoreInstallError("preflight_failed", "Ядро не прошло проверку версии.")
+                    self._require_absent(engine_id)
+                    current_phase = "replace"
+                    self._phase(operation_id, engine_id, current_phase, progress_override=70)
+                    first_identity = os.stat(temp_path)
+                    os.link(temp_path, target)
+                    replaced = True
+                else:
+                    self._require_active(engine_id)
+                    os.replace(temp_path, target)
             finally:
                 try:
                     os.unlink(temp_path)
                 except OSError:
                     pass
             replaced = True
-            current_phase = "preflight"
-            self._phase(operation_id, engine_id, current_phase)
-            command = self._preflight_command(engine_id, target)
-            code, output = self.run_command(command, timeout_s=self.resolve_timeout_s)
-            if int(code) != 0:
-                raise CoreInstallError("preflight_failed", "Конфигурация не прошла проверку перед установкой.")
-            current_phase = "restart"
-            self._phase(operation_id, engine_id, current_phase)
-            self._require_active(engine_id)
-            self._restart()
-            current_phase = "healthcheck"
-            self._phase(operation_id, engine_id, current_phase)
-            deadline = time.monotonic() + self.health_timeout_s
-            observed_core = None
-            while True:
-                observed_core = self.running_core()
-                if time.monotonic() >= deadline:
-                    break
-                time.sleep(0.05)
-            if observed_core != engine_id:
-                raise CoreInstallError("healthcheck_failed", "Ядро не прошло проверку после перезапуска.")
+            if first_install:
+                if first_identity is None or not os.path.samestat(first_identity, os.stat(target)):
+                    raise CoreInstallError("core_changed", "Файл ядра изменился во время установки.")
+                if self._is_core_running(engine_id):
+                    raise CoreInstallError("core_already_running", "Ядро запустилось во время установки; проверьте его состояние.")
+            if not first_install:
+                current_phase = "preflight"
+                self._phase(operation_id, engine_id, current_phase)
+                code, output = self.run_command(self._preflight_command(engine_id, target), timeout_s=self.resolve_timeout_s)
+                if int(code) != 0:
+                    raise CoreInstallError("preflight_failed", "Конфигурация не прошла проверку перед установкой.")
+                current_phase = "restart"
+                self._phase(operation_id, engine_id, current_phase)
+                self._require_active(engine_id)
+                self._restart()
+                current_phase = "healthcheck"
+                self._phase(operation_id, engine_id, current_phase)
+                deadline = time.monotonic() + self.health_timeout_s
+                observed_core = None
+                while True:
+                    observed_core = self.running_core()
+                    if time.monotonic() >= deadline:
+                        break
+                    time.sleep(0.05)
+                if observed_core != engine_id:
+                    raise CoreInstallError("healthcheck_failed", "Ядро не прошло проверку после перезапуска.")
             self.state_store.set_installed(
                 engine_id,
                 profile_id=profile.profile_id,
@@ -478,7 +530,11 @@ class CoreInstaller:
             )
         except Exception as exc:
             error = exc.message if isinstance(exc, CoreInstallError) else "Не удалось завершить установку ядра."
-            if replaced and had_backup:
+            if first_install and replaced:
+                error = f"{error} Файл ядра сохранён; проверьте его состояние."
+                self._set_operation(operation_id, status="failed", phase=current_phase, phase_label=_PHASE_LABELS.get(current_phase, current_phase), progress=_PHASE_PROGRESS.get(current_phase, 0), finished_at=time.time(), error=error)
+                self.state_store.set_runtime(engine_id, status="failed", phase=current_phase, error=error, operation_id=operation_id, progress=_PHASE_PROGRESS.get(current_phase, 0), phase_label=_PHASE_LABELS.get(current_phase, current_phase))
+            elif replaced and had_backup:
                 try:
                     self._phase(operation_id, engine_id, "rollback")
                     os.replace(backup_target, target)
@@ -529,6 +585,12 @@ class CoreInstaller:
         finally:
             with self._guard:
                 self._busy = False
+
+    def _is_core_running(self, engine_id: str) -> bool:
+        if self.settled_core is not None:
+            runtime, active = self.settled_core()
+            return active == engine_id or bool(runtime and runtime.has(engine_id))
+        return self.running_core() == engine_id
 
     def _restart(self) -> None:
         try:

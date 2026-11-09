@@ -200,8 +200,19 @@ let serviceStatusModuleApi = null;
       el.hidden = !match;
       if (!match) return;
       shown += 1;
+      const firstHint = el.querySelector('[data-core-first-install-hint]');
+      if (firstHint) {
+        const running = getCoreModalCurrentCore();
+        firstHint.textContent = running && running !== value
+          ? `${coreLabel(running)} продолжит работать.`
+          : 'Установка не перезапустит службу XKeen.';
+      }
       if (installed === true || installed === false) {
+        const previousInstalled = el.dataset.coreInstalled;
         el.dataset.coreInstalled = String(installed);
+        if (previousInstalled !== String(installed) && (previousInstalled !== undefined || !installed)) {
+          el.dispatchEvent(new CustomEvent('xkeen:core-installation-state', { detail: { installed } }));
+        }
         // The binary's own answer stands in when the source state has none.
         if (_coreVersions[value]) el.dataset.coreVersion = _coreVersions[value];
         const version = el.querySelector('[data-core-source-version]');
@@ -219,9 +230,16 @@ let serviceStatusModuleApi = null;
     const textEl = absent.querySelector('[data-core-absent-text]');
     if (textEl && value) {
       const label = coreLabel(value);
-      textEl.textContent = installed
-        ? `Ядро ${label} есть на роутере, но панель им не управляет. Включите модуль ${label} на странице модулей.`
-        : `${label} не установлено на роутере. Чтобы ставить и обновлять его из панели, включите модуль ${label} на странице модулей.`;
+      const moduleState = absent.dataset[`${value}ModuleState`];
+      if (moduleState === 'not_installed') {
+        textEl.textContent = `Модуль ${label} не установлен. Установите его на странице модулей.`;
+      } else if (moduleState === 'disabled') {
+        textEl.textContent = `Модуль ${label} выключен. Включите его на странице модулей.`;
+      } else {
+        textEl.textContent = installed
+          ? `Ядро ${label} есть на роутере, но панель им не управляет. Откройте страницу модулей.`
+          : `${label} не установлено на роутере. Откройте страницу модулей, чтобы проверить состояние модуля ${label}.`;
+      }
     }
   }
 

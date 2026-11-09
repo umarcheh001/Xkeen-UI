@@ -117,6 +117,130 @@ test('an absent engine with its module enabled stays listed and installable', as
   await expect(page.locator('#core-modal-confirm-btn')).toBeHidden();
 });
 
+test('an absent Mihomo shows the selected source and installable version', async ({ page }) => {
+  await serveCores(page, { cores: ['xray'] });
+  await page.route('**/api/mihomo/core-profiles', route => route.fulfill({ json: { ok: true, data: {
+    state: { selected_profile_id: 'official', last_status: 'idle', installed_release_tag: 'v1.19.20' },
+    profiles: [{ profile_id: 'official', display_name: 'Официальный Mihomo', release: { installable: true, stable: { tag: 'v1.19.20' } } }],
+    platform: {},
+  } } }));
+  await page.goto('/');
+  const menu = await openServiceMenu(page);
+  await engineSwitch(menu, 'mihomo').click();
+  const source = page.locator('#core-modal [data-core-source][data-core-engine="mihomo"]');
+  await expect(source.locator('[data-core-first-install-note]')).toBeVisible();
+  await expect(source.locator('[data-core-first-source]')).toHaveText('Официальный Mihomo');
+  await expect(source.getByRole('button', { name: 'Установить 1.19.20' })).toBeVisible();
+  await expect(source.locator('[data-core-source-action="retry"]')).toBeHidden();
+});
+
+test('an absent Xray shows the selected source and installable version', async ({ page }) => {
+  await serveCores(page, { cores: ['mihomo'], current: 'mihomo' });
+  await page.route('**/api/xray/core-profiles', route => route.fulfill({ json: { ok: true, data: {
+    state: { selected_profile_id: 'official', last_status: 'idle' },
+    profiles: [{ profile_id: 'official', display_name: 'Официальный Xray', release: { installable: true, stable: { tag: 'v26.11.9' } } }],
+    platform: {},
+  } } }));
+  await page.goto('/');
+  const menu = await openServiceMenu(page);
+  await engineSwitch(menu, 'xray').click();
+  const source = page.locator('#core-modal [data-core-source][data-core-engine="xray"]');
+  await expect(source.locator('[data-core-first-install-note]')).toBeVisible();
+  await expect(source.locator('[data-core-first-source]')).toHaveText('Официальный Xray');
+  await expect(source.getByRole('button', { name: 'Установить 26.11.9' })).toBeVisible();
+});
+
+test('an absent core names the version for an alternative source even with stale alpha state', async ({ page }) => {
+  await serveCores(page, { cores: ['xray'] });
+  await page.route('**/api/mihomo/core-profiles', route => route.fulfill({ json: { ok: true, data: {
+    state: { selected_profile_id: 'prizrak-core', installed_profile_id: 'official', installed_asset_name: 'mihomo-linux-alpha-abcdef.gz', last_status: 'idle' },
+    profiles: [{ profile_id: 'prizrak-core', display_name: 'Prizrak-Core', release: { installable: true, stable: { tag: 'v1.19.20' }, asset: { name: 'mihomo-linux-alpha-abcdef.gz' } } }], platform: {},
+  } } }));
+  await page.goto('/');
+  const menu = await openServiceMenu(page);
+  await engineSwitch(menu, 'mihomo').click();
+  const source = page.locator('#core-modal [data-core-source][data-core-engine="mihomo"]');
+  await expect(source.getByRole('button', { name: 'Установить 1.19.20' })).toBeVisible();
+});
+
+test('an absent core offers retry when its source cannot be loaded', async ({ page }) => {
+  await serveCores(page, { cores: ['xray'] });
+  await page.route('**/api/mihomo/core-profiles', route => route.fulfill({ status: 503, json: { ok: false, error: 'Источник недоступен' } }));
+  await page.goto('/');
+  const menu = await openServiceMenu(page);
+  await engineSwitch(menu, 'mihomo').click();
+  const source = page.locator('#core-modal [data-core-source][data-core-engine="mihomo"]');
+  await expect(source.locator('[data-core-first-status]')).toBeVisible();
+  await expect(source.getByRole('button', { name: 'Повторить проверку' })).toBeVisible();
+  await expect(source.locator('[data-core-source-action="prepare"]')).toBeDisabled();
+});
+
+test('an absent core explains why the selected release cannot be installed', async ({ page }) => {
+  await serveCores(page, { cores: ['xray'] });
+  await page.route('**/api/mihomo/core-profiles', route => route.fulfill({ json: { ok: true, data: {
+    state: { selected_profile_id: 'official', last_status: 'idle' },
+    profiles: [{ profile_id: 'official', display_name: 'Официальный Mihomo', release: { installable: false, reason: 'asset_missing' } }], platform: {},
+  } } }));
+  await page.goto('/');
+  const menu = await openServiceMenu(page);
+  await engineSwitch(menu, 'mihomo').click();
+  const source = page.locator('#core-modal [data-core-source][data-core-engine="mihomo"]');
+  await expect(source.locator('[data-core-first-status]')).toContainText('нет сборки для архитектуры');
+  await expect(source.locator('[data-core-source-action="prepare"]')).toBeDisabled();
+});
+
+test('an absent core cannot use a stale release after source loading fails', async ({ page }) => {
+  await serveCores(page, { cores: ['xray'] });
+  let fail = false;
+  await page.route('**/api/mihomo/core-profiles', route => fail
+    ? route.fulfill({ status: 503, json: { ok: false, error: 'Источник недоступен' } })
+    : route.fulfill({ json: { ok: true, data: { state: { selected_profile_id: 'official' }, profiles: [{ profile_id: 'official', display_name: 'Официальный Mihomo', release: { installable: true, stable: { tag: 'v1.19.20' } } }], platform: {} } } }));
+  await page.goto('/');
+  const menu = await openServiceMenu(page);
+  await engineSwitch(menu, 'mihomo').click();
+  const source = page.locator('#core-modal [data-core-source][data-core-engine="mihomo"]');
+  await expect(source.locator('[data-core-source-action="prepare"]')).toBeEnabled();
+  fail = true;
+  await source.getByRole('button', { name: 'Выбрать источник' }).click();
+  await page.locator('#mihomo-core-source-modal').getByRole('button', { name: 'Закрыть выбор источника' }).click();
+  await expect(source.locator('[data-core-source-action="prepare"]')).toBeDisabled();
+});
+
+test('first installation explains that the service keeps running and offers a panel restart', async ({ page }) => {
+  await serveCores(page, { cores: ['xray'] });
+  await page.route('**/api/mihomo/core-profiles', route => route.fulfill({ json: { ok: true, data: {
+    state: { selected_profile_id: 'official', last_status: 'idle' },
+    profiles: [{ profile_id: 'official', display_name: 'Официальный Mihomo', release: { installable: true, stable: { tag: 'v1.19.20' } } }], platform: {},
+  } } }));
+  await page.route('**/api/mihomo/core-install/prepare', route => route.fulfill({ json: { ok: true, confirmation: { confirmation_id: 'first', first_install: true, profile: {}, release: {} } } }));
+  await page.route('**/api/mihomo/core-install/apply', route => route.fulfill({ json: { ok: true, operation: { operation_id: 'first-op' } } }));
+  await page.route('**/api/mihomo/core-install/status?*', route => route.fulfill({ json: { ok: true, operation: { operation_id: 'first-op', first_install: true, status: 'succeeded', phase: 'complete', progress: 100 } } }));
+  await page.goto('/');
+  const menu = await openServiceMenu(page);
+  await engineSwitch(menu, 'mihomo').click();
+  await page.locator('#core-modal [data-core-source][data-core-engine="mihomo"]').getByRole('button', { name: 'Установить 1.19.20' }).click();
+  const dialog = page.locator('#mihomo-core-install-modal');
+  await expect(dialog.locator('[data-core-install-description]')).toContainText('без переключения');
+  await dialog.getByRole('button', { name: 'Установить', exact: true }).click();
+  await expect(dialog.getByRole('button', { name: 'Перезапустить панель' })).toBeVisible();
+  await expect(dialog.locator('[data-core-install-message]')).toContainText('Ядро установлено');
+});
+
+test('a newly installed core still offers panel restart after reopening the page', async ({ page }) => {
+  await serveCores(page, { cores: ['xray', 'mihomo'] });
+  await page.route('**/api/mihomo/core-profiles', route => route.fulfill({ json: { ok: true, data: {
+    state: { selected_profile_id: 'official', detected_version: '1.19.20', last_status: 'succeeded' },
+    profiles: [{ profile_id: 'official', display_name: 'Официальный Mihomo', release: { installable: true, stable: { tag: 'v1.19.20' } } }], platform: {},
+  } } }));
+  await page.goto('/');
+  await page.locator('#core-modal [data-core-source][data-core-engine="mihomo"]').evaluate(el => { el.dataset.firstInstall = 'true'; el.dispatchEvent(new CustomEvent('xkeen:core-installation-state')); });
+  const menu = await openServiceMenu(page);
+  await engineSwitch(menu, 'mihomo').click();
+  const source = page.locator('#core-modal [data-core-source][data-core-engine="mihomo"]');
+  await expect(source.getByRole('button', { name: 'Перезапустить панель' })).toBeVisible();
+  await expect(source.locator('[data-core-source-action="prepare"]')).toBeDisabled();
+});
+
 test('the only installed engine is shown active, and another installed one can be activated', async ({ page }) => {
   await serveCores(page, { cores: ['xray', 'mihomo'] });
   await page.goto('/');

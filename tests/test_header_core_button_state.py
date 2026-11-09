@@ -59,4 +59,5 @@ def test_single_core_modal_points_to_fork_installation_controls():
     assert "if (cores.length < 2) {" not in STATUS
     assert "btn.dataset.installed = String(cores.includes(" in STATUS
     assert "function showCoreModalEngine(" in STATUS
-    assert "включите модуль ${label} на странице модулей" in STATUS
+    assert "Модуль ${label} выключен" in STATUS
+    assert "Модуль ${label} не установлен" in STATUS

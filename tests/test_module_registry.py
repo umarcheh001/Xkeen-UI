@@ -400,6 +400,27 @@ def test_runtime_activation_preserves_legacy_full_and_gates_custom_profiles(tmp_
     assert custom_activation["inactive_modules"]["engine.mihomo"] == "user_disabled"
 
 
+@pytest.mark.parametrize("engine", ["xray", "mihomo"])
+def test_missing_core_offers_installation_without_activating_module(tmp_path, monkeypatch, engine):
+    registry = _registry(tmp_path)
+    item = {"id": f"engine.{engine}", "installed": True, "enabled": True,
+            "status": "unavailable", "missing_requirement_ids": [engine],
+            "unavailable_dependency_ids": [], "effective_enabled": False}
+    monkeypatch.setattr(registry, "get_registry", lambda: {"profile": "custom", "modules": [item]})
+    activation = registry.runtime_activation()
+    assert f"engine.{engine}" not in activation["active_module_ids"]
+    assert engine in activation["installable_missing_cores"]
+
+
+def test_runtime_activation_exposes_disabled_and_uninstalled_engine_states(tmp_path, monkeypatch):
+    registry = _registry(tmp_path)
+    monkeypatch.setattr(registry, "get_registry", lambda: {"profile": "custom", "modules": [
+        {"id": "engine.xray", "installed": False, "enabled": False, "status": "not_installed"},
+        {"id": "engine.mihomo", "installed": True, "enabled": False, "status": "disabled"},
+    ]})
+    assert registry.runtime_activation()["engine_module_states"] == {"xray": "not_installed", "mihomo": "disabled"}
+
+
 def test_is_runtime_active_uses_frozen_process_activation(tmp_path):
     registry = _registry(tmp_path)
     registry.get_registry()

@@ -24012,6 +24012,10 @@ body.panel-page #core-modal .xk-core-source-facts {
   line-height: 1.35;
 }
 
+body.panel-page #core-modal .xk-core-source-facts[hidden] { display: none; }
+body.panel-page [data-core-source-action="retry"][hidden],
+body.panel-page [data-core-source-action="restart-panel"][hidden] { display: none; }
+
 body.panel-page #core-modal .xk-core-source-facts dt { color: var(--op-muted); }
 
 body.panel-page #core-modal .xk-core-source-facts dd {

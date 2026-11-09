@@ -46,7 +46,7 @@
             {% for unmanaged_core_source_partial in page_context.unmanaged_core_source_partials %}
             {% include unmanaged_core_source_partial %}
             {% endfor %}
-            <div class="xk-core-source-control xk-core-source-control-absent" data-core-absent hidden>
+            <div class="xk-core-source-control xk-core-source-control-absent" data-core-absent data-xray-module-state="{{ page_context.engine_module_states.get('xray', '') }}" data-mihomo-module-state="{{ page_context.engine_module_states.get('mihomo', '') }}" hidden>
               <p data-core-absent-text></p>
               <a class="btn-secondary xk-core-source-action" href="{{ url_for('modules_page') }}">{{ op_icon('open') }}<span>Открыть модули</span></a>
             </div>

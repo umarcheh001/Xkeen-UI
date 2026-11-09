@@ -38,6 +38,16 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
     def module_active(module_id: str) -> bool:
         return module_id in active_modules
 
+    def allow_first_core_install(core: str) -> bool:
+        try:
+            item = ctx.module_registry.get_module(f"engine.{core}")["module"]
+            missing = set(item.get("missing_requirement_ids") or [])
+            return bool(item.get("installed") and item.get("enabled") and missing <= {core}
+                        and not item.get("unavailable_dependency_ids")
+                        and item.get("status") not in {"failed", "disabled", "not_installed"})
+        except Exception:
+            return False
+
     def module_change_guard(module_id: str, enabled: bool) -> dict[str, object] | None:
         if enabled or module_id not in {"engine.xray", "engine.mihomo"}:
             return None
@@ -254,6 +264,7 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
                     restart=ctx.restart_xkeen,
                     running_core=lambda: core_runtime().owner,
                     settled_core=settled_core_owner,
+                    allow_first_install=allow_first_core_install,
                 )
                 app.extensions["xkeen.core_installer"] = core_installer
 
@@ -319,6 +330,7 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
                     restart=ctx.restart_xkeen,
                     running_core=lambda: core_runtime().owner,
                     settled_core=settled_core_owner,
+                    allow_first_install=allow_first_core_install,
                 )
                 app.extensions["xkeen.core_installer"] = core_installer
 
@@ -354,7 +366,7 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
 
         core_installer = app.extensions.get("xkeen.core_installer")
         available_core_ids = set(detect_available_cores())
-        inactive_core_ids = available_core_ids - {
+        inactive_core_ids = (available_core_ids | set((ctx.module_activation or {}).get("installable_missing_cores", []))) - {
             core for core in ("xray", "mihomo") if module_active(f"engine.{core}")
         }
         if inactive_core_ids:
@@ -367,11 +379,15 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
                     restart=ctx.restart_xkeen,
                     running_core=lambda: core_runtime().owner,
                     settled_core=settled_core_owner,
+                    allow_first_install=allow_first_core_install,
                 )
                 app.extensions["xkeen.core_installer"] = core_installer
             for core_id in ("xray", "mihomo"):
                 if core_id in inactive_core_ids:
-                    app.register_blueprint(create_core_profiles_blueprint(core_id, core_installer))
+                    missing_core = core_id in set((ctx.module_activation or {}).get("installable_missing_cores", []))
+                    def allowed(core=core_id):
+                        return allow_first_core_install(core)
+                    app.register_blueprint(create_core_profiles_blueprint(core_id, core_installer, allow_management=allowed if missing_core else None))
     except Exception as exc:
         try:
             ctx.ws_debug("core profile routes initialization failed", error=str(exc))

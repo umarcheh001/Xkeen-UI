@@ -26,7 +26,7 @@ def _install_error_response(exc: CoreInstallError):
     return error_response(exc.message, statuses.get(exc.code, 400), code=exc.code)
 
 
-def create_core_profiles_blueprint(engine_id: str, installer: CoreInstaller) -> Blueprint:
+def create_core_profiles_blueprint(engine_id: str, installer: CoreInstaller, *, allow_management=None) -> Blueprint:
     """Create the source API for exactly one engine module."""
 
     normalized = str(engine_id or "").strip().lower()
@@ -34,6 +34,11 @@ def create_core_profiles_blueprint(engine_id: str, installer: CoreInstaller) -> 
         raise ValueError("Unknown core engine")
     bp = Blueprint(f"{normalized}_core_profiles", __name__)
     prefix = f"/api/{normalized}"
+
+    @bp.before_request
+    def check_management_allowed():
+        if allow_management is not None and request.method != "GET" and not allow_management():
+            return error_response("Модуль управления ядром выключен или недоступен.", 409, code="module_unavailable")
 
     @bp.get(f"{prefix}/core-profiles")
     def get_profiles():

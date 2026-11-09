@@ -133,6 +133,28 @@ def test_xray_only_registers_xray_routes_and_excludes_mihomo_tools(tmp_path):
     assert app.extensions["xkeen.module_owner_errors"] == []
 
 
+def test_missing_core_registers_install_api_without_engine_routes(tmp_path, monkeypatch):
+    monkeypatch.setattr("services.cores.detect_available_cores", lambda: [])
+    ctx = _context(tmp_path, ["core"])
+    ctx.module_activation["installable_missing_cores"] = ["mihomo"]
+    app = Flask("missing-core-install")
+    routes.register_blueprints(app, ctx)
+    rules = {rule.rule for rule in app.url_map.iter_rules()}
+    assert "/api/mihomo/core-install/prepare" in rules
+    assert "/api/mihomo/config" not in rules
+
+
+def test_missing_core_install_api_rechecks_if_module_was_disabled(tmp_path, monkeypatch):
+    monkeypatch.setattr("services.cores.detect_available_cores", lambda: [])
+    ctx = _context(tmp_path, ["core"])
+    ctx.module_activation["installable_missing_cores"] = ["mihomo"]
+    monkeypatch.setattr(ctx.module_registry, "get_module", lambda _id: {"module": {"installed": True, "enabled": False}})
+    app = Flask("missing-core-disabled")
+    routes.register_blueprints(app, ctx)
+    response = app.test_client().post('/api/mihomo/core-install/prepare', json={})
+    assert response.status_code == 409
+
+
 def test_mihomo_only_registers_mihomo_routes_and_excludes_xray_tools(tmp_path):
     app = _register(tmp_path, ["core", "tool.editor", "engine.mihomo"])
     rules = {rule.rule for rule in app.url_map.iter_rules()}

@@ -192,6 +192,7 @@ test.describe('Curated core source selection', () => {
 
   test('renames the single card action for a selected fork and opens confirmation', async ({ page }) => {
     const payload = mihomoProfiles();
+    payload.data.state.detected_version = '1.19.14';
     payload.data.state.selected_profile_id = 'prizrak-core';
     payload.data.state.installed_profile_id = 'official';
     let prepared = false;

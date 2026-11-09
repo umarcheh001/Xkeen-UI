@@ -215,6 +215,14 @@ def test_core_source_surfaces_follow_the_engine_that_serves_them(tmp_path):
         assert full.index('id="core-modal"') < full.index(f'id="{engine}-core-source-modal"')
 
 
+def test_missing_core_composes_only_install_controls():
+    from routes.pages import _build_panel_page_context
+    context = _build_panel_page_context({"core", "engine.xray"}, {"mihomo"})
+    assert "panel/slots/core_source_mihomo.html" in context["core_source_control_partials"]
+    assert "panel/modals/core_source_mihomo.html" in context["modal_partials"]
+    assert not any("mihomo" in part for part in context["screen_partials"])
+
+
 BACKUP_SURFACE_IDS = (
     "routing-backups-header",
     "backups-table",
