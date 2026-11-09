@@ -173,12 +173,20 @@ def test_single_partition_layout_is_accepted_before_device_checks(monkeypatch):
     assert result["code"] == "stale_target"
 
 
-def test_edit_partitions_never_touches_opkg_disk(monkeypatch):
-    monkeypatch.setattr(storage_usb, "_disk_device", lambda *_a: pytest.fail("device resolution reached"))
+def test_edit_partitions_never_touches_opkg_partition(monkeypatch):
+    monkeypatch.setattr(storage_usb, "_disk_device", lambda *_a: "/dev/sda")
+    monkeypatch.setattr(storage_usb, "_tool", lambda name: "/opt/sbin/parted" if name == "parted" else "")
+    monkeypatch.setattr(storage_usb, "_parted_layout", lambda *_a: {
+        "label": "gpt", "sector_size": 512, "free": [],
+        "partitions": [{"number": 3, "start": 2048, "end": 526335},
+                       {"number": 4, "start": 526336, "end": 1574911}]})
+    monkeypatch.setattr(storage_usb, "_parted_run", lambda *_a: pytest.fail("parted mutation reached"))
     parts = [{"partition_id": "Partition3", "uuid": "opkg-uuid"},
              {"partition_id": "Partition4", "uuid": "test-uuid"}]
-    for action in ("add", "delete", "split", "merge"):
+    for action in ("delete", "split", "merge"):
         result = storage_usb.edit_partitions(action, "Media0", "serial-1", parts,
+                                             partition_id="Partition3", uuid="opkg-uuid",
+                                             other_id="Partition4", other_uuid="test-uuid",
                                              confirm="EDIT Media0/serial-1")
         assert result["code"] == "opkg_protected"
 
@@ -194,6 +202,11 @@ def test_edit_partitions_rejects_stale_and_nonempty_targets(monkeypatch):
         "label": "gpt", "sector_size": 512,
         "partitions": [{"number": 4, "start": 2048, "end": 4196351}], "free": []})
     monkeypatch.setattr(storage_usb, "_parted_run", lambda *_a: pytest.fail("parted mutation reached"))
+    def command(_path, data):
+        safe["Media0"]["partition"]["Partition4"]["state"] = "UNMOUNTED" if data["no"] else "MOUNTED"
+        return {"ok": True}
+
+    monkeypatch.setattr(storage_usb, "_command", command)
     expected = [{"partition_id": "Partition4", "uuid": "test-uuid"}]
     base = ("Media0", "serial-1", expected)
     assert storage_usb.edit_partitions("split", *base, partition_id="Partition4", uuid="test-uuid",

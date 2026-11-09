@@ -65,10 +65,10 @@ async function prepare(page, requests, availableDisks = [disk]) {
       targetDisk.partitions.push(newPart(part.partition_id, part.start_sector, boundary - 1), newPart(id, boundary, part.end_sector));
       createdIds = [part.partition_id, id];
     } else if (operation === 'merge') {
-      const other = targetDisk.partitions.find((item) => item.partition_id === body.other_id);
-      targetDisk.partitions = targetDisk.partitions.filter((item) => item !== part && item !== other);
-      targetDisk.partitions.push(newPart(part.partition_id, Math.min(part.start_sector, other.start_sector),
-        Math.max(part.end_sector, other.end_sector)));
+      const merged = targetDisk.partitions.filter((item) => body.merge_parts.some((entry) => entry.partition_id === item.partition_id));
+      targetDisk.partitions = targetDisk.partitions.filter((item) => !merged.includes(item));
+      targetDisk.partitions.push(newPart(part.partition_id, Math.min(...merged.map((item) => item.start_sector)),
+        Math.max(...merged.map((item) => item.end_sector))));
       createdIds = [part.partition_id];
     } else if (operation === 'format') {
       const wasMounted = part.state === 'mounted';
@@ -259,6 +259,7 @@ test('one partition and local add, delete, split and merge workflows', async ({ 
   const left = section.locator('.fm-volumes-table tr').filter({ hasText: 'LEFT' });
   await left.getByRole('button', { name: 'Ещё' }).click();
   await left.locator('xpath=following-sibling::tr[1]').getByRole('button', { name: 'Объединить' }).click();
+  await page.getByRole('checkbox', { name: /RIGHT/ }).check();
   await page.locator('#fm-volume-form [data-volume-label="0"]').fill('JOINED');
   await page.locator('#fm-volume-form [name="confirmation"]').fill('Media1');
   await page.locator('#fm-volume-form button[type="submit"]').click();

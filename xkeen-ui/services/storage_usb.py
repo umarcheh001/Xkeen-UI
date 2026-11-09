@@ -205,11 +205,21 @@ def _inventory() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
                                      and not any(set(x["used_by"]) - {"cifs"} for x in disk["partitions"])
                                      and disk["size"] and disk["size"] >= 128 * 1048576
                                      and _tool("parted") and _disk_device(disk))
+        # Editing a GPT entry does not require detaching unrelated volumes (OPKG included).
+        parted = _tool("parted")
+        # Avoid probing block devices when the partition editor cannot run (and
+        # keep OPKG detection independent from optional host tooling).
+        device = _disk_device(disk) if parted else ""
+        layout = _parted_layout(device, parted) if device and parted else None
+        disk["editable"] = bool(layout and layout["label"] == "gpt"
+                                and layout["sector_size"] > 0 and 1048576 % layout["sector_size"] == 0)
+        disk["edit_reason"] = ("Не найдена утилита parted." if not parted else
+                               "Не удалось определить устройство накопителя." if not device else
+                               "Не удалось прочитать таблицу разделов." if not layout else
+                               "Для изменения отдельных разделов нужна таблица GPT." if not disk["editable"] else "")
         disk["free_ranges"] = []
-        if disk["partitionable"]:
-            device = _disk_device(disk)
-            layout = _parted_layout(device, _tool("parted")) if device else None
-            if layout and layout["label"] == "gpt":
+        if disk["editable"]:
+            if layout:
                 sector_size = layout["sector_size"]
                 disk["sector_size"] = sector_size
                 if sector_size > 0 and 1048576 % sector_size == 0:
@@ -527,7 +537,50 @@ def _clear_new_partition_headers(disk: dict[str, Any], device: str,
 
 
 def _is_empty_volume(part: dict[str, Any]) -> bool:
-    return bool(part.get("empty") and part.get("state") == "mounted")
+    return bool(part.get("empty") and part.get("state") == "mounted"
+                or not part.get("uuid") and not part.get("fstype")
+                and part.get("state") in {"unmounted", "unsupported"})
+
+
+def _verify_empty_volume(disk: dict[str, Any], part: dict[str, Any]) -> dict[str, Any] | None:
+    """Inspect an unmounted filesystem through firmware, without trusting cached emptiness."""
+    if part["state"] != "unmounted" or not part["uuid"]:
+        return None if _is_empty_volume(part) else _error("disk_in_use", "Раздел должен быть пустым.")
+    result = _command("system.mount", {"filesystem": part["uuid"] + ":", "no": False})
+    if not result["ok"]:
+        return result
+    failure = _error("disk_in_use", "Не удалось проверить содержимое раздела.")
+    try:
+        for _ in range(15):
+            fresh = next((d for d in _inventory()[0] if d["id"] == disk["id"]), None)
+            current = next((p for p in fresh["partitions"] if p["partition_id"] == part["partition_id"]
+                            and p["uuid"] == part["uuid"]), None) if fresh and fresh["serial"] == disk["serial"] else None
+            if not current or current["protected"]:
+                failure = _error("stale_target", "Раздел изменился во время проверки.")
+                break
+            if current["state"] == "mounted":
+                failure = None if _is_empty_volume(current) else _error("disk_in_use", "Раздел содержит файлы: операция отменена.")
+                break
+            time.sleep(0.3)
+    except Exception:
+        failure = _error("rci_unavailable", "Не удалось проверить содержимое раздела.")
+    finally:
+        # _target revalidates the UUID and OPKG protection before detaching.
+        try:
+            current_disk, current, error = _target(disk["id"], part["partition_id"], part["uuid"])
+            if error:
+                failure = error
+            elif current_disk["serial"] != disk["serial"]:
+                failure = _error("stale_target", "Накопитель заменён во время проверки.")
+            elif current["protected"] or set(current["used_by"]) - {"cifs"}:
+                failure = _error("disk_in_use", "Раздел используется службой.")
+            elif current["state"] != "unmounted":
+                result = _command("system.mount", {"filesystem": part["uuid"] + ":", "no": True})
+                if not result["ok"]:
+                    failure = result
+        except Exception:
+            failure = _error("rci_unavailable", "Не удалось отключить раздел после проверки содержимого.")
+    return failure
 
 
 def _disk_partition_target(part: dict[str, Any], layout: dict[str, Any]):
@@ -538,6 +591,7 @@ def _disk_partition_target(part: dict[str, Any], layout: dict[str, Any]):
 
 def edit_partitions(action: str, media_id: str, serial: str, expected_parts: list[dict[str, str]],
                     *, partition_id: str = "", uuid: str = "", other_id: str = "", other_uuid: str = "",
+                    merge_parts: list[dict[str, str]] | None = None,
                     start_sector: int = -1, size_mib: int = 0, confirm: str = "") -> dict[str, Any]:
     if action not in {"add", "delete", "split", "merge"}:
         return _error("bad_request", "Неизвестная операция с разделами.")
@@ -553,14 +607,16 @@ def edit_partitions(action: str, media_id: str, serial: str, expected_parts: lis
         disk = next((item for item in disks if item["id"] == media_id), None)
         if not disk or disk["serial"] != serial:
             return _error("stale_target", "Накопитель изменился. Обновите список.")
-        if disk["protected"]:
-            return _error("opkg_protected", "Нельзя менять разделы накопителя с активным OPKG.")
         try:
             expected = sorted((str(p["partition_id"]), str(p["uuid"])) for p in expected_parts)
         except (KeyError, TypeError):
             return _error("bad_request", "Некорректный состав накопителя.")
         if expected != sorted((p["partition_id"], p["uuid"]) for p in disk["partitions"]):
             return _error("stale_target", "Разделы накопителя изменились. Обновите список.")
+        requested_part = next((p for p in disk["partitions"]
+                               if p["partition_id"] == partition_id and p["uuid"] == uuid), None)
+        if action != "add" and requested_part and requested_part["protected"]:
+            return _error("opkg_protected", "Нельзя изменять раздел с активным OPKG.")
         device, parted = _disk_device(disk), _tool("parted")
         if not device or not parted:
             return _error("tool_missing", "Не найдены накопитель или утилита parted.")
@@ -572,17 +628,31 @@ def edit_partitions(action: str, media_id: str, serial: str, expected_parts: lis
             return _error("unsupported_layout", "Неподдерживаемый размер сектора.")
         sectors_mib = 1048576 // sector_size
         part = next((p for p in disk["partitions"] if p["partition_id"] == partition_id and p["uuid"] == uuid), None)
-        other = next((p for p in disk["partitions"] if p["partition_id"] == other_id and p["uuid"] == other_uuid), None)
         if action != "add" and not part:
             return _error("stale_target", "Раздел изменился. Обновите список.")
-        if action == "merge" and (not other or other is part):
-            return _error("stale_target", "Второй раздел изменился. Обновите список.")
+        targets = [part] if part and action != "add" else []
+        if action == "merge":
+            requested = merge_parts if merge_parts is not None else [
+                {"partition_id": partition_id, "uuid": uuid}, {"partition_id": other_id, "uuid": other_uuid}]
+            if not isinstance(requested, list) or not 2 <= len(requested) <= len(disk["partitions"]):
+                return _error("bad_request", "Выберите как минимум два раздела.")
+            try:
+                keys = [(str(p["partition_id"]), str(p["uuid"])) for p in requested]
+            except (KeyError, TypeError):
+                return _error("bad_request", "Некорректный список разделов.")
+            if len(set(keys)) != len(keys) or (partition_id, uuid) not in keys:
+                return _error("bad_request", "Список разделов содержит повторы или не включает исходный раздел.")
+            targets = [p for p in disk["partitions"] if (p["partition_id"], p["uuid"]) in keys]
+            if len(targets) != len(keys):
+                return _error("stale_target", "Выбранные разделы изменились. Обновите список.")
+        if any(p["protected"] for p in targets):
+            return _error("opkg_protected", "Нельзя изменять раздел с активным OPKG.")
         number, row = _disk_partition_target(part, layout) if part else (None, None)
-        other_number, other_row = _disk_partition_target(other, layout) if other else (None, None)
-        if action != "add" and not row or action == "merge" and not other_row:
+        target_rows = [_disk_partition_target(p, layout)[1] for p in targets]
+        if any(r is None for r in target_rows):
             return _error("stale_target", "Геометрия разделов изменилась.")
-        if any(set(p["used_by"]) - {"cifs"} for p in disk["partitions"]):
-            return _error("disk_in_use", "Накопитель используется службой.")
+        if any(set(p["used_by"]) - {"cifs"} for p in targets):
+            return _error("disk_in_use", "Выбранный раздел используется службой.")
         if action == "add":
             if type(start_sector) is not int or type(size_mib) is not int or size_mib < 64:
                 return _error("bad_layout", "Укажите свободную область и размер от 64 МиБ.")
@@ -596,12 +666,10 @@ def edit_partitions(action: str, media_id: str, serial: str, expected_parts: lis
             removes: list[int] = []
             creates = [(start, end)]
         elif action == "delete":
-            if part["state"] != "unmounted" or part["used_by"]:
+            if part["state"] not in {"unmounted", "unsupported"}:
                 return _error("must_unmount", "Перед удалением отключите раздел.")
             removes, creates = [number], []
         elif action == "split":
-            if not _is_empty_volume(part):
-                return _error("disk_in_use", "Делить можно только подключённый пустой раздел.")
             if type(size_mib) is not int or size_mib < 64:
                 return _error("bad_layout", "Размер первого раздела должен быть от 64 МиБ.")
             boundary = row["start"] + size_mib * sectors_mib
@@ -609,17 +677,24 @@ def edit_partitions(action: str, media_id: str, serial: str, expected_parts: lis
                 return _error("bad_layout", "Для второго раздела осталось меньше 64 МиБ.")
             removes, creates = [number], [(row["start"], boundary - 1), (boundary, row["end"])]
         else:
-            if not _is_empty_volume(part) or not _is_empty_volume(other):
-                return _error("disk_in_use", "Объединять можно только два подключённых пустых раздела.")
-            rows = sorted((row, other_row), key=lambda item: item["start"])
-            if rows[0]["end"] + 1 != rows[1]["start"]:
+            rows = sorted(target_rows, key=lambda item: item["start"])
+            if any(left["end"] + 1 != right["start"] for left, right in zip(rows, rows[1:])):
                 return _error("bad_layout", "Разделы должны соседствовать без промежутка.")
-            removes, creates = [number, other_number], [(rows[0]["start"], rows[1]["end"])]
-        if any(p["state"] not in {"mounted", "unmounted"} for p in disk["partitions"]):
+            removes, creates = [r["number"] for r in rows], [(rows[0]["start"], rows[-1]["end"])]
+        if any(p["state"] not in {"mounted", "unmounted", "unsupported"} for p in disk["partitions"]):
             return _error("disk_in_use", "Дождитесь завершения текущей операции с разделами.")
         mounted_before = [(p["partition_id"], p["uuid"]) for p in disk["partitions"]
-                          if p["state"] == "mounted" and _partition_number(p["partition_id"]) not in removes]
+                          if p["state"] == "mounted" and not p["protected"]
+                          and _partition_number(p["partition_id"]) not in removes]
+        if action in {"split", "merge"}:
+            for volume in targets:
+                failed = _verify_empty_volume(disk, volume)
+                if failed:
+                    return failed
+        # Keep OPKG mounted, but detach other filesystems while the GPT is edited.
         for volume in disk["partitions"]:
+            if volume["protected"]:
+                continue
             if volume["state"] == "mounted":
                 if not volume["uuid"]:
                     return _error("disk_in_use", "Не удалось определить файловую систему подключённого раздела.")
@@ -631,16 +706,20 @@ def edit_partitions(action: str, media_id: str, serial: str, expected_parts: lis
                 fresh = next(d for d in _inventory()[0] if d["id"] == media_id)
             except Exception:
                 return _error("rci_unavailable", "Накопитель исчез во время отключения.")
-            if fresh["serial"] != serial or fresh["protected"] or sorted(
+            if fresh["serial"] != serial or sorted(
                     (p["partition_id"], p["uuid"]) for p in fresh["partitions"]) != expected:
                 return _error("stale_target", "Накопитель изменился во время операции.")
-            if all(p["state"] == "unmounted" for p in fresh["partitions"]):
+            fresh_targets = [p for p in fresh["partitions"] if _partition_number(p["partition_id"]) in removes]
+            if any(p["protected"] or set(p["used_by"]) - {"cifs"} for p in fresh_targets):
+                return _error("disk_in_use", "Выбранный раздел занят службой.")
+            if all(p["state"] in {"unmounted", "unsupported"} for p in fresh_targets):
                 break
             time.sleep(0.3)
         else:
             return _error("disk_in_use", "Не все разделы удалось отключить.")
-        if any(re.fullmatch(re.escape(device) + r"(?:p)?[0-9]+", source) for source, _, _ in _mounts()):
-            return _error("disk_in_use", "Раздел накопителя всё ещё смонтирован в системе.")
+        target_sources = {device + ("p" if device[-1].isdigit() else "") + str(n) for n in removes}
+        if any(source in target_sources or source == device for source, _, _ in _mounts()):
+            return _error("disk_in_use", "Выбранный раздел всё ещё смонтирован в системе.")
         if _disk_device(disk) != device:
             return _error("stale_target", "Накопитель заменён перед изменением таблицы.")
         for removed in removes:
