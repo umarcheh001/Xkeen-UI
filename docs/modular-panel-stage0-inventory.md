@@ -41,7 +41,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 | `engine.mihomo` | 147 | 3.31 МБ | 97 | 4 | 6 | да |
 | `tool.editor` | 25 | 814.7 КБ | 0 | 0 | 2 | да |
 | `tool.terminal` | 47 | 472.0 КБ | 2 | 2 | 2 | да |
-| `tool.files` | 86 | 1.03 МБ | 42 | 1 | 1 | да |
+| `tool.files` | 86 | 1.04 МБ | 42 | 1 | 1 | да |
 | `tool.backups` | 8 | 99.8 КБ | 14 | 0 | 0 | да |
 | `integration.happ` | 22 | 325.0 КБ | 5 | 0 | 2 | да |
 | `tool.advanced-diagnostics` | 49 | 589.2 КБ | 16 | 0 | 1 | да |

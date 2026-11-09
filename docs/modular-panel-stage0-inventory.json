@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 672,
-      "size_bytes": 9190931,
+      "size_bytes": 9191736,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -254,7 +254,7 @@
       ],
       "removable": true,
       "unit_count": 86,
-      "size_bytes": 1083227,
+      "size_bytes": 1093079,
       "kind_counts": {
         "backend_route": 22,
         "backend_service": 32,
@@ -13756,7 +13756,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/file_manager_storage.spec.mjs",
-      "size_bytes": 16483,
+      "size_bytes": 16591,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -15625,7 +15625,7 @@
       "module_id": "core",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/panel-operator.css",
-      "size_bytes": 848291,
+      "size_bytes": 848988,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -27491,7 +27491,7 @@
       "module_id": "tool.files",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/storage_usb.py",
-      "size_bytes": 2832,
+      "size_bytes": 2885,
       "depends_on": [
         "core"
       ],
@@ -28156,7 +28156,7 @@
       "module_id": "tool.files",
       "kind": "backend_service",
       "path": "xkeen-ui/services/storage_usb.py",
-      "size_bytes": 40386,
+      "size_bytes": 45820,
       "depends_on": [
         "core"
       ],
@@ -28176,7 +28176,7 @@
       "module_id": "tool.files",
       "kind": "backend_test",
       "path": "tests/test_storage_usb.py",
-      "size_bytes": 17061,
+      "size_bytes": 17971,
       "depends_on": [
         "core"
       ],
@@ -28928,7 +28928,7 @@
       "module_id": "tool.files",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/file_manager/storage.js",
-      "size_bytes": 46432,
+      "size_bytes": 49887,
       "depends_on": [
         "core"
       ],
@@ -36931,7 +36931,7 @@
         },
         "tool.files": {
           "unit_count": 86,
-          "size_bytes": 1083227
+          "size_bytes": 1093079
         },
         "tool.advanced-diagnostics": {
           "unit_count": 49,

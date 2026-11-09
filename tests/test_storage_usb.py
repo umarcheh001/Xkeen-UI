@@ -69,6 +69,7 @@ def test_eject_protects_whole_disk(monkeypatch):
 def test_repartition_protects_opkg_and_revalidates_serial(monkeypatch):
     monkeypatch.setattr(storage_usb, "_command", lambda *_a: pytest.fail("RCI command reached"))
     monkeypatch.setattr(storage_usb, "_disk_device", lambda *_a: pytest.fail("device resolution reached"))
+    monkeypatch.setattr(storage_usb, "_tool", lambda _name: "")
     parts = [{"partition_id": "Partition3", "uuid": "opkg-uuid"},
              {"partition_id": "Partition4", "uuid": "test-uuid"}]
     result = storage_usb.repartition_disk("Media0", "serial-1", parts, [1024, 0],

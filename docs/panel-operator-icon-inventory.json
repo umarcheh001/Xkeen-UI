@@ -105,12 +105,12 @@
           "accessible_label": "Предупреждение"
         },
         {
-          "location": "xkeen-ui/static/js/features/file_manager/storage.js:L294",
+          "location": "xkeen-ui/static/js/features/file_manager/storage.js:L318",
           "control_type": "runtime-action",
           "accessible_label": "Предупреждение"
         },
         {
-          "location": "xkeen-ui/static/js/features/file_manager/storage.js:L338",
+          "location": "xkeen-ui/static/js/features/file_manager/storage.js:L360",
           "control_type": "runtime-action",
           "accessible_label": "Предупреждение"
         },
@@ -248,12 +248,12 @@
           "accessible_label": "Назад"
         },
         {
-          "location": "xkeen-ui/static/js/features/file_manager/storage.js:L291",
+          "location": "xkeen-ui/static/js/features/file_manager/storage.js:L315",
           "control_type": "runtime-action",
           "accessible_label": "Назад"
         },
         {
-          "location": "xkeen-ui/static/js/features/file_manager/storage.js:L337",
+          "location": "xkeen-ui/static/js/features/file_manager/storage.js:L359",
           "control_type": "runtime-action",
           "accessible_label": "Назад"
         },
@@ -404,7 +404,7 @@
           "accessible_label": "Подтвердить"
         },
         {
-          "location": "xkeen-ui/static/js/features/file_manager/storage.js:L118",
+          "location": "xkeen-ui/static/js/features/file_manager/storage.js:L142",
           "control_type": "runtime-action",
           "accessible_label": "Подтвердить"
         },
@@ -642,12 +642,12 @@
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/static/js/features/file_manager/storage.js:L183",
+          "location": "xkeen-ui/static/js/features/file_manager/storage.js:L207",
           "control_type": "runtime-action",
           "accessible_label": "Закрыть"
         },
         {
-          "location": "xkeen-ui/static/js/features/file_manager/storage.js:L189",
+          "location": "xkeen-ui/static/js/features/file_manager/storage.js:L213",
           "control_type": "runtime-action",
           "accessible_label": "Закрыть"
         },
@@ -1698,7 +1698,7 @@
       "tabler_asset": "sparkles",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/file_manager/storage.js:L187",
+          "location": "xkeen-ui/static/js/features/file_manager/storage.js:L211",
           "control_type": "runtime-action",
           "accessible_label": "Форматировать"
         },
@@ -2183,7 +2183,7 @@
           "accessible_label": "Список"
         },
         {
-          "location": "xkeen-ui/static/js/features/file_manager/storage.js:L294",
+          "location": "xkeen-ui/static/js/features/file_manager/storage.js:L318",
           "control_type": "runtime-action",
           "accessible_label": "Список"
         },
@@ -3306,7 +3306,7 @@
       "tabler_asset": "device-floppy",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/file_manager/storage.js:L191",
+          "location": "xkeen-ui/static/js/features/file_manager/storage.js:L215",
           "control_type": "runtime-action",
           "accessible_label": "Сохранить"
         },
