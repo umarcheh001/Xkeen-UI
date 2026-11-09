@@ -275,7 +275,7 @@ test.describe('Module manager screen', () => {
 
     await expect(page.locator('body')).not.toHaveClass(/\bpanel-page\b/);
     await expect(page.locator('.modules-summary')).toContainText('Локальная сборка.');
-    await expect(page.getByRole('button', { name: 'Обновить панель' })).toHaveCount(0);
+    await expect(page.locator('[data-operation="panel-update"]')).toHaveCount(0);
     await expect(page.getByRole('tab', { name: 'Доступные' })).toBeDisabled();
     await expect(page.getByRole('switch', { name: /Включить Mihomo/ })).toBeVisible();
   });
@@ -351,7 +351,7 @@ test.describe('Module manager screen', () => {
     await page.evaluate(async () => (await import('/static/js/pages/modules.init.js')).getModulesController().deactivate());
     unavailable = true;
     await page.evaluate(async () => (await import('/static/js/pages/modules.init.js')).getModulesController().activate());
-    await expect(page.getByRole('button', { name: 'Обновить панель' })).toBeDisabled();
+    await expect(page.locator('[data-operation="panel-update"]')).toBeDisabled();
     await expect(page.getByRole('switch', { name: 'Включить Mihomo' })).toBeDisabled();
     await expect(page.getByRole('button', { name: 'Перезапустить панель' })).toHaveCount(0);
     await expect(page.locator('#modules-error .modules-page-alert')).toHaveAttribute('data-code', 'module_state_unavailable');
@@ -359,10 +359,10 @@ test.describe('Module manager screen', () => {
     const retry = page.locator('#modules-error .modules-page-alert-retry');
     await expect(page.locator('#modules-refresh-status')).toBeHidden();
     await retry.click();
-    await expect(page.getByRole('button', { name: 'Обновить панель' })).toBeDisabled();
+    await expect(page.locator('[data-operation="panel-update"]')).toBeDisabled();
     unavailable = false;
     await retry.click();
-    await expect(page.getByRole('button', { name: 'Обновить панель' })).toBeEnabled();
+    await expect(page.locator('[data-operation="panel-update"]')).toBeEnabled();
     await expect(page.getByRole('button', { name: 'Перезапустить панель' })).toBeEnabled();
   });
 
@@ -559,7 +559,7 @@ test.describe('A screen that is not drawn anew without a reason', () => {
 
     await expect(page.getByRole('switch', { name: 'Включить Mihomo' })).toBeChecked();
     await expect(page.locator('.modules-summary')).toContainText('Требуется перезапуск');
-    await expect(page.getByRole('button', { name: 'Обновить панель' })).toBeEnabled();
+    await expect(page.locator('[data-operation="panel-update"]')).toBeEnabled();
   });
 
   test('a switch being saved locks the other actions and keeps the focus', async ({ page }) => {
@@ -581,7 +581,7 @@ test.describe('A screen that is not drawn anew without a reason', () => {
     await page.keyboard.press('Space');
     await expect.poll(() => Boolean(releaseSave)).toBe(true);
 
-    await expect(page.getByRole('button', { name: 'Обновить панель' })).toBeDisabled();
+    await expect(page.locator('[data-operation="panel-update"]')).toBeDisabled();
     await expect(page.getByRole('button', { name: 'Удалить Mihomo' })).toBeDisabled();
     await expect(page.getByRole('switch', { name: 'Включить Редакторы' })).toBeDisabled();
     await page.evaluate(async () => {
@@ -593,7 +593,7 @@ test.describe('A screen that is not drawn anew without a reason', () => {
     releaseSave();
     await expect(toggle).toBeChecked();
     await expect(toggle).toBeFocused();
-    await expect(page.getByRole('button', { name: 'Обновить панель' })).toBeEnabled();
+    await expect(page.locator('[data-operation="panel-update"]')).toBeEnabled();
   });
 
   test('a module that is not installed is still called by its name', async ({ page }) => {
@@ -611,7 +611,7 @@ test.describe('A screen that is not drawn anew without a reason', () => {
     await expect(block.locator('h2')).toContainText(`Установка модуля «${TERMINAL}» 2.10.0`);
     await expect(block).not.toContainText('tool.terminal');
 
-    await page.getByRole('button', { name: 'Обновить панель' }).click();
+    await page.locator('[data-operation="panel-update"]').click();
     const facts = page.getByRole('dialog').locator('.modules-plan-facts');
     await expect(facts).toContainText(`Xkeen UI Core, ${TERMINAL}, ${installedSnapshot.module_names['tool.files']}`);
     await expect(facts).not.toContainText('tool.');

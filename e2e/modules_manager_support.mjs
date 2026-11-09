@@ -32,12 +32,14 @@ export async function installIdleLifecycleRoutes(page) {
   await page.route('**/api/modules/installed', (route) => route.fulfill({ json: installedSnapshot }));
   await page.route('**/api/modules/operations/status', (route) => route.fulfill({ json: idleStatus }));
   await page.route('**/api/modules/available', (route) => route.fulfill({ json: availableSnapshot }));
+  await page.route('**/api/modules/panel/update-check', (route) => route.fulfill({ json: server.update_check }));
 }
 
 export async function installLifecycleRoutes(page, { status = idleStatus, installed = installedSnapshot, available = availableSnapshot } = {}) {
   await page.route('**/api/modules/installed', (route) => route.fulfill({ json: installed }));
   await page.route('**/api/modules/operations/status', (route) => route.fulfill({ json: status }));
   await page.route('**/api/modules/available', (route) => route.fulfill({ json: available }));
+  await page.route('**/api/modules/panel/update-check', (route) => route.fulfill({ json: server.update_check }));
 }
 
 // One answer about preparing a panel update (POST/GET /api/modules/panel/prepare).
