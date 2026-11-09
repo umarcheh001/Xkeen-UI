@@ -268,6 +268,7 @@ const TRANSFER_LABELS = {
   tcp_error: 'Сбой TCP', tls_timeout: 'Таймаут TLS', tls_error: 'Сбой TLS', tls_cert_error: 'Ошибка сертификата',
   proxy_error: 'Туннель прокси не установлен', dns_error: 'Сбой DNS', route_unverified: 'Прямой путь не проверен',
   core_unavailable: 'Ядро не установлено', core_start_failed: 'Временное ядро не запустилось',
+  inconsistent: 'Результат не повторился',
 };
 const STAGE_LABELS = { tcp: 'подключение', proxy_connect: 'туннель прокси', tls: 'TLS', http_headers: 'заголовки HTTP', body: 'тело ответа', complete: 'завершено' };
 
@@ -319,8 +320,13 @@ function paintAdvancedComparison(output, result) {
       summary.textContent = `${test.control} · ${test.destination_ip || 'IP не получен'}`;
       const attempts = document.createElement('dl');
       appendFact(attempts, 'Напрямую', transferDescription(test.direct));
-      appendFact(attempts, 'Малый ответ', transferDescription(test.small));
-      (test.attempts || []).forEach((item, index) => appendFact(attempts, `256 КБ · ${index + 1}`, transferDescription(item)));
+      if (test.size_boundary?.last_complete_bytes) appendFact(attempts, 'Пройденный размер', `${test.size_boundary.last_complete_bytes / 1024} КБ`);
+      if (test.size_boundary?.first_incomplete_bytes) appendFact(attempts, 'Первый обрыв', `${test.size_boundary.first_incomplete_bytes / 1024} КБ · ${test.size_boundary.repeatable ? 'повторился' : 'не подтверждён повтором'}`);
+      (test.steps || []).forEach((item, index) => appendFact(attempts, `Через узел · ${(item.requested_bytes / 1024).toLocaleString('ru-RU')} КБ${index > 0 && item.requested_bytes === test.steps[index - 1]?.requested_bytes ? ' · повтор' : ''}`, transferDescription(item)));
+      if (!(test.steps || []).length) {
+        appendFact(attempts, 'Малый ответ', transferDescription(test.small));
+        (test.attempts || []).forEach((item, index) => appendFact(attempts, `256 КБ · ${index + 1}`, transferDescription(item)));
+      }
       if (test.paced_direct) appendFact(attempts, 'Медленно напрямую', transferDescription(test.paced_direct));
       if (test.paced) appendFact(attempts, 'Замедленно', transferDescription(test.paced));
       details.append(summary, attempts);
@@ -330,7 +336,35 @@ function paintAdvancedComparison(output, result) {
   }
   const note = document.createElement('p');
   note.className = 'xk-provider-check-comparison-note';
-  note.textContent = 'Объём измерен по телу HTTP-ответа. TCP через локальный порт ядра не измеряет подключение к удалённому узлу. Похожий обрыв может быть связан с сервером, маршрутом или ограничением сети.';
+  note.textContent = 'Каждая ступень — отдельный HTTP-запрос. Объём измерен по телу ответа, без накладных расходов TLS и прокси. Ядро может повторно использовать транспорт при включённом мультиплексировании. TCP через локальный порт ядра не измеряет подключение к удалённому узлу. Похожий обрыв может быть связан с сервером, маршрутом или ограничением сети.';
+  output.append(note);
+}
+
+function paintTlsProfile(output, result) {
+  output.replaceChildren();
+  const title = document.createElement('strong');
+  title.textContent = 'TLS-профиль ядра';
+  output.append(title);
+  if (!result || result.status !== 'ok') {
+    const message = document.createElement('p');
+    message.textContent = result?.message || 'Профиль TLS не получен.';
+    output.append(message);
+    return;
+  }
+  const configured = result.configured || {};
+  const facts = document.createElement('dl');
+  appendFact(facts, 'Ядро', `${result.engine} · контрольный сервис ${result.control}`);
+  if (result.server_ip) appendFact(facts, 'IP сервера', result.server_ip);
+  appendFact(facts, 'Настроено', [configured.fingerprint && `fingerprint: ${configured.fingerprint}`, configured.server_name && `SNI: ${configured.server_name}`, configured.alpn && `ALPN: ${Array.isArray(configured.alpn) ? configured.alpn.join(', ') : configured.alpn}`].filter(Boolean).join(' · ') || 'профиль явно не задан');
+  appendFact(facts, 'Вывод', result.message || result.verdict || 'Результат не определён');
+  for (const profile of result.profiles || []) {
+    const name = profile.fingerprint === 'configured' ? 'Исходный профиль' : profile.fingerprint;
+    appendFact(facts, name, TRANSFER_LABELS[profile.status] || profile.status);
+    (profile.attempts || []).forEach((attempt, i) => appendFact(facts, `${name} · ${i + 1}`, transferDescription(attempt)));
+  }
+  output.append(facts);
+  const note = document.createElement('p');
+  note.textContent = 'Два раунда на одном IP сервера и одном IP контрольной площадки. Каждый вариант запускается отдельным временным ядром с теми же SNI, транспортом и ключами. TLS-время внутри ответа относится к контрольной площадке. Разница между fingerprint сама по себе не доказывает блокировку.';
   output.append(note);
 }
 
@@ -564,7 +598,7 @@ export function initProviderDiagnostics() {
       advancedButton.type = 'button';
       advancedButton.className = 'xk-provider-check-proxy-button';
       advancedButton.innerHTML = iconHtml('ping');
-      responsiveLabel(advancedButton, 'Расширенная проверка', 'Расширенная', 'Проверить IP, указанные TCP-порты и передачу до 256 КБ через узел к двум независимым площадкам; до 90 секунд');
+      responsiveLabel(advancedButton, 'Расширенная проверка', 'Расширенная', 'Проверить IP, указанные TCP-порты и передачу ступенчато от 8 до 256 КБ через узел к двум независимым площадкам; до 90 секунд');
       advancedButton.addEventListener('click', async () => {
         const ports = $('provider-check-ports').value.trim();
         if (ports && (!/^[\d,;\s]+$/.test(ports) || ports.split(/[,;\s]+/).length > 4 || ports.split(/[,;\s]+/).some((port) => !/^\d{1,5}$/.test(port) || Number(port) < 1 || Number(port) > 65535))) {
@@ -599,6 +633,31 @@ export function initProviderDiagnostics() {
         }
       });
       meta.append(advancedButton);
+      let tlsProfileOutput;
+      if (target.proxy_ref && Number.isInteger(target.proxy_index) && (target.tls_mode === 'standard' || target.tls_mode === 'reality')) {
+        const tlsProfileButton = document.createElement('button');
+        tlsProfileButton.type = 'button';
+        tlsProfileButton.className = 'xk-provider-check-proxy-button';
+        tlsProfileButton.innerHTML = iconHtml('ping');
+        responsiveLabel(tlsProfileButton, 'TLS-профиль ядра', 'TLS-профиль', 'Сравнить передачу через временное Xray или Mihomo с настроенным fingerprint и контрольными Chrome/Firefox');
+        tlsProfileOutput = document.createElement('div');
+        tlsProfileOutput.className = 'xk-provider-check-comparison xk-provider-check-tls-profile';
+        tlsProfileOutput.setAttribute('role', 'status');
+        tlsProfileOutput.setAttribute('aria-live', 'polite');
+        tlsProfileButton.addEventListener('click', async () => {
+          setButtonBusy(tlsProfileButton, true, 'Снимаем TLS-профиль…');
+          tlsProfileOutput.textContent = 'Временное ядро подключается к контрольному TLS-сервису…';
+          try {
+            const data = await api('/api/provider-diagnostics/tls-profile', { ref: target.proxy_ref, index: target.proxy_index }, AbortSignal.timeout(105000));
+            paintTlsProfile(tlsProfileOutput, data.result);
+          } catch (error) {
+            tlsProfileOutput.textContent = error.message || 'Проверка TLS-профиля не выполнена.';
+          } finally {
+            setButtonBusy(tlsProfileButton, false);
+          }
+        });
+        meta.append(tlsProfileButton);
+      }
       if (target.proxy_ref && Number.isInteger(target.proxy_index)) {
         const proxyButton = document.createElement('button');
         proxyButton.type = 'button';
@@ -676,6 +735,7 @@ export function initProviderDiagnostics() {
       advancedOutput.setAttribute('role', 'status');
       advancedOutput.setAttribute('aria-live', 'polite');
       row.append(check, main, state, resourceOutput, advancedOutput, details);
+      if (tlsProfileOutput) row.append(tlsProfileOutput);
       list.appendChild(row);
       paintResult(index);
     });

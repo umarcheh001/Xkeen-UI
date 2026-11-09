@@ -398,7 +398,7 @@
       "system_requirements": [],
       "removable": true,
       "unit_count": 17,
-      "size_bytes": 330595,
+      "size_bytes": 355664,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 2,
@@ -408,7 +408,7 @@
         "stylesheet": 1,
         "template": 4
       },
-      "route_count": 9,
+      "route_count": 10,
       "background_task_count": 0,
       "ui_surface_count": 1,
       "representative_paths": [
@@ -29068,7 +29068,7 @@
       "module_id": "tool.server-diagnostics",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/provider_diagnostics.py",
-      "size_bytes": 7218,
+      "size_bytes": 7742,
       "depends_on": [
         "core"
       ],
@@ -29120,6 +29120,11 @@
           "method": "POST",
           "path": "/api/provider-diagnostics/resource-compare",
           "decorator": "bp.post"
+        },
+        {
+          "method": "POST",
+          "path": "/api/provider-diagnostics/tls-profile",
+          "decorator": "bp.post"
         }
       ],
       "frontend_bundle": [],
@@ -29152,7 +29157,7 @@
       "module_id": "tool.server-diagnostics",
       "kind": "backend_service",
       "path": "xkeen-ui/services/provider_diagnostics_extended.py",
-      "size_bytes": 18597,
+      "size_bytes": 27911,
       "depends_on": [
         "core"
       ],
@@ -29189,7 +29194,7 @@
       "module_id": "tool.server-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_provider_diagnostics_extended.py",
-      "size_bytes": 14602,
+      "size_bytes": 21636,
       "depends_on": [
         "core"
       ],
@@ -29262,7 +29267,7 @@
       "module_id": "tool.server-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/provider_diagnostics.js",
-      "size_bytes": 54646,
+      "size_bytes": 59792,
       "depends_on": [
         "core"
       ],
@@ -29304,7 +29309,7 @@
       "module_id": "tool.server-diagnostics",
       "kind": "frontend_test",
       "path": "e2e/provider_diagnostics.spec.mjs",
-      "size_bytes": 35777,
+      "size_bytes": 37749,
       "depends_on": [
         "core"
       ],
@@ -29340,7 +29345,7 @@
       "module_id": "tool.server-diagnostics",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/server-diagnostics.css",
-      "size_bytes": 34902,
+      "size_bytes": 35434,
       "depends_on": [
         "core"
       ],
@@ -29357,7 +29362,7 @@
       "module_id": "tool.server-diagnostics",
       "kind": "template",
       "path": "xkeen-ui/templates/panel/modals/provider_diagnostics.html",
-      "size_bytes": 10962,
+      "size_bytes": 11509,
       "depends_on": [
         "core"
       ],
@@ -30650,7 +30655,7 @@
     }
   ],
   "routes": {
-    "endpoint_count": 356,
+    "endpoint_count": 357,
     "files_with_routes": 52,
     "endpoint_files": [
       {
@@ -32725,6 +32730,11 @@
           {
             "method": "POST",
             "path": "/api/provider-diagnostics/resource-compare",
+            "decorator": "bp.post"
+          },
+          {
+            "method": "POST",
+            "path": "/api/provider-diagnostics/tls-profile",
             "decorator": "bp.post"
           }
         ]

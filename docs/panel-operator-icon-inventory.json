@@ -1754,7 +1754,7 @@
       "tabler_asset": "arrow-right",
       "usage": [
         {
-          "location": "xkeen-ui/static/js/features/provider_diagnostics.js:L511",
+          "location": "xkeen-ui/static/js/features/provider_diagnostics.js:L545",
           "control_type": "runtime-action",
           "accessible_label": "Вперёд"
         },
@@ -2706,12 +2706,17 @@
           "accessible_label": "Проверить задержку"
         },
         {
-          "location": "xkeen-ui/static/js/features/provider_diagnostics.js:L566",
+          "location": "xkeen-ui/static/js/features/provider_diagnostics.js:L600",
           "control_type": "runtime-action",
           "accessible_label": "Проверить задержку"
         },
         {
-          "location": "xkeen-ui/static/js/features/provider_diagnostics.js:L606",
+          "location": "xkeen-ui/static/js/features/provider_diagnostics.js:L641",
+          "control_type": "runtime-action",
+          "accessible_label": "Проверить задержку"
+        },
+        {
+          "location": "xkeen-ui/static/js/features/provider_diagnostics.js:L665",
           "control_type": "runtime-action",
           "accessible_label": "Проверить задержку"
         },
@@ -3452,7 +3457,7 @@
           "accessible_label": "Поиск"
         },
         {
-          "location": "xkeen-ui/static/js/features/provider_diagnostics.js:L624",
+          "location": "xkeen-ui/static/js/features/provider_diagnostics.js:L683",
           "control_type": "runtime-action",
           "accessible_label": "Поиск"
         },

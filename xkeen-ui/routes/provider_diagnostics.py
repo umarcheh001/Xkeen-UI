@@ -16,7 +16,7 @@ from services.provider_diagnostics import (
     read_current_xray_targets,
     register_proxy_context,
 )
-from services.provider_diagnostics_extended import advanced_probe
+from services.provider_diagnostics_extended import advanced_probe, tls_profile_probe
 
 
 def create_provider_diagnostics_blueprint(*, xray_configs_dir: str, mihomo_config_file: str) -> Blueprint:
@@ -80,6 +80,17 @@ def create_provider_diagnostics_blueprint(*, xray_configs_dir: str, mihomo_confi
             return jsonify({"ok": False, "error": "Некорректная расширенная проверка."}), 400
         try:
             result = advanced_probe(payload)
+        except ValueError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+        return jsonify({"ok": True, "result": result})
+
+    @bp.post("/api/provider-diagnostics/tls-profile")
+    def tls_profile():
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return jsonify({"ok": False, "error": "Некорректная проверка TLS-профиля."}), 400
+        try:
+            result = tls_profile_probe(payload)
         except ValueError as exc:
             return jsonify({"ok": False, "error": str(exc)}), 400
         return jsonify({"ok": True, "result": result})

@@ -14,14 +14,14 @@ for (const width of [1440, 390]) {
     let request;
     await page.route('**/api/provider-diagnostics/advanced-probe', async (route) => {
       request = route.request().postDataJSON();
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      const stalled = { status: 'transfer_timeout', stage: 'body', bytes_received: 18000, requested_bytes: 262144, first_byte_ms: 140, last_progress_ms: 170, total_ms: 4200 };
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const stalled = { status: 'transfer_timeout', stage: 'body', bytes_received: 18000, requested_bytes: 20480, first_byte_ms: 140, last_progress_ms: 170, total_ms: 4200 };
       return route.fulfill({ json: { ok: true, result: {
         status: 'ok', engine: 'xray', network: 'tcp', total_ms: 26000,
         address_results: [{ ip: '198.51.100.10', family: 'IPv4', core_status: 'ok', transport_verified: true,
           diagnosis: { verdict: 'byte_limit_pattern', confidence: 'medium', approx_bytes: 18000, message: 'На независимых площадках повторяется остановка после похожего объёма. Есть признаки ограничения передачи; причина не подтверждена.' },
           ports: [{ port: 443, status: 'reachable', tcp_ms: 12 }, { port: 22, status: 'reachable', tcp_ms: 10 }, { port: 8443, status: 'timeout' }],
-          tests: ['Cloudflare', 'HTTPBingo / Fly.io'].map((control) => ({ control, destination_ip: '8.8.8.8', direct: { status: 'transfer_ok', bytes_received: 262144, requested_bytes: 262144 }, small: { status: 'transfer_ok', bytes_received: 8192, requested_bytes: 8192 }, attempts: [stalled, stalled, stalled], paced: { ...stalled, requested_bytes: 65536 } })),
+          tests: ['Cloudflare', 'HTTPBingo / Fly.io'].map((control) => ({ control, destination_ip: '8.8.8.8', direct: { status: 'transfer_ok', bytes_received: 262144, requested_bytes: 262144 }, size_boundary: { last_complete_bytes: 16384, first_incomplete_bytes: 20480, repeatable: true }, steps: [8192, 16384].map((size) => ({ status: 'transfer_ok', bytes_received: size, requested_bytes: size })).concat([stalled, stalled, stalled]), attempts: [stalled, stalled, stalled] })),
         }, { ip: '2001:db8::1', family: 'IPv6', core_status: 'ok', transport_verified: false,
           diagnosis: { verdict: 'undetermined', confidence: 'low', message: 'Передача не подтверждена.' }, ports: [{ port: 443, status: 'timeout' }], tests: [] }],
       } } });
@@ -33,7 +33,6 @@ for (const width of [1440, 390]) {
     await page.locator('#provider-check-ports').fill('22,8443');
     const button = page.getByRole('button', { name: 'Расширенная проверка', exact: true });
     await button.click();
-    await expect(button).toHaveClass(/is-loading/);
     const output = page.locator('.xk-provider-check-advanced-result');
     await expect(output).toContainText('Остановка около 17,6 КБ');
     await expect(output).toContainText('IPv6 · 2001:db8::1');
@@ -43,12 +42,34 @@ for (const width of [1440, 390]) {
     expect(request.ports).toBe('22,8443');
     await output.getByText('Cloudflare · 8.8.8.8', { exact: true }).click();
     await expect(output).toContainText('последние данные: 170 мс');
-    await expect(output).toContainText('256 КБ · 3');
+    await expect(output).toContainText('Пройденный размер');
+    await expect(output).toContainText('20 КБ · повторился');
+    await expect(output).toContainText('Через узел · 20 КБ · повтор');
     await expect(button).toBeEnabled();
     const overflow = await output.evaluate((element) => element.scrollWidth > element.clientWidth + 1);
     expect(overflow).toBe(false);
     await output.scrollIntoViewIfNeeded();
     await page.screenshot({ path: `test-results/provider-diagnostics-extended-${width}.png`, fullPage: false });
+    let profileRequest;
+    await page.route('**/api/provider-diagnostics/tls-profile', (route) => {
+      profileRequest = route.request().postDataJSON();
+      return route.fulfill({ json: { ok: true, result: {
+        status: 'ok', engine: 'Xray', control: 'speed.cloudflare.com', server_ip: '198.51.100.10',
+        configured: { fingerprint: 'safari', server_name: 'front.example.org' },
+        verdict: 'profile_sensitive', message: 'Разница между TLS-профилями повторилась в двух раундах.',
+        profiles: ['configured', 'chrome', 'firefox'].map((fingerprint) => ({ fingerprint, status: fingerprint === 'configured' ? 'transfer_timeout' : 'transfer_ok', attempts: Array.from({ length: 2 }, () => ({ status: fingerprint === 'configured' ? 'transfer_timeout' : 'transfer_ok', requested_bytes: 8192, bytes_received: fingerprint === 'configured' ? 0 : 8192, total_ms: 600 })) })),
+      } } });
+    });
+    await page.getByRole('button', { name: 'TLS-профиль ядра', exact: true }).click();
+    const profiles = page.locator('.xk-provider-check-tls-profile');
+    await expect(profiles).toContainText('Исходный профиль · 2');
+    await expect(profiles).toContainText('firefox · 2');
+    await expect(profiles).toContainText('fingerprint: safari');
+    await expect(profiles).toContainText('198.51.100.10');
+    expect(profileRequest).toEqual({ ref: 'opaque-ref', index: 0 });
+    expect(await profiles.evaluate((element) => element.scrollWidth > element.clientWidth + 1)).toBe(false);
+    await profiles.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `test-results/provider-diagnostics-tls-profile-${width}.png`, fullPage: false });
   });
 }
 

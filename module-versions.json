@@ -6,6 +6,6 @@
   "tool.backups": "1.0.1",
   "tool.editor": "1.0.2",
   "tool.files": "1.0.1",
-  "tool.server-diagnostics": "1.1.0",
+  "tool.server-diagnostics": "1.2.0",
   "tool.terminal": "1.0.0"
 }

@@ -188,6 +188,50 @@ def test_paced_transfer_is_requested_from_origin_instead_of_delaying_reads(monke
     assert seen[0][1]["paced"] is True
 
 
+def test_size_steps_repeat_the_first_incomplete_response_without_hiding_small_successes(monkeypatch):
+    sizes = []
+    def transfer(_control, size, **kwargs):
+        sizes.append(size)
+        if size <= 16384:
+            return {"status": "transfer_ok", "requested_bytes": size, "bytes_received": size}
+        return stalled(requested_bytes=size)
+    monkeypatch.setattr(extended, "_transfer", transfer)
+    steps = extended._step_transfers({}, deadline=extended.time.monotonic() + 30, proxy_port=12345)
+    assert sizes == [8192, 16384, 20480, 20480, 20480]
+    assert extended._step_boundary(steps) == {"last_complete_bytes": 16384, "first_incomplete_bytes": 20480, "repeatable": True}
+    control = {"attempts": steps, "direct": {"status": "transfer_ok"}}
+    assert extended._diagnose([control, copy.deepcopy(control)])["verdict"] == "byte_limit_pattern"
+    # A passing retry at the failed size contradicts a stable threshold.
+    steps[-1] = {"status": "transfer_ok", "requested_bytes": 20480, "bytes_received": 20480}
+    assert extended._step_boundary(steps)["repeatable"] is False
+    assert extended._diagnose([{**control, "attempts": steps}])["verdict"] == "undetermined"
+
+
+def test_small_steps_alone_do_not_claim_a_successful_256kb_transfer():
+    steps = [{"status": "transfer_ok", "requested_bytes": size, "bytes_received": size} for size in (8192, 16384)]
+    assert extended._diagnose([{"attempts": steps}, {"attempts": steps}])["verdict"] == "undetermined"
+
+
+@pytest.mark.parametrize("engine", ["xray", "mihomo", "mihomo_yaml"])
+def test_tls_fingerprint_variants_only_change_the_fingerprint(engine):
+    if engine == "xray":
+        entry = {"protocol": "vless", "settings": {"key": "secret"}, "streamSettings": {"security": "reality", "realitySettings": {"fingerprint": "safari", "serverName": "front.example", "publicKey": "public"}}}
+        variant = extended._with_tls_fingerprint(entry, "firefox")
+        assert variant["streamSettings"]["realitySettings"]["fingerprint"] == "firefox"
+        variant["streamSettings"]["realitySettings"]["fingerprint"] = "safari"
+    elif engine == "mihomo":
+        entry = {"_diagnostics_engine": "mihomo", "proxy": {"type": "vless", "server": "node.example", "client-fingerprint": "safari", "servername": "front.example", "uuid": "secret"}}
+        variant = extended._with_tls_fingerprint(entry, "firefox")
+        assert variant["proxy"]["client-fingerprint"] == "firefox"
+        variant["proxy"]["client-fingerprint"] = "safari"
+    else:
+        entry = {"_diagnostics_engine": "mihomo", "proxy_yaml": "  - name: N\n    type: trojan\n    password: secret\n    client-fingerprint: safari\n    servername: front.example\n"}
+        variant = extended._with_tls_fingerprint(entry, "firefox")
+        assert "client-fingerprint: firefox" in variant["proxy_yaml"]
+        variant["proxy_yaml"] = variant["proxy_yaml"].replace("client-fingerprint: firefox", "client-fingerprint: safari")
+    assert variant == entry
+
+
 def test_ipv6_checks_its_own_firewall_before_claiming_a_direct_path(monkeypatch):
     monkeypatch.setattr(base.sys, "platform", "linux")
     calls = []
@@ -243,9 +287,73 @@ def test_advanced_api_uses_cached_node_and_actual_engine_with_bounded_trials(mon
     assert sessions[0]["settings"]["vnext"][0]["address"] == "198.51.100.1"
     assert sessions[-1] == "terminated"
     assert port_calls == ([443, 22, 8443] if network == "tcp" else [])
-    assert len(calls) == 6  # two direct, then a small and a large response per destination
+    assert len(calls) == 16  # two direct large checks, then seven sizes through each destination
     assert "private-uuid" not in response.get_data(as_text=True)
     assert base._proxy_context(ref, 0)[0] == entry
+
+
+def test_tls_profile_probe_uses_the_actual_core_and_returns_only_safe_profile(monkeypatch):
+    target = base.make_target("node.example", 443, protocol="vless", tls=True, sni="front.example")
+    entry = {"protocol": "vless", "settings": {"vnext": [{"address": "node.example", "port": 443, "users": [{"id": "private"}]}]},
+             "streamSettings": {"security": "tls", "tlsSettings": {"fingerprint": "chrome", "serverName": "front.example", "alpn": ["h2"]}}}
+    ref = base.register_proxy_context([entry], 1, [target])
+    monkeypatch.setattr(base, "_resource_addresses", lambda _h, _p: [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("203.0.113.8", 443))])
+    monkeypatch.setattr(base.socket, "getaddrinfo", lambda *_a, **_k: [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("198.51.100.1", 443))])
+
+    variants = []
+    @contextmanager
+    def session(pinned):
+        assert pinned["settings"]["vnext"][0]["users"][0]["id"] == "private"
+        assert pinned["settings"]["vnext"][0]["address"] == "198.51.100.1"
+        assert pinned["streamSettings"]["tlsSettings"]["serverName"] == "front.example"
+        variants.append(pinned["streamSettings"]["tlsSettings"]["fingerprint"])
+        yield {"status": "ok", "port": 12345}
+
+    monkeypatch.setattr(base, "_resource_proxy_session", session)
+    calls = []
+    def request(*args, **kwargs):
+        calls.append(kwargs)
+        return {"status": "transfer_ok", "stage": "body", "bytes_received": 8192, "requested_bytes": 8192, "tls_ms": 12, "total_ms": 20}
+    monkeypatch.setattr(base, "_resource_http_request", request)
+    result = extended.tls_profile_probe({"ref": ref, "index": 0})
+    assert result["status"] == "ok"
+    assert result["engine"] == "Xray"
+    assert result["configured"] == {"fingerprint": "chrome", "server_name": "front.example", "alpn": ["h2"]}
+    assert [item["fingerprint"] for item in result["profiles"]] == ["configured", "chrome", "firefox"]
+    assert result["verdict"] == "profile_not_sensitive"
+    assert all(item["transfer_bytes"] == 8192 for item in calls)
+    assert len(calls) == 6
+    assert variants == ["chrome", "chrome", "firefox", "firefox", "chrome", "chrome"]
+    assert base._proxy_context(ref, 0)[0] == entry
+    assert "private" not in str(result)
+
+
+@pytest.mark.parametrize(("original_statuses", "alternate_status", "verdict"), [
+    (["transfer_timeout", "transfer_timeout"], "transfer_ok", "profile_sensitive"),
+    (["transfer_timeout", "transfer_ok"], "transfer_ok", "undetermined"),
+    (["core_start_failed", "core_start_failed"], "transfer_ok", "undetermined"),
+    (["transfer_timeout", "transfer_timeout"], "transfer_timeout", "undetermined"),
+])
+def test_tls_profile_requires_repeatable_network_results(monkeypatch, original_statuses, alternate_status, verdict):
+    entry = {"protocol": "vless", "settings": {"vnext": [{"address": "node.example", "port": 443}]}}
+    ref = base.register_proxy_context([entry], 1, [base.make_target("node.example", 443, tls=True)])
+    address = (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("198.51.100.1", 443))
+    monkeypatch.setattr(base, "_resource_addresses", lambda *_a: [address])
+    monkeypatch.setattr(base.socket, "getaddrinfo", lambda *_a, **_k: [address])
+    original = iter(original_statuses * 2)
+    def attempt(_entry, _address, *, fingerprint, deadline):
+        return {"status": next(original) if fingerprint is None else alternate_status}
+    monkeypatch.setattr(extended, "_tls_profile_attempt", attempt)
+    assert extended.tls_profile_probe({"ref": ref, "index": 0})["verdict"] == verdict
+
+
+def test_tls_profile_api_rejects_expired_context_and_invalid_payload(tmp_path):
+    app = Flask(__name__)
+    app.register_blueprint(create_provider_diagnostics_blueprint(xray_configs_dir=str(tmp_path), mihomo_config_file=str(tmp_path / "mihomo.yaml")))
+    client = app.test_client()
+    for payload in ([], {}, {"ref": "expired", "index": 0}):
+        response = client.post("/api/provider-diagnostics/tls-profile", json=payload)
+        assert response.status_code == 400
 
 
 @pytest.mark.parametrize("payload", [{}, {"target": []}, {"ref": "expired", "index": 0}, {"target": {"host": "node.example", "port": 443}, "ports": [0]}, {"target": {"host": "node.example", "port": 443}, "ports": [22, 23, 24, 25, 26]}])
