@@ -26,7 +26,7 @@
 - `mihomo-node-import-stage8.md` — итоговые проверки, визуальные состояния и ограничения.
 - `mihomo-node-import-stage9.md` — проверка поставки, описание изменений и порядок отката.
 
-- `panel-operator-redesign-completion-plan.md` — план завершения переезда панели на Operator Console; Этап 4 закрыт; в Этапе 5 закрыты editor/workbench, comments/schema status labels, responsive editor help, mobile fullscreen сложных модалов и применение четырёх modal families ко всем 50 static modals; Этапы 5–7 в целом открыты; сквозной icon-поток I0–I6 закрыт.
+- `panel-operator-redesign-completion-plan.md` — план завершения переезда панели на Operator Console; Этап 4 закрыт; в Этапе 5 закрыты editor/workbench, comments/schema status labels, responsive editor help, mobile fullscreen сложных модалов и применение четырёх modal families ко всем 55 static modals; Этапы 5–7 в целом открыты; сквозной icon-поток I0–I6 закрыт.
 - `mihomo-capability-matrix.json` и `panel-operator-stage0-mihomo-contract.md` — capability/contract baseline нового Mihomo roadmap (Этап 0).
 - `panel-operator-stage3-explainability-logs.md` — закрытый Этап 3 Mihomo: доказательная routing chain, rule counters и allow-listed upstream log level.
 - `modular-panel-stage8-official-module-manager.md` — roadmap Этапа 8: закрытые подэтапы 8.0–8.6, готовая основа 8.7 и открытая приёмка recovery/rollout.
@@ -78,7 +78,7 @@
 - `panel-operator-stage4-logs.md` — закрытая задача «Logs» Этапа 4: единые filters, structured counters, detail disclosure и inline error states при доминирующей terminal surface.
 - `panel-operator-stage4-files.md` — закрытая задача «Files» Этапа 4: toolbar regions, доступные table rows, раздельные selection/focus states, явный drag/drop feedback и единые inline states.
 - `panel-operator-stage4-mihomo-forms.md` — закрытые задачи «Mihomo profiles/generator» и «Формы подписок» Этапа 4: общие table/form/action primitives, согласованные labels/hints/validation/units и progressive disclosure advanced-полей.
-- `panel-operator-stage5-editor-workbench.md` — пять закрытых связанных задач Этапа 5: единый frame JSON/file/snapshot editor-workbench, плоские comments/schema status labels, responsive editor help, fullscreen сложных модалов на mobile и четыре family contracts для всех 50 static modals; остальной Этап 5 остаётся открыт.
+- `panel-operator-stage5-editor-workbench.md` — пять закрытых связанных задач Этапа 5: единый frame JSON/file/snapshot editor-workbench, плоские comments/schema status labels, responsive editor help, fullscreen сложных модалов на mobile и четыре family contracts для всех 55 static modals; остальной Этап 5 остаётся открыт.
 - `panel-operator-icon-i2-mihomo.md` — закрытый I2 сквозного icon-потока: Routing Mihomo, generator и связанные формы используют общий локальный Tabler sprite.
 - `panel-operator-icon-i3-top-level-views.md` — закрытый I3 сквозного icon-потока: top-level views панели, header/global actions и файлы используют один semantic icon dictionary с static guard.
 - `panel-operator-icon-i4-modal-families.md` и `panel-operator-icon-i5-accessibility.md` — закрытые modal/accessibility gates icon-потока.

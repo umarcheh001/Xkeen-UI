@@ -69,6 +69,7 @@ MODAL_FAMILIES = {
     "mihomo-import-modal": "editor-workbench",
     "mihomo-proxy-tools-modal": "master-detail",
     "mihomo-hwid-modal": "editor-workbench",
+    "mihomo-hwid-help-modal": "drawer-help",
     "fm-upload-conflict-modal": "confirm-compact-form",
     "fm-editor-modal": "editor-workbench",
     "github-export-modal": "confirm-compact-form",

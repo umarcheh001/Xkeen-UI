@@ -43,7 +43,7 @@ parameter hints получают непрозрачную operator surface, ко
 На ширине до 720 px сложные семейства `editor-workbench`, `master-detail` и `drawer-help` используют fullscreen frame. Их `.modal-content` не прокручивается целиком: scrolling находится только в `.modal-body`, поэтому header и footer остаются в viewport. `confirm-compact-form` сознательно остаётся короткой bottom-sheet формой, а не превращается в искусственно высокий fullscreen dialog.
 
 
-## 5. Четыре modal family применены ко всем 50 окнам — закрыто
+## 5. Четыре modal family применены ко всем 55 окнам — закрыто
 
 Каждый статический `modal` ID в `panel.html` имеет ровно один
 `data-operator-modal-family`; generated Stage 0 inventory подтверждает полное
@@ -51,10 +51,10 @@ parameter hints получают непрозрачную operator surface, ко
 
 | Family | Окон | Порядок прохода из аудита |
 | --- | ---: | --- |
-| `editor-workbench` | 7 | JSON/file/snapshot editors, routing template, Mihomo Import, HWID subscription и SSH transfer |
+| `editor-workbench` | 8 | JSON/file/snapshot editors, routing template, Mihomo Import, HWID subscription и SSH transfer |
 | `master-detail` | 18 | subscriptions/generator/pool/Mihomo, DAT/templates, UI settings/core, SSH и file-manager lists |
-| `drawer-help` | 3 | editor help, balancer help, terminal/file-manager help |
-| `confirm-compact-form` | 22 | core/confirm, SSH и все короткие file-manager действия, GitHub/donate |
+| `drawer-help` | 4 | editor help, balancer help, terminal/file-manager help и справка HWID-профиля Mihomo |
+| `confirm-compact-form` | 25 | core/confirm, SSH и все короткие file-manager действия, GitHub/donate |
 
 Все четыре family получают один scoped frame и не меняют feature markup,
 `id`, `data-*` или runtime handlers:
@@ -69,8 +69,8 @@ parameter hints получают непрозрачную operator surface, ко
 
 На ширине до 720 px editor/master-detail/drawer-help становятся fullscreen с
 доступными header/footer, тогда как compact form остаётся коротким bottom
-sheet. Chromium guard открывает каждый из 50 static modals, проверяет family
-counts `22 / 7 / 18 / 3`, grid frame, видимый header/body и границы viewport.
+sheet. Chromium guard открывает каждый из 55 static modals, проверяет family
+counts `25 / 8 / 18 / 4`, grid frame, видимый header/body и границы viewport.
 
 ## 6. Presentation geometry и empty/error auto-height — закрыто
 
@@ -101,6 +101,6 @@ python -m pytest -q tests/test_panel_operator_stage5_editors.py \
 npx playwright test e2e/panel_operator_stage5_editors.spec.mjs --project=chromium
 ```
 
-Static contract проверяет общий frame, все три editor IDs, отсутствие JSON pills, workbench-sidecar help, точное распределение всех 50 modal IDs по четырём families и документированное закрытие задачи. Chromium-contract проверяет 50 px header/footer, доминирующую область editor и flat status labels в dark/light, включая реальные schema autocomplete Xray (`type`) и Mihomo (`vless`), непрозрачную Monaco documentation surface, fullscreen narrow geometry JSON modal, sidecar без перекрытия footer, fullscreen help на mobile и grid frame/границы viewport каждого static modal. Отдельно проверяются реальные modal frames с видимыми error и empty states: они сжимаются, а скрытые пустые placeholders не меняют рабочую высоту.
+Static contract проверяет общий frame, все три editor IDs, отсутствие JSON pills, workbench-sidecar help, точное распределение всех 55 modal IDs по четырём families и документированное закрытие задачи. Chromium-contract проверяет 50 px header/footer, доминирующую область editor и flat status labels в dark/light, включая реальные schema autocomplete Xray (`type`) и Mihomo (`vless`), непрозрачную Monaco documentation surface, fullscreen narrow geometry JSON modal, sidecar без перекрытия footer, fullscreen help на mobile и grid frame/границы viewport каждого static modal. Отдельно проверяются реальные modal frames с видимыми error и empty states: они сжимаются, а скрытые пустые placeholders не меняют рабочую высоту.
 
-Критерий этих семи задач выполнен: JSON, file editor и snapshot имеют общий bounded workbench frame, comments/schema больше не конкурируют с editor как декоративные pills, help не закрывает save/cancel, все 50 static modal IDs получают один из четырёх family contracts, presentation geometry вынесена из template inline styles, empty/error не резервируют высокий canvas, а mobile не теряет header/footer сложных модалов. Полный критерий Этапа 5 остаётся открытым.
+Критерий этих семи задач выполнен: JSON, file editor и snapshot имеют общий bounded workbench frame, comments/schema больше не конкурируют с editor как декоративные pills, help не закрывает save/cancel, все 55 static modal IDs получают один из четырёх family contracts, presentation geometry вынесена из template inline styles, empty/error не резервируют высокий canvas, а mobile не теряет header/footer сложных модалов. Полный критерий Этапа 5 остаётся открытым.

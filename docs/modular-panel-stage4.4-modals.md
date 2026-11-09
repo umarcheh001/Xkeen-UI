@@ -2,7 +2,7 @@
 
 Статус: **закрыт 30 сентября 2026 года**.
 
-Все 53 модальных окна и оверлей терминала вынесены из `panel.html` в partials
+Все 54 модальных окна и оверлей терминала вынесены из `panel.html` в partials
 `xkeen-ui/templates/panel/modals/`. `panel.html` стал тонким composition root
 (73 строки): shell, screens, modal partials, toast, footer и entrypoint.
 
@@ -17,7 +17,7 @@
 | `core_source_xray.html` | `engine.xray` | manifest | источник и установка ядра Xray |
 | `core_source_mihomo.html` | `engine.mihomo` | manifest | источник и установка ядра Mihomo |
 | `mihomo.html` | `engine.mihomo` | `has_mihomo` | DNS, импорт, инструменты прокси, validation |
-| `happ.html` | `integration.happ` | `has_happ and has_mihomo` | `mihomo-hwid-modal` |
+| `happ.html` | `integration.happ` | `has_happ and has_mihomo` | `mihomo-hwid-modal`, `mihomo-hwid-help-modal` |
 | `files.html` | `tool.files` | `has_files` | 22 окна файлового менеджера, включая подключения к удалённой ФС и known hosts |
 | `files_editor.html` | `tool.files` + `tool.editor` | `has_files and has_editor` | `fm-editor-modal` |
 | `editor.html` | `tool.editor` | `has_editor` | `json-editor-modal` |
@@ -85,9 +85,9 @@ JavaScript. Теперь в профиле без движков `#core-modal` �
   оба составных gate и кнопка HWID;
 - server-side рендер Full до и после: тот же набор из 1350 `id` и тот же
   набор строк, изменился только порядок окон;
-- браузерный замер вычисленных стилей: каждое из 54 окон (53 модальных и
+- браузерный замер вычисленных стилей: каждое из 55 окон (54 модальных и
   оверлей терминала) открыто в Full до и после переноса — размеры, позиция,
-  `z-index`, отступы, цвета и сетки совпадают во всех 54 случаях; замер
+  `z-index`, отступы, цвета и сетки совпадают во всех 55 случаях; замер
   предварительно повторён дважды на исходном коде и стабилен;
 - browser smoke Full, Xray-minimal и Mihomo-minimal: набор ошибок совпадает с
   состоянием до 4.4, в minimal-профилях нет `4xx/5xx`;

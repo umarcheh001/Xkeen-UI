@@ -14033,27 +14033,6 @@ body.panel-page #mihomo-hwid-help-modal .xk-hw-help-body ol {
   padding-left: 22px;
 }
 
-@media (max-width: 640px) {
-  body.panel-page #mihomo-hwid-help-modal {
-    padding: 0;
-  }
-
-  body.panel-page #mihomo-hwid-help-modal .xk-hw-help-content {
-    width: 100vw;
-    max-width: 100vw;
-    height: 100dvh;
-    max-height: 100dvh;
-  }
-
-  body.panel-page #mihomo-hwid-help-modal .xk-hw-help-body {
-    padding: 0 16px 16px;
-  }
-
-  body.panel-page #mihomo-hwid-help-modal :is(.xk-hw-help-mapping, .xk-hw-help-example) > div {
-    grid-template-columns: minmax(88px, 0.34fr) minmax(0, 1fr);
-  }
-}
-
 body.panel-page #mihomo-import-modal .xk-mi-hwid-choice {
   display: grid;
   gap: 9px;
@@ -15797,6 +15776,27 @@ body.panel-page :is(.fm-panel-error-retry, .fm-empty-action) .xk-action-icon {
 /* ==========================================================================
  * 8. RESPONSIVE
  * ========================================================================== */
+@media (max-width: 640px) {
+  body.panel-page #mihomo-hwid-help-modal {
+    padding: 0;
+  }
+
+  body.panel-page #mihomo-hwid-help-modal .xk-hw-help-content {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+  }
+
+  body.panel-page #mihomo-hwid-help-modal .xk-hw-help-body {
+    padding: 0 16px 16px;
+  }
+
+  body.panel-page #mihomo-hwid-help-modal :is(.xk-hw-help-mapping, .xk-hw-help-example) > div {
+    grid-template-columns: minmax(88px, 0.34fr) minmax(0, 1fr);
+  }
+}
+
 @media (max-width: 1280px) {
   body.panel-page #mihomo-clash-traffic-summary {
     grid-template-columns: repeat(3, minmax(0, 1fr));
