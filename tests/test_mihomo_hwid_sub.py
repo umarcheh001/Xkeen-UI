@@ -241,6 +241,7 @@ def test_hwid_response_headers_preserve_extended_hwid_limit_fields():
         "X-Hwid-Devices": "4/4",
         "X-Hwid-Devices-Used": "4",
         "X-Hwid-Devices-Limit": "4",
+        "Subscription-Always-HWID-Enable": "true",
         "X-Other": "ignored",
     }
 
@@ -250,6 +251,7 @@ def test_hwid_response_headers_preserve_extended_hwid_limit_fields():
     assert extracted["x-hwid-devices"] == "4/4"
     assert extracted["x-hwid-devices-used"] == "4"
     assert extracted["x-hwid-devices-limit"] == "4"
+    assert extracted["subscription-always-hwid-enable"] == "true"
     assert "x-other" not in extracted
 
 

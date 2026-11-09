@@ -1,6 +1,47 @@
 import { test, expect, selectPanelView, openMihomoConfig } from './fixtures.mjs';
 
 
+test('HWID profile help explains mobile device fields and stays usable on a phone', async ({ page }, testInfo) => {
+  await page.goto('/');
+  await selectPanelView(page, 'mihomo');
+  await openMihomoConfig(page);
+  await page.locator('.xk-mihomo-menu summary').click();
+  await page.locator('#mihomo-hwid-sub-btn').click();
+
+  await page.locator('#mihomo-hwid-diag').evaluate((node) => node.classList.remove('hidden'));
+  const helpButton = page.locator('#mihomo-hwid-help-btn');
+  await expect(helpButton.locator('..')).toHaveClass(/xk-hw-device-actions/);
+  expect(await helpButton.evaluate((node) => node.previousElementSibling?.id)).toBe('mihomo-hwid-reset-btn');
+  const help = page.locator('#mihomo-hwid-help-modal');
+  await helpButton.click();
+  await expect(help).toBeVisible();
+  await expect(help).toContainText('Android, iPhone');
+  await expect(help).toContainText('User-Agent');
+  await expect(help).toContainText('proxy-provider');
+  await expect(help).toContainText('x-device-model');
+  await expect(help).toContainText('SM-A546E');
+  await page.screenshot({ path: testInfo.outputPath('hwid-help-desktop.png'), animations: 'disabled' });
+  await page.keyboard.press('Escape');
+  await expect(help).toBeHidden();
+  await expect(helpButton).toBeFocused();
+  await helpButton.click();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: testInfo.outputPath('hwid-help-mobile.png'), animations: 'disabled' });
+  await expect.poll(() => help.evaluate((node) => ({
+    page: document.documentElement.scrollWidth <= innerWidth,
+    body: node.querySelector('.xk-hw-help-body').scrollWidth <= node.querySelector('.xk-hw-help-body').clientWidth,
+    header: node.querySelector('.modal-header').getBoundingClientRect().bottom
+      <= node.querySelector('.xk-hw-help-body').getBoundingClientRect().top,
+    closeRight: node.querySelector('.modal-close').getBoundingClientRect().right > innerWidth / 2,
+  }))).toEqual({ page: true, body: true, header: true, closeRight: true });
+  await help.locator('#mihomo-hwid-help-done-btn').click();
+  await expect(help).toBeHidden();
+  await expect(helpButton).toBeFocused();
+  await expect(page.locator('#mihomo-hwid-modal')).toBeVisible();
+});
+
+
 test('HWID subscription uses the resizable Operator workbench and stretches its YAML preview', async ({ page }) => {
   await page.addInitScript(() => localStorage.removeItem('xk.modal.state.v1.mihomo-hwid'));
   await page.goto('/');

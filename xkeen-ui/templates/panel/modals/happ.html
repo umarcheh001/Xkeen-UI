@@ -69,9 +69,12 @@
                     <div class="xk-hw-section-title">Профиль устройства</div>
                     <div class="xk-hw-section-subtitle">Эти значения панель отправит провайдеру в HWID-заголовках.</div>
                   </div>
-                  <button type="button" id="mihomo-hwid-reset-btn" class="btn-secondary btn-compact xk-hw-reset-btn" title="Вернуть автоматически определённые значения панели">
-                    {{ op_icon('restart') }}<span>Сбросить</span>
-                  </button>
+                  <div class="xk-hw-device-actions">
+                    <button type="button" id="mihomo-hwid-reset-btn" class="btn-secondary btn-compact xk-hw-reset-btn" title="Вернуть автоматически определённые значения панели">
+                      {{ op_icon('restart') }}<span>Сбросить</span>
+                    </button>
+                    <button type="button" class="btn-secondary btn-compact xk-hw-help-btn" id="mihomo-hwid-help-btn" aria-label="Справка по HWID-профилю" data-tooltip="Настройка HWID-профиля Android или iPhone">{{ op_icon('help') }}<span>Справка</span></button>
+                  </div>
                 </div>
 
                 <div class="xk-hw-device-grid">
@@ -146,5 +149,57 @@
           </div>
           <button type="button" id="mihomo-hwid-cancel-btn" class="btn-secondary btn-compact" data-operator-dismiss-duplicate="true">Отмена</button>
         </div>
+      </div>
+    </div>
+    <div id="mihomo-hwid-help-modal" class="modal hidden" data-operator-modal-family="drawer-help" role="dialog" aria-modal="true" aria-label="Справка по HWID-профилю Mihomo">
+      <div class="modal-content xk-hw-help-content">
+        <div class="modal-header">
+          <div>
+            <span class="modal-title">HWID-профиль Mihomo</span>
+            <p class="modal-description">Как передать данные Android, iPhone или роутера провайдеру Mihomo</p>
+          </div>
+          <button type="button" id="mihomo-hwid-help-close-btn" class="modal-close" aria-label="Закрыть справку">{{ op_icon('close') }}</button>
+        </div>
+        <div class="modal-body xk-hw-help-body">
+          <p class="xk-hw-help-lead">Некоторые провайдеры показывают мобильному устройству больше серверов, чем роутеру. Поля профиля задают заголовки запроса, а локальный HWID-adapter повторяет их при обновлении <code>proxy-provider</code>.</p>
+          <section>
+            <h3>Где взять данные</h3>
+            <p>Откройте настройки или отладку приложения, в котором подписка уже работает, и найдите раздел отправки HWID или заголовков запроса. Скопируйте значения <em>одного и того же устройства</em>, не смешивая HWID телефона с моделью роутера.</p>
+            <div class="xk-hw-help-mapping" aria-label="Соответствие полей и заголовков">
+              <div><strong>Поле в панели</strong><strong>Заголовок приложения</strong></div>
+              <div><span>HWID</span><code>x-hwid</code></div>
+              <div><span>Платформа</span><code>x-device-os</code></div>
+              <div><span>Версия OS</span><code>x-ver-os</code></div>
+              <div><span>Модель</span><code>x-device-model</code></div>
+              <div><span>User-Agent</span><code>User-Agent</code></div>
+            </div>
+          </section>
+          <section>
+            <h3>Пример: Android</h3>
+            <p>В приложении на скриншоте включена «Отправка HWID». Его данные можно перенести в редактор так:</p>
+            <div class="xk-hw-help-example">
+              <div><span>HWID</span><code>a1b2c3d4e5f6a7</code></div>
+              <div><span>Платформа</span><code>Android</code></div>
+              <div><span>Версия OS</span><code>16</code></div>
+              <div><span>Модель</span><code>SM-A546E</code></div>
+              <div><span>User-Agent</span><code>prizrak-box/2.0.0-rc02 (Android Build; Prizrak-Core v1.19.33-r11)</code></div>
+            </div>
+            <p class="xk-hw-help-note">HWID здесь вымышленный. Используйте идентификатор из своего приложения: новый случайный HWID может занять слот устройства у провайдера.</p>
+          </section>
+          <section>
+            <h3>Пример: iPhone</h3>
+            <p>Если приложение показывает <code>x-device-os: iOS</code>, <code>x-ver-os: 17.6.1</code> и <code>x-device-model: iPhone15,2</code>, перенесите их в соответствующие поля. HWID и User-Agent скопируйте из этого же приложения. Не подставляйте Android-строку User-Agent к профилю iPhone.</p>
+          </section>
+          <section>
+            <h3>Проверка результата</h3>
+            <ol>
+              <li>Введите URL, заполните профиль и нажмите «Проверить».</li>
+              <li>Сравните количество узлов и «Ответ провайдера» с профилем роутера. Больше узлов не гарантирует их работоспособность.</li>
+              <li>Проверьте YAML preview и только затем вставьте provider в конфиг или примените с рестартом.</li>
+            </ol>
+            <p class="xk-hw-help-note">Мобильный User-Agent иногда переключает ответ на Xray JSON, который Mihomo-provider не читает. В таком случае верните совместимый <code>ClashMeta/…; mihomo/…</code> или откройте ссылку в «Узле» для статического разбора.</p>
+          </section>
+        </div>
+        <div class="modal-actions"><button type="button" id="mihomo-hwid-help-done-btn" class="btn-primary">Закрыть</button></div>
       </div>
     </div>

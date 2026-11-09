@@ -254,8 +254,13 @@ test('Escape, protected backdrop, focus cycle and repeated open use the shared m
 test('remote source is requested only on explicit parse; busy hotkeys do not duplicate requests', async ({ page }) => {
   await prepare(page);
   let requests = 0, release;
+  let probes = 0;
   let started;
   const ready = new Promise((resolve) => { started = resolve; });
+  await page.route('**/api/mihomo/provider/probe', (route) => {
+    probes += 1;
+    return route.fulfill({ json: { ok: true, provider_mode: 'adapter' } });
+  });
   await page.route('**/api/mihomo/parse/xray-json', async (route) => {
     requests += 1;
     started();
@@ -265,13 +270,15 @@ test('remote source is requested only on explicit parse; busy hotkeys do not dup
   await open(page);
   await page.locator('#mihomo-import-input').fill('https://subscription.example/fixture');
   expect(requests).toBe(0);
-  await expect(page.locator('#mihomo-import-parse-static-btn')).toBeVisible();
+  expect(probes).toBe(0);
+  await expect(page.locator('#mihomo-import-parse-static-btn')).toBeHidden();
   await page.locator('#mihomo-import-parse-btn').click();
   await ready;
   await expect(page.locator('#mihomo-import-parse-btn')).toBeDisabled();
   await expect(page.locator(MODAL)).toHaveAttribute('aria-busy', 'true');
   await page.locator('#mihomo-import-input').press('Control+Enter');
   expect(requests).toBe(1);
+  expect(probes).toBe(1);
   release();
   await expect(page.locator('#mihomo-import-review-btn')).toBeEnabled();
 });
@@ -414,6 +421,76 @@ test('subscription destination switches provider use links and supported static 
   await expect(page.locator('#mihomo-import-provider-settings')).toBeHidden();
   await expect(page.locator('#mihomo-import-xray-refresh-block')).toBeVisible();
   expect(probes).toBe(2);
+});
+
+test('a dual-format HWID subscription opens the HWID wizard with its URL', async ({ page }) => {
+  await prepare(page);
+  let xrayParses = 0;
+  await page.route('**/api/mihomo/parse/xray-json', (route) => {
+    xrayParses += 1;
+    return route.fulfill({ json: { ok: true, proxies: [{ proxy_name: 'Static', proxy_yaml: '- name: Static\n  type: direct\n' }] } });
+  });
+  await page.route('**/api/mihomo/provider/probe', (route) => route.fulfill({ json: {
+    ok: true,
+    profile: { suggested_name: 'Velvet_VPN' },
+    provider_mode: 'direct_headers',
+    hwid_supported: true,
+    provider_url: 'https://provider.example/subscription',
+    provider_payload: { has_nodes: true, node_count: 47 },
+  } }));
+
+  await open(page);
+  await page.locator('#mihomo-import-input').fill('https://provider.example/subscription');
+  await page.locator('#mihomo-import-parse-btn').click();
+  await expect(page.locator('#mihomo-import-modal')).toBeVisible();
+  await expect(page.locator('#mihomo-import-hwid-choice')).toBeVisible();
+  await expect(page.locator('#mihomo-import-hwid-choice')).toContainText('Подписка поддерживает HWID');
+  await expect(page.locator('#mihomo-hwid-modal')).toBeHidden();
+  await page.locator('#mihomo-import-use-hwid-btn').click();
+  await expect(page.locator('#mihomo-import-modal')).toBeHidden();
+  await expect(page.locator('#mihomo-hwid-modal')).toBeVisible();
+  await expect(page.locator('#mihomo-hwid-url')).toHaveValue('https://provider.example/subscription');
+  await expect(page.locator('#mihomo-hwid-probe-btn')).toBeEnabled();
+  expect(xrayParses).toBe(0);
+});
+
+test('HWID-capable subscription can choose static node parsing', async ({ page }, testInfo) => {
+  await prepare(page);
+  await page.route('**/api/mihomo/parse/xray-json', (route) => route.fulfill({ json: {
+    ok: true,
+    proxies: [{ proxy_name: 'Static-from-HWID-source', proxy_yaml: '- name: Static-from-HWID-source\n  type: direct\n' }],
+  } }));
+  await page.route('**/api/mihomo/provider/probe', (route) => route.fulfill({ json: {
+    ok: true,
+    profile: { suggested_name: 'Velvet_VPN' },
+    provider_mode: 'direct_headers',
+    hwid_supported: true,
+    provider_payload: { has_nodes: true, node_count: 47 },
+  } }));
+
+  await open(page);
+  await page.locator('#mihomo-import-input').fill('https://provider.example/subscription');
+  await page.locator('#mihomo-import-parse-btn').click();
+  await expect(page.locator('#mihomo-import-hwid-choice')).toBeVisible();
+  await page.locator('#mihomo-import-input').fill('https://provider.example/another');
+  await expect(page.locator('#mihomo-import-hwid-choice')).toBeHidden();
+  await page.locator('#mihomo-import-input').fill('https://provider.example/subscription');
+  await page.locator('#mihomo-import-parse-btn').click();
+  await expect(page.locator('#mihomo-import-hwid-choice')).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('hwid-choice-desktop.png'), animations: 'disabled' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator('#mihomo-import-input')).toHaveValue('https://provider.example/subscription');
+  await expect(page.locator('#mihomo-import-use-hwid-btn')).toBeVisible();
+  await expect(page.locator('#mihomo-import-parse-static-btn')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('hwid-choice-mobile.png'), animations: 'disabled' });
+  await page.locator('#mihomo-import-parse-static-btn').click();
+  await expect(page.locator('#mihomo-import-review-btn')).toBeVisible();
+  await expect(page.locator('#mihomo-import-preview-toggle')).toBeVisible();
+  await expect(page.locator('#mihomo-import-status')).toContainText('1 узел');
+  await expect(page.locator('#mihomo-import-hwid-choice')).toBeHidden();
+  await page.locator('#mihomo-import-preview-toggle').click();
+  await expect(page.locator('#mihomo-import-modal .cm-content')).toContainText('Static-from-HWID-source');
 });
 
 test('ordinary provider fallback handles fulfilled not_xray_json without eager preview', async ({ page }) => {

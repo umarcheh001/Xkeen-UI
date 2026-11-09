@@ -13910,6 +13910,192 @@ body.panel-page #outbounds-subscriptions-request-profile-help-modal .xk-sub-requ
   background: color-mix(in srgb, var(--op-accent) 9%, transparent);
 }
 
+body.panel-page #mihomo-hwid-modal .xk-hw-device-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  flex: none;
+}
+
+body.panel-page #mihomo-hwid-modal .xk-hw-help-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  border-color: var(--op-border);
+  color: var(--op-text-strong);
+  background: var(--op-surface-3);
+}
+
+body.panel-page #mihomo-hwid-help-modal {
+  justify-content: center;
+  padding: 18px;
+}
+
+body.panel-page #mihomo-hwid-help-modal .xk-hw-help-content {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(800px, calc(100vw - 36px));
+  max-width: 800px;
+  height: min(85dvh, 860px);
+  max-height: calc(100dvh - 36px);
+}
+
+body.panel-page #mihomo-hwid-help-modal .modal-header {
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+body.panel-page #mihomo-hwid-help-modal .modal-header > div {
+  min-width: 0;
+}
+
+body.panel-page #mihomo-hwid-help-modal .modal-close {
+  flex: none;
+  margin-left: auto;
+}
+
+body.panel-page #mihomo-hwid-help-modal .xk-hw-help-body {
+  display: grid;
+  align-content: start;
+  gap: 0;
+  padding: 0 22px 22px;
+  color: var(--op-text);
+  overflow-y: auto;
+}
+
+body.panel-page #mihomo-hwid-help-modal .xk-hw-help-body section {
+  display: grid;
+  gap: 10px;
+  padding: 18px 0;
+  border-top: 1px solid var(--op-border);
+}
+
+body.panel-page #mihomo-hwid-help-modal .xk-hw-help-body :is(h3, p, ol) {
+  margin: 0;
+}
+
+body.panel-page #mihomo-hwid-help-modal .xk-hw-help-body h3 {
+  font-size: calc(14px * var(--xk-font-scale, 1));
+  color: var(--op-text-strong);
+}
+
+body.panel-page #mihomo-hwid-help-modal .xk-hw-help-body :is(p, li) {
+  color: var(--op-muted);
+  line-height: 1.5;
+}
+
+body.panel-page #mihomo-hwid-help-modal .xk-hw-help-lead {
+  padding: 18px 0;
+  color: var(--op-text-strong) !important;
+}
+
+body.panel-page #mihomo-hwid-help-modal .xk-hw-help-mapping,
+body.panel-page #mihomo-hwid-help-modal .xk-hw-help-example {
+  display: grid;
+  gap: 0;
+  border-left: 3px solid var(--op-accent);
+  background: var(--op-surface-2);
+}
+
+body.panel-page #mihomo-hwid-help-modal :is(.xk-hw-help-mapping, .xk-hw-help-example) > div {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.34fr) minmax(0, 1fr);
+  gap: 12px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--op-border);
+}
+
+body.panel-page #mihomo-hwid-help-modal :is(.xk-hw-help-mapping, .xk-hw-help-example) > div:last-child {
+  border-bottom: 0;
+}
+
+body.panel-page #mihomo-hwid-help-modal :is(.xk-hw-help-mapping, .xk-hw-help-example) code {
+  overflow-wrap: anywhere;
+  color: var(--op-text-strong);
+}
+
+body.panel-page #mihomo-hwid-help-modal .xk-hw-help-example {
+  border-left-color: var(--op-success);
+}
+
+body.panel-page #mihomo-hwid-help-modal .xk-hw-help-note {
+  padding: 9px 11px;
+  border-left: 2px solid var(--op-warning);
+  background: var(--op-warning-soft);
+}
+
+body.panel-page #mihomo-hwid-help-modal .xk-hw-help-body ol {
+  display: grid;
+  gap: 6px;
+  padding-left: 22px;
+}
+
+@media (max-width: 640px) {
+  body.panel-page #mihomo-hwid-help-modal {
+    padding: 0;
+  }
+
+  body.panel-page #mihomo-hwid-help-modal .xk-hw-help-content {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+  }
+
+  body.panel-page #mihomo-hwid-help-modal .xk-hw-help-body {
+    padding: 0 16px 16px;
+  }
+
+  body.panel-page #mihomo-hwid-help-modal :is(.xk-hw-help-mapping, .xk-hw-help-example) > div {
+    grid-template-columns: minmax(88px, 0.34fr) minmax(0, 1fr);
+  }
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-hwid-choice {
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+  border-left: 3px solid var(--op-accent);
+  background: var(--op-surface-2);
+  color: var(--op-text-strong);
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-hwid-choice.hidden {
+  display: none;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-hwid-choice p {
+  margin: 0;
+  color: var(--op-muted);
+  line-height: 1.4;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-hwid-choice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+body.panel-page #mihomo-import-modal .xk-mi-hwid-choice-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+body.panel-page #mihomo-import-modal #mihomo-import-use-hwid-btn {
+  border-color: var(--op-accent) !important;
+  background: var(--op-accent) !important;
+  color: #fff !important;
+}
+
+body.panel-page #mihomo-import-modal #mihomo-import-use-hwid-btn:hover {
+  border-color: var(--op-accent-hover) !important;
+  background: var(--op-accent-hover) !important;
+}
+
 body.panel-page #outbounds-subscriptions-modal .xk-sub-controls {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));

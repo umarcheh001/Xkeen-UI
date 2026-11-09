@@ -356,7 +356,7 @@ function profileCard(data, profile, { selectedProfileId, installedProfileId, spr
   return card;
 }
 
-function renderProfiles(root, data, selectedProfileId) {
+function renderProfiles(root, data, selectedProfileId, coreInstalled) {
   const host = root.querySelector('[data-core-source-profiles]');
   if (!host) return;
   const sprite = iconSprite(root);
@@ -376,12 +376,9 @@ function renderProfiles(root, data, selectedProfileId) {
   const install = root.querySelector('[data-core-source-action="choose-install"]');
   const label = root.querySelector('[data-core-source-install-label]');
   if (install && !install.classList.contains('is-working') && !install.classList.contains('is-success')) {
-    install.disabled = !chosen?.release?.installable;
-    const group = chosen && sourceGroup(profiles, chosen.profile_id);
-    const current = group === sourceGroup(profiles, data.state?.installed_profile_id || 'official');
-    text(label, !chosen ? 'Установить'
-      : current ? `Установить ${releaseLabel(chosen.release)}`.trim()
-        : `Установить ${profiles.find((item) => item.profile_id === group)?.display_name || chosen.display_name}`);
+    const release = chosen && releaseState(data, chosen, coreInstalled);
+    install.disabled = !chosen?.release?.installable || Boolean(release?.button.disabled);
+    text(label, release?.button.label || 'Установить');
   }
 }
 
@@ -545,7 +542,7 @@ export function initCoreSource(root) {
     else renderReleaseState(statusNode, iconSprite(root), release);
     if (state.last_status === 'running' && state.last_operation_id && activeOperationId !== state.last_operation_id) startPolling(state.last_operation_id);
     text(sourceModal?.querySelector('[data-core-source-platform]'), data.platform?.opkg_arch || data.platform?.machine || 'архитектура не определена');
-    renderProfiles(sourceModal, data, selected);
+    renderProfiles(sourceModal, data, selected, coreInstalled);
   };
 
   const setMessage = (scope, message) => text(scope?.querySelector('[data-core-source-message], [data-core-install-message]'), message || '');
@@ -637,7 +634,7 @@ export function initCoreSource(root) {
     event.preventDefault();
     if (channel.disabled) return;
     setMessage(sourceModal, '');
-    renderProfiles(sourceModal, data, channel.dataset.coreSourceChannel);
+    renderProfiles(sourceModal, data, channel.dataset.coreSourceChannel, root.dataset.coreInstalled !== 'false');
     sourceModal.querySelector(`[data-core-source-channel="${CSS.escape(channel.dataset.coreSourceChannel)}"]`)?.focus();
   });
 
@@ -646,7 +643,7 @@ export function initCoreSource(root) {
     const input = event.target.closest?.('input[type="radio"]');
     if (!input || !data) return;
     setMessage(sourceModal, '');
-    renderProfiles(sourceModal, data, input.value);
+    renderProfiles(sourceModal, data, input.value, root.dataset.coreInstalled !== 'false');
     sourceModal.querySelector(`input[type="radio"][value="${CSS.escape(input.value)}"]`)?.focus();
   });
 

@@ -9,7 +9,7 @@ import {
   refreshSharedMihomoEditor,
   syncMihomoModalBodyScrollLock,
 } from './mihomo_runtime.js';
-import { getXkeenFilePath } from './xkeen_runtime.js';
+import { getXkeenFilePath, getXkeenLazyRuntimeApi } from './xkeen_runtime.js';
 import { iconHtml } from '../ui/operator_icons.js';
 import { appendHappDecryptorCardLink } from '../ui/happ_decryptor_link.js';
 import { mihomoCountryFlag } from './mihomo_clash/visuals.js';
@@ -64,6 +64,8 @@ let mihomoImportModuleApi = null;
     engineSelect: 'mihomo-import-engine-select',
     monacoHost: 'mihomo-import-preview-monaco',
     status: 'mihomo-import-status',
+    hwidChoice: 'mihomo-import-hwid-choice',
+    btnUseHwid: 'mihomo-import-use-hwid-btn',
     hint: 'mihomo-import-target-hint',
     destinationBlock: 'mihomo-import-destination-block',
     destinationOptions: 'mihomo-import-destination-options',
@@ -119,6 +121,7 @@ let mihomoImportModuleApi = null;
   let _previewOpen = false;
   let _previewGeneration = 0;
   let _parseOperation = null;
+  let _hwidChoice = null;
   let _selectedDestination = 'static';
   let _baseFileRevision = '';
   let _actionBusy = false;
@@ -134,6 +137,8 @@ let mihomoImportModuleApi = null;
   const _importApi = createMihomoImportApi({ getCoreHttp: getMihomoCoreHttpApi });
 
   function invalidateImportUiResult() {
+    _hwidChoice = null;
+    $(IDS.hwidChoice)?.classList.add('hidden');
     invalidateMihomoImportResult(_importState);
     _lastResult = null;
     _selectedDestination = 'static';
@@ -395,7 +400,8 @@ let mihomoImportModuleApi = null;
       return `Готово: ${items.length} ${pluralRu(items.length, ['локация', 'локации', 'локаций'])} → выбранные proxy-groups.`;
     }
     if (items.some((item) => item && item.type === 'proxy-provider')) {
-      return `Подписка распознана: ${sourceSuffix.replace(/^ · /, '') || 'источник'} → ${targetLabel}${noticeSuffix}.`;
+      const hwid = items.some((item) => item?.provider_mode === 'hwid_adapter');
+      return `${hwid ? 'HWID-подписка' : 'Подписка'} распознана: ${sourceSuffix.replace(/^ · /, '') || 'источник'} → ${targetLabel}${noticeSuffix}.`;
     }
     return `Готово: ${items.length} ${pluralRu(items.length, ['узел', 'узла', 'узлов'])}${sourceSuffix} → ${targetLabel}${noticeSuffix}.`;
   }
@@ -591,8 +597,6 @@ let mihomoImportModuleApi = null;
       button.disabled = busy || _actionBusy || !hasResult;
     });
     if (staticBtn) {
-      const source = String($(IDS.input)?.value || '').trim();
-      staticBtn.hidden = hasResult || getImportMode() === 'amnezia-premium' || !isBackendSubscriptionLink(source);
       staticBtn.disabled = busy;
     }
     parse?.classList.toggle('hidden', _reviewOpen);
@@ -2036,6 +2040,8 @@ let mihomoImportModuleApi = null;
     if (!modal) return;
     const manager = getMihomoModalApi();
     if (!show) {
+      _hwidChoice = null;
+      $(IDS.hwidChoice)?.classList.add('hidden');
       _reviewOpen = false;
       resetMihomoImportState(_importState);
       _lastResult = null;
@@ -2073,6 +2079,8 @@ let mihomoImportModuleApi = null;
     } catch (e2) {}
 
     if (show) {
+      _hwidChoice = null;
+      $(IDS.hwidChoice)?.classList.add('hidden');
       // reset
       _reviewOpen = false;
       resetMihomoImportState(_importState);
@@ -2873,12 +2881,37 @@ let mihomoImportModuleApi = null;
     });
   }
 
-  async function buildSubscriptionProviderConfig(uri, existingConfig, options = {}) {
-    let probe = null;
+  async function handoffToHwidModal(url) {
     try {
-      probe = await probeRegularProvider(uri);
-    } catch (e) {
-      try { console.warn('mihomo provider probe failed, using generated provider name', e); } catch (e2) {}
+      const lazy = getXkeenLazyRuntimeApi();
+      let api = null;
+      if (lazy?.ensureFeature && lazy?.getFeatureApi) {
+        await lazy.ensureFeature('mihomoHwidSub');
+        api = lazy.getFeatureApi('mihomoHwidSub');
+      }
+      if (!api?.openWithInput) {
+        const module = await import('./mihomo_hwid_sub.js');
+        api = module.getMihomoHwidSubApi();
+      }
+      if (!api?.openWithInput) return false;
+      showModal(false);
+      api.openWithInput(url);
+      return true;
+    } catch (error) {
+      if (!modalOpen()) showModal(true);
+      setStatus('Не удалось открыть HWID-подписку. Повторите попытку.', true);
+      return false;
+    }
+  }
+
+  async function buildSubscriptionProviderConfig(uri, existingConfig, options = {}) {
+    let probe = options.probe;
+    if (probe === undefined) {
+      try {
+        probe = await probeRegularProvider(uri);
+      } catch (e) {
+        try { console.warn('mihomo provider probe failed, using generated provider name', e); } catch (e2) {}
+      }
     }
     const profile = (probe && probe.profile) || {};
     const providerName = String(profile.suggested_name || profile.profile_title || '').trim();
@@ -3738,6 +3771,10 @@ let mihomoImportModuleApi = null;
     const rawText = inp ? String(inp.value || '') : '';
     const mode = getImportMode();
     const staticProviderProxies = boolOpt(options && options.staticProviderProxies);
+    const staticChoiceUrl = String(options?.staticChoiceUrl || '');
+    const staticChoiceProbe = options?.staticChoiceProbe || null;
+    $(IDS.hwidChoice)?.classList.add('hidden');
+    _hwidChoice = null;
     updateMihomoImportContext(_importState, { source: rawText, mode });
 
     if (!rawText.trim()) {
@@ -3848,23 +3885,43 @@ let mihomoImportModuleApi = null;
             continue;
           }
 
-          // For http(s)/Happ URLs in subscription/auto modes, try the backend
-          // Xray-JSON parser first; on not_xray_json we transparently fall
-          // back to creating a regular proxy-provider entry.
+          // Prefer a verified Mihomo provider; a URL can also serve Xray JSON
+          // to other clients, but Mihomo can refresh its provider directly.
           if (isBackendSubscriptionLink(line) && mode !== 'proxy') {
             setStatus(`Распознаю подписку ${line}…`, false, null, { busy: true });
-            const existingNames = collectProxyNamesFromText(tmp);
-            const xrayProxies = await parseXrayJsonViaApi(line, existingNames);
+            let providerProbe = line === staticChoiceUrl ? staticChoiceProbe : null;
+            if (!providerProbe) {
+              try { providerProbe = await probeRegularProvider(line); } catch (e) {}
+            }
             if (!isCurrentImportRequest(requestToken)) return;
-            if (xrayProxies && xrayProxies.length) {
-              for (const p of xrayProxies) {
-                outputs.push({ ...p, uri: line });
-                tmp += '\n' + p.content;
+            if (lines.length === 1 && line !== staticChoiceUrl
+              && (providerProbe?.hwid_supported || providerProbe?.provider_mode === 'hwid_adapter')) {
+              _hwidChoice = { url: line, probe: providerProbe };
+              $(IDS.hwidChoice)?.classList.remove('hidden');
+              setStatus('', false);
+              setSourceLayout(false);
+              return;
+            }
+            const providerReady = providerProbe?.provider_payload?.has_nodes
+              && providerProbe.provider_mode !== 'static_happ';
+            if (line === staticChoiceUrl || !providerReady) {
+              const existingNames = collectProxyNamesFromText(tmp);
+              const xrayProxies = await parseXrayJsonViaApi(line, existingNames);
+              if (!isCurrentImportRequest(requestToken)) return;
+              if (xrayProxies && xrayProxies.length) {
+                for (const p of xrayProxies) {
+                  outputs.push({ ...p, uri: line });
+                  tmp += '\n' + p.content;
+                }
+                continue;
               }
-              continue;
+            }
+            if (line === staticChoiceUrl && !providerProbe?.provider_proxies?.length) {
+              throw new Error('Подписка не содержит узлов в поддерживаемом статическом формате. Попробуйте HWID-provider.');
             }
             const out = await buildSubscriptionProviderConfig(line, tmp, {
-              staticProxies: staticProviderProxies,
+              staticProxies: staticProviderProxies || line === staticChoiceUrl,
+              probe: providerProbe,
             });
             if (!isCurrentImportRequest(requestToken)) return;
             if (Array.isArray(out)) {
@@ -4150,6 +4207,18 @@ let mihomoImportModuleApi = null;
     wireButton('mihomo-import-retry-registration', () => recoverImportOperation('registration'));
     _configOperations.subscribe(() => renderOperationStatus());
     wireButton(IDS.btnParse, () => parseInput());
+    wireButton(IDS.btnUseHwid, async () => {
+      const choice = _hwidChoice;
+      if (choice && choice.url === String($(IDS.input)?.value || '').trim()) {
+        await handoffToHwidModal(choice.url);
+      }
+    });
+    wireButton(IDS.btnParseStatic, () => {
+      const choice = _hwidChoice;
+      if (choice && choice.url === String($(IDS.input)?.value || '').trim()) {
+        parseInput({ staticChoiceUrl: choice.url, staticChoiceProbe: choice.probe });
+      }
+    });
     wireButton(IDS.btnInsert, () => insertIntoEditor());
     wireButton(IDS.btnSave, () => commitCandidate(false));
     wireButton(IDS.btnApply, () => commitCandidate(true));
