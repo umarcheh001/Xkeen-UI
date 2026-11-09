@@ -81,12 +81,14 @@ def test_family_selection_does_not_hide_ipv6_after_many_ipv4_addresses():
     assert [item[0] for item in base._distinct_addresses(addresses, 2)] == [socket.AF_INET, socket.AF_INET6]
 
 
-def test_basic_probe_preserves_mixed_family_results(monkeypatch):
+@pytest.mark.parametrize("platform", ["linux", "darwin"])
+def test_basic_probe_preserves_mixed_family_results(monkeypatch, platform):
+    monkeypatch.setattr(base.sys, "platform", platform)
     monkeypatch.setattr(base.socket, "getaddrinfo", lambda *_a, **_k: [
         (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("198.51.100.1", 443)),
         (socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("2001:db8::1", 443, 0, 0)),
     ])
-    monkeypatch.setattr(base, "_xkeen_direct_mark", lambda: 0)
+    monkeypatch.setattr(base, "_xkeen_direct_mark", lambda *, ipv6=False: 0)
     monkeypatch.setattr(base, "_probe_address", lambda _t, a, _m: {
         "ip": a[4][0], "status": "reachable" if a[0] == socket.AF_INET else "tls_timeout", "stage": "tls",
     })

@@ -398,7 +398,7 @@
       "system_requirements": [],
       "removable": true,
       "unit_count": 17,
-      "size_bytes": 330457,
+      "size_bytes": 330595,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 2,
@@ -29189,7 +29189,7 @@
       "module_id": "tool.server-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_provider_diagnostics_extended.py",
-      "size_bytes": 14464,
+      "size_bytes": 14602,
       "depends_on": [
         "core"
       ],
