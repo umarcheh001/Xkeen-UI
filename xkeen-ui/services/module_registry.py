@@ -337,7 +337,7 @@ MODULE_DEFINITIONS: tuple[ModuleDefinition, ...] = (
         id="tool.server-diagnostics",
         name="Диагностика серверов",
         description=(
-            "Проверка доступности серверов из конфигураций Xray и Mihomo. Нужен модуль Xray или Mihomo. "
+            "Проверка доступности серверов из конфигураций Xray и Mihomo. "
             "Часть проверок отправляет адреса серверов во внешние сервисы (dns.google, cheburcheck.ru)."
         ),
         version=REGISTRY_VERSION,

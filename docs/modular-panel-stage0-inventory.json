@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 672,
-      "size_bytes": 9177486,
+      "size_bytes": 9178771,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -398,7 +398,7 @@
       "system_requirements": [],
       "removable": true,
       "unit_count": 15,
-      "size_bytes": 271219,
+      "size_bytes": 271801,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 1,
@@ -2740,7 +2740,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/module_registry.py",
-      "size_bytes": 75127,
+      "size_bytes": 75083,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -11829,7 +11829,7 @@
       "module_id": "core",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/module_manager/render.js",
-      "size_bytes": 80116,
+      "size_bytes": 80483,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -14022,7 +14022,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/modules_panel_update_prepare.spec.mjs",
-      "size_bytes": 13529,
+      "size_bytes": 14491,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -29199,7 +29199,7 @@
       "module_id": "tool.server-diagnostics",
       "kind": "backend_test",
       "path": "tests/test_server_diagnostics_module_registry.py",
-      "size_bytes": 5995,
+      "size_bytes": 5951,
       "depends_on": [
         "core"
       ],
@@ -29243,7 +29243,7 @@
       "module_id": "tool.server-diagnostics",
       "kind": "frontend_test",
       "path": "e2e/modules_server_diagnostics.spec.mjs",
-      "size_bytes": 3949,
+      "size_bytes": 4575,
       "depends_on": [
         "core"
       ],

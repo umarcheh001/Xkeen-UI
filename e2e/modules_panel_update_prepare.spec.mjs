@@ -50,6 +50,21 @@ test('остановка на подтверждении', async ({ page }) => {
   await expect(page.locator('#modules-plan-apply')).toBeEnabled();
 });
 
+test('новый модуль диагностики назван понятно в плане обновления', async ({ page }) => {
+  const plan = { ...panelUpdatePlan, affected_module_ids: ['core', 'tool.server-diagnostics'] };
+  await installPanelPrepareRoutes(page, { steps: [prepareReady(plan)] });
+  await openModules(page);
+  const moduleNames = { ...server.installed.module_names };
+  delete moduleNames['tool.server-diagnostics'];
+  await page.route('**/api/modules/installed', (route) => route.fulfill({ json: { ...server.installed, module_names: moduleNames } }));
+  await page.route('**/api/modules/available', (route) => route.fulfill({ json: {
+    ...server.available, modules: server.available.modules.filter((item) => item.id !== 'tool.server-diagnostics'),
+  } }));
+  await page.reload();
+  await updateButton(page).click();
+  await expect(updateDialog(page)).toContainText('Xkeen UI Core, Диагностика серверов');
+});
+
 test('архив из кэша', async ({ page }) => {
   await installPanelPrepareRoutes(page, { steps: [prepareReady(panelUpdatePlan, { cached: true, finished_at: 1003 })] });
   await openModules(page);

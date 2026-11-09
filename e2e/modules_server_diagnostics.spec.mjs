@@ -59,13 +59,16 @@ test('the catalog warns before installing it on a router without engines', async
   const withoutEngines = {
     ...server.available,
     modules: server.available.modules.map((item) => (
-      ['engine.xray', 'engine.mihomo'].includes(item.id) ? { ...item, installed: false, lifecycle_actions: ['install'] } : item
+      ['engine.xray', 'engine.mihomo'].includes(item.id) ? { ...item, installed: false, lifecycle_actions: ['install'] }
+        : item.id === MODULE_ID ? { ...item, description: 'Проверка доступности серверов. Нужен модуль Xray или Mihomo. Часть проверок обращается к внешним сервисам.' } : item
     )),
   };
   await mockModules(page, server.installed, withoutEngines);
   await page.goto('/modules');
   await page.getByRole('tab', { name: 'Доступные' }).click();
   const catalogTile = page.locator(`.modules-catalog-tile[data-module-id="${MODULE_ID}"]`);
+  await expect(catalogTile.locator('.modules-tile-description')).toHaveText('Проверка доступности серверов. Часть проверок обращается к внешним сервисам.');
+  await expect(catalogTile.locator('.modules-tile-meta').first()).toHaveText('Нужны модули: Xkeen UI Core, а также Xray или Mihomo');
   await expect(catalogTile.locator('.modules-tile-meta')).toContainText(['Нужен модуль Xray или Mihomo']);
 
   await page.unrouteAll({ behavior: 'ignoreErrors' });

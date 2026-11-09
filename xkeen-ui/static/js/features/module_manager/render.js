@@ -19,7 +19,8 @@ function moduleVersion(item) {
 // A module is called by its name wherever the window knows it.
 function moduleLabel(id, names) {
   const key = String(id ?? '');
-  return (names && typeof names.get === 'function' && names.get(key)) || key;
+  return (names && typeof names.get === 'function' && names.get(key))
+    || (key === 'tool.server-diagnostics' ? 'Диагностика серверов' : key);
 }
 
 function moduleList(ids, names) {
@@ -1471,10 +1472,17 @@ function catalogTile(item, action, names, { onPlan, busy, quiet, noEngine = fals
   top.append(moduleIcon(item.id), title);
   if (item.installed === true) top.append(node('span', 'modules-chip is-ok modules-catalog-chip', 'Установлен'));
   tile.append(top);
-  if (item.description) tile.append(node('p', 'modules-tile-description', item.description));
+  if (item.description) {
+    const description = item.id === SERVER_DIAGNOSTICS
+      ? item.description.replace('Нужен модуль Xray или Mihomo. ', '') : item.description;
+    tile.append(node('p', 'modules-tile-description', description));
+  }
   const requires = item.requires || item.dependencies;
   const meta = [];
-  if (Array.isArray(requires) && requires.length) meta.push(`Нужны модули: ${moduleList(requires, names)}`);
+  if (Array.isArray(requires) && requires.length) {
+    const engines = item.id === SERVER_DIAGNOSTICS ? ', а также Xray или Mihomo' : '';
+    meta.push(`Нужны модули: ${moduleList(requires, names)}${engines}`);
+  }
   if (Array.isArray(item.conflicts) && item.conflicts.length) meta.push(`Конфликтуют: ${moduleList(item.conflicts, names)}`);
   if (item.id === SERVER_DIAGNOSTICS && action === 'install' && noEngine) meta.push(NEEDS_ENGINE_TEXT);
   if (meta.length) {

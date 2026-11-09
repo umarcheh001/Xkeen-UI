@@ -46,7 +46,7 @@ def test_module_is_registered_with_owner_text():
     definition = next(item for item in MODULE_DEFINITIONS if item.id == MODULE_ID)
     assert definition.name == "Диагностика серверов"
     assert definition.description == (
-        "Проверка доступности серверов из конфигураций Xray и Mihomo. Нужен модуль Xray или Mihomo. "
+        "Проверка доступности серверов из конфигураций Xray и Mihomo. "
         "Часть проверок отправляет адреса серверов во внешние сервисы (dns.google, cheburcheck.ru)."
     )
     assert definition.dependencies == ("core",)
