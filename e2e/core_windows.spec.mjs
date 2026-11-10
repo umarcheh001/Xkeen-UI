@@ -67,6 +67,19 @@ test('the service menu marks the active engine and lays the service buttons out 
   expect(Math.abs(gap - edge)).toBeLessThanOrEqual(2);
 });
 
+test('service menu and core window show the full installed build', async ({ page }) => {
+  await serveCores(page, { cores: ['xray', 'mihomo'] });
+  await page.route('**/api/cores/versions', route => route.fulfill({ json: { ok: true, cores: {
+    xray: { installed: true, version: '26.11.9' },
+    mihomo: { installed: true, version: '1.19.33', display_version: '1.19.33-r12' },
+  } } }));
+  await page.goto('/');
+  const menu = await openServiceMenu(page);
+  await expect(engineSwitch(menu, 'mihomo')).toContainText('1.19.33-r12');
+  await engineSwitch(menu, 'mihomo').click();
+  await expect(tab(page, 'mihomo').locator('[data-core-option-version]')).toHaveText('1.19.33-r12');
+});
+
 test('a stopped service offers Start in the place of Stop', async ({ page }) => {
   await serveCores(page, { cores: ['xray', 'mihomo'], running: false });
   await page.goto('/');
@@ -277,6 +290,22 @@ test('a newly installed core still offers panel restart after reopening the page
   await expect(source.locator('[data-core-source-action="prepare"]')).toBeDisabled();
 });
 
+test('restart prompt and switch action fit when the viewport has room', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 600 });
+  await serveCores(page, { cores: ['xray', 'mihomo'] });
+  await page.route('**/api/mihomo/core-profiles', route => route.fulfill({ json: { ok: true, data: {
+    state: { selected_profile_id: 'official', detected_version: '1.19.20', last_status: 'succeeded' },
+    profiles: [{ profile_id: 'official', display_name: 'Official', release: { installable: true, stable: { tag: 'v1.19.20' } } }], platform: {},
+  } } }));
+  await page.goto('/');
+  await page.locator('#core-modal [data-core-source][data-core-engine="mihomo"]').evaluate(el => { el.dataset.firstInstall = 'true'; el.dispatchEvent(new CustomEvent('xkeen:core-installation-state')); });
+  const menu = await openServiceMenu(page);
+  await engineSwitch(menu, 'mihomo').click();
+  const geometry = await page.locator('#core-modal .xk-core-modal-body').evaluate(el => ({ height: el.clientHeight, scroll: el.scrollHeight }));
+  expect(geometry.scroll).toBeLessThanOrEqual(geometry.height + 1);
+  await expect(page.locator('#core-modal-confirm-btn')).toBeInViewport();
+});
+
 test('restart wait is visible immediately and recovers when the request fails', async ({ page }) => {
   await serveCores(page, { cores: ['xray', 'mihomo'] });
   await page.route('**/api/mihomo/core-profiles', route => route.fulfill({ json: { ok: true, data: {
@@ -305,6 +334,43 @@ test('restart wait is visible immediately and recovers when the request fails', 
   await expect(button).toHaveText('Перезапустить панель');
   await expect(section).toContainText('Перезапуск недоступен');
   await expect(section.locator('[data-core-restart-elapsed]')).toHaveCount(0);
+});
+
+test('restart reloads only after the panel process changes', async ({ page }) => {
+  await serveCores(page, { cores: ['xray', 'mihomo'] });
+  await page.route('**/api/mihomo/core-profiles', route => route.fulfill({ json: { ok: true, data: {
+    state: { selected_profile_id: 'official', detected_version: '1.19.20', last_status: 'succeeded' },
+    profiles: [{ profile_id: 'official', display_name: 'Official', release: { installable: true, stable: { tag: 'v1.19.20' } } }], platform: {},
+  } } }));
+  let instance = 'old';
+  await page.route('**/api/modules/instance', route => route.fulfill({ json: { ok: true, instance } }));
+  await page.route('**/api/modules/restart', route => route.fulfill({ json: { ok: true, restart_requested: true } }));
+  await page.goto('/');
+  await page.locator('#core-modal [data-core-source][data-core-engine="mihomo"]').evaluate(el => { el.dataset.firstInstall = 'true'; el.dispatchEvent(new CustomEvent('xkeen:core-installation-state')); });
+  const menu = await openServiceMenu(page);
+  await engineSwitch(menu, 'mihomo').click();
+  await page.locator('#core-modal [data-core-source][data-core-engine="mihomo"] [data-core-source-action="restart-panel"]').click();
+  await page.waitForTimeout(2500);
+  await expect(page.locator('#core-modal')).toBeVisible();
+  instance = 'new';
+  await expect(page.locator('#core-modal')).toBeHidden({ timeout: 10000 });
+});
+
+test('restart still waits for the new process when the restart response is lost', async ({ page }) => {
+  await serveCores(page, { cores: ['xray', 'mihomo'] });
+  await page.route('**/api/mihomo/core-profiles', route => route.fulfill({ json: { ok: true, data: {
+    state: { selected_profile_id: 'official', detected_version: '1.19.20', last_status: 'succeeded' },
+    profiles: [{ profile_id: 'official', display_name: 'Official', release: { installable: true, stable: { tag: 'v1.19.20' } } }], platform: {},
+  } } }));
+  let instance = 'old';
+  await page.route('**/api/modules/instance', route => route.fulfill({ json: { ok: true, instance } }));
+  await page.route('**/api/modules/restart', route => { instance = 'new'; return route.abort(); });
+  await page.goto('/');
+  await page.locator('#core-modal [data-core-source][data-core-engine="mihomo"]').evaluate(el => { el.dataset.firstInstall = 'true'; el.dispatchEvent(new CustomEvent('xkeen:core-installation-state')); });
+  const menu = await openServiceMenu(page);
+  await engineSwitch(menu, 'mihomo').click();
+  await page.locator('#core-modal [data-core-source][data-core-engine="mihomo"] [data-core-source-action="restart-panel"]').click();
+  await expect(page.locator('#core-modal')).toBeHidden({ timeout: 10000 });
 });
 
 test('first installation confirmation shows restart wait while the request is pending', async ({ page }) => {

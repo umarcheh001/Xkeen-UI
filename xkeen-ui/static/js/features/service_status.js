@@ -1556,7 +1556,7 @@ let serviceStatusModuleApi = null;
         const found = versionData && versionData.cores && typeof versionData.cores === 'object' ? versionData.cores : {};
         Object.keys(found).forEach((core) => {
           const entry = found[core] || {};
-          if (entry.installed && entry.version) versions[normalizeCore(core)] = shortVersion(entry.version);
+          if (entry.installed && entry.version) versions[normalizeCore(core)] = shortVersion(entry.display_version || entry.version);
         });
         _coreVersions = versions;
         renderServiceMenuCores();

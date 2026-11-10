@@ -143,6 +143,16 @@ def app_with_lifecycle():
     return app.test_client(), service, notifications
 
 
+def test_instance_marker_is_stable_until_the_panel_is_recreated(app_with_lifecycle):
+    client, _lifecycle, _notifications = app_with_lifecycle
+    first = client.get('/api/modules/instance')
+    assert first.headers['Cache-Control'] == 'no-store'
+    assert first.json['instance'] == client.get('/api/modules/instance').json['instance']
+    other = Flask('other-panel')
+    other.register_blueprint(create_modules_blueprint(RegistryFake(), lifecycle_service=LifecycleFake()))
+    assert first.json['instance'] != other.test_client().get('/api/modules/instance').json['instance']
+
+
 def test_lifecycle_read_and_control_routes_delegate_with_no_store(app_with_lifecycle):
     client, service, _notifications = app_with_lifecycle
     requests = [

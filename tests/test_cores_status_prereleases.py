@@ -168,6 +168,20 @@ def test_parse_mihomo_version_supports_alpha_build_output():
     assert cores_status._parse_mihomo_version(output) == "alpha-df1c5e5"
 
 
+def test_parse_mihomo_version_preserves_installed_build_suffix():
+    output = "Mihomo Meta v1.19.33-r12 linux arm64 with go1.25.1"
+    assert cores_status._parse_mihomo_version(output) == "1.19.33"
+    assert cores_status._parse_mihomo_display_version(output) == "1.19.33-r12"
+
+
+def test_versions_api_exposes_full_build_without_changing_update_version(monkeypatch, tmp_path):
+    _mock_installed_cores(monkeypatch)
+    monkeypatch.setattr(cores_status, "_run_cmd", lambda *_args, **_kwargs: (0, "Mihomo Meta v1.19.33-r12 linux arm64"))
+    core = _make_cores_status_client(tmp_path).get("/api/cores/versions").get_json()["cores"]["mihomo"]
+    assert core["version"] == "1.19.33"
+    assert core["display_version"] == "1.19.33-r12"
+
+
 def test_pick_release_selects_latest_release_within_each_channel():
     releases = [
         {"tag_name": "alpha-1", "prerelease": True, "draft": False, "published_at": "2024-08-12T10:00:00Z"},

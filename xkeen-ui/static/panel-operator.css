@@ -14945,7 +14945,7 @@ body.panel-page #core-modal .xk-core-modal-content,
 html[data-theme="light"] body.panel-page #core-modal .xk-core-modal-content {
   width: min(94vw, 720px);
   max-width: 720px;
-  max-height: min(88dvh, 640px);
+  max-height: 94dvh;
   padding: 0 !important;
   border-radius: var(--op-radius-lg) !important;
   background: var(--op-surface) !important;
@@ -24046,6 +24046,7 @@ body.panel-page #core-modal .xk-core-modal-body {
   display: grid;
   gap: 14px;
   padding: 16px 18px !important;
+  max-height: none;
 }
 
 body.panel-page #core-modal .xk-core-engine-list {

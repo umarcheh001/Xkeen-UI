@@ -215,6 +215,11 @@ def _parse_mihomo_version(output: str) -> Optional[str]:
     return pre.group(1) if pre else None
 
 
+def _parse_mihomo_display_version(output: str) -> Optional[str]:
+    m = re.search(r"\bv?(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)", output or "")
+    return m.group(1) if m else _parse_mihomo_version(output)
+
+
 def _read_json(path: str, trusted_root: str) -> Optional[dict]:
     try:
         resolved = os.path.realpath(path)
@@ -738,7 +743,7 @@ def create_cores_status_blueprint(ui_state_dir: str) -> Blueprint:
         mihomo_exists = (os.path.isfile(mihomo_bin) and os.access(mihomo_bin, os.X_OK)) if configured_mihomo else os.path.exists(mihomo_bin)
         if mihomo_exists:
             rc, txt = _run_cmd([mihomo_bin, "-v"], timeout_s=2.5)
-            out["mihomo"] = {"installed": True, "version": _parse_mihomo_version(txt), "rc": rc}
+            out["mihomo"] = {"installed": True, "version": _parse_mihomo_version(txt), "display_version": _parse_mihomo_display_version(txt), "rc": rc}
         else:
             out["mihomo"] = {"installed": False, "version": None, "rc": 127}
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any, Callable
+from uuid import uuid4
 
 from flask import Blueprint, jsonify, request
 
@@ -27,6 +28,7 @@ def create_modules_blueprint(
     """Create the configuration-only module registry API blueprint."""
 
     bp = Blueprint("modules", __name__)
+    instance_id = uuid4().hex
     if panel_update_preparer is None and lifecycle_service is not None:
         from services.panel_update_prepare import PanelUpdatePreparer
 
@@ -146,6 +148,10 @@ def create_modules_blueprint(
     @bp.get("/api/modules/installed")
     def api_modules_installed():
         return lifecycle_response(lambda: lifecycle_service.installed())
+
+    @bp.get("/api/modules/instance")
+    def api_modules_instance():
+        return success({"ok": True, "instance": instance_id})
 
     @bp.get("/api/modules/update-channel")
     def api_modules_update_channel():

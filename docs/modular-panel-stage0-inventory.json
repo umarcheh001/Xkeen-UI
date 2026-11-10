@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 672,
-      "size_bytes": 9246795,
+      "size_bytes": 9255275,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -56,7 +56,7 @@
         "stylesheet": 9,
         "template": 34
       },
-      "route_count": 107,
+      "route_count": 108,
       "background_task_count": 4,
       "ui_surface_count": 37,
       "representative_paths": [
@@ -815,7 +815,7 @@
       "module_id": "core",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/cores_status.py",
-      "size_bytes": 33171,
+      "size_bytes": 33434,
       "depends_on": [],
       "starts_background_task": true,
       "background_markers": [
@@ -961,7 +961,7 @@
       "module_id": "core",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/modules.py",
-      "size_bytes": 23196,
+      "size_bytes": 23381,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -985,6 +985,11 @@
         {
           "method": "GET",
           "path": "/api/modules/installed",
+          "decorator": "bp.get"
+        },
+        {
+          "method": "GET",
+          "path": "/api/modules/instance",
           "decorator": "bp.get"
         },
         {
@@ -1127,7 +1132,7 @@
       "module_id": "core",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/pages.py",
-      "size_bytes": 28357,
+      "size_bytes": 28585,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -4354,7 +4359,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_core_management_dialog_contract.py",
-      "size_bytes": 4146,
+      "size_bytes": 4448,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -4478,7 +4483,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_cores_status_prereleases.py",
-      "size_bytes": 22997,
+      "size_bytes": 23732,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -6844,7 +6849,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_lifecycle_routes.py",
-      "size_bytes": 18081,
+      "size_bytes": 18664,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -11177,7 +11182,7 @@
       "module_id": "core",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/core_source.js",
-      "size_bytes": 39986,
+      "size_bytes": 41567,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -11206,7 +11211,7 @@
       "module_id": "core",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/cores_status.js",
-      "size_bytes": 37032,
+      "size_bytes": 37058,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -12103,7 +12108,7 @@
       "module_id": "core",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/service_status.js",
-      "size_bytes": 64196,
+      "size_bytes": 64221,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -13479,7 +13484,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/core_windows.spec.mjs",
-      "size_bytes": 35297,
+      "size_bytes": 39841,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -15625,7 +15630,7 @@
       "module_id": "core",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/panel-operator.css",
-      "size_bytes": 851388,
+      "size_bytes": 851396,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -30655,7 +30660,7 @@
     }
   ],
   "routes": {
-    "endpoint_count": 357,
+    "endpoint_count": 358,
     "files_with_routes": 52,
     "endpoint_files": [
       {
@@ -30917,6 +30922,11 @@
           {
             "method": "GET",
             "path": "/api/modules/installed",
+            "decorator": "bp.get"
+          },
+          {
+            "method": "GET",
+            "path": "/api/modules/instance",
             "decorator": "bp.get"
           },
           {

@@ -742,7 +742,7 @@ let coresStatusModuleApi = null;
     lastInstalled = { xray, mihomo };
 
     setText($('core-xray-installed'), xray.installed ? formatInstalledVersionLabel(xray.version) : NOT_INSTALLED_LABEL);
-    setText($('core-mihomo-installed'), mihomo.installed ? formatInstalledVersionLabel(mihomo.version) : NOT_INSTALLED_LABEL);
+    setText($('core-mihomo-installed'), mihomo.installed ? formatInstalledVersionLabel(mihomo.display_version || mihomo.version) : NOT_INSTALLED_LABEL);
 
     const pillX = $('core-pill-xray');
     const pillM = $('core-pill-mihomo');

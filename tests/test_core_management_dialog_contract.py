@@ -21,6 +21,13 @@ SOURCE = (ROOT / "xkeen-ui/templates/panel/core_source.html").read_text(
 CSS = (ROOT / "xkeen-ui/static/panel-operator.css").read_text(encoding="utf-8")
 
 
+def test_installed_module_waiting_for_restart_is_not_reported_uninstalled():
+    from routes.pages import _unmanaged_core_sources
+
+    assert _unmanaged_core_sources(["xray", "mihomo"], {"xray"}, {"mihomo"}) == []
+    assert _unmanaged_core_sources(["xray", "mihomo"], {"xray"}, set()) == ["mihomo"]
+
+
 def test_source_controls_are_rendered_by_the_shared_core_modal():
     modal_start = SHARED_MODAL.index('id="core-modal"')
     modal_end = SHARED_MODAL.index('id="confirm-modal"')

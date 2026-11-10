@@ -306,6 +306,10 @@ def build_panel_frontend_modules(
     }
 
 
+def _unmanaged_core_sources(detected: list[str], active: set[str], waiting: set[str]) -> list[str]:
+    return [core for core in detected if core in {"xray", "mihomo"} and core not in active and core not in waiting]
+
+
 def _build_panel_page_context(active_module_ids: set[str] | None, installable_missing_cores: set[str] | None = None) -> dict[str, object]:
     """Select server-owned panel surfaces from the Stage 3 activation result."""
 
@@ -608,10 +612,10 @@ def register_pages_routes(
                 core for core, module_id in (("xray", "engine.xray"), ("mihomo", "engine.mihomo"))
                 if module_id in active_module_ids
             }
-            page_context["unmanaged_core_source_engines"] = [
-                core for core in _core_ui.get("detected_cores", [])
-                if core in {"xray", "mihomo"} and core not in active_engines
-            ]
+            page_context["unmanaged_core_source_engines"] = _unmanaged_core_sources(
+                _core_ui.get("detected_cores", []), active_engines,
+                set(page_context["installable_missing_cores"]),
+            )
             page_context["unmanaged_core_source_partials"] = [
                 f"panel/slots/core_source_unavailable_{core}.html"
                 for core in page_context["unmanaged_core_source_engines"]

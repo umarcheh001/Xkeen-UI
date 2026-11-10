@@ -626,8 +626,37 @@ export function initCoreSource(root) {
     updateElapsed();
     const timer = window.setInterval(updateElapsed, 1000);
     try {
-      await request('/api/modules/restart', { method: 'POST', body: '{}' });
+      const before = await request('/api/modules/instance', { cache: 'no-store' });
+      if (!before.instance) throw new Error('Не удалось определить состояние панели.');
+      const restartController = new AbortController();
+      const restartTimeout = window.setTimeout(() => restartController.abort(), 10000);
+      try {
+        await request('/api/modules/restart', { method: 'POST', body: '{}', signal: restartController.signal });
+      } catch (error) {
+        // The old process may have stopped before its response reached us.
+        if (!(error instanceof TypeError) && error.name !== 'AbortError') throw error;
+      } finally {
+        window.clearTimeout(restartTimeout);
+      }
       text(messageNode, 'Панель перезапускается. Если страница не обновится, обновите её вручную.');
+      const deadline = Date.now() + 120000;
+      while (Date.now() < deadline) {
+        await new Promise(resolve => window.setTimeout(resolve, 1500));
+        const controller = new AbortController();
+        const timeout = window.setTimeout(() => controller.abort(), 5000);
+        try {
+          const current = await request('/api/modules/instance', { cache: 'no-store', signal: controller.signal });
+          if (current.instance && current.instance !== before.instance) {
+            window.location.reload();
+            return;
+          }
+        } catch (_) {
+          // The panel may be unavailable while its process is restarting.
+        } finally {
+          window.clearTimeout(timeout);
+        }
+      }
+      throw new Error('Не удалось дождаться перезапуска панели. Проверьте её состояние и обновите страницу вручную.');
     } catch (error) {
       window.clearInterval(timer);
       elapsed.remove();
