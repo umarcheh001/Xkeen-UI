@@ -510,6 +510,9 @@ export function initCoreSource(root) {
 
   const startPolling = (operationId) => {
     if (!operationId) return;
+    if (root.dataset.firstInstall === 'true' || confirmation?.first_install) {
+      document.dispatchEvent(new CustomEvent('xkeen:first-core-install-start', { detail: { engine } }));
+    }
     activeOperationId = String(operationId);
     if (!pollStartedAt) pollStartedAt = Date.now();
     poll(activeOperationId);
@@ -611,7 +614,9 @@ export function initCoreSource(root) {
     if (restartPending) return;
     restartPending = true;
     const originalLabel = button.textContent;
-    button.disabled = true;
+    const restartButtons = [root, installModal].flatMap(scope => Array.from(scope?.querySelectorAll('[data-core-source-action="restart-panel"]') || []));
+    const disabledStates = restartButtons.map(item => item.disabled);
+    restartButtons.forEach(item => { item.disabled = true; });
     button.setAttribute('aria-busy', 'true');
     button.classList.add('xk-core-restart-working');
     text(button, 'Перезапускаем…');
@@ -660,7 +665,7 @@ export function initCoreSource(root) {
     } catch (error) {
       window.clearInterval(timer);
       elapsed.remove();
-      button.disabled = false;
+      restartButtons.forEach((item, index) => { item.disabled = disabledStates[index]; });
       button.removeAttribute('aria-busy');
       button.classList.remove('xk-core-restart-working');
       text(button, originalLabel);
@@ -668,6 +673,11 @@ export function initCoreSource(root) {
       restartPending = false;
     }
   };
+
+  root.addEventListener('xkeen:auto-restart-after-core-install', () => {
+    const button = installModal?.querySelector('[data-core-source-action="restart-panel"]');
+    if (button) void restartPanel(button, installModal.querySelector('[data-core-install-message]'));
+  });
 
   const poll = async (operationId) => {
     if (pollTimer) clearTimeout(pollTimer);
@@ -702,6 +712,7 @@ export function initCoreSource(root) {
         }
         pollStartedAt = 0;
         await refresh();
+        if (firstInstall) document.dispatchEvent(new CustomEvent('xkeen:first-core-install-finish', { detail: { engine, succeeded: operation.status === 'succeeded' } }));
         return;
       }
       pollTimer = setTimeout(() => poll(operationId), 700);
@@ -792,6 +803,7 @@ export function initCoreSource(root) {
     button.setAttribute('aria-busy', 'true');
     button.classList.add('is-working');
     text(buttonLabelNode(button), 'Установка…');
+    if (confirmation.first_install) document.dispatchEvent(new CustomEvent('xkeen:first-core-install-start', { detail: { engine } }));
     try {
       const response = await request(`${endpoint}/core-install/apply`, { method: 'POST', body: JSON.stringify({ confirmation_id: confirmation.confirmation_id }) });
       pollStartedAt = Date.now();
@@ -799,6 +811,7 @@ export function initCoreSource(root) {
       renderOperation(response.operation || { status: 'running', phase: 'download', progress: 8, phase_label: 'Загрузка релиза' });
       startPolling(response.operation?.operation_id);
     } catch (error) {
+      if (confirmation.first_install) document.dispatchEvent(new CustomEvent('xkeen:first-core-install-finish', { detail: { engine, succeeded: false } }));
       setMessage(installModal, error.message || 'Не удалось начать установку.');
       button.disabled = false;
       button.removeAttribute('aria-busy');

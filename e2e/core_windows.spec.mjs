@@ -141,6 +141,25 @@ test('an absent engine with its module enabled stays listed and installable', as
   await expect(page.locator('#core-modal-confirm-btn')).toBeHidden();
 });
 
+for (const [missing, running] of [['mihomo', 'xray'], ['xray', 'mihomo']]) {
+  test(`an installed ${missing} module waiting for its core remains visible in the service menu`, async ({ page }) => {
+    await serveCores(page, { cores: [running], current: running });
+    await page.goto('/');
+    await page.evaluate((engine) => {
+      const ids = window.XKeen.pageConfig.frontendModules.activeModuleIds;
+      const at = ids.indexOf(`engine.${engine}`);
+      if (at >= 0) ids.splice(at, 1);
+      document.querySelector(`#core-modal [data-core-source][data-core-engine="${engine}"]`).dataset.firstInstall = 'true';
+    }, missing);
+    const menu = await openServiceMenu(page);
+    await expect(engineSwitch(menu, missing)).toBeVisible();
+    await expect(engineSwitch(menu, missing)).toContainText('не установлено');
+    await engineSwitch(menu, missing).click();
+    await expect(tab(page, missing)).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator(`#core-modal [data-core-source][data-core-engine="${missing}"] [data-core-source-action="prepare"]`)).toBeVisible();
+  });
+}
+
 test('an absent Mihomo shows the selected source and installable version', async ({ page }) => {
   await serveCores(page, { cores: ['xray'] });
   await page.route('**/api/mihomo/core-profiles', route => route.fulfill({ json: { ok: true, data: {
@@ -230,7 +249,7 @@ test('an absent core cannot use a stale release after source loading fails', asy
   await expect(source.locator('[data-core-source-action="prepare"]')).toBeDisabled();
 });
 
-test('first installation explains that the service keeps running and offers a panel restart', async ({ page }) => {
+test('first installation restarts the panel and reloads after the new process starts', async ({ page }) => {
   await serveCores(page, { cores: ['xray'] });
   await page.route('**/api/mihomo/core-profiles', route => route.fulfill({ json: { ok: true, data: {
     state: { selected_profile_id: 'official', last_status: 'idle' },
@@ -239,6 +258,10 @@ test('first installation explains that the service keeps running and offers a pa
   await page.route('**/api/mihomo/core-install/prepare', route => route.fulfill({ json: { ok: true, confirmation: { confirmation_id: 'first', first_install: true, profile: {}, release: {} } } }));
   await page.route('**/api/mihomo/core-install/apply', route => route.fulfill({ json: { ok: true, operation: { operation_id: 'first-op' } } }));
   await page.route('**/api/mihomo/core-install/status?*', route => route.fulfill({ json: { ok: true, operation: { operation_id: 'first-op', first_install: true, status: 'succeeded', phase: 'complete', progress: 100 } } }));
+  let restartCount = 0;
+  let instance = 'old';
+  await page.route('**/api/modules/instance', route => route.fulfill({ json: { ok: true, instance } }));
+  await page.route('**/api/modules/restart', route => { restartCount += 1; instance = 'new'; return route.fulfill({ json: { ok: true, restart_requested: true } }); });
   await page.goto('/');
   const menu = await openServiceMenu(page);
   await engineSwitch(menu, 'mihomo').click();
@@ -246,8 +269,120 @@ test('first installation explains that the service keeps running and offers a pa
   const dialog = page.locator('#mihomo-core-install-modal');
   await expect(dialog.locator('[data-core-install-description]')).toContainText('без переключения');
   await dialog.getByRole('button', { name: 'Установить', exact: true }).click();
-  await expect(dialog.getByRole('button', { name: 'Перезапустить панель' })).toBeVisible();
-  await expect(dialog.locator('[data-core-install-message]')).toContainText('Ядро установлено');
+  await expect.poll(() => restartCount).toBe(1);
+  await expect(dialog).toBeHidden({ timeout: 10000 });
+});
+
+test('first Xray installation also restarts the panel once and reloads it', async ({ page }) => {
+  await serveCores(page, { cores: ['mihomo'], current: 'mihomo' });
+  await page.route('**/api/xray/core-profiles', route => route.fulfill({ json: { ok: true, data: {
+    state: { selected_profile_id: 'official', last_status: 'idle' },
+    profiles: [{ profile_id: 'official', display_name: 'Official Xray', release: { installable: true, stable: { tag: 'v26.11.9' } } }], platform: {},
+  } } }));
+  await page.route('**/api/xray/core-install/prepare', route => route.fulfill({ json: { ok: true, confirmation: { confirmation_id: 'first-xray', first_install: true, profile: {}, release: {} } } }));
+  await page.route('**/api/xray/core-install/apply', route => route.fulfill({ json: { ok: true, operation: { operation_id: 'first-xray-op' } } }));
+  await page.route('**/api/xray/core-install/status?*', route => route.fulfill({ json: { ok: true, operation: { operation_id: 'first-xray-op', first_install: true, status: 'succeeded', phase: 'complete', progress: 100 } } }));
+  let restartCount = 0;
+  let instance = 'old';
+  await page.route('**/api/modules/instance', route => route.fulfill({ json: { ok: true, instance } }));
+  await page.route('**/api/modules/restart', route => { restartCount += 1; instance = 'new'; return route.fulfill({ json: { ok: true, restart_requested: true } }); });
+  await page.goto('/');
+  const menu = await openServiceMenu(page);
+  await engineSwitch(menu, 'xray').click();
+  await page.locator('#core-modal [data-core-source][data-core-engine="xray"]').getByRole('button', { name: 'Установить 26.11.9' }).click();
+  const dialog = page.locator('#xray-core-install-modal');
+  await dialog.getByRole('button', { name: 'Установить', exact: true }).click();
+  await expect.poll(() => restartCount).toBe(1);
+  await expect(dialog).toBeHidden({ timeout: 10000 });
+});
+
+test('automatic restart blocks both restart buttons and sends only one request', async ({ page }) => {
+  await serveCores(page, { cores: ['xray'] });
+  await page.route('**/api/mihomo/core-profiles', route => route.fulfill({ json: { ok: true, data: {
+    state: { selected_profile_id: 'official', last_status: 'idle' },
+    profiles: [{ profile_id: 'official', display_name: 'Official', release: { installable: true, stable: { tag: 'v1.19.20' } } }], platform: {},
+  } } }));
+  await page.route('**/api/mihomo/core-install/prepare', route => route.fulfill({ json: { ok: true, confirmation: { confirmation_id: 'first', first_install: true, profile: {}, release: {} } } }));
+  await page.route('**/api/mihomo/core-install/apply', route => route.fulfill({ json: { ok: true, operation: { operation_id: 'first-op' } } }));
+  await page.route('**/api/mihomo/core-install/status?*', route => route.fulfill({ json: { ok: true, operation: { operation_id: 'first-op', first_install: true, status: 'succeeded', phase: 'complete', progress: 100 } } }));
+  await page.route('**/api/modules/instance', route => route.fulfill({ json: { ok: true, instance: 'old' } }));
+  let restartCount = 0;
+  let release;
+  const pending = new Promise(resolve => { release = resolve; });
+  await page.route('**/api/modules/restart', async route => { restartCount += 1; await pending; await route.fulfill({ status: 503, json: { ok: false, error: 'Недоступно' } }); });
+  try {
+    await page.goto('/');
+    const menu = await openServiceMenu(page);
+    await engineSwitch(menu, 'mihomo').click();
+    await page.locator('#core-modal [data-core-source][data-core-engine="mihomo"]').getByRole('button', { name: 'Установить 1.19.20' }).click();
+    await page.locator('#mihomo-core-install-modal').getByRole('button', { name: 'Установить', exact: true }).click();
+    await expect.poll(() => restartCount).toBe(1);
+    const installButton = page.locator('#mihomo-core-install-modal [data-core-source-action="restart-panel"]');
+    const mainButton = page.locator('#core-modal [data-core-engine="mihomo"] [data-core-source-action="restart-panel"]');
+    await expect(installButton).toBeDisabled();
+    await expect(mainButton).toBeDisabled();
+    await mainButton.evaluate(el => el.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+    expect(restartCount).toBe(1);
+  } finally { release(); }
+  await expect(page.locator('#mihomo-core-install-modal [data-core-source-action="restart-panel"]')).toBeEnabled();
+});
+
+test('first installation defers automatic restart while edits are unsaved', async ({ page }) => {
+  await serveCores(page, { cores: ['xray'] });
+  await page.route('**/api/mihomo/core-profiles', route => route.fulfill({ json: { ok: true, data: {
+    state: { selected_profile_id: 'official', last_status: 'idle' },
+    profiles: [{ profile_id: 'official', display_name: 'Official', release: { installable: true, stable: { tag: 'v1.19.20' } } }], platform: {},
+  } } }));
+  await page.route('**/api/mihomo/core-install/prepare', route => route.fulfill({ json: { ok: true, confirmation: { confirmation_id: 'first', first_install: true, profile: {}, release: {} } } }));
+  await page.route('**/api/mihomo/core-install/apply', route => route.fulfill({ json: { ok: true, operation: { operation_id: 'first-op' } } }));
+  await page.route('**/api/mihomo/core-install/status?*', route => route.fulfill({ json: { ok: true, operation: { operation_id: 'first-op', first_install: true, status: 'succeeded', phase: 'complete', progress: 100 } } }));
+  let restartCount = 0;
+  await page.route('**/api/modules/restart', route => { restartCount += 1; return route.fulfill({ json: { ok: true } }); });
+  await page.goto('/');
+  await page.waitForFunction(() => Boolean(window.XKeen?.ui?.configDirty));
+  const menu = await openServiceMenu(page);
+  await engineSwitch(menu, 'mihomo').click();
+  await page.locator('#core-modal [data-core-source][data-core-engine="mihomo"]').getByRole('button', { name: 'Установить 1.19.20' }).click();
+  await page.evaluate(() => window.XKeen.ui.configDirty.setDirty('file-manager', 'test-unsaved', true, { scopeLabel: 'Файлы' }));
+  await page.locator('#mihomo-core-install-modal').getByRole('button', { name: 'Установить', exact: true }).click();
+  await expect(page.locator('#mihomo-core-install-modal [data-core-source-action="restart-panel"]')).toBeEnabled();
+  await page.waitForTimeout(2000);
+  expect(restartCount).toBe(0);
+});
+
+test('core detection does not reload the page while first installation is finishing', async ({ page }) => {
+  await serveCores(page, { cores: ['xray'] });
+  let installed = false;
+  let reads = 0;
+  await page.route('**/api/xkeen/core', route => { reads += 1; return route.fulfill({ json: { ok: true, cores: installed ? ['xray', 'mihomo'] : ['xray'], currentCore: 'xray' } }); });
+  await page.route('**/api/mihomo/core-profiles', route => route.fulfill({ json: { ok: true, data: {
+    state: { selected_profile_id: 'official', last_status: 'idle' },
+    profiles: [{ profile_id: 'official', display_name: 'Official', release: { installable: true, stable: { tag: 'v1.19.20' } } }], platform: {},
+  } } }));
+  await page.route('**/api/mihomo/core-install/prepare', route => route.fulfill({ json: { ok: true, confirmation: { confirmation_id: 'first', first_install: true, profile: {}, release: {} } } }));
+  await page.route('**/api/mihomo/core-install/apply', route => { installed = true; return route.fulfill({ json: { ok: true, operation: { operation_id: 'first-op' } } }); });
+  let finishInstall;
+  const pending = new Promise(resolve => { finishInstall = resolve; });
+  await page.route('**/api/mihomo/core-install/status?*', async route => { await pending; await route.fulfill({ json: { ok: true, operation: { operation_id: 'first-op', first_install: true, status: 'succeeded', phase: 'complete', progress: 100 } } }); });
+  let instance = 'old';
+  await page.route('**/api/modules/instance', route => route.fulfill({ json: { ok: true, instance } }));
+  await page.route('**/api/modules/restart', route => { instance = 'new'; return route.fulfill({ json: { ok: true, restart_requested: true } }); });
+  try {
+    await page.goto('/');
+    const menu = await openServiceMenu(page);
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await page.waitForTimeout(3000);
+    await engineSwitch(menu, 'mihomo').click();
+    await page.locator('#core-modal [data-core-source][data-core-engine="mihomo"]').getByRole('button', { name: 'Установить 1.19.20' }).click();
+    await page.locator('#mihomo-core-install-modal').getByRole('button', { name: 'Установить', exact: true }).click();
+    await expect.poll(() => installed).toBe(true);
+    const before = reads;
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect.poll(() => reads).toBeGreaterThan(before);
+    await page.waitForTimeout(1500);
+    await expect(page.locator('#mihomo-core-install-modal')).toBeVisible();
+  } finally { finishInstall(); }
+  await expect(page.locator('#mihomo-core-install-modal')).toBeHidden({ timeout: 10000 });
 });
 
 test('an open dialog reconciles a core installed after its initial list was read', async ({ page }) => {
@@ -393,7 +528,6 @@ test('first installation confirmation shows restart wait while the request is pe
   await dialog.getByRole('button', { name: 'Установить', exact: true }).click();
   const button = dialog.locator('[data-core-source-action="restart-panel"]');
   try {
-    await button.click();
     await expect(button).toContainText('Перезапускаем');
     await expect(dialog.locator('[data-core-restart-elapsed]')).toContainText('Прошло 1 с', { timeout: 4000 });
   } finally { finishRestart(); }

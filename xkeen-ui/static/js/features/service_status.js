@@ -1585,7 +1585,10 @@ let serviceStatusModuleApi = null;
       const version = _coreVersions[value] || '';
       // An engine without a binary and without its module is one the owner
       // does not use: the switch leaves it out instead of listing it absent.
-      const unused = !isCurrent && !installed && _installedCores !== null && !coreHasManagementModule(value);
+      const awaitingCore = Boolean(document.querySelector(
+        `#core-modal [data-core-source][data-core-engine="${value}"][data-first-install="true"]`,
+      ));
+      const unused = !isCurrent && !installed && _installedCores !== null && !coreHasManagementModule(value) && !awaitingCore;
       btn.hidden = unused;
       btn.setAttribute('aria-pressed', String(isCurrent));
       btn.classList.toggle('is-absent', !installed);

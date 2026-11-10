@@ -24,6 +24,7 @@ let coreUiPendingMessage = '';
 let coreUiLastCheckAt = 0;
 let coreUiWatchInited = false;
 let coreUiLiveTopologyInitialized = false;
+const coreFirstInstallPending = new Set();
 
 function getCoreHttp() {
   return getXkeenCoreHttpApi();
@@ -91,7 +92,7 @@ function notifyPanelInfo(message) {
 export function hasPanelUnsavedChanges() {
   try {
     const dirtyApi = getXkeenConfigDirtyApi();
-    if (dirtyApi && typeof dirtyApi.anyDirty === 'function' && dirtyApi.anyDirty(['routing', 'inbounds', 'outbounds'])) {
+    if (dirtyApi && typeof dirtyApi.anyDirty === 'function' && dirtyApi.anyDirty()) {
       return true;
     }
   } catch (error) {}
@@ -300,6 +301,9 @@ async function checkCoreUiTopology(reason) {
     const prevCores = coreUiKnownDetectedCores.slice();
     const nextSig = coreListSignature(nextCores);
     if (nextSig !== coreUiKnownSignature) {
+      // The binary can appear before its installation has finished. Do not
+      // reload the page while the owning operation is completing/restarting.
+      if (coreFirstInstallPending.size) return;
       coreUiKnownDetectedCores = nextCores.slice();
       coreUiKnownSignature = nextSig;
       void handleCoreUiTopologyChange(prevCores, nextCores);
@@ -332,6 +336,26 @@ export function initPanelCoreUiAutoDetect() {
   coreUiWatchInited = true;
 
   wireCoreUiRefreshButton();
+
+  document.addEventListener('xkeen:first-core-install-start', (event) => {
+    const engine = String(event.detail?.engine || '');
+    if (engine) coreFirstInstallPending.add(engine);
+  });
+  document.addEventListener('xkeen:first-core-install-finish', (event) => {
+    const engine = String(event.detail?.engine || '');
+    if (!engine || !coreFirstInstallPending.has(engine)) return;
+    if (!event.detail?.succeeded) {
+      coreFirstInstallPending.delete(engine);
+      scheduleCoreUiWatch(0);
+      return;
+    }
+    if (hasPanelUnsavedChanges()) {
+      notifyPanelInfo('Сохраните изменения и перезапустите панель для подключения модуля.');
+      return;
+    }
+    const root = document.querySelector(`[data-core-source][data-core-engine="${engine}"]`);
+    root?.dispatchEvent(new CustomEvent('xkeen:auto-restart-after-core-install'));
+  });
 
   document.addEventListener('visibilitychange', () => {
     try {
