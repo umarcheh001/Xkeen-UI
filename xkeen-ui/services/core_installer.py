@@ -256,6 +256,8 @@ class CoreInstaller:
                 "phase": "download",
                 "phase_label": _PHASE_LABELS["download"],
                 "progress": _PHASE_PROGRESS["download"],
+                "downloaded_bytes": 0,
+                "total_bytes": 0,
                 "error": None,
                 "started_at": time.time(),
                 "finished_at": None,
@@ -443,7 +445,14 @@ class CoreInstaller:
                 raise CoreInstallError("binary_path_missing", "Не найден путь к бинарному файлу ядра.")
             current_phase = "download"
             self._phase(operation_id, engine_id, "download")
-            payload = self.downloader(str(release["asset"]["url"]), timeout_s=self.resolve_timeout_s)
+            def on_download_progress(done: int, total: int) -> None:
+                progress = 8 + min(19, int(20 * done / total)) if total > 0 else 8
+                self._set_operation(operation_id, downloaded_bytes=done, total_bytes=total, progress=progress)
+
+            if self.downloader == self._download:
+                payload = self.downloader(str(release["asset"]["url"]), timeout_s=self.resolve_timeout_s, on_progress=on_download_progress)
+            else:
+                payload = self.downloader(str(release["asset"]["url"]), timeout_s=self.resolve_timeout_s)
             if not isinstance(payload, (bytes, bytearray)):
                 raise CoreInstallError("download_failed", "Источник вернул некорректный файл.")
             current_phase = "verify"
@@ -712,11 +721,23 @@ class CoreInstaller:
         raise CoreInstallError("binary_missing", "В архиве нет бинарного файла ядра.")
 
     @staticmethod
-    def _download(url: str, *, timeout_s: float) -> bytes:
+    def _download(url: str, *, timeout_s: float, on_progress: Callable[[int, int], None] | None = None) -> bytes:
         import urllib.request
 
         with urllib.request.urlopen(str(url), timeout=float(timeout_s)) as response:
-            return response.read()
+            try:
+                total = max(0, int(response.headers.get("Content-Length") or 0))
+            except (TypeError, ValueError):
+                total = 0
+            chunks = io.BytesIO()
+            while True:
+                chunk = response.read(64 * 1024)
+                if not chunk:
+                    break
+                chunks.write(chunk)
+                if on_progress:
+                    on_progress(chunks.tell(), total)
+            return chunks.getvalue()
 
     @staticmethod
     def _run_command(command: list[str], *, timeout_s: float) -> tuple[int, str]:

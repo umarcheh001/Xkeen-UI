@@ -414,6 +414,7 @@ export function initCoreSource(root) {
   let operationStatus = 'idle';
   let refreshGeneration = 0;
   let restartPending = false;
+  let downloadSample = null;
   const coreIsInstalled = () => root.dataset.coreInstalled !== 'false' || Boolean(data?.state?.detected_version);
 
   const progressPanel = installModal?.querySelector('[data-core-install-progress]');
@@ -439,14 +440,34 @@ export function initCoreSource(root) {
     const label = String(((firstInstall || inactiveInstall) && steps.find(([id]) => id === phase)?.[1]) || operation.phase_label || steps.find(([id]) => id === phase)?.[1] || 'Установка ядра');
     const progress = Number.isFinite(Number(operation.progress)) ? Math.max(0, Math.min(100, Number(operation.progress))) : 0;
     const currentIndex = steps.findIndex(([id]) => id === phase);
+    let downloadNote = '';
+    const done = Number(operation.downloaded_bytes);
+    const total = Number(operation.total_bytes);
+    if (status === 'running' && phase === 'download' && operation.downloaded_bytes != null && Number.isFinite(done) && done >= 0) {
+      const now = Date.now();
+      const id = String(operation.operation_id || activeOperationId || '');
+      const previous = downloadSample?.id === id ? downloadSample : null;
+      const speed = previous && now > previous.at && done > previous.bytes ? (done - previous.bytes) * 1000 / (now - previous.at) : 0;
+      downloadSample = { id, at: now, bytes: done };
+      const mb = value => (value / 1048576).toFixed(1).replace('.', ',');
+      const parts = [Number.isFinite(total) && total > 0 ? `${mb(done)} из ${mb(total)} МБ` : `${mb(done)} МБ`];
+      if (speed > 0) {
+        parts.push(`${(speed * 8 / 1000000).toFixed(1).replace('.', ',')} Мбит/с`);
+        if (Number.isFinite(total) && total > done) parts.push(`осталось около ${Math.max(1, Math.round((total - done) / speed))} с`);
+      }
+      downloadNote = parts.join(' · ');
+    } else {
+      downloadSample = null;
+    }
     operationStatus = status;
     progressPanel.hidden = false;
     progressPanel.setAttribute('aria-busy', status === 'running' ? 'true' : 'false');
     if (progressBar) progressBar.value = progress;
     text(progressPercent, `${Math.round(progress)}%`);
     text(progressPhase, label);
-    text(progressNote, status === 'running' ? 'Окно можно закрыть, операция продолжится на роутере.' : (status === 'succeeded' ? (firstInstall || inactiveInstall ? 'Ядро установлено; текущая служба не перезапускалась.' : 'Новая версия прошла проверку и запущена.') : (firstInstall ? 'Установка не завершена.' : 'Предыдущая версия сохранена или восстановлена.')));
+    text(progressNote, status === 'running' ? (downloadNote || 'Окно можно закрыть, операция продолжится на роутере.') : (status === 'succeeded' ? (firstInstall || inactiveInstall ? 'Ядро установлено; текущая служба не перезапускалась.' : 'Новая версия прошла проверку и запущена.') : (firstInstall ? 'Установка не завершена.' : 'Предыдущая версия сохранена или восстановлена.')));
     if (progressSteps) {
+      progressSteps.style.setProperty('--xk-core-step-count', String(steps.length));
       progressSteps.replaceChildren();
       steps.forEach(([id, stepLabel], index) => {
         const item = document.createElement('li');
@@ -460,6 +481,7 @@ export function initCoreSource(root) {
 
   const showConfirmation = () => {
     operationStatus = 'idle';
+    downloadSample = null;
     if (progressPanel) {
       progressPanel.hidden = true;
       progressPanel.setAttribute('aria-busy', 'false');

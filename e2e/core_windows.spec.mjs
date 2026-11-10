@@ -273,6 +273,70 @@ test('first installation restarts the panel and reloads after the new process st
   await expect(dialog).toBeHidden({ timeout: 10000 });
 });
 
+test('core download shows measured bytes and speed and distributes five steps', async ({ page }) => {
+  await serveCores(page, { cores: ['xray'] });
+  await page.route('**/api/mihomo/core-profiles', route => route.fulfill({ json: { ok: true, data: {
+    state: { selected_profile_id: 'official', last_status: 'idle' },
+    profiles: [{ profile_id: 'official', display_name: 'Official', release: { installable: true, stable: { tag: 'v1.19.20' } } }], platform: {},
+  } } }));
+  await page.route('**/api/mihomo/core-install/prepare', route => route.fulfill({ json: { ok: true, confirmation: { confirmation_id: 'first', first_install: true, profile: {}, release: {} } } }));
+  await page.route('**/api/mihomo/core-install/apply', route => route.fulfill({ json: { ok: true, operation: { operation_id: 'download-op', first_install: true, status: 'running', phase: 'download', progress: 8 } } }));
+  let polls = 0;
+  let release;
+  let releaseThird;
+  const later = new Promise(resolve => { release = resolve; });
+  const third = new Promise(resolve => { releaseThird = resolve; });
+  await page.route('**/api/mihomo/core-install/status?*', async route => {
+    polls += 1;
+    if (polls > 1) await later;
+    if (polls > 2) await third;
+    await route.fulfill({ json: { ok: true, operation: { operation_id: 'download-op', first_install: true, status: 'running', phase: 'download', progress: 12, downloaded_bytes: (polls === 1 ? 1 : 3) * 1048576, total_bytes: polls > 2 ? 0 : 8 * 1048576 } } });
+  });
+  try {
+    await page.goto('/');
+    const menu = await openServiceMenu(page);
+    await engineSwitch(menu, 'mihomo').click();
+    await page.locator('#core-modal [data-core-source][data-core-engine="mihomo"]').getByRole('button', { name: 'Установить 1.19.20' }).click();
+    const dialog = page.locator('#mihomo-core-install-modal');
+    await dialog.getByRole('button', { name: 'Установить', exact: true }).click();
+    const note = dialog.locator('[data-core-install-progress-note]');
+    await expect(note).toContainText('1,0 из 8,0 МБ');
+    await expect(note).not.toContainText('Мбит/с');
+    const geometry = await dialog.locator('[data-core-install-steps]').evaluate(el => ({ box: el.getBoundingClientRect().width, steps: [...el.children].map(node => node.getBoundingClientRect().width) }));
+    expect(geometry.steps).toHaveLength(5);
+    expect(geometry.steps.reduce((a, b) => a + b, 0)).toBeGreaterThan(geometry.box * 0.9);
+    release();
+    await expect(note).toContainText('3,0 из 8,0 МБ');
+    await expect(note).toContainText('Мбит/с');
+    releaseThird();
+    await expect(note).toHaveText('3,0 МБ');
+  } finally { release(); releaseThird(); }
+});
+
+test('active Xray update uses seven full-width steps and stays readable on mobile', async ({ page }) => {
+  await serveCores(page, { cores: ['xray', 'mihomo'] });
+  await page.route('**/api/xray/core-profiles', route => route.fulfill({ json: { ok: true, data: {
+    state: { selected_profile_id: 'official', detected_version: '26.9.9', last_status: 'idle' },
+    profiles: [{ profile_id: 'official', display_name: 'Official', release: { installable: true, stable: { tag: 'v26.11.9' } } }], platform: {},
+  } } }));
+  await page.route('**/api/xray/core-install/prepare', route => route.fulfill({ json: { ok: true, confirmation: { confirmation_id: 'update', first_install: false, profile: {}, release: {} } } }));
+  await page.route('**/api/xray/core-install/apply', route => route.fulfill({ json: { ok: true, operation: { operation_id: 'update-op', status: 'running', phase: 'download', progress: 8 } } }));
+  await page.route('**/api/xray/core-install/status?*', route => route.fulfill({ json: { ok: true, operation: { operation_id: 'update-op', status: 'running', phase: 'download', progress: 12, downloaded_bytes: 1048576, total_bytes: 0 } } }));
+  await page.goto('/');
+  const menu = await openServiceMenu(page);
+  await engineSwitch(menu, 'xray').click();
+  await page.locator('#core-modal [data-core-source][data-core-engine="xray"] [data-core-source-action="prepare"]').click();
+  const dialog = page.locator('#xray-core-install-modal');
+  await dialog.getByRole('button', { name: 'Установить', exact: true }).click();
+  await expect(dialog.locator('[data-core-install-progress-note]')).toHaveText('1,0 МБ');
+  const geometry = await dialog.locator('[data-core-install-steps]').evaluate(el => ({ box: el.getBoundingClientRect().width, steps: [...el.children].map(node => node.getBoundingClientRect().width) }));
+  expect(geometry.steps).toHaveLength(7);
+  expect(geometry.steps.reduce((a, b) => a + b, 0)).toBeGreaterThan(geometry.box * 0.9);
+  await page.setViewportSize({ width: 390, height: 800 });
+  const overflow = await dialog.locator('[data-core-install-progress]').evaluate(el => el.scrollWidth - el.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
+});
+
 test('first Xray installation also restarts the panel once and reloads it', async ({ page }) => {
   await serveCores(page, { cores: ['mihomo'], current: 'mihomo' });
   await page.route('**/api/xray/core-profiles', route => route.fulfill({ json: { ok: true, data: {
@@ -530,6 +594,9 @@ test('first installation confirmation shows restart wait while the request is pe
   try {
     await expect(button).toContainText('Перезапускаем');
     await expect(dialog.locator('[data-core-restart-elapsed]')).toContainText('Прошло 1 с', { timeout: 4000 });
+    const messageBox = await dialog.locator('[data-core-install-message]').boundingBox();
+    const buttonBox = await button.boundingBox();
+    expect(buttonBox.y - (messageBox.y + messageBox.height)).toBeGreaterThanOrEqual(12);
   } finally { finishRestart(); }
 });
 

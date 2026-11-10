@@ -6,6 +6,7 @@ import importlib
 import io
 import json
 import time
+import threading
 import zipfile
 
 import pytest
@@ -14,6 +15,75 @@ import pytest
 profiles = importlib.import_module("services.core_profiles")
 installer_module = importlib.import_module("services.core_installer")
 state_module = importlib.import_module("services.core_profile_state")
+
+
+@pytest.mark.parametrize("header,total", [("8", 8), (None, 0), ("invalid", 0)])
+def test_core_download_reports_chunks_and_optional_total(monkeypatch, header, total):
+    class Response:
+        headers = {} if header is None else {"Content-Length": header}
+        def __enter__(self): return self
+        def __exit__(self, *_args): pass
+        def read(self, size):
+            assert size > 0
+            return chunks.pop(0)
+
+    chunks = [b"abc", b"defgh", b""]
+    monkeypatch.setattr("urllib.request.urlopen", lambda *_args, **_kwargs: Response())
+    seen = []
+    result = installer_module.CoreInstaller._download("https://example.test/core", timeout_s=2, on_progress=lambda done, size: seen.append((done, size)))
+    assert result == b"abcdefgh"
+    assert seen == [(3, total), (8, total)]
+
+
+def test_core_install_status_exposes_live_download_bytes(tmp_path, monkeypatch):
+    install, _store, _target = _installer(tmp_path)
+    payload = _xray_archive(b"new-xray")
+    first_read = threading.Event()
+    continue_download = threading.Event()
+
+    class Response:
+        headers = {"Content-Length": str(len(payload))}
+        def __enter__(self): return self
+        def __exit__(self, *_args): pass
+        def read(self, _size):
+            if not first_read.is_set():
+                first_read.set()
+                return payload[:10]
+            assert continue_download.wait(3)
+            result = payload[10:]
+            self.read = lambda _size: b""
+            return result
+
+    monkeypatch.setattr("urllib.request.urlopen", lambda *_args, **_kwargs: Response())
+    install.downloader = install._download
+    prepared = install.prepare("xray")
+    operation_id = install.apply("xray", prepared["confirmation_id"])["operation_id"]
+    try:
+        assert first_read.wait(3)
+        deadline = time.monotonic() + 3
+        while time.monotonic() < deadline:
+            operation = install.status("xray", operation_id)
+            if operation.get("downloaded_bytes") == 10:
+                break
+            time.sleep(0.01)
+        assert operation["downloaded_bytes"] == 10
+        assert operation["total_bytes"] == len(payload)
+        assert 8 <= operation["progress"] < 28
+    finally:
+        continue_download.set()
+    assert _wait_for_terminal(install, operation_id)["status"] == "succeeded"
+
+
+def test_core_download_propagates_stream_errors(monkeypatch):
+    class Response:
+        headers = {"Content-Length": "8"}
+        def __enter__(self): return self
+        def __exit__(self, *_args): pass
+        def read(self, _size): raise OSError("connection lost")
+
+    monkeypatch.setattr("urllib.request.urlopen", lambda *_args, **_kwargs: Response())
+    with pytest.raises(OSError, match="connection lost"):
+        installer_module.CoreInstaller._download("https://example.test/core", timeout_s=2, on_progress=lambda *_args: None)
 
 
 def _xray_archive(payload: bytes) -> bytes:

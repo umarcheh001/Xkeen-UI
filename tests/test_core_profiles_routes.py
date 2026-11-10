@@ -37,6 +37,8 @@ class FakeInstaller:
             "phase": "verify",
             "phase_label": "Проверка контрольной суммы",
             "progress": 28,
+            "downloaded_bytes": 1234,
+            "total_bytes": 5678,
             "error": None,
         }
 
@@ -84,6 +86,8 @@ def test_prepare_apply_and_status_use_confirmation_contract():
     assert operation["phase"] == "verify"
     assert operation["phase_label"] == "Проверка контрольной суммы"
     assert operation["progress"] == 28
+    assert operation["downloaded_bytes"] == 1234
+    assert operation["total_bytes"] == 5678
 
 
 def test_installer_errors_remain_machine_readable():
