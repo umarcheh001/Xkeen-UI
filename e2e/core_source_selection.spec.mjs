@@ -269,7 +269,7 @@ test.describe('Curated core source selection', () => {
     await card.getByRole('button', { name: 'Источник' }).click();
     const modal = page.locator('#mihomo-core-source-modal');
     await modal.locator('input[value="prizrak-core"]').check();
-    await modal.getByRole('button', { name: 'Установить Prizrak-Core' }).click();
+    await modal.getByRole('button', { name: 'Установить 1.19.32-prizrak' }).click();
 
     await expect.poll(() => saved).toEqual({ profile_id: 'prizrak-core' });
     await expect.poll(() => prepared).toBe(true);
@@ -384,7 +384,7 @@ test.describe('Curated core source selection', () => {
     await expect(status).toHaveClass(/is-update/);
     await expect(status).toContainText('26.3.27 → 26.10.1');
     await expect(action).toHaveText('Обновить до 26.10.1');
-    await expect(action).toHaveClass(/btn-primary/);
+    await expect(action).toHaveAttribute('data-release-primary', '1');
 
     // The badge text sits on the line of its "Состояние" label.
     const [label, title] = await Promise.all([
@@ -462,7 +462,7 @@ test.describe('Curated core source selection', () => {
     await expect(uwuray).not.toContainText('Установлен');
     await expect(modal.locator('.xk-core-source-profile-details')).toHaveCount(1);
     await expect(official.locator('.xk-core-source-profile-details')).toHaveCount(1);
-    await expect(modal.getByRole('button', { name: 'Установить v26.3.27' })).toBeVisible();
+    await expect(modal.getByRole('button', { name: 'Переустановить' })).toBeVisible();
 
     // Picking another card moves the details and renames the button, and saves nothing.
     await modal.locator('input[value="uwuray"]').check();
@@ -508,13 +508,13 @@ test.describe('Curated core source selection', () => {
     await expect(pre).toHaveAttribute('aria-pressed', 'true');
     await expect(official).toContainText('v26.10.17');
     await expect(official.locator('.xk-core-source-profile-details')).toContainText('e'.repeat(64));
-    await expect(modal.getByRole('button', { name: 'Установить v26.10.17' })).toBeVisible();
+    await expect(modal.getByRole('button', { name: 'Обновить до 26.10.17' })).toBeVisible();
 
     await stable.click();
     await expect(stable).toHaveAttribute('aria-pressed', 'true');
     await expect(official.locator('.xk-core-source-profile-meta')).toContainText('v26.3.27');
     await expect(official.locator('.xk-core-source-profile-details')).toContainText('a'.repeat(64));
-    await expect(modal.getByRole('button', { name: 'Установить v26.3.27' })).toBeVisible();
+    await expect(modal.getByRole('button', { name: 'Установить 26.3.27' })).toBeVisible();
     expect(saved).toBeNull();
     await modal.getByRole('button', { name: 'Запомнить без установки' }).click();
     await expect.poll(() => saved).toEqual({ profile_id: 'official' });
@@ -538,5 +538,32 @@ test.describe('Curated core source selection', () => {
     const official = page.locator('#mihomo-core-source-modal .xk-core-source-profile').first();
     await expect(official.locator('[data-core-source-channel="official-prerelease"]')).toContainText('alpha-94b13ae');
     await expect(official.locator('.xk-core-source-profile-meta')).toContainText('alpha-94b13ae · 13.10.2026');
+  });
+
+  test('Mihomo source dialog distinguishes an installed fork from its next revision', async ({ page }) => {
+    let payload = mihomoProfiles();
+    payload.data.state = {
+      selected_profile_id: 'prizrak-core', installed_profile_id: 'prizrak-core',
+      installed_release_tag: 'v1.19.33-r11', detected_version: '1.19.33', last_status: 'idle',
+    };
+    payload.data.profiles[1].release.stable.tag = 'v1.19.33-r11';
+    payload.data.profiles[1].release.asset.name = 'prizrak-core-linux-mipsle-v1.19.33-r11.gz';
+    await page.route('**/api/mihomo/core-profiles', async (route) => route.fulfill({
+      contentType: 'application/json', body: JSON.stringify(payload),
+    }));
+    await openView(page, 'mihomo');
+    await openCoreManagement(page, 'mihomo');
+    const card = page.locator('[data-core-source][data-core-engine="mihomo"]');
+    await card.getByRole('button', { name: 'Выбрать источник' }).click();
+    const modal = page.locator('#mihomo-core-source-modal');
+    await expect(modal.locator('.xk-core-source-profile').nth(1)).toContainText('Установлен');
+    await expect(modal.locator('[data-core-source-action="choose-install"]')).toHaveText('Переустановить');
+
+    payload = clone(payload);
+    payload.data.profiles[1].release.stable.tag = 'v1.19.33-r12';
+    payload.data.profiles[1].release.asset.name = 'prizrak-core-linux-mipsle-v1.19.33-r12.gz';
+    await modal.getByRole('button', { name: 'Закрыть выбор источника' }).click();
+    await card.getByRole('button', { name: 'Выбрать источник' }).click();
+    await expect(modal.locator('[data-core-source-action="choose-install"]')).toHaveText('Обновить до 1.19.33-r12');
   });
 });

@@ -78,6 +78,27 @@ import { iconHtml } from 'xk-core/js/ui/operator_icons.js';
     return `<button type="button" class="btn-secondary fm-volume-icon-btn fm-volume-text-btn ${tone}" data-act="${action}" data-di="${di}" data-pi="${pi}" ${disabled ? 'disabled data-static-disabled="1"' : ''} title="${escape(title || label)}">${iconHtml(icons[action])}<span>${escape(label)}</span></button>`;
   }
 
+  const editableDisk = (disk) => !!(disk?.editable ?? disk?.partitionable);
+  const usablePart = (part) => !!part && !part.protected
+    && !(part.used_by || []).some((item) => item !== 'cifs')
+    && ['mounted', 'unmounted', 'unsupported'].includes(part.state);
+  // Unmounted contents are checked again by the server before any table changes.
+  const emptyCandidate = (part) => usablePart(part) && (part.empty
+    || part.state === 'unmounted' || (part.state === 'unsupported' && !part.uuid && !part.fstype));
+  const geometryKnown = (part) => Number.isInteger(part?.start_sector) && Number.isInteger(part?.end_sector);
+
+  function mergeCandidates(disk, part) {
+    if (!emptyCandidate(part) || !geometryKnown(part)) return [];
+    const ordered = [...disk.partitions].sort((a, b) => a.start_sector - b.start_sector);
+    const anchor = ordered.indexOf(part);
+    let first = anchor, last = anchor;
+    while (first > 0 && emptyCandidate(ordered[first - 1]) && geometryKnown(ordered[first - 1])
+      && ordered[first - 1].end_sector + 1 === ordered[first].start_sector) first--;
+    while (last + 1 < ordered.length && emptyCandidate(ordered[last + 1]) && geometryKnown(ordered[last + 1])
+      && ordered[last].end_sector + 1 === ordered[last + 1].start_sector) last++;
+    return ordered.slice(first, last + 1);
+  }
+
   function render() {
     const box = el('fm-volumes-list');
     if (!box) return;
@@ -95,10 +116,11 @@ import { iconHtml } from 'xk-core/js/ui/operator_icons.js';
           : !disk.partitionable ? 'Разметка недоступна: проверьте утилиту parted и использование накопителя'
           : 'Создать новую таблицу разделов');
       const add = partButton('add', 'Добавить', di, -1, !disk.free_ranges?.length,
-        disk.free_ranges?.length ? 'Создать раздел в свободной области' : 'Нет свободной области от 64 МиБ');
+        disk.edit_reason || (disk.free_ranges?.length ? 'Создать раздел в свободной области' : 'Нет свободной области от 64 МиБ'));
       const rows = (disk.partitions || []).map((part, pi) => {
         const mounted = part.state === 'mounted';
         const protectedPart = !!part.protected;
+        const structureEditable = editableDisk(disk) && geometryKnown(part);
         const working = ['formatting', 'checking', 'mounting', 'unmounting'].includes(part.state);
         const used = part.total != null && part.free != null ? Math.max(0, part.total - part.free) : null;
         const fill = part.total ? Math.min(100, Math.round(100 * used / part.total)) : 0;
@@ -112,19 +134,21 @@ import { iconHtml } from 'xk-core/js/ui/operator_icons.js';
             protectedPart ? 'На разделе работает OPKG' : 'Удалить все данные раздела'),
           partButton('more', 'Ещё', di, pi),
         ].filter(Boolean).join('');
-        const neighbor = disk.partitions?.find((candidate) => candidate !== part && candidate?.empty && part.empty
-          && (candidate.end_sector + 1 === part.start_sector || part.end_sector + 1 === candidate.start_sector));
+        const mergeable = mergeCandidates(disk, part).length >= 2;
+        const editHint = protectedPart ? 'На разделе работает OPKG' : disk.edit_reason
+          || (!geometryKnown(part) ? 'Не удалось определить границы раздела' : '')
+          || (!usablePart(part) ? 'Раздел занят службой или другой операцией' : '');
         const secondary = [
           partButton('check', 'Проверить', di, pi, working || protectedPart || !part.check_supported,
             protectedPart ? 'На разделе работает OPKG' : 'Проверить файловую систему'),
           partButton('label', 'Метка', di, pi, working || protectedPart || mounted || !part.label_available, labelHint),
-          partButton('delete', 'Удалить', di, pi, protectedPart || mounted || !!part.used_by?.length || !disk.partitionable,
-            mounted ? 'Сначала отключите раздел' : 'Удалить раздел и все его данные'),
-          partButton('split', 'Разделить', di, pi, !disk.partitionable || !part.empty ||
+          partButton('delete', 'Удалить', di, pi, !usablePart(part) || mounted || !structureEditable,
+            editHint || (mounted ? 'Сначала отключите раздел' : 'Удалить раздел и все его данные')),
+          partButton('split', 'Разделить', di, pi, !structureEditable || !emptyCandidate(part) ||
             (part.end_sector - part.start_sector + 1) * (disk.sector_size || 512) < 128 * 1048576,
-          'Можно разделить только пустой подключённый том'),
-          partButton('merge', 'Объединить', di, pi, !disk.partitionable || !neighbor,
-            'Можно объединить соседние пустые тома'),
+          editHint || 'Можно разделить пустой том от 128 МиБ. Содержимое отключённого тома будет проверено.'),
+          partButton('merge', 'Объединить', di, pi, !structureEditable || !mergeable,
+            editHint || 'Выбрать соседние пустые разделы для объединения'),
         ].join('');
         return `<tr>
           <td><strong>${escape(part.label || part.partition_id)}</strong><small>${escape(part.partition_id)} · ${escape(part.uuid)}</small>${part.label_pending ? '<small class="fm-volume-pending">Имя в прошивке обновится после переподключения USB</small>' : ''}</td>
@@ -137,7 +161,7 @@ import { iconHtml } from 'xk-core/js/ui/operator_icons.js';
       }).join('');
       return `<section class="fm-volume-disk" aria-label="${escape(name)}">
         <div class="fm-volume-disk-head"><div><strong>${escape(name)}</strong><span>${escape(disk.id)} · ${size(disk.size)}${location ? ` · ${escape(location)}` : ''}</span></div><div class="fm-volume-disk-actions">${add}${repartition}${eject}</div></div>
-        <div class="fm-volume-table-wrap"><table class="fm-volumes-table"><thead><tr><th>Раздел</th><th>Тип</th><th>Объём</th><th>Используется</th><th>Состояние</th><th>Действия</th></tr></thead><tbody>${rows || '<tr><td colspan="6">Разделы не обнаружены.</td></tr>'}</tbody></table></div>
+        ${disk.edit_reason ? `<p class="fm-volume-label-hint">${escape(disk.edit_reason)}</p>` : ''}<div class="fm-volume-table-wrap"><table class="fm-volumes-table"><thead><tr><th>Раздел</th><th>Тип</th><th>Объём</th><th>Используется</th><th>Состояние</th><th>Действия</th></tr></thead><tbody>${rows || '<tr><td colspan="6">Разделы не обнаружены.</td></tr>'}</tbody></table></div>
       </section>`;
     }).join('');
     setBusy(busy);
@@ -301,13 +325,11 @@ import { iconHtml } from 'xk-core/js/ui/operator_icons.js';
   function openStructureAction(action, di, pi) {
     const disk = disks[di];
     const part = disk?.partitions?.[pi];
-    if (!disk?.partitionable || (action !== 'add' && !part)) return;
+    if (!editableDisk(disk) || (action !== 'add' && (!usablePart(part) || !geometryKnown(part)))) return;
     const name = [disk.manufacturer, disk.product].filter(Boolean).join(' ') || disk.id;
     const free = disk.free_ranges || [];
-    const neighbors = action === 'merge' ? disk.partitions.filter((candidate) => candidate !== part
-      && candidate.empty && part.empty && (candidate.end_sector + 1 === part.start_sector
-        || part.end_sector + 1 === candidate.start_sector)) : [];
-    if (action === 'add' && !free.length || action === 'merge' && !neighbors.length) return;
+    const candidates = action === 'merge' ? mergeCandidates(disk, part) : [];
+    if (action === 'add' && !free.length || action === 'merge' && candidates.length < 2) return;
     const formatTypes = [...new Set(disk.partitions.flatMap((item) => item.labelable_format_types || []))];
     if (!formatTypes.length) formatTypes.push('ext4');
     const firstFree = free[0];
@@ -320,14 +342,14 @@ import { iconHtml } from 'xk-core/js/ui/operator_icons.js';
     const detail = action === 'add' ? 'Новый раздел появится в свободной области.'
       : action === 'delete' ? `Раздел ${part.label || part.partition_id} и все его данные будут удалены.`
       : action === 'split' ? `Том ${part.label || part.partition_id} будет заменён двумя новыми разделами.`
-      : 'Оба тома будут заменены одним разделом. Их содержимое будет удалено.';
+      : 'Выбранные разделы будут заменены одним новым томом.';
     selected = { action, di, pi, serial: disk.serial, uuid: part?.uuid,
       expectedParts: disk.partitions.map((item) => ({ partition_id: item.partition_id, uuid: item.uuid })),
-      formatTypes, maxMiB, initialMiB, free };
+      formatTypes, maxMiB, initialMiB, free, candidates };
     const options = (index) => `<div class="fm-layout-row-options"><label>Файловая система<select data-format-type="${index}">${formatTypes.map((type) => `<option value="${escape(type)}">${escape(type.toUpperCase())}</option>`).join('')}</select></label><label>Метка тома<input data-volume-label="${index}" value="DATA${index + 1}" maxlength="30" required autocomplete="off"></label></div>`;
     const range = `<div class="fm-layout-row-controls"><input type="range" data-structure-range min="64" max="${maxMiB}" step="16" value="${initialMiB}" aria-label="Размер первого раздела"><label>ГБ<input type="number" data-structure-size min="0.0625" max="${(maxMiB / 1024).toFixed(3)}" step="any" value="${(initialMiB / 1024).toFixed(2)}" required></label></div>`;
     const region = action === 'add' ? `<label class="fm-structure-field">Свободная область<select name="start_sector">${free.map((item) => `<option value="${item.start_sector}">${size(item.size_bytes)} · сектор ${item.start_sector}</option>`).join('')}</select></label>` : '';
-    const neighbor = action === 'merge' ? `<label class="fm-structure-field">Соседний пустой том<select name="other_id">${neighbors.map((item) => `<option value="${escape(item.partition_id)}">${escape(item.label || item.partition_id)} · ${size(item.total)}</option>`).join('')}</select></label>` : '';
+    const neighbor = action === 'merge' ? `<fieldset class="fm-merge-parts"><legend>Разделы для объединения</legend>${candidates.map((item) => `<label><input type="checkbox" name="merge_id" value="${escape(item.partition_id)}" ${item === part ? 'checked disabled data-static-disabled="1"' : ''}><span>${escape(item.label || item.partition_id)} · ${size((item.end_sector - item.start_sector + 1) * (disk.sector_size || 512))}</span></label>`).join('')}<small data-merge-summary></small></fieldset>` : '';
     const editor = action === 'delete' ? '' : `<div class="fm-layout-editor">${region}${neighbor}
       ${action === 'split' || action === 'add' ? `<div class="fm-layout-row"><div class="fm-layout-row-head"><i class="fm-layout-swatch is-accent"></i><strong>${action === 'add' ? 'Новый раздел' : 'Раздел 1'}</strong><output data-structure-output>${size(initialMiB * 1048576)}</output></div>${range}${options(0)}</div>` : `<div class="fm-layout-row">${options(0)}</div>`}
       ${action === 'split' ? `<div class="fm-layout-row"><div class="fm-layout-row-head"><i class="fm-layout-swatch is-success"></i><strong>Раздел 2</strong><output data-structure-remainder></output></div><span class="fm-layout-remainder">Оставшееся место</span>${options(1)}</div>` : ''}
@@ -335,9 +357,29 @@ import { iconHtml } from 'xk-core/js/ui/operator_icons.js';
     el('fm-volumes-modal')?.classList.add('fm-volumes-editing');
     const panel = el('fm-volumes-action');
     panel.innerHTML = `<form id="fm-volume-form" class="fm-layout-form"><div class="fm-layout-heading"><button type="button" class="btn-secondary btn-icon fm-volume-icon-btn" data-close-action="1" aria-label="Назад" title="Назад">${iconHtml('back')}</button><div><strong>${titles[action]}</strong><span>${escape(name)} · ${escape(disk.id)}</span></div></div>
-      ${editor}<div class="fm-layout-bottom"><div class="fm-layout-warning">${iconHtml('alert')}<span>${escape(detail)}</span></div><label>Для подтверждения введите ${escape(disk.id)}<input name="confirmation" autocomplete="off" required></label><div class="fm-layout-footer"><button type="button" class="btn-secondary" data-close-action="1">Отмена</button><button type="submit" class="btn-secondary fm-volume-commit ${action === 'add' ? '' : 'is-danger'}">${iconHtml(action === 'delete' ? 'trash' : action === 'add' ? 'file-add' : 'list-details')}<span>${titles[action]}</span></button></div></div></form>`;
+      ${editor}<div class="fm-layout-bottom"><div class="fm-layout-warning">${iconHtml('alert')}<span>${escape(detail)}${['split', 'merge'].includes(action) ? ' Отключённые тома будут временно подключены для проверки пустоты. Если найдены файлы, операция отменится.' : ''}</span></div><label>Для подтверждения введите ${escape(disk.id)}<input name="confirmation" autocomplete="off" required></label><div class="fm-layout-footer"><button type="button" class="btn-secondary" data-close-action="1">Отмена</button><button type="submit" class="btn-secondary fm-volume-commit ${action === 'add' ? '' : 'is-danger'}">${iconHtml(action === 'delete' ? 'trash' : action === 'add' ? 'file-add' : 'list-details')}<span>${titles[action]}</span></button></div></div></form>`;
     panel.classList.remove('hidden');
     syncStructureEditor();
+    syncMergeEditor();
+  }
+
+  function selectedMergeParts() {
+    return selected.candidates.filter((part) => el('fm-volumes-action').querySelector(
+      `[name="merge_id"][value="${part.partition_id}"]`)?.checked);
+  }
+
+  function syncMergeEditor() {
+    if (selected?.action !== 'merge') return;
+    const parts = selectedMergeParts();
+    const contiguous = parts.length >= 2 && parts.every((part, index) => !index
+      || parts[index - 1].end_sector + 1 === part.start_sector);
+    const panel = el('fm-volumes-action');
+    const button = panel.querySelector('[type="submit"]');
+    button.dataset.staticDisabled = contiguous ? '0' : '1';
+    button.disabled = busy || !contiguous;
+    panel.querySelector('[data-merge-summary]').textContent = contiguous
+      ? `Выбрано: ${parts.length} · Итоговый объём: ${size((parts.at(-1).end_sector - parts[0].start_sector + 1) * (disks[selected.di].sector_size || 512))}`
+      : 'Выберите не менее двух разделов, идущих подряд без пропусков.';
   }
 
   function syncStructureEditor() {
@@ -601,6 +643,7 @@ import { iconHtml } from 'xk-core/js/ui/operator_icons.js';
     el('fm-volumes-action')?.addEventListener('change', (event) => {
       if (event.target.matches('[name="fstype"]')) syncFormatLabel();
       if (event.target.matches('[name="start_sector"]')) selectFreeRange(Number(event.target.value));
+      if (event.target.matches('[name="merge_id"]') && !busy) syncMergeEditor();
       if (event.target.matches('[data-size-input]') && !busy) {
         setPartitionSize(Number(event.target.dataset.sizeInput), Number(event.target.value) * 1024);
       }
@@ -650,10 +693,12 @@ import { iconHtml } from 'xk-core/js/ui/operator_icons.js';
           fstype: field.value, label: event.target.querySelector(`[data-volume-label="${index}"]`).value.trim(),
         }));
         if (options.some((option) => !validLabel(option.label, option.fstype))) return;
-        const other = disk.partitions.find((item) => item.partition_id === String(form.get('other_id') || ''));
+        const mergeParts = selected.action === 'merge' ? selectedMergeParts() : [];
+        if (selected.action === 'merge' && (mergeParts.length < 2 || mergeParts.some((item, index) => index
+          && mergeParts[index - 1].end_sector + 1 !== item.start_sector))) return;
         const extra = { expected_parts: selected.expectedParts, confirm: `EDIT ${disk.id}/${disk.serial}`,
           ...(part ? { partition_id: part.partition_id, uuid: part.uuid } : {}),
-          ...(other ? { other_id: other.partition_id, other_uuid: other.uuid } : {}),
+          ...(mergeParts.length ? { merge_parts: mergeParts.map((item) => ({ partition_id: item.partition_id, uuid: item.uuid })) } : {}),
           ...(selected.action === 'add' ? { start_sector: Number(form.get('start_sector')) } : {}),
           ...(['add', 'split'].includes(selected.action)
             ? { size_mib: Number(event.target.querySelector('[data-structure-range]').value) } : {}),

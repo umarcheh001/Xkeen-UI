@@ -322,6 +322,14 @@ https://..."></textarea>
               </div>
 
               <div id="mihomo-import-status" class="status xk-mi-status hidden" role="status" aria-live="polite" aria-atomic="true"></div>
+              <section id="mihomo-import-hwid-choice" class="xk-mi-hwid-choice hidden" role="status" aria-live="polite" aria-label="Способ добавления HWID-подписки">
+                <div class="xk-mi-section-title">Подписка поддерживает HWID</div>
+                <p>Выберите способ добавления. HWID-provider будет обновляться через Mihomo; статический разбор добавит текущие узлы в <code>proxies</code>.</p>
+                <div class="xk-mi-hwid-choice-actions">
+                  <button type="button" id="mihomo-import-use-hwid-btn" class="btn-primary btn-compact">{{ op_icon('hwid') }}<span>Настроить HWID</span></button>
+                  <button type="button" id="mihomo-import-parse-static-btn" class="btn-secondary btn-compact">{{ op_icon('format') }}<span>Разобрать на узлы</span></button>
+                </div>
+              </section>
               <p id="mihomo-import-target-hint" class="modal-hint xk-mi-target hidden"></p>
               <button type="button" id="mihomo-import-preview-toggle" class="btn-secondary btn-compact hidden" aria-expanded="false" aria-controls="mihomo-import-preview-panel">Показать YAML</button>
 
@@ -423,7 +431,6 @@ https://..."></textarea>
             <button type="button" id="mihomo-import-review-back" class="btn-secondary btn-compact hidden">Назад</button>
             <button type="button" id="mihomo-import-review-btn" class="btn-primary btn-compact hidden">{{ op_icon('check') }}<span class="xk-action-label">Проверить изменение</span></button>
             <button type="button" id="mihomo-import-parse-btn" class="btn-primary btn-compact xk-mi-primary-action" data-tooltip="Распознать источник без сохранения и перезапуска.">{{ op_icon('format') }}<span class="xk-action-label">Распознать</span></button>
-            <button type="button" id="mihomo-import-parse-static-btn" class="btn-secondary btn-compact xk-mi-primary-action" data-tooltip="Использовать поддерживаемый static flow для подписки.">{{ op_icon('download') }}<span class="xk-action-label">Статические узлы</span></button>
             <button type="button" id="mihomo-import-insert-btn" class="btn-secondary btn-compact xk-mi-primary-action" data-tooltip="Открыть подготовленный конфиг в главном редакторе без сохранения файла." disabled>{{ op_icon('add-node') }}<span class="xk-action-label">В черновик</span></button>
             <button type="button" id="mihomo-import-save-btn" class="btn-secondary btn-compact xk-mi-primary-action hidden" data-tooltip="Проверить подготовленный конфиг, создать резервную копию и сохранить без перезапуска." disabled>{{ op_icon('save') }}<span class="xk-action-label">Сохранить</span></button>
             <button type="button" id="mihomo-import-apply-btn" class="btn-primary btn-compact xk-mi-primary-action hidden" data-tooltip="Проверить и сохранить подготовленный конфиг, затем перезапустить ядро." disabled>{{ op_icon('play') }}<span class="xk-action-label">Сохранить и применить</span></button>

@@ -42,6 +42,7 @@ _HWID_RESPONSE_HEADER_KEYS = (
     "x-hwid-limit",
     "x-hwid-max-devices-reached",
     "x-hwid-not-supported",
+    "subscription-always-hwid-enable",
 )
 _HAPP_FALLBACK_UA_ENV = "XKEEN_MIHOMO_HWID_HAPP_USER_AGENT"
 _HAPP_FALLBACK_ENABLED_ENV = "XKEEN_MIHOMO_HWID_HAPP_FALLBACK"

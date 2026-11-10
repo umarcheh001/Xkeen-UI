@@ -5,6 +5,113 @@ const TARGETS = [
   { name: 'AWG', host: 'awg.example', port: 51820, network: 'udp', protocol: 'wireguard', source: '04_outbounds.json', tls: false },
 ];
 
+async function expandFirstServer(page) {
+  const toggle = page.locator('.xk-provider-check-row-toggle').first();
+  if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
+}
+
+for (const width of [1440, 390]) {
+  test(`extended diagnostics shows repeatable stalls and port results at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 960 });
+    await page.route('**/api/provider-diagnostics/targets?core=xray', (route) => route.fulfill({ json: {
+      ok: true, targets: [{ ...TARGETS[0], proxy_ref: 'opaque-ref', proxy_index: 0 }],
+    } }));
+    let request;
+    await page.route('**/api/provider-diagnostics/advanced-probe', async (route) => {
+      request = route.request().postDataJSON();
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const stalled = { status: 'transfer_timeout', stage: 'body', bytes_received: 18000, requested_bytes: 20480, first_byte_ms: 140, last_progress_ms: 170, total_ms: 4200 };
+      return route.fulfill({ json: { ok: true, result: {
+        status: 'ok', engine: 'xray', network: 'tcp', total_ms: 26000,
+        address_results: [{ ip: '198.51.100.10', family: 'IPv4', core_status: 'ok', transport_verified: true,
+          diagnosis: { verdict: 'byte_limit_pattern', confidence: 'medium', approx_bytes: 18000, message: 'На независимых площадках повторяется остановка после похожего объёма. Есть признаки ограничения передачи; причина не подтверждена.' },
+          ports: [{ port: 443, status: 'reachable', tcp_ms: 12 }, { port: 22, status: 'reachable', tcp_ms: 10 }, { port: 8443, status: 'timeout' }],
+          tests: ['Cloudflare', 'HTTPBingo / Fly.io'].map((control) => ({ control, destination_ip: '8.8.8.8', direct: { status: 'transfer_ok', bytes_received: 262144, requested_bytes: 262144 }, size_boundary: { last_complete_bytes: 16384, first_incomplete_bytes: 20480, repeatable: true }, steps: [8192, 16384].map((size) => ({ status: 'transfer_ok', bytes_received: size, requested_bytes: size })).concat([stalled, stalled, stalled]), attempts: [stalled, stalled, stalled] })),
+        }, { ip: '2001:db8::1', family: 'IPv6', core_status: 'ok', transport_verified: false,
+          diagnosis: { verdict: 'undetermined', confidence: 'low', message: 'Передача не подтверждена.' }, ports: [{ port: 443, status: 'timeout' }], tests: [] },
+        { ip: '198.51.100.11', family: 'IPv4', core_status: 'ok', transport_verified: true,
+          diagnosis: { verdict: 'transfer_ok', confidence: 'medium', message: 'Ограничение на проверенном объёме не обнаружено.' }, ports: [], tests: [] }],
+      } } });
+    });
+    await page.goto('/');
+    await selectPanelView(page, 'routing');
+    await page.locator('[data-provider-check-core="xray"]').click();
+    await page.locator('.xk-provider-check-advanced-settings summary').click();
+    await page.locator('#provider-check-ports').fill('22,8443');
+    const button = page.getByRole('button', { name: 'Расширенная проверка', exact: true });
+    const card = page.locator('.xk-provider-check-row').first();
+    const toggle = card.locator('.xk-provider-check-row-toggle');
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await card.locator('input[type=checkbox]').uncheck();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await card.locator('input[type=checkbox]').check();
+    await toggle.focus();
+    await page.keyboard.press('Enter');
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await button.click();
+    const output = page.locator('.xk-provider-check-advanced-result');
+    await expect(output).toContainText('Остановка около 17,6 КБ');
+    await expect(output).toContainText('IPv6 · 2001:db8::1');
+    await expect(output).toContainText('TCP :8443');
+    await expect(output).toContainText('причина не подтверждена');
+    await expect(output.locator('.xk-provider-check-blocking-probability.is-medium')).toHaveText('Вероятность блокировки: средняя');
+    await expect(output.locator('.xk-provider-check-blocking-probability.is-unknown')).toHaveText('Вероятность блокировки: не определена');
+    await expect(output.locator('.xk-provider-check-blocking-probability.is-low')).toHaveText('Вероятность блокировки: низкая');
+    await expect(output).not.toContainText('Уверенность:');
+    expect(request.ref).toBe('opaque-ref');
+    expect(request.ports).toBe('22,8443');
+    await output.getByText('Cloudflare · 8.8.8.8', { exact: true }).click();
+    await expect(output).toContainText('последние данные: 170 мс');
+    await expect(output).toContainText('Пройденный размер');
+    await expect(output).toContainText('20 КБ · повторился');
+    await expect(output).toContainText('Через узел · 20 КБ · повтор');
+    await expect(button).toBeEnabled();
+    const overflow = await output.evaluate((element) => element.scrollWidth > element.clientWidth + 1);
+    expect(overflow).toBe(false);
+    await output.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `test-results/provider-diagnostics-extended-${width}.png`, fullPage: false });
+    let profileRequest;
+    await page.route('**/api/provider-diagnostics/tls-profile', (route) => {
+      profileRequest = route.request().postDataJSON();
+      return route.fulfill({ json: { ok: true, result: {
+        status: 'ok', engine: 'Xray', control: 'speed.cloudflare.com', server_ip: '198.51.100.10',
+        configured: { fingerprint: 'safari', server_name: 'front.example.org' },
+        verdict: 'profile_sensitive', message: 'Разница между TLS-профилями повторилась в двух раундах.',
+        profiles: ['configured', 'chrome', 'firefox'].map((fingerprint) => ({ fingerprint, status: fingerprint === 'configured' ? 'transfer_timeout' : 'transfer_ok', attempts: Array.from({ length: 2 }, () => ({ status: fingerprint === 'configured' ? 'transfer_timeout' : 'transfer_ok', requested_bytes: 8192, bytes_received: fingerprint === 'configured' ? 0 : 8192, total_ms: 600 })) })),
+      } } });
+    });
+    await page.getByRole('button', { name: 'TLS-профиль ядра', exact: true }).click();
+    const profiles = page.locator('.xk-provider-check-tls-profile');
+    await expect(profiles).toContainText('Исходный профиль · 2');
+    await expect(profiles).toContainText('firefox · 2');
+    await expect(profiles).toContainText('fingerprint: safari');
+    await expect(profiles).toContainText('198.51.100.10');
+    expect(profileRequest).toEqual({ ref: 'opaque-ref', index: 0 });
+    const advancedSection = output.locator('..');
+    const profileSection = profiles.locator('..');
+    await expect(advancedSection).not.toHaveAttribute('open');
+    await expect(profileSection).toHaveAttribute('open');
+    await profileSection.locator(':scope > summary').click();
+    await expect(profileSection).not.toHaveAttribute('open');
+    await expect(profileSection.locator('.xk-provider-check-section-preview')).toContainText('Разница между TLS-профилями');
+    await toggle.click();
+    await expect(profiles).toBeHidden();
+    await expect(card.locator('input[type=checkbox]')).toBeChecked();
+    await toggle.click();
+    await expect(profileSection).not.toHaveAttribute('open');
+    await advancedSection.locator(':scope > summary').click();
+    await expect(output).toBeVisible();
+    await expect(output).toContainText('Остановка около 17,6 КБ');
+    await profileSection.locator(':scope > summary').click();
+    await page.locator('#provider-check-modal').click({ position: { x: 2, y: 2 } });
+    await page.waitForTimeout(150);
+    await expect(page.locator('#provider-check-modal')).toBeVisible();
+    expect(await profiles.evaluate((element) => element.scrollWidth > element.clientWidth + 1)).toBe(false);
+    await profiles.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `test-results/provider-diagnostics-tls-profile-${width}.png`, fullPage: false });
+  });
+}
+
 async function expectCompactDetailActions(page) {
   const geometry = await page.locator('.xk-provider-check-details').first().locator('.xk-provider-check-detail-actions').evaluate((container) => {
     const frame = container.getBoundingClientRect();
@@ -96,14 +203,15 @@ test('Xray toolbar opens server diagnostics and runs selected checks', async ({ 
   expect(summaryLayout.stats.left).toBeGreaterThan(summaryLayout.source.right);
   expect(Math.max(...summaryLayout.cards.map((card) => card.top)) - Math.min(...summaryLayout.cards.map((card) => card.top))).toBeLessThan(2);
   await page.screenshot({ path: 'test-results/provider-diagnostics-summary-desktop.png', fullPage: false });
-  await page.locator('.xk-provider-check-details').first().locator('summary').click();
+  await expandFirstServer(page);
+  await page.locator('.xk-provider-check-details').first().locator(':scope > summary').click();
   await expect(page.locator('.xk-provider-check-details').first()).toContainText('DNS');
   await expect(page.locator('.xk-provider-check-details').first()).toContainText('front.example.org');
   await expect(page.locator('.xk-provider-check-details').first()).toContainText('192.0.2.10');
   await page.getByRole('button', { name: 'Сравнить TLS/SNI' }).first().click();
   await expect(page.getByRole('button', { name: 'Сравнить TLS/SNI' }).first()).toHaveClass(/is-loading/);
   await expect(page.locator('.xk-provider-check-comparison').first()).toContainText('Признаки фильтрации TLS/SNI');
-  await expect(page.locator('.xk-provider-check-comparison').first()).toContainText('Уверенность: средняя');
+  await expect(page.locator('.xk-provider-check-comparison').first().locator('.xk-provider-check-blocking-probability.is-medium')).toHaveText('Вероятность блокировки: средняя');
   await expect(page.locator('.xk-provider-check-comparison').first()).toContainText('TLS-попыток: 9');
   await expect(page.locator('.xk-provider-check-comparison').first()).toContainText('таймаут TLS');
   await expect(page.locator('.xk-provider-check-comparison-ip').first()).toContainText('198.51.100.10');
@@ -206,7 +314,8 @@ test('Mihomo diagnostics accepts manual sources on a phone', async ({ page }) =>
     statsTop: document.querySelector('#provider-check-overview').getBoundingClientRect().top,
   }));
   expect(mobileSummary.statsTop).toBeGreaterThanOrEqual(mobileSummary.sourceBottom);
-  await page.locator('.xk-provider-check-details').first().locator('summary').click();
+  await expandFirstServer(page);
+  await page.locator('.xk-provider-check-details').first().locator(':scope > summary').click();
   await page.getByRole('button', { name: 'Сравнить TLS/SNI' }).first().click();
   await expect(page.locator('.xk-provider-check-comparison').first()).toContainText('Причина не установлена');
   await page.getByRole('button', { name: 'Проверить списки' }).first().click();
@@ -233,7 +342,8 @@ test('a failed diagnostic request is not reported as a blocked server', async ({
   await expect(page.locator('.xk-provider-check-row-state.is-probe_error')).toContainText('Проверка не выполнена');
   await expect(page.locator('#provider-check-unknown-count')).toHaveText('1');
   await expect(page.locator('#provider-check-issue-count')).toHaveText('0');
-  await page.locator('.xk-provider-check-details summary').click();
+  await expandFirstServer(page);
+  await page.locator('.xk-provider-check-details > summary').click();
   await expect(page.locator('.xk-provider-check-details dt')).toHaveText('Запрос');
 });
 
@@ -253,7 +363,8 @@ test('an unverified direct route stays out of reachable and blocked counts', asy
   await expect(page.locator('.xk-provider-check-row-state.is-route_unverified')).toContainText('Прямой путь не проверен');
   await expect(page.locator('#provider-check-unknown-count')).toHaveText('1');
   await expect(page.locator('#provider-check-ok-count')).toHaveText('0');
-  await page.locator('.xk-provider-check-details summary').click();
+  await expandFirstServer(page);
+  await page.locator('.xk-provider-check-details > summary').click();
   await page.getByRole('button', { name: 'Сравнить TLS/SNI' }).click();
   await expect(page.locator('.xk-provider-check-comparison')).toContainText('Прямой путь не проверен');
 });
@@ -366,10 +477,14 @@ test('manual proxy link can be checked through the proxy before TCP checks', asy
   await page.locator('#provider-check-input').fill('vless://private@example.org:443');
   await page.locator('#provider-check-parse').click();
   const proxyButton = page.getByRole('button', { name: 'Проверить прокси' });
+  await expandFirstServer(page);
   await expect(proxyButton).toBeVisible();
   await proxyButton.click();
   await expect(proxyButton).toHaveClass(/is-loading/);
-  await expect(page.locator('.xk-provider-check-proxy-status')).toContainText('Прокси работает · 86 мс');
+  await expect(page.locator('.xk-provider-check-proxy-status')).toContainText('Короткий запрос прошёл · 86 мс');
+  await expect(page.locator('.xk-provider-check-proxy-result')).toHaveText('Прокси передал HTTPS-запрос к контрольному адресу.');
+  await expect(page.locator('.xk-provider-check-proxy-result')).toBeVisible();
+  expect(await page.locator('.xk-provider-check-proxy-result').evaluate((element) => element.parentElement.tagName)).not.toBe('DETAILS');
   await expect(page.locator('.xk-provider-check-row-state')).toContainText('Не проверен');
   await expect(page.locator('#provider-check-resource-hint')).toContainText('Ссылка подписки выше нужна только для поиска серверов');
   const resourceButton = page.getByRole('button', { name: 'Сравнить доступ' });
@@ -385,6 +500,7 @@ test('manual proxy link can be checked through the proxy before TCP checks', asy
   await expect(page.locator('#provider-check-status')).toContainText('Сравниваем доступ к kino.watch');
   finishComparison();
   await expect(page.locator('.xk-provider-check-resource-result')).toContainText('Сеть: Успешный ответ напрямую и через прокси');
+  await expect(page.locator('.xk-provider-check-resource-result .xk-provider-check-blocking-probability.is-low')).toHaveText('Вероятность блокировки: низкая');
   await expect(page.locator('.xk-provider-check-resource-result')).toContainText('Реестр сайта kino.watch: запись найдена');
   await expect(page.locator('#provider-check-status')).toContainText('Сравнение kino.watch завершено');
   await page.locator('.xk-provider-check-resource-result').scrollIntoViewIfNeeded();
@@ -392,6 +508,7 @@ test('manual proxy link can be checked through the proxy before TCP checks', asy
   comparisonStatus = 301;
   await resourceButton.click();
   await expect(page.locator('.xk-provider-check-resource-result')).toContainText('Оба пути вернули редирект; доступ к сайту не подтверждён');
+  await expect(page.locator('.xk-provider-check-resource-result .xk-provider-check-blocking-probability.is-unknown')).toHaveText('Вероятность блокировки: не определена');
   directTimedOut = true;
   await resourceButton.click();
   await expect(page.locator('.xk-provider-check-resource-result')).toContainText('Через прокси получен редирект, напрямую HTTP-ответа нет');
@@ -416,10 +533,11 @@ test('Mihomo proxy check starts the selected engine and shows its result', async
   await openMihomoConfig(page);
   await page.locator('[data-provider-check-core="mihomo"]').click();
   const proxyButton = page.getByRole('button', { name: 'Проверить прокси' });
+  await expandFirstServer(page);
   await expect(proxyButton).toHaveAttribute('data-tooltip', /Mihomo/);
   await proxyButton.click();
   await expect(proxyButton).toHaveClass(/is-loading/);
-  await expect(page.locator('.xk-provider-check-proxy-status')).toContainText('Прокси работает · 54 мс');
+  await expect(page.locator('.xk-provider-check-proxy-status')).toContainText('Короткий запрос прошёл · 54 мс');
 });
 
 test('resource comparison remains readable on a phone', async ({ page }) => {
@@ -442,6 +560,7 @@ test('resource comparison remains readable on a phone', async ({ page }) => {
   await openMihomoConfig(page);
   await page.locator('[data-provider-check-core="mihomo"]').click();
   await page.locator('#provider-check-resource-url').fill('https://kino.watch/');
+  await expandFirstServer(page);
   await page.getByRole('button', { name: 'Сравнить доступ' }).click();
   await expect(page.locator('.xk-provider-check-resource-result')).toContainText('Через прокси доступен, напрямую нет');
   expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);

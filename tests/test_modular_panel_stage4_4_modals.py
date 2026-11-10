@@ -50,7 +50,10 @@ MODAL_PARTIALS = {
         ("engine.mihomo",),
         ("mihomo-dns-modal", "mihomo-import-modal", "mihomo-proxy-tools-modal", "mihomo-validation-modal"),
     ),
-    "happ": (("integration.happ", "engine.mihomo"), ("mihomo-hwid-modal",)),
+    "happ": (
+        ("integration.happ", "engine.mihomo"),
+        ("mihomo-hwid-modal", "mihomo-hwid-help-modal"),
+    ),
     "files": (
         ("tool.files",),
         (
@@ -153,7 +156,9 @@ def test_initial_html_contains_only_modals_of_active_modules(tmp_path, monkeypat
     # Composite gates: HWID needs Mihomo, the file editor needs the editor.
     with_happ = modal_set([*MIHOMO_MINIMAL_MODULE_IDS, "integration.happ"], "mihomo-happ")
     assert "mihomo-hwid-modal" in with_happ
+    assert "mihomo-hwid-help-modal" in with_happ
     assert "mihomo-hwid-modal" not in modal_set([*XRAY_MINIMAL_MODULE_IDS, "integration.happ"], "xray-happ")
+    assert "mihomo-hwid-help-modal" not in modal_set([*XRAY_MINIMAL_MODULE_IDS, "integration.happ"], "xray-happ")
     files_only = modal_set(["core", "tool.files"], "files-only")
     assert owned("files") <= files_only and "fm-editor-modal" not in files_only
     assert "fm-editor-modal" in modal_set(["core", "tool.files", "tool.editor"], "files-editor")
@@ -184,8 +189,10 @@ def test_hwid_trigger_follows_its_modal(tmp_path, monkeypatch):
     with_happ = render_panel([*MIHOMO_MINIMAL_MODULE_IDS, "integration.happ"], tmp_path / "with")
     assert 'id="mihomo-hwid-sub-btn"' not in without
     assert 'id="mihomo-hwid-modal"' not in without
+    assert 'id="mihomo-hwid-help-modal"' not in without
     assert 'id="mihomo-hwid-sub-btn"' in with_happ
     assert 'id="mihomo-hwid-modal"' in with_happ
+    assert 'id="mihomo-hwid-help-modal"' in with_happ
 
 
 def test_stage4_4_closure_is_documented():

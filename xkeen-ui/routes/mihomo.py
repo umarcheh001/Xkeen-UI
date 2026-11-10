@@ -1023,6 +1023,10 @@ def create_mihomo_blueprint(
                     current_provider_summary
                     and current_provider_summary.get("hwid_placeholder_provider")
                 )
+                hwid_advertised = _mihomo_header_truthy(
+                    hwid_markers.get("subscription-always-hwid-enable")
+                )
+                result["hwid_supported"] = hwid_advertised
                 if _mihomo_hwid_headers_suggest_required(hwid_markers) or direct_looks_hwid_gated:
                     try:
                         info = _mh_hwid_get_device_info()
@@ -1042,6 +1046,7 @@ def create_mihomo_blueprint(
                             )
                             result["provider_headers"] = {}
                             result["provider_mode"] = "hwid_adapter"
+                            result["hwid_supported"] = True
                             result["provider_payload"] = hwid_summary
                             provider_proxies = _mihomo_provider_payload_proxy_blocks(hwid_payload)
                             if provider_proxies:

@@ -36,20 +36,20 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 | Module ID | Единиц | Размер | Routes | Background | UI surfaces | Removable |
 |---|---:|---:|---:|---:|---:|---|
-| `core` | 672 | 8.81 МБ | 107 | 4 | 37 | нет |
+| `core` | 672 | 8.82 МБ | 107 | 4 | 37 | нет |
 | `engine.xray` | 151 | 3.80 МБ | 64 | 3 | 14 | да |
-| `engine.mihomo` | 147 | 3.30 МБ | 97 | 4 | 6 | да |
+| `engine.mihomo` | 147 | 3.31 МБ | 97 | 4 | 6 | да |
 | `tool.editor` | 25 | 814.7 КБ | 0 | 0 | 2 | да |
 | `tool.terminal` | 47 | 472.0 КБ | 2 | 2 | 2 | да |
-| `tool.files` | 86 | 1.03 МБ | 42 | 1 | 1 | да |
+| `tool.files` | 86 | 1.04 МБ | 42 | 1 | 1 | да |
 | `tool.backups` | 8 | 99.8 КБ | 14 | 0 | 0 | да |
-| `integration.happ` | 22 | 319.9 КБ | 5 | 0 | 1 | да |
+| `integration.happ` | 22 | 325.0 КБ | 5 | 0 | 2 | да |
 | `tool.advanced-diagnostics` | 49 | 589.2 КБ | 16 | 0 | 1 | да |
-| `tool.server-diagnostics` | 15 | 265.4 КБ | 8 | 0 | 1 | да |
+| `tool.server-diagnostics` | 17 | 363.5 КБ | 10 | 0 | 1 | да |
 
 ## Backend routes и регистрация
 
-- Endpoint declarations: **355**.
+- Endpoint declarations: **357**.
 - Файлов с route decorators/WS dispatch: **52**.
 - Точек регистрации: **31**.
 
@@ -78,7 +78,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 - Canonical/top-level страниц: **5**.
 - Вкладок `data-view` в `panel.html`: **6**.
-- Статических modal containers в `panel.html`: **54**.
+- Статических modal containers в `panel.html`: **55**.
 - Нормализованный UTF-8 размер `panel.html`: **1.2 КБ**.
 
 Уже существующие границы, пригодные для модульной загрузки:
@@ -131,7 +131,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 | `tool.files` | `core` | 86 | `xkeen-ui/routes/fileops/__init__.py`<br>`xkeen-ui/routes/fileops/blueprint.py`<br>`xkeen-ui/routes/fileops/endpoints_http.py` |
 | `tool.files` | `engine.xray` | 1 | `xkeen-ui/routes/fs/endpoints_transfer.py` |
 | `tool.files` | `tool.backups` | 1 | `xkeen-ui/routes/fs/blueprint.py` |
-| `tool.server-diagnostics` | `core` | 15 | `xkeen-ui/routes/provider_diagnostics.py`<br>`xkeen-ui/services/provider_diagnostics.py`<br>`tests/test_provider_diagnostics.py` |
+| `tool.server-diagnostics` | `core` | 17 | `xkeen-ui/routes/provider_diagnostics.py`<br>`xkeen-ui/services/provider_diagnostics.py`<br>`xkeen-ui/services/provider_diagnostics_extended.py` |
 | `tool.server-diagnostics` | `engine.mihomo` | 1 | `xkeen-ui/services/provider_diagnostics.py` |
 | `tool.server-diagnostics` | `engine.xray` | 1 | `xkeen-ui/services/provider_diagnostics.py` |
 | `tool.terminal` | `core` | 47 | `xkeen-ui/routes/commands.py`<br>`xkeen-ui/services/ws_pty.py`<br>`tests/test_ws_pty_replay.py` |

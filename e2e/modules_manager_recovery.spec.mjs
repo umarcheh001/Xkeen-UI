@@ -304,7 +304,7 @@ test.describe('Module manager recovery and guards', () => {
         return route.fulfill({ json: availableSnapshot });
       });
       await page.goto('/modules');
-      await expect(page.getByRole('button', { name: 'Обновить панель' })).toBeEnabled();
+      await expect(page.locator('[data-operation="panel-update"]')).toBeEnabled();
       await page.evaluate(async () => {
         const { getModulesController } = await import('/static/js/pages/modules.init.js');
         getModulesController().deactivate();
@@ -318,7 +318,7 @@ test.describe('Module manager recovery and guards', () => {
         await getModulesController().activate();
       });
       await expect(page.locator('#modules-operation-status')).toContainText('Прервана');
-      await expect(page.getByRole('button', { name: 'Обновить панель' })).toBeEnabled();
+      await expect(page.locator('[data-operation="panel-update"]')).toBeEnabled();
       expect(statusCalls).toBeGreaterThan(beforeReturn);
       expect(catalogCalls).toBe(0);
     });
@@ -341,7 +341,7 @@ test.describe('Module manager recovery and guards', () => {
     await expect(page.locator('#modules-operation-status').getByRole('button')).toHaveCount(1);
     await expect(page.locator('#modules-operation-status').getByRole('button', { name: 'Скрыть отчёт об операции' })).toBeVisible();
     await expect(page.getByRole('switch', { name: 'Включить Mihomo' })).toBeEnabled();
-    await expect(page.getByRole('button', { name: 'Обновить панель' })).toBeEnabled();
+    await expect(page.locator('[data-operation="panel-update"]')).toBeEnabled();
     await page.getByRole('tab', { name: 'Доступные' }).click();
     await expect(page.getByRole('button', { name: `Установить ${TERMINAL}` })).toBeEnabled();
     expect(recoveryCalls).toBe(0);
@@ -353,7 +353,7 @@ test.describe('Module manager recovery and guards', () => {
 
     await expect(page.locator('#modules-operation-status')).toContainText('заменены установщиком');
     await expect(page.locator('#modules-operation-status')).not.toContainText('Файлы панели не изменены');
-    await expect(page.getByRole('button', { name: 'Обновить панель' })).toBeEnabled();
+    await expect(page.locator('[data-operation="panel-update"]')).toBeEnabled();
   });
 
   test('repeats a failed undo without restarting', async ({ page }) => {
@@ -477,7 +477,7 @@ test.describe('Module manager recovery and guards', () => {
     await expect(page.locator('.modules-core')).toContainText('Xkeen UI Core');
     await expect(page.locator('#modules-error .modules-page-alert')).toHaveAttribute('data-code', 'operation_in_progress');
     await expect(page.locator('#modules-error')).not.toContainText('/private/operation.log');
-    await expect(page.getByRole('button', { name: 'Обновить панель' })).toBeDisabled();
+    await expect(page.locator('[data-operation="panel-update"]')).toBeDisabled();
     await expect(page.getByRole('switch', { name: 'Включить Mihomo' })).toBeDisabled();
     await page.getByRole('tab', { name: 'Доступные' }).click();
     await expect(page.getByRole('button', { name: `Установить ${TERMINAL}` })).toBeDisabled();
@@ -505,7 +505,7 @@ test.describe('Module manager recovery and guards', () => {
       await getModulesController().refreshInstalledAfterTerminal();
     });
     await expect(page.locator('.modules-core')).toContainText('Xkeen UI Core');
-    await expect(page.getByRole('button', { name: 'Обновить панель' })).toBeDisabled();
+    await expect(page.locator('[data-operation="panel-update"]')).toBeDisabled();
     await expect(page.getByRole('switch', { name: 'Включить Mihomo' })).toBeDisabled();
     await page.evaluate(() => document.querySelector('input[role="switch"]').click());
     await expect(page.getByRole('button', { name: 'Перезапустить панель' })).toHaveCount(0);
@@ -518,7 +518,7 @@ test.describe('Module manager recovery and guards', () => {
     expect({ planCalls, restartCalls, toggleCalls }).toEqual({ planCalls: 0, restartCalls: 0, toggleCalls: 0 });
     await page.getByRole('button', { name: 'Обновить состояние' }).click();
     await page.getByRole('tab', { name: 'Установленные' }).click();
-    await expect(page.getByRole('button', { name: 'Обновить панель' })).toBeEnabled();
+    await expect(page.locator('[data-operation="panel-update"]')).toBeEnabled();
     await expect(page.getByRole('button', { name: 'Перезапустить панель' })).toBeVisible();
   });
 
@@ -554,12 +554,12 @@ test.describe('Module manager recovery and guards', () => {
       elements: [...document.querySelectorAll('body *')].filter((el) => el.getBoundingClientRect().right > innerWidth + 1).slice(0, 8).map((el) => [el.tagName, el.className, Math.round(el.getBoundingClientRect().right)]),
     }));
     expect(overflow.width <= overflow.viewport, JSON.stringify(overflow)).toBe(true);
-    await page.getByRole('button', { name: 'Обновить панель' }).click();
+    await page.locator('[data-operation="panel-update"]').click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
     expect(await dialog.evaluate((element) => element.getBoundingClientRect().right <= innerWidth)).toBe(true);
     expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
     await dialog.getByRole('button', { name: 'Отмена' }).click();
-    await expect(page.getByRole('button', { name: 'Обновить панель' })).toBeFocused();
+    await expect(page.locator('[data-operation="panel-update"]')).toBeFocused();
   });
 });

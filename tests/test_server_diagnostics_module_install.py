@@ -30,6 +30,7 @@ def owner(path: str) -> str:
     [
         "routes/provider_diagnostics.py",
         "services/provider_diagnostics.py",
+        "services/provider_diagnostics_extended.py",
         "static/js/features/provider_diagnostics.js",
         "templates/panel/modals/provider_diagnostics.html",
         "static/server-diagnostics.css",

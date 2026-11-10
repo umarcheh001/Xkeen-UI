@@ -587,7 +587,7 @@ def build_contract(root: Path) -> dict[str, Any]:
             },
             {
                 "id": "mihomo-hwid",
-                "current_location": "#mihomo-hwid-modal",
+                "current_location": "#mihomo-hwid-modal and #mihomo-hwid-help-modal",
                 "decision": "Happ-specific markup is integration.happ-owned and requires engine.mihomo at runtime.",
                 "owners": ["engine.mihomo", "integration.happ"],
             },

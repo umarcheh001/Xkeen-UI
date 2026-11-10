@@ -47,6 +47,7 @@ def create_storage_usb_blueprint() -> Blueprint:
                 action, media_id, str(data.get("serial") or ""), data.get("expected_parts"),
                 partition_id=partition_id, uuid=uuid,
                 other_id=str(data.get("other_id") or ""), other_uuid=str(data.get("other_uuid") or ""),
+                merge_parts=data.get("merge_parts"),
                 start_sector=data.get("start_sector", -1), size_mib=data.get("size_mib", 0),
                 confirm=str(data.get("confirm") or ""),
             )

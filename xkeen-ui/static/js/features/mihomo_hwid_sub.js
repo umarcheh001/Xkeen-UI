@@ -30,6 +30,10 @@ let mihomoHwidSubModuleApi = null;
     modal: 'mihomo-hwid-modal',
     btnClose: 'mihomo-hwid-close-btn',
     btnCancel: 'mihomo-hwid-cancel-btn',
+    btnHelp: 'mihomo-hwid-help-btn',
+    helpModal: 'mihomo-hwid-help-modal',
+    btnHelpClose: 'mihomo-hwid-help-close-btn',
+    btnHelpDone: 'mihomo-hwid-help-done-btn',
 
     url: 'mihomo-hwid-url',
     insecure: 'mihomo-hwid-insecure',
@@ -1216,6 +1220,7 @@ let mihomoHwidSubModuleApi = null;
   function showModal(show) {
     const modal = $(IDS.modal);
     if (!modal) return;
+    if (!show) showHelp(false, false);
     try {
       if (show) modal.classList.remove('hidden');
       else modal.classList.add('hidden');
@@ -1252,6 +1257,15 @@ let mihomoHwidSubModuleApi = null;
         schedulePreviewEditor();
       } catch (e5) {}
     }
+  }
+
+  function showHelp(show, restoreFocus = true) {
+    const modal = $(IDS.helpModal);
+    if (!modal) return;
+    modal.classList.toggle('hidden', !show);
+    syncMihomoModalBodyScrollLock();
+    if (show) $(IDS.btnHelpClose)?.focus();
+    else if (restoreFocus && !$(IDS.modal)?.classList.contains('hidden')) $(IDS.btnHelp)?.focus();
   }
 
   function wireButton(id, fn) {
@@ -1792,6 +1806,18 @@ let mihomoHwidSubModuleApi = null;
     wireButton(IDS.btnOpen, () => showModal(true));
     wireButton(IDS.btnClose, () => showModal(false));
     wireButton(IDS.btnCancel, () => showModal(false));
+    wireButton(IDS.btnHelp, () => showHelp(true));
+    wireButton(IDS.btnHelpClose, () => showHelp(false));
+    wireButton(IDS.btnHelpDone, () => showHelp(false));
+    $(IDS.helpModal)?.addEventListener('click', (event) => {
+      if (event.target === $(IDS.helpModal)) showHelp(false);
+    });
+    $(IDS.helpModal)?.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        showHelp(false);
+      }
+    });
 
     wireButton(IDS.btnProbe, () => doProbe());
     wireButton(IDS.btnOpenNode, () => handoffToImportModal($(IDS.url)?.value));
@@ -1879,6 +1905,16 @@ let mihomoHwidSubModuleApi = null;
         } catch (err) {}
       });
       if (urlEl.dataset) urlEl.dataset.xkKeys = '1';
+    }
+  };
+
+  HW.openWithInput = function openWithInput(value) {
+    HW.init();
+    showModal(true);
+    const input = $(IDS.url);
+    if (input) {
+      input.value = String(value || '').trim();
+      input.focus();
     }
   };
 

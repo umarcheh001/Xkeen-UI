@@ -830,6 +830,44 @@ def test_regular_provider_probe_prefers_hwid_adapter_when_hwid_payload_has_more_
     assert fetch_calls[1]["x-hwid"] == "AABBCCDDEEFF"
 
 
+def test_regular_provider_probe_uses_advertised_hwid_support(monkeypatch, client):
+    monkeypatch.setattr(
+        mihomo,
+        "_mh_hwid_get_device_info",
+        lambda: {"headers": {"x-hwid": "AABBCCDDEEFF", "User-Agent": "ClashMeta/1.19.24"}},
+    )
+
+    def fake_probe(url, *, headers, insecure, timeout, prefer, policy):
+        return {
+            "ok": True,
+            "profile": {"suggested_name": "Provider"},
+            "hwid_response_headers": {"subscription-always-hwid-enable": "true"},
+        }
+
+    fetch_calls = []
+
+    def fake_fetch(url, *, headers, insecure, timeout, policy):
+        fetch_calls.append(dict(headers or {}))
+        count = 3 if (headers or {}).get("x-hwid") else 2
+        payload = "proxies:\n" + "".join(
+            f"  - name: node-{index}\n    type: direct\n" for index in range(count)
+        )
+        return payload, {"format": "yaml", "hwid_response_headers": {"subscription-always-hwid-enable": "true"}}
+
+    monkeypatch.setattr(mihomo, "_mh_hwid_probe_subscription_safe", fake_probe)
+    monkeypatch.setattr(mihomo, "_mh_hwid_fetch_provider_payload", fake_fetch)
+
+    response = client.post("/api/mihomo/provider/probe", json={"url": "https://provider.example/sub"})
+
+    assert response.status_code == 200
+    result = response.get_json()
+    assert result["hwid_supported"] is True
+    assert result["provider_mode"] == "direct_headers"
+    assert result["provider_payload"]["node_count"] == 2
+    assert fetch_calls[0] == {"User-Agent": "router"}
+    assert len(fetch_calls) == 1
+
+
 def test_regular_provider_probe_ignores_hwid_placeholder_direct_nodes(monkeypatch, client):
     monkeypatch.setattr(
         mihomo,

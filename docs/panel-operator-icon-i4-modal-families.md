@@ -4,7 +4,7 @@
 
 ## Что закреплено
 
-- Все 50 статических `modal` IDs теперь имеют `data-operator-modal-family` и попадают в Stage 0 inventory.
+- Все 55 статических `modal` IDs теперь имеют `data-operator-modal-family` и попадают в Stage 0 inventory.
 - Inventory для каждого окна содержит семейство, состояния, close icon, количество operator icons, список icon-only controls без accessible name и legacy-glyph guard.
 - Четыре семейства используют единый scoped CSS-контракт: `confirm-compact-form`, `editor-workbench`, `master-detail`, `drawer-help`.
 - Close/back/save/danger/help и toolbar actions используют локальный минимальный Tabler sprite через `op_icon`/`XKeen.ui.operatorIcons`; action emoji и текстовые `×`/стрелки в модальных действиях удалены.

@@ -91,14 +91,14 @@ def test_stage5_all_static_modals_are_bound_to_one_of_the_four_family_frames():
         "confirm-compact-form": 25,
         "editor-workbench": 8,
         "master-detail": 18,
-        "drawer-help": 3,
+        "drawer-help": 4,
     }
     modal_pairs = __import__("re").findall(
         r'<div\b[^>]*\bid="([^"]+)"[^>]*\bclass="[^"]*\bmodal\b[^"]*"[^>]*\bdata-operator-modal-family="([^"]+)"',
         template,
     )
 
-    assert len(modal_pairs) == 54
+    assert len(modal_pairs) == 55
     assert {family for _, family in modal_pairs} == set(expected_counts)
     assert {family: sum(mapped == family for _, mapped in modal_pairs) for family in expected_counts} == expected_counts
 
@@ -128,7 +128,7 @@ def test_stage5_editor_tasks_are_documented_as_closed():
         "### Этап 5. Редакторы и модальные семейства — в работе",
         "[x] создать единый editor modal contract для JSON, file editor и snapshot",
         "[x] заменить comments/schema pills на компактные status labels",
-        "[x] применить четыре modal family ко всем 50 окнам в приоритетном порядке из аудита",
+        "[x] применить четыре modal family ко всем 55 окнам в приоритетном порядке из аудита",
         "[x] убрать чисто презентационные inline max-width/gap/margin после переноса в scoped classes;",
         "[x] для пустых/error состояний использовать auto-height вместо искусственно высокого body;",
         "panel-operator-stage5-editor-workbench.md",
@@ -141,7 +141,7 @@ def test_stage5_editor_tasks_are_documented_as_closed():
         "## 2. Comments/schema status labels — закрыто",
         "## 3. Устаревшая справка редактора — удалено",
         "## 4. Fullscreen сложных модалов на mobile — закрыто",
-        "## 5. Четыре modal family применены ко всем 50 окнам — закрыто",
+        "## 5. Четыре modal family применены ко всем 55 окнам — закрыто",
         "## Сохранённые контракты",
         "## Проверка",
         "Критерий этих семи задач выполнен",
