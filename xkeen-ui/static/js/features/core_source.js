@@ -435,8 +435,9 @@ export function initCoreSource(root) {
     const status = String(operation.status || 'running');
     const phase = String(operation.phase || 'download');
     const firstInstall = Boolean(operation.first_install || confirmation?.first_install);
-    const steps = operationSteps(firstInstall);
-    const label = String((firstInstall && steps.find(([id]) => id === phase)?.[1]) || operation.phase_label || steps.find(([id]) => id === phase)?.[1] || 'Установка ядра');
+    const inactiveInstall = Boolean(operation.inactive_install || confirmation?.inactive_install);
+    const steps = operationSteps(firstInstall || inactiveInstall);
+    const label = String(((firstInstall || inactiveInstall) && steps.find(([id]) => id === phase)?.[1]) || operation.phase_label || steps.find(([id]) => id === phase)?.[1] || 'Установка ядра');
     const progress = Number.isFinite(Number(operation.progress)) ? Math.max(0, Math.min(100, Number(operation.progress))) : 0;
     const currentIndex = steps.findIndex(([id]) => id === phase);
     operationStatus = status;
@@ -445,7 +446,7 @@ export function initCoreSource(root) {
     if (progressBar) progressBar.value = progress;
     text(progressPercent, `${Math.round(progress)}%`);
     text(progressPhase, label);
-    text(progressNote, status === 'running' ? 'Окно можно закрыть, операция продолжится на роутере.' : (status === 'succeeded' ? (firstInstall ? 'Ядро установлено; текущая служба не перезапускалась.' : 'Новая версия прошла проверку и запущена.') : (firstInstall ? 'Установка не завершена.' : 'Предыдущая версия сохранена или восстановлена.')));
+    text(progressNote, status === 'running' ? 'Окно можно закрыть, операция продолжится на роутере.' : (status === 'succeeded' ? (firstInstall || inactiveInstall ? 'Ядро установлено; текущая служба не перезапускалась.' : 'Новая версия прошла проверку и запущена.') : (firstInstall ? 'Установка не завершена.' : 'Предыдущая версия сохранена или восстановлена.')));
     if (progressSteps) {
       progressSteps.replaceChildren();
       steps.forEach(([id, stepLabel], index) => {
@@ -478,7 +479,7 @@ export function initCoreSource(root) {
   const fillConfirmation = (nextConfirmation) => {
     confirmation = nextConfirmation;
     if (!confirmation) return;
-    text(installModal?.querySelector('[data-core-install-description]'), confirmation.first_install
+    text(installModal?.querySelector('[data-core-install-description]'), confirmation.first_install || confirmation.inactive_install
       ? 'Ядро будет установлено без переключения и перезапуска текущей службы.'
       : 'Текущий бинарник и состояние профиля будут сохранены. При ошибке проверки или запуска панель вернёт предыдущую версию.');
     if (installDetails) {
@@ -528,6 +529,11 @@ export function initCoreSource(root) {
     }
     if (generation !== refreshGeneration) return;
     data = response.data;
+    if (root.dataset.coreInstalled === 'false' && data.state?.detected_version) {
+      document.dispatchEvent(new CustomEvent('xkeen:core-detection-changed', {
+        detail: { engine: root.dataset.coreEngine, version: data.state.detected_version },
+      }));
+    }
     selected = data.state?.selected_profile_id || 'official';
     const selectedProfile = data.profiles?.find((profile) => profile.profile_id === selected);
     const coreInstalled = root.dataset.coreInstalled !== 'false';

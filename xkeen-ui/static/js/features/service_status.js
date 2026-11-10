@@ -1669,6 +1669,27 @@ let serviceStatusModuleApi = null;
     if (_inited) return;
     _inited = true;
 
+    document.addEventListener('xkeen:core-detection-changed', async (event) => {
+      const engine = normalizeCore(event.detail?.engine);
+      if (!engine) return;
+      try {
+        const response = await fetch('/api/xkeen/core', { cache: 'no-store' });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (data.ok === false || !Array.isArray(data.cores)) return;
+        const cores = data.cores.map(normalizeCore).filter(Boolean);
+        if (!cores.includes(engine)) return;
+        _coreVersions[engine] = shortVersion(event.detail?.version);
+        rememberInstalledCores(cores, normalizeCore(data.currentCore || ''));
+        getCoreModalButtons().forEach((button) => {
+          button.dataset.installed = String(cores.includes(normalizeCore(button.getAttribute('data-core'))));
+        });
+        syncCoreModalSelectionUi();
+      } catch (error) {
+        // A failed refresh must not replace the last confirmed state.
+      }
+    });
+
     try { ensureShellBinding(); } catch (e) {}
 
     // Bind only if relevant elements exist; safe on pages without these blocks.

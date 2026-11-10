@@ -165,6 +165,7 @@ test.describe('Curated core source selection', () => {
     const confirmation = page.locator('#xray-core-install-modal');
     await expect(confirmation).toContainText('Xray-linux-mips32le.zip');
     await expect(confirmation).toContainText('b'.repeat(64));
+    await expect(confirmation.locator('[data-core-install-progress]')).toBeHidden();
     await confirmation.getByRole('button', { name: 'Установить' }).click();
     await expect.poll(() => applied).toEqual({ confirmation_id: 'xray-confirm' });
   });

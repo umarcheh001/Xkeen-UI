@@ -23607,6 +23607,7 @@ body.panel-page .xk-core-install-progress {
   border-radius: var(--op-radius-sm);
   background: var(--op-accent-soft);
 }
+body.panel-page .xk-core-install-progress[hidden] { display: none; }
 body.panel-page .xk-core-install-progress-head {
   display: flex;
   align-items: flex-start;

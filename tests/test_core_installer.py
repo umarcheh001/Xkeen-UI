@@ -133,6 +133,14 @@ def test_apply_replaces_verified_binary_and_marks_installed(tmp_path):
     assert persisted["last_phase_label"] == "Установка завершена"
 
 
+def test_successful_install_removes_its_temporary_backup(tmp_path):
+    install, store, _target = _installer(tmp_path)
+    prepared = install.prepare("xray")
+    operation = _wait_for_terminal(install, install.apply("xray", prepared["confirmation_id"])["operation_id"])
+    assert operation["status"] == "succeeded"
+    assert not (tmp_path / "state" / "core-profiles" / "backups" / operation["operation_id"]).exists()
+
+
 def test_confirmation_is_single_use_and_profile_status_reads_binary_version(tmp_path):
     install, _store, _target = _installer(tmp_path)
     install.run_command = lambda command, **_kwargs: (0, "Xray 26.3.27") if "-version" in command else (0, "ok")
@@ -344,13 +352,51 @@ def test_status_rejects_unknown_operation_id(tmp_path):
     assert exc_info.value.code == "operation_not_found"
 
 
-def test_prepare_rejects_inactive_core(tmp_path):
-    install, _store, _target = _installer(tmp_path, running="mihomo")
+def test_reinstall_inactive_core_keeps_running_core_untouched(tmp_path):
+    install, store, target = _installer(tmp_path, running="mihomo")
+    restarts = []
+    commands = []
+    install.restart = lambda *_args, **_kwargs: restarts.append(True)
+    install.run_command = lambda command, **_kwargs: (commands.append(command) or (0, "Xray 26.3.27"))
 
-    with pytest.raises(installer_module.CoreInstallError) as exc_info:
-        install.prepare("xray")
+    prepared = install.prepare("xray")
+    operation = _wait_for_terminal(install, install.apply("xray", prepared["confirmation_id"])["operation_id"])
 
-    assert exc_info.value.code == "inactive_core"
+    assert operation["status"] == "succeeded"
+    assert target.read_bytes() == b"new-xray"
+    assert store.get("xray")["installed_release_tag"] == "v26.3.27"
+    assert restarts == []
+    assert any("version" in command for command in commands)
+
+
+def test_inactive_reinstall_rejects_invalid_binary_without_replacing_it(tmp_path):
+    install, _store, target = _installer(tmp_path, running="mihomo", preflight=(1, "invalid"))
+    restarts = []
+    install.restart = lambda *_args, **_kwargs: restarts.append(True)
+    prepared = install.prepare("xray")
+    operation = _wait_for_terminal(install, install.apply("xray", prepared["confirmation_id"])["operation_id"])
+
+    assert operation["status"] == "failed"
+    assert target.read_bytes() == b"old-xray"
+    assert restarts == []
+
+
+def test_inactive_reinstall_refuses_switch_during_validation(tmp_path):
+    install, _store, target = _installer(tmp_path, running="mihomo")
+    active = {"core": "mihomo"}
+    install.running_core = lambda: active["core"]
+    restarts = []
+    install.restart = lambda *_args, **_kwargs: restarts.append(True)
+    def validate(_command, **_kwargs):
+        active["core"] = "xray"
+        return 0, "Xray 26.3.27"
+    prepared = install.prepare("xray")
+    install.run_command = validate
+    operation = _wait_for_terminal(install, install.apply("xray", prepared["confirmation_id"])["operation_id"])
+
+    assert operation["status"] == "failed"
+    assert target.read_bytes() == b"old-xray"
+    assert restarts == []
 
 
 def test_first_install_keeps_other_core_running_without_restart(tmp_path):
@@ -468,6 +514,33 @@ def test_first_install_mihomo_keeps_xray_running(tmp_path):
     assert restarts == []
 
 
+def test_reinstall_inactive_mihomo_keeps_xray_running(tmp_path):
+    install, store, _target = _installer(tmp_path, running="xray")
+    target = tmp_path / "mihomo"
+    target.write_bytes(b"old-mihomo")
+    payload = gzip.compress(b"new-mihomo", mtime=0)
+    release = _release_for(b"unused")
+    release["asset"] = {"name": "mihomo-linux-amd64.gz", "url": "https://example.test/mihomo.gz"}
+    release["checksum"]["sha256"] = hashlib.sha256(payload).hexdigest()
+    release["binary_name"] = "mihomo"
+    install.release_resolver = lambda *_args, **_kwargs: release
+    install.downloader = lambda *_args, **_kwargs: payload
+    restarts = []
+    install.restart = lambda *_args, **_kwargs: restarts.append(True)
+    prepared = install.prepare("mihomo")
+    operation_id = install.apply("mihomo", prepared["confirmation_id"])["operation_id"]
+    deadline = time.monotonic() + 3
+    while time.monotonic() < deadline:
+        operation = install.status("mihomo", operation_id)
+        if operation["status"] in {"succeeded", "failed", "rolled_back"}:
+            break
+        time.sleep(.01)
+    assert operation["status"] == "succeeded"
+    assert target.read_bytes() == b"new-mihomo"
+    assert store.get("mihomo")["installed_profile_id"] == "official"
+    assert restarts == []
+
+
 def test_failed_first_install_never_restarts_stopped_service(tmp_path):
     install, _store, target = _installer(tmp_path, running=None, preflight=(1, "bad binary"))
     target.unlink()
@@ -567,7 +640,7 @@ def test_prepare_during_a_core_hand_off_waits_for_the_owner(tmp_path):
     install.settled_core = lambda: (both, "mihomo")
     with pytest.raises(installer_module.CoreInstallError) as exc_info:
         install.prepare("xray")
-    assert exc_info.value.code == "inactive_core"
+    assert exc_info.value.code == "core_switching"
 
     install.settled_core = lambda: (CoreRuntime(("xray",)), "xray")
     assert install.prepare("xray")["engine_id"] == "xray"

@@ -226,6 +226,31 @@ test('first installation explains that the service keeps running and offers a pa
   await expect(dialog.locator('[data-core-install-message]')).toContainText('Ядро установлено');
 });
 
+test('an open dialog reconciles a core installed after its initial list was read', async ({ page }) => {
+  let installed = false;
+  let releaseProfiles;
+  const profilesReady = new Promise(resolve => { releaseProfiles = resolve; });
+  await page.route('**/api/xkeen/status', route => route.fulfill({ json: { ok: true, running: true, core: 'xray' } }));
+  await page.route('**/api/xkeen/core', route => route.fulfill({ json: { ok: true, cores: installed ? ['xray', 'mihomo'] : ['xray'], currentCore: 'xray' } }));
+  await page.route('**/api/cores/versions', route => route.fulfill({ json: { ok: true, cores: {
+    xray: { installed: true, version: '26.9.9' }, mihomo: { installed, version: installed ? '1.19.20' : null },
+  } } }));
+  await page.route('**/api/mihomo/core-profiles', async route => {
+    await profilesReady;
+    installed = true;
+    return route.fulfill({ json: { ok: true, data: {
+      state: { selected_profile_id: 'official', detected_version: '1.19.20', last_status: 'succeeded' },
+      profiles: [{ profile_id: 'official', display_name: 'Официальный Mihomo', release: { installable: true, stable: { tag: 'v1.19.20' } } }], platform: {},
+    } } });
+  });
+  await page.goto('/');
+  const menu = await openServiceMenu(page);
+  await engineSwitch(menu, 'mihomo').click();
+  await expect(tab(page, 'mihomo')).toContainText('Не установлено');
+  releaseProfiles();
+  await expect(tab(page, 'mihomo')).toContainText('Установлено');
+});
+
 test('a newly installed core still offers panel restart after reopening the page', async ({ page }) => {
   await serveCores(page, { cores: ['xray', 'mihomo'] });
   await page.route('**/api/mihomo/core-profiles', route => route.fulfill({ json: { ok: true, data: {
@@ -387,6 +412,22 @@ for (const [running, other] of [['xray', 'mihomo'], ['mihomo', 'xray']]) {
     await expect(update(running)).toHaveClass(/btn-primary/);
   });
 }
+
+test('reinstalling an inactive core explains that the current service keeps running', async ({ page }) => {
+  await serveCores(page, { cores: ['xray', 'mihomo'], current: 'xray' });
+  const payload = sourceProfiles('mihomo', '1.19.14', '1.19.14');
+  await page.route('**/api/mihomo/core-profiles', route => route.fulfill({ json: payload }));
+  await page.route('**/api/mihomo/core-install/prepare', route => route.fulfill({ json: {
+    ok: true, confirmation: { confirmation_id: 'inactive', inactive_install: true, profile: payload.data.profiles[0], release: payload.data.profiles[0].release },
+  } }));
+  await page.goto('/');
+  const menu = await openServiceMenu(page);
+  await engineSwitch(menu, 'mihomo').click();
+  await page.locator('#core-modal [data-core-source][data-core-engine="mihomo"] [data-core-source-action="prepare"]').click();
+  const dialog = page.locator('#mihomo-core-install-modal');
+  await expect(dialog.locator('[data-core-install-description]')).toContainText('без переключения и перезапуска');
+  await expect(dialog.locator('[data-core-install-progress]')).toBeHidden();
+});
 
 test('an open core window follows the service when it stops and starts again', async ({ page }) => {
   await page.clock.install();
