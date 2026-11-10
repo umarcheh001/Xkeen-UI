@@ -11,10 +11,10 @@
 - Stage 0 inventory: `docs/modular-panel-stage0-inventory.json`;
 - machine-readable contract: `docs/modular-panel-stage4.1-contract.json`;
 - пересборка: `python .\scripts\generate_modular_panel_stage4_1_contract.py --root .`;
-- UTF-8 размер: `453292` байт;
-- строк: `5909`;
+- UTF-8 размер: `453364` байт;
+- строк: `5911`;
 - статических `id`: `1361`, дубликатов: `0`;
-- SHA-256 текущего baseline: `df5ac20e2ceb2b6933e5595e95c7b78d0ad8ba8271f9609804ce981da753ce5a`.
+- SHA-256 текущего baseline: `13640480a83f6be36810c37bc56c260403fe1a0825f6a0998f33f86ac9200555`.
 
 ## Правила composition
 
@@ -79,41 +79,41 @@ head → startup → header → navigation → global_controls → screens → m
 | ssh-confirm-modal | core | tool.terminal | mixed-current-classification | xkeen-ui/templates/panel/modals/commands.html | 3906 |
 | ssh-transfer-modal | core | tool.terminal | mixed-current-classification | xkeen-ui/templates/panel/modals/commands.html | 3922 |
 | core-modal | core | core | shared | xkeen-ui/templates/panel/modals/shared.html | 3944 |
-| confirm-modal | core | core | shared | xkeen-ui/templates/panel/modals/shared.html | 4012 |
-| github-export-modal | core | core | shared | xkeen-ui/templates/panel/modals/shared.html | 4028 |
-| github-catalog-modal | core | core | shared | xkeen-ui/templates/panel/modals/shared.html | 4047 |
-| donate-modal | core | core | shared | xkeen-ui/templates/panel/modals/shared.html | 4074 |
-| ui-settings-modal | core | core | shared | xkeen-ui/templates/panel/modals/shared.html | 4130 |
-| provider-check-modal | tool.server-diagnostics | tool.server-diagnostics | owned | xkeen-ui/templates/panel/modals/provider_diagnostics.html | 4151 |
-| mihomo-dns-modal | engine.mihomo | engine.mihomo | owned | xkeen-ui/templates/panel/modals/mihomo.html | 4222 |
-| mihomo-import-modal | engine.mihomo | engine.mihomo | owned | xkeen-ui/templates/panel/modals/mihomo.html | 4389 |
-| mihomo-proxy-tools-modal | engine.mihomo | engine.mihomo | owned | xkeen-ui/templates/panel/modals/mihomo.html | 4657 |
-| mihomo-validation-modal | engine.mihomo | engine.mihomo | owned | xkeen-ui/templates/panel/modals/mihomo.html | 4799 |
-| mihomo-hwid-modal | integration.happ | integration.happ | owned | xkeen-ui/templates/panel/modals/happ.html | 4866 |
-| fm-upload-conflict-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5016 |
-| fm-connect-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5037 |
-| fm-knownhosts-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5135 |
-| fm-create-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5166 |
-| fm-rename-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5203 |
-| fm-archive-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5228 |
-| fm-extract-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5267 |
-| fm-folder-picker-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5324 |
-| fm-archive-list-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5348 |
-| fm-mask-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5384 |
-| fm-props-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5408 |
-| fm-hash-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5427 |
-| fm-chmod-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5459 |
-| fm-chown-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5512 |
-| fm-dropop-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5545 |
-| fm-conflicts-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5565 |
-| fm-bookmarks-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5597 |
-| fm-download-multi-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5625 |
-| fm-progress-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5665 |
-| fm-ops-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5686 |
-| fm-volumes-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5717 |
-| fm-help-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5744 |
-| fm-editor-modal | tool.editor | tool.editor | owned | xkeen-ui/templates/panel/modals/files_editor.html | 5810 |
-| json-editor-modal | tool.editor | tool.editor | owned | xkeen-ui/templates/panel/modals/editor.html | 5847 |
+| confirm-modal | core | core | shared | xkeen-ui/templates/panel/modals/shared.html | 4014 |
+| github-export-modal | core | core | shared | xkeen-ui/templates/panel/modals/shared.html | 4030 |
+| github-catalog-modal | core | core | shared | xkeen-ui/templates/panel/modals/shared.html | 4049 |
+| donate-modal | core | core | shared | xkeen-ui/templates/panel/modals/shared.html | 4076 |
+| ui-settings-modal | core | core | shared | xkeen-ui/templates/panel/modals/shared.html | 4132 |
+| provider-check-modal | tool.server-diagnostics | tool.server-diagnostics | owned | xkeen-ui/templates/panel/modals/provider_diagnostics.html | 4153 |
+| mihomo-dns-modal | engine.mihomo | engine.mihomo | owned | xkeen-ui/templates/panel/modals/mihomo.html | 4224 |
+| mihomo-import-modal | engine.mihomo | engine.mihomo | owned | xkeen-ui/templates/panel/modals/mihomo.html | 4391 |
+| mihomo-proxy-tools-modal | engine.mihomo | engine.mihomo | owned | xkeen-ui/templates/panel/modals/mihomo.html | 4659 |
+| mihomo-validation-modal | engine.mihomo | engine.mihomo | owned | xkeen-ui/templates/panel/modals/mihomo.html | 4801 |
+| mihomo-hwid-modal | integration.happ | integration.happ | owned | xkeen-ui/templates/panel/modals/happ.html | 4868 |
+| fm-upload-conflict-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5018 |
+| fm-connect-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5039 |
+| fm-knownhosts-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5137 |
+| fm-create-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5168 |
+| fm-rename-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5205 |
+| fm-archive-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5230 |
+| fm-extract-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5269 |
+| fm-folder-picker-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5326 |
+| fm-archive-list-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5350 |
+| fm-mask-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5386 |
+| fm-props-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5410 |
+| fm-hash-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5429 |
+| fm-chmod-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5461 |
+| fm-chown-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5514 |
+| fm-dropop-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5547 |
+| fm-conflicts-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5567 |
+| fm-bookmarks-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5599 |
+| fm-download-multi-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5627 |
+| fm-progress-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5667 |
+| fm-ops-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5688 |
+| fm-volumes-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5719 |
+| fm-help-modal | core | tool.files | mixed-current-classification | xkeen-ui/templates/panel/modals/files.html | 5746 |
+| fm-editor-modal | tool.editor | tool.editor | owned | xkeen-ui/templates/panel/modals/files_editor.html | 5812 |
+| json-editor-modal | tool.editor | tool.editor | owned | xkeen-ui/templates/panel/modals/editor.html | 5849 |
 
 ## Mixed boundaries и решения
 

@@ -416,6 +416,7 @@ export function initCoreSource(root) {
   let terminalOperationId = null;
   let operationStatus = 'idle';
   let refreshGeneration = 0;
+  let restartPending = false;
 
   const progressPanel = installModal?.querySelector('[data-core-install-progress]');
   const progressBar = installModal?.querySelector('[data-core-install-progress-bar]');
@@ -608,6 +609,39 @@ export function initCoreSource(root) {
 
   const setMessage = (scope, message) => text(scope?.querySelector('[data-core-source-message], [data-core-install-message]'), message || '');
 
+  const restartPanel = async (button, messageNode) => {
+    if (restartPending) return;
+    restartPending = true;
+    const originalLabel = button.textContent;
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    button.classList.add('xk-core-restart-working');
+    text(button, 'Перезапускаем…');
+    text(messageNode, 'Перезапускаем панель. Пожалуйста, подождите.');
+    const elapsed = document.createElement('span');
+    elapsed.className = 'xk-core-restart-elapsed';
+    elapsed.dataset.coreRestartElapsed = '';
+    elapsed.setAttribute('aria-hidden', 'true');
+    button.after(elapsed);
+    const startedAt = Date.now();
+    const updateElapsed = () => text(elapsed, `Прошло ${Math.floor((Date.now() - startedAt) / 1000)} с`);
+    updateElapsed();
+    const timer = window.setInterval(updateElapsed, 1000);
+    try {
+      await request('/api/modules/restart', { method: 'POST', body: '{}' });
+      text(messageNode, 'Панель перезапускается. Если страница не обновится, обновите её вручную.');
+    } catch (error) {
+      window.clearInterval(timer);
+      elapsed.remove();
+      button.disabled = false;
+      button.removeAttribute('aria-busy');
+      button.classList.remove('xk-core-restart-working');
+      text(button, originalLabel);
+      text(messageNode, error.message || 'Не удалось перезапустить панель.');
+      restartPending = false;
+    }
+  };
+
   const poll = async (operationId) => {
     if (pollTimer) clearTimeout(pollTimer);
     if (Date.now() - pollStartedAt >= MAX_POLL_MS) {
@@ -656,14 +690,7 @@ export function initCoreSource(root) {
     const action = button.dataset.coreSourceAction;
     try {
       if (action === 'restart-panel') {
-        button.disabled = true;
-        try {
-          await request('/api/modules/restart', { method: 'POST', body: '{}' });
-          text(root.querySelector('[data-core-restart-needed] p'), 'Панель перезапускается. Обновите страницу через несколько секунд.');
-        } catch (error) {
-          button.disabled = false;
-          text(root.querySelector('[data-core-restart-needed] p'), error.message || 'Не удалось перезапустить панель.');
-        }
+        await restartPanel(button, root.querySelector('[data-core-restart-needed] p'));
         return;
       }
       if (action === 'retry') { await refresh(); return; }
@@ -729,14 +756,7 @@ export function initCoreSource(root) {
     if (!button) return;
     if (button.dataset.coreSourceAction === 'close-confirm') { modalOpen(installModal, false); return; }
     if (button.dataset.coreSourceAction === 'restart-panel') {
-      button.disabled = true;
-      try {
-        await request('/api/modules/restart', { method: 'POST', body: '{}' });
-        text(installModal.querySelector('[data-core-install-message]'), 'Панель перезапускается. Обновите страницу через несколько секунд.');
-      } catch (error) {
-        button.disabled = false;
-        text(installModal.querySelector('[data-core-install-message]'), error.message || 'Не удалось перезапустить панель.');
-      }
+      await restartPanel(button, installModal.querySelector('[data-core-install-message]'));
       return;
     }
     if (button.dataset.coreSourceAction !== 'apply' || !confirmation) return;

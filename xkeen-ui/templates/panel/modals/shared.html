@@ -51,12 +51,14 @@
               <a class="btn-secondary xk-core-source-action" href="{{ url_for('modules_page') }}">{{ op_icon('open') }}<span>Открыть модули</span></a>
             </div>
           </section>
-          <p id="core-modal-status" class="modal-hint xk-core-status" role="status" aria-live="polite"></p>
+          <div class="xk-core-switch-row">
+            <p id="core-modal-status" class="modal-hint xk-core-status" role="status" aria-live="polite"></p>
+            <button type="button" id="core-modal-confirm-btn" class="btn-primary xk-core-source-action" hidden>Сделать активным</button>
+          </div>
         </div>
         <div class="modal-actions xk-core-modal-actions">
           <div class="xk-core-actions-row">
             <button type="button" id="core-modal-cancel-btn" class="btn-secondary btn-compact" data-operator-dismiss-duplicate="true">Закрыть</button>
-            <button type="button" id="core-modal-confirm-btn" class="btn-primary btn-compact" hidden>Сделать активным</button>
           </div>
         </div>
       </div>

@@ -99,6 +99,17 @@ test('an engine with neither a binary nor a module stays out of the switch', asy
   await expect(page.locator('#core-modal-confirm-btn')).toBeHidden();
 });
 
+test('a core list error remains visible when no switch action is available', async ({ page }) => {
+  await serveCores(page, { cores: ['xray', 'mihomo'] });
+  await page.route('**/api/xkeen/core', route => route.fulfill({ status: 503, json: { ok: false, error: 'Список ядер недоступен' } }));
+  await page.goto('/');
+  const menu = await openServiceMenu(page);
+  await engineSwitch(menu, 'xray').click();
+  await expect(page.locator('#core-modal-confirm-btn')).toBeHidden();
+  await expect(page.locator('#core-modal-status')).toBeVisible();
+  await expect(page.locator('#core-modal-status')).toContainText('Ошибка загрузки списка ядер');
+});
+
 test('an absent engine with its module enabled stays listed and installable', async ({ page }) => {
   await serveCores(page, { cores: ['xray'] });
   await page.goto('/');
@@ -266,6 +277,62 @@ test('a newly installed core still offers panel restart after reopening the page
   await expect(source.locator('[data-core-source-action="prepare"]')).toBeDisabled();
 });
 
+test('restart wait is visible immediately and recovers when the request fails', async ({ page }) => {
+  await serveCores(page, { cores: ['xray', 'mihomo'] });
+  await page.route('**/api/mihomo/core-profiles', route => route.fulfill({ json: { ok: true, data: {
+    state: { selected_profile_id: 'official', detected_version: '1.19.20', last_status: 'succeeded' },
+    profiles: [{ profile_id: 'official', display_name: 'Официальный Mihomo', release: { installable: true, stable: { tag: 'v1.19.20' } } }], platform: {},
+  } } }));
+  let finishRestart;
+  const restartResponse = new Promise(resolve => { finishRestart = resolve; });
+  await page.route('**/api/modules/restart', async route => {
+    await restartResponse;
+    await route.fulfill({ status: 503, json: { ok: false, error: 'Перезапуск недоступен' } });
+  });
+  await page.goto('/');
+  await page.locator('#core-modal [data-core-source][data-core-engine="mihomo"]').evaluate(el => { el.dataset.firstInstall = 'true'; el.dispatchEvent(new CustomEvent('xkeen:core-installation-state')); });
+  const menu = await openServiceMenu(page);
+  await engineSwitch(menu, 'mihomo').click();
+  const section = page.locator('#core-modal [data-core-source][data-core-engine="mihomo"] [data-core-restart-needed]');
+  const button = section.locator('[data-core-source-action="restart-panel"]');
+  try {
+    await button.click();
+    await expect(button).toBeDisabled();
+    await expect(button).toContainText('Перезапускаем');
+    await expect(section.locator('[data-core-restart-elapsed]')).toContainText('Прошло 1 с', { timeout: 4000 });
+  } finally { finishRestart(); }
+  await expect(button).toBeEnabled();
+  await expect(button).toHaveText('Перезапустить панель');
+  await expect(section).toContainText('Перезапуск недоступен');
+  await expect(section.locator('[data-core-restart-elapsed]')).toHaveCount(0);
+});
+
+test('first installation confirmation shows restart wait while the request is pending', async ({ page }) => {
+  await serveCores(page, { cores: ['xray'] });
+  await page.route('**/api/mihomo/core-profiles', route => route.fulfill({ json: { ok: true, data: {
+    state: { selected_profile_id: 'official', last_status: 'idle' },
+    profiles: [{ profile_id: 'official', display_name: 'Официальный Mihomo', release: { installable: true, stable: { tag: 'v1.19.20' } } }], platform: {},
+  } } }));
+  await page.route('**/api/mihomo/core-install/prepare', route => route.fulfill({ json: { ok: true, confirmation: { confirmation_id: 'first', first_install: true, profile: {}, release: {} } } }));
+  await page.route('**/api/mihomo/core-install/apply', route => route.fulfill({ json: { ok: true, operation: { operation_id: 'first-op' } } }));
+  await page.route('**/api/mihomo/core-install/status?*', route => route.fulfill({ json: { ok: true, operation: { operation_id: 'first-op', first_install: true, status: 'succeeded', phase: 'complete', progress: 100 } } }));
+  let finishRestart;
+  const restartResponse = new Promise(resolve => { finishRestart = resolve; });
+  await page.route('**/api/modules/restart', async route => { await restartResponse; await route.fulfill({ json: { ok: true, restart_requested: true } }); });
+  await page.goto('/');
+  const menu = await openServiceMenu(page);
+  await engineSwitch(menu, 'mihomo').click();
+  await page.locator('#core-modal [data-core-source][data-core-engine="mihomo"]').getByRole('button', { name: 'Установить 1.19.20' }).click();
+  const dialog = page.locator('#mihomo-core-install-modal');
+  await dialog.getByRole('button', { name: 'Установить', exact: true }).click();
+  const button = dialog.locator('[data-core-source-action="restart-panel"]');
+  try {
+    await button.click();
+    await expect(button).toContainText('Перезапускаем');
+    await expect(dialog.locator('[data-core-restart-elapsed]')).toContainText('Прошло 1 с', { timeout: 4000 });
+  } finally { finishRestart(); }
+});
+
 test('the only installed engine is shown active, and another installed one can be activated', async ({ page }) => {
   await serveCores(page, { cores: ['xray', 'mihomo'] });
   await page.goto('/');
@@ -411,6 +478,44 @@ for (const [running, other] of [['xray', 'mihomo'], ['mihomo', 'xray']]) {
     await expect(update(running)).toContainText('Обновить до');
     await expect(update(running)).toHaveClass(/btn-primary/);
   });
+}
+
+for (const [running, other] of [['xray', 'mihomo'], ['mihomo', 'xray']]) {
+  for (const [size, width] of [['desktop', 1440], ['mobile', 390]]) {
+    test(`switch action aligns with its explanation and matches button text for ${other} on ${size}`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await serveCores(page, { cores: ['xray', 'mihomo'], current: running });
+      await page.route('**/api/xray/core-profiles', route => route.fulfill({ json: sourceProfiles('xray', '26.9.9', '26.10.1') }));
+      await page.route('**/api/mihomo/core-profiles', route => route.fulfill({ json: sourceProfiles('mihomo', '1.19.14', '1.19.32') }));
+      await page.goto('/');
+      const menu = await openServiceMenu(page);
+      await engineSwitch(menu, other).click();
+      const button = page.locator('#core-modal-confirm-btn');
+      const status = page.locator('#core-modal-status');
+      const source = page.locator(`#core-modal [data-core-source][data-core-engine="${other}"] [data-core-source-action="open"]`);
+      await expect(button).toBeVisible();
+      await expect(status).toContainText('Служба xkeen перезапустится');
+      const actual = await page.evaluate(({ buttonSelector, sourceSelector }) => {
+        const button = document.querySelector(buttonSelector);
+        const source = document.querySelector(sourceSelector);
+        const status = document.querySelector('#core-modal-status');
+        const row = button.parentElement;
+        const rect = element => { const r = element.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; };
+        const font = element => { const s = getComputedStyle(element); return [s.fontFamily, s.fontSize, s.fontWeight, s.lineHeight]; };
+        const rowStyle = getComputedStyle(row);
+        return { sameRow: row === status.parentElement, button: rect(button), status: rect(status), row: rect(row), padding: parseFloat(rowStyle.paddingLeft) + parseFloat(rowStyle.paddingRight), buttonFont: font(button), sourceFont: font(source) };
+      }, { buttonSelector: '#core-modal-confirm-btn', sourceSelector: `#core-modal [data-core-source][data-core-engine="${other}"] [data-core-source-action="open"]` });
+      expect(actual.sameRow).toBe(true);
+      expect(actual.buttonFont).toEqual(actual.sourceFont);
+      if (size === 'desktop') {
+        expect(Math.abs((actual.button.y + actual.button.height / 2) - (actual.status.y + actual.status.height / 2))).toBeLessThan(2);
+        expect(actual.button.x).toBeGreaterThan(actual.status.x);
+      } else {
+        expect(actual.button.y).toBeGreaterThan(actual.status.y);
+        expect(Math.abs(actual.button.width - (actual.row.width - actual.padding - 2))).toBeLessThan(3);
+      }
+    });
+  }
 }
 
 test('reinstalling an inactive core explains that the current service keeps running', async ({ page }) => {
