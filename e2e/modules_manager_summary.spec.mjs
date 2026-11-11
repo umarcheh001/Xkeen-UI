@@ -17,8 +17,7 @@ test.describe('DevTools panel summary boundary', () => {
       legacyRequests.push(`${route.request().method()} ${new URL(route.request().url()).pathname}`);
       return route.fulfill({ status: 404, json: { ok: false } });
     });
-    await page.route('**/api/modules/panel/update-check', (route) => route.fulfill({ json: noUpdate }));
-    await installIdleLifecycleRoutes(page);
+    await installIdleLifecycleRoutes(page, { check: noUpdate });
 
     await page.goto('/devtools');
     const updateCard = page.locator('#dt-update-card');
@@ -36,8 +35,7 @@ test.describe('DevTools panel summary boundary', () => {
   });
 
   test('DevTools stretches the panel information card to the ENV bottom edge', async ({ page }) => {
-    await page.route('**/api/modules/panel/update-check', (route) => route.fulfill({ json: noUpdate }));
-    await installIdleLifecycleRoutes(page);
+    await installIdleLifecycleRoutes(page, { check: noUpdate });
 
     await page.goto('/devtools');
     await expect(page.locator('#dt-panel-summary .xk-summary-stats')).toBeVisible();

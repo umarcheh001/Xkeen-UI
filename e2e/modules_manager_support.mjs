@@ -28,11 +28,14 @@ export const mihomoSwitchable = {
 };
 export const withMihomo = (enabled) => (enabled ? mihomoSwitchable : installedSnapshot);
 
-export async function installIdleLifecycleRoutes(page) {
+// check — ответ проверки обновлений панели. Playwright берёт последний
+// зарегистрированный маршрут, поэтому свой ответ нельзя положить рядом вызовом
+// page.route(): этот перетёр бы его. Передавайте его сюда.
+export async function installIdleLifecycleRoutes(page, { check = server.update_check } = {}) {
   await page.route('**/api/modules/installed', (route) => route.fulfill({ json: installedSnapshot }));
   await page.route('**/api/modules/operations/status', (route) => route.fulfill({ json: idleStatus }));
   await page.route('**/api/modules/available', (route) => route.fulfill({ json: availableSnapshot }));
-  await page.route('**/api/modules/panel/update-check', (route) => route.fulfill({ json: server.update_check }));
+  await page.route('**/api/modules/panel/update-check', (route) => route.fulfill({ json: check }));
 }
 
 export async function installLifecycleRoutes(page, { status = idleStatus, installed = installedSnapshot, available = availableSnapshot } = {}) {
