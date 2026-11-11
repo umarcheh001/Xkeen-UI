@@ -12,7 +12,7 @@
           <h2>Команды</h2>
           <p class="commands-subtitle">Выберите действие или откройте оболочку для ручной работы.</p>
         </div>
-        <div id="xkeen-command-capabilities-status" class="command-capabilities-status" role="status">⚠ Не удалось определить доступность команд XKeen</div>
+        <div id="xkeen-command-capabilities-status" class="command-capabilities-status" role="status" hidden>⚠ Не удалось определить доступность команд XKeen</div>
       </div>
       <div class="commands-header-actions">
         <button type="button" class="btn-primary commands-title-action" id="terminal-open-shell-btn" {% if not is_mips %}style="display:none;"{% endif %} title="Открыть терминал" aria-label="Открыть терминал" data-tooltip="Открыть терминал (обычный режим).">{{ op_icon('terminal') }}<span>Открыть терминал</span></button>
@@ -111,7 +111,7 @@
                     data-label="xkeen {{ cmd.flag }}"
                     data-command="xkeen {{ cmd.flag }}"
                     data-action="run"
-                    data-availability="unknown"
+                    data-availability="pending"
                     data-tooltip="{{ cmd.desc }}">
               <span class="command-item-prefix">xkeen</span>
               <code>{{ cmd.flag }}</code>

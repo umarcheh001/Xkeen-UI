@@ -5228,6 +5228,10 @@ body.panel-page #view-commands .command-item[data-availability="available"] .com
   display: none !important;
 }
 
+body.panel-page #view-commands .command-item[data-availability="pending"] .command-availability-icon {
+  display: none !important;
+}
+
 body.panel-page #view-commands .command-item[data-availability="unknown"] .command-item-desc {
   color: #f6bd60 !important;
 }

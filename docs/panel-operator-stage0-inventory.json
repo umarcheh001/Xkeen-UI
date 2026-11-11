@@ -9917,7 +9917,7 @@
       {
         "locator": "div.command-item@L2100",
         "name": "data-availability",
-        "value": "unknown"
+        "value": "pending"
       },
       {
         "locator": "div.command-item@L2100",
