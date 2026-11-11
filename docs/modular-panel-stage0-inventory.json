@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 676,
-      "size_bytes": 9299117,
+      "size_bytes": 9299523,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -3265,7 +3265,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/restart_log.py",
-      "size_bytes": 6609,
+      "size_bytes": 7015,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],

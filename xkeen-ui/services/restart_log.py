@@ -10,6 +10,8 @@ import time
 from urllib.parse import quote
 from typing import List
 
+from services.io.atomic import _atomic_write_text
+
 
 _META_KEY_RE = re.compile(r"[^A-Za-z0-9_.-]+")
 _RESTART_SOURCE_RE = re.compile(
@@ -41,19 +43,17 @@ def _trim_log_if_needed(log_file: str) -> None:
     except OSError:
         return
     # Первая строка почти наверняка обрезана посередине — выбрасываем её.
+    # Обрезка идёт по байту "\n", а он в UTF-8 однобайтовый, так что строка
+    # начинается с целого символа и декодируется без потерь.
     cut = tail.find(b"\n")
     if cut >= 0:
         tail = tail[cut + 1:]
     try:
-        temp = log_file + ".tmp"
-        with open(temp, "wb") as f:
-            f.write(tail)
-        os.replace(temp, log_file)
-    except OSError:
-        try:
-            os.unlink(log_file + ".tmp")
-        except OSError:
-            pass
+        _atomic_write_text(log_file, tail.decode("utf-8", errors="replace"), mode=0o644)
+    except (OSError, UnicodeError):
+        # Обрезка — обслуживание журнала, а не операция пользователя: если
+        # не вышло, журнал просто останется больше прежнего.
+        pass
 
 
 def _operation_source(line: object) -> str:
