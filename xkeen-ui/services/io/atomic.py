@@ -54,7 +54,7 @@ def _replace(src: str, dst: str) -> None:
     os.replace(src, dst)
 
 
-def _sync_dir(path: str) -> None:
+def _sync_dir(path: str, sync: Callable[[int], None] | None = None) -> None:
     """Best-effort fsync каталога: без него подмена может пережить не всё."""
     directory = os.path.dirname(path) or "."
     try:
@@ -62,7 +62,7 @@ def _sync_dir(path: str) -> None:
     except Exception:
         return
     try:
-        os.fsync(fd)
+        (sync or os.fsync)(fd)
     except Exception:
         pass
     finally:
@@ -72,7 +72,7 @@ def _sync_dir(path: str) -> None:
             pass
 
 
-def _write_and_replace(path: str, write_body: Callable[[Any], None], mode: int, newline: str) -> None:
+def _write_and_replace(path: str, write_body: Callable[[Any], None], mode: int, newline: str, sync: Callable[[int], None] | None = None) -> None:
     directory = os.path.dirname(path) or "."
     os.makedirs(directory, exist_ok=True)
 
@@ -91,7 +91,7 @@ def _write_and_replace(path: str, write_body: Callable[[Any], None], mode: int, 
                 # Иначе после сбоя питания на месте настроек оказывается
                 # пустой файл: подмена доехала, содержимое — нет.
                 try:
-                    os.fsync(f.fileno())
+                    (sync or os.fsync)(f.fileno())
                 except Exception:
                     pass
             try:
@@ -107,7 +107,7 @@ def _write_and_replace(path: str, write_body: Callable[[Any], None], mode: int, 
             except OSError:
                 pass
             raise
-        _sync_dir(path)
+        _sync_dir(path, sync)
 
 
 def _atomic_write_text(path: str, text: str, mode: int = 0o644, *, newline: str = "\n") -> None:
@@ -123,9 +123,10 @@ def _atomic_write_json(
     ensure_ascii: bool = False,
     indent: int = 2,
     newline: str = "\n",
+    sync: Callable[[int], None] | None = None,
 ) -> None:
     def body(f: Any) -> None:
         json.dump(obj, f, ensure_ascii=ensure_ascii, indent=indent)
         f.write("\n")
 
-    _write_and_replace(path, body, mode, newline)
+    _write_and_replace(path, body, mode, newline, sync)

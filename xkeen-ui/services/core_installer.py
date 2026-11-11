@@ -20,6 +20,7 @@ from typing import Any, Callable
 import zipfile
 
 from services.core_profile_state import CoreProfileStateStore
+from services.core_profile_state import _sync_core_file
 from services.core_profiles import (
     CoreProfile,
     RouterPlatform,
@@ -473,7 +474,7 @@ class CoreInstaller:
             current_phase = "backup"
             self._phase(operation_id, engine_id, "backup")
             os.makedirs(backup_dir, exist_ok=True)
-            _atomic_write_json(os.path.join(backup_dir, "state.json"), prior_state, mode=0o600)
+            _atomic_write_json(os.path.join(backup_dir, "state.json"), prior_state, mode=0o600, sync=_sync_core_file)
             if os.path.exists(target):
                 shutil.copy2(target, backup_target)
                 had_backup = True
@@ -485,7 +486,7 @@ class CoreInstaller:
                 with os.fdopen(fd, "wb") as handle:
                     handle.write(binary)
                     handle.flush()
-                    os.fsync(handle.fileno())
+                    _sync_core_file(handle.fileno())
                 try:
                     os.chmod(temp_path, 0o755)
                 except OSError:

@@ -11,6 +11,11 @@ from typing import Any
 
 from services.core_profiles import get_profile
 from services.io.atomic import _atomic_write_json
+from services.blocking import run_blocking
+
+
+def _sync_core_file(fd: int) -> None:
+    run_blocking(os.fsync, fd)
 
 
 _ENGINES = ("xray", "mihomo")
@@ -94,7 +99,7 @@ class CoreProfileStateStore:
 
     def _write(self, payload: dict[str, Any]) -> None:
         os.makedirs(self.root, exist_ok=True)
-        _atomic_write_json(self.path, payload, mode=0o600)
+        _atomic_write_json(self.path, payload, mode=0o600, sync=_sync_core_file)
 
     def all(self) -> dict[str, Any]:
         with self._lock:

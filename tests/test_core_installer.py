@@ -5,6 +5,9 @@ import gzip
 import importlib
 import io
 import json
+import subprocess
+import sys
+from pathlib import Path
 import time
 import threading
 import zipfile
@@ -15,6 +18,36 @@ import pytest
 profiles = importlib.import_module("services.core_profiles")
 installer_module = importlib.import_module("services.core_installer")
 state_module = importlib.import_module("services.core_profile_state")
+
+
+def test_core_file_sync_does_not_block_gevent_loop(tmp_path):
+    pytest.importorskip('gevent')
+    script = '''
+from gevent import monkey
+monkey.patch_all()
+import os, sys, gevent
+sys.path.insert(0, sys.argv[1])
+from services.core_installer import _sync_core_file
+from services.core_profile_state import CoreProfileStateStore
+sleep = monkey.get_original("time", "sleep")
+real_fsync = os.fsync
+def slow_fsync(fd):
+    sleep(0.15)
+    real_fsync(fd)
+os.fsync = slow_fsync
+def exercise(action):
+    marks = []
+    g = gevent.spawn_later(0.03, marks.append, True)
+    action()
+    assert marks, "event loop blocked by fsync"
+    g.join(timeout=1)
+with open(os.path.join(sys.argv[2], "binary"), "wb") as f:
+    exercise(lambda: _sync_core_file(f.fileno()))
+exercise(lambda: CoreProfileStateStore(sys.argv[2]).set_selected("mihomo", "official"))
+'''
+    root = str(Path(__file__).resolve().parents[1] / 'xkeen-ui')
+    result = subprocess.run([sys.executable, '-c', script, root, str(tmp_path)], capture_output=True, text=True, timeout=20)
+    assert result.returncode == 0, result.stderr
 
 
 @pytest.mark.parametrize("header,total", [("8", 8), (None, 0), ("invalid", 0)])
