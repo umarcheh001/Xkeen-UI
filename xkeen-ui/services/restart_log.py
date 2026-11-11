@@ -18,6 +18,43 @@ _RESTART_SOURCE_RE = re.compile(
 )
 _HIDDEN_OPERATION_SOURCES = frozenset({"mihomo-clash"})
 
+# Журнал теперь хранит ещё и вывод команды, поэтому без верхней границы он
+# растёт на роутере неограниченно.  Держим не больше MAX_LOG_BYTES и обрезаем
+# редко — только когда файл перерос вдвое, чтобы не платить за это на каждой
+# записи.  Урезаем по границе строки, иначе первая строка останется обрубком.
+MAX_LOG_BYTES = 2 * 1024 * 1024
+_TRIM_THRESHOLD_BYTES = 2 * MAX_LOG_BYTES
+
+
+def _trim_log_if_needed(log_file: str) -> None:
+    """Best-effort: оставить хвост последних MAX_LOG_BYTES, не разрывая строк."""
+    try:
+        size = os.path.getsize(log_file)
+    except OSError:
+        return
+    if size <= _TRIM_THRESHOLD_BYTES:
+        return
+    try:
+        with open(log_file, "rb") as f:
+            f.seek(max(0, size - MAX_LOG_BYTES))
+            tail = f.read()
+    except OSError:
+        return
+    # Первая строка почти наверняка обрезана посередине — выбрасываем её.
+    cut = tail.find(b"\n")
+    if cut >= 0:
+        tail = tail[cut + 1:]
+    try:
+        temp = log_file + ".tmp"
+        with open(temp, "wb") as f:
+            f.write(tail)
+        os.replace(temp, log_file)
+    except OSError:
+        try:
+            os.unlink(log_file + ".tmp")
+        except OSError:
+            pass
+
 
 def _operation_source(line: object) -> str:
     match = _RESTART_SOURCE_RE.match(str(line or "").strip())
@@ -81,6 +118,8 @@ def append_restart_log(log_file: str, ok: bool, source: str = "api", *, raw_text
     except Exception:
         # Logging errors are non-critical
         pass
+    else:
+        _trim_log_if_needed(log_file)
 
     try:
         from services.events import broadcast_event
@@ -109,6 +148,8 @@ def append_restart_log_text(log_file: str, raw_text: str) -> None:
             f.write(text)
     except Exception:
         pass
+    else:
+        _trim_log_if_needed(log_file)
 
 
 def write_restart_log(log_file: str, raw_text: str) -> None:

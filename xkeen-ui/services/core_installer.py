@@ -390,14 +390,26 @@ class CoreInstaller:
             raise CoreInstallError("inactive_core", "Устанавливать можно только активное ядро.")
 
     def _require_inactive(self, engine_id: str) -> None:
+        """Установка в неактивное ядро: службой должно владеть второе ядро.
+
+        Отделено от ``_require_active``: сообщения разные, потому что и причины
+        разные — смена ядра, уже запущенное целевое ядро и полное отсутствие
+        запущенных ядер требуют разных действий от оператора.
+        """
         if self.settled_core is not None:
             runtime, active = self.settled_core()
-            if getattr(runtime, "switching", False) or (runtime and runtime.has(engine_id)):
-                raise CoreInstallError("core_switching", "Состояние ядра изменилось. Повторите установку.")
+            if getattr(runtime, "switching", False):
+                raise CoreInstallError("core_switching", "Идёт смена ядра. Повторите установку через несколько секунд.")
+            if runtime and runtime.has(engine_id):
+                raise CoreInstallError("core_switching", "Ядро уже запущено. Обновите состояние и повторите установку.")
         else:
             active = self.running_core()
-        if active != self._other_engine(engine_id):
-            raise CoreInstallError("core_switching", "Состояние ядра изменилось. Повторите установку.")
+        other = self._other_engine(engine_id)
+        if active == other:
+            return
+        if active is None:
+            raise CoreInstallError("inactive_core", "Не запущено ни одного ядра. Сначала запустите ядро, затем повторите установку.")
+        raise CoreInstallError("core_switching", "Состояние ядра изменилось. Повторите установку.")
 
     @staticmethod
     def _reason_message(reason: str) -> str:
@@ -446,8 +458,16 @@ class CoreInstaller:
                 raise CoreInstallError("binary_path_missing", "Не найден путь к бинарному файлу ядра.")
             current_phase = "download"
             self._phase(operation_id, engine_id, "download")
+            # Прогресс имеет всего 20 различимых значений, а on_progress зовётся
+            # на каждые 64 КБ: на ядре в 200 МБ это 3200 вызовов, каждый из
+            # которых берёт _guard. Пишем только когда процент изменился.
+            last_progress = [-1]
+
             def on_download_progress(done: int, total: int) -> None:
                 progress = 8 + min(19, int(20 * done / total)) if total > 0 else 8
+                if progress == last_progress[0]:
+                    return
+                last_progress[0] = progress
                 self._set_operation(operation_id, downloaded_bytes=done, total_bytes=total, progress=progress)
 
             if self.downloader == self._download:
