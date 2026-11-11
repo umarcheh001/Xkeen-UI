@@ -36,11 +36,11 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 | Module ID | Единиц | Размер | Routes | Background | UI surfaces | Removable |
 |---|---:|---:|---:|---:|---:|---|
-| `core` | 673 | 8.85 МБ | 108 | 4 | 37 | нет |
+| `core` | 676 | 8.86 МБ | 108 | 4 | 37 | нет |
 | `engine.xray` | 151 | 3.80 МБ | 64 | 3 | 14 | да |
 | `engine.mihomo` | 147 | 3.31 МБ | 97 | 4 | 6 | да |
 | `tool.editor` | 25 | 814.7 КБ | 0 | 0 | 2 | да |
-| `tool.terminal` | 47 | 472.0 КБ | 2 | 2 | 2 | да |
+| `tool.terminal` | 47 | 473.8 КБ | 3 | 2 | 2 | да |
 | `tool.files` | 86 | 1.04 МБ | 42 | 1 | 1 | да |
 | `tool.backups` | 8 | 99.8 КБ | 14 | 0 | 0 | да |
 | `integration.happ` | 22 | 325.0 КБ | 5 | 0 | 2 | да |
@@ -49,7 +49,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 ## Backend routes и регистрация
 
-- Endpoint declarations: **358**.
+- Endpoint declarations: **359**.
 - Файлов с route decorators/WS dispatch: **52**.
 - Точек регистрации: **31**.
 
@@ -107,7 +107,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 | `core` | `tool.editor` | 12 | `xkeen-ui/static/js/pages/panel.editor.bundle.js`<br>`xkeen-ui/static/js/pages/panel.editor.codemirror.bundle.js`<br>`xkeen-ui/static/js/pages/panel.editor.diff.bundle.js` |
 | `core` | `tool.files` | 9 | `xkeen-ui/routes/__init__.py`<br>`xkeen-ui/services/panel_service_data.py`<br>`tests/test_filemanager_trash_policy.py` |
 | `core` | `tool.server-diagnostics` | 2 | `xkeen-ui/routes/__init__.py`<br>`xkeen-ui/static/js/pages/panel.server_diagnostics.bundle.js` |
-| `core` | `tool.terminal` | 7 | `xkeen-ui/run_server.py`<br>`xkeen-ui/routes/__init__.py`<br>`tests/test_module_backend_gates.py` |
+| `core` | `tool.terminal` | 8 | `xkeen-ui/run_server.py`<br>`xkeen-ui/routes/__init__.py`<br>`tests/test_module_backend_gates.py` |
 | `engine.mihomo` | `core` | 147 | `xkeen-ui/bootstrap_mihomo_env.py`<br>`xkeen-ui/mihomo_config_generator.py`<br>`xkeen-ui/mihomo_server_core.py` |
 | `engine.mihomo` | `engine.xray` | 6 | `xkeen-ui/routes/mihomo.py`<br>`xkeen-ui/services/mihomo_clash_devices.py`<br>`xkeen-ui/services/mihomo_clash_dto.py` |
 | `engine.mihomo` | `integration.happ` | 3 | `xkeen-ui/routes/mihomo.py`<br>`xkeen-ui/services/mihomo_subscriptions.py`<br>`xkeen-ui/static/js/features/mihomo_import.js` |

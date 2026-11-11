@@ -5215,6 +5215,28 @@ body.panel-page #view-commands .commands-column {
   min-width: 0;
 }
 
+body.panel-page #view-commands .command-capabilities-status {
+  margin-top: 8px;
+  color: #f6bd60;
+  font-size: calc(12px * var(--xk-font-scale, 1));
+}
+
+body.panel-page #view-commands .command-capabilities-status[hidden],
+body.panel-page #view-commands .command-item-wrap[hidden],
+body.panel-page #view-commands #commands-body .command-group[hidden],
+body.panel-page #view-commands .command-item[data-availability="available"] .command-availability-icon {
+  display: none !important;
+}
+
+body.panel-page #view-commands .command-item[data-availability="unknown"] .command-item-desc {
+  color: #f6bd60 !important;
+}
+
+html[data-theme="light"] body.panel-page #view-commands .command-capabilities-status,
+html[data-theme="light"] body.panel-page #view-commands .command-item[data-availability="unknown"] .command-item-desc {
+  color: #8a5300 !important;
+}
+
 body.panel-page #view-commands #commands-body .command-group,
 body.panel-page #view-commands #commands-body .command-group + .command-group,
 html[data-theme="light"] body.panel-page #view-commands #commands-body .command-group {

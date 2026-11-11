@@ -152,6 +152,11 @@ test.describe('Operator Console I5 accessibility and responsive contract', () =>
   });
 
   test('visual regression snapshots cover representative views and editor modal', async ({ page }) => {
+    // Snapshot must not depend on whether the local test host has XKeen installed.
+    await page.route('**/api/xkeen/command-capabilities', route => route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ known: false, flags: [] }),
+    }));
     // Полоса ядер на вкладке «Команды» зависит от машины: какие ядра найдены
     // и ответил ли GitHub. Эталон снимается с заданного ответа, а не с сети.
     await page.route('**/api/cores/versions', async (route) => {

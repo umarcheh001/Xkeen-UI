@@ -121,6 +121,9 @@ export async function applyPanelViewRuntime(name) {
         ensurePanelLazyFeature('coresStatus'),
       ]);
       if (!results.every(Boolean)) throw new Error('commands view features not ready');
+    }).then(() => {
+      const commands = getPanelLazyFeatureApi('commandsList');
+      if (commands && typeof commands.refreshCapabilities === 'function') return commands.refreshCapabilities();
     }).catch((error) => {
       try { console.error('[XKeen] view init failed:', viewName, error); } catch (e) {}
     });

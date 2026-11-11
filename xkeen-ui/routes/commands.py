@@ -18,11 +18,19 @@ from flask import Blueprint, jsonify, request
 from routes.common.errors import error_response
 
 from services.command_jobs import create_command_job, get_command_job, cleanup_old_jobs
-from services.xkeen_commands_catalog import ALLOWED_FLAGS, get_full_shell_policy, is_full_shell_enabled
+from services.xkeen_commands_catalog import ALLOWED_FLAGS, XKEEN_BIN, get_full_shell_policy, is_full_shell_enabled
+from services.xkeen_command_capabilities import detect_xkeen_commands
 
 
 def create_commands_blueprint() -> Blueprint:
     bp = Blueprint("commands", __name__)
+
+    @bp.get("/api/xkeen/command-capabilities")
+    def api_xkeen_command_capabilities():
+        flags = detect_xkeen_commands(XKEEN_BIN)
+        response = jsonify({"known": flags is not None, "flags": sorted(flags or ())})
+        response.headers["Cache-Control"] = "no-store"
+        return response
 
     @bp.post("/api/run-command")
     def api_run_command():

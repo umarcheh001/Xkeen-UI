@@ -38,20 +38,20 @@
         "gevent-websocket (optional)"
       ],
       "removable": false,
-      "unit_count": 673,
-      "size_bytes": 9282679,
+      "unit_count": 676,
+      "size_bytes": 9293724,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
-        "backend_service": 97,
-        "backend_test": 301,
+        "backend_service": 98,
+        "backend_test": 302,
         "configuration": 12,
         "frontend_bundle": 10,
         "frontend_entrypoint": 4,
         "frontend_feature": 45,
         "frontend_javascript": 40,
         "frontend_runtime": 2,
-        "frontend_test": 79,
+        "frontend_test": 80,
         "frontend_ui": 18,
         "stylesheet": 9,
         "template": 34
@@ -214,7 +214,7 @@
       ],
       "removable": true,
       "unit_count": 47,
-      "size_bytes": 483327,
+      "size_bytes": 485146,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 1,
@@ -223,7 +223,7 @@
         "frontend_feature": 2,
         "frontend_terminal": 41
       },
-      "route_count": 2,
+      "route_count": 3,
       "background_task_count": 2,
       "ui_surface_count": 2,
       "representative_paths": [
@@ -3697,8 +3697,28 @@
     {
       "module_id": "core",
       "kind": "backend_service",
+      "path": "xkeen-ui/services/xkeen_command_capabilities.py",
+      "size_bytes": 2138,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_service",
       "path": "xkeen-ui/services/xkeen_commands_catalog.py",
-      "size_bytes": 12267,
+      "size_bytes": 13448,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -10173,6 +10193,28 @@
     {
       "module_id": "core",
       "kind": "backend_test",
+      "path": "tests/test_xkeen_command_capabilities.py",
+      "size_bytes": 4123,
+      "depends_on": [
+        "tool.terminal"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
       "path": "tests/test_xkeen_command_inventory.py",
       "size_bytes": 1388,
       "depends_on": [],
@@ -12760,7 +12802,7 @@
       "module_id": "core",
       "kind": "frontend_javascript",
       "path": "xkeen-ui/static/js/pages/panel.view_runtime.js",
-      "size_bytes": 8689,
+      "size_bytes": 8885,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -14271,7 +14313,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/panel_operator_i5.spec.mjs",
-      "size_bytes": 11709,
+      "size_bytes": 11981,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -15035,6 +15077,26 @@
     },
     {
       "module_id": "core",
+      "kind": "frontend_test",
+      "path": "e2e/xkeen_command_capabilities.spec.mjs",
+      "size_bytes": 1832,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
       "kind": "frontend_ui",
       "path": "xkeen-ui/static/js/ui/build_refresh.js",
       "size_bytes": 6802,
@@ -15650,7 +15712,7 @@
       "module_id": "core",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/panel-operator.css",
-      "size_bytes": 851530,
+      "size_bytes": 852382,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -16172,7 +16234,7 @@
       "module_id": "core",
       "kind": "template",
       "path": "xkeen-ui/templates/panel/screens/commands.html",
-      "size_bytes": 15691,
+      "size_bytes": 16142,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -29457,7 +29519,7 @@
       "module_id": "tool.terminal",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/commands.py",
-      "size_bytes": 3647,
+      "size_bytes": 4033,
       "depends_on": [
         "core"
       ],
@@ -29471,6 +29533,11 @@
           "decorator": "bp.get"
         },
         {
+          "method": "GET",
+          "path": "/api/xkeen/command-capabilities",
+          "decorator": "bp.get"
+        },
+        {
           "method": "POST",
           "path": "/api/run-command",
           "decorator": "bp.post"
@@ -29480,7 +29547,9 @@
       "system_requirements": [
         "shell"
       ],
-      "environment_variables": [],
+      "environment_variables": [
+        "XKEEN_BIN"
+      ],
       "removable": true
     },
     {
@@ -29561,7 +29630,7 @@
       "module_id": "tool.terminal",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/commands_list.js",
-      "size_bytes": 6513,
+      "size_bytes": 7946,
       "depends_on": [
         "core"
       ],
@@ -30682,7 +30751,7 @@
     }
   ],
   "routes": {
-    "endpoint_count": 358,
+    "endpoint_count": 359,
     "files_with_routes": 52,
     "endpoint_files": [
       {
@@ -32778,6 +32847,11 @@
           {
             "method": "GET",
             "path": "/api/run-command/<job_id>",
+            "decorator": "bp.get"
+          },
+          {
+            "method": "GET",
+            "path": "/api/xkeen/command-capabilities",
             "decorator": "bp.get"
           },
           {
@@ -35770,11 +35844,12 @@
       {
         "from": "core",
         "to": "tool.terminal",
-        "unit_count": 7,
+        "unit_count": 8,
         "examples": [
           "xkeen-ui/run_server.py",
           "xkeen-ui/routes/__init__.py",
           "tests/test_module_backend_gates.py",
+          "tests/test_xkeen_command_capabilities.py",
           "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js",
           "xkeen-ui/static/js/pages/panel.module_loader.js",
           "xkeen-ui/static/js/pages/panel_shell.shared.js",
@@ -36738,11 +36813,12 @@
       {
         "from": "core",
         "to": "tool.terminal",
-        "unit_count": 7,
+        "unit_count": 8,
         "examples": [
           "xkeen-ui/run_server.py",
           "xkeen-ui/routes/__init__.py",
           "tests/test_module_backend_gates.py",
+          "tests/test_xkeen_command_capabilities.py",
           "xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js",
           "xkeen-ui/static/js/pages/panel.module_loader.js",
           "xkeen-ui/static/js/pages/panel_shell.shared.js",
@@ -36959,7 +37035,7 @@
         },
         "tool.terminal": {
           "unit_count": 47,
-          "size_bytes": 483327
+          "size_bytes": 485146
         },
         "tool.files": {
           "unit_count": 86,

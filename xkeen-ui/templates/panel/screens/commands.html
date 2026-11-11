@@ -12,6 +12,7 @@
           <h2>Команды</h2>
           <p class="commands-subtitle">Выберите действие или откройте оболочку для ручной работы.</p>
         </div>
+        <div id="xkeen-command-capabilities-status" class="command-capabilities-status" role="status">⚠ Не удалось определить доступность команд XKeen</div>
       </div>
       <div class="commands-header-actions">
         <button type="button" class="btn-primary commands-title-action" id="terminal-open-shell-btn" {% if not is_mips %}style="display:none;"{% endif %} title="Открыть терминал" aria-label="Открыть терминал" data-tooltip="Открыть терминал (обычный режим).">{{ op_icon('terminal') }}<span>Открыть терминал</span></button>
@@ -86,8 +87,8 @@
      large hole before moving that group to the next lane. #}
   {% set command_column_indexes = [
     [0, 1, 2, 3, 4, 5, 10],
-    [6, 7, 8, 9, 11, 12, 14, 15],
-    [13]
+    [6, 7, 8, 9, 11, 12, 15, 17],
+    [13, 14, 16]
   ] %}
   {% for column_indexes in command_column_indexes %}
     <div class="commands-column" data-command-column="{{ loop.index }}">
@@ -110,10 +111,11 @@
                     data-label="xkeen {{ cmd.flag }}"
                     data-command="xkeen {{ cmd.flag }}"
                     data-action="run"
+                    data-availability="unknown"
                     data-tooltip="{{ cmd.desc }}">
               <span class="command-item-prefix">xkeen</span>
               <code>{{ cmd.flag }}</code>
-              <span class="command-item-desc">{{ cmd.desc }}</span>
+              <span class="command-item-desc"><span class="command-availability-icon" aria-label="Доступность команды не определена" title="Доступность команды не определена">⚠ </span>{{ cmd.desc }}</span>
               <button type="button" class="command-item-action" aria-label="Выполнить xkeen {{ cmd.flag }}">Выполнить</button>
             </div>
           </li>

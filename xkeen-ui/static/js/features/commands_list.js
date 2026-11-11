@@ -20,6 +20,37 @@ let commandsListModuleApi = null;
 
   const CL = {};
   commandsListModuleApi = CL;
+  let capabilityRequest = 0;
+
+  CL.refreshCapabilities = async function refreshCapabilities() {
+    const request = ++capabilityRequest;
+    let known = false;
+    let available = new Set();
+    try {
+      const response = await fetch('/api/xkeen/command-capabilities', { cache: 'no-store' });
+      const data = await response.json();
+      known = response.ok && data.known === true && Array.isArray(data.flags);
+      if (known) available = new Set(data.flags);
+    } catch (error) {}
+    if (request !== capabilityRequest) return;
+    const view = document.getElementById('view-commands');
+    if (!view) return;
+    const status = document.getElementById('xkeen-command-capabilities-status');
+    if (status) status.hidden = known;
+    view.querySelectorAll('.command-item[data-availability]').forEach((item) => {
+      const flag = item.getAttribute('data-flag');
+      const row = item.closest('.command-item-wrap');
+      if (row) row.hidden = known && !available.has(flag);
+      item.dataset.availability = known ? 'available' : 'unknown';
+    });
+    view.querySelectorAll('.command-group').forEach((group) => {
+      const rows = Array.from(group.querySelectorAll('.command-item-wrap'));
+      const visible = rows.filter((row) => !row.hidden).length;
+      group.hidden = visible === 0;
+      const count = group.querySelector('.command-group-count');
+      if (count) count.textContent = String(visible);
+    });
+  };
 
   function getLazyRuntimeApi() {
     return getXkeenLazyRuntimeApi();
