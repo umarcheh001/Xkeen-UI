@@ -31,6 +31,7 @@ COMMAND_GROUPS = [
             {"flag": "-ug", "desc": "GeoFile/GeoIPSET"},
             {"flag": "-ux", "desc": "Xray (повышение/понижение версии)"},
             {"flag": "-um", "desc": "Mihomo (повышение/понижение версии)"},
+            {"flag": "-uy", "desc": "Yq (установка/обновление)"},
         ],
     },
     {

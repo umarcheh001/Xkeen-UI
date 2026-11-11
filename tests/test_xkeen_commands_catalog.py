@@ -77,3 +77,9 @@ def test_xkeen_command_catalog_has_no_duplicate_flags() -> None:
     flags = _catalog_flags()
 
     assert len(flags) == len(set(flags))
+
+
+def test_yq_install_update_command_is_available_in_update_group() -> None:
+    update = next(group for group in COMMAND_GROUPS if group["title"] == "Обновление")
+    assert {"flag": "-uy", "desc": "Yq (установка/обновление)"} in update["items"]
+    assert "-uy" in ALLOWED_FLAGS
