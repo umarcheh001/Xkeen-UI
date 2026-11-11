@@ -32,7 +32,65 @@ def test_mihomo_async_restart_flow_persists_full_restart_log():
     assert 'resp.update({"restart_queued": True, "restart_job_id": job.id})' in route_src
     assert "def write_restart_log(log_file: str, raw_text: str) -> None:" in restart_log_src
     assert "def _sync_restart_log(job: \"CommandJob\" | None) -> None:" in jobs_src
-    assert "write_restart_log(_restart_log_file(), payload)" in jobs_src
+    assert "append_restart_log" in jobs_src
+
+
+def test_background_restart_preserves_history_and_records_result(monkeypatch, tmp_path):
+    sys.path.insert(0, str(ROOT / "xkeen-ui"))
+    try:
+        jobs = importlib.import_module("services.command_jobs")
+    finally:
+        sys.path.pop(0)
+    log = tmp_path / "restart.log"
+    log.write_text("[2026-11-10 10:00:00] source=api-stop result=OK\n", encoding="utf-8")
+    monkeypatch.setenv("XKEEN_RESTART_LOG_FILE", str(log))
+    monkeypatch.setattr("services.xkeen.get_xkeen_runtime_status", lambda: {"runtime_status": "running", "runtime_core": "xray"})
+    monkeypatch.setattr("services.xkeen._wait_xkeen_running", lambda *_args, **_kwargs: True)
+    job = jobs.CommandJob(id="a", flag="-restart", status="running", output="Xray output\n")
+    jobs._sync_restart_log(job)
+    assert "Xray output" not in log.read_text(encoding="utf-8")
+    job.status, job.exit_code, job.finished_at = "finished", 0, job.created_at + 2
+    jobs._sync_restart_log(job)
+    result = log.read_text(encoding="utf-8")
+    assert "source=api-stop result=OK" in result
+    assert "Xray output\n[" in result
+    assert "source=job-restart result=OK" in result
+
+
+def test_background_restart_with_stopped_core_is_not_success(monkeypatch, tmp_path):
+    sys.path.insert(0, str(ROOT / "xkeen-ui"))
+    try:
+        jobs = importlib.import_module("services.command_jobs")
+    finally:
+        sys.path.pop(0)
+    log = tmp_path / "restart.log"
+    monkeypatch.setenv("XKEEN_RESTART_LOG_FILE", str(log))
+    monkeypatch.setattr("services.xkeen.get_xkeen_runtime_status", lambda: {"runtime_status": "stopped", "runtime_core": "none"})
+    monkeypatch.setattr("services.xkeen._wait_xkeen_running", lambda *_args, **_kwargs: False)
+    job = jobs.CommandJob(id="c", flag="-restart", status="finished", exit_code=0, finished_at=1)
+    jobs._sync_restart_log(job)
+    assert "source=job-restart result=FAIL" in log.read_text(encoding="utf-8")
+
+
+def test_background_start_failure_records_error(monkeypatch, tmp_path):
+    sys.path.insert(0, str(ROOT / "xkeen-ui"))
+    try:
+        jobs = importlib.import_module("services.command_jobs")
+    finally:
+        sys.path.pop(0)
+    log = tmp_path / "restart.log"
+    monkeypatch.setenv("XKEEN_RESTART_LOG_FILE", str(log))
+    job = jobs.CommandJob(id="b", flag="-start", status="error", error="timeout", finished_at=1)
+    jobs._sync_restart_log(job)
+    result = log.read_text(encoding="utf-8")
+    assert "timeout\n[" in result
+    assert "source=job-start result=FAIL" in result
+
+
+def test_preparing_live_stream_does_not_clear_saved_history():
+    src = _read("xkeen-ui/static/js/features/restart_log.js")
+    section = src.split("RL.prepareLiveStream =", 1)[1].split("RL.waitForJob =", 1)[0]
+    assert "RL.clear()" not in section
 
 
 def test_core_restart_job_status_is_available_without_terminal_module(monkeypatch, tmp_path):

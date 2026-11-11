@@ -9,6 +9,18 @@
 export const RESTART_SUMMARY_RE = /^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]\s+source=([^\s]+)\s+result=([A-Z]+)(?:\s+(.*?))?\s*$/i;
 
 export const RESTART_SOURCE_META = Object.freeze({
+  'job-restart': {
+    label: 'Перезапуск',
+    successText: 'Xkeen перезапущен',
+    failureText: 'не удалось перезапустить Xkeen',
+    bucket: 'service',
+  },
+  'job-start': {
+    label: 'Запуск',
+    successText: 'Xkeen запущен',
+    failureText: 'не удалось запустить Xkeen',
+    bucket: 'service',
+  },
   api: {
     label: 'Xkeen',
     successText: 'перезапущен успешно',

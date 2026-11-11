@@ -744,6 +744,21 @@ test.describe('Operator Console Stage 4 logs', () => {
     await expect(rowsOf.first()).toBeFocused();
   });
 
+  test('background restart shows its date, time and folded output', async ({ page }) => {
+    await openLogs(page, 'dark', { width: 1440, height: 900 }, { restartLines: [
+      '[2026-07-29 09:12:00] source=xray-preflight result=FAIL\n',
+      'Xray output\n',
+      '[2026-07-29 09:13:00] source=job-restart result=OK runtime_status=running runtime_core=xray\n',
+    ] });
+    const card = page.locator('#view-xray-logs .xk-restart-log-card');
+    const row = card.locator('.xk-jr-row').filter({ hasText: 'Перезапуск' });
+    await expect(card).toContainText('29 июля');
+    await expect(row).toContainText('09:13:00');
+    await expect(row).toContainText('Xkeen перезапущен');
+    await row.click();
+    await expect(card.locator('.xk-jr-out')).toContainText('Xray output');
+  });
+
   test('the journal shows the newest first when asked and remembers it', async ({ page }) => {
     const journal = [
       '[2026-07-28 22:00:00] source=routing result=OK file=03_routing.json duration_ms=41\n',

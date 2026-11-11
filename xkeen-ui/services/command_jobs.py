@@ -18,7 +18,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Dict
 
-from services.restart_log import write_restart_log
+from services.restart_log import append_restart_log
 
 try:
     import pty as _pty
@@ -123,7 +123,7 @@ def _should_sync_restart_log(job: "CommandJob" | None) -> bool:
 
 
 def _sync_restart_log(job: "CommandJob" | None) -> None:
-    if not _should_sync_restart_log(job):
+    if not _should_sync_restart_log(job) or job.status not in {"finished", "error"}:
         return
 
     payload = job.output or ""
@@ -133,8 +133,24 @@ def _sync_restart_log(job: "CommandJob" | None) -> None:
             payload += "\n"
         payload += err + "\n"
 
+    ok = job.status == "finished" and job.exit_code == 0
+    runtime = {}
     try:
-        write_restart_log(_restart_log_file(), payload)
+        from services.xkeen import _wait_xkeen_running, get_xkeen_runtime_status
+
+        if ok:
+            ok = _wait_xkeen_running(True, timeout=8.0)
+        runtime = get_xkeen_runtime_status()
+    except Exception:
+        ok = False
+    try:
+        append_restart_log(
+            _restart_log_file(), ok,
+            source="job-start" if job.flag == "-start" else "job-restart",
+            raw_text=payload,
+            duration_ms=max(0, int(((job.finished_at or job.created_at) - job.created_at) * 1000)),
+            **runtime,
+        )
     except Exception:
         pass
 

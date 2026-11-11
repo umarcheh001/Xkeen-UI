@@ -56,7 +56,7 @@ def _format_restart_meta(meta: dict[str, object]) -> str:
     return (" " + " ".join(parts)) if parts else ""
 
 
-def append_restart_log(log_file: str, ok: bool, source: str = "api", **meta: object) -> None:
+def append_restart_log(log_file: str, ok: bool, source: str = "api", *, raw_text: str = "", **meta: object) -> None:
     """Append a single line about restart result to the restart log."""
     # Clash API reads, health checks and delay probes are high-frequency
     # diagnostics, not Xkeen lifecycle operations.  Keep them out of this
@@ -69,12 +69,15 @@ def append_restart_log(log_file: str, ok: bool, source: str = "api", **meta: obj
         res="OK" if ok else "FAIL",
         meta=_format_restart_meta(meta),
     )
+    output = str(raw_text or "")
+    if output and not output.endswith("\n"):
+        output += "\n"
     log_dir = os.path.dirname(log_file)
     if log_dir and not os.path.isdir(log_dir):
         os.makedirs(log_dir, exist_ok=True)
     try:
-        with open(log_file, "a") as f:
-            f.write(line)
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(output + line)
     except Exception:
         # Logging errors are non-critical
         pass

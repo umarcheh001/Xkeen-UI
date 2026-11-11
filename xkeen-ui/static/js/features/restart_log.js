@@ -1566,7 +1566,7 @@ let restartLogModuleApi = null;
     const opts = options && typeof options === 'object' ? options : {};
 
     if (opts.clear !== false) {
-      RL.clear();
+      RL.setRaw('', { toastNewSubscription: false });
     } else if (opts.resetRaw === true) {
       RL.setRaw('', { toastNewSubscription: false });
     }
