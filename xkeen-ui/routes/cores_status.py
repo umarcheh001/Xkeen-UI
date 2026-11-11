@@ -216,8 +216,18 @@ def _parse_mihomo_version(output: str) -> Optional[str]:
 
 
 def _parse_mihomo_display_version(output: str) -> Optional[str]:
-    m = re.search(r"\bv?(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)", output or "")
-    return m.group(1) if m else _parse_mihomo_version(output)
+    """Версия для показа: сначала после слова version, потом любая в строке.
+
+    Широкий шаблон ловит первое число вида 1.2.3 где угодно, поэтому его
+    пробуем последним — иначе номер версии из пути к бинарнику перебил бы
+    настоящий.
+    """
+    text = output or ""
+    branded = re.search(r"\b(?:version|meta|mihomo)\s+v?(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)", text, re.IGNORECASE)
+    if branded:
+        return branded.group(1)
+    m = re.search(r"\bv?(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)", text)
+    return m.group(1) if m else _parse_mihomo_version(text)
 
 
 def _read_json(path: str, trusted_root: str) -> Optional[dict]:

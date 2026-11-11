@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 676,
-      "size_bytes": 9298520,
+      "size_bytes": 9299117,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -254,7 +254,7 @@
       ],
       "removable": true,
       "unit_count": 86,
-      "size_bytes": 1093079,
+      "size_bytes": 1093740,
       "kind_counts": {
         "backend_route": 22,
         "backend_service": 32,
@@ -398,7 +398,7 @@
       "system_requirements": [],
       "removable": true,
       "unit_count": 17,
-      "size_bytes": 372203,
+      "size_bytes": 372588,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 2,
@@ -815,7 +815,7 @@
       "module_id": "core",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/cores_status.py",
-      "size_bytes": 33434,
+      "size_bytes": 34031,
       "depends_on": [],
       "starts_background_task": true,
       "background_markers": [
@@ -28245,7 +28245,7 @@
       "module_id": "tool.files",
       "kind": "backend_service",
       "path": "xkeen-ui/services/storage_usb.py",
-      "size_bytes": 45820,
+      "size_bytes": 46481,
       "depends_on": [
         "core"
       ],
@@ -29225,7 +29225,7 @@
       "module_id": "tool.server-diagnostics",
       "kind": "backend_service",
       "path": "xkeen-ui/services/provider_diagnostics.py",
-      "size_bytes": 74341,
+      "size_bytes": 74726,
       "depends_on": [
         "core",
         "engine.mihomo",
@@ -37039,7 +37039,7 @@
         },
         "tool.files": {
           "unit_count": 86,
-          "size_bytes": 1093079
+          "size_bytes": 1093740
         },
         "tool.advanced-diagnostics": {
           "unit_count": 49,

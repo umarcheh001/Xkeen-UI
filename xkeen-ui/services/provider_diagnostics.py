@@ -39,7 +39,10 @@ _RESOURCE_PROBE_SLOTS = threading.BoundedSemaphore(2)
 _PROXY_CONTEXT_LOCK = threading.Lock()
 _PROXY_CONTEXTS: OrderedDict[str, tuple[float, list[dict | None], list[dict]]] = OrderedDict()
 _PROXY_CONTEXT_TTL = 600
-_PROXY_CONTEXT_LIMIT = 32
+# Каждая запись держит ещё и targets — до 200 серверов с хостом, портом и SNI.
+# При лимите 32 это до 5 МБ на роутере с малым объёмом памяти, а нужны
+# одновременно не больше двух-трёх: страница серверов плюс история вкладки.
+_PROXY_CONTEXT_LIMIT = 8
 _TLS_CONTROLS = (("1.1.1.1", "cloudflare-dns.com"), ("8.8.8.8", "dns.google"))
 _TLS_COMPARE_IP_LIMIT = 2
 _TLS_COMPARE_ROUNDS = 2

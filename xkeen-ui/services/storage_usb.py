@@ -537,9 +537,17 @@ def _clear_new_partition_headers(disk: dict[str, Any], device: str,
 
 
 def _is_empty_volume(part: dict[str, Any]) -> bool:
-    return bool(part.get("empty") and part.get("state") == "mounted"
-                or not part.get("uuid") and not part.get("fstype")
-                and part.get("state") in {"unmounted", "unsupported"})
+    """Том можно считать пустым, не монтируя его.
+
+    Два независимых случая: смонтированный том, прошивка уже сообщила, что он
+    пуст; и том вовсе без файловой системы (нет uuid и fstype) в состоянии
+    unmounted/unsupported — там нечего проверять. Скобки расставлены явно:
+    приоритет ``and`` выше ``or``, но читать без них это выражение тяжело.
+    """
+    mounted_and_empty = bool(part.get("empty") and part.get("state") == "mounted")
+    no_filesystem = (not part.get("uuid") and not part.get("fstype")
+                     and part.get("state") in {"unmounted", "unsupported"})
+    return bool(mounted_and_empty or no_filesystem)
 
 
 def _verify_empty_volume(disk: dict[str, Any], part: dict[str, Any]) -> dict[str, Any] | None:
