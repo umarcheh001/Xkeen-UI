@@ -44,6 +44,8 @@ _PROXY_CONTEXT_TTL = 600
 # одновременно не больше двух-трёх: страница серверов плюс история вкладки.
 _PROXY_CONTEXT_LIMIT = 8
 _TLS_CONTROLS = (("1.1.1.1", "cloudflare-dns.com"), ("8.8.8.8", "dns.google"))
+# Как часто цикл чтения тела просыпается, чтобы проверить общий дедлайн.
+_BODY_POLL_S = 0.2
 _TLS_COMPARE_IP_LIMIT = 2
 _TLS_COMPARE_ROUNDS = 2
 _UDP_PROTOCOLS = {"hysteria", "hysteria2", "hy2", "tuic", "wireguard", "anytls-quic"}
@@ -888,10 +890,39 @@ def _resource_http_request(parts: tuple[str, str, int, str], *, address: tuple |
                 result["status"] = "unexpected_response"
                 return result
             stage = "body"
+            # На Windows shutdown() из таймера не прерывает блокирующее чтение:
+            # поток просыпается только когда сервер закроет соединение, и
+            # дедлайн превращается в ожидание ответа сервера. Короткий таймаут
+            # заставляет цикл просыпаться и проверять срок сам.
+            #
+            # Срок проверяем по монотонному времени, а не по флагу expired:
+            # таймер и таймаут сокета срабатывают в один момент, и поток
+            # успевает проснуться раньше, чем таймер выставит флаг.
+            deadline = started + duration
+            try:
+                sock.settimeout(_BODY_POLL_S)
+            except OSError:
+                pass
             while result["bytes_received"] < transfer_bytes:
-                chunk = response.read1(min(4096, transfer_bytes - result["bytes_received"]))
+                try:
+                    chunk = response.read1(min(4096, transfer_bytes - result["bytes_received"]))
+                except TimeoutError:
+                    # Опрос разбудил нас: либо срок вышел, либо передача просто
+                    # медленная и данных ещё нет.
+                    if time.monotonic() >= deadline:
+                        result["status"] = "transfer_timeout"
+                        break
+                    continue
+                except OSError:
+                    # Истёкший срок на Windows рвёт соединение через shutdown()
+                    # и поднимает OSError (WinError 10058), а не TimeoutError.
+                    # Всё прочее — настоящая ошибка соединения.
+                    if time.monotonic() >= deadline:
+                        result["status"] = "transfer_timeout"
+                        break
+                    raise
                 if not chunk:
-                    result["status"] = "transfer_timeout" if expired.is_set() else "transfer_short"
+                    result["status"] = "transfer_timeout" if time.monotonic() >= deadline else "transfer_short"
                     break
                 elapsed = round((time.monotonic() - started) * 1000)
                 if result["first_byte_ms"] is None:

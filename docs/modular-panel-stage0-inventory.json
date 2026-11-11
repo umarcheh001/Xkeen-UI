@@ -398,7 +398,7 @@
       "system_requirements": [],
       "removable": true,
       "unit_count": 17,
-      "size_bytes": 372588,
+      "size_bytes": 374700,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 2,
@@ -29225,7 +29225,7 @@
       "module_id": "tool.server-diagnostics",
       "kind": "backend_service",
       "path": "xkeen-ui/services/provider_diagnostics.py",
-      "size_bytes": 74726,
+      "size_bytes": 76838,
       "depends_on": [
         "core",
         "engine.mihomo",
