@@ -712,7 +712,7 @@ def normalize_internet_status(payload: Any) -> dict[str, Any]:
         "checking": _bool(source.get("checking")),
         "checked": str(source.get("checked") or "")[:96],
         "interface": str(_first(source, "interface") or gateway.get("interface") or "")[:64],
-        "address": str(_first(source, "address") or gateway.get("address") or "")[:64],
+        "address": "",
     }
 
 
@@ -1081,6 +1081,13 @@ def sample_router_diagnostics(
             except RciUnavailable:
                 continue
         result["interfaces"] = normalize_interfaces(interface_payload, now=now, interface_stats=interface_stats)
+        internet = result["internet"]
+        interface_name = internet.get("interface", "")
+        interfaces = result["interfaces"]["items"]
+        candidates = ([item for item in interfaces if item["name"] == interface_name]
+                      if interface_name else [item for item in interfaces if item["default_gateway"]])
+        if len(candidates) == 1 and candidates[0]["online"] is not False:
+            internet["address"] = candidates[0]["address"]
     except RciUnavailable as exc:
         rci_states.append(exc.state)
         result["interfaces"] = {"available": False, "count": 0, "items": [], "truncated": False}

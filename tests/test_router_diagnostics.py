@@ -126,7 +126,30 @@ def test_normalize_internet_status_handles_keenetic_accessibility_flags():
     assert payload["dns"] is True
     assert payload["captive"] is False
     assert payload["interface"] == "ISP"
-    assert payload["address"] == "192.0.2.2"
+    assert payload["address"] == ""
+
+
+def test_snapshot_uses_active_interface_address_not_gateway():
+    def fetch(path):
+        if path == "show/internet/status":
+            return {"internet": True, "gateway": [{"interface": "ISP", "address": "192.0.2.1"}]}
+        if path == "show/interface":
+            return [{"id": "ISP", "address": "192.0.2.20", "defaultgw": True},
+                    {"id": "Backup", "address": "192.0.2.30"}]
+        raise AssertionError(path)
+
+    payload = sample_router_diagnostics(reader=lambda path: "1", rci_fetcher=fetch, clock=lambda: 100)
+    assert payload["internet"]["address"] == "192.0.2.20"
+
+
+def test_snapshot_does_not_use_unrelated_interface_address():
+    def fetch(path):
+        if path == "show/internet/status":
+            return {"gateway": [{"interface": "ISP", "address": "192.0.2.1"}]}
+        return [{"id": "Backup", "address": "192.0.2.30", "defaultgw": True}]
+
+    payload = sample_router_diagnostics(reader=lambda path: "1", rci_fetcher=fetch, clock=lambda: 100)
+    assert payload["internet"]["address"] == ""
 
 
 def test_conntrack_reads_count_and_limit_from_procfs():
