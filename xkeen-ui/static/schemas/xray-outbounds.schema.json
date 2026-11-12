@@ -1,13 +1,54 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Xray Outbounds Fragment",
+  "description": "JSON Schema for 04_outbounds.json. Accepts either { outbounds: [...] } fragments or a raw outbounds array.",
+  "anyOf": [
+    {
+      "title": "04_outbounds.json object",
+      "type": "object",
+      "properties": {
+        "outbounds": {
+          "description": "Исходящие подключения",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/outbound"
+          }
+        }
+      },
+      "required": [
+        "outbounds"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "title": "Outbounds array",
+      "description": "Исходящие подключения",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/outbound"
+      }
+    }
+  ],
   "definitions": {
     "realityFallbackRateLimit": {
       "type": "object",
       "description": "Ограничение скорости неавторизованных REALITY fallback-соединений.",
       "properties": {
-        "afterBytes": { "type": "integer", "minimum": 0, "default": 0 },
-        "bytesPerSec": { "type": "integer", "minimum": 0, "default": 0 },
-        "burstBytesPerSec": { "type": "integer", "minimum": 0, "default": 0 }
+        "afterBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0
+        },
+        "bytesPerSec": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0
+        },
+        "burstBytesPerSec": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0
+        }
       },
       "additionalProperties": false
     },
@@ -435,9 +476,27 @@
           "type": "string",
           "description": "Актуальное имя поля транспорта Xray. Канонические значения: `raw`, `xhttp`, `mkcp`, `grpc`, `websocket`, `httpupgrade`, `hysteria`; legacy-алиасы также принимает core.",
           "enum": [
-            "raw", "tcp", "xhttp", "splithttp", "mkcp", "kcp", "grpc", "websocket", "ws", "httpupgrade", "hysteria"
+            "raw",
+            "tcp",
+            "xhttp",
+            "splithttp",
+            "mkcp",
+            "kcp",
+            "grpc",
+            "websocket",
+            "ws",
+            "httpupgrade",
+            "hysteria",
+            "xdrive",
+            "masque"
           ],
-          "deprecatedValues": ["tcp", "splithttp", "kcp", "ws", "grpc"],
+          "deprecatedValues": [
+            "tcp",
+            "splithttp",
+            "kcp",
+            "ws",
+            "grpc"
+          ],
           "default": "raw"
         },
         "network": {
@@ -454,7 +513,9 @@
             "httpupgrade",
             "splithttp",
             "hysteria",
-            "xhttp"
+            "xhttp",
+            "xdrive",
+            "masque"
           ],
           "deprecatedValues": [
             "grpc"
@@ -542,10 +603,19 @@
               "default": false,
               "description": "Не доверять системным корневым сертификатам. Оставьте `false`, если не используете собственный CA."
             },
-            "verifyPeerCertByName": { "type": "string" },
-            "enableSessionResumption": { "type": "boolean", "default": false },
-            "cipherSuites": { "type": "string" },
-            "pinnedPeerCertSha256": { "type": "string" },
+            "verifyPeerCertByName": {
+              "type": "string"
+            },
+            "enableSessionResumption": {
+              "type": "boolean",
+              "default": false
+            },
+            "cipherSuites": {
+              "type": "string"
+            },
+            "pinnedPeerCertSha256": {
+              "type": "string"
+            },
             "pinnedPeerCertificateChainSha256": {
               "type": "array",
               "description": "SHA-256 pinning всей цепочки сертификатов сервера (в base64). Редко нужно.",
@@ -553,11 +623,24 @@
                 "type": "string"
               }
             },
-            "curvePreferences": { "type": "array", "items": { "type": "string" } },
-            "masterKeyLog": { "type": "string" },
-            "echServerKeys": { "type": "string" },
-            "echConfigList": { "type": "string" },
-            "echSockopt": { "type": "object" },
+            "curvePreferences": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "masterKeyLog": {
+              "type": "string"
+            },
+            "echServerKeys": {
+              "type": "string"
+            },
+            "echConfigList": {
+              "type": "string"
+            },
+            "echSockopt": {
+              "type": "object"
+            },
             "minVersion": {
               "type": "string",
               "description": "Минимальная версия TLS (например `1.2`, `1.3`).",
@@ -577,6 +660,10 @@
               "type": "boolean",
               "default": false,
               "description": "Отклонять TLS-соединения с неизвестным SNI (серверная настройка). Клиенту не нужно."
+            },
+            "useSystemCA": {
+              "type": "boolean",
+              "description": "Использовать системное хранилище центров сертификации TLS."
             }
           }
         },
@@ -706,8 +793,20 @@
               "type": "integer",
               "description": "Максимальное отклонение времени клиента от сервера (мс). Защищает от replay-атак."
             },
-            "limitFallbackUpload": { "$ref": "#/definitions/realityFallbackRateLimit" },
-            "limitFallbackDownload": { "$ref": "#/definitions/realityFallbackRateLimit" }
+            "limitFallbackUpload": {
+              "$ref": "#/definitions/realityFallbackRateLimit"
+            },
+            "limitFallbackDownload": {
+              "$ref": "#/definitions/realityFallbackRateLimit"
+            },
+            "masterKeyLog": {
+              "type": "string",
+              "description": "Путь журнала ключей REALITY для отладки."
+            },
+            "type": {
+              "type": "string",
+              "description": "Тип целевого соединения REALITY; обычно определяется по target автоматически."
+            }
           }
         },
         "rawSettings": {
@@ -884,11 +983,26 @@
           "type": "object",
           "description": "Hysteria/Hysteria2 transport settings. For Hysteria2, use version=2 and auth.",
           "properties": {
-            "version": { "type": "integer", "enum": [1, 2], "default": 2 },
-            "auth": { "type": "string" },
-            "congestion": { "type": "string" },
-            "up": { "type": "string" },
-            "down": { "type": "string" }
+            "version": {
+              "type": "integer",
+              "enum": [
+                1,
+                2
+              ],
+              "default": 2
+            },
+            "auth": {
+              "type": "string"
+            },
+            "congestion": {
+              "type": "string"
+            },
+            "up": {
+              "type": "string"
+            },
+            "down": {
+              "type": "string"
+            }
           }
         },
         "finalmask": {
@@ -900,8 +1014,12 @@
               "items": {
                 "type": "object",
                 "properties": {
-                  "type": { "type": "string" },
-                  "settings": { "type": "object" }
+                  "type": {
+                    "type": "string"
+                  },
+                  "settings": {
+                    "type": "object"
+                  }
                 }
               }
             },
@@ -910,12 +1028,112 @@
               "items": {
                 "type": "object",
                 "properties": {
-                  "type": { "type": "string" },
-                  "settings": { "type": "object" }
+                  "type": {
+                    "type": "string"
+                  },
+                  "settings": {
+                    "type": "object"
+                  }
                 }
               }
             },
-            "quicParams": { "type": "object" }
+            "quicParams": {
+              "type": "object"
+            }
+          }
+        },
+        "xdriveSettings": {
+          "type": "object",
+          "description": "Настройки XDRIVE в Xray-core v26.11.9. Для исходящего VLESS нужны VLESS Encryption и включённый mux; настройки клиента и сервера должны совпадать.",
+          "properties": {
+            "service": {
+              "type": "string",
+              "enum": [
+                "local",
+                "google-drive",
+                "Google Drive",
+                "template",
+                "s3"
+              ],
+              "description": "Хранилище XDRIVE."
+            },
+            "remoteFolder": {
+              "type": "string",
+              "description": "Удалённая папка транспорта."
+            },
+            "secrets": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Учётные данные выбранного хранилища; для Google Drive: Client ID, Client Secret и Refresh Token."
+            },
+            "segmentBytes": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Размер сегмента в байтах."
+            },
+            "flushIntervalMs": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Интервал отправки в миллисекундах."
+            },
+            "pollIntervalMs": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Интервал опроса в миллисекундах."
+            },
+            "maxPollIntervalMs": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Максимальный интервал опроса в миллисекундах."
+            },
+            "sessionTtlSeconds": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Время жизни сессии в секундах."
+            },
+            "concurrency": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Число параллельных операций."
+            },
+            "eagerWindowMs": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Окно активного опроса в миллисекундах."
+            },
+            "holeTimeoutMs": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Тайм-аут ожидания пропущенного сегмента в миллисекундах."
+            },
+            "template": {
+              "type": "object",
+              "description": "Шаблон запросов для сервиса template."
+            },
+            "s3": {
+              "type": "object",
+              "description": "Настройки S3.",
+              "properties": {
+                "endpoint": {
+                  "type": "string"
+                },
+                "region": {
+                  "type": "string"
+                },
+                "bucket": {
+                  "type": "string"
+                },
+                "pathStyle": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "xmux": {
+              "type": "object",
+              "description": "Настройки повторного использования подключений XDRIVE."
+            }
           }
         },
         "sockopt": {
@@ -927,7 +1145,10 @@
               "description": "fwmark исходящих пакетов (для policy-based routing). В Xkeen устанавливается скриптом автоматически."
             },
             "tcpFastOpen": {
-              "type": "boolean",
+              "type": [
+                "boolean",
+                "integer"
+              ],
               "description": "Включить TCP Fast Open (TFO). Требует поддержки обеими сторонами."
             },
             "tproxy": {
@@ -992,6 +1213,140 @@
             "v6only": {
               "type": "boolean",
               "description": "Привязывать сокет только к IPv6."
+            },
+            "tcpCongestion": {
+              "type": "string",
+              "description": "Алгоритм управления перегрузкой TCP."
+            },
+            "addressPortStrategy": {
+              "type": "string",
+              "description": "Стратегия выбора адреса и порта."
+            },
+            "tcpWindowClamp": {
+              "type": "integer",
+              "description": "Ограничение окна TCP."
+            },
+            "tcpMaxSeg": {
+              "type": "integer",
+              "description": "Максимальный размер сегмента TCP."
+            },
+            "tcpUserTimeout": {
+              "type": "integer",
+              "description": "Пользовательский тайм-аут TCP."
+            },
+            "acceptProxyProtocol": {
+              "type": "boolean",
+              "description": "Принимать PROXY protocol."
+            },
+            "penetrate": {
+              "type": "boolean",
+              "description": "Включить penetrate."
+            },
+            "trustedXForwardedFor": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Доверенные адреса X-Forwarded-For."
+            },
+            "customSockopt": {
+              "type": "array",
+              "description": "Дополнительные параметры сокета.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "system": {
+                    "type": "string"
+                  },
+                  "network": {
+                    "type": "string"
+                  },
+                  "level": {
+                    "type": "string"
+                  },
+                  "opt": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "happyEyeballs": {
+              "type": "object",
+              "description": "Настройки параллельного подключения IPv4 и IPv6.",
+              "properties": {
+                "prioritizeIPv6": {
+                  "type": "boolean"
+                },
+                "tryDelayMs": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "interleave": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "maxConcurrentTry": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          }
+        },
+        "address": {
+          "type": "string",
+          "description": "Адрес транспорта Xray."
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535,
+          "description": "Порт транспорта Xray."
+        },
+        "splithttpSettings": {
+          "$ref": "#/definitions/streamSettings/properties/xhttpSettings",
+          "description": "Совместимый алиас xhttpSettings."
+        },
+        "masqueSettings": {
+          "type": "object",
+          "description": "Настройки транспорта MASQUE.",
+          "properties": {
+            "host": {
+              "type": "string",
+              "description": "Имя хоста MASQUE."
+            },
+            "path": {
+              "type": "string",
+              "description": "Путь запроса MASQUE."
+            },
+            "user": {
+              "type": "string",
+              "description": "Имя пользователя MASQUE."
+            },
+            "pass": {
+              "type": "string",
+              "description": "Пароль MASQUE."
+            },
+            "headers": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Заголовки MASQUE."
+            },
+            "warp": {
+              "type": "object",
+              "description": "Параметры WARP для MASQUE."
+            },
+            "xmux": {
+              "type": "object",
+              "description": "Повторное использование соединений MASQUE."
             }
           }
         }
@@ -1040,12 +1395,30 @@
           "then": {
             "anyOf": [
               {
-                "required": ["method"],
-                "properties": { "method": { "enum": ["websocket", "ws"] } }
+                "required": [
+                  "method"
+                ],
+                "properties": {
+                  "method": {
+                    "enum": [
+                      "websocket",
+                      "ws"
+                    ]
+                  }
+                }
               },
               {
-                "required": ["network"],
-                "properties": { "network": { "enum": ["ws", "websocket"] } }
+                "required": [
+                  "network"
+                ],
+                "properties": {
+                  "network": {
+                    "enum": [
+                      "ws",
+                      "websocket"
+                    ]
+                  }
+                }
               }
             ]
           }
@@ -1076,12 +1449,24 @@
           "then": {
             "anyOf": [
               {
-                "required": ["method"],
-                "properties": { "method": { "const": "grpc" } }
+                "required": [
+                  "method"
+                ],
+                "properties": {
+                  "method": {
+                    "const": "grpc"
+                  }
+                }
               },
               {
-                "required": ["network"],
-                "properties": { "network": { "const": "grpc" } }
+                "required": [
+                  "network"
+                ],
+                "properties": {
+                  "network": {
+                    "const": "grpc"
+                  }
+                }
               }
             ]
           }
@@ -1095,12 +1480,24 @@
           "then": {
             "anyOf": [
               {
-                "required": ["method"],
-                "properties": { "method": { "const": "httpupgrade" } }
+                "required": [
+                  "method"
+                ],
+                "properties": {
+                  "method": {
+                    "const": "httpupgrade"
+                  }
+                }
               },
               {
-                "required": ["network"],
-                "properties": { "network": { "const": "httpupgrade" } }
+                "required": [
+                  "network"
+                ],
+                "properties": {
+                  "network": {
+                    "const": "httpupgrade"
+                  }
+                }
               }
             ]
           }
@@ -1114,12 +1511,30 @@
           "then": {
             "anyOf": [
               {
-                "required": ["method"],
-                "properties": { "method": { "enum": ["xhttp", "splithttp"] } }
+                "required": [
+                  "method"
+                ],
+                "properties": {
+                  "method": {
+                    "enum": [
+                      "xhttp",
+                      "splithttp"
+                    ]
+                  }
+                }
               },
               {
-                "required": ["network"],
-                "properties": { "network": { "enum": ["xhttp", "splithttp"] } }
+                "required": [
+                  "network"
+                ],
+                "properties": {
+                  "network": {
+                    "enum": [
+                      "xhttp",
+                      "splithttp"
+                    ]
+                  }
+                }
               }
             ]
           }
@@ -1213,7 +1628,8 @@
             "trojan",
             "wireguard",
             "hysteria",
-            "tun"
+            "tun",
+            "masque"
           ],
           "description": "Тип входящего протокола. `dokodemo-door` — прозрачный прокси (tproxy/redirect) для роутера, `socks`/`http` — локальные прокси для клиентов LAN, `vless`/`vmess`/`trojan`/`shadowsocks` — туннелируемые протоколы для удалённых клиентов."
         },
@@ -1361,7 +1777,8 @@
             "trojan",
             "hysteria",
             "wireguard",
-            "loopback"
+            "loopback",
+            "masque"
           ],
           "description": "Тип исходящего протокола. `freedom` — прямое соединение без прокси, `blackhole` — отбрасывание (для блокировки), `dns` — встроенный DNS-outbound (используется с `DNS`-rule), `vless`/`vmess`/`trojan`/`shadowsocks`/`wireguard` — прокси-протоколы, `loopback` — повторный проход через routing с другим источником."
         },
@@ -1450,40 +1867,28 @@
             "ForceIPv6v4"
           ],
           "description": "Стратегия резолвинга доменов при исходящем соединении. `AsIs` — передать домен как есть (резолвит удалённый сервер), `UseIP`/`UseIPv4`/`UseIPv6` — резолвить через встроенный DNS и отправлять IP, `ForceIP*` — жёстко требовать resolve, отбрасывать соединение если DNS вернул пустой ответ. Пары вида `UseIPv4v6`/`UseIPv6v4` задают порядок семейств адресов: сначала названное первым."
+        },
+        "targetStrategy": {
+          "type": "string",
+          "enum": [
+            "AsIs",
+            "UseIP",
+            "UseIPv4",
+            "UseIPv6",
+            "UseIPv4v6",
+            "UseIPv6v4",
+            "ForceIP",
+            "ForceIPv4",
+            "ForceIPv6",
+            "ForceIPv4v6",
+            "ForceIPv6v4"
+          ],
+          "description": "Стратегия разрешения адреса назначения исходящего соединения."
         }
       },
       "required": [
         "protocol"
       ]
     }
-  },
-  "title": "Xray Outbounds Fragment",
-  "description": "JSON Schema for 04_outbounds.json. Accepts either { outbounds: [...] } fragments or a raw outbounds array.",
-  "anyOf": [
-    {
-      "title": "04_outbounds.json object",
-      "type": "object",
-      "properties": {
-        "outbounds": {
-          "description": "Исходящие подключения",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/outbound"
-          }
-        }
-      },
-      "required": [
-        "outbounds"
-      ],
-      "additionalProperties": false
-    },
-    {
-      "title": "Outbounds array",
-      "description": "Исходящие подключения",
-      "type": "array",
-      "items": {
-        "$ref": "#/definitions/outbound"
-      }
-    }
-  ]
+  }
 }

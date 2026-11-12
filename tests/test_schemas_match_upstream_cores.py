@@ -70,6 +70,54 @@ def test_mihomo_proxy_types_cover_every_type_the_core_parses():
     assert types == MIHOMO_PROXY_TYPES | PRIZRAK_PROXY_TYPES
 
 
+def test_mihomo_schema_covers_snell_v6_fields():
+    schema = _load(MIHOMO)
+    props = schema["definitions"]["proxy"]["properties"]
+    assert props["psk"]["type"] == "string"
+    assert 6 in props["version"]["examples"]
+    assert {"default", "unshaped", "unsafe-raw"} <= set(props["mode"]["examples"])
+
+
+def test_mihomo_listener_schema_offers_shadowsocks_users_mapping():
+    listeners = _load(MIHOMO)["properties"]["listeners"]["items"]["properties"]
+    assert {"type": "object", "additionalProperties": {"type": "string"}} in listeners["users"]["anyOf"]
+
+
+def test_mihomo_schema_describes_current_tls_transport_options():
+    props = _load(MIHOMO)["definitions"]["proxy"]["properties"]
+    assert {"username", "password"} <= props["jls-opts"]["properties"].keys()
+    assert {"password", "version"} <= props["shadow-tls-opts"]["properties"].keys()
+    assert {"password", "version-hint", "restls-script"} <= props["restls-opts"]["properties"].keys()
+    assert {"primary-key", "transport-layer-padding"} <= props["tlsmirror-opts"]["properties"].keys()
+    assert {"base-nanoseconds", "uniform-random-multiplier-nanoseconds"} <= props["tlsmirror-opts"]["properties"]["defer-instance-derived-write-time"]["properties"].keys()
+    assert {"realm-id", "server-url", "stun-servers"} <= props["realm-opts"]["properties"].keys()
+    mekya = props["mekya-opts"]["properties"]
+    assert {"h2-pool-size", "kcp", "packet-writing-buffer"} <= mekya.keys()
+    assert {"uplink-capacity", "downlink-capacity"} <= mekya["kcp"]["properties"].keys()
+
+
+def test_mihomo_schema_covers_additional_upstream_proxy_fields():
+    props = _load(MIHOMO)["definitions"]["proxy"]["properties"]
+    assert {
+        "auth-str", "authenticated-length", "client-metadata", "disable-reuse",
+        "disable-sni", "fast-open", "heartbeat-interval", "hop-interval", "host-key",
+        "host-key-algorithms", "idle-session-check-interval", "idle-session-timeout",
+        "min-idle-session", "obfs", "obfs-opts", "obfs-password", "ports", "protocol",
+        "reduce-rtt", "reuse", "udp-mtu", "udp-over-tcp", "udp-over-tcp-version",
+        "udp-relay-mode", "xudp", "packet-addr", "target-rematch-name", "target-sub-rule",
+        "comp-lzo", "data-ciphers", "data-ciphers-fallback", "disable-kcp-input",
+        "disable-quic-input", "down-speed", "up-speed", "global-padding", "headers",
+        "http-mask", "http-mask-host", "http-mask-mode", "http-mask-multiplex", "http-mask-tls",
+        "initial-connection-receive-window", "initial-stream-receive-window",
+        "max-connection-receive-window", "max-stream-receive-window", "key-direction",
+        "mapped-listeners", "max-udp-relay-packet-size", "mekya-opts", "obfs-max-packet-size",
+        "obfs-min-packet-size", "obfs-param", "obfs-protocol", "path-root", "peer-info",
+        "ping", "ping-restart", "private-key-passphrase", "protocol-param", "realm-opts",
+        "remote-trace-level", "remote-trace-target", "request-timeout", "ss-opts", "tls-auth",
+        "tls-crypt-v2", "token", "tran-window", "udp-over-stream-version", "uri", "ws-headers",
+    } <= props.keys()
+
+
 def test_mihomo_asks_for_server_and_port_only_from_types_that_dial_out():
     proxy = _load(MIHOMO)["definitions"]["proxy"]
 
@@ -99,6 +147,52 @@ def test_xray_transports_do_not_offer_networks_removed_from_the_core():
                 continue
             stale = set(stream[field].get("enum", [])) & XRAY_REMOVED_NETWORKS
             assert not stale, f"{path.name}: {field} предлагает {sorted(stale)}"
+
+
+def test_xray_schemas_support_xdrive_transport():
+    for path in XRAY_SCHEMAS:
+        stream = _load(path)["definitions"]["streamSettings"]["properties"]
+        assert "xdrive" in stream["network"]["enum"], path.name
+        assert "xdrive" in stream["method"]["enum"], path.name
+        settings = stream["xdriveSettings"]["properties"]
+        assert {"service", "remoteFolder", "secrets", "s3", "template", "xmux"} <= settings.keys(), path.name
+
+
+def test_xray_schemas_cover_current_stream_config_fields():
+    for path in XRAY_SCHEMAS:
+        stream = _load(path)["definitions"]["streamSettings"]["properties"]
+        assert {"address", "port", "splithttpSettings", "masqueSettings", "hysteriaSettings", "finalmask"} <= stream.keys(), path.name
+        assert "masque" in stream["method"]["enum"], path.name
+        assert "masque" in stream["network"]["enum"], path.name
+
+
+def test_xray_schemas_cover_current_reality_tls_and_outbound_fields():
+    for path in XRAY_SCHEMAS:
+        definitions = _load(path)["definitions"]
+        stream = definitions["streamSettings"]["properties"]
+        assert {"masterKeyLog", "type"} <= stream["realitySettings"]["properties"].keys(), path.name
+        assert "useSystemCA" in stream["tlsSettings"]["properties"], path.name
+        assert "targetStrategy" in definitions["outbound"]["properties"], path.name
+        sockopt = stream["sockopt"]["properties"]
+        assert {"acceptProxyProtocol", "tcpCongestion", "tcpWindowClamp", "tcpMaxSeg", "penetrate", "tcpUserTimeout", "customSockopt", "addressPortStrategy", "happyEyeballs", "trustedXForwardedFor"} <= sockopt.keys(), path.name
+        assert set(sockopt["tcpFastOpen"]["type"]) == {"boolean", "integer"}
+
+
+def test_xray_schemas_offer_masque_protocol():
+    for path in XRAY_SCHEMAS:
+        defs = _load(path)["definitions"]
+        assert "masque" in defs["inbound"]["properties"]["protocol"]["enum"], path.name
+        assert "masque" in defs["outbound"]["properties"]["protocol"]["enum"], path.name
+
+
+def test_xray_schemas_cover_current_dns_and_routing_fields():
+    full = _load(SCHEMAS / "xray-config.schema.json")
+    dns = full["properties"]["dns"]["properties"]
+    assert {"script", "serveStale", "serveExpiredTTL", "enableParallelQuery", "useSystemHosts"} <= dns.keys()
+    assert "script" in full["properties"]["routing"]["properties"]
+    routing = _load(SCHEMAS / "xray-routing.schema.json")["anyOf"]
+    assert "script" in routing[0]["properties"]["routing"]["properties"]
+    assert "script" in routing[1]["properties"]
 
 
 def test_xray_domain_strategies_cover_every_value_the_core_accepts():
@@ -141,6 +235,14 @@ def test_mihomo_new_protocols_got_their_required_fields():
     assert {"required": ["port-range"]} in mieru["anyOf"]
 
 
+def test_mihomo_openvpn_does_not_require_optional_tls_crypt():
+    proxy = _load(MIHOMO)["definitions"]["proxy"]
+    rule = _proxy_rule(proxy, "openvpn")
+    assert "tls-crypt" not in rule["required"]
+    assert {"AES-128-CBC", "AES-256-CBC", "CHACHA20-POLY1305"} <= set(rule["properties"]["cipher"]["enum"])
+    assert {"MD5", "SHA1", "SHA384", "SHA512"} <= set(rule["properties"]["auth"]["enum"])
+
+
 def test_mihomo_fields_with_shared_names_are_split_by_proxy_type():
     """`network` и `peers` значат разное у разных типов — общего ограничения быть не может."""
     proxy = _load(MIHOMO)["definitions"]["proxy"]
@@ -160,6 +262,12 @@ def test_mihomo_fields_with_shared_names_are_split_by_proxy_type():
         "$ref": "#/definitions/wireGuardPeer"
     }
     assert _proxy_rule(proxy, "easytier")["properties"]["peers"]["items"] == {"type": "string"}
+
+
+def test_mihomo_xhttp_session_fields_cover_current_core():
+    definitions = _load(MIHOMO)["definitions"]
+    for name in ("xhttpOpts", "xhttpDownloadSettings"):
+        assert {"session-length", "session-table"} <= definitions[name]["properties"].keys()
 
 
 def test_mihomo_describes_the_fields_of_the_new_protocols():

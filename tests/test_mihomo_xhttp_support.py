@@ -159,21 +159,29 @@ def test_parse_vless_normalizes_vision_udp443_flow_for_mihomo_schema():
     assert "flow: xtls-rprx-vision\n" in result.yaml
     assert "xtls-rprx-vision-udp443" not in result.yaml
     assert "packet-encoding: xudp" in result.yaml
-    assert "support-x25519mlkem768" not in result.yaml
+    assert yaml.safe_load(result.yaml)[0]["reality-opts"]["support-x25519mlkem768"] is True
 
 
-def test_parse_vless_only_emits_mlkem_support_when_link_explicitly_requests_it():
+@pytest.mark.parametrize("value,expected", [("true", True), ("false", False)])
+def test_parse_vless_preserves_explicit_mlkem_support(value, expected):
     link = (
         "vless://f3131569-259f-4c4e-8fd9-67daf2212223@example.com:443"
         "?type=tcp&encryption=none&security=reality"
         "&pbk=pubkey&fp=chrome&sni=www.example.com&sid=46ab9f"
-        "&support-x25519mlkem768=true#pq-node"
+        f"&support-x25519mlkem768={value}#pq-node"
     )
 
     result = parse_vless(link)
     parsed = yaml.safe_load(result.yaml)[0]
 
-    assert parsed["reality-opts"]["support-x25519mlkem768"] is True
+    assert parsed["reality-opts"]["support-x25519mlkem768"] is expected
+
+
+@pytest.mark.parametrize("suffix,expected", [("", True), ("&support-x25519mlkem768=false", False)])
+def test_parse_trojan_reality_defaults_mlkem_and_preserves_false(suffix, expected):
+    from services.mihomo_proxy_parsers import parse_trojan
+    result = parse_trojan("trojan://password@example.com:443?security=reality&pbk=key" + suffix)
+    assert yaml.safe_load(result.yaml)[0]["reality-opts"]["support-x25519mlkem768"] is expected
 
 
 @pytest.mark.parametrize("sid_key", ["sid", "shortId", "short-id", "short_id", "shortid"])
@@ -375,12 +383,11 @@ def test_frontend_mihomo_import_reads_reality_short_id_aliases():
     assert "realityParam(params, 'pbk', 'publicKey', 'public-key', 'public_key')" in src
 
 
-def test_frontend_mihomo_import_does_not_force_mlkem_reality_support():
+def test_frontend_mihomo_import_defaults_mlkem_reality_support():
     src = (ROOT / "xkeen-ui/static/js/features/mihomo_import.js").read_text(encoding="utf-8")
 
     assert "supportX25519MLKEM768: boolMaybe(" in src
-    assert "'support-x25519mlkem768': supportX25519MLKEM768 === true ? true : undefined" in src
-    assert "'support-x25519mlkem768': true," not in src
+    assert "'support-x25519mlkem768': supportX25519MLKEM768 ?? true" in src
 
 
 def test_frontend_mihomo_import_preserves_reality_spider_x():

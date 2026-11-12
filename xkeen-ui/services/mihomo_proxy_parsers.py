@@ -186,8 +186,7 @@ def _append_reality_pq_support_from_query(lines: List[str], mapping: Dict[str, s
         "supportX25519MLKEM768",
         "support_x25519mlkem768",
     )
-    if support is True:
-        lines.append("    support-x25519mlkem768: true")
+    lines.append(f"    support-x25519mlkem768: {'false' if support is False else 'true'}")
 
 
 def _append_reality_pq_support_from_mapping(lines: List[str], mapping: Any) -> None:
@@ -197,19 +196,17 @@ def _append_reality_pq_support_from_mapping(lines: List[str], mapping: Any) -> N
         "supportX25519MLKEM768",
         "support_x25519mlkem768",
     )
-    if support is True:
-        lines.append("    support-x25519mlkem768: true")
+    lines.append(f"    support-x25519mlkem768: {'false' if support is False else 'true'}")
 
 
 def _append_reality_pq_support_from_qs(lines: List[str], parsed_qs: Dict[str, List[str]]) -> None:
-    support = _qs_bool(
-        parsed_qs,
+    support = _query_bool(
+        {key: _qs_first(parsed_qs, key, "") for key in parsed_qs},
         "support-x25519mlkem768",
         "supportX25519MLKEM768",
         "support_x25519mlkem768",
     )
-    if support:
-        lines.append("    support-x25519mlkem768: true")
+    lines.append(f"    support-x25519mlkem768: {'false' if support is False else 'true'}")
 
 
 def _sanitize_headers(value: Any) -> Optional[Dict[str, Any]]:

@@ -2423,7 +2423,7 @@
               "accessible_name": false
             },
             {
-              "control": "control@15611",
+              "control": "control@15678",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
@@ -2441,7 +2441,7 @@
               "accessible_name": false
             },
             {
-              "control": "control@17236",
+              "control": "control@17303",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
@@ -11462,7 +11462,7 @@
       {
         "locator": "span.xk-mi-info@L4483",
         "name": "data-tooltip",
-        "value": "Работает только для VLESS Reality и требует Mihomo v1.19.29 или новее."
+        "value": "Для Reality: если в источнике значение не задано, включается автоматически. Требует Mihomo v1.19.29 или новее и подходящий отпечаток."
       },
       {
         "locator": "div.xk-mi-custom-select@L4484",

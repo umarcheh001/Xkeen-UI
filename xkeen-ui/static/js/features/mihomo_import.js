@@ -305,20 +305,24 @@ let mihomoImportModuleApi = null;
     if (value.fingerprint) parts.push(`фингерпринт: ${value.fingerprint}`);
     if (value.x25519 === 'enable') parts.push('X25519MLKEM768: включить');
     if (value.x25519 === 'disable') parts.push('X25519MLKEM768: выключить');
-    return parts.length ? parts.join(', ') : 'наследовать значения источника';
+    return parts.length ? parts.join(', ') : 'значения источника; X25519MLKEM768 включён, если не указан';
   }
 
   function yamlProxyWithConnectionOptions(content, options) {
     const raw = String(content || '').trim();
-    if (!raw || (!options.fingerprint && options.x25519 === 'inherit')) return content;
+    if (!raw) return content;
     try {
       const parsed = loadYaml(raw);
       if (!Array.isArray(parsed) || !parsed.length || !parsed[0] || typeof parsed[0] !== 'object') return content;
       const proxy = { ...parsed[0] };
       if (proxy.tls !== true && !proxy['reality-opts']) return content;
       if (options.fingerprint) proxy['client-fingerprint'] = options.fingerprint;
-      if (options.x25519 !== 'inherit' && proxy.type === 'vless' && proxy['reality-opts'] && typeof proxy['reality-opts'] === 'object' && !Array.isArray(proxy['reality-opts'])) {
-        proxy['reality-opts'] = { ...proxy['reality-opts'], 'support-x25519mlkem768': options.x25519 === 'enable' };
+      if (['vless', 'vmess', 'trojan'].includes(proxy.type) && proxy['reality-opts'] && typeof proxy['reality-opts'] === 'object' && !Array.isArray(proxy['reality-opts'])) {
+        const reality = { ...proxy['reality-opts'] };
+        if (options.x25519 !== 'inherit' || !Object.prototype.hasOwnProperty.call(reality, 'support-x25519mlkem768')) {
+          reality['support-x25519mlkem768'] = options.x25519 !== 'disable';
+        }
+        proxy['reality-opts'] = reality;
       }
       return dumpYaml([proxy], { noRefs: true, noCompatMode: true, lineWidth: -1, sortKeys: false }).trimEnd() + '\n';
     } catch (_) {
@@ -327,7 +331,6 @@ let mihomoImportModuleApi = null;
   }
 
   function yamlProviderWithConnectionOptions(content, options) {
-    if (!options.fingerprint && options.x25519 === 'inherit') return content;
     try {
       const parsed = loadYaml(String(content || ''));
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return content;
@@ -336,8 +339,9 @@ let mihomoImportModuleApi = null;
       if (!provider) return content;
       const override = { ...(provider.override || {}) };
       const expressions = Array.isArray(override['override-expr']) ? override['override-expr'].slice() : [];
-      if (options.fingerprint) expressions.push(`'.["client-fingerprint"] = "${options.fingerprint}"'`);
-      if (options.x25519 !== 'inherit') expressions.push(`'(select(.type == "vless" and .["reality-opts"] != null) | .["reality-opts"]["support-x25519mlkem768"]) = ${options.x25519 === 'enable'}'`);
+      if (options.fingerprint) expressions.push(`.["client-fingerprint"] = "${options.fingerprint}"`);
+      if (options.x25519 !== 'inherit') expressions.push(`(select((.type == "vless" or .type == "vmess" or .type == "trojan") and .["reality-opts"] != null) | .["reality-opts"]["support-x25519mlkem768"]) = ${options.x25519 === 'enable'}`);
+      else expressions.push(`(select((.type == "vless" or .type == "vmess" or .type == "trojan") and .["reality-opts"] != null and (.["reality-opts"] | has("support-x25519mlkem768") | not)) | .["reality-opts"]["support-x25519mlkem768"]) = true`);
       if (expressions.length) override['override-expr'] = Array.from(new Set(expressions));
       provider.override = override;
       parsed[key] = provider;
@@ -2761,7 +2765,7 @@ let mihomoImportModuleApi = null;
         common['reality-opts'] = {
           'public-key': reality.publicKey,
           'short-id': shortId == null ? undefined : String(shortId),
-          'support-x25519mlkem768': supportX25519MLKEM768 === true ? true : undefined,
+          'support-x25519mlkem768': supportX25519MLKEM768 ?? true,
           'spider-x': reality.spiderX == null ? undefined : String(reality.spiderX),
           'mldsa65-verify': firstDefined(reality, 'mldsa65-verify', 'mldsa65Verify'),
         };

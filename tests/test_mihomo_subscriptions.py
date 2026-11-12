@@ -297,6 +297,56 @@ def test_connection_options_leave_non_tls_and_non_reality_nodes_alone():
     assert "support-x25519mlkem768" not in updated_tls
 
 
+def test_connection_options_default_mlkem_only_when_absent():
+    block = "- name: Node\n  type: vless\n  tls: true\n  reality-opts:\n    public-key: key\n"
+    inherited = {"fingerprint": "", "x25519": "inherit"}
+    assert "support-x25519mlkem768: true" in svc._apply_connection_options_to_proxy_block(block, inherited)
+    disabled = block + "    support-x25519mlkem768: false\n"
+    assert "support-x25519mlkem768: false" in svc._apply_connection_options_to_proxy_block(disabled, inherited)
+    assert "support-x25519mlkem768: false" in svc._apply_connection_options_to_proxy_block(block, {"x25519": "disable"})
+
+
+@pytest.mark.parametrize("protocol", ["trojan", "vmess"])
+def test_connection_options_default_mlkem_for_other_reality_protocols(protocol):
+    block = f"- name: Node\n  type: {protocol}\n  tls: true\n  reality-opts:\n    public-key: key\n"
+    assert "support-x25519mlkem768: true" in svc._apply_connection_options_to_proxy_block(block, {})
+
+
+@pytest.mark.parametrize("protocol", ['\"vless\"', "'vless'", "vless # comment"])
+@pytest.mark.parametrize("reality,mode,expected", [
+    ("{public-key: key}", "inherit", True),
+    ("{public-key: key, support-x25519mlkem768: false}", "enable", True),
+    ("{public-key: key, support-x25519mlkem768: true}", "disable", False),
+    ("{public-key: key, support-x25519mlkem768: false}", "inherit", False),
+    ("{public-key: 'a,b', short-id: '42'} # comment", "inherit", True),
+])
+def test_connection_options_apply_to_flow_reality_and_quoted_types(protocol, reality, mode, expected):
+    import yaml
+    block = f"- name: Node\n  type: {protocol}\n  tls: true\n  reality-opts: {reality}\n"
+    result = svc._apply_connection_options_to_proxy_block(block, {"x25519": mode})
+    assert yaml.safe_load(result)[0]["reality-opts"]["support-x25519mlkem768"] is expected
+
+
+def test_connection_options_support_commented_mapping_and_custom_indent():
+    import yaml
+    block = "- name: Node\n  type: vless # comment\n  reality-opts: # comment\n      public-key: key\n      support-x25519mlkem768: false\n"
+    result = svc._apply_connection_options_to_proxy_block(block, {"x25519": "enable"})
+    assert yaml.safe_load(result)[0]["reality-opts"]["support-x25519mlkem768"] is True
+
+
+@pytest.mark.parametrize("reality", [
+    'reality-opts:\n    "support-x25519mlkem768": false\n    public-key: key',
+    'reality-opts: {public-key: key,}',
+    'reality-opts: {\n    public-key: key,\n    short-id: "1234"\n  }',
+])
+def test_connection_options_accept_yaml_mapping_variants(reality):
+    import yaml
+    block = f"- name: Node\n  type: vless\n  {reality}\n"
+    result = svc._apply_connection_options_to_proxy_block(block, {"x25519": "inherit"})
+    value = yaml.safe_load(result)[0]["reality-opts"]["support-x25519mlkem768"]
+    assert value is ('false' not in reality)
+
+
 def test_refresh_mihomo_provider_static_subscription_uses_provider_parser(tmp_path, monkeypatch):
     old_yaml = "- name: Old Node\n  type: vless\n  server: 1.1.1.1\n  port: 443\n"
     config = (

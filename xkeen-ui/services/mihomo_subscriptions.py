@@ -137,11 +137,76 @@ def _clean_connection_options(value: Any) -> Dict[str, str]:
     return {"fingerprint": fingerprint, "x25519": x25519}
 
 
+def _apply_flow_reality_option(line: str, mode: str) -> str:
+    """Update a YAML flow mapping without splitting quoted values or comments."""
+    start = line.index("{")
+    quote = ""
+    depth = 0
+    segments = []
+    segment_start = start + 1
+    i = start
+    comment = False
+    while i < len(line):
+        char = line[i]
+        if comment:
+            if char == "\n":
+                comment = False
+        elif quote:
+            if quote == '"' and char == "\\":
+                i += 2
+                continue
+            if char == quote:
+                if quote == "'" and i + 1 < len(line) and line[i + 1] == "'":
+                    i += 2
+                    continue
+                quote = ""
+        elif char in "\"'":
+            quote = char
+        elif char == "#" and (i == 0 or line[i - 1].isspace()):
+            comment = True
+        elif char in "[{":
+            depth += 1
+        elif char in "]}":
+            depth -= 1
+            if depth == 0:
+                segments.append(line[segment_start:i])
+                break
+        elif char == "," and depth == 1:
+            segments.append(line[segment_start:i])
+            segment_start = i + 1
+        i += 1
+    if depth != 0 or quote:
+        raise ValueError("Не удалось обработать параметры Reality в подписке")
+    existing = None
+    key_match = None
+    for index, segment in enumerate(segments):
+        key_match = re.search(r"(?m)^\s*(?:support-x25519mlkem768|'support-x25519mlkem768'|\"support-x25519mlkem768\")\s*:", segment)
+        if key_match:
+            existing = index
+            break
+    if existing is not None and mode == "inherit":
+        return line
+    value = "false" if mode == "disable" else "true"
+    if existing is None:
+        if not segments[-1].strip():
+            whitespace = segments[-1]
+            segments[-1] = f"{whitespace}support-x25519mlkem768: {value}"
+        else:
+            segments.append(f" support-x25519mlkem768: {value}")
+    else:
+        segment = segments[existing]
+        tail = segment[key_match.end():]
+        suffix_match = re.search(r"\s+#.*|\s+$", tail, re.DOTALL)
+        suffix = suffix_match.group(0) if suffix_match else ""
+        segments[existing] = segment[:key_match.end()] + f" {value}" + suffix
+    return line[:start + 1] + ",".join(segments) + line[i:]
+
+
 def _apply_connection_options_to_proxy_block(block: Any, options: Any) -> str:
     """Apply imported node overrides without requiring PyYAML on the router."""
     values = _clean_connection_options(options)
     text = str(block or "").replace("\r\n", "\n").replace("\r", "\n").strip()
-    if not text or (not values["fingerprint"] and values["x25519"] == "inherit"):
+    if not text:
         return text
     lines = text.split("\n")
     item_match = re.match(r"^(\s*)-\s+", lines[0])
@@ -159,13 +224,14 @@ def _apply_connection_options_to_proxy_block(block: Any, options: Any) -> str:
             reality_idx = idx
 
     has_tls = reality_idx >= 0 or any(
-        len(line) - len(line.lstrip()) == key_indent and line.strip() == "tls: true"
+        len(line) - len(line.lstrip()) == key_indent and re.fullmatch(r"tls:\s*true\s*(?:#.*)?", line.strip())
         for line in lines
     )
     if not has_tls:
         return text
-    is_vless = any(
-        len(line) - len(line.lstrip()) == key_indent and line.strip() == "type: vless"
+    supports_reality = any(
+        len(line) - len(line.lstrip()) == key_indent
+        and re.fullmatch(r"type:\s*(?:vless|vmess|trojan|'vless'|'vmess'|'trojan'|\"vless\"|\"vmess\"|\"trojan\")\s*(?:#.*)?", line.strip())
         for line in lines
     )
 
@@ -179,21 +245,34 @@ def _apply_connection_options_to_proxy_block(block: Any, options: Any) -> str:
                 insert_at -= 1
             lines.insert(insert_at, fingerprint_line)
 
-    if values["x25519"] != "inherit" and reality_idx >= 0 and is_vless:
-        reality_child_indent = key_indent + 2
+    if reality_idx >= 0 and supports_reality:
+        reality_value = lines[reality_idx].split(":", 1)[1].lstrip()
+        if reality_value.startswith("{"):
+            flow = _apply_flow_reality_option("\n".join(lines[reality_idx:]), values["x25519"])
+            return "\n".join(lines[:reality_idx] + [flow]).strip()
+        child_indents = []
+        for line in lines[reality_idx + 1:]:
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            indent = len(line) - len(line.lstrip())
+            if indent <= key_indent:
+                break
+            child_indents.append(indent)
+        reality_child_indent = min(child_indents, default=key_indent + 2)
         child_idx = -1
         for idx in range(reality_idx + 1, len(lines)):
             stripped = lines[idx].strip()
             indent = len(lines[idx]) - len(lines[idx].lstrip())
             if stripped and indent <= key_indent:
                 break
-            if indent == reality_child_indent and stripped.startswith("support-x25519mlkem768:"):
+            if indent == reality_child_indent and re.match(r"(?:support-x25519mlkem768|'support-x25519mlkem768'|\"support-x25519mlkem768\")\s*:", stripped):
                 child_idx = idx
                 break
-        child_line = " " * reality_child_indent + f"support-x25519mlkem768: {'true' if values['x25519'] == 'enable' else 'false'}"
-        if child_idx >= 0:
+        child_line = " " * reality_child_indent + f"support-x25519mlkem768: {'false' if values['x25519'] == 'disable' else 'true'}"
+        if child_idx >= 0 and values["x25519"] != "inherit":
             lines[child_idx] = child_line
-        else:
+        elif child_idx < 0 and re.fullmatch(r"reality-opts:\s*(?:#.*)?", lines[reality_idx].strip()):
             insert_at = reality_idx + 1
             while insert_at < len(lines):
                 stripped = lines[insert_at].strip()

@@ -880,6 +880,13 @@
             "x-ui-example": "name: xkeen-ui-egress-check",
             "x-ui-warning": "Не повторяйте имя другого listener — диагностика и логи станут неоднозначными."
           },
+          "users": {
+            "anyOf": [
+              {"type": "object", "additionalProperties": {"type": "string"}},
+              {"type": "array", "items": {"type": "object"}}
+            ],
+            "description": "Пользователи listener. Для Shadowsocks в Mihomo v1.19.34 и новее — соответствие имени и пароля; у других протоколов формат может отличаться."
+          },
           "type": {
             "type": "string",
             "enum": ["http", "socks", "mixed", "redir", "tproxy", "tunnel", "tun", "shadowsocks", "snell", "vmess", "vless", "trojan", "anytls", "mieru", "sudoku", "trusttunnel", "tuic", "shadowquic", "hysteria2", "hysteria2-realm"],
@@ -1014,7 +1021,103 @@
         },
         "password": {
           "type": "string",
-          "description": "Пароль — для ss/trojan/hysteria2/snell/tuic/trusttunnel, а также OpenVPN auth-user-pass."
+          "description": "Пароль — для ss/trojan/hysteria2/tuic/trusttunnel, а также OpenVPN auth-user-pass. Для Snell используется `psk`."
+        },
+        "psk": {
+          "type": "string",
+          "description": "Предварительный ключ Snell; должен совпадать с сервером."
+        },
+        "auth-str": {"type": "string", "description": "Строка авторизации Hysteria."},
+        "authenticated-length": {"type": "boolean", "description": "Аутентифицировать длину пакетов VMess."},
+        "client-metadata": {"type": "string", "description": "Метаданные клиента AnyTLS."},
+        "disable-reuse": {"type": "boolean", "description": "Отключить повторное использование сессий AnyTLS."},
+        "disable-sni": {"type": "boolean", "description": "Отключить SNI для TUIC."},
+        "fast-open": {"type": "boolean", "description": "Настройка быстрого установления соединения Hysteria или TUIC."},
+        "heartbeat-interval": {"type": "integer", "description": "Интервал контрольных сообщений TUIC."},
+        "hop-interval": {"anyOf": [{"type": "integer"}, {"type": "string"}], "description": "Интервал смены порта Hysteria или Hysteria2; формат зависит от протокола."},
+        "host-key": {"type": "array", "items": {"type": "string"}, "description": "Допустимые ключи хоста SSH."},
+        "host-key-algorithms": {"type": "array", "items": {"type": "string"}, "description": "Допустимые алгоритмы ключа хоста SSH."},
+        "idle-session-check-interval": {"type": "integer", "description": "Интервал проверки незанятых сессий AnyTLS."},
+        "idle-session-timeout": {"type": "integer", "description": "Тайм-аут незанятой сессии AnyTLS."},
+        "min-idle-session": {"type": "integer", "description": "Минимальное число незанятых сессий AnyTLS."},
+        "obfs": {"type": "string", "description": "Способ обфускации Hysteria, Hysteria2 или ShadowsocksR."},
+        "obfs-opts": {"type": "object", "description": "Параметры обфускации Snell."},
+        "obfs-password": {"type": "string", "description": "Пароль обфускации Hysteria2."},
+        "ports": {"type": "string", "description": "Порты для переключения Hysteria или Hysteria2."},
+        "protocol": {"type": "string", "description": "Режим протокола Hysteria или ShadowsocksR."},
+        "reduce-rtt": {"type": "boolean", "description": "Уменьшить число обменов при подключении TUIC."},
+        "reuse": {"type": "boolean", "description": "Повторно использовать соединения Snell."},
+        "udp-mtu": {"type": "integer", "description": "Размер UDP-пакета Hysteria2."},
+        "udp-over-tcp": {"type": "boolean", "description": "Передавать UDP поверх TCP в Shadowsocks."},
+        "udp-over-tcp-version": {"type": "integer", "description": "Версия UDP-over-TCP в Shadowsocks."},
+        "udp-relay-mode": {"type": "string", "description": "Режим передачи UDP в TUIC."},
+        "xudp": {"type": "boolean", "description": "Включить XUDP для VMess или VLESS."},
+        "packet-addr": {"type": "boolean", "description": "Включить packet address для VMess или VLESS."},
+        "target-rematch-name": {"type": "string", "description": "Имя целевой политики rematch."},
+        "target-sub-rule": {"type": "string", "description": "Целевой набор правил rematch."},
+        "comp-lzo": {"type": "string", "description": "Режим сжатия OpenVPN."},
+        "data-ciphers": {"type": "array", "items": {"type": "string"}, "description": "Список шифров данных OpenVPN."},
+        "data-ciphers-fallback": {"type": "string", "description": "Резервный шифр данных OpenVPN."},
+        "disable-kcp-input": {"type": "boolean", "description": "Отключить приём EasyTier по KCP."},
+        "disable-quic-input": {"type": "boolean", "description": "Отключить приём EasyTier по QUIC."},
+        "down-speed": {"type": "integer", "description": "Скорость приёма Hysteria."},
+        "up-speed": {"type": "integer", "description": "Скорость передачи Hysteria."},
+        "global-padding": {"type": "boolean", "description": "Включить дополнение данных VMess."},
+        "headers": {"type": "object", "additionalProperties": {"type": "string"}, "description": "HTTP-заголовки исходящего HTTP-прокси."},
+        "http-mask": {"type": "boolean", "description": "Включить HTTP-маскировку Sudoku."},
+        "http-mask-host": {"type": "string", "description": "Хост HTTP-маскировки Sudoku."},
+        "http-mask-mode": {"type": "string", "description": "Режим HTTP-маскировки Sudoku."},
+        "http-mask-multiplex": {"type": "string", "description": "Режим мультиплексирования HTTP-маскировки Sudoku."},
+        "http-mask-tls": {"type": "boolean", "description": "Использовать TLS для HTTP-маскировки Sudoku."},
+        "initial-connection-receive-window": {"type": "integer", "minimum": 0, "description": "Начальное окно приёма соединения Hysteria2."},
+        "initial-stream-receive-window": {"type": "integer", "minimum": 0, "description": "Начальное окно приёма потока Hysteria2."},
+        "max-connection-receive-window": {"type": "integer", "minimum": 0, "description": "Максимальное окно приёма соединения Hysteria2."},
+        "max-stream-receive-window": {"type": "integer", "minimum": 0, "description": "Максимальное окно приёма потока Hysteria2."},
+        "key-direction": {"type": "string", "description": "Направление ключа OpenVPN."},
+        "mapped-listeners": {"type": "array", "items": {"type": "string"}, "description": "Список сопоставленных listener EasyTier."},
+        "max-udp-relay-packet-size": {"type": "integer", "description": "Максимальный размер UDP-пакета TUIC."},
+        "mekya-opts": {"type": "object", "description": "Параметры транспорта Mekya для VMess.", "properties": {
+          "url": {"type": "string"}, "h2-pool-size": {"type": "integer"}, "max-write-delay": {"type": "integer"},
+          "max-request-size": {"type": "integer"}, "polling-interval-initial": {"type": "integer"}, "max-write-size": {"type": "integer"},
+          "max-write-duration-ms": {"type": "integer"}, "max-simultaneous-write-connection": {"type": "integer"}, "packet-writing-buffer": {"type": "integer"},
+          "kcp": {"type": "object", "properties": {"mtu": {"type": "integer"}, "tti": {"type": "integer"},
+            "uplink-capacity": {"type": "integer"}, "downlink-capacity": {"type": "integer"}, "congestion": {"type": "boolean"},
+            "write-buffer": {"type": "integer"}, "read-buffer": {"type": "integer"}, "seed": {"type": "string"}, "header": {"type": "string"}}}
+        }},
+        "obfs-max-packet-size": {"type": "integer", "description": "Максимальный размер пакета обфускации Hysteria2."},
+        "obfs-min-packet-size": {"type": "integer", "description": "Минимальный размер пакета обфускации Hysteria2."},
+        "obfs-param": {"type": "string", "description": "Параметр обфускации ShadowsocksR."},
+        "obfs-protocol": {"type": "string", "description": "Протокол обфускации Hysteria."},
+        "path-root": {"type": "string", "description": "Корневой путь Sudoku."},
+        "peer-info": {"type": "object", "additionalProperties": {"type": "string"}, "description": "Дополнительная информация клиента OpenVPN."},
+        "ping": {"type": "integer", "description": "Интервал ping OpenVPN."},
+        "ping-restart": {"type": "integer", "description": "Тайм-аут перезапуска OpenVPN при отсутствии ping."},
+        "private-key-passphrase": {"type": "string", "description": "Пароль приватного ключа SSH."},
+        "protocol-param": {"type": "string", "description": "Параметр протокола ShadowsocksR."},
+        "realm-opts": {"type": "object", "description": "Параметры Hysteria2 Realm.", "properties": {
+          "server-url": {"type": "string"}, "realm-id": {"type": "string"},
+          "stun-servers": {"type": "array", "items": {"type": "string"}}
+        }},
+        "remote-trace-level": {"type": "integer", "minimum": 0, "description": "Уровень удалённой трассировки ZeroTier."},
+        "remote-trace-target": {"type": "string", "description": "Получатель удалённой трассировки ZeroTier."},
+        "request-timeout": {"type": "integer", "description": "Тайм-аут запроса TUIC."},
+        "ss-opts": {"type": "object", "description": "Параметры Shadowsocks для Trojan."},
+        "tls-auth": {"type": "string", "description": "Ключ tls-auth OpenVPN."},
+        "tls-crypt-v2": {"type": "string", "description": "Ключ tls-crypt-v2 OpenVPN."},
+        "token": {"type": "string", "description": "Токен авторизации TUIC."},
+        "tran-window": {"type": "integer", "description": "Параметр окна передачи OpenVPN."},
+        "udp-over-stream-version": {"type": "integer", "description": "Версия UDP-over-stream в TUIC."},
+        "uri": {"type": "string", "description": "URI сервиса MASQUE."},
+        "ws-headers": {"type": "object", "additionalProperties": {"type": "string"}, "description": "Заголовки WebSocket в VLESS."},
+        "version": {
+          "type": "integer",
+          "examples": [1, 2, 3, 4, 5, 6],
+          "description": "Версия Snell. Версия 6 поддерживается начиная с Mihomo v1.19.34."
+        },
+        "mode": {
+          "type": "string",
+          "examples": ["default", "unshaped", "unsafe-raw"],
+          "description": "Режим Snell v6: `default`, `unshaped` или `unsafe-raw`."
         },
         "uuid": {
           "type": "string",
@@ -1089,7 +1192,7 @@
           "type": "string",
           "enum": ["none", "chrome", "firefox", "safari", "ios", "iOS", "android", "edge", "360", "qq", "random", "randomized", "chrome120", "firefox120", "safari16", "chrome_psk", "chrome_psk_shuffle", "chrome_padding_psk_shuffle", "chrome_pq", "chrome_pq_psk"],
           "deprecatedValues": ["iOS", "chrome120", "firefox120", "safari16", "chrome_psk", "chrome_psk_shuffle", "chrome_padding_psk_shuffle", "chrome_pq", "chrome_pq_psk"],
-          "description": "uTLS ClientHello fingerprint. Исходники Mihomo используют `ios` в нижнем регистре; документированное написание `iOS` сохранено как compatibility-вариант. Для reality обычно указывают `chrome`, `firefox`, `ios` или `random`."
+          "description": "uTLS ClientHello fingerprint. Для REALITY с новым Xray используйте совместимый отпечаток `chrome`, `firefox` или `safari` и включите `support-x25519mlkem768`; Firefox и Safari обновлены в Mihomo v1.19.34. Совместимость зависит от сервера и сети. `random` и `ios` не гарантируют поддержку ML-KEM."
         },
         "network": {
           "anyOf": [
@@ -1373,9 +1476,9 @@
         },
         "reality-opts": {
           "type": "object",
-          "description": "Параметры VLESS Reality. Используются с `type: vless`, `tls: true` и подходящим `client-fingerprint`.",
+          "description": "Параметры Reality для VLESS, VMess или Trojan. Используются с `tls: true` и подходящим `client-fingerprint`.",
           "x-ui-explain": "Это клиентские параметры Reality: публичный ключ сервера и short-id, по которым маскированное соединение вообще сможет установиться.",
-          "x-ui-use-case": "Нужны только для `type: vless` с `tls: true`, когда сервер работает в режиме Reality.",
+          "x-ui-use-case": "Нужны для `type: vless`, `vmess` или `trojan` с `tls: true`, когда сервер работает в режиме Reality.",
           "x-ui-example": "{ public-key: \"<server-public-key>\", short-id: \"abcd1234\" }",
           "x-ui-warning": "Обычно вместе с этим блоком нужны ещё `servername` и `client-fingerprint`; без них Reality-клиент часто не поднимается.",
           "properties": {
@@ -1395,7 +1498,7 @@
             "support-x25519mlkem768": {
               "type": "boolean",
               "default": false,
-              "description": "Совместимость с Mihomo: включить гибридный обмен X25519-MLKEM768. Prizrak-Core игнорирует это старое поле."
+              "description": "Разрешить X25519-MLKEM768 в REALITY, если его поддерживает выбранный отпечаток. Для новых Xray-серверов обычно требуется `true`; некоторые старые серверы могут требовать `false`. По умолчанию Mihomo использует `false`. Prizrak-Core игнорирует это поле."
             },
             "mldsa65-verify": {
               "type": "string",
@@ -1405,6 +1508,56 @@
             "password": { "type": "string", "description": "Prizrak-Core: алиас публичного ключа Reality." },
             "show": { "type": "boolean", "description": "Prizrak-Core: выводить диагностические сведения Reality." },
             "master-key-log": { "type": "string", "description": "Prizrak-Core: путь журнала мастер-ключей Reality." }
+          }
+        },
+        "jls-opts": {
+          "type": "object",
+          "description": "Параметры JLS для поддерживающих его прокси.",
+          "properties": {
+            "username": {"type": "string", "description": "Имя пользователя JLS."},
+            "password": {"type": "string", "description": "Пароль JLS."}
+          }
+        },
+        "shadow-tls-opts": {
+          "type": "object",
+          "description": "Параметры ShadowTLS.",
+          "properties": {
+            "password": {"type": "string", "description": "Пароль ShadowTLS."},
+            "version": {"type": "integer", "description": "Версия ShadowTLS."}
+          }
+        },
+        "restls-opts": {
+          "type": "object",
+          "description": "Параметры Restls.",
+          "properties": {
+            "password": {"type": "string", "description": "Пароль Restls."},
+            "version-hint": {"type": "string", "description": "Версия TLS, например `tls12` или `tls13`."},
+            "restls-script": {"type": "string", "description": "Необязательный сценарий трафика Restls."}
+          }
+        },
+        "tlsmirror-opts": {
+          "type": "object",
+          "description": "Параметры TLSMirror для поддерживающих его прокси.",
+          "properties": {
+            "primary-key": {"type": "string", "description": "Основной ключ TLSMirror."},
+            "explicit-nonce-ciphersuites": {"type": "array", "items": {"type": "integer"}, "description": "Список идентификаторов наборов шифров."},
+            "defer-instance-derived-write-time": {"type": "object", "description": "Параметры задержки записи.", "properties": {
+              "base-nanoseconds": {"type": "integer", "minimum": 0}, "uniform-random-multiplier-nanoseconds": {"type": "integer", "minimum": 0}
+            }},
+            "transport-layer-padding": {"type": "object", "description": "Настройки дополнения транспортного уровня.", "properties": {"enabled": {"type": "boolean"}}},
+            "connection-enrolment": {"type": "object", "description": "Параметры регистрации соединения.", "properties": {
+              "primary-ingress-outbound": {"type": "string"}, "primary-egress-outbound": {"type": "string"}
+            }},
+            "sequence-watermarking-enabled": {"type": "boolean", "description": "Включить маркировку последовательности."},
+            "embedded-traffic-generator": {"type": "object", "description": "Настройки встроенного генератора трафика.", "properties": {
+              "steps": {"type": "array", "items": {"type": "object", "properties": {
+                "name": {"type": "string"}, "host": {"type": "string"}, "path": {"type": "string"}, "method": {"type": "string"},
+                "connection-ready": {"type": "boolean"}, "connection-recall-exit": {"type": "boolean"}, "h2-do-not-wait-for-download-finish": {"type": "boolean"},
+                "wait-time": {"type": "object", "properties": {"base-nanoseconds": {"type": "integer", "minimum": 0}, "uniform-random-multiplier-nanoseconds": {"type": "integer", "minimum": 0}}},
+                "headers": {"type": "array", "items": {"type": "object", "properties": {"name": {"type": "string"}, "value": {"type": "string"}, "values": {"type": "array", "items": {"type": "string"}}}}},
+                "next-step": {"type": "array", "items": {"type": "object", "properties": {"weight": {"type": "integer"}, "goto-location": {"type": "integer"}}}}
+              }}}
+            }}
           }
         },
         "ech-opts": {
@@ -2112,7 +2265,7 @@
             }
           },
           "then": {
-            "required": ["server", "port", "ca", "tls-crypt"],
+            "required": ["server", "port", "ca"],
             "anyOf": [
               { "required": ["cert", "key"] },
               { "required": ["username"] }
@@ -2121,8 +2274,8 @@
               "type": { "const": "openvpn" },
               "proto": { "enum": ["udp", "tcp"] },
               "dev": { "const": "tun" },
-              "cipher": { "enum": ["AES-128-GCM", "AES-256-GCM"] },
-              "auth": { "const": "SHA256" }
+              "cipher": { "enum": ["AES-128-GCM", "AES-256-GCM", "AES-128-CBC", "AES-256-CBC", "AES-CBC", "CHACHA20-POLY1305"] },
+              "auth": { "enum": ["MD5", "SHA1", "SHA256", "SHA384", "SHA512"] }
             }
           }
         },
@@ -2224,7 +2377,7 @@
             "required": ["tls", "type"],
             "properties": {
               "tls": { "const": true },
-              "type": { "const": "vless" }
+              "type": { "enum": ["vless", "vmess", "trojan"] }
             }
           }
         }
@@ -2277,6 +2430,8 @@
           "description": "Где размещать идентификатор XHTTP-сессии."
         },
         "session-key": { "type": "string", "description": "Ключ для идентификатора XHTTP-сессии." },
+        "session-table": { "type": "string", "description": "Таблица символов идентификатора XHTTP-сессии." },
+        "session-length": { "type": "string", "description": "Длина или диапазон длины идентификатора XHTTP-сессии." },
         "seq-placement": {
           "type": "string",
           "enum": ["path", "query", "cookie", "header"],
@@ -2532,6 +2687,8 @@
           "description": "Где размещать идентификатор XHTTP-сессии."
         },
         "session-key": { "type": "string", "description": "Ключ для идентификатора XHTTP-сессии." },
+        "session-table": { "type": "string", "description": "Таблица символов идентификатора XHTTP-сессии." },
+        "session-length": { "type": "string", "description": "Длина или диапазон длины идентификатора XHTTP-сессии." },
         "seq-placement": {
           "type": "string",
           "enum": ["path", "query", "cookie", "header"],

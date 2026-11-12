@@ -29,6 +29,7 @@ ROOT = Path(__file__).resolve().parents[1]
 # Generators that write tracked snapshots, in dependency order. The stage 0
 # inventory and module sizes go last: they read the other files.
 GENERATORS = (
+    ("generate_xray_schemas.py", True),
     ("generate_frontend_inventory.py", True),
     ("generate_panel_operator_inventory.py", True),
     ("generate_modular_panel_stage4_1_contract.py", True),
@@ -53,7 +54,13 @@ SCOPE_FILES = (
 )
 # Generated outputs live here; their hashes tell whether a pass changed anything.
 OUTPUT_DIRS = ("docs", "e2e/fixtures")
-OUTPUT_FILES = ("xkeen-ui/module-sizes.json",)
+OUTPUT_FILES = (
+    "xkeen-ui/module-sizes.json",
+    "xkeen-ui/static/schemas/xray-config.schema.json",
+    "xkeen-ui/static/schemas/xray-inbounds.schema.json",
+    "xkeen-ui/static/schemas/xray-outbounds.schema.json",
+    "xkeen-ui/static/schemas/xray-routing.schema.json",
+)
 
 
 def in_scope(rel: str) -> bool:

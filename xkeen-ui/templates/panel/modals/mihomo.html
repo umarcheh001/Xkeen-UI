@@ -248,14 +248,14 @@ rule-set:github@domain
                         </div>
                       </label>
                       <label class="xk-mi-field">
-                        <span class="hint-label">X25519MLKEM768 <span class="xk-mi-info" data-tooltip="Работает только для VLESS Reality и требует Mihomo v1.19.29 или новее." aria-label="Подробнее о X25519MLKEM768">i</span></span>
+                        <span class="hint-label">X25519MLKEM768 <span class="xk-mi-info" data-tooltip="Для Reality: если в источнике значение не задано, включается автоматически. Требует Mihomo v1.19.29 или новее и подходящий отпечаток." aria-label="Подробнее о X25519MLKEM768">i</span></span>
                         <div class="xk-mi-custom-select" data-mi-select-for="mihomo-import-x25519">
                           <button type="button" class="xk-mi-custom-select-trigger" id="mihomo-import-x25519-trigger" aria-label="X25519MLKEM768" aria-haspopup="listbox" aria-expanded="false" aria-controls="mihomo-import-x25519-menu">
                             <span class="xk-mi-custom-select-value"></span>{{ op_icon('chevron-down') }}
                           </button>
                           <div id="mihomo-import-x25519-menu" class="xk-mi-custom-select-menu" role="listbox" hidden></div>
                           <select id="mihomo-import-x25519" class="xray-log-select xk-mi-control xk-mi-native-select" tabindex="-1" aria-hidden="true">
-                          <option value="inherit">Наследовать от источника</option>
+                          <option value="inherit">Из источника, иначе включить</option>
                           <option value="enable">Включить принудительно</option>
                           <option value="disable">Выключить принудительно</option>
                           </select>

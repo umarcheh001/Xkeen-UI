@@ -1,6 +1,16 @@
 import { test, expect } from './fixtures.mjs';
 import yaml from 'js-yaml';
 
+test('REALITY import enables ML-KEM by default and preserves explicit false', async ({ page }) => {
+  await page.goto('/');
+  const results = await page.evaluate(async () => {
+    const { generateMihomoImportConfig: generate } = await import('/static/js/features/mihomo_import.js');
+    const link = 'vless://11111111-1111-1111-1111-111111111111@example.com:443?security=reality&pbk=key';
+    return [generate(link), generate(link + '&support-x25519mlkem768=false')];
+  });
+  expect(results.map(result => yaml.load(result.content)[0]['reality-opts']['support-x25519mlkem768'])).toEqual([true, false]);
+});
+
 test('XHTTP import preserves query uploads and XMUX without forcing TCP Fast Open', async ({ page }) => {
   const extra = {
     sessionIDPlacement: 'query', sessionIDKey: 'cid', sessionIDLength: '40-52',

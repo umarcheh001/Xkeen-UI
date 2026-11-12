@@ -227,18 +227,19 @@ def test_convert_vless_tcp_reality_vision_emits_expected_yaml():
     # short-id roundtrip preserves string type even for hex-with-letters values
     assert ro["short-id"] == "ab12cd34"
     assert isinstance(ro["short-id"], str)
-    assert "support-x25519mlkem768" not in ro
+    assert ro["support-x25519mlkem768"] is True
 
 
-def test_convert_vless_reality_preserves_explicit_mlkem_support_only():
+@pytest.mark.parametrize("enabled", [True, False])
+def test_convert_vless_reality_preserves_explicit_mlkem_support(enabled):
     outbound = _outbound_vless_tcp_reality_vision()
-    outbound["streamSettings"]["realitySettings"]["support-x25519mlkem768"] = True
+    outbound["streamSettings"]["realitySettings"]["support-x25519mlkem768"] = enabled
 
     result = convert_outbound_to_mihomo(outbound, "Reality-PQ")
     assert result is not None
     parsed = yaml.safe_load(result.yaml)[0]
 
-    assert parsed["reality-opts"]["support-x25519mlkem768"] is True
+    assert parsed["reality-opts"]["support-x25519mlkem768"] is enabled
 
 
 def test_prizrak_xray_json_preserves_finalmask_mux_and_reality_signature():

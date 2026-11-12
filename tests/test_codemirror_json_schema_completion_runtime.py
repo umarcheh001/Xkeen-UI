@@ -107,6 +107,15 @@ def _run_linter_messages(doc: str, schema_path: str = "./xkeen-ui/static/schemas
     return [str(item["message"]) for item in _run_linter_diagnostics(doc, schema_path)]
 
 
+@pytest.mark.parametrize("schema_name", ["xray-config", "xray-outbounds"])
+def test_xdrive_transport_is_accepted_by_editor(schema_name):
+    doc = json.dumps({"outbounds": [{"protocol": "vless", "streamSettings": {
+        "network": "xdrive", "xdriveSettings": {"service": "local", "remoteFolder": "test"}
+    }}]})
+    diagnostics = _run_linter_diagnostics(doc, f"./xkeen-ui/static/schemas/{schema_name}.schema.json")
+    assert not [item for item in diagnostics if "xdrive" in str(item).lower()]
+
+
 def _run_hover_info(doc_with_marker: str, schema_path: str = "./xkeen-ui/static/schemas/xray-routing.schema.json") -> dict[str, object] | None:
     if shutil.which("node") is None:
         pytest.skip("node is not available in this environment")

@@ -1,0 +1,3936 @@
+{
+  "definitions": {
+    "realityFallbackRateLimit": {
+      "type": "object",
+      "description": "Ограничение скорости неавторизованных REALITY fallback-соединений.",
+      "properties": {
+        "afterBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0
+        },
+        "bytesPerSec": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0
+        },
+        "burstBytesPerSec": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "routingRule": {
+      "type": "object",
+      "description": "Правило маршрутизации",
+      "x-ui-explain": "Правила в `routing.rules` проверяются сверху вниз до первого совпадения. В правиле задают, что совпадает (`domain`, `ip`, `port`, `network`, `inboundTag`), и куда слать совпавший трафик (`outboundTag` или `balancerTag`).",
+      "x-ui-use-case": "Типичная схема: сначала `block`-правила (реклама, трекинг), затем `direct` для локальных сетей и RU, затем `proxy` для остального, в конце — fallback MATCH.",
+      "x-ui-example": "{\n  \"type\": \"field\",\n  \"domain\": [\"geosite:youtube\"],\n  \"outboundTag\": \"proxy\"\n}",
+      "x-ui-warning": "Правило без `outboundTag` и без `balancerTag` фактически ничего не делает — Xray принимает его как валидное, но трафик идёт в defaultOutboundTag.",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "field"
+          ],
+          "default": "field",
+          "description": "Тип правила маршрутизации. Для routing rules используется значение field."
+        },
+        "domain": {
+          "type": "array",
+          "description": "Домены для сопоставления. Префиксы: `domain:` — домен и его субдомены, `full:` — точное совпадение, `geosite:` — geosite-база, `regexp:` — регулярное выражение, `ext:` — внешний .dat-файл.",
+          "items": {
+            "type": "string",
+            "examples": [
+              "domain:google.com",
+              "full:exact.example.com",
+              "geosite:category-ads-all",
+              "regexp:\\.example\\.com$",
+              "ext:geosite.dat:category-ads-all"
+            ]
+          }
+        },
+        "ip": {
+          "type": "array",
+          "description": "IP-адреса или CIDR-подсети. Префиксы: `geoip:` — geoip-база (например `geoip:cn`, `geoip:private`), `ext:` — внешний .dat-файл.",
+          "items": {
+            "type": "string",
+            "examples": [
+              "geoip:cn",
+              "geoip:private",
+              "10.0.0.0/8",
+              "192.168.0.0/16",
+              "ext:geoip.dat:cn"
+            ]
+          }
+        },
+        "port": {
+          "type": [
+            "string",
+            "integer"
+          ],
+          "description": "Порт назначения или диапазон. Число — один порт, строка — диапазон/список (например `'53'`, `'1024-65535'`, `'80,443'`).",
+          "examples": [
+            443,
+            "80,443",
+            "1024-65535"
+          ]
+        },
+        "sourcePort": {
+          "type": [
+            "string",
+            "integer"
+          ],
+          "description": "Порт источника или диапазон. Обычно не нужен — используйте для специфичных сценариев (например фильтрации по локальному порту)."
+        },
+        "network": {
+          "type": "string",
+          "enum": [
+            "tcp",
+            "udp",
+            "tcp,udp"
+          ],
+          "description": "Тип сети. Используйте `udp` для QUIC/DNS (UDP/443, UDP/53), `tcp,udp` — если правило применимо к обоим протоколам."
+        },
+        "source": {
+          "type": "array",
+          "description": "IP-адреса или подсети источника (CIDR или `geoip:`). Позволяет разделять политики по устройствам/подсетям LAN.",
+          "items": {
+            "type": "string",
+            "examples": [
+              "10.0.0.0/8",
+              "192.168.1.100",
+              "geoip:private"
+            ]
+          }
+        },
+        "user": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Email-адреса пользователей inbound'а. Работает только для multi-user протоколов (vless/vmess/trojan/shadowsocks)."
+        },
+        "inboundTag": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "examples": [
+              "redirect",
+              "tproxy"
+            ]
+          },
+          "description": "Теги inbound-соединений, к которым применимо правило. В Xkeen типично `redirect` и `tproxy`."
+        },
+        "protocol": {
+          "type": "array",
+          "description": "Протоколы, определённые sniffing'ом. По официальной документации Xray для routing поддерживаются `http`, `tls`, `quic`, `bittorrent`. Требует включённого sniffing на соответствующем inbound'е, иначе правило не сработает.",
+          "items": {
+            "type": "string",
+            "enum": [
+              "http",
+              "tls",
+              "quic",
+              "bittorrent"
+            ]
+          }
+        },
+        "attrs": {
+          "type": "object",
+          "description": "HTTP-атрибуты для сопоставления (method, path и т.п.). Требует sniffing; используется редко."
+        },
+        "outboundTag": {
+          "type": "string",
+          "description": "Тег outbound для маршрутизации",
+          "examples": [
+            "direct",
+            "block",
+            "dns",
+            "vless-reality"
+          ]
+        },
+        "balancerTag": {
+          "type": "string",
+          "description": "Tag балансировщика. Используется вместо `outboundTag`, если трафик должен распределяться между несколькими outbound'ами. В одном правиле указывайте только одно из двух.",
+          "examples": [
+            "proxy"
+          ]
+        },
+        "ruleTag": {
+          "type": "string",
+          "description": "Имя правила маршрутизации. Xkeen использует префикс `xk_auto_*` для автоматически добавленных правил подписок.",
+          "examples": [
+            "xk_auto_leastPing"
+          ]
+        },
+        "domainMatcher": {
+          "type": "string",
+          "enum": [
+            "hybrid",
+            "linear"
+          ],
+          "default": "hybrid",
+          "description": "Алгоритм сопоставления доменов для этого правила. Обычно задаётся на уровне `routing.domainMatcher`, а не для отдельного правила."
+        }
+      },
+      "additionalProperties": false
+    },
+    "balancer": {
+      "type": "object",
+      "description": "Балансировщик outbound'ов. На него ссылаются правила через `balancerTag`.",
+      "x-ui-explain": "Балансировщик — это «виртуальный outbound», который под капотом выбирает реальный outbound из `selector` по заданной стратегии (`random`, `leastPing` и т.д.).",
+      "x-ui-use-case": "Когда есть несколько узлов (`vless-1`, `vless-2`, ...) и хочется разделить на них нагрузку или автоматически брать самый быстрый.",
+      "x-ui-example": "{\n  \"tag\": \"proxy\",\n  \"selector\": [\"vless-\"],\n  \"strategy\": { \"type\": \"leastPing\" }\n}",
+      "x-ui-warning": "На Keenetic 300+ узлов в одном балансировщике кладут роутер (observatory/conntrack/RAM). Безопасный размер — десятки узлов, не сотни.",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "description": "Уникальный tag балансировщика. Используется в `rules[].balancerTag` для ссылки.",
+          "examples": [
+            "proxy"
+          ]
+        },
+        "selector": {
+          "type": "array",
+          "description": "Префиксы или полные tag'и outbound'ов, между которыми распределяется трафик. Например `\"vless-\"` охватит все outbound'ы, чей tag начинается с `vless-`.",
+          "items": {
+            "type": "string",
+            "examples": [
+              "vless-reality",
+              "vless-",
+              "direct",
+              "block"
+            ]
+          }
+        },
+        "fallbackTag": {
+          "type": "string",
+          "description": "Запасной outbound tag или префикс сгенерированных outbound'ов, если ни один из `selector` не доступен. Требует включённого `observatory`.",
+          "examples": [
+            "direct",
+            "block"
+          ]
+        },
+        "strategy": {
+          "type": "object",
+          "description": "Стратегия распределения. Если не задана — используется `random`.",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "random",
+                "leastPing",
+                "roundRobin",
+                "leastLoad"
+              ],
+              "default": "random",
+              "description": "Тип стратегии балансировщика — определяет способ выбора outbound'а из `selector`. `random` — случайный; `leastPing` — с минимальной задержкой (требует `observatory`); `roundRobin` — по очереди; `leastLoad` — с минимальной нагрузкой (требует `burstObservatory`)."
+            }
+          }
+        }
+      },
+      "required": [
+        "tag",
+        "selector"
+      ]
+    },
+    "inboundDokodemoSettings": {
+      "type": "object",
+      "description": "Настройки `dokodemo-door`/transparent inbound. Используются для прозрачного перехвата через tproxy/redirect или для простого port-mapping на один удалённый адрес.",
+      "x-ui-explain": "Это блок назначения для `dokodemo-door`: какой трафик принимать, куда его считать направленным и нужно ли брать реальный адрес из iptables/tproxy-редиректа.",
+      "x-ui-use-case": "На роутере чаще всего здесь ставят `network` и `followRedirect` для transparent proxy. Для port-mapping дополнительно задают `address` и `port`.",
+      "x-ui-example": "{ \"network\": \"tcp,udp\", \"followRedirect\": true }",
+      "x-ui-warning": "Если включили `followRedirect: true`, inbound должен реально получать redirected/tproxy-трафик; иначе Xray не сможет корректно восстановить исходное назначение.",
+      "properties": {
+        "address": {
+          "type": "string",
+          "default": "localhost",
+          "description": "Адрес назначения для port-mapping или fallback-маршрута. Может быть IPv4, IPv6 или доменом.",
+          "examples": [
+            "8.8.8.8",
+            "mc.hypixel.net",
+            "localhost"
+          ]
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535,
+          "description": "Порт назначения. `0` или отсутствие поля означает «использовать тот же порт, на который пришёл трафик».",
+          "examples": [
+            53,
+            25565,
+            0
+          ]
+        },
+        "portMap": {
+          "type": "object",
+          "description": "Таблица переопределения назначения по локальному порту. Ключ — локальный порт, значение — строка вида `host:port`, `:port` или `host:`.",
+          "additionalProperties": {
+            "type": "string",
+            "examples": [
+              "1.1.1.1:7777",
+              ":8888",
+              "example.com:"
+            ]
+          }
+        },
+        "network": {
+          "type": "string",
+          "enum": [
+            "tcp",
+            "udp",
+            "tcp,udp"
+          ],
+          "default": "tcp",
+          "description": "Какие типы трафика принимает inbound. Для transparent proxy на роутере обычно используют `tcp,udp`, для точечного mapping — `tcp` или `udp`."
+        },
+        "followRedirect": {
+          "type": "boolean",
+          "default": false,
+          "description": "Когда `true`, dokodemo-door пытается взять реальный адрес назначения из redirected/tproxy-трафика и игнорирует статическое `address`/`port` там, где доступен оригинальный target."
+        },
+        "userLevel": {
+          "type": "integer",
+          "default": 0,
+          "description": "User level для local policy. Если отдельные policy-level не используются, обычно оставляют `0`."
+        }
+      }
+    },
+    "inboundSettings": {
+      "type": "object",
+      "description": "Настройки, специфичные для inbound-протокола. Сейчас схема детально подсказывает поля `dokodemo-door` (`network`, `followRedirect`, `address`, `port`, `portMap`, `userLevel`).",
+      "allOf": [
+        {
+          "$ref": "#/definitions/inboundDokodemoSettings"
+        }
+      ]
+    },
+    "outboundUserEntry": {
+      "type": "object",
+      "description": "Параметры одной учётки на удалённом сервере. Для VLESS/VMess здесь обычно лежат `id`, `encryption`, `level` и `flow`; для некоторых других протоколов могут использоваться парольные поля.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "UUID или строковый идентификатор пользователя на удалённом сервере. Для VLESS/VMess должен совпадать с серверной учёткой.",
+          "examples": [
+            "f3131569-259f-4c4e-8fd9-67daf2212223"
+          ]
+        },
+        "encryption": {
+          "type": "string",
+          "description": "Режим шифрования учётки. Для VLESS почти всегда `none`; в других legacy-сценариях значение зависит от конкретного протокола/ядра.",
+          "examples": [
+            "none",
+            "auto",
+            "aes-128-gcm"
+          ]
+        },
+        "level": {
+          "type": "integer",
+          "default": 0,
+          "description": "User level для policy. Если политика уровней не используется, обычно оставляют `0`."
+        },
+        "flow": {
+          "type": "string",
+          "description": "Режим XTLS/VLESS. Для Reality/Vision чаще всего используют `xtls-rprx-vision` или `xtls-rprx-vision-udp443`.",
+          "examples": [
+            "xtls-rprx-vision",
+            "xtls-rprx-vision-udp443",
+            ""
+          ]
+        },
+        "email": {
+          "type": "string",
+          "description": "Читаемая метка пользователя. Полезна для статистики и логов, если ядро собирает user-based stats."
+        },
+        "security": {
+          "type": "string",
+          "description": "Legacy-параметр VMess (`auto`, `aes-128-gcm` и т.п.). Для VLESS обычно не нужен.",
+          "examples": [
+            "auto",
+            "aes-128-gcm",
+            "chacha20-poly1305",
+            "none"
+          ]
+        },
+        "alterId": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Legacy-параметр VMess. В современных конфигурациях обычно `0`."
+        },
+        "password": {
+          "type": "string",
+          "description": "Пароль учётки для протоколов, которые используют пароль вместо UUID."
+        }
+      }
+    },
+    "outboundRemoteEndpoint": {
+      "type": "object",
+      "description": "Описание одного удалённого узла назначения для outbound (`vnext`/`servers`).",
+      "properties": {
+        "address": {
+          "type": "string",
+          "description": "Адрес удалённого сервера. Поддерживаются домены, IPv4 и IPv6.",
+          "examples": [
+            "example.com",
+            "1.2.3.4",
+            "2001:db8::1"
+          ]
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Порт удалённого сервера.",
+          "examples": [
+            443,
+            8443
+          ]
+        },
+        "users": {
+          "type": "array",
+          "description": "Список учёток для этого узла. Для VLESS/VMess чаще всего здесь один элемент.",
+          "items": {
+            "$ref": "#/definitions/outboundUserEntry"
+          }
+        },
+        "id": {
+          "type": "string",
+          "description": "Прямая client-конфигурация VLESS/VMess без `users[]`: UUID или строковый идентификатор пользователя."
+        },
+        "encryption": {
+          "type": "string",
+          "description": "Прямая client-конфигурация VLESS/VMess без `users[]`: режим шифрования (`none`, `auto` и т.п.)."
+        },
+        "level": {
+          "type": "integer",
+          "description": "Прямая client-конфигурация: user level для policy."
+        },
+        "flow": {
+          "type": "string",
+          "description": "Прямая client-конфигурация: режим XTLS/VLESS (`xtls-rprx-vision` и т.п.)."
+        },
+        "password": {
+          "type": "string",
+          "description": "Пароль сервера/учётки для Trojan, Shadowsocks и других password-based outbound'ов."
+        },
+        "method": {
+          "type": "string",
+          "description": "Метод шифрования/алгоритм для Shadowsocks-подобных outbound'ов.",
+          "examples": [
+            "chacha20-ietf-poly1305",
+            "aes-128-gcm"
+          ]
+        },
+        "ota": {
+          "type": "boolean",
+          "description": "Legacy OTA-флаг для старых Shadowsocks-конфигов."
+        },
+        "email": {
+          "type": "string",
+          "description": "Дополнительная читаемая метка для сервера/учётки."
+        }
+      }
+    },
+    "outboundBlackholeResponse": {
+      "type": "object",
+      "description": "Ответ Blackhole-outbound перед закрытием соединения. Если блок не задан, соединение просто закрывается без ответа.",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "none",
+            "http"
+          ],
+          "default": "none",
+          "description": "`none` — сразу закрыть соединение; `http` — вернуть простой HTTP 403 и затем закрыть соединение."
+        }
+      }
+    },
+    "outboundSettings": {
+      "type": "object",
+      "description": "Настройки, специфичные для выбранного outbound-протокола. По актуальной документации Xray для VLESS/VMess поддерживается compact-формат с `address`/`port`/`id` прямо в корне `settings`; legacy-массив `vnext` тоже поддерживается для совместимости. Для blackhole используется `response`, для loopback — `inboundTag`.",
+      "properties": {
+        "address": {
+          "type": "string",
+          "description": "Прямой адрес удалённого сервера в client-конфигурации без массива `vnext`."
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Прямой порт удалённого сервера в client-конфигурации без массива `vnext`."
+        },
+        "id": {
+          "type": "string",
+          "description": "Прямой идентификатор пользователя (обычно UUID) в compact client-конфигурации VLESS/VMess."
+        },
+        "encryption": {
+          "type": "string",
+          "description": "Прямой режим шифрования учётки в compact client-конфигурации."
+        },
+        "level": {
+          "type": "integer",
+          "description": "Прямой user level в compact client-конфигурации."
+        },
+        "flow": {
+          "type": "string",
+          "description": "Прямой режим XTLS/VLESS в compact client-конфигурации."
+        },
+        "users": {
+          "type": "array",
+          "description": "Список учёток для compact client-конфигурации или для вложенного endpoint-объекта.",
+          "items": {
+            "$ref": "#/definitions/outboundUserEntry"
+          }
+        },
+        "vnext": {
+          "type": "array",
+          "description": "Список удалённых узлов для VLESS/VMess outbound в legacy/распространённой схеме Xray-конфигов.",
+          "items": {
+            "$ref": "#/definitions/outboundRemoteEndpoint"
+          }
+        },
+        "servers": {
+          "type": "array",
+          "description": "Список серверов для Trojan, Shadowsocks, HTTP, SOCKS и других outbound'ов, где используется `servers`.",
+          "items": {
+            "$ref": "#/definitions/outboundRemoteEndpoint"
+          }
+        },
+        "response": {
+          "$ref": "#/definitions/outboundBlackholeResponse"
+        },
+        "inboundTag": {
+          "type": "string",
+          "description": "Для `protocol: loopback` задаёт виртуальный inbound-tag, под которым трафик повторно заходит в routing."
+        },
+        "reverse": {
+          "type": "object",
+          "description": "Минималистичная reverse-proxy-конфигурация VLESS. Используется редко."
+        }
+      }
+    },
+    "streamSettings": {
+      "type": "object",
+      "description": "Настройки транспорта для inbound/outbound. Задаёт тип сети (network) и слой безопасности (security).",
+      "x-ui-explain": "Это блок, который описывает, как именно Xray устанавливает соединение: по какому транспорту (`method`; старое имя — `network`) и с какой защитой (`security`).",
+      "x-ui-use-case": "Меняйте его, когда сервер работает не на чистом TCP, а через WebSocket, XHTTP, REALITY, CDN или другой transport/security stack.",
+      "x-ui-example": "\"streamSettings\": { \"network\": \"xhttp\", \"security\": \"tls\", \"tlsSettings\": { \"serverName\": \"edge.example.com\" } }",
+      "x-ui-warning": "Transport- и security-подблоки жёстко связаны: `tlsSettings` требует `security: tls`, `realitySettings` — `security: reality`, а `xhttpSettings` — `network: xhttp`.",
+      "properties": {
+        "method": {
+          "type": "string",
+          "description": "Актуальное имя поля транспорта Xray. Канонические значения: `raw`, `xhttp`, `mkcp`, `grpc`, `websocket`, `httpupgrade`, `hysteria`; legacy-алиасы также принимает core.",
+          "enum": [
+            "raw",
+            "tcp",
+            "xhttp",
+            "splithttp",
+            "mkcp",
+            "kcp",
+            "grpc",
+            "websocket",
+            "ws",
+            "httpupgrade",
+            "hysteria",
+            "xdrive",
+            "masque"
+          ],
+          "deprecatedValues": [
+            "tcp",
+            "splithttp",
+            "kcp",
+            "ws",
+            "grpc"
+          ],
+          "default": "raw"
+        },
+        "network": {
+          "type": "string",
+          "description": "Legacy-имя поля транспорта, всё ещё принимаемое Xray. `raw`/`tcp` — прямой TCP/UDP transport; `ws`/`websocket`, `kcp`/`mkcp` и `xhttp`/`splithttp` — совместимые пары имён. Транспорты `http`/`h2`, `h3` и `quic` из ядра удалены — конфиг с ними не запустится, вместо них XHTTP.",
+          "enum": [
+            "raw",
+            "tcp",
+            "mkcp",
+            "kcp",
+            "websocket",
+            "ws",
+            "grpc",
+            "httpupgrade",
+            "splithttp",
+            "hysteria",
+            "xhttp",
+            "xdrive",
+            "masque"
+          ],
+          "deprecatedValues": [
+            "grpc"
+          ],
+          "deprecationMessage": "Transport gRPC устарел в актуальных версиях Xray; по возможности используйте XHTTP (stream-up H2).",
+          "default": "raw"
+        },
+        "security": {
+          "type": "string",
+          "description": "Слой transport security: `none`, стандартный `tls` или `reality`. REALITY требует `realitySettings` и совместимый transport (RAW/XHTTP/gRPC в актуальном Xray), но не ограничен только VLESS.",
+          "x-ui-explain": "Это уровень шифрования и маскировки поверх выбранного транспорта.",
+          "x-ui-use-case": "`tls` подходит для обычных HTTPS-подобных соединений, `reality` — для REALITY-compatible protocol/transport сочетаний, `none` — в основном для локальных inbound-сценариев.",
+          "x-ui-example": "\"security\": \"tls\"",
+          "x-ui-warning": "Если выбрали `tls` или `reality`, не забудьте добавить соответствующий блок настроек ниже.",
+          "enum": [
+            "none",
+            "tls",
+            "reality"
+          ],
+          "default": "none"
+        },
+        "tlsSettings": {
+          "type": "object",
+          "description": "Настройки TLS. Применимо только если `security = \"tls\"`.",
+          "x-ui-explain": "Это настройки обычного TLS: SNI, ALPN, проверка сертификата и fingerprint клиента.",
+          "x-ui-use-case": "Нужен почти для всех внешних VLESS/Trojan/VMess соединений на 443 и для большинства CDN-сценариев.",
+          "x-ui-example": "{ \"serverName\": \"edge.example.com\", \"fingerprint\": \"chrome\", \"alpn\": [\"h2\", \"http/1.1\"] }",
+          "x-ui-warning": "Обычно нельзя оставлять `allowInsecure: true` в рабочем конфиге — это отключает нормальную проверку сертификата.",
+          "properties": {
+            "serverName": {
+              "type": "string",
+              "description": "SNI (Server Name Indication). Обычно совпадает с доменом сервера. Для VLESS/Trojan/VMess это обязательное поле.",
+              "examples": [
+                "edge.example.com"
+              ]
+            },
+            "alpn": {
+              "type": "array",
+              "description": "ALPN-список — какой прикладной протокол использовать поверх TLS.",
+              "items": {
+                "type": "string",
+                "examples": [
+                  "h2",
+                  "http/1.1"
+                ]
+              }
+            },
+            "allowInsecure": {
+              "type": "boolean",
+              "default": false,
+              "description": "Пропустить проверку сертификата сервера. ОПАСНО — оставляйте `false` в рабочем конфиге, меняйте только для диагностики."
+            },
+            "show": {
+              "type": "boolean",
+              "default": false,
+              "description": "Diagnostic flag accepted by Xray TLS settings. Usually false."
+            },
+            "fingerprint": {
+              "type": "string",
+              "description": "uTLS ClientHello fingerprint. Помимо коротких имён браузеров Xray принимает нативные Hello*-имена uTLS.",
+              "examples": [
+                "chrome",
+                "firefox",
+                "safari",
+                "ios",
+                "android",
+                "edge",
+                "360",
+                "qq",
+                "random",
+                "randomized",
+                "HelloChrome_106_Shuffle",
+                ""
+              ]
+            },
+            "certificates": {
+              "type": "array",
+              "description": "Клиентские сертификаты (для mTLS) или серверные сертификаты. Обычно не нужно — серверы используют свои CA-подписанные сертификаты.",
+              "items": {
+                "$ref": "#/definitions/certificate"
+              }
+            },
+            "disableSystemRoot": {
+              "type": "boolean",
+              "default": false,
+              "description": "Не доверять системным корневым сертификатам. Оставьте `false`, если не используете собственный CA."
+            },
+            "verifyPeerCertByName": {
+              "type": "string"
+            },
+            "enableSessionResumption": {
+              "type": "boolean",
+              "default": false
+            },
+            "cipherSuites": {
+              "type": "string"
+            },
+            "pinnedPeerCertSha256": {
+              "type": "string"
+            },
+            "pinnedPeerCertificateChainSha256": {
+              "type": "array",
+              "description": "SHA-256 pinning всей цепочки сертификатов сервера (в base64). Редко нужно.",
+              "items": {
+                "type": "string"
+              }
+            },
+            "curvePreferences": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "masterKeyLog": {
+              "type": "string"
+            },
+            "echServerKeys": {
+              "type": "string"
+            },
+            "echConfigList": {
+              "type": "string"
+            },
+            "echSockopt": {
+              "type": "object"
+            },
+            "minVersion": {
+              "type": "string",
+              "description": "Минимальная версия TLS (например `1.2`, `1.3`).",
+              "examples": [
+                "1.2",
+                "1.3"
+              ]
+            },
+            "maxVersion": {
+              "type": "string",
+              "description": "Максимальная версия TLS.",
+              "examples": [
+                "1.3"
+              ]
+            },
+            "rejectUnknownSni": {
+              "type": "boolean",
+              "default": false,
+              "description": "Отклонять TLS-соединения с неизвестным SNI (серверная настройка). Клиенту не нужно."
+            },
+            "useSystemCA": {
+              "type": "boolean",
+              "description": "Использовать системное хранилище центров сертификации TLS."
+            }
+          }
+        },
+        "realitySettings": {
+          "type": "object",
+          "description": "Настройки REALITY transport security. Применимо при `security = \"reality\"`; поддерживаемые сочетания protocol/transport зависят от версии Xray.",
+          "x-ui-explain": "Это параметры REALITY-маскировки: ключи, SNI-кандидат и short-id, по которым клиент и сервер узнают друг друга.",
+          "x-ui-use-case": "Используется для REALITY transport security, когда соединение должно выглядеть как обычный TLS-трафик к целевому сайту.",
+          "x-ui-example": "{ \"serverName\": \"www.microsoft.com\", \"password\": \"<server-public-key>\", \"shortId\": \"6ba85179e30d4fc2\" }",
+          "x-ui-warning": "На клиенте актуальный Xray использует `password` (старое имя `publicKey` остаётся алиасом), на сервере — `privateKey`; `serverName` и short-id должны совпадать с серверной настройкой.",
+          "properties": {
+            "show": {
+              "type": "boolean",
+              "default": false,
+              "description": "Отладочный вывод Reality в лог. В рабочем конфиге оставьте `false`."
+            },
+            "dest": {
+              "type": [
+                "string",
+                "integer"
+              ],
+              "description": "Адрес назначения — куда Reality форвардит нераспознанный трафик (обычно `host:port` настоящего сайта, который маскирует сервер).",
+              "examples": [
+                "edge.example.com:443",
+                "www.microsoft.com:443"
+              ]
+            },
+            "target": {
+              "type": [
+                "string",
+                "integer"
+              ],
+              "description": "Актуальное имя серверной цели REALITY; `dest` сохранён core как legacy-алиас."
+            },
+            "xver": {
+              "type": "integer",
+              "enum": [
+                0,
+                1,
+                2
+              ],
+              "default": 0,
+              "description": "Версия PROXY protocol перед Reality. `0` — без PROXY; `1`/`2` — если Reality стоит за другим прокси."
+            },
+            "serverNames": {
+              "type": "array",
+              "description": "Список допустимых SNI. Клиент должен использовать один из этих доменов. На сервере совпадает с dest.",
+              "items": {
+                "type": "string",
+                "examples": [
+                  "edge.example.com",
+                  "www.microsoft.com"
+                ]
+              }
+            },
+            "privateKey": {
+              "type": "string",
+              "description": "Приватный ключ Reality (только на сервере). НЕ публиковать — генерируется парой с `publicKey` командой `xray x25519`."
+            },
+            "password": {
+              "type": "string",
+              "description": "Актуальное имя клиентского REALITY credential: публичный ключ, соответствующий privateKey сервера."
+            },
+            "publicKey": {
+              "type": "string",
+              "description": "Legacy-алиас поля `password`, принимаемый Xray для совместимости."
+            },
+            "shortIds": {
+              "type": "array",
+              "description": "Короткие hex-идентификаторы (0-16 символов, чётное количество). Клиент указывает один из допустимых, пустая строка — «любой».",
+              "items": {
+                "type": "string",
+                "examples": [
+                  "",
+                  "6ba85179e30d4fc2"
+                ]
+              }
+            },
+            "mldsa65Seed": {
+              "type": "string",
+              "description": "Серверный seed ML-DSA-65 для дополнительной постквантовой подписи сертификата."
+            },
+            "shortId": {
+              "type": "string",
+              "description": "Один из `shortIds`, разрешённых на сервере. Может быть пустой строкой; непустое значение должно быть hex-строкой чётной длины до 16 символов.",
+              "examples": [
+                "",
+                "6ba85179e30d4fc2"
+              ]
+            },
+            "fingerprint": {
+              "type": "string",
+              "description": "Имитируемый TLS fingerprint браузера. Для Reality рекомендуется `chrome`.",
+              "examples": [
+                "chrome",
+                "firefox"
+              ]
+            },
+            "serverName": {
+              "type": "string",
+              "description": "SNI клиента (должен быть в `serverNames` сервера).",
+              "examples": [
+                "edge.example.com"
+              ]
+            },
+            "mldsa65Verify": {
+              "type": "string",
+              "description": "Клиентский публичный ключ проверки подписи ML-DSA-65."
+            },
+            "spiderX": {
+              "type": "string",
+              "description": "Путь spider (клиентский параметр). Обычно `/` или пустая строка.",
+              "examples": [
+                "/",
+                ""
+              ]
+            },
+            "minClientVer": {
+              "type": "string",
+              "description": "Минимальная версия клиента REALITY (серверная настройка). В Xray-core v26.7.11+ пустое значение по умолчанию — 26.3.27; для совместимости со старыми клиентами явно укажите \"0.0.0\"."
+            },
+            "maxClientVer": {
+              "type": "string",
+              "description": "Максимальная версия клиента (серверная настройка)."
+            },
+            "maxTimeDiff": {
+              "type": "integer",
+              "description": "Максимальное отклонение времени клиента от сервера (мс). Защищает от replay-атак."
+            },
+            "limitFallbackUpload": {
+              "$ref": "#/definitions/realityFallbackRateLimit"
+            },
+            "limitFallbackDownload": {
+              "$ref": "#/definitions/realityFallbackRateLimit"
+            },
+            "masterKeyLog": {
+              "type": "string",
+              "description": "Путь журнала ключей REALITY для отладки."
+            },
+            "type": {
+              "type": "string",
+              "description": "Тип целевого соединения REALITY; обычно определяется по target автоматически."
+            }
+          }
+        },
+        "rawSettings": {
+          "type": "object",
+          "description": "Настройки актуального RAW-транспорта; legacy-имя этого же блока — `tcpSettings`."
+        },
+        "tcpSettings": {
+          "type": "object",
+          "description": "Legacy-алиас `rawSettings`, всё ещё принимаемый Xray."
+        },
+        "kcpSettings": {
+          "type": "object",
+          "description": "Настройки mKCP-транспорта (UDP-based). Обычно оставьте пустым объектом; при необходимости задайте header.type, mtu, tti, seed и т.д."
+        },
+        "wsSettings": {
+          "type": "object",
+          "description": "Настройки WebSocket-транспорта. Применимо только если `network = \"ws\"`.",
+          "properties": {
+            "path": {
+              "type": "string",
+              "default": "/",
+              "description": "HTTP-путь WebSocket-подключения. Обычно должен совпадать с серверным.",
+              "examples": [
+                "/",
+                "/ws",
+                "/vless"
+              ]
+            },
+            "host": {
+              "type": "string",
+              "description": "HTTP Host header (может отличаться от реального адреса за CDN).",
+              "examples": [
+                "edge.example.com"
+              ]
+            },
+            "headers": {
+              "type": "object",
+              "description": "Дополнительные HTTP-заголовки.",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "httpSettings": {
+          "type": "object",
+          "description": "Настройки HTTP/2 транспорта. Применимо только если `network = \"http\"`. Для новых конфигов обычно проще `xhttp` или `httpupgrade`.",
+          "properties": {
+            "host": {
+              "type": "array",
+              "description": "Список допустимых Host-заголовков. На сервере — whitelist; на клиенте — отправляется случайный из списка.",
+              "items": {
+                "type": "string",
+                "examples": [
+                  "edge.example.com"
+                ]
+              }
+            },
+            "path": {
+              "type": "string",
+              "default": "/",
+              "description": "HTTP-путь.",
+              "examples": [
+                "/"
+              ]
+            },
+            "method": {
+              "type": "string",
+              "description": "HTTP-метод. Обычно не требуется менять.",
+              "examples": [
+                "PUT",
+                "GET"
+              ]
+            },
+            "headers": {
+              "type": "object",
+              "description": "Дополнительные HTTP-заголовки."
+            }
+          }
+        },
+        "grpcSettings": {
+          "type": "object",
+          "description": "Настройки gRPC-транспорта. gRPC устарел — по возможности используйте `xhttp` (stream-up H2).",
+          "properties": {
+            "serviceName": {
+              "type": "string",
+              "description": "gRPC service name (должно совпадать с серверным).",
+              "examples": [
+                "api",
+                "GunService"
+              ]
+            },
+            "multiMode": {
+              "type": "boolean",
+              "default": false,
+              "description": "Мультиплексирование gRPC-потоков внутри одного соединения."
+            },
+            "authority": {
+              "type": "string",
+              "description": "HTTP :authority header. Обычно совпадает с хостом сервера."
+            }
+          }
+        },
+        "httpupgradeSettings": {
+          "type": "object",
+          "description": "Настройки HTTP Upgrade транспорта. Применимо только если `network = \"httpupgrade\"`.",
+          "properties": {
+            "path": {
+              "type": "string",
+              "default": "/",
+              "description": "HTTP-путь.",
+              "examples": [
+                "/",
+                "/upgrade"
+              ]
+            },
+            "host": {
+              "type": "string",
+              "description": "HTTP Host header."
+            },
+            "headers": {
+              "type": "object",
+              "description": "Дополнительные HTTP-заголовки.",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "xhttpSettings": {
+          "type": "object",
+          "description": "Настройки XHTTP-транспорта. Применимо при `method: \"xhttp\"` или legacy `network: \"xhttp\"`/`\"splithttp\"`.",
+          "x-ui-explain": "Это настройки современного HTTP-based транспорта XHTTP, который в новых Xray-конфигах обычно приходит на смену gRPC.",
+          "x-ui-use-case": "Нужен, когда сервер настроен на XHTTP и вы хотите браузероподобный transport для CDN или современных VLESS/TLS-сценариев.",
+          "x-ui-example": "{ \"path\": \"/gateway\", \"mode\": \"stream-up\" }",
+          "x-ui-warning": "Параметры XHTTP должны совпадать с сервером, а `mode` нельзя оставлять произвольным вроде `auto` — здесь допустимы только конкретные режимы схемы.",
+          "properties": {
+            "path": {
+              "type": "string",
+              "default": "/",
+              "description": "HTTP-путь XHTTP.",
+              "examples": [
+                "/",
+                "/gateway"
+              ]
+            },
+            "host": {
+              "type": "string",
+              "description": "Host / authority для XHTTP.",
+              "examples": [
+                "edge.example.com"
+              ]
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "stream-one",
+                "stream-up",
+                "packet-up"
+              ],
+              "default": "stream-one",
+              "description": "Режим XHTTP. `stream-one` — безопасный baseline, `stream-up` — чаще для browser-like TCP, `packet-up` — для packet/UDP-like сценариев."
+            },
+            "headers": {
+              "type": "object",
+              "description": "Дополнительные HTTP-заголовки.",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "hysteriaSettings": {
+          "type": "object",
+          "description": "Hysteria/Hysteria2 transport settings. For Hysteria2, use version=2 and auth.",
+          "properties": {
+            "version": {
+              "type": "integer",
+              "enum": [
+                1,
+                2
+              ],
+              "default": 2
+            },
+            "auth": {
+              "type": "string"
+            },
+            "congestion": {
+              "type": "string"
+            },
+            "up": {
+              "type": "string"
+            },
+            "down": {
+              "type": "string"
+            }
+          }
+        },
+        "finalmask": {
+          "type": "object",
+          "description": "Final mask settings for Hysteria2, including salamander UDP masking.",
+          "properties": {
+            "udp": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string"
+                  },
+                  "settings": {
+                    "type": "object"
+                  }
+                }
+              }
+            },
+            "udpmasks": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string"
+                  },
+                  "settings": {
+                    "type": "object"
+                  }
+                }
+              }
+            },
+            "quicParams": {
+              "type": "object"
+            }
+          }
+        },
+        "xdriveSettings": {
+          "type": "object",
+          "description": "Настройки XDRIVE в Xray-core v26.11.9. Для исходящего VLESS нужны VLESS Encryption и включённый mux; настройки клиента и сервера должны совпадать.",
+          "properties": {
+            "service": {
+              "type": "string",
+              "enum": [
+                "local",
+                "google-drive",
+                "Google Drive",
+                "template",
+                "s3"
+              ],
+              "description": "Хранилище XDRIVE."
+            },
+            "remoteFolder": {
+              "type": "string",
+              "description": "Удалённая папка транспорта."
+            },
+            "secrets": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Учётные данные выбранного хранилища; для Google Drive: Client ID, Client Secret и Refresh Token."
+            },
+            "segmentBytes": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Размер сегмента в байтах."
+            },
+            "flushIntervalMs": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Интервал отправки в миллисекундах."
+            },
+            "pollIntervalMs": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Интервал опроса в миллисекундах."
+            },
+            "maxPollIntervalMs": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Максимальный интервал опроса в миллисекундах."
+            },
+            "sessionTtlSeconds": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Время жизни сессии в секундах."
+            },
+            "concurrency": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Число параллельных операций."
+            },
+            "eagerWindowMs": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Окно активного опроса в миллисекундах."
+            },
+            "holeTimeoutMs": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Тайм-аут ожидания пропущенного сегмента в миллисекундах."
+            },
+            "template": {
+              "type": "object",
+              "description": "Шаблон запросов для сервиса template."
+            },
+            "s3": {
+              "type": "object",
+              "description": "Настройки S3.",
+              "properties": {
+                "endpoint": {
+                  "type": "string"
+                },
+                "region": {
+                  "type": "string"
+                },
+                "bucket": {
+                  "type": "string"
+                },
+                "pathStyle": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "xmux": {
+              "type": "object",
+              "description": "Настройки повторного использования подключений XDRIVE."
+            }
+          }
+        },
+        "sockopt": {
+          "type": "object",
+          "description": "Низкоуровневые настройки сокета. Xkeen обычно выставляет их автоматически — трогайте только при специфичной маршрутизации.",
+          "properties": {
+            "mark": {
+              "type": "integer",
+              "description": "fwmark исходящих пакетов (для policy-based routing). В Xkeen устанавливается скриптом автоматически."
+            },
+            "tcpFastOpen": {
+              "type": [
+                "boolean",
+                "integer"
+              ],
+              "description": "Включить TCP Fast Open (TFO). Требует поддержки обеими сторонами."
+            },
+            "tproxy": {
+              "type": "string",
+              "enum": [
+                "redirect",
+                "tproxy",
+                "off"
+              ],
+              "description": "Режим прозрачного проксирования для inbound. В Xkeen обычно `tproxy` на Linux-роутерах."
+            },
+            "domainStrategy": {
+              "type": "string",
+              "enum": [
+                "AsIs",
+                "UseIP",
+                "UseIPv4",
+                "UseIPv6",
+                "UseIPv4v6",
+                "UseIPv6v4",
+                "ForceIP",
+                "ForceIPv4",
+                "ForceIPv6",
+                "ForceIPv4v6",
+                "ForceIPv6v4"
+              ],
+              "description": "Стратегия резолвинга адреса назначения при dial. `UseIP` — резолвить через встроенный DNS. Варианты с суффиксом (`UseIPv4v6`, `UseIPv6v4` и такие же `Force*`) задают порядок перебора семейств адресов: первым идёт названный."
+            },
+            "dialerProxy": {
+              "type": "string",
+              "description": "Tag outbound'а, через который dial'ить (цепочка outbound'ов)."
+            },
+            "tcpKeepAliveInterval": {
+              "type": "integer",
+              "description": "Интервал TCP keep-alive пробелов (сек)."
+            },
+            "tcpKeepAliveIdle": {
+              "type": "integer",
+              "description": "TCP keep-alive idle-таймаут (сек)."
+            },
+            "tcpMptcp": {
+              "type": "boolean",
+              "description": "MPTCP (Multipath TCP). Требует поддержки ядра."
+            },
+            "tcpNoDelay": {
+              "type": "boolean",
+              "description": "TCP_NODELAY (отключить Nagle's algorithm)."
+            },
+            "tcpcongestion": {
+              "type": "string",
+              "description": "Алгоритм congestion control (должен быть доступен в ядре).",
+              "examples": [
+                "bbr",
+                "cubic",
+                "reno"
+              ]
+            },
+            "interface": {
+              "type": "string",
+              "description": "Имя сетевого интерфейса для исходящего трафика."
+            },
+            "v6only": {
+              "type": "boolean",
+              "description": "Привязывать сокет только к IPv6."
+            },
+            "tcpCongestion": {
+              "type": "string",
+              "description": "Алгоритм управления перегрузкой TCP."
+            },
+            "addressPortStrategy": {
+              "type": "string",
+              "description": "Стратегия выбора адреса и порта."
+            },
+            "tcpWindowClamp": {
+              "type": "integer",
+              "description": "Ограничение окна TCP."
+            },
+            "tcpMaxSeg": {
+              "type": "integer",
+              "description": "Максимальный размер сегмента TCP."
+            },
+            "tcpUserTimeout": {
+              "type": "integer",
+              "description": "Пользовательский тайм-аут TCP."
+            },
+            "acceptProxyProtocol": {
+              "type": "boolean",
+              "description": "Принимать PROXY protocol."
+            },
+            "penetrate": {
+              "type": "boolean",
+              "description": "Включить penetrate."
+            },
+            "trustedXForwardedFor": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Доверенные адреса X-Forwarded-For."
+            },
+            "customSockopt": {
+              "type": "array",
+              "description": "Дополнительные параметры сокета.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "system": {
+                    "type": "string"
+                  },
+                  "network": {
+                    "type": "string"
+                  },
+                  "level": {
+                    "type": "string"
+                  },
+                  "opt": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "happyEyeballs": {
+              "type": "object",
+              "description": "Настройки параллельного подключения IPv4 и IPv6.",
+              "properties": {
+                "prioritizeIPv6": {
+                  "type": "boolean"
+                },
+                "tryDelayMs": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "interleave": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "maxConcurrentTry": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          }
+        },
+        "address": {
+          "type": "string",
+          "description": "Адрес транспорта Xray."
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535,
+          "description": "Порт транспорта Xray."
+        },
+        "splithttpSettings": {
+          "$ref": "#/definitions/streamSettings/properties/xhttpSettings",
+          "description": "Совместимый алиас xhttpSettings."
+        },
+        "masqueSettings": {
+          "type": "object",
+          "description": "Настройки транспорта MASQUE.",
+          "properties": {
+            "host": {
+              "type": "string",
+              "description": "Имя хоста MASQUE."
+            },
+            "path": {
+              "type": "string",
+              "description": "Путь запроса MASQUE."
+            },
+            "user": {
+              "type": "string",
+              "description": "Имя пользователя MASQUE."
+            },
+            "pass": {
+              "type": "string",
+              "description": "Пароль MASQUE."
+            },
+            "headers": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Заголовки MASQUE."
+            },
+            "warp": {
+              "type": "object",
+              "description": "Параметры WARP для MASQUE."
+            },
+            "xmux": {
+              "type": "object",
+              "description": "Повторное использование соединений MASQUE."
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "tlsSettings"
+            ]
+          },
+          "then": {
+            "required": [
+              "security"
+            ],
+            "properties": {
+              "security": {
+                "const": "tls"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "realitySettings"
+            ]
+          },
+          "then": {
+            "required": [
+              "security"
+            ],
+            "properties": {
+              "security": {
+                "const": "reality"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "wsSettings"
+            ]
+          },
+          "then": {
+            "anyOf": [
+              {
+                "required": [
+                  "method"
+                ],
+                "properties": {
+                  "method": {
+                    "enum": [
+                      "websocket",
+                      "ws"
+                    ]
+                  }
+                }
+              },
+              {
+                "required": [
+                  "network"
+                ],
+                "properties": {
+                  "network": {
+                    "enum": [
+                      "ws",
+                      "websocket"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "httpSettings"
+            ]
+          },
+          "then": {
+            "required": [
+              "network"
+            ],
+            "properties": {
+              "network": {
+                "const": "http"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "grpcSettings"
+            ]
+          },
+          "then": {
+            "anyOf": [
+              {
+                "required": [
+                  "method"
+                ],
+                "properties": {
+                  "method": {
+                    "const": "grpc"
+                  }
+                }
+              },
+              {
+                "required": [
+                  "network"
+                ],
+                "properties": {
+                  "network": {
+                    "const": "grpc"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "httpupgradeSettings"
+            ]
+          },
+          "then": {
+            "anyOf": [
+              {
+                "required": [
+                  "method"
+                ],
+                "properties": {
+                  "method": {
+                    "const": "httpupgrade"
+                  }
+                }
+              },
+              {
+                "required": [
+                  "network"
+                ],
+                "properties": {
+                  "network": {
+                    "const": "httpupgrade"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "xhttpSettings"
+            ]
+          },
+          "then": {
+            "anyOf": [
+              {
+                "required": [
+                  "method"
+                ],
+                "properties": {
+                  "method": {
+                    "enum": [
+                      "xhttp",
+                      "splithttp"
+                    ]
+                  }
+                }
+              },
+              {
+                "required": [
+                  "network"
+                ],
+                "properties": {
+                  "network": {
+                    "enum": [
+                      "xhttp",
+                      "splithttp"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "certificate": {
+      "type": "object",
+      "properties": {
+        "usage": {
+          "type": "string",
+          "enum": [
+            "encipherment",
+            "verify",
+            "issue",
+            "verifyclient"
+          ]
+        },
+        "certificateFile": {
+          "type": "string"
+        },
+        "keyFile": {
+          "type": "string"
+        },
+        "certificate": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "key": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ocspStapling": {
+          "type": "integer"
+        },
+        "oneTimeLoading": {
+          "type": "boolean"
+        },
+        "buildChain": {
+          "type": "boolean"
+        }
+      }
+    },
+    "inbound": {
+      "type": "object",
+      "description": "Входящее подключение — локальный слушающий сокет, через который Xray принимает клиентский трафик (прозрачный прокси, socks/http для LAN или туннелируемые vless/vmess/trojan/shadowsocks для удалённых клиентов).",
+      "x-ui-explain": "Inbound — это «вход» для трафика: порт, на котором Xray слушает. Всё, что в него прилетает, дальше проходит через `routing.rules` и уходит в один из outbound.",
+      "x-ui-use-case": "На роутере обычно настраивают dokodemo-door (прозрачный перехват) и/или socks/http для LAN-клиентов. Для туннеля с других устройств — vless/trojan с TLS.",
+      "x-ui-example": "{\n  \"tag\": \"socks-in\",\n  \"listen\": \"0.0.0.0\",\n  \"port\": 1080,\n  \"protocol\": \"socks\",\n  \"settings\": { \"auth\": \"noauth\", \"udp\": true }\n}",
+      "x-ui-warning": "Inbound на `0.0.0.0` без авторизации и без фильтрации по IP делает прокси открытым для всех — если порт случайно пробросится в интернет, им начнут пользоваться третьи лица.",
+      "properties": {
+        "listen": {
+          "type": "string",
+          "default": "0.0.0.0",
+          "description": "IP-адрес прослушивания. `0.0.0.0` — все IPv4-интерфейсы, `127.0.0.1` — только loopback (рекомендуется, если прокси используется только самим роутером), `::` — все IPv6-интерфейсы. Конкретный IP — ограничить интерфейс.",
+          "examples": [
+            "0.0.0.0",
+            "127.0.0.1",
+            "192.168.1.1",
+            "::"
+          ]
+        },
+        "port": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "Порт, диапазон или список портов. Число — одиночный порт, строка `start-end` — диапазон (требует `allocate`), `a,b,c` — перечисление. Для dokodemo-door с `followRedirect: true` значение игнорируется (используется порт tproxy).",
+          "examples": [
+            1080,
+            10808,
+            "1000-2000",
+            "80,443,8080"
+          ]
+        },
+        "protocol": {
+          "type": "string",
+          "enum": [
+            "tunnel",
+            "dokodemo-door",
+            "http",
+            "shadowsocks",
+            "mixed",
+            "socks",
+            "vless",
+            "vmess",
+            "trojan",
+            "wireguard",
+            "hysteria",
+            "tun",
+            "masque"
+          ],
+          "description": "Тип входящего протокола. `dokodemo-door` — прозрачный прокси (tproxy/redirect) для роутера, `socks`/`http` — локальные прокси для клиентов LAN, `vless`/`vmess`/`trojan`/`shadowsocks` — туннелируемые протоколы для удалённых клиентов."
+        },
+        "settings": {
+          "type": "object",
+          "description": "Настройки, специфичные для выбранного протокола (например, `clients` для vless/vmess/trojan, `accounts` для http/socks, `address`+`port`+`network` для dokodemo-door). Структура зависит от `protocol`."
+        },
+        "streamSettings": {
+          "$ref": "#/definitions/streamSettings"
+        },
+        "tag": {
+          "type": "string",
+          "description": "Уникальный тег входящего подключения. Используется в `routing.rules.inboundTag` для привязки правил маршрутизации. Рекомендуется задавать человекочитаемые теги.",
+          "examples": [
+            "tproxy",
+            "socks-in",
+            "http-in",
+            "api"
+          ]
+        },
+        "sniffing": {
+          "type": "object",
+          "description": "Распознавание (sniff) настоящего домена внутри зашифрованного трафика. Позволяет маршрутизировать по FQDN, когда клиент отправил только IP — критично для прозрачного прокси на роутере.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": false,
+              "description": "Включить sniffing. Для tproxy/redirect-сценария обычно требуется `true`, чтобы применялись доменные правила маршрутизации."
+            },
+            "destOverride": {
+              "type": "array",
+              "description": "Список протоколов, для которых выполнять sniff. `http` — Host-заголовок, `tls` — SNI, `quic` — SNI в QUIC-пакетах, `fakedns` — подмена из FakeDNS-пула, `fakedns+others` — FakeDNS плюс остальные.",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "http",
+                  "tls",
+                  "quic",
+                  "fakedns",
+                  "fakedns+others"
+                ]
+              },
+              "examples": [
+                [
+                  "http",
+                  "tls"
+                ],
+                [
+                  "http",
+                  "tls",
+                  "quic"
+                ],
+                [
+                  "fakedns",
+                  "http",
+                  "tls"
+                ]
+              ]
+            },
+            "metadataOnly": {
+              "type": "boolean",
+              "default": false,
+              "description": "Использовать только метаданные (SNI/Host), не читая тело пакета. Ускоряет обработку, но ломает распознавание для протоколов без явного метаданных."
+            },
+            "domainsExcluded": {
+              "type": "array",
+              "description": "Домены, для которых результат sniff игнорируется и трафик маршрутизируется по исходному IP. Полезно для внутренних доменов.",
+              "items": {
+                "type": "string",
+                "examples": [
+                  "geosite:private",
+                  "example.internal",
+                  "regexp:\\.local$"
+                ]
+              }
+            },
+            "routeOnly": {
+              "type": "boolean",
+              "default": false,
+              "description": "Использовать распознанный домен только для маршрутизации, но подключаться по исходному IP. Полезно при работе через CDN с прикладным анти-sniff."
+            }
+          }
+        },
+        "allocate": {
+          "type": "object",
+          "description": "Режим выделения портов для mapping-протоколов. Применяется, когда `port` задан диапазоном.",
+          "properties": {
+            "strategy": {
+              "type": "string",
+              "enum": [
+                "always",
+                "random"
+              ],
+              "description": "`always` — используются все порты диапазона одновременно, `random` — часть портов (concurrency) открывается случайно и обновляется раз в `refresh` минут."
+            },
+            "refresh": {
+              "type": "integer",
+              "minimum": 2,
+              "description": "Интервал обновления активных портов в минутах (только для `random`). Официальный минимум — 2 минуты."
+            },
+            "concurrency": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Количество одновременно открытых портов из диапазона (только для `random`)."
+            }
+          }
+        }
+      },
+      "required": [
+        "port",
+        "protocol"
+      ]
+    },
+    "outbound": {
+      "type": "object",
+      "description": "Исходящее подключение — маршрут наружу: freedom (прямое соединение), blackhole (отбрасывание) или прокси-протокол до удалённого сервера.",
+      "x-ui-explain": "Outbound — это «выход» трафика: куда Xray направляет запрос. На outbound ссылаются правила (`routing.rules[].outboundTag`) и балансировщики (`balancers[].selector`).",
+      "x-ui-use-case": "Стандартный набор: `direct` (freedom — напрямую в интернет), `block` (blackhole — дропнуть) и один-несколько прокси-outbound (vless/trojan/shadowsocks) до ваших серверов.",
+      "x-ui-example": "{\n  \"tag\": \"proxy-1\",\n  \"protocol\": \"vless\",\n  \"settings\": { \"address\": \"example.com\", \"port\": 443, \"id\": \"11111111-1111-1111-1111-111111111111\", \"encryption\": \"none\", \"flow\": \"xtls-rprx-vision\" },\n  \"streamSettings\": { \"network\": \"tcp\", \"security\": \"reality\" }\n}",
+      "x-ui-warning": "Тег outbound должен быть уникальным: если два outbound имеют одинаковый `tag`, поведение зависит от порядка в конфиге и может стать непредсказуемым. На выбор outbound также влияет `routing.domainStrategy`.",
+      "properties": {
+        "sendThrough": {
+          "type": "string",
+          "default": "0.0.0.0",
+          "description": "Локальный IP-адрес, с которого будут исходить соединения. Полезно, если у роутера несколько интерфейсов и нужно пустить трафик через конкретный WAN.",
+          "examples": [
+            "0.0.0.0",
+            "192.168.1.1",
+            "::"
+          ]
+        },
+        "protocol": {
+          "type": "string",
+          "enum": [
+            "block",
+            "blackhole",
+            "dns",
+            "direct",
+            "freedom",
+            "http",
+            "socks",
+            "vmess",
+            "vless",
+            "shadowsocks",
+            "trojan",
+            "hysteria",
+            "wireguard",
+            "loopback",
+            "masque"
+          ],
+          "description": "Тип исходящего протокола. `freedom` — прямое соединение без прокси, `blackhole` — отбрасывание (для блокировки), `dns` — встроенный DNS-outbound (используется с `DNS`-rule), `vless`/`vmess`/`trojan`/`shadowsocks`/`wireguard` — прокси-протоколы, `loopback` — повторный проход через routing с другим источником."
+        },
+        "settings": {
+          "type": "object",
+          "description": "Настройки, специфичные для выбранного протокола (например, `vnext` с адресом сервера для vless/vmess, `servers` для shadowsocks/socks/http, `response` для blackhole). Структура зависит от `protocol`."
+        },
+        "tag": {
+          "type": "string",
+          "description": "Уникальный тег исходящего подключения. Используется в `routing.rules.outboundTag` и в `balancers.selector`. Стандартные теги: `direct`, `block`, `proxy`.",
+          "examples": [
+            "direct",
+            "block",
+            "proxy",
+            "dns-out",
+            "warp"
+          ]
+        },
+        "streamSettings": {
+          "$ref": "#/definitions/streamSettings"
+        },
+        "proxySettings": {
+          "type": "object",
+          "description": "Цепочка через другой outbound (chain proxy): текущий протокол будет проходить через указанный `tag` как через промежуточный прокси.",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "description": "Тег outbound-прокси, через который будет идти соединение.",
+              "examples": [
+                "warp",
+                "tor",
+                "another-vless"
+              ]
+            },
+            "transportLayer": {
+              "type": "boolean",
+              "default": false,
+              "description": "Использовать транспортный слой предыдущего outbound. В подавляющем большинстве случаев оставляется `false`."
+            }
+          }
+        },
+        "mux": {
+          "type": "object",
+          "description": "Мультиплексирование соединений: несколько потоков в одном TCP/WebSocket-соединении. Снижает задержку установки соединения, но может ухудшить throughput больших файлов. НЕ поддерживается gRPC/XHTTP-транспортом и vless с `flow: xtls-rprx-vision`.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": false,
+              "description": "Включить mux. Для vless с `flow: xtls-rprx-vision` использовать нельзя (flow требует отдельный поток)."
+            },
+            "concurrency": {
+              "type": "integer",
+              "default": 8,
+              "minimum": -1,
+              "maximum": 1024,
+              "description": "Максимальное число подсоединений на одно mux-соединение. `-1` отключает mux TCP, `0` использует дефолт (8). Типовые значения: 8–16."
+            },
+            "xudpConcurrency": {
+              "type": "integer",
+              "default": 0,
+              "description": "Аналог `concurrency`, но для UDP через XUDP. `0` отключает мультиплексирование UDP."
+            },
+            "xudpProxyUDP443": {
+              "type": "string",
+              "enum": [
+                "reject",
+                "allow",
+                "skip"
+              ],
+              "description": "Поведение для UDP/443 (QUIC). `reject` — отбросить, `allow` — пропускать через прокси, `skip` — отправить напрямую мимо прокси (обычно используется `reject`, т.к. QUIC часто вредит throughput через туннель)."
+            }
+          }
+        },
+        "domainStrategy": {
+          "type": "string",
+          "enum": [
+            "AsIs",
+            "UseIP",
+            "UseIPv4",
+            "UseIPv6",
+            "UseIPv4v6",
+            "UseIPv6v4",
+            "ForceIP",
+            "ForceIPv4",
+            "ForceIPv6",
+            "ForceIPv4v6",
+            "ForceIPv6v4"
+          ],
+          "description": "Стратегия резолвинга доменов при исходящем соединении. `AsIs` — передать домен как есть (резолвит удалённый сервер), `UseIP`/`UseIPv4`/`UseIPv6` — резолвить через встроенный DNS и отправлять IP, `ForceIP*` — жёстко требовать resolve, отбрасывать соединение если DNS вернул пустой ответ. Пары вида `UseIPv4v6`/`UseIPv6v4` задают порядок семейств адресов: сначала названное первым."
+        },
+        "targetStrategy": {
+          "type": "string",
+          "enum": [
+            "AsIs",
+            "UseIP",
+            "UseIPv4",
+            "UseIPv6",
+            "UseIPv4v6",
+            "UseIPv6v4",
+            "ForceIP",
+            "ForceIPv4",
+            "ForceIPv6",
+            "ForceIPv4v6",
+            "ForceIPv6v4"
+          ],
+          "description": "Стратегия разрешения адреса назначения исходящего соединения."
+        }
+      },
+      "required": [
+        "protocol"
+      ]
+    },
+    "observatory": {
+      "description": "Мониторинг доступности outbound-узлов. Необходим для `balancer.strategy.type=leastPing` и для автоматического исключения «мёртвых» узлов из ротации. Xray периодически отправляет probe-запросы на `probeUrl` через каждый подходящий outbound.",
+      "x-ui-explain": "Observatory — это фоновая «разведка»: Xray сам опрашивает ваши outbound, измеряет задержку/доступность и сообщает балансировщику, кто живой и быстрый.",
+      "x-ui-use-case": "Нужен, если вы используете `balancer.strategy.type = leastPing` или хотите, чтобы мёртвые узлы автоматически выпадали из ротации.",
+      "x-ui-example": "{\n  \"subjectSelector\": [\"proxy-\"],\n  \"probeUrl\": \"https://cp.cloudflare.com/generate_204\",\n  \"probeInterval\": \"60s\"\n}",
+      "x-ui-warning": "Слишком короткий `probeInterval` и большой список узлов в сумме создают постоянную нагрузку на CPU и conntrack Keenetic. Безопасно: десятки узлов при интервале 30–60 секунд.",
+      "type": "object",
+      "properties": {
+        "subjectSelector": {
+          "type": "array",
+          "description": "Список префиксов или полных тегов outbound, которые нужно проверять. Префиксный матчинг: `proxy-` охватит `proxy-1`, `proxy-2` и т.д. Должен соответствовать тегам, используемым в `balancer.selector`.",
+          "items": {
+            "type": "string",
+            "examples": [
+              "vless-reality",
+              "proxy",
+              "proxy-",
+              "warp"
+            ]
+          }
+        },
+        "probeUrl": {
+          "type": "string",
+          "default": "https://www.google.com/generate_204",
+          "description": "URL для проверки доступности. Должен возвращать быстрый успешный ответ (обычно 204 No Content). Альтернативы: `http://www.gstatic.com/generate_204`, `https://cp.cloudflare.com/generate_204`.",
+          "examples": [
+            "https://www.google.com/generate_204",
+            "http://www.gstatic.com/generate_204",
+            "https://cp.cloudflare.com/generate_204"
+          ]
+        },
+        "probeInterval": {
+          "type": "string",
+          "default": "60s",
+          "description": "Интервал между проверками. Формат `<число><единица>`: `s` — секунды, `m` — минуты, `h` — часы. Меньшие значения быстрее реагируют на деградацию, но нагружают роутер и узлы.",
+          "examples": [
+            "10s",
+            "30s",
+            "60s",
+            "5m"
+          ]
+        },
+        "enableConcurrency": {
+          "type": "boolean",
+          "default": false,
+          "description": "Проверять несколько outbound параллельно. Ускоряет probe-цикл, но создаёт одновременный всплеск соединений — на слабых роутерах (Keenetic) лучше оставлять `false`."
+        }
+      },
+      "additionalProperties": false
+    },
+    "burstObservatory": {
+      "description": "Альтернативный observatory с burst-проверками на базе `pingConfig`. Используется, когда нужен более точный ping (ICMP-like через TCP connect) вместо HTTP-probe. Для большинства сценариев достаточно обычного `observatory`.",
+      "type": "object",
+      "properties": {
+        "subjectSelector": {
+          "type": "array",
+          "description": "Список префиксов или полных тегов outbound для проверки (см. `observatory.subjectSelector`).",
+          "items": {
+            "type": "string",
+            "examples": [
+              "vless-reality",
+              "proxy",
+              "proxy-",
+              "warp"
+            ]
+          }
+        },
+        "pingConfig": {
+          "type": "object",
+          "description": "Параметры burst-пинга для каждого узла.",
+          "properties": {
+            "destination": {
+              "type": "string",
+              "description": "Адрес назначения пинга в формате `host:port` (TCP-connect используется вместо ICMP).",
+              "examples": [
+                "1.1.1.1:80",
+                "www.google.com:443",
+                "cloudflare.com:443"
+              ]
+            },
+            "connectivity": {
+              "type": "string",
+              "description": "URL для проверки наличия интернет-подключения в целом (если недоступен — probe-цикл пропускается).",
+              "examples": [
+                "http://connectivitycheck.gstatic.com/generate_204"
+              ]
+            },
+            "interval": {
+              "type": "string",
+              "description": "Интервал между burst-проверками.",
+              "examples": [
+                "30s",
+                "1m",
+                "5m"
+              ]
+            },
+            "sampling": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Размер скользящего окна для усреднения задержек. Чем больше — тем стабильнее результат, но медленнее реакция.",
+              "examples": [
+                3,
+                5,
+                10
+              ]
+            },
+            "timeout": {
+              "type": "string",
+              "description": "Таймаут одиночного пинга. Узлы, не ответившие за это время, считаются мертвыми.",
+              "examples": [
+                "3s",
+                "5s",
+                "10s"
+              ]
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "schemas": {
+    "xray-config.schema.json": {
+      "root": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "Xray-core Config",
+        "description": "JSON Schema for Xray-core configuration (v1.8+). Covers inbounds, outbounds, routing, DNS, transport, policy, stats, observatory, reverse, fakedns, metrics, burstObservatory.",
+        "type": "object",
+        "properties": {
+          "env": {
+            "type": "object",
+            "description": "Переменные окружения Xray, заданные непосредственно в конфигурации.",
+            "additionalProperties": {
+              "type": [
+                "string",
+                "number",
+                "boolean"
+              ]
+            }
+          },
+          "log": {
+            "description": "Настройки логирования Xray. На Keenetic с пакетом XKeen логи обычно выводятся в /opt/var/log/xray.",
+            "type": "object",
+            "properties": {
+              "access": {
+                "type": "string",
+                "description": "Путь к файлу лога доступа. Пустая строка — вывод в stdout, `none` — полностью отключить access-лог. На проде обычно `none` или путь в /opt/var/log.",
+                "examples": [
+                  "",
+                  "none",
+                  "/opt/var/log/xray/access.log"
+                ]
+              },
+              "error": {
+                "type": "string",
+                "description": "Путь к файлу лога ошибок. Пустая строка — вывод в stderr. На Keenetic рекомендуется указать файл для ротации.",
+                "examples": [
+                  "",
+                  "/opt/var/log/xray/error.log"
+                ]
+              },
+              "loglevel": {
+                "type": "string",
+                "enum": [
+                  "debug",
+                  "info",
+                  "warning",
+                  "error",
+                  "none"
+                ],
+                "default": "warning",
+                "description": "Уровень логирования. `debug` и `info` сильно раздувают логи — включайте только для отладки. `warning` — разумный дефолт, `error` — только ошибки, `none` — полностью отключить."
+              },
+              "dnsLog": {
+                "type": "boolean",
+                "default": false,
+                "description": "Логировать каждый DNS-запрос через встроенный резолвер. Создаёт много записей — использовать только для диагностики DNS-проблем."
+              }
+            },
+            "additionalProperties": false
+          },
+          "api": {
+            "description": "gRPC API для runtime-управления Xray (горячая перезагрузка правил, статистика и override балансировщика). Xray автоматически создаёт внутренний outbound с именем `api.tag`; при отдельном API-inbound направьте его правилом `inboundTag` на этот outbound. Для XKeen speed balancer нужны `RoutingService` и `StatsService`.",
+            "type": "object",
+            "properties": {
+              "tag": {
+                "type": "string",
+                "description": "Имя внутреннего API-outbound, который Xray создаёт автоматически. При отдельном inbound его обычно тоже называют `api` и добавляют правило `inboundTag: [\"api\"]` → `outboundTag: \"api\"`.",
+                "examples": [
+                  "api"
+                ]
+              },
+              "listen": {
+                "type": "string",
+                "description": "Адрес и порт gRPC-сервера. По соображениям безопасности используйте только loopback (`127.0.0.1`).",
+                "examples": [
+                  "127.0.0.1:10085",
+                  "127.0.0.1:8080"
+                ]
+              },
+              "services": {
+                "type": "array",
+                "description": "Список доступных gRPC-сервисов. Для speed balancer XKeen нужны `RoutingService` (OverrideBalancerTarget) и `StatsService`; `HandlerService` управляет inbound/outbound, `LoggerService` — логом, `ObservatoryService` — observatory, `ReflectionService` — gRPC reflection.",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "HandlerService",
+                    "LoggerService",
+                    "StatsService",
+                    "RoutingService",
+                    "ObservatoryService",
+                    "ReflectionService"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "tag"
+            ],
+            "additionalProperties": false
+          },
+          "dns": {
+            "description": "Встроенный DNS-резолвер Xray. Для прозрачного прокси на Keenetic обычно используется для обхода DNS-leak и выбора DoH/DoT-серверов (например, Cloudflare `https+local://1.1.1.1/dns-query`).",
+            "x-ui-explain": "DNS-блок управляет тем, как сам Xray резолвит домены: через обычный DNS, DoH, DoT, FakeDNS и адресные правила.",
+            "x-ui-use-case": "Нужен, когда важно убрать DNS-leak, направить разные домены в разные резолверы или включить FakeDNS для transparent/sniff сценариев.",
+            "x-ui-example": "{\n  \"servers\": [\n    \"https+local://1.1.1.1/dns-query\",\n    \"fakedns\"\n  ],\n  \"tag\": \"dns-query\"\n}",
+            "x-ui-warning": "Ошибки в `dns.servers` ломают не только резолв доменов, но и весь transparent flow: правила по доменам перестают матчиться, а трафик начинает «утекать» в системный DNS.",
+            "type": "object",
+            "properties": {
+              "hosts": {
+                "type": "object",
+                "description": "Статические DNS-записи (домен → IP или целевой домен). Используется для пиннинга или аналога /etc/hosts. Значение может быть строкой, массивом строк или адресом другого домена (CNAME-like).",
+                "additionalProperties": {
+                  "oneOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  ]
+                }
+              },
+              "servers": {
+                "type": "array",
+                "description": "Список DNS-серверов в порядке приоритета. Можно использовать простые строки (`8.8.8.8`) или объекты с `domains`/`expectIPs` для таргетирования. Первый подошедший сервер обрабатывает запрос.",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "string",
+                      "description": "DNS-адрес: IP (`8.8.8.8`), DoH (`https://dns.google/dns-query`), DoH локальный (`https+local://`), DoT (`tls://1.1.1.1`), QUIC (`quic+local://`), `localhost` — системный резолвер, `fakedns` — FakeDNS-пул.",
+                      "examples": [
+                        "8.8.8.8",
+                        "1.1.1.1",
+                        "https://dns.google/dns-query",
+                        "https+local://1.1.1.1/dns-query",
+                        "tls://1.1.1.1",
+                        "localhost",
+                        "fakedns"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "address": {
+                          "type": "string",
+                          "description": "DNS-адрес (см. формат выше).",
+                          "examples": [
+                            "8.8.8.8",
+                            "https+local://1.1.1.1/dns-query"
+                          ]
+                        },
+                        "port": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 65535,
+                          "default": 53,
+                          "description": "Порт DNS-сервера. Обычно 53 (plain), 853 (DoT), 443 (DoH)."
+                        },
+                        "clientIp": {
+                          "type": "string",
+                          "description": "IP-адрес клиента для EDNS Client Subnet. Помогает CDN выбирать ближайший узел.",
+                          "examples": [
+                            "1.2.3.4"
+                          ]
+                        },
+                        "skipFallback": {
+                          "type": "boolean",
+                          "default": false,
+                          "description": "Пропустить этот сервер при fallback'е (используется только для целевых доменов)."
+                        },
+                        "domains": {
+                          "type": "array",
+                          "description": "Домены, для которых именно этот сервер будет авторитетным. Формат как в routing rules: `domain:`, `full:`, `geosite:`, `regexp:`.",
+                          "items": {
+                            "type": "string",
+                            "examples": [
+                              "geosite:cn",
+                              "domain:google.com",
+                              "full:example.com"
+                            ]
+                          }
+                        },
+                        "expectIPs": {
+                          "type": "array",
+                          "description": "Ожидаемые IP/CIDR-диапазоны ответов. Если ответ не попадает — резолвер пробует следующий сервер. Формат: `geoip:cn`, `1.1.1.1/32`.",
+                          "items": {
+                            "type": "string",
+                            "examples": [
+                              "geoip:cn",
+                              "geoip:private",
+                              "192.168.0.0/16"
+                            ]
+                          }
+                        },
+                        "queryStrategy": {
+                          "type": "string",
+                          "enum": [
+                            "UseIP",
+                            "UseIPv4",
+                            "UseIPv6"
+                          ],
+                          "description": "Стратегия для конкретно этого сервера: `UseIP` — оба семейства, `UseIPv4`/`UseIPv6` — только одно."
+                        }
+                      },
+                      "required": [
+                        "address"
+                      ]
+                    }
+                  ]
+                }
+              },
+              "clientIp": {
+                "type": "string",
+                "description": "IP-адрес клиента для EDNS Client Subnet на уровне всего DNS-блока.",
+                "examples": [
+                  "1.2.3.4"
+                ]
+              },
+              "queryStrategy": {
+                "type": "string",
+                "enum": [
+                  "UseIP",
+                  "UseIPv4",
+                  "UseIPv6"
+                ],
+                "default": "UseIP",
+                "description": "Глобальная стратегия DNS-запросов. `UseIP` — A+AAAA, `UseIPv4` — только A (рекомендуется для Keenetic без IPv6), `UseIPv6` — только AAAA."
+              },
+              "disableCache": {
+                "type": "boolean",
+                "default": false,
+                "description": "Отключить кеширование DNS-ответов. Обычно `false` — кеш снижает нагрузку на upstream."
+              },
+              "disableFallback": {
+                "type": "boolean",
+                "default": false,
+                "description": "Отключить механизм fallback на следующий сервер, если текущий не ответил."
+              },
+              "disableFallbackIfMatch": {
+                "type": "boolean",
+                "default": false,
+                "description": "Не применять fallback, если домен совпал с `domains` какого-либо сервера (даже если тот вернул ошибку)."
+              },
+              "tag": {
+                "type": "string",
+                "description": "Тег DNS-трафика, используется для маршрутизации (например, правило `inboundTag: [\"dns-query\"]` → `outboundTag: \"direct\"`).",
+                "examples": [
+                  "dns-query"
+                ]
+              },
+              "script": {
+                "type": "string",
+                "description": "Lua-сценарий DNS."
+              },
+              "serveStale": {
+                "type": "boolean",
+                "description": "Разрешить выдачу устаревших записей DNS-кэша."
+              },
+              "serveExpiredTTL": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "TTL для устаревших ответов DNS."
+              },
+              "enableParallelQuery": {
+                "type": "boolean",
+                "description": "Включить параллельные DNS-запросы."
+              },
+              "useSystemHosts": {
+                "type": "boolean",
+                "description": "Использовать системный файл hosts."
+              }
+            },
+            "additionalProperties": false
+          },
+          "routing": {
+            "description": "Правила маршрутизации трафика между inbound'ами и outbound'ами. Правила применяются сверху вниз — первое совпадение выигрывает. Если ни одно не сработало — используется первый outbound в списке.",
+            "type": "object",
+            "properties": {
+              "domainStrategy": {
+                "type": "string",
+                "enum": [
+                  "AsIs",
+                  "IPIfNonMatch",
+                  "IPOnDemand"
+                ],
+                "default": "AsIs",
+                "description": "Глобальная стратегия сопоставления доменов с IP-правилами. `AsIs` — не резолвить домены (быстро, но IP-правила работают только для IP-запросов), `IPIfNonMatch` — если домен не подошёл под доменные правила, резолвить в IP и проверить IP-правила, `IPOnDemand` — резолвить при первой же проверке IP."
+              },
+              "domainMatcher": {
+                "type": "string",
+                "enum": [
+                  "hybrid",
+                  "linear"
+                ],
+                "default": "hybrid",
+                "description": "Алгоритм сопоставления доменов. `hybrid` — быстрый гибридный (рекомендуется), `linear` — совместимый со старыми V2Ray-правилами, но медленнее."
+              },
+              "rules": {
+                "type": "array",
+                "description": "Массив правил маршрутизации. Обрабатываются сверху вниз.",
+                "items": {
+                  "$ref": "#/definitions/routingRule"
+                }
+              },
+              "balancers": {
+                "type": "array",
+                "description": "Балансировщики нагрузки между несколькими outbound. Используются через `balancerTag` в правилах вместо `outboundTag`.",
+                "items": {
+                  "$ref": "#/definitions/balancer"
+                }
+              },
+              "script": {
+                "type": "string",
+                "description": "Lua-сценарий маршрутизации."
+              }
+            },
+            "additionalProperties": false
+          },
+          "inbounds": {
+            "description": "Входящие подключения",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/inbound"
+            }
+          },
+          "outbounds": {
+            "description": "Исходящие подключения",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/outbound"
+            }
+          },
+          "transport": {
+            "description": "Глобальные настройки транспорта (устаревшее, используйте streamSettings в inbound/outbound)",
+            "type": "object"
+          },
+          "policy": {
+            "description": "Политики таймаутов, буферов и статистики. Позволяет настроить поведение соединений и сбор трафика по уровням пользователей и системных счётчиков.",
+            "type": "object",
+            "properties": {
+              "levels": {
+                "type": "object",
+                "description": "Политики по уровням пользователей (клиент может иметь `level: 0`, `level: 1` и т.д.). Ключ — строка с номером уровня: `\"0\"`, `\"1\"`.",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "handshake": {
+                      "type": "integer",
+                      "default": 4,
+                      "description": "Таймаут рукопожатия в секундах. Соединения, не установившиеся за это время, закрываются."
+                    },
+                    "connIdle": {
+                      "type": "integer",
+                      "default": 300,
+                      "description": "Таймаут простоя соединения в секундах. После этого времени без активности соединение закрывается."
+                    },
+                    "uplinkOnly": {
+                      "type": "integer",
+                      "default": 2,
+                      "description": "Таймаут в секундах, после которого закрывается соединение, если остался только исходящий поток (клиент не закрывает свою сторону)."
+                    },
+                    "downlinkOnly": {
+                      "type": "integer",
+                      "default": 5,
+                      "description": "Таймаут в секундах, после которого закрывается соединение, если остался только входящий поток."
+                    },
+                    "statsUserUplink": {
+                      "type": "boolean",
+                      "default": false,
+                      "description": "Включить сбор статистики по исходящему трафику на пользователя (видно через `stats` API)."
+                    },
+                    "statsUserDownlink": {
+                      "type": "boolean",
+                      "default": false,
+                      "description": "Включить сбор статистики по входящему трафику на пользователя."
+                    },
+                    "bufferSize": {
+                      "type": "integer",
+                      "default": 512,
+                      "description": "Размер буфера на одно соединение в КБ. `0` — без буфера (низкая задержка, но больше overhead), `-1` — без лимита (использует столько, сколько нужно)."
+                    }
+                  }
+                }
+              },
+              "system": {
+                "type": "object",
+                "description": "Системная статистика (агрегированная по inbound/outbound).",
+                "properties": {
+                  "statsInboundUplink": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Считать исходящий трафик по inbound'ам."
+                  },
+                  "statsInboundDownlink": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Считать входящий трафик по inbound'ам."
+                  },
+                  "statsOutboundUplink": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Считать исходящий трафик по outbound'ам."
+                  },
+                  "statsOutboundDownlink": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Считать входящий трафик по outbound'ам."
+                  },
+                  "overrideAccessLogDest": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Переопределить путь access-лога значением из `log.access` (когда меняется runtime через API)."
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          "stats": {
+            "description": "Активирует подсистему сбора статистики. Достаточно указать пустой объект `{}` в конфиге. Данные читаются через gRPC API (`StatsService`).",
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+          },
+          "reverse": {
+            "description": "Обратный прокси (reverse proxy) — позволяет выставлять внутренние сервисы наружу через внешний Xray. `bridges` — на стороне, спрятанной за NAT, `portals` — на внешней стороне с публичным IP.",
+            "type": "object",
+            "properties": {
+              "bridges": {
+                "type": "array",
+                "description": "Точки входа обратного прокси на стороне за NAT.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "tag": {
+                      "type": "string",
+                      "description": "Уникальный тег bridge.",
+                      "examples": [
+                        "bridge"
+                      ]
+                    },
+                    "domain": {
+                      "type": "string",
+                      "description": "Внутренний домен, на который будет ходить внешняя сторона.",
+                      "examples": [
+                        "test.example.com"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "tag",
+                    "domain"
+                  ]
+                }
+              },
+              "portals": {
+                "type": "array",
+                "description": "Точки выхода обратного прокси на внешней стороне.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "tag": {
+                      "type": "string",
+                      "description": "Уникальный тег portal.",
+                      "examples": [
+                        "portal"
+                      ]
+                    },
+                    "domain": {
+                      "type": "string",
+                      "description": "Тот же домен, что в соответствующем `bridge`.",
+                      "examples": [
+                        "test.example.com"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "tag",
+                    "domain"
+                  ]
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          "fakedns": {
+            "description": "FakeDNS-пул — резервирует диапазон IP для подмены ответов DNS, чтобы sniff на следующем hop мог восстановить реальный домен по IP. Используется в паре с `sniffing.destOverride: [\"fakedns\"]` и DNS-сервером `fakedns` в списке `dns.servers`.",
+            "oneOf": [
+              {
+                "type": "object",
+                "description": "Один fakedns-пул.",
+                "properties": {
+                  "ipPool": {
+                    "type": "string",
+                    "default": "198.18.0.0/15",
+                    "description": "CIDR-диапазон для фейковых IP. По умолчанию используется диапазон, зарезервированный для benchmark-тестирования RFC 2544.",
+                    "examples": [
+                      "198.18.0.0/15",
+                      "240.0.0.0/8"
+                    ]
+                  },
+                  "poolSize": {
+                    "type": "integer",
+                    "default": 65535,
+                    "description": "Размер LRU-пула фейковых IP. Когда пул заполнен, старые записи вытесняются."
+                  }
+                }
+              },
+              {
+                "type": "array",
+                "description": "Несколько fakedns-пулов одновременно (например, отдельные пулы для IPv4 и IPv6).",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "ipPool": {
+                      "type": "string",
+                      "description": "CIDR-диапазон пула."
+                    },
+                    "poolSize": {
+                      "type": "integer",
+                      "description": "Размер пула."
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "fakeDns": {
+            "$ref": "#/properties/fakedns",
+            "description": "Имя поля, используемое json-тегом Xray-core; `fakedns` также принимается JSON-декодером без учёта регистра."
+          },
+          "observatory": {
+            "description": "Мониторинг доступности outbound. Необходим для `balancer.strategy.type=leastPing` и автоматического исключения мёртвых узлов. Xray периодически отправляет probe-запросы на `probeUrl` через каждый подходящий outbound.",
+            "x-ui-explain": "Observatory регулярно проверяет доступность и задержку outbound-ов, чтобы балансировщик мог выбирать живые и быстрые узлы.",
+            "x-ui-use-case": "Нужен для `leastPing`, `leastLoad` и любых сценариев, где Xray должен сам отличать рабочий узел от умершего.",
+            "x-ui-example": "{\n  \"subjectSelector\": [\"proxy-\", \"warp\"],\n  \"probeUrl\": \"https://www.gstatic.com/generate_204\",\n  \"probeInterval\": \"30s\"\n}",
+            "x-ui-warning": "Слишком частый probe на слабом роутере создаёт лишнюю нагрузку и может сам ухудшать latency, особенно если outbound-ов много.",
+            "type": "object",
+            "properties": {
+              "subjectSelector": {
+                "type": "array",
+                "description": "Список префиксов или полных тегов outbound для проверки. Префикс `proxy-` матчит `proxy-1`, `proxy-2` и т.д.",
+                "items": {
+                  "type": "string",
+                  "examples": [
+                    "vless-reality",
+                    "proxy",
+                    "proxy-",
+                    "warp"
+                  ]
+                }
+              },
+              "probeUrl": {
+                "type": "string",
+                "default": "https://www.google.com/generate_204",
+                "description": "URL для проверки доступности. Должен возвращать быстрый успешный ответ (обычно 204). Альтернативы — `cp.cloudflare.com/generate_204`, `www.gstatic.com/generate_204`.",
+                "examples": [
+                  "https://www.google.com/generate_204",
+                  "http://www.gstatic.com/generate_204",
+                  "https://cp.cloudflare.com/generate_204"
+                ]
+              },
+              "probeInterval": {
+                "type": "string",
+                "default": "10s",
+                "description": "Интервал проверки. Формат `<число><s|m|h>`. Меньшие значения быстрее реагируют на деградацию, но нагружают роутер и узлы.",
+                "examples": [
+                  "10s",
+                  "30s",
+                  "60s",
+                  "5m"
+                ]
+              },
+              "enableConcurrency": {
+                "type": "boolean",
+                "default": false,
+                "description": "Параллельная проверка всех outbound. Ускоряет probe-цикл, но даёт одновременный всплеск — на Keenetic лучше оставить `false`."
+              }
+            },
+            "additionalProperties": false
+          },
+          "burstObservatory": {
+            "description": "Альтернативный observatory с burst-проверкой через TCP-connect (используется с `leastLoad`-стратегией балансировщика). Подходит, когда нужен более точный ping вместо HTTP-probe.",
+            "type": "object",
+            "properties": {
+              "subjectSelector": {
+                "type": "array",
+                "description": "Список префиксов или полных тегов outbound для проверки.",
+                "items": {
+                  "type": "string",
+                  "examples": [
+                    "vless-reality",
+                    "proxy",
+                    "proxy-",
+                    "warp"
+                  ]
+                }
+              },
+              "pingConfig": {
+                "type": "object",
+                "description": "Параметры burst-пинга.",
+                "properties": {
+                  "destination": {
+                    "type": "string",
+                    "description": "Адрес назначения в формате `host:port` (TCP-connect вместо ICMP).",
+                    "examples": [
+                      "1.1.1.1:80",
+                      "www.google.com:443"
+                    ]
+                  },
+                  "connectivity": {
+                    "type": "string",
+                    "description": "URL проверки наличия интернета в целом — если недоступен, probe-цикл пропускается.",
+                    "examples": [
+                      "http://connectivitycheck.gstatic.com/generate_204"
+                    ]
+                  },
+                  "interval": {
+                    "type": "string",
+                    "description": "Интервал между burst-проверками.",
+                    "examples": [
+                      "30s",
+                      "1m",
+                      "5m"
+                    ]
+                  },
+                  "sampling": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Размер скользящего окна для усреднения задержек.",
+                    "examples": [
+                      3,
+                      5,
+                      10
+                    ]
+                  },
+                  "timeout": {
+                    "type": "string",
+                    "description": "Таймаут одиночного пинга. Узлы, не ответившие за это время, считаются мертвыми.",
+                    "examples": [
+                      "3s",
+                      "5s",
+                      "10s"
+                    ]
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          "metrics": {
+            "description": "Встроенный HTTP-сервер метрик (Prometheus-совместимый endpoint). Активируется через inbound с тем же тегом, что указан в `tag`. Доступ к `/debug/vars` и `/metrics` по этому тегу.",
+            "type": "object",
+            "properties": {
+              "tag": {
+                "type": "string",
+                "description": "Тег inbound'а для метрик. Чтобы эндпоинт работал, нужно объявить inbound с этим тегом и `protocol: dokodemo-door`, а правило маршрутизации должно вести на `outboundTag: metrics`.",
+                "examples": [
+                  "metrics"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          "geodata": {
+            "type": "object",
+            "description": "Автоматическое обновление и горячая перезагрузка файлов geodata. Поля зависят от версии Xray-core.",
+            "additionalProperties": true
+          },
+          "version": {
+            "type": "object",
+            "description": "Ограничение версий Xray-core, на которых разрешено запускать конфигурацию.",
+            "properties": {
+              "min": {
+                "type": "string",
+                "pattern": "^$|^[0-9]+\\.[0-9]+\\.[0-9]+$"
+              },
+              "max": {
+                "type": "string",
+                "pattern": "^$|^[0-9]+\\.[0-9]+\\.[0-9]+$"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "definitions": [
+        "realityFallbackRateLimit",
+        "routingRule",
+        "balancer",
+        "inboundDokodemoSettings",
+        "inboundSettings",
+        "outboundUserEntry",
+        "outboundRemoteEndpoint",
+        "outboundBlackholeResponse",
+        "outboundSettings",
+        "streamSettings",
+        "certificate",
+        "inbound",
+        "outbound"
+      ],
+      "overrides": {
+        "routingRule": {
+          "remove": [
+            "x-ui-explain",
+            "x-ui-use-case",
+            "x-ui-example",
+            "x-ui-warning"
+          ],
+          "edit": {
+            "properties": {
+              "edit": {
+                "domain": {
+                  "set": {
+                    "description": "Домены (regexp:, domain:, full:, geosite:, ext:)"
+                  },
+                  "edit": {
+                    "items": {
+                      "remove": [
+                        "examples"
+                      ]
+                    }
+                  }
+                },
+                "ip": {
+                  "set": {
+                    "description": "IP/CIDR (geoip:, ext:)"
+                  },
+                  "edit": {
+                    "items": {
+                      "remove": [
+                        "examples"
+                      ]
+                    }
+                  }
+                },
+                "port": {
+                  "remove": [
+                    "examples"
+                  ],
+                  "set": {
+                    "description": "Порт или диапазон (например '53', '1024-65535', '80,443')"
+                  }
+                },
+                "sourcePort": {
+                  "remove": [
+                    "description"
+                  ]
+                },
+                "network": {
+                  "set": {
+                    "description": "Тип сети"
+                  }
+                },
+                "source": {
+                  "set": {
+                    "description": "IP-адреса источника"
+                  },
+                  "edit": {
+                    "items": {
+                      "remove": [
+                        "examples"
+                      ]
+                    }
+                  }
+                },
+                "user": {
+                  "set": {
+                    "description": "Email-адреса пользователей"
+                  }
+                },
+                "inboundTag": {
+                  "set": {
+                    "description": "Теги inbound"
+                  }
+                },
+                "protocol": {
+                  "set": {
+                    "description": "Протоколы, распознанные sniffing'ом для routing (`http`, `tls`, `quic`, `bittorrent`). Требует включённого sniffing на inbound."
+                  }
+                },
+                "attrs": {
+                  "set": {
+                    "description": "Атрибуты для сопоставления"
+                  }
+                },
+                "balancerTag": {
+                  "set": {
+                    "description": "Тег балансировщика"
+                  }
+                },
+                "ruleTag": {
+                  "set": {
+                    "description": "Имя правила маршрутизации. Xkeen использует xk_auto_* для автоматически добавленных правил подписок."
+                  }
+                },
+                "domainMatcher": {
+                  "remove": [
+                    "default",
+                    "description"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "balancer": {
+          "remove": [
+            "description",
+            "x-ui-explain",
+            "x-ui-use-case",
+            "x-ui-example",
+            "x-ui-warning"
+          ],
+          "edit": {
+            "properties": {
+              "edit": {
+                "tag": {
+                  "remove": [
+                    "description"
+                  ]
+                },
+                "selector": {
+                  "remove": [
+                    "description"
+                  ],
+                  "edit": {
+                    "items": {
+                      "set": {
+                        "examples": [
+                          "vless-reality",
+                          "direct",
+                          "block"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "fallbackTag": {
+                  "set": {
+                    "description": "Запасной outbound tag или префикс сгенерированных outbound'ов, если ни один из selector не доступен."
+                  }
+                },
+                "strategy": {
+                  "remove": [
+                    "description"
+                  ],
+                  "edit": {
+                    "properties": {
+                      "edit": {
+                        "type": {
+                          "remove": [
+                            "default"
+                          ],
+                          "set": {
+                            "description": "Тип стратегии балансировщика: random, leastPing, roundRobin или leastLoad."
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "inboundDokodemoSettings": {
+          "remove": [
+            "x-ui-explain",
+            "x-ui-use-case",
+            "x-ui-example",
+            "x-ui-warning"
+          ]
+        },
+        "streamSettings": {
+          "set": {
+            "description": "Настройки транспорта",
+            "x-ui-explain": "Это блок, который описывает, как именно Xray устанавливает соединение: по какому транспорту (`method`; старое имя — `network`) и с каким уровнем защиты (`security`)."
+          },
+          "edit": {
+            "properties": {
+              "edit": {
+                "network": {
+                  "remove": [
+                    "description"
+                  ],
+                  "set": {
+                    "x-ui-explain": "Это конкретный transport, которым Xray будет упаковывать трафик поверх обычного соединения.",
+                    "x-ui-use-case": "Чаще всего тут оставляют `tcp`, а меняют на `ws`/`xhttp`, когда сервер и CDN настроены именно под такой transport.",
+                    "x-ui-example": "\"network\": \"xhttp\"",
+                    "x-ui-warning": "Значение должно совпадать с настройкой сервера, иначе transport-подблоки ниже не сработают."
+                  }
+                },
+                "security": {
+                  "remove": [
+                    "description"
+                  ]
+                },
+                "tlsSettings": {
+                  "remove": [
+                    "description"
+                  ],
+                  "edit": {
+                    "properties": {
+                      "edit": {
+                        "serverName": {
+                          "remove": [
+                            "description",
+                            "examples"
+                          ]
+                        },
+                        "alpn": {
+                          "remove": [
+                            "description"
+                          ],
+                          "edit": {
+                            "items": {
+                              "remove": [
+                                "examples"
+                              ]
+                            }
+                          }
+                        },
+                        "allowInsecure": {
+                          "remove": [
+                            "description"
+                          ]
+                        },
+                        "show": {
+                          "remove": [
+                            "description"
+                          ]
+                        },
+                        "certificates": {
+                          "remove": [
+                            "description"
+                          ]
+                        },
+                        "disableSystemRoot": {
+                          "remove": [
+                            "description"
+                          ]
+                        },
+                        "pinnedPeerCertificateChainSha256": {
+                          "remove": [
+                            "description"
+                          ]
+                        },
+                        "minVersion": {
+                          "remove": [
+                            "description",
+                            "examples"
+                          ]
+                        },
+                        "maxVersion": {
+                          "remove": [
+                            "description",
+                            "examples"
+                          ]
+                        },
+                        "rejectUnknownSni": {
+                          "remove": [
+                            "description"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "realitySettings": {
+                  "remove": [
+                    "description"
+                  ],
+                  "edit": {
+                    "properties": {
+                      "edit": {
+                        "show": {
+                          "remove": [
+                            "description"
+                          ]
+                        },
+                        "dest": {
+                          "remove": [
+                            "examples"
+                          ],
+                          "set": {
+                            "description": "Адрес назначения (например 'example.com:443')"
+                          }
+                        },
+                        "xver": {
+                          "remove": [
+                            "description"
+                          ]
+                        },
+                        "serverNames": {
+                          "remove": [
+                            "description"
+                          ],
+                          "edit": {
+                            "items": {
+                              "remove": [
+                                "examples"
+                              ]
+                            }
+                          }
+                        },
+                        "privateKey": {
+                          "remove": [
+                            "description"
+                          ]
+                        },
+                        "shortIds": {
+                          "remove": [
+                            "description"
+                          ],
+                          "edit": {
+                            "items": {
+                              "remove": [
+                                "examples"
+                              ]
+                            }
+                          }
+                        },
+                        "shortId": {
+                          "remove": [
+                            "examples"
+                          ]
+                        },
+                        "fingerprint": {
+                          "remove": [
+                            "description",
+                            "examples"
+                          ]
+                        },
+                        "serverName": {
+                          "remove": [
+                            "description",
+                            "examples"
+                          ]
+                        },
+                        "spiderX": {
+                          "remove": [
+                            "description",
+                            "examples"
+                          ]
+                        },
+                        "minClientVer": {
+                          "set": {
+                            "description": "Минимальная версия клиента REALITY. В Xray-core v26.7.11+ пустое значение по умолчанию — 26.3.27; для совместимости со старыми клиентами явно укажите \"0.0.0\"."
+                          }
+                        },
+                        "maxClientVer": {
+                          "remove": [
+                            "description"
+                          ]
+                        },
+                        "maxTimeDiff": {
+                          "remove": [
+                            "description"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "kcpSettings": {
+                  "remove": [
+                    "description"
+                  ]
+                },
+                "wsSettings": {
+                  "remove": [
+                    "description"
+                  ],
+                  "edit": {
+                    "properties": {
+                      "edit": {
+                        "path": {
+                          "remove": [
+                            "description",
+                            "examples"
+                          ]
+                        },
+                        "host": {
+                          "remove": [
+                            "description",
+                            "examples"
+                          ]
+                        },
+                        "headers": {
+                          "remove": [
+                            "description"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "httpSettings": {
+                  "remove": [
+                    "description"
+                  ],
+                  "edit": {
+                    "properties": {
+                      "edit": {
+                        "host": {
+                          "remove": [
+                            "description"
+                          ],
+                          "edit": {
+                            "items": {
+                              "remove": [
+                                "examples"
+                              ]
+                            }
+                          }
+                        },
+                        "path": {
+                          "remove": [
+                            "description",
+                            "examples"
+                          ]
+                        },
+                        "method": {
+                          "remove": [
+                            "description",
+                            "examples"
+                          ]
+                        },
+                        "headers": {
+                          "remove": [
+                            "description"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "grpcSettings": {
+                  "remove": [
+                    "description"
+                  ],
+                  "edit": {
+                    "properties": {
+                      "edit": {
+                        "serviceName": {
+                          "remove": [
+                            "description",
+                            "examples"
+                          ]
+                        },
+                        "multiMode": {
+                          "remove": [
+                            "description"
+                          ]
+                        },
+                        "authority": {
+                          "remove": [
+                            "description"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "httpupgradeSettings": {
+                  "remove": [
+                    "description"
+                  ],
+                  "edit": {
+                    "properties": {
+                      "edit": {
+                        "path": {
+                          "remove": [
+                            "description",
+                            "examples"
+                          ]
+                        },
+                        "host": {
+                          "remove": [
+                            "description"
+                          ]
+                        },
+                        "headers": {
+                          "remove": [
+                            "description"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "xhttpSettings": {
+                  "edit": {
+                    "properties": {
+                      "edit": {
+                        "mode": {
+                          "set": {
+                            "description": "Режим XHTTP."
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "sockopt": {
+                  "remove": [
+                    "description"
+                  ],
+                  "edit": {
+                    "properties": {
+                      "edit": {
+                        "mark": {
+                          "remove": [
+                            "description"
+                          ]
+                        },
+                        "tcpFastOpen": {
+                          "remove": [
+                            "description"
+                          ]
+                        },
+                        "tproxy": {
+                          "remove": [
+                            "description"
+                          ]
+                        },
+                        "domainStrategy": {
+                          "remove": [
+                            "description"
+                          ]
+                        },
+                        "dialerProxy": {
+                          "remove": [
+                            "description"
+                          ]
+                        },
+                        "tcpKeepAliveInterval": {
+                          "remove": [
+                            "description"
+                          ]
+                        },
+                        "tcpKeepAliveIdle": {
+                          "remove": [
+                            "description"
+                          ]
+                        },
+                        "tcpMptcp": {
+                          "remove": [
+                            "description"
+                          ]
+                        },
+                        "tcpNoDelay": {
+                          "remove": [
+                            "description"
+                          ]
+                        },
+                        "tcpcongestion": {
+                          "remove": [
+                            "description",
+                            "examples"
+                          ]
+                        },
+                        "interface": {
+                          "remove": [
+                            "description"
+                          ]
+                        },
+                        "v6only": {
+                          "remove": [
+                            "description"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "inbound": {
+          "remove": [
+            "x-ui-explain",
+            "x-ui-use-case",
+            "x-ui-example",
+            "x-ui-warning"
+          ],
+          "set": {
+            "description": "Входящее подключение"
+          },
+          "edit": {
+            "properties": {
+              "edit": {
+                "listen": {
+                  "remove": [
+                    "examples"
+                  ],
+                  "set": {
+                    "description": "Адрес прослушивания"
+                  }
+                },
+                "port": {
+                  "remove": [
+                    "examples"
+                  ],
+                  "set": {
+                    "description": "Порт или диапазон"
+                  }
+                },
+                "protocol": {
+                  "set": {
+                    "description": "Протокол"
+                  }
+                },
+                "settings": {
+                  "remove": [
+                    "type",
+                    "description"
+                  ],
+                  "set": {
+                    "$ref": "#/definitions/inboundSettings"
+                  }
+                },
+                "tag": {
+                  "remove": [
+                    "examples"
+                  ],
+                  "set": {
+                    "description": "Уникальный тег"
+                  }
+                },
+                "sniffing": {
+                  "remove": [
+                    "description"
+                  ],
+                  "edit": {
+                    "properties": {
+                      "edit": {
+                        "enabled": {
+                          "remove": [
+                            "description"
+                          ]
+                        },
+                        "destOverride": {
+                          "remove": [
+                            "description",
+                            "examples"
+                          ]
+                        },
+                        "metadataOnly": {
+                          "remove": [
+                            "description"
+                          ]
+                        },
+                        "domainsExcluded": {
+                          "remove": [
+                            "description"
+                          ],
+                          "edit": {
+                            "items": {
+                              "remove": [
+                                "examples"
+                              ]
+                            }
+                          }
+                        },
+                        "routeOnly": {
+                          "remove": [
+                            "description"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "allocate": {
+                  "remove": [
+                    "description"
+                  ],
+                  "edit": {
+                    "properties": {
+                      "edit": {
+                        "strategy": {
+                          "remove": [
+                            "description"
+                          ]
+                        },
+                        "refresh": {
+                          "remove": [
+                            "minimum",
+                            "description"
+                          ]
+                        },
+                        "concurrency": {
+                          "remove": [
+                            "minimum",
+                            "description"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "outbound": {
+          "remove": [
+            "x-ui-explain",
+            "x-ui-use-case",
+            "x-ui-example",
+            "x-ui-warning"
+          ],
+          "set": {
+            "description": "Исходящее подключение"
+          },
+          "edit": {
+            "properties": {
+              "edit": {
+                "sendThrough": {
+                  "remove": [
+                    "examples"
+                  ],
+                  "set": {
+                    "description": "IP для отправки"
+                  }
+                },
+                "protocol": {
+                  "set": {
+                    "description": "Протокол"
+                  }
+                },
+                "settings": {
+                  "remove": [
+                    "type",
+                    "description"
+                  ],
+                  "set": {
+                    "$ref": "#/definitions/outboundSettings"
+                  }
+                },
+                "tag": {
+                  "remove": [
+                    "examples"
+                  ],
+                  "set": {
+                    "description": "Уникальный тег"
+                  }
+                },
+                "proxySettings": {
+                  "remove": [
+                    "description"
+                  ],
+                  "edit": {
+                    "properties": {
+                      "edit": {
+                        "tag": {
+                          "remove": [
+                            "examples"
+                          ],
+                          "set": {
+                            "description": "Тег outbound-прокси"
+                          }
+                        },
+                        "transportLayer": {
+                          "remove": [
+                            "description"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "mux": {
+                  "remove": [
+                    "description"
+                  ],
+                  "edit": {
+                    "properties": {
+                      "edit": {
+                        "enabled": {
+                          "remove": [
+                            "description"
+                          ]
+                        },
+                        "concurrency": {
+                          "remove": [
+                            "description"
+                          ]
+                        },
+                        "xudpConcurrency": {
+                          "remove": [
+                            "description"
+                          ]
+                        },
+                        "xudpProxyUDP443": {
+                          "remove": [
+                            "description"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "domainStrategy": {
+                  "remove": [
+                    "description"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "xray-inbounds.schema.json": {
+      "root": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "Xray Inbounds Fragment",
+        "description": "JSON Schema for 03_inbounds.json. Accepts either { inbounds: [...] } fragments or a raw inbounds array.",
+        "anyOf": [
+          {
+            "title": "03_inbounds.json object",
+            "type": "object",
+            "properties": {
+              "inbounds": {
+                "description": "Входящие подключения",
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/inbound"
+                }
+              }
+            },
+            "required": [
+              "inbounds"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "title": "Inbounds array",
+            "description": "Входящие подключения",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/inbound"
+            }
+          }
+        ]
+      },
+      "definitions": [
+        "realityFallbackRateLimit",
+        "routingRule",
+        "balancer",
+        "inboundDokodemoSettings",
+        "inboundSettings",
+        "streamSettings",
+        "certificate",
+        "inbound",
+        "outbound"
+      ],
+      "overrides": {
+        "routingRule": {
+          "remove": [
+            "x-ui-explain",
+            "x-ui-use-case",
+            "x-ui-example",
+            "x-ui-warning"
+          ]
+        },
+        "balancer": {
+          "remove": [
+            "x-ui-explain",
+            "x-ui-use-case",
+            "x-ui-example",
+            "x-ui-warning"
+          ]
+        },
+        "streamSettings": {
+          "edit": {
+            "properties": {
+              "edit": {
+                "tlsSettings": {
+                  "edit": {
+                    "properties": {
+                      "remove": [
+                        "show"
+                      ]
+                    }
+                  }
+                },
+                "realitySettings": {
+                  "edit": {
+                    "properties": {
+                      "edit": {
+                        "shortId": {
+                          "remove": [
+                            "examples"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "inbound": {
+          "edit": {
+            "properties": {
+              "edit": {
+                "settings": {
+                  "remove": [
+                    "type",
+                    "description"
+                  ],
+                  "set": {
+                    "$ref": "#/definitions/inboundSettings"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "xray-outbounds.schema.json": {
+      "root": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "Xray Outbounds Fragment",
+        "description": "JSON Schema for 04_outbounds.json. Accepts either { outbounds: [...] } fragments or a raw outbounds array.",
+        "anyOf": [
+          {
+            "title": "04_outbounds.json object",
+            "type": "object",
+            "properties": {
+              "outbounds": {
+                "description": "Исходящие подключения",
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/outbound"
+                }
+              }
+            },
+            "required": [
+              "outbounds"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "title": "Outbounds array",
+            "description": "Исходящие подключения",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/outbound"
+            }
+          }
+        ]
+      },
+      "definitions": [
+        "realityFallbackRateLimit",
+        "routingRule",
+        "balancer",
+        "outboundUserEntry",
+        "outboundRemoteEndpoint",
+        "outboundBlackholeResponse",
+        "outboundSettings",
+        "streamSettings",
+        "certificate",
+        "inbound",
+        "outbound"
+      ],
+      "overrides": {
+        "routingRule": {
+          "remove": [
+            "x-ui-explain",
+            "x-ui-use-case",
+            "x-ui-example",
+            "x-ui-warning"
+          ]
+        },
+        "balancer": {
+          "remove": [
+            "x-ui-explain",
+            "x-ui-use-case",
+            "x-ui-example",
+            "x-ui-warning"
+          ]
+        },
+        "outbound": {
+          "edit": {
+            "properties": {
+              "edit": {
+                "settings": {
+                  "remove": [
+                    "type",
+                    "description"
+                  ],
+                  "set": {
+                    "$ref": "#/definitions/outboundSettings"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "xray-routing.schema.json": {
+      "root": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "Xray Routing Fragment",
+        "description": "JSON Schema for 05_routing.json. Accepts { routing: ... } fragments, optional observatory blocks used by leastPing, or routing-only objects with rules/balancers/domainStrategy at the root.",
+        "anyOf": [
+          {
+            "title": "05_routing.json object",
+            "type": "object",
+            "properties": {
+              "routing": {
+                "description": "Правила маршрутизации трафика",
+                "type": "object",
+                "properties": {
+                  "domainStrategy": {
+                    "type": "string",
+                    "enum": [
+                      "AsIs",
+                      "IPIfNonMatch",
+                      "IPOnDemand"
+                    ],
+                    "default": "AsIs",
+                    "description": "Стратегия сопоставления доменов"
+                  },
+                  "domainMatcher": {
+                    "type": "string",
+                    "enum": [
+                      "hybrid",
+                      "linear"
+                    ],
+                    "default": "hybrid",
+                    "description": "Алгоритм сопоставления доменов"
+                  },
+                  "rules": {
+                    "type": "array",
+                    "description": "Массив правил маршрутизации",
+                    "items": {
+                      "$ref": "#/definitions/routingRule"
+                    }
+                  },
+                  "balancers": {
+                    "type": "array",
+                    "description": "Балансировщики нагрузки",
+                    "items": {
+                      "$ref": "#/definitions/balancer"
+                    }
+                  },
+                  "script": {
+                    "type": "string",
+                    "description": "Lua-сценарий маршрутизации."
+                  }
+                },
+                "additionalProperties": false
+              },
+              "observatory": {
+                "$ref": "#/definitions/observatory"
+              },
+              "burstObservatory": {
+                "$ref": "#/definitions/burstObservatory"
+              }
+            },
+            "required": [
+              "routing"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "title": "Routing object",
+            "description": "Правила маршрутизации трафика",
+            "type": "object",
+            "properties": {
+              "domainStrategy": {
+                "type": "string",
+                "enum": [
+                  "AsIs",
+                  "IPIfNonMatch",
+                  "IPOnDemand"
+                ],
+                "default": "AsIs",
+                "description": "Стратегия сопоставления доменов"
+              },
+              "domainMatcher": {
+                "type": "string",
+                "enum": [
+                  "hybrid",
+                  "linear"
+                ],
+                "default": "hybrid",
+                "description": "Алгоритм сопоставления доменов"
+              },
+              "rules": {
+                "type": "array",
+                "description": "Массив правил маршрутизации",
+                "items": {
+                  "$ref": "#/definitions/routingRule"
+                }
+              },
+              "balancers": {
+                "type": "array",
+                "description": "Балансировщики нагрузки",
+                "items": {
+                  "$ref": "#/definitions/balancer"
+                }
+              },
+              "script": {
+                "type": "string",
+                "description": "Lua-сценарий маршрутизации."
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "definitions": [
+        "realityFallbackRateLimit",
+        "routingRule",
+        "balancer",
+        "observatory",
+        "burstObservatory",
+        "streamSettings",
+        "certificate",
+        "inbound",
+        "outbound"
+      ],
+      "overrides": {
+        "streamSettings": {
+          "edit": {
+            "properties": {
+              "edit": {
+                "tlsSettings": {
+                  "edit": {
+                    "properties": {
+                      "remove": [
+                        "show"
+                      ]
+                    }
+                  }
+                },
+                "realitySettings": {
+                  "edit": {
+                    "properties": {
+                      "edit": {
+                        "shortId": {
+                          "remove": [
+                            "examples"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

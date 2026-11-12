@@ -237,6 +237,38 @@ def test_mihomo_yaml_schema_runtime_accepts_documented_vless_tls_reality_fields(
     assert result["diagnostics"] == []
 
 
+@pytest.mark.parametrize("protocol", ["trojan", "vmess"])
+def test_mihomo_yaml_schema_accepts_reality_for_supported_protocols(protocol):
+    doc = f"""proxies:
+  - name: reality
+    type: {protocol}
+    server: example.com
+    port: 443
+    tls: true
+    client-fingerprint: firefox
+    reality-opts:
+      public-key: test-key
+      support-x25519mlkem768: true
+"""
+    result = _run_mihomo_yaml_schema(doc)
+    assert result["ok"] is True, result["diagnostics"]
+
+
+def test_mihomo_yaml_schema_accepts_openvpn_without_tls_crypt():
+    doc = """proxies:
+  - name: openvpn
+    type: openvpn
+    server: example.com
+    port: 1194
+    ca: example-ca
+    username: user
+    password: pass
+    tls-auth: example-key
+"""
+    result = _run_mihomo_yaml_schema(doc)
+    assert result["ok"] is True, result["diagnostics"]
+
+
 def test_mihomo_yaml_schema_runtime_accepts_raw_transport_and_lowercase_ios_fingerprint():
     result = _run_mihomo_yaml_schema(
         "\n".join([
