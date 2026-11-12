@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 676,
-      "size_bytes": 9299355,
+      "size_bytes": 9298617,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -88,7 +88,7 @@
       ],
       "removable": true,
       "unit_count": 151,
-      "size_bytes": 3983776,
+      "size_bytes": 3968996,
       "kind_counts": {
         "backend_route": 13,
         "backend_service": 20,
@@ -15119,7 +15119,7 @@
       "module_id": "core",
       "kind": "frontend_ui",
       "path": "xkeen-ui/static/js/ui/country_flags.js",
-      "size_bytes": 16180,
+      "size_bytes": 23002,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -15732,7 +15732,7 @@
       "module_id": "core",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/styles.css",
-      "size_bytes": 889729,
+      "size_bytes": 882169,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -22280,7 +22280,7 @@
       "module_id": "engine.xray",
       "kind": "backend_test",
       "path": "tests/test_xray_subscription_filters_contract.py",
-      "size_bytes": 47842,
+      "size_bytes": 47768,
       "depends_on": [
         "core",
         "tool.editor"
@@ -22804,7 +22804,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/outbounds.js",
-      "size_bytes": 475045,
+      "size_bytes": 460339,
       "depends_on": [
         "core",
         "tool.editor",

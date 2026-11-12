@@ -261,13 +261,14 @@ def test_outbounds_card_exposes_current_proxy_nodes_and_ping_controls():
     assert "'detail'," not in country_candidates_src
     assert "function poolCountryNode(ent) {" in outbounds_src
     assert "xk-pool-tag-country-slot" in outbounds_src
-    assert "const COUNTRY_FLAG_SVG = Object.freeze({" in outbounds_src
-    assert "SH: 'CH'" in outbounds_src
-    assert "CZECHIA|CZECH\\s*REPUBLIC|PRAGUE|PRAHA" in outbounds_src
-    assert "SWITZERLAND|SWISS|ZURICH|ZÜRICH|GENEVA" in outbounds_src
-    assert "CH: '<svg" in outbounds_src
-    assert "CZ: '<svg" in outbounds_src
-    assert "xk-sub-node-country-svg" in outbounds_src
+    flags_src = (ROOT / "xkeen-ui" / "static" / "js" / "ui" / "country_flags.js").read_text(encoding="utf-8")
+    assert "from 'xk-core/js/ui/country_flags.js'" in outbounds_src
+    assert "SH: 'CH'" in flags_src
+    assert "CZECHIA|CZECH\\s*REPUBLIC|PRAGUE|PRAHA" in flags_src
+    assert "SWITZERLAND|SWISS|ZURICH|ZÜRICH|GENEVA" in flags_src
+    assert "CH: '<svg" in flags_src
+    assert "CZ: '<svg" in flags_src
+    assert "xk-sub-node-country-svg" in flags_src
     assert "countryFlagBadgeHtml(nodeCountryFlagInfo(node))" in outbounds_src
     assert "xk-sub-node-country" in outbounds_src
     assert 'id="outbounds-active-node-status"' in template_src
@@ -294,10 +295,8 @@ def test_outbounds_card_exposes_current_proxy_nodes_and_ping_controls():
     assert ".xk-outbounds-node-list {\n  grid-template-columns: 1fr;\n  gap: 8px;\n  min-height: 0;\n  max-height: min(36vh, 320px);\n  overflow: auto;" in styles_src
     assert "#outbounds-body.xk-outbounds-subscription-fragment .xk-outbounds-node-item {" in styles_src
     assert "-webkit-line-clamp: 2;" in styles_src
-    assert ".xk-sub-node-country[data-country=\"DE\"]" in styles_src
-    assert ".xk-sub-node-country[data-country=\"RU\"]" in styles_src
-    assert ".xk-sub-node-country[data-country=\"CH\"]" in styles_src
-    assert ".xk-sub-node-country[data-country=\"CZ\"]" in styles_src
+    # Flags are drawn only by the shared dictionary of country_flags.js.
+    assert "[data-country=" not in styles_src
     assert ".xk-sub-node-country-svg" in styles_src
     assert ".xk-sub-node-country.is-globe" in styles_src
     assert "#outbounds-body.xk-outbounds-subscription-fragment .xk-outbounds-node-item .xk-sub-node-side {\n  min-width: 54px;" in styles_src

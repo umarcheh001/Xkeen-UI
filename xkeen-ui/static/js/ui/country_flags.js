@@ -1,17 +1,32 @@
 // Country of a proxy node from its name: a flag emoji, a leading code such as
 // "DE" or a city/country word. Shared by the Mihomo and Xray screens.
+// The one dictionary of the panel: a code is known only if it has a flag below.
 export const COUNTRY_NAMES = Object.freeze({
-  AE: 'United Arab Emirates', AU: 'Australia', BR: 'Brazil', CA: 'Canada', CH: 'Switzerland',
-  CN: 'China', CZ: 'Czechia', DE: 'Germany', EE: 'Estonia', ES: 'Spain', FI: 'Finland', FR: 'France',
-  GL: 'Greenland',
-  GB: 'United Kingdom', HK: 'Hong Kong', ID: 'Indonesia', IL: 'Israel', IN: 'India',
-  IT: 'Italy', JP: 'Japan', KR: 'South Korea', KZ: 'Kazakhstan', LV: 'Latvia',
-  MY: 'Malaysia', NL: 'Netherlands', NO: 'Norway', PL: 'Poland', PT: 'Portugal', RU: 'Russia',
-  SE: 'Sweden', SG: 'Singapore', TH: 'Thailand', TR: 'Turkey', TW: 'Taiwan',
-  UA: 'Ukraine', US: 'United States', VN: 'Vietnam',
+  AE: 'United Arab Emirates', AM: 'Armenia', AR: 'Argentina', AT: 'Austria', AU: 'Australia',
+  AZ: 'Azerbaijan', BE: 'Belgium', BG: 'Bulgaria', BR: 'Brazil', BY: 'Belarus', CA: 'Canada',
+  CH: 'Switzerland', CN: 'China', CZ: 'Czechia', DE: 'Germany', DK: 'Denmark', EE: 'Estonia',
+  ES: 'Spain', EU: 'Европейский союз', FI: 'Finland', FR: 'France', GB: 'United Kingdom',
+  GE: 'Georgia', GL: 'Greenland', GR: 'Greece', HK: 'Hong Kong', HU: 'Hungary', ID: 'Indonesia',
+  IE: 'Ireland', IL: 'Israel', IN: 'India', IT: 'Italy', JP: 'Japan', KR: 'South Korea',
+  KZ: 'Kazakhstan', LV: 'Latvia', MD: 'Moldova', MX: 'Mexico', MY: 'Malaysia', NL: 'Netherlands',
+  NO: 'Norway', PL: 'Poland', PT: 'Portugal', RO: 'Romania', RS: 'Serbia', RU: 'Russia',
+  SE: 'Sweden', SG: 'Singapore', SI: 'Slovenia', SK: 'Slovakia', TH: 'Thailand', TR: 'Turkey',
+  TW: 'Taiwan', UA: 'Ukraine', US: 'United States', VN: 'Vietnam',
 });
 
-const COUNTRY_RULES = Object.freeze([
+export const COUNTRY_CODE_ALIASES = Object.freeze({ UK: 'GB', UAE: 'AE', USA: 'US', SH: 'CH' });
+
+// A code (or its alias) the dictionary knows, otherwise ''.
+export function normalizeCountryCode(value) {
+  const raw = String(value || '').trim().toUpperCase();
+  if (!raw) return '';
+  const code = COUNTRY_CODE_ALIASES[raw] || raw;
+  return Object.prototype.hasOwnProperty.call(COUNTRY_NAMES, code) ? code : '';
+}
+
+// A bare "Europe" is left out on purpose: providers write it for any European node.
+export const COUNTRY_TEXT_RULES = Object.freeze([
+  [/\b(EUROPEAN\s*UNION)\b/i, 'EU'], [/\b(MOLDOVA|CHISINAU|KISHINEV)\b/i, 'MD'],
   [/\b(HONG\s*KONG|HKG)\b/i, 'HK'], [/\b(SINGAPORE)\b/i, 'SG'],
   [/\b(JAPAN|TOKYO|OSAKA)\b/i, 'JP'], [/\b(KOREA|SEOUL)\b/i, 'KR'],
   [/\b(UNITED\s*STATES|USA|NEW\s*YORK|LOS\s*ANGELES|CHICAGO)\b/i, 'US'],
@@ -72,6 +87,25 @@ const NODE_FLAG_SVG = Object.freeze({
   TH: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#a51931"/><rect y="2.4" width="20" height="9.2" fill="#fff"/><rect y="4.5" width="20" height="5" fill="#2d2a4a"/></svg>',
   MY: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#cc0001"/><rect y="1" width="20" height="1" fill="#fff"/><rect y="3" width="20" height="1" fill="#fff"/><rect y="5" width="20" height="1" fill="#fff"/><rect y="7" width="20" height="1" fill="#fff"/><rect y="9" width="20" height="1" fill="#fff"/><rect y="11" width="20" height="1" fill="#fff"/><rect y="13" width="20" height="1" fill="#fff"/><rect width="9" height="7.5" fill="#010066"/><circle cx="4.4" cy="3.7" r="2" fill="#ffcc00"/><circle cx="5.1" cy="3.7" r="1.7" fill="#010066"/><path d="M7.1 2.2l.35 1.1h1.15l-.95.65.35 1.1-.9-.7-.9.7.35-1.1-.95-.65h1.15z" fill="#ffcc00"/></svg>',
   ID: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#fff"/><rect width="20" height="7" fill="#ce1126"/></svg>',
+  AM: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#f2a800"/><rect width="20" height="9.333" fill="#0033a0"/><rect width="20" height="4.667" fill="#d90012"/></svg>',
+  AR: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#74acdf"/><rect y="4.667" width="20" height="4.667" fill="#fff"/><circle cx="10" cy="7" r="1.5" fill="#f6b40e"/></svg>',
+  AT: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#c8102e"/><rect y="4.667" width="20" height="4.667" fill="#fff"/></svg>',
+  AZ: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#00af66"/><rect width="20" height="9.333" fill="#e4002b"/><rect width="20" height="4.667" fill="#0092bc"/><circle cx="9.4" cy="7" r="1.8" fill="#fff"/><circle cx="9.9" cy="7" r="1.45" fill="#e4002b"/><circle cx="11.9" cy="7" r=".55" fill="#fff"/></svg>',
+  BE: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#ef3340"/><rect width="13.333" height="14" fill="#fdda24"/><rect width="6.667" height="14" fill="#000"/></svg>',
+  BG: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#d62612"/><rect width="20" height="9.333" fill="#00966e"/><rect width="20" height="4.667" fill="#fff"/></svg>',
+  BY: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#4aa657"/><rect width="20" height="9.333" fill="#c8313e"/><rect width="2.6" height="14" fill="#fff"/><path d="M1.3 .6l.8 1.2-.8 1.2-.8-1.2zM1.3 4l.8 1.2-.8 1.2-.8-1.2zM1.3 7.4l.8 1.2-.8 1.2-.8-1.2zM1.3 10.8l.8 1.2-.8 1.2-.8-1.2z" fill="#c8313e"/></svg>',
+  DK: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#c8102e"/><rect x="6" width="2" height="14" fill="#fff"/><rect y="6" width="20" height="2" fill="#fff"/></svg>',
+  EU: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#003399"/><g fill="#ffcc00"><circle cx="10" cy="3" r=".55"/><circle cx="12" cy="3.536" r=".55"/><circle cx="13.464" cy="5" r=".55"/><circle cx="14" cy="7" r=".55"/><circle cx="13.464" cy="9" r=".55"/><circle cx="12" cy="10.464" r=".55"/><circle cx="10" cy="11" r=".55"/><circle cx="8" cy="10.464" r=".55"/><circle cx="6.536" cy="9" r=".55"/><circle cx="6" cy="7" r=".55"/><circle cx="6.536" cy="5" r=".55"/><circle cx="8" cy="3.536" r=".55"/></g></svg>',
+  GE: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#fff"/><rect x="8.8" width="2.4" height="14" fill="#ff0000"/><rect y="5.8" width="20" height="2.4" fill="#ff0000"/><path d="M4.4 1.6v2.8M3 3h2.8M15.6 1.6v2.8M14.2 3h2.8M4.4 9.6v2.8M3 11h2.8M15.6 9.6v2.8M14.2 11h2.8" stroke="#ff0000" stroke-width=".8"/></svg>',
+  GR: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#0d5eaf"/><path d="M0 2.333h20M0 5.444h20M0 8.556h20M0 11.667h20" stroke="#fff" stroke-width="1.556"/><rect width="7.778" height="7.778" fill="#0d5eaf"/><rect x="3.111" width="1.556" height="7.778" fill="#fff"/><rect y="3.111" width="7.778" height="1.556" fill="#fff"/></svg>',
+  HU: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#477050"/><rect width="20" height="9.333" fill="#fff"/><rect width="20" height="4.667" fill="#ce2939"/></svg>',
+  IE: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#ff883e"/><rect width="13.333" height="14" fill="#fff"/><rect width="6.667" height="14" fill="#169b62"/></svg>',
+  MD: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#cc092f"/><rect width="13.333" height="14" fill="#ffd200"/><rect width="6.667" height="14" fill="#0046ae"/><path d="M8.6 4.3h2.8v2.7c0 1.3-.7 2.2-1.4 2.6-.7-.4-1.4-1.3-1.4-2.6z" fill="#b07e2a" stroke="#7a4f12" stroke-width=".3"/></svg>',
+  MX: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#ce1126"/><rect width="13.333" height="14" fill="#fff"/><rect width="6.667" height="14" fill="#006847"/><circle cx="10" cy="7" r="1.6" fill="#8c5a2b"/></svg>',
+  RO: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#ce1126"/><rect width="13.333" height="14" fill="#fcd116"/><rect width="6.667" height="14" fill="#002b7f"/></svg>',
+  RS: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#fff"/><rect width="20" height="9.333" fill="#0c4076"/><rect width="20" height="4.667" fill="#c6363c"/><path d="M4.6 3h2.8v3.2c0 1.4-.7 2.3-1.4 2.7-.7-.4-1.4-1.3-1.4-2.7z" fill="#c6363c" stroke="#fff" stroke-width=".4"/></svg>',
+  SI: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#ed1c24"/><rect width="20" height="9.333" fill="#005da4"/><rect width="20" height="4.667" fill="#fff"/><path d="M4.4 2.6h2.8v2.8c0 1.2-.7 2-1.4 2.4-.7-.4-1.4-1.2-1.4-2.4z" fill="#005da4" stroke="#ed1c24" stroke-width=".35"/></svg>',
+  SK: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#ee1c25"/><rect width="20" height="9.333" fill="#0b4ea2"/><rect width="20" height="4.667" fill="#fff"/><path d="M4.4 3h3.4v3.6c0 1.6-.9 2.6-1.7 3-.8-.4-1.7-1.4-1.7-3z" fill="#ee1c25" stroke="#fff" stroke-width=".4"/><path d="M6.1 4.2v4.4M5 5.4h2.2M5.3 6.6h1.6" stroke="#fff" stroke-width=".45"/></svg>',
 });
 
 export function nodeCountryCode(name) {
@@ -87,10 +121,9 @@ export function nodeCountryCode(name) {
   }
   const normalized = value.replace(/[_.\/-]+/g, ' ');
   const token = normalized.match(/^(?:\s*)([A-Z]{2,3})(?=\s|$)/)?.[1];
-  const aliases = { UK: 'GB', UAE: 'AE', USA: 'US', SH: 'CH' };
-  const tokenCode = aliases[token] || token;
-  if (COUNTRY_NAMES[tokenCode]) return tokenCode;
-  return COUNTRY_RULES.find(([rule]) => rule.test(normalized))?.[1] || '';
+  const tokenCode = normalizeCountryCode(token);
+  if (tokenCode) return tokenCode;
+  return COUNTRY_TEXT_RULES.find(([rule]) => rule.test(normalized))?.[1] || '';
 }
 
 export function nodeDisplayName(name, countryCode = nodeCountryCode(name)) {
