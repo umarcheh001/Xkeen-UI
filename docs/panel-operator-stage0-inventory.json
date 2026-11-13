@@ -13,8 +13,8 @@
     "panel_redesign_rules_allowed_in_legacy_stylesheet": false,
     "operator_stylesheet_owns_presentation_only": true,
     "legacy_panel_rule_guard": {
-      "frozen_rule_block_count": 727,
-      "frozen_rule_blocks_sha256": "7e1f460733ac5230c5a7d93e4aa1f54a93d39e739a3e2b879ad536c11a0352db",
+      "frozen_rule_block_count": 720,
+      "frozen_rule_blocks_sha256": "1e5b54c104fd8680d26a917b24fb13ef596a6269c76fe6b666eefbff924ae91a",
       "policy": "Existing legacy blocks are frozen; do not add or edit panel redesign rules here."
     }
   },

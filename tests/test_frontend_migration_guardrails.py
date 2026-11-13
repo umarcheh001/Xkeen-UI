@@ -39,7 +39,7 @@ def test_source_entrypoints_bootstrap_pages_without_legacy_loader():
         ],
         "mihomo_generator.entry.js": [
             "import { bootTopLevelShell } from './top_level_shell.shared.js';",
-            "import { bootMihomoGeneratorScreen } from './mihomo_generator.screen.bootstrap.js';",
+            "import { loadModulePart } from '../features/module_parts.js';",
             "import { registerPanelMihomoTopLevelScreens } from './top_level_panel_mihomo.shared.js';",
             "initialScreen: 'mihomo_generator'",
         ],
@@ -90,7 +90,7 @@ def test_top_level_source_entrypoints_stay_thin_wrappers_over_shared_shell_boots
         "mihomo_generator.entry.js": [
             "void bootTopLevelShell({",
             "initialScreen: 'mihomo_generator'",
-            "return bootMihomoGeneratorScreen();",
+            "return loadModulePart('engine.mihomo', 'generator').then((mod) => mod.bootMihomoGeneratorScreen());",
             "registerPanelMihomoTopLevelScreens();",
         ],
     }
@@ -111,8 +111,9 @@ def test_top_level_source_entrypoints_stay_thin_wrappers_over_shared_shell_boots
         for fragment in fragments:
             assert fragment in text, f"missing thin-shell wrapper fragment in {filename}: {fragment}"
         assert text.count("bootTopLevelShell({") == 1, f"{filename} should stay a single shell-bootstrap wrapper"
+        checked = text.replace("from '../features/module_parts.js'", "from '<core module bridge>'")
         for fragment in forbidden_fragments:
-            assert fragment not in text, f"{filename} should stay thin and not own runtime logic: {fragment}"
+            assert fragment not in checked, f"{filename} should stay thin and not own runtime logic: {fragment}"
 
 
 def test_top_level_bridge_assets_stay_import_only_over_canonical_source_entrypoints():
@@ -390,9 +391,9 @@ def test_panel_lazy_bindings_own_panel_specific_feature_loaders():
         "loadModulePart('engine.xray', 'routing_templates')",
         "loadModulePart('engine.xray', 'github')",
         "import('../ui/settings_panel.js')",
-        "import('../features/compat/mihomo_import.js').then(() => mod)",
-        "import('../features/compat/mihomo_proxy_tools.js').then(() => mod)",
-        "import('../features/compat/mihomo_hwid_sub.js').then(() => mod)",
+        "loadModulePart('engine.mihomo', 'import')",
+        "loadModulePart('engine.mihomo', 'proxy_tools')",
+        "loadModulePart('engine.mihomo', 'hwid_sub')",
     ]
 
     for fragment in required_fragments:
@@ -426,8 +427,8 @@ def test_panel_view_runtime_uses_panel_lazy_bindings_for_xkeen_and_commands_view
 def test_formatters_and_xray_preflight_use_direct_imports_in_consumers():
     expectations = {
         ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_panel.js": [
-            "await import('../ui/prettier_loader.js');",
-            "await import('../ui/formatters.js');",
+            "await import('xk-core/js/ui/prettier_loader.js');",
+            "await import('xk-core/js/ui/formatters.js');",
         ],
         ROOT / "xkeen-ui" / "static" / "js" / "features" / "routing.js": [
             "await import('xk-core/js/ui/prettier_loader.js');",
@@ -455,8 +456,9 @@ def test_formatters_and_xray_preflight_use_direct_imports_in_consumers():
         text = path.read_text(encoding="utf-8")
         for fragment in fragments:
             assert fragment in text, f"missing direct-import fragment in {path.relative_to(ROOT).as_posix()}: {fragment}"
+        checked = text.replace("from '../features/module_parts.js'", "from '<core module bridge>'")
         for fragment in forbidden_fragments:
-            assert fragment not in text, (
+            assert fragment not in checked, (
                 f"consumer should not use lazy_runtime feature bridge in {path.relative_to(ROOT).as_posix()}: {fragment}"
             )
 

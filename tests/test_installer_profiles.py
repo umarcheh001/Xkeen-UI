@@ -43,13 +43,14 @@ def _source(root: Path) -> Path:
         "routes/system_resources.py": "# diagnostics route",
         "static/js/features/resource_monitor.js": "diagnostics window",
         "static/js/pages/panel.routing.bundle.js": "xray bundle",
-        "static/js/pages/panel.mihomo.bundle.js": "mihomo bundle",
+        "static/js/pages/panel.mihomo.bundle.js": "mihomo core loader",
+        "static/js/pages/mihomo.module.bundle.js": "mihomo bundle",
         "static/js/pages/codemirror6.shared.js": "light editor",
         "static/monaco-editor/vs/editor.js": "monaco",
         "templates/panel/screens/routing.html": "xray screen",
         "templates/panel/screens/mihomo.html": "mihomo screen",
         "static/frontend-build/assets/panel.routing.bundle-123.js": "compiled xray",
-        "static/frontend-build/assets/panel.mihomo.bundle-123.js": "compiled mihomo",
+        "static/frontend-build/modules/engine.mihomo/mihomo.module.bundle-123.js": "compiled mihomo",
         "static/frontend-build/assets/panel-123.js": "compiled shared",
     }
     for name, data in files.items():
@@ -74,8 +75,9 @@ def test_minimal_profile_copies_owned_backend_frontend_and_assets(tmp_path):
     assert (dest / "static/frontend-build/assets/panel.routing.bundle-123.js").is_file()
     assert (dest / "static/js/pages/codemirror6.shared.js").is_file()
     assert not (dest / "routes/mihomo.py").exists()
-    assert not (dest / "static/js/pages/panel.mihomo.bundle.js").exists()
-    assert not (dest / "static/frontend-build/assets/panel.mihomo.bundle-123.js").exists()
+    assert (dest / "static/js/pages/panel.mihomo.bundle.js").is_file()
+    assert not (dest / "static/js/pages/mihomo.module.bundle.js").exists()
+    assert not (dest / "static/frontend-build/modules/engine.mihomo/mihomo.module.bundle-123.js").exists()
     assert not (dest / "static/monaco-editor").exists()
     state = json.loads((dest / "modules.json").read_text(encoding="utf-8"))
     assert state["profile"] == "xray-minimal"
@@ -189,8 +191,10 @@ def test_real_frontend_manifest_excludes_opposite_engine_entry():
     assert frontend is not None
     files, manifest, bridge = frontend
     assert "js/pages/panel.routing.bundle.js" in manifest
-    assert "js/pages/panel.mihomo.bundle.js" not in manifest
-    assert "js/pages/mihomo_generator.entry.js" not in manifest
+    assert "js/pages/panel.mihomo.bundle.js" in manifest
+    assert "js/pages/mihomo_generator.entry.js" in manifest
+    assert "js/pages/mihomo.module.entry.js" not in manifest
+    assert not any("frontend-build/modules/engine.mihomo/" in name for name in files)
     assert "static/frontend-build/assets/panel.mihomo.bundle-DyoOXfvB.js" not in files
     # A chunk the panel bootstrap imports statically has to come along even when
     # it carries the other engine's name.  Which chunk that is and what Vite
@@ -205,7 +209,7 @@ def test_real_frontend_manifest_excludes_opposite_engine_entry():
             assert "static/frontend-build/" + full[dependency]["file"] in files
     assert "static/js/pages/mihomo_generator.entry.js" not in files
     assert "static/js/pages/panel.routing.bundle.js" not in files
-    assert "static/js/pages/mihomo_generator.entry.js" not in bridge
+    assert "static/js/pages/mihomo_generator.entry.js" in bridge
 
 
 def test_upgrade_keeps_custom_editor_variant(tmp_path):

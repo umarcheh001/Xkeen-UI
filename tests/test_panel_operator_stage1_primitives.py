@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tests.support.style_sources import read_style_source
+
 from collections import Counter
 from pathlib import Path
 import re
@@ -81,7 +83,7 @@ def _selector_counts(css: str) -> tuple[int, int, int, int]:
 
 
 def test_stage1_stylesheet_has_one_canonical_layer_order():
-    css = OPERATOR_CSS.read_text(encoding="utf-8")
+    css = read_style_source(OPERATOR_CSS)
     positions = [css.index(f"* {name}") for name in SECTION_NAMES]
 
     assert positions == sorted(positions)
@@ -96,7 +98,7 @@ def test_stage1_stylesheet_has_one_canonical_layer_order():
 
 
 def test_stage1_primitives_use_low_specificity_scope_and_existing_anchors():
-    css = OPERATOR_CSS.read_text(encoding="utf-8")
+    css = read_style_source(OPERATOR_CSS)
     primitives_start = css.index("* 4. PRIMITIVES")
     workspaces_start = css.index("* 5. WORKSPACES")
     primitives = css[primitives_start:workspaces_start]
@@ -120,7 +122,7 @@ def test_stage1_primitives_use_low_specificity_scope_and_existing_anchors():
 
 
 def test_stage1_flat_effect_and_geometry_contract_is_static():
-    css = OPERATOR_CSS.read_text(encoding="utf-8")
+    css = read_style_source(OPERATOR_CSS)
 
     assert not re.search(r"(?:linear|radial|conic|repeating-linear|repeating-radial)-gradient\(", css)
     assert "--op-control-h: 32px;" in css
@@ -144,15 +146,14 @@ def test_stage1_flat_effect_and_geometry_contract_is_static():
     # Keep this as an explicit allow-list so a new rounded component cannot
     # silently reintroduce legacy visual language.
     assert len(pill_blocks) == 10
-    assert ".fm-toggle-slider" in pill_blocks[0]
-    assert ".xk-mihomo-connections-view-tab span" in pill_blocks[1]
-    assert ".xk-mihomo-device-name" in pill_blocks[2]
-    assert ".xk-core-source-arch" in pill_blocks[3]
-    assert ".xk-core-source-risk, .xk-core-source-installed" in pill_blocks[4]
-    assert "#core-modal .xk-core-option-state" in pill_blocks[5]
-    for index, component in ((6, '.xk-xlog-live'), (7, '.xk-xlog-badge'), (8, '.xk-xlog-bar')):
-        assert f':is(#view-xray-logs, #mihomo-clash-logs) {component}' in pill_blocks[index]
-    assert ".xk-jr-row > .outn" in pill_blocks[9]
+    allowed = ['.fm-toggle-slider', '.xk-mihomo-connections-view-tab span',
+               '.xk-mihomo-device-name', '.xk-core-source-arch',
+               '.xk-core-source-risk, .xk-core-source-installed',
+               '#core-modal .xk-core-option-state', '.xk-jr-row > .outn']
+    allowed += [f':is(#view-xray-logs, #mihomo-clash-logs) {component}'
+                for component in ('.xk-xlog-live', '.xk-xlog-badge', '.xk-xlog-bar')]
+    for selector in allowed:
+        assert any(selector in block for block in pill_blocks), selector
 
     assert ")::before," in css
     assert ")::after {" in css
@@ -162,7 +163,7 @@ def test_stage1_flat_effect_and_geometry_contract_is_static():
 
 
 def test_operator_selector_layer_stays_within_living_budget():
-    css = OPERATOR_CSS.read_text(encoding="utf-8")
+    css = read_style_source(OPERATOR_CSS)
     contract = CONTRACT_DOC.read_text(encoding="utf-8")
     definitions, unique, duplicate_selectors, duplicate_instances = _selector_counts(css)
 

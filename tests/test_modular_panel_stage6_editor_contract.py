@@ -93,7 +93,7 @@ def test_engine_bundles_do_not_eagerly_import_advanced_quick_fixes():
     assert "from 'xk-core/js/ui/schema_quickfixes.js'" not in routing
     assert "from '../ui/schema_quickfixes.js'" not in mihomo
     assert "import('xk-core/js/ui/schema_quickfixes.js')" in routing
-    assert "import('../ui/schema_quickfixes.js')" in mihomo
+    assert "import('xk-core/js/ui/schema_quickfixes.js')" in mihomo
 
 
 def test_stage6_descriptor_is_json_serializable():

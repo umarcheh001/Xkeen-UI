@@ -1,3 +1,5 @@
+
+from tests.support.style_sources import read_style_source
 """Stage 4 result-card contracts; interaction coverage lives in Playwright."""
 from pathlib import Path
 
@@ -5,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 JS = (ROOT / "xkeen-ui/static/js/features/mihomo_import.js").read_text(encoding="utf-8")
 RESULT = (ROOT / "xkeen-ui/static/js/features/mihomo_import_result.js").read_text(encoding="utf-8")
 TEMPLATE = (ROOT / "xkeen-ui/templates/panel/modals/mihomo.html").read_text(encoding="utf-8")
-CSS = (ROOT / "xkeen-ui/static/panel-operator.css").read_text(encoding="utf-8")
+CSS = read_style_source(ROOT / "xkeen-ui/static/panel-operator.css")
 PLAN = (ROOT / "README-mihomo-node-import-redesign-plan.md").read_text(encoding="utf-8")
 DOC = (ROOT / "docs/mihomo-node-import-stage4.md").read_text(encoding="utf-8")
 

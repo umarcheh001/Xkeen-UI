@@ -41,3 +41,20 @@ test('stylesheet loads once and a failed load can be retried', async () => {
     globalThis.document = previous;
   }
 });
+
+test('an untracked server stylesheet without a sheet is retried even if its error already fired', async () => {
+  const previous = globalThis.document;
+  const events = {};
+  let removed = false;
+  const existing = { sheet: null, href:'/screen.css?v=123', remove() { removed = true; }, addEventListener() {} };
+  const replacement = {dataset:{},addEventListener(name,fn){events[name]=fn;}};
+  globalThis.document = {head:{querySelector(){return existing;},appendChild(){}},createElement(){return replacement;}};
+  try {
+    const pending = styles.ensureModuleStylesheet('screen-host-style','/screen.css');
+    assert.equal(removed, true);
+    assert.equal(replacement.href, '/screen.css?v=123');
+    assert.equal(typeof events.load, 'function');
+    events.load();
+    assert.equal(await pending, true);
+  } finally { globalThis.document = previous; }
+});

@@ -44,3 +44,24 @@ def test_generator_shell_stays_in_core_without_expanding_public_contract():
     assert 'standalone_lazy.js' not in private
     for consumer in ('mihomo_generator.entry.js', 'top_level_mihomo_generator_screen.js'):
         assert 'mihomo_generator.shell.shared.js' in (pages / consumer).read_text(encoding='utf-8')
+
+
+def test_mihomo_styles_are_owned_by_module_and_shared_log_primitives_stay_core():
+    static = ROOT / 'xkeen-ui/static'
+    css_path = static / 'mihomo.module.css'
+    assert css_path.is_file(), 'Mihomo-specific styles need an independent resource'
+    css = css_path.read_text(encoding='utf-8')
+    shared = '\n'.join((static / name).read_text(encoding='utf-8') for name in ('styles.css', 'panel-operator.css'))
+    for selector in ('#mihomo-validation-modal .modal-content', '.xk-mi-body', '#mihomo-clash-logs-list'):
+        assert selector in css
+        assert selector not in shared
+    assert ':is(#view-xray-logs,#mihomo-clash-logs) .xk-xlog-chip' in shared
+    entry = (static / 'js/pages/mihomo.module.entry.js').read_text(encoding='utf-8')
+    assert 'new URL(' in entry and 'mihomo.module.css' in entry
+
+
+def test_generator_initial_markup_loads_module_styles_before_first_paint():
+    template = (ROOT / 'xkeen-ui/templates/mihomo_generator.html').read_text(encoding='utf-8')
+    assert 'data-xk-module-css="engine.mihomo"' in template
+    assert "filename='mihomo.module.css'" in template
+    assert template.index("filename='mihomo.module.css'") < template.index('</head>')

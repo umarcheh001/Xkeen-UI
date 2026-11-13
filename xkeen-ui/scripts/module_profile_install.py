@@ -98,6 +98,8 @@ def owner(path: str) -> str:
     p = path.replace("\\", "/").lower()
     if p.startswith("js/") or p.startswith("schemas/"):
         p = "static/" + p
+    if p.removesuffix('.gz') == 'static/mihomo.module.css':
+        return 'engine.mihomo'
     # The server diagnostics window, its styles and button slots. The hint in
     # the engine error messages and the loader of the module stay in the core.
     if not p.startswith("static/frontend-build/") and any(

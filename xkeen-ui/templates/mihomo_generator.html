@@ -1782,6 +1782,7 @@
   {# Shared Operator Console primitives are loaded last. The page keeps its
      runtime hooks while the late layer flattens legacy generator chrome. #}
   <link rel="stylesheet" href="{{ url_for('static', filename='panel-operator.css', v='20260919b') }}">
+  <link rel="stylesheet" data-xk-module-css="engine.mihomo" href="{{ url_for('static', filename='mihomo.module.css', v=frontend_module_importmap().get('xk-module/engine.mihomo', '')) }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='page-shell.css') }}">
 </head>
 <body class="panel-page mihomo-generator-page">

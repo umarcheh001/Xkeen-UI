@@ -147,7 +147,9 @@ def test_terminal_css_is_not_initial_html_and_is_loader_owned(tmp_path):
 
     assert "xterm/xterm.css" not in html
     assert "xterm/xterm.css" in loader
-    assert "data-xk-module-css" in loader
+    assert "ensureModuleStylesheet" in loader
+    styles = (ROOT / "xkeen-ui/static/js/ui/module_styles.js").read_text(encoding="utf-8")
+    assert "data-xk-module-css" in styles
     assert "if (!descriptor || !hasOwnedRoot(descriptor.domRoots)) return false;" in loader
 
 

@@ -32,6 +32,7 @@ export default defineConfig(() => {
   }
   const entryName = path.basename(definition.entry, '.js');
   return {
+    base: './',
     root: staticRoot,
     publicDir: false,
     build: {

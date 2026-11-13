@@ -1,3 +1,5 @@
+
+from tests.support.style_sources import read_style_source
 from pathlib import Path
 
 import json
@@ -205,7 +207,7 @@ def test_mihomo_generator_initializes_preview_toolbar_without_engine_toggle():
 
 def test_mihomo_generator_xray_subscription_prompt_uses_theme_confirm_modal():
     script = Path('xkeen-ui/static/js/features/mihomo_generator.js').read_text(encoding='utf-8')
-    bootstrap = Path('xkeen-ui/static/js/pages/mihomo_generator.screen.bootstrap.js').read_text(encoding='utf-8')
+    bootstrap = Path('xkeen-ui/static/js/pages/mihomo_generator.shell.shared.js').read_text(encoding='utf-8')
     template = Path('xkeen-ui/templates/mihomo_generator.html').read_text(encoding='utf-8')
 
     assert 'confirmMihomoAction,' in script
@@ -282,7 +284,7 @@ def test_mihomo_result_modal_collapses_empty_log_column_and_uses_compact_section
 
 
 def test_mihomo_generator_bootstrap_loads_shared_ansi_formatter():
-    bootstrap = Path('xkeen-ui/static/js/pages/mihomo_generator.screen.bootstrap.js').read_text(encoding='utf-8')
+    bootstrap = Path('xkeen-ui/static/js/pages/mihomo_generator.shell.shared.js').read_text(encoding='utf-8')
 
     assert "import '../util/ansi.js?v=20260302a';" in bootstrap
 
@@ -387,14 +389,14 @@ def test_top_level_navigation_controls_use_shared_helper_contract():
     assert "import { registerPanelMihomoTopLevelScreens } from './top_level_panel_mihomo.shared.js';" in xkeen_entry
     assert "initialScreen: 'xkeen'" in xkeen_entry
     assert "import { bootTopLevelShell } from './top_level_shell.shared.js';" in mihomo_entry
-    assert "import { bootMihomoGeneratorScreen } from './mihomo_generator.screen.bootstrap.js';" in mihomo_entry
+    assert "loadModulePart('engine.mihomo', 'generator')" in mihomo_entry
     assert "import { registerPanelMihomoTopLevelScreens } from './top_level_panel_mihomo.shared.js';" in mihomo_entry
     assert "initialScreen: 'mihomo_generator'" in mihomo_entry
     assert 'export async function bootDevtoolsScreen()' in devtools_bootstrap
     assert 'export async function bootXkeenScreen()' in xkeen_bootstrap
     assert "import { wireTopLevelNavigation } from './top_level_nav.shared.js';" in devtools_init
     assert "import { wireTopLevelNavigation } from './top_level_nav.shared.js';" in xkeen_init
-    assert "import { wireTopLevelNavigation } from './top_level_nav.shared.js';" in mihomo_init
+    assert "import { wireTopLevelNavigation } from 'xk-core/js/pages/top_level_nav.shared.js';" in mihomo_init
     assert panel_template.count('data-xk-top-nav="1"') >= 3
     assert 'data-xk-top-nav="1"' in devtools_template
     assert xkeen_template.count('data-xk-top-nav="1"') >= 3
@@ -552,7 +554,7 @@ def test_p3_devtools_screen_module_keeps_host_alive_and_stops_background_tasks_o
 
 
 def test_file_manager_monaco_modal_tracks_modal_resize_and_fills_available_height():
-    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+    styles = read_style_source(Path('xkeen-ui/static/styles.css'))
     editor = Path('xkeen-ui/static/js/features/file_manager/editor.js').read_text(encoding='utf-8')
 
     monaco_block = styles.split('#fm-editor-modal #fm-editor-monaco {', 1)[1].split('}', 1)[0]
@@ -570,7 +572,7 @@ def test_file_manager_monaco_modal_tracks_modal_resize_and_fills_available_heigh
 
 
 def test_json_editor_modal_tracks_modal_resize_and_stretches_monaco_and_cm6_hosts():
-    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+    styles = read_style_source(Path('xkeen-ui/static/styles.css'))
     editor = Path('xkeen-ui/static/js/ui/json_editor_modal.js').read_text(encoding='utf-8')
 
     monaco_block = styles.split('#json-editor-modal #json-editor-monaco {', 1)[1].split('}', 1)[0]
@@ -599,7 +601,7 @@ def test_json_editor_modal_tracks_modal_resize_and_stretches_monaco_and_cm6_host
 def test_confirm_modal_stacks_above_dynamic_editor_modal_z_indexes():
     modal = Path('xkeen-ui/static/js/ui/modal.js').read_text(encoding='utf-8')
     confirm = Path('xkeen-ui/static/js/ui/confirm_modal.js').read_text(encoding='utf-8')
-    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+    styles = read_style_source(Path('xkeen-ui/static/styles.css'))
 
     bring_block = modal.split('function bringModalToFront(modalEl) {', 1)[1].split('\n  function onModalOpen', 1)[0]
     confirm_show_block = confirm.split('function showModal(modal) {', 1)[1].split('\n  function hideModal', 1)[0]
@@ -622,7 +624,7 @@ def test_confirm_modal_stacks_above_dynamic_editor_modal_z_indexes():
 
 
 def test_global_toasts_stay_visible_above_open_modals():
-    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+    styles = read_style_source(Path('xkeen-ui/static/styles.css'))
     modal = Path('xkeen-ui/static/js/ui/modal.js').read_text(encoding='utf-8')
     toast = Path('xkeen-ui/static/js/ui/toast.js').read_text(encoding='utf-8')
 
@@ -652,7 +654,7 @@ def test_mihomo_import_explains_stale_subscription_delete_failure():
 
 def test_modal_drag_uses_frame_coalesced_compositor_transforms():
     modal = Path('xkeen-ui/static/js/ui/modal.js').read_text(encoding='utf-8')
-    operator_css = Path('xkeen-ui/static/panel-operator.css').read_text(encoding='utf-8')
+    operator_css = read_style_source(Path('xkeen-ui/static/panel-operator.css'))
     panel_compat = Path('xkeen-ui/static/js/pages/panel.shared_compat.bundle.js').read_text(encoding='utf-8')
 
     drag_block = modal.split('function startDrag(e, modalEl, contentEl, handleEl) {', 1)[1].split(
@@ -961,7 +963,7 @@ def test_mihomo_yaml_schema_runtime_is_wired_into_panel_editor():
 
 def test_codemirror_mihomo_yaml_uses_rich_syntax_decorations():
     codemirror_runtime = Path('xkeen-ui/static/js/ui/codemirror6_boot.js').read_text(encoding='utf-8')
-    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+    styles = read_style_source(Path('xkeen-ui/static/styles.css'))
 
     assert "function buildYamlDecorations(view)" in codemirror_runtime
     assert "function isYamlMappingColon(text, index, end)" in codemirror_runtime
@@ -1466,7 +1468,7 @@ def test_routing_refresh_button_is_wired_in_wireui_instead_of_refresh_success_pa
 
 
 def test_routing_topbar_fragment_select_keeps_intrinsic_width_after_screen_return():
-    text = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+    text = read_style_source(Path('xkeen-ui/static/styles.css'))
 
     assert '.xk-routing-fileline .xray-log-select{' in text
     assert 'width: auto;' in text
@@ -1476,7 +1478,7 @@ def test_routing_topbar_fragment_select_keeps_intrinsic_width_after_screen_retur
 
 
 def test_operator_routing_fragment_select_is_compact_on_wide_screens_and_full_width_on_mobile():
-    text = Path('xkeen-ui/static/panel-operator.css').read_text(encoding='utf-8')
+    text = read_style_source(Path('xkeen-ui/static/panel-operator.css'))
 
     assert 'body.panel-page .xk-routing-fileblock {' in text
     assert 'width: max-content;' in text
@@ -1487,7 +1489,7 @@ def test_operator_routing_fragment_select_is_compact_on_wide_screens_and_full_wi
 
 
 def test_xray_live_logs_header_selects_keep_compact_width_after_panel_reactivation():
-    text = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+    text = read_style_source(Path('xkeen-ui/static/styles.css'))
 
     assert '.log-header-actions > .xray-log-select {' in text
     assert 'width: auto;' in text
@@ -1497,7 +1499,7 @@ def test_xray_live_logs_header_selects_keep_compact_width_after_panel_reactivati
 
 
 def test_root_layout_keeps_body_background_painted_to_full_viewport_height():
-    text = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+    text = read_style_source(Path('xkeen-ui/static/styles.css'))
 
     assert 'html {' in text
     assert 'min-height: 100%;' in text
@@ -1507,7 +1509,7 @@ def test_root_layout_keeps_body_background_painted_to_full_viewport_height():
 
 
 def test_monaco_marker_widget_uses_full_available_width_without_forcing_extra_detail_rows():
-    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+    styles = read_style_source(Path('xkeen-ui/static/styles.css'))
 
     common_widget_block = styles.split(
         '.monaco-editor .zone-widget,\n.monaco-editor .marker-widget,\n.monaco-editor .peekview-widget {',
@@ -1568,7 +1570,7 @@ def test_monaco_marker_widget_uses_full_available_width_without_forcing_extra_de
 
 def test_xray_preflight_modal_exposes_explainer_block_and_problem_line_rendering():
     modal_text = Path('xkeen-ui/static/js/ui/xray_preflight_modal.js').read_text(encoding='utf-8')
-    css_text = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+    css_text = read_style_source(Path('xkeen-ui/static/styles.css'))
     spinner_text = Path('xkeen-ui/static/js/ui/spinner_fetch.js').read_text(encoding='utf-8')
     routing_text = Path('xkeen-ui/static/js/features/routing.js').read_text(encoding='utf-8')
 
@@ -1680,7 +1682,7 @@ def test_routing_comments_ux_listener_is_guarded_after_init_flag():
 
 def test_routing_monaco_custom_menu_includes_symbol_occurrence_and_palette_actions():
     routing = Path('xkeen-ui/static/js/features/routing.js').read_text(encoding='utf-8')
-    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+    styles = read_style_source(Path('xkeen-ui/static/styles.css'))
 
     assert 'function routingMonacoMenuItemHtml(action, label, shortcut) {' in routing
     assert "routingMonacoMenuItemHtml('goToSymbol', 'Перейти к символу...', 'Ctrl+Shift+O')" in routing
@@ -1701,7 +1703,7 @@ def test_routing_monaco_custom_menu_includes_symbol_occurrence_and_palette_actio
     mihomo_panel = Path('xkeen-ui/static/js/features/mihomo_panel.js').read_text(encoding='utf-8')
     mihomo_generator = Path('xkeen-ui/static/js/features/mihomo_generator.js').read_text(encoding='utf-8')
     file_manager = Path('xkeen-ui/static/js/features/file_manager/editor.js').read_text(encoding='utf-8')
-    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+    styles = read_style_source(Path('xkeen-ui/static/styles.css'))
 
     assert 'function installCustomContextMenu(editor, host, opts) {' in monaco_shared
     assert "const customContextMenu = _normalizeCustomContextMenuOptions(o, language);" in monaco_shared
@@ -1780,7 +1782,7 @@ def test_mihomo_server_side_config_swaps_resync_editor_after_activate_and_restor
 
 def test_mihomo_profiles_backups_panel_uses_compact_premium_vault_layout():
     template = compose_panel_template(Path('.'))
-    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+    styles = read_style_source(Path('xkeen-ui/static/styles.css'))
     script = Path('xkeen-ui/static/js/features/mihomo_panel.js').read_text(encoding='utf-8')
 
     assert 'class="xk-mihomo-vault"' in template
@@ -1811,7 +1813,7 @@ def test_mihomo_profiles_backups_panel_uses_compact_premium_vault_layout():
 
 
 def test_panel_mobile_usability_pass_uses_scrollable_tabs_and_compact_editor_toolbar_overrides():
-    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+    styles = read_style_source(Path('xkeen-ui/static/styles.css'))
 
     assert 'Panel page: mobile usability pass' in styles
     assert '@media (max-width: 760px) {' in styles
@@ -1819,9 +1821,9 @@ def test_panel_mobile_usability_pass_uses_scrollable_tabs_and_compact_editor_too
     assert 'scroll-snap-type: x proximity;' in styles
     assert 'body.panel-page .xkeen-ctrl-group-main {' in styles
     assert 'grid-template-columns: repeat(3, minmax(0, 1fr));' in styles
-    assert 'body.panel-page .xk-routing-toolbararea,' in styles
+    assert 'body.panel-page .xk-routing-toolbararea' in styles
     assert 'body.panel-page .xk-mihomo-toolbararea {' in styles
-    assert 'body.panel-page .xk-routing-toolbarhost,' in styles
+    assert 'body.panel-page .xk-routing-toolbarhost' in styles
     assert 'body.panel-page .xk-mihomo-toolbarhost {' in styles
     assert 'body.panel-page #routing-body {' in styles
     assert '--xk-routing-editor-height: min(44vh, 360px);' in styles
@@ -1831,7 +1833,7 @@ def test_panel_mobile_usability_pass_uses_scrollable_tabs_and_compact_editor_too
 
 
 def test_panel_mobile_second_wave_compacts_file_manager_and_modal_shells():
-    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+    styles = read_style_source(Path('xkeen-ui/static/styles.css'))
 
     assert 'Panel page: mobile second wave (file manager + modal ergonomics).' in styles
     assert 'body.panel-page .modal-content {' in styles
@@ -1851,7 +1853,7 @@ def test_panel_mobile_second_wave_compacts_file_manager_and_modal_shells():
 
 
 def test_ui_settings_close_button_matches_standard_modal_geometry():
-    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+    styles = read_style_source(Path('xkeen-ui/static/styles.css'))
 
     close_block = styles.rsplit('#ui-settings-modal .modal-close {', 1)[-1].split('}', 1)[0]
     assert 'width: 32px;' in close_block
@@ -1861,7 +1863,7 @@ def test_ui_settings_close_button_matches_standard_modal_geometry():
 
 
 def test_file_manager_active_panel_highlight_stays_subtle():
-    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+    styles = read_style_source(Path('xkeen-ui/static/styles.css'))
 
     active_block = styles.split('.fm-panel-active{', 1)[1].split('}\n\n.fm-panel-bar{', 1)[0]
     active_bar_block = styles.split('.fm-panel-active .fm-panel-bar{', 1)[1].split('}\n/*', 1)[0]
@@ -1880,15 +1882,15 @@ def test_file_manager_active_panel_highlight_stays_subtle():
 
 
 def test_panel_mobile_third_wave_switches_file_manager_to_touch_first_rows_and_stacks_editor_toolbars():
-    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+    styles = read_style_source(Path('xkeen-ui/static/styles.css'))
 
     assert 'Panel page: mobile third wave (touch-first file manager + cleaner editor toolbars).' in styles
     assert 'body.panel-page .routing-focus-note {' in styles
     assert 'display: none;' in styles
-    assert 'body.panel-page .xk-routing-toolbararea,' in styles
+    assert 'body.panel-page .xk-routing-toolbararea' in styles
     assert 'body.panel-page .xk-mihomo-toolbararea {' in styles
     assert 'grid-template-columns: repeat(3, 32px) minmax(0, 1fr);' in styles
-    assert 'body.panel-page .xk-routing-toolbarhost,' in styles
+    assert 'body.panel-page .xk-routing-toolbarhost' in styles
     assert 'body.panel-page .xk-mihomo-toolbarhost {' in styles
     assert 'grid-column: 1 / -1;' in styles
     assert 'body.panel-page .fm-hints {' in styles
@@ -1902,7 +1904,7 @@ def test_panel_mobile_third_wave_switches_file_manager_to_touch_first_rows_and_s
 
 
 def test_editor_fullscreen_toolbars_are_pinned_above_fullscreen_editors():
-    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+    styles = read_style_source(Path('xkeen-ui/static/styles.css'))
     actions = Path('xkeen-ui/static/js/ui/editor_actions.js').read_text(encoding='utf-8')
     routing = Path('xkeen-ui/static/js/features/routing.js').read_text(encoding='utf-8')
 
@@ -1959,7 +1961,7 @@ def test_mihomo_fullscreen_toolbar_dedupes_fallback_button():
 
 
 def test_routing_template_modals_stretch_preview_and_edit_editors_with_modal_resize():
-    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+    styles = read_style_source(Path('xkeen-ui/static/styles.css'))
     script = Path('xkeen-ui/static/js/features/routing_templates.js').read_text(encoding='utf-8')
 
     assert '#routing-template-modal .modal-content,' in styles
@@ -2023,7 +2025,7 @@ def test_routing_dat_prefs_backfill_blank_values_with_defaults():
 
 def test_routing_dat_refresh_preserves_custom_paths_and_names():
     card_text = Path('xkeen-ui/static/js/features/routing_cards/dat/card.js').read_text(encoding='utf-8')
-    css_text = Path('xkeen-ui/static/panel-operator.css').read_text(encoding='utf-8')
+    css_text = read_style_source(Path('xkeen-ui/static/panel-operator.css'))
 
     assert 'Discovery is read-only' in card_text
     assert "const dir = String(p.dir || '').trim()" in card_text
@@ -2065,7 +2067,7 @@ def test_xray_logs_height_prefs_keep_local_draft_and_survive_hidden_view_saves()
 
 
 def test_xray_logs_css_keeps_live_window_resizable_past_restart_log_cap():
-    css = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+    css = read_style_source(Path('xkeen-ui/static/styles.css'))
 
     generic_cap = 'body.panel-page .log-card .log-block {\n    min-height: 140px;\n    max-height: 220px;'
     fullscreen_selector = '.log-card.is-fullscreen .xray-log-block'
@@ -2090,7 +2092,7 @@ def test_xray_logs_css_keeps_live_window_resizable_past_restart_log_cap():
 def test_xray_logs_device_names_ui_contract():
     script = Path('xkeen-ui/static/js/features/xray_logs.js').read_text(encoding='utf-8')
     template = compose_panel_template(Path('.'))
-    css = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+    css = read_style_source(Path('xkeen-ui/static/styles.css'))
 
     assert 'id="xray-log-devices-btn"' in template
     assert 'id="xray-devices-modal"' in template
@@ -2131,7 +2133,7 @@ def test_xray_logs_device_names_ui_contract():
 def test_xray_logs_destination_domain_hints_ui_contract():
     script = Path('xkeen-ui/static/js/features/xray_logs.js').read_text(encoding='utf-8')
     parser = Path('xkeen-ui/static/js/features/xray_log_domain_hints.js').read_text(encoding='utf-8')
-    css = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+    css = read_style_source(Path('xkeen-ui/static/styles.css'))
 
     assert "from './xray_log_domain_hints.js';" in script
     view = Path('xkeen-ui/static/js/features/xray_log_view.js').read_text(encoding='utf-8')
@@ -2210,7 +2212,7 @@ def test_forced_rules_wizard_uses_real_outbounds_and_separates_domain_ip_rules()
     assert "other[key] = other[key].filter" in text
     assert "перенесено из другого маршрута" in text
     assert "удалено дублей из других маршрутов" in text
-    css = Path('xkeen-ui/static/panel-operator.css').read_text(encoding='utf-8')
+    css = read_style_source(Path('xkeen-ui/static/panel-operator.css'))
     assert "#routing-forced-rules-modal .xk-forced-wizard-preview-panel {\n  overflow: hidden !important;" in css
     assert "#routing-forced-rules-modal .xk-forced-wizard-listbox {\n  display: flex;\n  flex: 1 1 0;" in css
     assert "#routing-forced-rules-modal .xk-chip" in css
@@ -2259,7 +2261,7 @@ def test_routing_field_help_clicks_do_not_leak_to_adjacent_remove_buttons():
     render = Path('xkeen-ui/static/js/features/routing_cards/rules/render.js').read_text(encoding='utf-8')
     shell = Path('xkeen-ui/static/js/features/routing_cards.js').read_text(encoding='utf-8')
     bundle = Path('xkeen-ui/static/js/pages/xray.module.bundle.js').read_text(encoding='utf-8')
-    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+    styles = read_style_source(Path('xkeen-ui/static/styles.css'))
 
     assert "raw.closest('.routing-help-btn')" in modal
     assert "btn.matches('[data-tooltip-only=\"1\"], .routing-help-tip')" in modal
@@ -2317,7 +2319,7 @@ def test_routing_rule_cards_do_not_render_duplicate_json_preview_under_extra_fie
 
 
 def test_codemirror_lint_tooltips_are_scrollable_and_width_limited_inside_editor():
-    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+    styles = read_style_source(Path('xkeen-ui/static/styles.css'))
     boot = Path('xkeen-ui/static/js/ui/codemirror6_boot.js').read_text(encoding='utf-8')
     hover_block = styles.split('.cm-tooltip.cm-tooltip-hover {', 1)[1].split('}', 1)[0]
     schema_hover_block = styles.split('.cm-tooltip .cm6-json-schema-hover {', 1)[1].split('}', 1)[0]
@@ -2355,7 +2357,7 @@ def test_codemirror_lint_tooltips_are_scrollable_and_width_limited_inside_editor
 
 
 def test_monaco_schema_hovers_keep_single_scroll_layer():
-    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+    styles = read_style_source(Path('xkeen-ui/static/styles.css'))
 
     hover_block = styles.split(
         '.monaco-hover .monaco-scrollable-element,\n.monaco-editor-hover .monaco-scrollable-element {',
@@ -2416,7 +2418,7 @@ def test_inline_spinner_keyframes_only_rotate():
     поднимает кружок ещё на половину высоты — ровно та рассинхронизация,
     из-за которой индикатор импорта стоял выше первой строки текста.
     """
-    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+    styles = read_style_source(Path('xkeen-ui/static/styles.css'))
     blocks = [
         chunk.split('}', 1)[0]
         for chunk in styles.split('@keyframes xkeen-spinner {')[1:]

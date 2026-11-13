@@ -29,6 +29,17 @@ WRAPPER_SUBHEADER = "// Build-managed ESM bridge entry. The canonical module gra
 SYNC_SCRIPT = ROOT / "scripts" / "sync_frontend_build_manifest.py"
 
 
+def test_public_core_page_helper_does_not_become_a_page_bridge():
+    from scripts.sync_frontend_build_manifest import collect_wrapper_specs
+
+    manifest = {
+        'js/pages/panel.entry.js': {'isEntry': True, 'name': 'panel', 'file': 'assets/panel-A.js'},
+        'js/pages/top_level_nav.shared.js': {'isEntry': True, 'name': 'xk-core-nav', 'file': 'assets/nav-B.js'},
+    }
+    specs = collect_wrapper_specs(manifest, kind='raw')
+    assert [spec.source_entry for spec in specs] == ['static/js/pages/panel.entry.js']
+
+
 def _expected_wrapper_text(source_entry: str) -> str:
     return "\n".join([
         WRAPPER_HEADER,

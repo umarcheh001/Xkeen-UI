@@ -1,4 +1,7 @@
+
+from tests.support.style_sources import read_style_source
 from pathlib import Path
+import re
 
 from scripts.panel_template_source import compose_panel_template
 from tests.support.template_blocks import element_markup
@@ -42,8 +45,10 @@ def test_subscription_form_aligns_labels_hints_validation_units_and_disclosure()
 
 
 def test_operator_layer_flattens_mihomo_tables_forms_and_actions():
-    css = CSS.read_text(encoding="utf-8")
+    css = read_style_source(CSS)
     stage = css[css.index("/* Stage 4 Mihomo profiles/generator"):css.index("/* ==========================================================================\n * 6. MODALS")]
+    own = (ROOT / "xkeen-ui/static/mihomo.module.css").read_text(encoding="utf-8").split("/* From panel-operator.css; original cascade order retained. */", 1)[1]
+    stage += "\n".join(match.group(0) for match in re.finditer(r"([^{}]+)\{([^{}]*)\}", own) if re.search(r"mihomo-generator-page|xk-mihomo-(?:vault|profile|mini-btn)", match.group(1)))
     for fragment in (".xk-mihomo-vault-table", ".xk-mihomo-profile-create", ".xk-mihomo-mini-btn", ".mihomo-generator-page .subscription-row", ".mihomo-generator-page .proxy-card", ".xk-sub-advanced-grid", ".xk-sub-interval-inline", "border-radius: var(--op-control-radius) !important;", "background-image: none !important;"):
         assert fragment in stage
     assert "linear-gradient(" not in stage
@@ -51,7 +56,7 @@ def test_operator_layer_flattens_mihomo_tables_forms_and_actions():
 
 
 def test_profile_actions_and_create_row_keep_the_compact_layout_aligned():
-    css = CSS.read_text(encoding="utf-8")
+    css = read_style_source(CSS)
     assert '.xk-mihomo-vault-table--profiles .xk-mihomo-row-actions {' in css
     assert 'grid-template-columns: repeat(3, var(--op-control-compact-h));' in css
     assert '.xk-mihomo-mini-btn[data-action="activate"] {' in css
@@ -81,7 +86,7 @@ def test_profiles_and_backups_use_icon_only_actions_without_decorative_heading_i
 
 
 def test_visual_correction_removes_blue_glass_and_fixed_modal_canvases():
-    css = CSS.read_text(encoding="utf-8")
+    css = read_style_source(CSS)
     for fragment in (
         "body.panel-page.mihomo-generator-page .generator-layout",
         "height: calc(100dvh - 104px) !important;",
@@ -119,7 +124,7 @@ def test_mihomo_forms_closure_is_documented():
 
 def test_mihomo_generator_validation_result_uses_flat_operator_diagnostic_contract():
     template = (ROOT / "xkeen-ui" / "templates" / "mihomo_generator.html").read_text(encoding="utf-8")
-    css = (ROOT / "xkeen-ui" / "static" / "panel-operator.css").read_text(encoding="utf-8")
+    css = read_style_source(ROOT / "xkeen-ui" / "static" / "panel-operator.css")
 
     modal = template[template.index('id="mihomoResultModal"'):template.index('id="bulkImportModal"')]
     assert 'data-operator-modal-family="master-detail"' in modal
@@ -143,7 +148,7 @@ def test_mihomo_generator_validation_result_uses_flat_operator_diagnostic_contra
 
 def test_routing_mihomo_validation_uses_the_same_flat_operator_diagnostic_contract():
     template = PANEL
-    css = CSS.read_text(encoding="utf-8")
+    css = read_style_source(CSS)
 
     modal = element_markup(template, "mihomo-validation-modal")
     assert 'data-operator-modal-family="master-detail"' in modal
@@ -168,7 +173,7 @@ def test_routing_mihomo_validation_uses_the_same_flat_operator_diagnostic_contra
 
 
 def test_generator_validation_log_uses_a_readable_neutral_diagnostic_canvas():
-    css = CSS.read_text(encoding="utf-8")
+    css = read_style_source(CSS)
 
     for fragment in (
         "body.panel-page.mihomo-generator-page .validation-log-panel {",

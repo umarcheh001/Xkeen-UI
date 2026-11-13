@@ -1892,7 +1892,7 @@ def test_http_contract_and_frontend(tmp_path: Path, monkeypatch):
     root = Path(__file__).resolve().parents[1]
     template = compose_panel_template(root)
     script = (root / "xkeen-ui/static/js/features/mihomo_dns.js").read_text(encoding="utf-8")
-    bundle = (root / "xkeen-ui/static/js/pages/panel.mihomo.bundle.js").read_text(encoding="utf-8")
+    bundle = (root / "xkeen-ui/static/js/pages/mihomo.module.bundle.js").read_text(encoding="utf-8")
     assert 'id="mihomo-dns-btn"' in template
     assert 'id="mihomo-dns-modal"' in template
     assert 'id="mihomo-dns-selector-enable"' in template

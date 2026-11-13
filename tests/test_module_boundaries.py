@@ -346,6 +346,7 @@ CORE_PUBLIC_SURFACE = [
     "js/ui/editor_schema.js",
     "js/ui/formatters.js",
     "js/ui/happ_decryptor_link.js",
+    "js/ui/module_styles.js",
     "js/ui/operator_icons.js",
     "js/ui/prettier_loader.js",
     "js/ui/schema_quickfixes.js",

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+from tests.support.style_sources import read_style_source
+
 from pathlib import Path
 
 from scripts.panel_template_source import compose_panel_template
 from tests.support.template_blocks import element_markup
 
 ROOT = Path(__file__).resolve().parents[1]
-CSS = (ROOT / "xkeen-ui/static/panel-operator.css").read_text(encoding="utf-8")
+CSS = read_style_source(ROOT / "xkeen-ui/static/panel-operator.css")
 TEMPLATE = compose_panel_template(ROOT)
 MODAL = element_markup(TEMPLATE, "mihomo-dns-modal")
 

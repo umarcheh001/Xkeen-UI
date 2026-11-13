@@ -184,8 +184,8 @@ def test_minimal_profiles_still_leave_optional_modules_out(installed):
     script_root = target / "static" / "js"
 
     expected_absent = {
-        "xray-minimal": ["pages/panel.mihomo.bundle.js", "features/mihomo_panel.js",
-                         "features/mihomo_generator.js", "pages/mihomo_generator.entry.js",
+        "xray-minimal": ["features/mihomo_panel.js",
+                         "features/mihomo_generator.js",
                          "pages/file_manager.lazy.entry.js", "pages/panel.editor.monaco.bundle.js",
                          "pages/backups.entry.js", "features/resource_monitor.js",
                          "features/backups.js"],
@@ -209,3 +209,17 @@ def test_mihomo_minimal_profile_has_no_xray_module_files(installed):
     build = target / "static/frontend-build"
     assert not (build / "modules/engine.xray").exists()
     assert not (build / ".vite/module.engine.xray.json").exists()
+
+
+def test_mihomo_build_and_styles_follow_installed_profile(installed):
+    profile, target = installed
+    has_mihomo = profile in {'full', 'mihomo-minimal'}
+    build = target / 'static/frontend-build'
+    assert (build / 'modules/engine.mihomo').is_dir() is has_mihomo
+    assert (build / '.vite/module.engine.mihomo.json').is_file() is has_mihomo
+    assert (target / 'static/mihomo.module.css').is_file() is has_mihomo
+    if has_mihomo:
+        manifest = json.loads((build / '.vite/module.engine.mihomo.json').read_text(encoding='utf-8'))
+        css = [asset for item in manifest.values() for asset in item.get('assets', ()) if asset.endswith('.css')]
+        assert css
+        assert all((build / 'modules/engine.mihomo' / asset).is_file() for asset in css)

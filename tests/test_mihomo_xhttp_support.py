@@ -10,6 +10,7 @@ import pytest
 import yaml
 
 from services.mihomo_proxy_parsers import parse_trojan, parse_vless
+from tests.support.node_js import NODE_MODULE_COMMAND
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -75,7 +76,7 @@ const module = await import('./xkeen-ui/static/js/features/mihomo_import.js');
 console.log(JSON.stringify(module.generateMihomoImportConfig({json.dumps(uri)})));
 """
     result = subprocess.run(
-        ["node", "--input-type=module"], input=script, cwd=ROOT,
+        [*NODE_MODULE_COMMAND], input=script, cwd=ROOT,
         text=True, capture_output=True, check=False,
     )
     assert result.returncode == 0, result.stderr
@@ -102,7 +103,7 @@ console.log(JSON.stringify(toYaml({
 })));
 """
     result = subprocess.run(
-        ["node", "--input-type=module"], input=script, cwd=ROOT,
+        [*NODE_MODULE_COMMAND], input=script, cwd=ROOT,
         text=True, capture_output=True, check=False,
     )
     assert result.returncode == 0, result.stderr

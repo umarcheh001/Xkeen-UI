@@ -261,6 +261,16 @@ export function ensureScreenStyles(snapshot) {
 
   snapshot.styles.forEach((node) => {
     if (!node) return;
+    const moduleCssKey = node.getAttribute?.('data-xk-module-css');
+    if (moduleCssKey) {
+      const existing = Array.from(doc.head.querySelectorAll('link[data-xk-module-css]'))
+        .find((link) => link.getAttribute('data-xk-module-css') === moduleCssKey);
+      if (existing) {
+        // Keep the loaded module after the incoming screen's inline styles.
+        doc.head.appendChild(existing);
+        return;
+      }
+    }
     const key = buildStyleKey(node);
     if (key && hostState.styleKeys.has(key)) return;
     if (key) hostState.styleKeys.add(key);

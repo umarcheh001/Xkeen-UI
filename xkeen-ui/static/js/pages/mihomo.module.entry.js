@@ -1,4 +1,7 @@
 import { rememberModulePart } from 'xk-core/js/features/module_parts.js';
+import { ensureModuleStylesheet } from 'xk-core/js/ui/module_styles.js';
+
+const stylesheetUrl = new URL('../../mihomo.module.css', import.meta.url).href;
 
 export const MIHOMO_MODULE_PARTS = Object.freeze({
   bundle: () => import('./mihomo.module.bundle.js'),
@@ -23,7 +26,7 @@ export function load(part) {
     return Promise.reject(new Error(`unknown part of the Mihomo module: ${part}`));
   }
   if (!partPromises.has(part)) {
-    partPromises.set(part, Promise.resolve().then(loader).then((mod) => {
+    partPromises.set(part, ensureModuleStylesheet('engine.mihomo', stylesheetUrl).then(loader).then((mod) => {
       rememberModulePart('engine.mihomo', part, mod);
       return mod;
     }).catch((error) => {

@@ -20,6 +20,16 @@ async function openMihomoImport(page) {
   await expect(page.locator('#mihomo-import-modal')).toBeVisible();
 }
 
+test('source textarea keeps the shared preview line height after module CSS loads', async ({ page }) => {
+  await page.goto('/');
+  await openMihomoImport(page);
+  const ratio = await page.locator('#mihomo-import-input').evaluate(node => {
+    const css = getComputedStyle(node);
+    return parseFloat(css.lineHeight) / parseFloat(css.fontSize);
+  });
+  expect(ratio).toBeCloseTo(1.35, 2);
+});
+
 
 test('Amnezia Premium locations use compact flags and a two-column scroller', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 960 });

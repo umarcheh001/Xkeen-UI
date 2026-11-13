@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tests.support.style_sources import read_style_source
+
 import json
 import threading
 import time
@@ -527,7 +529,7 @@ def test_dns_diagnostics_ui_has_inline_actions_and_visibility_toggle():
     from scripts.panel_template_source import compose_panel_template
 
     template = compose_panel_template(root)
-    styles = (root / "xkeen-ui" / "static" / "panel-operator.css").read_text(encoding="utf-8")
+    styles = read_style_source(root / "xkeen-ui" / "static" / "panel-operator.css")
     script = (root / "xkeen-ui" / "static" / "js" / "features" / "mihomo_clash" / "dns.js").read_text(encoding="utf-8")
 
     assert 'id="mihomo-clash-dns-toggle"' in template

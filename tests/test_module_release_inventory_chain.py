@@ -56,6 +56,8 @@ def _refresh(repo: Path) -> None:
 @pytest.mark.parametrize(("module", "module_file"), [
     ("tool.advanced-diagnostics", "xkeen-ui/static/js/features/resource_monitor/view.js"),
     ("engine.xray", "xkeen-ui/static/js/features/xray_logs.js"),
+    ("engine.mihomo", "xkeen-ui/static/js/features/mihomo_clash/logs.js"),
+    ("engine.mihomo", "xkeen-ui/static/mihomo.module.css"),
 ])
 def test_module_change_with_refreshed_inventory_passes_both_release_checks(tmp_path, module, module_file):
     repo = tmp_path / "repo"
@@ -66,7 +68,7 @@ def test_module_change_with_refreshed_inventory_passes_both_release_checks(tmp_p
     sizes_before = (repo / SIZES).read_bytes()
 
     with (repo / module_file).open("ab") as handle:
-        handle.write(b"\n// release change\n")
+        handle.write(b"\n/* release change */\n")
     (repo / "tests" / "test_release_change.py").write_text("def test_release_change():\n    assert True\n", encoding="utf-8")
     _refresh(repo)
     _git(repo, "commit", "-q", "-m", "module change")

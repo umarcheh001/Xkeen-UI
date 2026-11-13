@@ -76,6 +76,7 @@ _KNOWN_PACKAGE_FILES = {
 # import closure below drags what they import into the core package. Every
 # importer of a file listed here already belongs to the same module.
 _PACKAGE_OWNER_OVERRIDES = {
+    "static/mihomo.module.css": "engine.mihomo",
     # The DevTools page: it carries the panel update screen, so no module
     # release may touch it.
     "routes/devtools.py": "core",

@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from scripts.panel_template_source import compose_panel_template
+from tests.support.style_sources import read_style_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -11,11 +12,11 @@ ROOT = Path(__file__).resolve().parents[1]
 def _read(rel_path: str) -> str:
     if rel_path == "xkeen-ui/templates/panel.html":
         return compose_panel_template(ROOT)
-    return (ROOT / rel_path).read_text(encoding="utf-8")
+    return read_style_source(ROOT / rel_path) if rel_path.endswith(".css") else (ROOT / rel_path).read_text(encoding="utf-8")
 
 
 def test_panel_mihomo_bundle_uses_canonical_feature_urls():
-    src = _read("xkeen-ui/static/js/pages/panel.mihomo.bundle.js")
+    src = _read("xkeen-ui/static/js/pages/mihomo.module.bundle.js")
 
     assert "../features/mihomo_panel.js?v=" not in src
     assert "../features/mihomo_yaml_patch.js?v=" not in src
@@ -66,16 +67,14 @@ def test_mihomo_legacy_global_publish_is_handled_only_by_compat_modules():
 
 
 def test_panel_lazy_bindings_load_mihomo_compat_bridges_for_legacy_consumers():
-    src = _read("xkeen-ui/static/js/pages/panel.lazy_bindings.runtime.js")
+    src = _read("xkeen-ui/static/js/pages/mihomo.module.entry.js")
 
     required_fragments = [
-        "mihomoImport: {",
-        "load: () => import('../features/mihomo_import.js').then(",
+        "import: () => import('../features/mihomo_import.js').then(",
         "import('../features/compat/mihomo_import.js')",
         "import('../features/mihomo_proxy_tools.js'))",
         "import('../features/compat/mihomo_proxy_tools.js').then(() => mod)",
-        "mihomoHwidSub: {",
-        "load: () => import('../features/mihomo_hwid_sub.js').then(",
+        "hwid_sub: () => import('../features/mihomo_hwid_sub.js').then(",
         "import('../features/compat/mihomo_hwid_sub.js').then(() => mod)",
     ]
 

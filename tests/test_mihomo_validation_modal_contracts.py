@@ -1,3 +1,5 @@
+
+from tests.support.style_sources import read_style_source
 from pathlib import Path
 from scripts.panel_template_source import compose_panel_template
 
@@ -8,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_mihomo_panel_validation_modal_uses_compact_premium_rendering_contract():
     script = (ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_panel.js").read_text(encoding="utf-8")
     template = compose_panel_template(ROOT)
-    styles = (ROOT / "xkeen-ui" / "static" / "styles.css").read_text(encoding="utf-8")
+    styles = read_style_source(ROOT / "xkeen-ui" / "static" / "styles.css")
 
     assert "validationGrid: 'mihomo-validation-grid'" in script
     assert "validationCopyBtn: 'mihomo-validation-copy-btn'" in script

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from scripts.panel_template_source import compose_panel_template
 from tests.support.template_blocks import element_markup
+from tests.support.style_sources import read_style_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,7 +30,7 @@ OPERATOR_HEADER = ROOT / "xkeen-ui" / "static" / "js" / "pages" / "panel.mihomo_
 def _text(path: Path) -> str:
     if path == TEMPLATE:
         return compose_panel_template(ROOT)
-    return path.read_text(encoding="utf-8")
+    return read_style_source(path) if path == CSS else path.read_text(encoding="utf-8")
 
 
 def _mihomo_markup() -> str:
@@ -80,7 +81,8 @@ def test_mihomo_clash_feature_is_lazy_and_not_in_eager_feature_registry():
     runtime = _text(VIEW_RUNTIME)
 
     assert "mihomoClash: {" in lazy
-    assert "import('../features/mihomo_clash/index.js')" in lazy
+    assert "loadModulePart('engine.mihomo', 'clash')" in lazy
+    assert "import('../features/mihomo_clash/index.js')" in _text(ROOT / "xkeen-ui/static/js/pages/mihomo.module.entry.js")
     assert "ensurePanelLazyFeature('mihomoClash')" in runtime
     assert "getPanelLazyFeatureApi('mihomoClash')" in runtime
     assert "getMihomoClashFeatureApi()" in runtime

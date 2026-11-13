@@ -131,7 +131,7 @@ def collect_wrapper_specs(manifest: dict[str, dict[str, object]], *, kind: str) 
     expected_prefix = RAW_PAGE_PREFIX if kind == "raw" else BRIDGE_PAGE_PREFIX
 
     for source_entry_in_manifest, payload in manifest.items():
-        if not source_entry_in_manifest.startswith(expected_prefix):
+        if not source_entry_in_manifest.startswith(expected_prefix) or not source_entry_in_manifest.endswith('.entry.js'):
             continue
         if not isinstance(payload, dict):
             raise ValueError(f"manifest entry for {source_entry_in_manifest!r} must be an object")

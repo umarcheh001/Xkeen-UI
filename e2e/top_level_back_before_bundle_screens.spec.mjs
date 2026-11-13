@@ -15,7 +15,7 @@ const GENERATOR = {
   path: '/mihomo_generator',
   bodyClass: /mihomo-generator-page/,
   back: 'a.xk-header-btn-ui[data-xk-top-nav="1"]',
-  scripts: /\/static\/js\/(?:pages\/mihomo_generator\.screen\.bootstrap|features\/mihomo_generator)\.js/,
+  scripts: /\/static\/(?:js\/(?:pages\/mihomo_generator\.(?:screen\.bootstrap|shell\.shared)|features\/mihomo_generator)\.js|frontend-build\/(?:modules\/engine\.mihomo\/mihomo_generator[^/]*|assets\/mihomo_generator\.shell\.shared-[^/]+)\.js)/,
   ready: '#mihomo-preview-engine-select',
 };
 
@@ -73,7 +73,7 @@ test.describe('leaving the Mihomo generator early', () => {
     await openPanelReadyFor(page, screen);
 
     const back = await enter(page, screen);
-    expect(hold.heldCount(), 'the scripts of the screen must be the ones held back').toBeGreaterThan(0);
+    await expect.poll(() => hold.heldCount(), 'the scripts of the screen must be the ones held back').toBeGreaterThan(0);
     expect(await back.getAttribute('data-xk-top-nav-wired'), 'Back must be wired before the scripts arrive').toBe('1');
 
     const pressedAt = Date.now();

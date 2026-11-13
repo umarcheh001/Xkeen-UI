@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tests.support.style_sources import read_style_source
+
 import hashlib
 import json
 import re
@@ -165,7 +167,7 @@ def test_stage0_inventory_classifies_all_inline_styles_and_dom_hooks(tmp_path):
 
 def test_operator_stylesheet_is_last_owned_and_fully_scoped():
     template = compose_panel_template(ROOT)
-    operator_css = OPERATOR_CSS.read_text(encoding="utf-8")
+    operator_css = read_style_source(OPERATOR_CSS)
     legacy_css = LEGACY_CSS.read_text(encoding="utf-8")
 
     stylesheet_tags = re.findall(
@@ -195,8 +197,8 @@ def test_operator_stylesheet_is_last_owned_and_fully_scoped():
         if "body.panel-page" in prelude:
             legacy_blocks.append(f"{prelude}{{{declarations}}}")
     legacy_digest = hashlib.sha256(("\n".join(legacy_blocks) + "\n").encode("utf-8")).hexdigest()
-    assert len(legacy_blocks) == 727
-    assert legacy_digest == "7e1f460733ac5230c5a7d93e4aa1f54a93d39e739a3e2b879ad536c11a0352db"
+    assert len(legacy_blocks) == 720
+    assert legacy_digest == "1e5b54c104fd8680d26a917b24fb13ef596a6269c76fe6b666eefbff924ae91a"
 
     without_comments = re.sub(r"/\*.*?\*/", "", operator_css, flags=re.DOTALL)
     # Animation steps are not selectors. Scope is enforced on the rule that

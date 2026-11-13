@@ -233,7 +233,9 @@ async function loadWithRetry(key, load) {
     if (attempt > 0) await wait(delays[attempt - 1]);
     try {
       await ensurePanelModuleStyles(key);
-      return await importBundle(key, load);
+      const mod = await importBundle(key, load);
+      if (typeof mod?.prepare === 'function') await mod.prepare();
+      return mod;
     } catch (error) {
       lastError = error;
     }
