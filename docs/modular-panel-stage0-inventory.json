@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 676,
-      "size_bytes": 9317033,
+      "size_bytes": 9324476,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -88,7 +88,7 @@
       ],
       "removable": true,
       "unit_count": 152,
-      "size_bytes": 4032968,
+      "size_bytes": 4032769,
       "kind_counts": {
         "backend_route": 13,
         "backend_service": 20,
@@ -134,7 +134,7 @@
       ],
       "removable": true,
       "unit_count": 155,
-      "size_bytes": 3551343,
+      "size_bytes": 3552957,
       "kind_counts": {
         "app_runtime": 4,
         "backend_route": 2,
@@ -14453,7 +14453,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/panel_operator_stage4_logs.spec.mjs",
-      "size_bytes": 48888,
+      "size_bytes": 49589,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -14877,7 +14877,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/subscriptions_modal_layout.spec.mjs",
-      "size_bytes": 46127,
+      "size_bytes": 47175,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -15119,7 +15119,7 @@
       "module_id": "core",
       "kind": "frontend_ui",
       "path": "xkeen-ui/static/js/ui/country_flags.js",
-      "size_bytes": 23002,
+      "size_bytes": 28433,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -15712,7 +15712,7 @@
       "module_id": "core",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/panel-operator.css",
-      "size_bytes": 859035,
+      "size_bytes": 859298,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -20077,7 +20077,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_test",
       "path": "e2e/mihomo_clash_groups_workspace.spec.mjs",
-      "size_bytes": 39203,
+      "size_bytes": 40817,
       "depends_on": [
         "core",
         "tool.editor"
@@ -22493,7 +22493,7 @@
       "module_id": "engine.xray",
       "kind": "backend_test",
       "path": "tests/test_xray_subscription_filters_contract.py",
-      "size_bytes": 47768,
+      "size_bytes": 47782,
       "depends_on": [
         "core",
         "tool.editor"
@@ -23017,7 +23017,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/outbounds.js",
-      "size_bytes": 460339,
+      "size_bytes": 460126,
       "depends_on": [
         "core",
         "tool.editor",

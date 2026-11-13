@@ -6,6 +6,30 @@ import {
 // Mihomo groups: snapshots, the egress card, DNS diagnostics, choosing in a group
 // and the GLOBAL selector.
 
+test('country flags cover new regions and unknown flags use a globe without renaming nodes',async({page})=>{
+  const payload=groupsPayload();
+  const group=payload.groups[0];
+  const scotland=String.fromCodePoint(0x1F3F4,...[...'gbsct'].map(c=>0xE0000+c.charCodeAt(0)),0xE007F);
+  group.nodes=[['🇸🇴 Анти «Белые списки» 90','SO'],['🇦🇩 Andorra','AD'],['🇨🇶 Sark','CQ'],[`${scotland} Scotland`,'GB-SCT'],['🇿🇿 Unknown','ZZ']]
+    .map(([name])=>({...group.nodes[0],name}));
+  group.now=group.nodes[0].name;
+  payload.groups=[group];
+  await page.route('**/api/mihomo/clash/status',r=>r.fulfill({json:statusPayload()}));
+  await page.route(/\/api\/mihomo\/clash\/proxy-groups(?:\/.*)?$/,r=>r.fulfill({json:payload}));
+  await page.goto('/');await selectPanelView(page,'mihomo');
+  const card=page.locator('[data-group-name="AUTO"]');
+  await card.locator('.xk-mihomo-group-head').click();
+  const sprite=await page.request.get('/static/icons/country-flags.svg');
+  expect(sprite.ok()).toBe(true);
+  const parsed=await sprite.text();
+  expect(parsed).toContain('id="flag-SO"');
+  for(const code of ['SO','AD','CQ','GB-SCT'])await expect(card.locator(`[data-country="${code}"] svg use`)).toHaveAttribute('href',new RegExp(`#flag-${code}$`));
+  const unknown=card.locator('[data-node-name="🇿🇿 Unknown"]');
+  await expect(unknown.locator('.xk-country-globe')).toBeVisible();
+  await expect(unknown.locator('.xk-mihomo-node-main strong')).toHaveText('Unknown');
+  await expect(unknown.locator('[data-mihomo-group-select]')).toHaveAttribute('data-node','🇿🇿 Unknown');
+});
+
 test('Mihomo groups recover from transient snapshot failures without restarting the panel', async ({ page }) => {
   let requests = 0;
   await page.route('**/api/mihomo/clash/status', (route) => route.fulfill({ json: statusPayload() }));

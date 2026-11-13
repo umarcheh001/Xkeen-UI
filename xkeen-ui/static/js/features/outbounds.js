@@ -18,6 +18,7 @@ import {
   COUNTRY_NAMES,
   COUNTRY_TEXT_RULES,
   countryFlag,
+  nodeCountryCode,
   normalizeCountryCode,
 } from 'xk-core/js/ui/country_flags.js';
 import { appendHappDecryptorCardLink } from 'xk-core/js/ui/happ_decryptor_link.js';
@@ -1593,17 +1594,8 @@ let outboundsModuleApi = null;
     }
 
     function countryCodeFromRegionalIndicators(text) {
-      const chars = Array.from(String(text || ''));
-      for (let i = 0; i < chars.length - 1; i += 1) {
-        const a = chars[i].codePointAt(0);
-        const b = chars[i + 1].codePointAt(0);
-        if (a >= 0x1F1E6 && a <= 0x1F1FF && b >= 0x1F1E6 && b <= 0x1F1FF) {
-          return normalizeCountryCode(
-            String.fromCharCode(65 + (a - 0x1F1E6)) + String.fromCharCode(65 + (b - 0x1F1E6))
-          );
-        }
-      }
-      return '';
+      const value = String(text || '');
+      return /[\u{1F1E6}-\u{1F1FF}]{2}|[\u{1F3F3}\u{1F3F4}]/u.test(value) ? nodeCountryCode(value) : '';
     }
 
     function countryCodeFromTokens(text) {
@@ -1682,8 +1674,8 @@ let outboundsModuleApi = null;
         if (code) {
           return {
             code,
-            label: COUNTRY_NAMES[code] || code,
-            globe: false,
+            label: countryFlag(code).label,
+            globe: !COUNTRY_NAMES[code],
           };
         }
       }
@@ -1695,7 +1687,7 @@ let outboundsModuleApi = null;
 
     function stripLeadingFlagTokens(value) {
       return String(value || '')
-        .replace(/^(?:(?:[\u{1F1E6}-\u{1F1FF}]{2})|[\u{1F3F3}\u{1F3F4}\u{1F30D}-\u{1F30F}]|\uFE0F|\u200D|\s)+/gu, '')
+        .replace(/^(?:(?:[\u{1F1E6}-\u{1F1FF}]{2})|\u{1F3F4}[\u{E0020}-\u{E007E}]+\u{E007F}|[\u{1F3F3}\u{1F3F4}\u{1F30D}-\u{1F30F}]|\uFE0F|\u200D|\s)+/gu, '')
         .trim();
     }
 
@@ -1723,7 +1715,7 @@ let outboundsModuleApi = null;
       // only a leading flag emoji from the provider name so the country is not
       // shown twice; keep textual codes and the rest of the name untouched.
       const info = nodeCountryFlagInfo(node);
-      return info ? (stripLeadingFlagTokens(raw) || raw) : raw;
+      return info ? (stripLeadingFlagTokens(raw) || info.label || raw) : raw;
     }
 
     function countryFlagBadgeHtml(info) {
@@ -1732,7 +1724,7 @@ let outboundsModuleApi = null;
       const code = normalizeCountryCode(info.code);
       const countryAttr = code ? ` data-country="${escapeHtml(code)}"` : '';
       const kindClass = code ? '' : ' is-globe';
-      const svg = code ? countryFlag(code).svg : '';
+      const svg = info.code ? countryFlag(info.code).svg : '';
       return `<span class="xk-sub-node-country${kindClass}"${countryAttr} role="img" aria-label="${label}" title="${label}" data-tooltip="${label}">${svg}</span>`;
     }
 

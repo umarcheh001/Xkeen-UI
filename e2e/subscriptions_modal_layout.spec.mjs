@@ -782,6 +782,21 @@ test('subscriptions modal presents nodes as a compact server tile grid on deskto
   expect(layout.overlaps).toEqual([]);
 });
 
+test('Xray subscriptions display Somalia and a neutral globe for unknown flags', async ({page})=>{
+  const base=buildDemoNodes()[0];
+  const nodes=['🇸🇴 Анти «Белые списки» 90','🇿🇿 Unknown'].map((name,i)=>({...base,key:`flag-${i}`,name,tag:name}));
+  const subscription=buildDemoSubscription(nodes);
+  await page.route('**/api/xray/subscriptions',r=>r.fulfill({json:{ok:true,subscriptions:[subscription]}}));
+  await openSubscriptionsModal(page);
+  await page.locator('tr[data-sub-id="demo-sub"]').click();
+  const cards=page.locator('#outbounds-subscriptions-nodes-list .xk-sub-node-item');
+  await expect(cards).toHaveCount(2);
+  await expect(cards.nth(0).locator('.xk-sub-node-country svg use')).toHaveAttribute('href',/#flag-SO$/);
+  await expect(cards.nth(0).locator('.xk-sub-node-title-text')).toHaveText('Анти «Белые списки» 90');
+  await expect(cards.nth(1).locator('.xk-country-globe')).toBeVisible();
+  await expect(cards.nth(1).locator('.xk-sub-node-title-text')).toHaveText('Unknown');
+});
+
 test('Xray server cards do not duplicate a country flag from the provider name', async ({ page }) => {
   const nodes = buildDemoNodes().slice(0, 3);
   const subscription = buildDemoSubscription(nodes);

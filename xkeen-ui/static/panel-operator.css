@@ -7739,6 +7739,16 @@ body.panel-page .routing-side-card--outbounds .xk-sub-node-country.is-globe::aft
   display: none;
 }
 
+body.panel-page .xk-sub-node-country:has(> .xk-country-globe) {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.panel-page .xk-sub-node-country:has(> .xk-country-globe)::before {
+  display: none !important;
+}
+
 /* Stage 4 Mihomo profiles/generator and subscription forms: the same flat
  * fields, data tables and action rows used by the rest of the console. */
 body.panel-page :is(.xk-op-field-label, .xk-pool-fieldlabel) {

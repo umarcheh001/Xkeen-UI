@@ -1,5 +1,15 @@
 import { test, expect, selectPanelView } from './fixtures.mjs';
 
+test('Xray log flags use the local sprite and an unknown flag becomes a globe',async({page})=>{
+  const lines=['🇸🇴 Somalia','🇿🇿 Unknown'].map((name,i)=>`2026/11/13 21:00:0${i} from 192.168.1.34:53122 accepted tcp:example.test:443 [redirect-in -> ${name}]`);
+  await openLogs(page,'dark',{width:1440,height:900},{accessLines:lines});
+  const table=page.locator('#xray-log-output');
+  await expect(table.locator('.tr .flag svg use')).toHaveAttribute('href',/#flag-SO$/);
+  await expect(table.locator('.tr .xk-country-globe')).toBeVisible();
+  await expect(table.locator('.tr').nth(1)).toContainText('Unknown');
+  await expect(table.locator('.tr').nth(1)).not.toContainText('🇿🇿');
+});
+
 test('xray rows alternate their background after filtering and reversing order',async({page})=>{
   await openLogs(page,'dark',{width:1440,height:900});
   const colors=()=>rows(page).evaluateAll(els=>els.map(el=>getComputedStyle(el).backgroundColor));
