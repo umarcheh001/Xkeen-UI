@@ -1,8 +1,8 @@
 import { confirmMihomoAction } from './mihomo_runtime.js';
-import { getXkeenCoreHttpApi, toastXkeen } from './xkeen_runtime.js';
+import { getXkeenCoreHttpApi, toastXkeen } from 'xk-core/js/features/xkeen_runtime.js';
 import { getMihomoPanelApi } from './mihomo_panel.js';
-import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } from './dns_guard_text.js';
-import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from './dns_operation_recovery.js';
+import { GUARD_RELEASED_BADGE, guardNotice, guardRelease, guardReleaseText } from 'xk-core/js/features/dns_guard_text.js';
+import { awaitDnsOperation, createDnsOperationNotice, newDnsOperationId } from 'xk-core/js/features/dns_operation_recovery.js';
 
 /* Guarded, one-click protected DNS assistant for Mihomo. */
 (() => {

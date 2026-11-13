@@ -1,6 +1,6 @@
 import { initMihomoGenerator } from '../features/mihomo_generator.js';
-import { getXkeenPageName } from '../features/xkeen_runtime.js';
-import { wireTopLevelNavigation } from './top_level_nav.shared.js';
+import { getXkeenPageName } from 'xk-core/js/features/xkeen_runtime.js';
+import { wireTopLevelNavigation } from 'xk-core/js/pages/top_level_nav.shared.js';
 
 function isMihomoGeneratorPage() {
   return !!(

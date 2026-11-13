@@ -104,6 +104,9 @@ _PACKAGE_OWNER_OVERRIDES = {
     # The loader of the Xray module stays in the core and does not change when
     # the module changes.
     "static/js/pages/panel.routing.bundle.js": "core",
+    "static/js/pages/panel.mihomo.bundle.js": "core",
+    "static/js/pages/mihomo_generator.entry.js": "core",
+    "static/js/pages/mihomo_generator.shell.shared.js": "core",
     "static/js/ui/dat_contents_modal.js": "engine.xray",
     # Schema helpers that only the editors import.
     "static/js/ui/schema_diagnostic_format.js": "tool.editor",

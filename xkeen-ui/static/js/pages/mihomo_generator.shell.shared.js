@@ -1,0 +1,15 @@
+import './shell.shared.js';
+import './editor.shared.js';
+import '../runtime/standalone_lazy.js';
+import './codemirror6.shared.js';
+import '../core/xk_dom.js';
+import '../core/xk_http.js';
+import '../core/xk_storage.js';
+import '../ui/modal.js';
+import '../ui/confirm_modal.js';
+import '../ui/theme.js?v=20260324b';
+import '../ui/tooltips_auto.js?v=20260805g';
+import '../util/helpers.js';
+import '../util/ansi.js?v=20260302a';
+import '../util/command_job.js';
+import '../ui/spinner_fetch.js';

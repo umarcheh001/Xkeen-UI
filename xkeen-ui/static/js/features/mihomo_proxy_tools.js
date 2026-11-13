@@ -1,7 +1,7 @@
 import { getMihomoPanelApi } from './mihomo_panel.js';
 import { getMihomoImportApi } from './mihomo_import.js';
 import { getMihomoCoreHttpApi, refreshSharedMihomoEditor } from './mihomo_runtime.js';
-import { getXkeenFilePath } from './xkeen_runtime.js';
+import { getXkeenFilePath } from 'xk-core/js/features/xkeen_runtime.js';
 
 let mihomoProxyToolsModuleApi = null;
 

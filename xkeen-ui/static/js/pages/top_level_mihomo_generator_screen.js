@@ -23,6 +23,7 @@ function isMihomoLocation() {
 }
 
 async function resolveMihomoBootstrapModule() {
+  await import('./mihomo_generator.shell.shared.js');
   return loadModulePart('engine.mihomo', 'generator');
 }
 

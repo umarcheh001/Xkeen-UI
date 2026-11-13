@@ -104,7 +104,7 @@ def owner(path: str) -> str:
         token in p.rsplit("/", 1)[-1] for token in _SERVER_DIAGNOSTICS_TOKENS
     ):
         return "core" if p.removesuffix(".gz") in _SERVER_DIAGNOSTICS_CORE_FILES else "tool.server-diagnostics"
-    if p == "static/js/pages/panel.routing.bundle.js":
+    if p in ("static/js/pages/panel.routing.bundle.js", "static/js/pages/panel.mihomo.bundle.js", "static/js/pages/mihomo_generator.entry.js", "static/js/pages/mihomo_generator.shell.shared.js"):
         return "core"
     name = p.rsplit("/", 1)[-1]
     if name.startswith("_") and p.startswith("static/frontend-build/"):
@@ -122,8 +122,6 @@ def owner(path: str) -> str:
         if "/.vite/" in p or name == "manifest.json":
             return "core"
         for token, module in (
-            ("panel.mihomo.bundle", "engine.mihomo"),
-            ("mihomo_generator", "engine.mihomo"),
             ("terminal.lazy", "tool.terminal"),
             ("file_manager", "tool.files"),
             ("backups", "tool.backups"),
@@ -132,8 +130,6 @@ def owner(path: str) -> str:
         ):
             if token in name:
                 return module
-        if any(token in name for token in ("mihomo", "clash")):
-            return "engine.mihomo"
         if name.startswith("panel.editor."):
             return "tool.editor"
         return "core"

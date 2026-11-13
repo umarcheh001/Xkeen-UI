@@ -85,6 +85,7 @@ def test_separate_modules_table_is_read() -> None:
     assert separate_modules() == {
         "tool.advanced-diagnostics": "js/features/resource_monitor.js",
         "engine.xray": "js/pages/xray.module.entry.js",
+        "engine.mihomo": "js/pages/mihomo.module.entry.js",
         "tool.server-diagnostics": "js/features/provider_diagnostics.js",
     }
 
@@ -103,7 +104,9 @@ def test_build_files_of_xray_names_are_core_outside_the_module() -> None:
     assert owner('static/frontend-build/assets/panel.routing.bundle-X.js') == 'core'
     assert owner('static/frontend-build/assets/xk-core-0123456789-X.js') == 'core'
     assert owner('static/frontend-build/modules/engine.xray/routing-X.js') == 'engine.xray'
-    assert owner('static/frontend-build/assets/panel.mihomo.bundle-X.js') == 'engine.mihomo'
+    assert owner('static/frontend-build/assets/panel.mihomo.bundle-X.js') == 'core'
+    assert owner('static/frontend-build/assets/mihomo_generator-X.js') == 'core'
+    assert owner('static/frontend-build/modules/engine.mihomo/clash-X.js') == 'engine.mihomo'
 
 
 def test_no_static_import_crosses_a_separated_module_boundary() -> None:
@@ -179,6 +182,45 @@ def test_xray_module_files_are_owned_by_xray_and_its_loader_by_the_core() -> Non
     assert package_owner("static/js/pages/xray.module.bundle.js") == "engine.xray"
     assert package_owner("static/js/pages/panel.routing.bundle.js") == "core"
     assert package_owner("static/js/features/module_parts.js") == "core"
+
+
+def test_mihomo_entry_and_core_loaders_have_explicit_owners():
+    for name in ('mihomo.module.entry.js', 'mihomo.module.bundle.js', 'mihomo_generator.screen.bootstrap.js'):
+        assert package_owner('static/js/pages/' + name) == 'engine.mihomo'
+    for name in ('panel.mihomo.bundle.js', 'mihomo_generator.entry.js'):
+        assert package_owner('static/js/pages/' + name) == 'core'
+
+
+def test_mihomo_build_has_only_its_directory():
+    assert separate_modules().get('engine.mihomo') == 'js/pages/mihomo.module.entry.js'
+    manifest = BUILD / '.vite/manifest.build.json'
+    if not manifest.is_file():
+        pytest.skip('frontend build not found')
+    entries = json.loads(manifest.read_text(encoding='utf-8'))
+    assert [item['src'] for item in entries.values() if item.get('src')
+            and package_owner('static/' + item['src']) == 'engine.mihomo'] == []
+
+
+def test_mihomo_uses_public_core_and_core_uses_only_module_entry():
+    offenders = []
+    public = 0
+    allowed = {'js/features/module_parts.js', 'js/pages/panel.mihomo.bundle.js'}
+    for relative, source in _js_sources():
+        who = package_owner('static/' + relative)
+        text = _SOURCE_COMMENTS.sub('', source.read_text(encoding='utf-8'))
+        for specifier in static_specifiers(text, strip_comments=False) + _DYNAMIC_IMPORT.findall(text):
+            if specifier == 'xk-module/engine.mihomo':
+                assert relative in allowed
+            if who == 'engine.mihomo' and specifier.startswith('xk-core/'):
+                public += 1
+            target = resolve(relative, specifier.split('?', 1)[0])
+            if target is None:
+                continue
+            other = package_owner('static/' + target)
+            if who != other and 'engine.mihomo' in (who, other):
+                offenders.append(f'{relative} -> {specifier}')
+    assert public >= 20
+    assert offenders == []
 
 
 _DYNAMIC_IMPORT = re.compile(r"""\bimport\s*\(\s*["'`]([^"'`$]+)["'`]""")
@@ -297,6 +339,7 @@ CORE_PUBLIC_SURFACE = [
     "js/features/xkeen_runtime.js",
     "js/features/xkeen_texts.js",
     "js/features/xray_log_line_class.js",
+    "js/pages/top_level_nav.shared.js",
     "js/ui/config_dirty_state.js",
     "js/ui/config_shell.js",
     "js/ui/country_flags.js",
@@ -307,8 +350,9 @@ CORE_PUBLIC_SURFACE = [
     "js/ui/prettier_loader.js",
     "js/ui/schema_quickfixes.js",
     "js/ui/schema_semantic_validation.js",
+    "js/ui/yaml_schema.js",
     "js/util/strip_json_comments.js",
-    "js/vendor/codemirror_json_schema.js",
+    "js/vendor/codemirror_json_schema.js"
 ]
 
 

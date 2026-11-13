@@ -13,8 +13,8 @@ import {
   getXkeenEditorToolbarMiniItems,
   getXkeenPageName,
   getXkeenUiApi,
-} from './xkeen_runtime.js';
-import { iconHtml } from '../ui/operator_icons.js';
+} from 'xk-core/js/features/xkeen_runtime.js';
+import { iconHtml } from 'xk-core/js/ui/operator_icons.js';
 
 let mihomoGeneratorModuleApi = null;
 
@@ -1190,7 +1190,7 @@ function initEngineToggle() {
 
         function loadRestartLogModule() {
           if (!_restartLogModulePromise) {
-            _restartLogModulePromise = import('./restart_log.js').catch((error) => {
+            _restartLogModulePromise = import('xk-core/js/features/restart_log.js').catch((error) => {
               _restartLogModulePromise = null;
               throw error;
             });

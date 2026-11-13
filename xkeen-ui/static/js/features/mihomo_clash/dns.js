@@ -1,5 +1,5 @@
 import { confirmMihomoAction } from '../mihomo_runtime.js';
-import { toastXkeen } from '../xkeen_runtime.js';
+import { toastXkeen } from 'xk-core/js/features/xkeen_runtime.js';
 import {
   flushMihomoClashDnsCache,
   flushMihomoClashFakeIpCache,

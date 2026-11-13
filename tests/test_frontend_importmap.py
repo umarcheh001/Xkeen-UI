@@ -108,6 +108,21 @@ def test_xray_importmap_obeys_activation(tmp_path: Path) -> None:
     assert build_module_importmap(tmp_path, {'core'}) == {}
 
 
+def test_mihomo_importmap_obeys_activation_in_source_and_build(tmp_path: Path) -> None:
+    source = tmp_path / 'static/js/pages/mihomo.module.entry.js'
+    source.parent.mkdir(parents=True)
+    source.write_text('', encoding='utf-8')
+    assert SOURCE_FALLBACKS['engine.mihomo'] == 'js/pages/mihomo.module.entry.js'
+    assert build_module_importmap(tmp_path, {'engine.mihomo'}) == {
+        'xk-module/engine.mihomo': 'js/pages/mihomo.module.entry.js',
+    }
+    assert build_module_importmap(tmp_path, {'core'}) == {}
+    lay_module_manifest(tmp_path, 'engine.mihomo', 'mihomo-A.js')
+    assert build_module_importmap(tmp_path, {'engine.mihomo'}) == {
+        'xk-module/engine.mihomo': 'frontend-build/modules/engine.mihomo/mihomo-A.js',
+    }
+
+
 def test_built_module_wins_over_its_source(tmp_path: Path) -> None:
     lay_source(tmp_path)
     lay_module_manifest(tmp_path, MODULE_ID, "resource_monitor-AbCd1234.js")

@@ -1,4 +1,4 @@
-import { countryFlag, nodeCountryCode, nodeDisplayName } from '../../ui/country_flags.js';
+import { countryFlag, nodeCountryCode, nodeDisplayName } from 'xk-core/js/ui/country_flags.js';
 
 function escapeSvgText(value) {
   return String(value ?? '')

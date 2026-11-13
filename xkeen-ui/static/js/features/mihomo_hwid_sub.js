@@ -8,7 +8,7 @@ import {
   refreshSharedMihomoEditor,
   syncMihomoModalBodyScrollLock,
 } from './mihomo_runtime.js';
-import { getXkeenFilePath, getXkeenLazyRuntimeApi } from './xkeen_runtime.js';
+import { getXkeenFilePath, getXkeenLazyRuntimeApi } from 'xk-core/js/features/xkeen_runtime.js';
 
 let mihomoHwidSubModuleApi = null;
 
@@ -1121,7 +1121,7 @@ let mihomoHwidSubModuleApi = null;
 
   function loadRestartLogModule() {
     if (!_restartLogModulePromise) {
-      _restartLogModulePromise = import('./restart_log.js').catch((error) => {
+      _restartLogModulePromise = import('xk-core/js/features/restart_log.js').catch((error) => {
         _restartLogModulePromise = null;
         throw error;
       });

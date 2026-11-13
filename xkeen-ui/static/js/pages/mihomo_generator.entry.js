@@ -1,3 +1,4 @@
+import './mihomo_generator.shell.shared.js';
 import { bootTopLevelShell } from './top_level_shell.shared.js';
 import { loadModulePart } from '../features/module_parts.js';
 import { registerPanelMihomoTopLevelScreens } from './top_level_panel_mihomo.shared.js';

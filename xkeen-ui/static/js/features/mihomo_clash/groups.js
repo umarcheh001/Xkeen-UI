@@ -1,6 +1,6 @@
-import { iconHtml } from '../../ui/operator_icons.js';
+import { iconHtml } from 'xk-core/js/ui/operator_icons.js';
 import { confirmMihomoAction } from '../mihomo_runtime.js';
-import { toastXkeen } from '../xkeen_runtime.js';
+import { toastXkeen } from 'xk-core/js/features/xkeen_runtime.js';
 import { mihomoCountryFlag, mihomoNodeCountryCode, mihomoNodeDisplayName } from './visuals.js';
 import {
   fetchMihomoClashGroups,

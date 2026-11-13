@@ -9,11 +9,11 @@ import {
   refreshSharedMihomoEditor,
   syncMihomoModalBodyScrollLock,
 } from './mihomo_runtime.js';
-import { getXkeenFilePath, getXkeenLazyRuntimeApi } from './xkeen_runtime.js';
-import { iconHtml } from '../ui/operator_icons.js';
-import { appendHappDecryptorCardLink } from '../ui/happ_decryptor_link.js';
+import { getXkeenFilePath, getXkeenLazyRuntimeApi } from 'xk-core/js/features/xkeen_runtime.js';
+import { iconHtml } from 'xk-core/js/ui/operator_icons.js';
+import { appendHappDecryptorCardLink } from 'xk-core/js/ui/happ_decryptor_link.js';
 import { mihomoCountryFlag } from './mihomo_clash/visuals.js';
-import { appendProviderDiagnosticsHint } from './provider_diagnostics_hint.js';
+import { appendProviderDiagnosticsHint } from 'xk-core/js/features/provider_diagnostics_hint.js';
 import {
   beginMihomoImportRequest,
   commitMihomoImportResult,

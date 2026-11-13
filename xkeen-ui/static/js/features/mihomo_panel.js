@@ -24,9 +24,9 @@ import {
   getXkeenUiApi,
   getXkeenSettingsApi,
   setXkeenPageConfigValue,
-} from './xkeen_runtime.js';
-import { loadEditorSchema, resolveEditorSnippetProvider } from '../ui/editor_schema.js';
-import { iconHtml } from '../ui/operator_icons.js';
+} from 'xk-core/js/features/xkeen_runtime.js';
+import { loadEditorSchema, resolveEditorSnippetProvider } from 'xk-core/js/ui/editor_schema.js';
+import { iconHtml } from 'xk-core/js/ui/operator_icons.js';
 
 let mihomoPanelModuleApi = null;
 
@@ -137,8 +137,8 @@ let mihomoPanelModuleApi = null;
   let _monacoFsWired = false;
 
   async function ensureFormattersReady() {
-    await import('../ui/prettier_loader.js');
-    await import('../ui/formatters.js');
+    await import('xk-core/js/ui/prettier_loader.js');
+    await import('xk-core/js/ui/formatters.js');
     return getMihomoFormattersApi();
   }
 
@@ -159,7 +159,7 @@ let mihomoPanelModuleApi = null;
 
   function loadRestartLogModule() {
     if (!_restartLogModulePromise) {
-      _restartLogModulePromise = import('./restart_log.js').catch((error) => {
+      _restartLogModulePromise = import('xk-core/js/features/restart_log.js').catch((error) => {
         _restartLogModulePromise = null;
         throw error;
       });
@@ -271,7 +271,7 @@ let mihomoPanelModuleApi = null;
 
   async function loadMihomoYamlSchemaModule() {
     if (_mihomoYamlSchemaModulePromise) return _mihomoYamlSchemaModulePromise;
-    _mihomoYamlSchemaModulePromise = import('../ui/yaml_schema.js').catch((error) => {
+    _mihomoYamlSchemaModulePromise = import('xk-core/js/ui/yaml_schema.js').catch((error) => {
       _mihomoYamlSchemaModulePromise = null;
       throw error;
     });
@@ -313,7 +313,7 @@ let mihomoPanelModuleApi = null;
         typeof ensureCapability === 'function' ? ensureCapability('quick-fix') : true
       ).then((ok) => {
         if (!ok) return null;
-        return import('../ui/schema_quickfixes.js')
+        return import('xk-core/js/ui/schema_quickfixes.js')
           .then(({ createMihomoQuickFixProvider }) => {
             _mihomoQuickFixProvider = createMihomoQuickFixProvider();
             try {

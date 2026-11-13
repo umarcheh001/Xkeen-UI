@@ -2,9 +2,9 @@ import {
   countryFlag,
   nodeCountryCode,
   nodeDisplayName,
-} from "../../ui/country_flags.js";
+} from "xk-core/js/ui/country_flags.js";
 import { MIHOMO_ROUTE_LABELS as LABELS } from "./log_model.js";
-import { iconHtml } from "../../ui/operator_icons.js";
+import { iconHtml } from "xk-core/js/ui/operator_icons.js";
 
 export const logEscape = (value) =>
   String(value ?? "").replace(
