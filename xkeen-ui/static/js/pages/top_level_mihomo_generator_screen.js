@@ -1,3 +1,4 @@
+import { loadModulePart } from '../features/module_parts.js';
 import { getTopLevelScreenRegistryApi } from './top_level_screen_registry.js';
 import {
   applyScreenDocumentState,
@@ -22,7 +23,7 @@ function isMihomoLocation() {
 }
 
 async function resolveMihomoBootstrapModule() {
-  return import('./mihomo_generator.screen.bootstrap.js');
+  return loadModulePart('engine.mihomo', 'generator');
 }
 
 function createMihomoGeneratorScreen() {

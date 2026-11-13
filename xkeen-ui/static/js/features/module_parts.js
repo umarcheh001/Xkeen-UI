@@ -1,6 +1,7 @@
 // The core reaches the files of a separately built module only through here:
 // it names the module and the part it needs, the module's entry loads it.
 let MODULE_ENTRIES = {
+  'engine.mihomo': () => import('../pages/mihomo.module.entry.js'),
   'engine.xray': () => import('xk-module/engine.xray'),
 };
 

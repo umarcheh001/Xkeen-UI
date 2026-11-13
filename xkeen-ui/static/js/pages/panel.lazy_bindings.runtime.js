@@ -95,26 +95,19 @@ const panelFeatureSpecs = Object.freeze({
     getApi: (mod) => (mod && typeof mod.getUiSettingsPanelApi === 'function') ? mod.getUiSettingsPanelApi() : null,
   },
   mihomoImport: {
-    load: () => import('../features/mihomo_import.js').then(
-      (mod) => import('../features/compat/mihomo_import.js').then(() => mod)
-    ),
+    load: () => loadModulePart('engine.mihomo', 'import'),
     getApi: (mod) => (mod && typeof mod.getMihomoImportApi === 'function') ? mod.getMihomoImportApi() : null,
   },
   mihomoProxyTools: {
-    load: () => import('../features/mihomo_import.js')
-      .then(() => import('../features/compat/mihomo_import.js'))
-      .then(() => import('../features/mihomo_proxy_tools.js'))
-      .then((mod) => import('../features/compat/mihomo_proxy_tools.js').then(() => mod)),
+    load: () => loadModulePart('engine.mihomo', 'proxy_tools'),
     getApi: (mod) => (mod && typeof mod.getMihomoProxyToolsApi === 'function') ? mod.getMihomoProxyToolsApi() : null,
   },
   mihomoHwidSub: {
-    load: () => import('../features/mihomo_hwid_sub.js').then(
-      (mod) => import('../features/compat/mihomo_hwid_sub.js').then(() => mod)
-    ),
+    load: () => loadModulePart('engine.mihomo', 'hwid_sub'),
     getApi: (mod) => (mod && typeof mod.getMihomoHwidSubApi === 'function') ? mod.getMihomoHwidSubApi() : null,
   },
   mihomoClash: {
-    load: () => import('../features/mihomo_clash/index.js'),
+    load: () => loadModulePart('engine.mihomo', 'clash'),
     getApi: (mod) => (mod && typeof mod.getMihomoClashApi === 'function') ? mod.getMihomoClashApi() : null,
   },
   xkeenTexts: {

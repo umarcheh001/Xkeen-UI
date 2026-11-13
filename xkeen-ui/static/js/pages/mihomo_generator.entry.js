@@ -1,11 +1,11 @@
 import { bootTopLevelShell } from './top_level_shell.shared.js';
-import { bootMihomoGeneratorScreen } from './mihomo_generator.screen.bootstrap.js';
+import { loadModulePart } from '../features/module_parts.js';
 import { registerPanelMihomoTopLevelScreens } from './top_level_panel_mihomo.shared.js';
 
 void bootTopLevelShell({
   initialScreen: 'mihomo_generator',
   bootstrap() {
-    return bootMihomoGeneratorScreen();
+    return loadModulePart('engine.mihomo', 'generator').then((mod) => mod.bootMihomoGeneratorScreen());
   },
 }).then(() => {
   try { registerPanelMihomoTopLevelScreens(); } catch (error) {

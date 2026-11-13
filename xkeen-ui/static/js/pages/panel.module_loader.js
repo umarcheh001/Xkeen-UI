@@ -1,3 +1,4 @@
+import { ensureModuleStylesheet } from '../ui/module_styles.js';
 // Stage 5 panel frontend loader.
 //
 // The server announces only stable bundle keys. Import factories live here so
@@ -62,7 +63,6 @@ const moduleResults = Object.create(null);
 const reportedFailures = new Set();
 const failureNoticeAt = Object.create(null);
 const loadAttempts = Object.create(null);
-const stylePromises = Object.create(null);
 // Keys being retried from the notice: the retry reports its own outcome and
 // skips the automatic pauses, the reader is waiting on the button.
 const manualRetries = new Set();
@@ -243,35 +243,7 @@ async function loadWithRetry(key, load) {
 
 function ensureModuleStyle(cssKey) {
   const key = String(cssKey || '');
-  const href = STYLE_URLS[key];
-  if (!href) return Promise.resolve(false);
-  if (stylePromises[key]) return stylePromises[key];
-
-  stylePromises[key] = new Promise((resolve, reject) => {
-    const selector = `link[data-xk-module-css="${key}"]`;
-    const existing = document.head?.querySelector(selector);
-    if (existing) {
-      resolve(true);
-      return;
-    }
-
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = href;
-    link.dataset.xkModuleCss = key;
-    link.addEventListener('load', () => resolve(true), { once: true });
-    link.addEventListener('error', () => {
-      // A dead link left in the page would pass for a loaded stylesheet.
-      link.remove();
-      reject(new Error(`failed to load module stylesheet: ${key}`));
-    }, { once: true });
-    document.head.appendChild(link);
-  }).catch((error) => {
-    delete stylePromises[key];
-    throw error;
-  });
-
-  return stylePromises[key];
+  return ensureModuleStylesheet(key, STYLE_URLS[key]);
 }
 
 export async function ensurePanelModuleStyles(key) {
