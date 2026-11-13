@@ -665,11 +665,9 @@ def test_rules_providers_and_logs_have_bounded_on_demand_contract():
         "formatRelativeTime",
         "providerSubscriptionHtml",
         "updateHttpProviders",
-        "MAX_LOG_ROWS = 500",
-        "annotatedLogText",
-        "row?.devices",
+        "createMihomoLogModel",
+        "createMihomoLogView",
         "requestMihomoClashWsToken",
-        "scope: 'mihomo-clash-logs'",
         "deactivateMihomoClashRules();",
         "deactivateMihomoClashLogs();",
         ".xk-mihomo-rules-layout",
@@ -677,6 +675,8 @@ def test_rules_providers_and_logs_have_bounded_on_demand_contract():
         ".xk-mihomo-device-name",
     ):
         assert fragment in markup or fragment in client or fragment in feature or fragment in rules or fragment in logs or fragment in css
+
+    assert re.search(r"scope:\s*['\"]mihomo-clash-logs['\"]", logs)
 
     assert "if (value === 'rules') return 'control';" not in state
     assert "if (value === 'logs') return 'control';" not in state

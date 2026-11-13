@@ -24746,7 +24746,7 @@ body.panel-page #xk-mihomo-service-menu .xk-autorestart-hint {
  * a collapsible summary, filter chips and the output box. access.log is a
  * virtual table with fixed 32px rows, error.log an append-only stream.
  * Rows never animate and use transforms only for virtual positioning. */
-body.panel-page #view-xray-logs .xk-xlog-card {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-card {
   --xk-xlog-mono: var(--xk-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
   --xk-xlog-h: 32px;
   --xk-xlog-proxy: var(--op-accent);
@@ -24759,7 +24759,7 @@ body.panel-page #view-xray-logs .xk-xlog-card {
 }
 
 /* Same header rhythm as .log-header-row of the operations journal below. */
-body.panel-page #view-xray-logs .xk-xlog-head {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-head {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -24768,11 +24768,11 @@ body.panel-page #view-xray-logs .xk-xlog-head {
   border-bottom: 1px solid var(--op-border);
 }
 
-body.panel-page #view-xray-logs .xk-xlog-head > * {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-head > * {
   margin: 0 !important;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-title {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-title {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -24786,7 +24786,7 @@ body.panel-page #view-xray-logs .xk-xlog-title {
   text-transform: none !important;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-live {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-live {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -24806,40 +24806,40 @@ body.panel-page #view-xray-logs .xk-xlog-live {
   animation: none;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-live > i {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-live > i {
   width: 7px;
   height: 7px;
   border-radius: 50%;
   background: var(--op-border-strong);
 }
 
-body.panel-page #view-xray-logs .xk-xlog-live[data-state="on"] {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-live[data-state="on"] {
   border-color: var(--op-success-border, var(--op-border));
   background: var(--op-success-soft);
   color: var(--op-success);
 }
 
-body.panel-page #view-xray-logs .xk-xlog-live[data-state="on"] > i {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-live[data-state="on"] > i {
   background: var(--op-success);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--op-success) 25%, transparent);
 }
 
-body.panel-page #view-xray-logs .xk-xlog-live[data-state="armed"] {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-live[data-state="armed"] {
   border-color: var(--op-warning-border, var(--op-border));
   background: var(--op-warning-soft);
   color: var(--op-warning);
 }
 
-body.panel-page #view-xray-logs .xk-xlog-live[data-state="armed"] > i {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-live[data-state="armed"] > i {
   background: var(--op-warning);
 }
 
-body.panel-page #view-xray-logs .xk-xlog-live[data-state="error"] {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-live[data-state="error"] {
   background: var(--op-danger-soft);
   color: var(--op-danger);
 }
 
-body.panel-page #view-xray-logs .xk-xlog-seg {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-seg {
   display: inline-flex;
   align-items: center;
   gap: 2px;
@@ -24851,7 +24851,7 @@ body.panel-page #view-xray-logs .xk-xlog-seg {
   background: var(--op-surface-2);
 }
 
-body.panel-page #view-xray-logs .xk-xlog-seg-btn {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-seg-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -24868,46 +24868,46 @@ body.panel-page #view-xray-logs .xk-xlog-seg-btn {
   cursor: pointer;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-seg-btn[hidden] {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-seg-btn[hidden] {
   display: none;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-seg-btn:hover:not(:disabled) {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-seg-btn:hover:not(:disabled) {
   color: var(--op-text) !important;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-seg-btn:disabled {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-seg-btn:disabled {
   opacity: 0.5;
   cursor: default;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-seg-btn .xk-action-icon {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-seg-btn .xk-action-icon {
   width: 15px;
   height: 15px;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-seg-btn .n {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-seg-btn .n {
   color: var(--op-faint);
   font-size: calc(11px * var(--xk-font-scale, 1));
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-seg-btn .n:empty {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-seg-btn .n:empty {
   display: none;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-seg-btn.is-on {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-seg-btn.is-on {
   background: var(--op-surface) !important;
   color: var(--op-text-strong) !important;
   box-shadow: 0 0 0 1px var(--op-border-strong) !important;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-run .is-stop:hover:not(:disabled) {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-run .is-stop:hover:not(:disabled) {
   color: var(--op-danger) !important;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-badge {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-badge {
   padding: 0 5px;
   border-radius: 999px;
   background: var(--op-warning);
@@ -24915,22 +24915,22 @@ body.panel-page #view-xray-logs .xk-xlog-badge {
   font: 600 10.5px/16px var(--xk-xlog-mono);
 }
 
-body.panel-page #view-xray-logs .xk-xlog-level {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-level {
   height: var(--xk-xlog-h);
   min-height: var(--xk-xlog-h);
 }
 
-body.panel-page #view-xray-logs .xk-xlog-spacer {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-spacer {
   flex: 1 1 auto;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-search {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-search {
   position: relative;
   flex: 0 1 280px;
   min-width: 170px;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-search > .xk-action-icon {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-search > .xk-action-icon {
   position: absolute;
   top: 8px;
   left: 8px;
@@ -24940,7 +24940,7 @@ body.panel-page #view-xray-logs .xk-xlog-search > .xk-action-icon {
   pointer-events: none;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-search .xray-log-filter {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-search .xray-log-filter {
   width: 100%;
   height: var(--xk-xlog-h);
   min-height: var(--xk-xlog-h);
@@ -24948,14 +24948,14 @@ body.panel-page #view-xray-logs .xk-xlog-search .xray-log-filter {
   background: var(--op-editor) !important;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-kbd,
-body.panel-page #view-xray-logs .xk-xlog-search-clear {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-kbd,
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-search-clear {
   position: absolute;
   top: 7px;
   right: 7px;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-kbd {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-kbd {
   padding: 1px 5px;
   border: 1px solid var(--op-border);
   border-radius: 4px;
@@ -24964,12 +24964,12 @@ body.panel-page #view-xray-logs .xk-xlog-kbd {
   pointer-events: none;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-search:focus-within .xk-xlog-kbd,
-body.panel-page #view-xray-logs .xk-xlog-search-clear:not([hidden]) ~ .xk-xlog-kbd {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-search:focus-within .xk-xlog-kbd,
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-search-clear:not([hidden]) ~ .xk-xlog-kbd {
   display: none;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-search-clear {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-search-clear {
   top: 5px;
   right: 5px;
   display: inline-grid;
@@ -24983,11 +24983,11 @@ body.panel-page #view-xray-logs .xk-xlog-search-clear {
   color: var(--op-muted) !important;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-search-clear[hidden] {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-search-clear[hidden] {
   display: none;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-icon-btn {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-icon-btn {
   display: inline-grid;
   place-items: center;
   width: var(--xk-xlog-h);
@@ -24997,13 +24997,13 @@ body.panel-page #view-xray-logs .xk-xlog-icon-btn {
   padding: 0;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-icon-btn .xk-action-icon {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-icon-btn .xk-action-icon {
   width: 16px;
   height: 16px;
 }
 
 /* Menu: one column of rows, switches on the right, file removal set apart. */
-body.panel-page #view-xray-logs #xray-log-more .xk-xlog-menu-panel {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) #xray-log-more .xk-xlog-menu-panel {
   right: 0;
   left: auto;
   top: calc(100% + 4px);
@@ -25015,7 +25015,7 @@ body.panel-page #view-xray-logs #xray-log-more .xk-xlog-menu-panel {
   padding: 6px;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-menu-title {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-menu-title {
   margin: 6px 8px 4px;
   color: var(--op-faint);
   font-size: calc(10.5px * var(--xk-font-scale, 1));
@@ -25024,7 +25024,7 @@ body.panel-page #view-xray-logs .xk-xlog-menu-title {
   text-transform: uppercase;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-menu-item {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-menu-item {
   display: flex;
   align-items: center;
   gap: 9px;
@@ -25042,39 +25042,39 @@ body.panel-page #view-xray-logs .xk-xlog-menu-item {
   cursor: pointer;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-menu-item[hidden] {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-menu-item[hidden] {
   display: none;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-menu-item:hover {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-menu-item:hover {
   background: var(--op-surface-3) !important;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-menu-item > .xk-action-icon {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-menu-item > .xk-action-icon {
   flex: 0 0 auto;
   width: 15px;
   height: 15px;
   color: var(--op-muted);
 }
 
-body.panel-page #view-xray-logs .xk-xlog-menu-item > span:not(.dt-switch) {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-menu-item > span:not(.dt-switch) {
   flex: 1 1 auto;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-menu-item > em {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-menu-item > em {
   color: var(--op-faint);
   font-size: calc(11.5px * var(--xk-font-scale, 1));
   font-style: normal;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-menu-item .dt-switch {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-menu-item .dt-switch {
   min-height: 0;
   padding: 0;
   border: 0 !important;
   background: transparent !important;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-menu-item :is(.dt-log-lines-input, .xray-log-select) {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-menu-item :is(.dt-log-lines-input, .xray-log-select) {
   width: 84px;
   min-width: 84px;
   height: 26px;
@@ -25083,35 +25083,35 @@ body.panel-page #view-xray-logs .xk-xlog-menu-item :is(.dt-log-lines-input, .xra
   line-height: 24px;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-menu-item .dt-log-lines-input {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-menu-item .dt-log-lines-input {
   padding: 0 6px;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-menu-item.is-danger,
-body.panel-page #view-xray-logs .xk-xlog-menu-item.is-danger > .xk-action-icon {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-menu-item.is-danger,
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-menu-item.is-danger > .xk-action-icon {
   color: var(--op-danger) !important;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-menu-sep {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-menu-sep {
   height: 1px;
   margin: 5px 2px;
   background: var(--op-border);
 }
 
 /* Summary: one line when collapsed, four tiles when open. */
-body.panel-page #view-xray-logs .xk-xlog-summary {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-summary {
   border: 1px solid var(--op-border);
   border-radius: var(--op-radius-sm);
   background: var(--op-surface-2);
 }
 
-body.panel-page #view-xray-logs .xk-xlog-card[data-xlog-file="error"] .xk-xlog-summary,
-body.panel-page #view-xray-logs .xk-xlog-card.xk-xlog-no-summary .xk-xlog-summary,
-body.panel-page #view-xray-logs .xk-xlog-summary[hidden] {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-card[data-xlog-file="error"] .xk-xlog-summary,
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-card.xk-xlog-no-summary .xk-xlog-summary,
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-summary[hidden] {
   display: none;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-summary-head {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-summary-head {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -25127,7 +25127,7 @@ body.panel-page #view-xray-logs .xk-xlog-summary-head {
   cursor: pointer;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-summary-head .t {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-summary-head .t {
   color: var(--op-muted);
   font-size: calc(11px * var(--xk-font-scale, 1));
   font-weight: 650;
@@ -25135,19 +25135,19 @@ body.panel-page #view-xray-logs .xk-xlog-summary-head .t {
   text-transform: uppercase;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-mini {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-mini {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
 }
 
-body.panel-page #view-xray-logs :is(.xk-xlog-mini, .xk-xlog-legend) > span {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) :is(.xk-xlog-mini, .xk-xlog-legend) > span {
   display: inline-flex;
   align-items: center;
   gap: 5px;
 }
 
-body.panel-page #view-xray-logs :is(.xk-xlog-mini, .xk-xlog-legend) > span::before {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) :is(.xk-xlog-mini, .xk-xlog-legend) > span::before {
   content: "";
   width: 8px;
   height: 8px;
@@ -25155,17 +25155,17 @@ body.panel-page #view-xray-logs :is(.xk-xlog-mini, .xk-xlog-legend) > span::befo
   background: var(--xk-xlog-dot, var(--xk-xlog-proxy));
 }
 
-body.panel-page #view-xray-logs :is(.xk-xlog-mini, .xk-xlog-legend) em {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) :is(.xk-xlog-mini, .xk-xlog-legend) em {
   color: var(--op-faint);
   font-style: normal;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-summary-open-only,
-body.panel-page #view-xray-logs .xk-xlog-summary.is-open .xk-xlog-mini {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-summary-open-only,
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-summary.is-open .xk-xlog-mini {
   display: none;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-summary-tog {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-summary-tog {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -25173,27 +25173,27 @@ body.panel-page #view-xray-logs .xk-xlog-summary-tog {
   color: var(--op-muted);
 }
 
-body.panel-page #view-xray-logs .xk-xlog-summary-tog .xk-action-icon {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-summary-tog .xk-action-icon {
   width: 14px;
   height: 14px;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-summary.is-open .xk-xlog-summary-tog .xk-action-icon {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-summary.is-open .xk-xlog-summary-tog .xk-action-icon {
   transform: rotate(180deg);
 }
 
-body.panel-page #view-xray-logs .xk-xlog-summary-body {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-summary-body {
   display: grid;
   grid-template-columns: 1.2fr repeat(3, minmax(0, 1fr));
   gap: 10px;
   padding: 0 10px 10px;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-summary-body[hidden] {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-summary-body[hidden] {
   display: none;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-tile {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-tile {
   min-width: 0;
   padding: 9px 11px;
   border: 1px solid var(--op-border);
@@ -25201,7 +25201,7 @@ body.panel-page #view-xray-logs .xk-xlog-tile {
   background: var(--op-surface);
 }
 
-body.panel-page #view-xray-logs .xk-xlog-tile h4 {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-tile h4 {
   margin: 0 0 7px;
   color: var(--op-muted);
   font-size: calc(11px * var(--xk-font-scale, 1));
@@ -25210,7 +25210,7 @@ body.panel-page #view-xray-logs .xk-xlog-tile h4 {
   text-transform: uppercase;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-bar {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-bar {
   display: flex;
   gap: 2px;
   height: 8px;
@@ -25219,12 +25219,12 @@ body.panel-page #view-xray-logs .xk-xlog-bar {
   background: var(--op-surface-3);
 }
 
-body.panel-page #view-xray-logs .xk-xlog-bar > i {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-bar > i {
   display: block;
   background: var(--xk-xlog-dot, var(--xk-xlog-proxy));
 }
 
-body.panel-page #view-xray-logs .xk-xlog-legend {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-legend {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
@@ -25232,11 +25232,12 @@ body.panel-page #view-xray-logs .xk-xlog-legend {
   font-size: calc(12px * var(--xk-font-scale, 1));
 }
 
-body.panel-page #view-xray-logs .xk-xlog-legend b {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-legend b {
+  color: var(--op-text-strong);
   font-weight: 650;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-top {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-top {
   display: grid;
   gap: 4px;
   margin: 0;
@@ -25244,7 +25245,7 @@ body.panel-page #view-xray-logs .xk-xlog-top {
   list-style: none;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-top li {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-top li {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -25255,7 +25256,7 @@ body.panel-page #view-xray-logs .xk-xlog-top li {
   font-size: calc(12px * var(--xk-font-scale, 1));
 }
 
-body.panel-page #view-xray-logs .xk-xlog-top li::before {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-top li::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -25264,11 +25265,11 @@ body.panel-page #view-xray-logs .xk-xlog-top li::before {
   background: var(--op-accent-soft);
 }
 
-body.panel-page #view-xray-logs .xk-xlog-top li > * {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-top li > * {
   position: relative;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-top button {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-top button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -25286,52 +25287,52 @@ body.panel-page #view-xray-logs .xk-xlog-top button {
   cursor: pointer;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-top li.is-on::before {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-top li.is-on::before {
   width: 100%;
   box-shadow: inset 0 0 0 1px var(--op-accent-border);
 }
 
-body.panel-page #view-xray-logs .xk-xlog-top li.is-on button {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-top li.is-on button {
   color: var(--op-accent) !important;
   font-weight: 600;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-top em {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-top em {
   color: var(--op-muted);
   font: 11.5px var(--xk-xlog-mono);
   font-style: normal;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-muted {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-muted {
   margin: 0;
   color: var(--op-faint);
   font-size: calc(12px * var(--xk-font-scale, 1));
 }
 
 /* Chips */
-body.panel-page #view-xray-logs .xk-xlog-chips {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-chips {
   display: grid;
   gap: 6px;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-chips:empty {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-chips:empty {
   display: none;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-chiprow {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-chiprow {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-chiprow .lbl {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-chiprow .lbl {
   min-width: 58px;
   color: var(--op-muted);
   font-size: calc(11.5px * var(--xk-font-scale, 1));
 }
 
-body.panel-page #view-xray-logs .xk-xlog-chip {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -25348,50 +25349,50 @@ body.panel-page #view-xray-logs .xk-xlog-chip {
   cursor: pointer;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-chip em {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-chip em {
   color: var(--op-faint);
   font-size: calc(11px * var(--xk-font-scale, 1));
   font-style: normal;
   font-variant-numeric: tabular-nums;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-chip.is-on {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-chip.is-on {
   border-color: var(--op-accent-border) !important;
   background: var(--op-accent-soft) !important;
   color: var(--op-accent) !important;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-chip.is-cond {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-chip.is-cond {
   border-color: var(--op-accent) !important;
   background: var(--op-accent) !important;
   color: #fff !important;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-chip.is-cond .xk-action-icon {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-chip.is-cond .xk-action-icon {
   width: 14px;
   height: 14px;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-chip .dot {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-chip .dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
   background: var(--xk-xlog-dot, var(--xk-xlog-proxy));
 }
 
-body.panel-page #view-xray-logs .xk-xlog-vsep {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-vsep {
   width: 1px;
   height: 18px;
   margin: 0 4px;
   background: var(--op-border);
 }
 
-body.panel-page #view-xray-logs .xk-xlog-hint {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-hint {
   color: var(--op-faint);
   font-size: calc(11.5px * var(--xk-font-scale, 1));
 }
 
-body.panel-page #view-xray-logs .xk-xlog-reset {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-reset {
   margin-left: auto;
   min-height: 0;
   padding: 0;
@@ -25405,17 +25406,17 @@ body.panel-page #view-xray-logs .xk-xlog-reset {
 }
 
 /* Route colours for dots, stripes and pills. */
-body.panel-page #view-xray-logs .dot-proxy { --xk-xlog-dot: var(--xk-xlog-proxy); }
-body.panel-page #view-xray-logs .dot-direct { --xk-xlog-dot: var(--xk-xlog-direct); }
-body.panel-page #view-xray-logs .dot-block { --xk-xlog-dot: var(--xk-xlog-block); }
-body.panel-page #view-xray-logs .dot-dns { --xk-xlog-dot: var(--xk-xlog-dns); }
-body.panel-page #view-xray-logs .dot-debug { --xk-xlog-dot: var(--op-border-strong); }
-body.panel-page #view-xray-logs .dot-info { --xk-xlog-dot: var(--op-accent); }
-body.panel-page #view-xray-logs .dot-warning { --xk-xlog-dot: var(--op-warning); }
-body.panel-page #view-xray-logs .dot-error { --xk-xlog-dot: var(--op-danger); }
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .dot-proxy { --xk-xlog-dot: var(--xk-xlog-proxy); }
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .dot-direct { --xk-xlog-dot: var(--xk-xlog-direct); }
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .dot-block { --xk-xlog-dot: var(--xk-xlog-block); }
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .dot-dns { --xk-xlog-dot: var(--xk-xlog-dns); }
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .dot-debug { --xk-xlog-dot: var(--op-border-strong); }
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .dot-info { --xk-xlog-dot: var(--op-accent); }
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .dot-warning { --xk-xlog-dot: var(--op-warning); }
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .dot-error { --xk-xlog-dot: var(--op-danger); }
 
 /* Output box */
-body.panel-page #view-xray-logs .xk-xlog-box {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-box {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -25426,7 +25427,7 @@ body.panel-page #view-xray-logs .xk-xlog-box {
   background: var(--op-editor);
 }
 
-body.panel-page #view-xray-logs .xk-xlog-output {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-output {
   position: relative;
   height: 520px;
   min-height: 160px;
@@ -25444,11 +25445,11 @@ body.panel-page #view-xray-logs .xk-xlog-output {
   outline: none;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-output:focus-visible {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-output:focus-visible {
   box-shadow: inset 0 0 0 2px var(--op-accent-border);
 }
 
-body.panel-page #view-xray-logs .xk-xlog-grp {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-grp {
   overflow: hidden;
   color: var(--op-faint);
   font: 11px var(--xk-xlog-mono);
@@ -25456,7 +25457,7 @@ body.panel-page #view-xray-logs .xk-xlog-grp {
   white-space: nowrap;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-flag {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-flag {
   display: inline-flex;
   flex: 0 0 auto;
   width: 18px;
@@ -25466,13 +25467,13 @@ body.panel-page #view-xray-logs .xk-xlog-flag {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--op-text) 18%, transparent);
 }
 
-body.panel-page #view-xray-logs .xk-xlog-flag svg {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-flag svg {
   display: block;
   width: 18px;
   height: 13px;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-btn {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -25480,19 +25481,19 @@ body.panel-page #view-xray-logs .xk-xlog-btn {
   white-space: nowrap;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-btn .xk-action-icon {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-btn .xk-action-icon {
   width: 15px;
   height: 15px;
 }
 
 /* error.log stream: rows wrap; off-screen rows skip layout and paint. */
-body.panel-page #view-xray-logs .xk-xlog-stream {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-stream {
   padding: 4px 0;
 }
 
 /* Floating bars over the output. */
-body.panel-page #view-xray-logs .xk-xlog-selbar,
-body.panel-page #view-xray-logs .xk-xlog-float {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-selbar,
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-float {
   position: absolute;
   bottom: 42px;
   left: 50%;
@@ -25501,7 +25502,7 @@ body.panel-page #view-xray-logs .xk-xlog-float {
   box-shadow: var(--op-shadow-float);
 }
 
-body.panel-page #view-xray-logs .xk-xlog-selbar {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-selbar {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -25516,23 +25517,23 @@ body.panel-page #view-xray-logs .xk-xlog-selbar {
   white-space: nowrap;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-float .xk-action-icon {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-float .xk-action-icon {
   width: 14px;
   height: 14px;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-selbar[hidden],
-body.panel-page #view-xray-logs .xk-xlog-float[hidden] {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-selbar[hidden],
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-float[hidden] {
   display: none;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-selbar .hint {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-selbar .hint {
   margin: 0 4px;
   color: var(--op-faint);
   font: 11px var(--xk-xlog-mono);
 }
 
-body.panel-page #view-xray-logs .xk-xlog-float {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-float {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -25548,7 +25549,7 @@ body.panel-page #view-xray-logs .xk-xlog-float {
   font-weight: 600;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-foot {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-foot {
   display: flex;
   align-items: center;
   gap: 14px;
@@ -25560,56 +25561,56 @@ body.panel-page #view-xray-logs .xk-xlog-foot {
   font-size: calc(11.5px * var(--xk-font-scale, 1));
 }
 
-body.panel-page #view-xray-logs .xk-xlog-foot .xk-log-counter {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-foot .xk-log-counter {
   border: 0 !important;
   background: transparent !important;
   padding: 0;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-raw-note[hidden] {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-raw-note[hidden] {
   display: none;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-card .xk-log-state:empty {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-card .xk-log-state:empty {
   display: none;
 }
 
 /* Fullscreen: the output box takes the free height. */
-body.panel-page #view-xray-logs .xk-xlog-card.is-fullscreen .xk-xlog-box {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-card.is-fullscreen .xk-xlog-box {
   flex: 1 1 0;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-card.is-fullscreen .xk-xlog-output {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-card.is-fullscreen .xk-xlog-output {
   flex: 1 1 0;
   height: 0 !important;
   resize: none;
 }
 
-body.panel-page #view-xray-logs .xk-xlog-card.is-fullscreen .xk-xlog-summary {
+body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-card.is-fullscreen .xk-xlog-summary {
   display: none;
 }
 
 @media (max-width: 900px) {
-  body.panel-page #view-xray-logs .xk-xlog-summary-body {
+  body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-summary-body {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  body.panel-page #view-xray-logs .xk-xlog-search {
+  body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-search {
     flex: 1 1 100%;
     order: 10;
   }
 
-  body.panel-page #view-xray-logs .xk-xlog-summary-head {
+  body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-summary-head {
     flex-wrap: wrap;
     gap: 4px 12px;
     padding-block: 6px;
   }
 
-  body.panel-page #view-xray-logs .xk-xlog-summary-head [data-xlog-summary-extra] {
+  body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-summary-head [data-xlog-summary-extra] {
     display: none;
   }
 
-  body.panel-page #view-xray-logs .xk-xlog-mini {
+  body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-mini {
     flex: 1 1 auto;
     flex-wrap: wrap;
     gap: 4px 10px;
@@ -25617,7 +25618,7 @@ body.panel-page #view-xray-logs .xk-xlog-card.is-fullscreen .xk-xlog-summary {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  body.panel-page #view-xray-logs .xk-xlog-card * {
+  body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-card * {
     transition: none !important;
   }
 }
@@ -27299,3 +27300,30 @@ body.panel-page #fm-volumes-modal .fm-layout-footer { display: flex; justify-con
   body.panel-page #fm-volumes-modal .fm-layout-row-options { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
   body.panel-page #fm-volumes-modal .fm-layout-footer > button { flex: 1 1 120px; }
 }
+
+/* Mihomo log workspace: shared Xray summary/header, isolated virtual rows. */
+body.panel-page #mihomo-clash-logs { position:relative; inset:auto; display:block; height:auto; padding:10px; overflow:visible; min-height:0; }
+body.panel-page #mihomo-clash-logs .xk-xlog-card { min-height:0; }
+body.panel-page #mihomo-clash-logs-list { height:clamp(280px,58vh,720px); overflow:auto; resize:vertical; min-height:220px; outline:none; }
+body.panel-page #mihomo-clash-logs.is-fullscreen { position:fixed;inset:10px;z-index:10000;overflow:auto;background:var(--op-surface); }
+body.panel-page #mihomo-clash-logs.is-fullscreen #mihomo-clash-logs-list {height:calc(100vh - 280px);}
+body.panel-page #mihomo-clash-logs .xk-xlog-live[data-tone=positive] {color:var(--op-success);}
+body.panel-page #mihomo-clash-logs .xk-xlog-live[data-tone=warning] {color:var(--op-warning);}
+body.panel-page #mihomo-clash-logs .is-paused {background:var(--op-warning-soft);color:var(--op-warning);}
+body.panel-page :is(#view-xray-logs,#mihomo-clash-logs) .xk-xlog-chip:is([data-value=proxy],[data-value=direct],[data-value=block],[data-value=dns]) {color:var(--xk-xlog-dot,var(--op-accent));}
+
+/* Semantic route chips, shared by Xray and Mihomo. */
+body.panel-page :is(#view-xray-logs,#mihomo-clash-logs) .xk-xlog-chip[data-value=proxy] {color:var(--op-accent);background:#252238;border-color:#544b87;}
+body.panel-page :is(#view-xray-logs,#mihomo-clash-logs) .xk-xlog-chip[data-value=proxy] :is(em,.dot) {color:inherit;}
+body.panel-page :is(#view-xray-logs,#mihomo-clash-logs) .xk-xlog-chip[data-value=direct] {color:var(--op-success);background:#20242b;border-color:#435f54;}
+body.panel-page :is(#view-xray-logs,#mihomo-clash-logs) .xk-xlog-chip[data-value=direct] :is(em,.dot) {color:inherit;}
+body.panel-page :is(#view-xray-logs,#mihomo-clash-logs) .xk-xlog-chip[data-value=block] {color:var(--op-danger);background:#252127;border-color:#65434a;}
+body.panel-page :is(#view-xray-logs,#mihomo-clash-logs) .xk-xlog-chip[data-value=block] :is(em,.dot) {color:inherit;}
+body.panel-page :is(#view-xray-logs,#mihomo-clash-logs) .xk-xlog-chip[data-value=dns] {color:var(--op-warning);background:#242329;border-color:#58503b;}
+body.panel-page :is(#view-xray-logs,#mihomo-clash-logs) .xk-xlog-chip[data-value=dns] :is(em,.dot) {color:inherit;}
+
+/* Selected chips retain their semantic colour instead of the generic accent. */
+body.panel-page :is(#view-xray-logs,#mihomo-clash-logs) .xk-xlog-chip.is-on[data-value=proxy] {color:var(--op-accent) !important;background:#252238 !important;border-color:#544b87 !important;}
+body.panel-page :is(#view-xray-logs,#mihomo-clash-logs) .xk-xlog-chip.is-on[data-value=direct] {color:var(--op-success) !important;background:#20242b !important;border-color:#435f54 !important;}
+body.panel-page :is(#view-xray-logs,#mihomo-clash-logs) .xk-xlog-chip.is-on[data-value=block] {color:var(--op-danger) !important;background:#252127 !important;border-color:#65434a !important;}
+body.panel-page :is(#view-xray-logs,#mihomo-clash-logs) .xk-xlog-chip.is-on[data-value=dns] {color:var(--op-warning) !important;background:#242329 !important;border-color:#58503b !important;}

@@ -1,0 +1,14 @@
+{
+  "sources": ["https://github.com/MetaCubeX/mihomo/blob/v1.19.34/tunnel/tunnel.go#L597", "https://github.com/MetaCubeX/mihomo/blob/v1.19.34/dns/resolver.go#L160", "Owner screenshot 2026-11-11: RuleSet/adlist and Google OR examples"],
+  "cases": [
+    {"message":"[TCP] 192.168.1.82:53534 --> play.googleapis.com:443 match OR(((RuleSet,google@domain) || (RuleSet,google@ipcidr))) using Google[PL [PL] reality-Umar-Xkeen-UI]","kind":"proxy","group":"Google","node":"PL [PL] reality-Umar-Xkeen-UI"},
+    {"message":"[TCP] 192.168.1.82:54950 --> grs.dbankcloud.asia:443 match RuleSet(adlist@domain) using REJECT","kind":"block","rule":"RuleSet(adlist@domain)"},
+    {"message":"[UDP] [2001:db8::1]:5353 --> [2606:4700:4700::1111]:53 match Match using DIRECT","kind":"direct","sourceIp":"2001:db8::1","destination":"2606:4700:4700::1111","network":"udp"},
+    {"message":"[TCP] 192.168.1.20:5000 --> example.org:443 using GLOBAL","kind":null,"group":"GLOBAL"},
+    {"message":"[TCP] 192.168.1.20:5000 --> example.org:443 doesn't match any rule using DIRECT","kind":"direct","rule":""},
+    {"message":"[TCP] 192.168.1.20:5000 --> example.org:443 match Match using Work [office][Frankfurt [DE] (one)]","kind":"proxy","group":"Work [office]","node":"Frankfurt [DE] (one)"},
+    {"message":"[DNS] cache hit example.org --> [192.0.2.10] A, expire at 2026-11-13 13:00:00","kind":"dns","type":"dns"},
+    {"message":"[TCP] dial AUTO (match RuleSet/google) 192.168.1.82:53534 --> example.org:443 error: i/o timeout","kind":null,"type":"message"},
+    {"message":"<img src=x onerror=alert(1)> unknown event","kind":null,"type":"message"}
+  ]
+}

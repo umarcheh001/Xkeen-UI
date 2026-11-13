@@ -332,27 +332,42 @@
 
     <div id="mihomo-clash-panel-logs" class="xk-mihomo-runtime-panel" data-mihomo-clash-panel="logs" role="tabpanel" aria-labelledby="mihomo-clash-tab-logs" hidden>
       <section id="mihomo-clash-logs" class="xk-mihomo-logs-workspace" aria-labelledby="mihomo-clash-logs-title">
-          <div class="xk-mihomo-logs-head">
-            <div><h3 id="mihomo-clash-logs-title">Логи Mihomo</h3><span id="mihomo-clash-logs-state" role="status" aria-live="polite">Ожидание</span></div>
-            <div class="xk-mihomo-logs-actions">
-              <button type="button" id="mihomo-clash-logs-pause" class="btn-secondary btn-icon" aria-label="Пауза логов">{{ op_icon('pause') }}</button>
-              <button type="button" id="mihomo-clash-logs-clear" class="btn-secondary btn-icon" aria-label="Очистить логи">{{ op_icon('clear') }}</button>
+        <div class="xk-xlog-card" data-xlog-file="access">
+          <div class="xk-xlog-head">
+            <h3 id="mihomo-clash-logs-title" class="xk-xlog-title">Логи Mihomo</h3>
+            <span id="mihomo-clash-logs-state" class="xk-xlog-live" role="status" aria-live="polite">Ожидание</span>
+            <div class="xk-xlog-seg" role="group" aria-label="Просмотр потока">
+              <button type="button" id="mihomo-clash-logs-play" class="xk-xlog-seg-btn" hidden>{{ op_icon('play') }}<span>Пуск</span></button>
+              <button type="button" id="mihomo-clash-logs-pause" class="xk-xlog-seg-btn" aria-label="Пауза логов" aria-pressed="false">{{ op_icon('pause') }}<span>Пауза</span></button>
+              <button type="button" id="mihomo-clash-logs-stop" class="xk-xlog-seg-btn" title="Отключить просмотр потока. Настройки Mihomo сохраняются.">{{ op_icon('stop') }}<span>Стоп</span></button>
             </div>
+            <span class="xk-xlog-spacer"></span>
+            <div class="xk-xlog-search">{{ op_icon('search') }}<input id="mihomo-clash-logs-filter" class="xray-log-filter" type="search" placeholder="Поиск: домен, IP, группа, узел…" aria-label="Фильтр логов" autocomplete="off"><kbd class="xk-xlog-kbd">/</kbd></div>
+            <button type="button" id="mihomo-clash-logs-order" class="btn-secondary xk-xlog-icon-btn" aria-label="Порядок логов" aria-pressed="true">{{ op_icon('sort') }}</button>
+            <details class="dt-log-menu xk-xlog-menu"><summary class="btn-secondary xk-xlog-icon-btn" aria-label="Ещё">{{ op_icon('more') }}</summary>
+              <div class="dt-log-menu-panel xk-xlog-menu-panel">
+                <div class="xk-xlog-menu-title">Вид</div>
+                <label class="xk-xlog-menu-item">Показывать уровень<select id="mihomo-log-local-level" aria-label="Фильтр уровня"><option value="all">Все</option><option value="debug">Debug</option><option value="info">Info</option><option value="warning">Warning</option><option value="error">Error</option></select></label>
+                <label class="xk-xlog-menu-item" title="Минимальный уровень получаемого потока. Настройки ядра не меняются.">Получать события<select id="mihomo-clash-logs-level" aria-label="Уровень потока"><option value="all">Обычный поток (info)</option><option value="debug">Debug (до 5 минут)</option><option value="info">Info</option><option value="warning">Warning и Error</option><option value="error">Error</option></select></label>
+                <div class="xk-xlog-menu-sep"></div><div class="xk-xlog-menu-title">Данные</div>
+                <button type="button" class="xk-xlog-menu-item" id="mihomo-clash-logs-copy">{{ op_icon('duplicate') }}Копировать видимое</button>
+                <button type="button" class="xk-xlog-menu-item" id="mihomo-clash-logs-clear">{{ op_icon('broom') }}Очистить экран</button>
+              </div>
+            </details>
+            <button type="button" id="mihomo-log-fullscreen" class="btn-secondary xk-xlog-icon-btn" aria-label="Полный экран" aria-pressed="false">{{ op_icon('fullscreen') }}</button>
           </div>
-          <div class="xk-mihomo-logs-filters">
-            <select id="mihomo-clash-logs-level" aria-label="Уровень логов"><option value="all">Все уровни (upstream info)</option><option value="debug">Debug (до 5 минут)</option><option value="info">Info</option><option value="warning">Warning</option><option value="error">Error</option></select>
-            <input id="mihomo-clash-logs-filter" type="search" aria-label="Фильтр логов" placeholder="Фильтр сообщения или поля">
-            <select id="mihomo-clash-logs-order" aria-label="Порядок логов">
-              <option value="newest">Новые события сверху</option>
-              <option value="oldest">Старые события сверху</option>
-            </select>
-            <button type="button" class="btn-secondary" id="mihomo-clash-logs-start">В начало</button>
-            <button type="button" class="btn-secondary" id="mihomo-clash-logs-end">В конец</button>
-            <button type="button" class="btn-secondary" id="mihomo-clash-logs-follow" aria-pressed="true">Автопрокрутка</button>
-            <button type="button" class="btn-secondary" id="mihomo-clash-logs-copy">Копировать</button>
+          <div id="mihomo-log-summary" class="xk-xlog-summary" aria-label="Сводка по соединениям">
+            <button type="button" class="xk-xlog-summary-head" data-mlog-summary-toggle aria-expanded="false" aria-controls="mihomo-log-summary-body"><span class="t">Сводка</span><span class="xk-xlog-mini" data-mlog-summary-mini></span><span class="xk-xlog-grp" data-mlog-summary-extra></span><span class="xk-xlog-summary-tog"><span data-label>Развернуть</span>{{ op_icon('chevron-down') }}</span></button>
+            <div id="mihomo-log-summary-body" class="xk-xlog-summary-body" data-mlog-summary-body hidden></div>
           </div>
-          <ol id="mihomo-clash-logs-list" class="xk-mihomo-logs-list" aria-live="off"></ol>
-          <div id="mihomo-clash-logs-empty" class="xk-mihomo-logs-empty">Новые записи появятся здесь в реальном времени.</div>
+          <div id="mihomo-log-chips" class="xk-xlog-chips" aria-label="Фильтры журнала"></div>
+          <div class="xk-xlog-box">
+            <div id="mihomo-clash-logs-list" role="grid" aria-label="Строки лога Mihomo" tabindex="0"></div>
+            <button type="button" class="xk-xlog-float" data-mlog-new hidden>К новым</button>
+            <div id="mihomo-log-selection" class="xk-xlog-selbar" role="toolbar" aria-label="Выбранные строки" hidden><span>Выбрано <b data-count>0</b></span><button type="button" class="btn-secondary" data-selection="copy-selected">Копировать строки лога</button><button type="button" class="btn-secondary" data-selection="copy-tsv">Копировать таблицей</button><button type="button" class="btn-secondary" data-selection="clear-selection" aria-label="Снять выбор">{{ op_icon('close') }}</button></div>
+            <div class="xk-xlog-foot"><span id="mihomo-log-stats"></span><span class="xk-xlog-spacer"></span><span>История с момента открытия вкладки</span></div>
+          </div>
+        </div>
       </section>
     </div>
 

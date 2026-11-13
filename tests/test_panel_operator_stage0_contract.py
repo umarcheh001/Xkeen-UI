@@ -100,7 +100,8 @@ def test_stage0_inventory_covers_views_accordions_engines_and_all_modals(tmp_pat
     # remaining controls. The Xray logs summary collapses to one line.
     # Mihomo import keeps existing managed-subscription actions in a disclosure
     # so its source step stays compact without removing those actions.
-    assert len(accordions) == 15
+    # The Mihomo log summary is now collapsible, matching the Xray log summary.
+    assert len(accordions) == 16
     assert all(item["target_id"] and item["target_present"] for item in accordions)
     assert all(item["states"] == ["collapsed", "expanded"] for item in accordions)
     # the diagnostics window's menu replaced the old DNS guidance disclosure

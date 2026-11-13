@@ -2,462 +2,447 @@ import {
   mihomoClashLogsWsUrl,
   requestMihomoClashWsToken,
   fetchMihomoClashGroups,
-} from './client.js';
-import { mihomoCountryFlag, mihomoNodeCountryCode, mihomoNodeDisplayName } from './visuals.js';
+} from "./client.js";
+import { createMihomoLogModel } from "./log_model.js";
+import { createMihomoLogView } from "./log_view.js";
+import { mihomoLogRowText } from "./log_export.js";
 
-const MAX_LOG_ROWS = 500;
-const LOG_SETTINGS_KEY = 'xkeen:mihomo-clash-log-settings:v1';
-const GROUP_ICON_RULES = [
-  [/заблок|blocked/i, '×'],
-  [/direct|напрям/i, '↗'],
-  [/telegram/i, '➤'],
-  [/discord/i, '♢'],
-  [/steam/i, 'S'],
-  [/cdn/i, '◉'],
-  [/ai/i, '✦'],
-  [/fallback/i, '⇄'],
-];
-
-let root = null;
-let active = false;
-let generation = 0;
-let capabilities = {};
-let runtime = {};
-let paused = false;
-let level = 'all';
-let query = '';
-let rows = [];
-let socket = null;
-let controller = null;
-let renderFrame = 0;
-let reconnectTimer = 0;
-let reconnectAttempt = 0;
-let order = 'newest';
-let autoFollow = true;
-let routeVisuals = new Map();
-let routeVisualsRequest = null;
-
-function upstreamLogLevel() {
-  // Mihomo's level is a minimum threshold. The economical default is info;
-  // selecting "all" keeps the local filter broad without enabling debug.
-  return ['debug', 'info', 'warning', 'error'].includes(level) && level !== 'all'
-    ? level : 'info';
-}
-
-function byId(id) { return document.getElementById(id); }
-
-function escapeHtml(value) {
-  return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
-
-function searchText(row) {
-  const route = parseRouteMeta(row?.message);
-  return [row?.level, row?.message, route.group, route.node, route.country,
-    ...Object.entries(row?.fields || {}).flat(),
-    ...(row?.devices || []).flatMap((device) => [device?.ip, device?.name])]
-    .join(' ').toLocaleLowerCase('ru');
-}
-
-function countryFlag(code) {
-  const normalized = String(code || '').trim().toUpperCase();
-  if (!/^[A-Z]{2}$/u.test(normalized)) return '';
-  return [...normalized].map((letter) => String.fromCodePoint(127397 + letter.charCodeAt(0))).join('');
-}
-
-function parseRouteMeta(message) {
-  const text = String(message || '');
-  const using = text.match(/\busing\s+(.+)$/u);
-  const rest = String(using?.[1] || '').trim();
-  const match = rest.match(/^(.+?)\[[A-Z]{2}\s+\[([A-Z]{2})\]\s*(.+)$/u)
-    || rest.match(/^(.+?)(?:\[[\u{1F1E6}-\u{1F1FF}]{2}\s*)?\[([A-Z]{2})\]\s*(.+)$/u);
-  if (!match) return { group: '', country: '', node: '' };
-  const group = String(match[1] || '').trim();
-  const country = String(match[2] || '').toUpperCase();
-  const node = String(match[3] || '').replace(/\]$/u, '').trim();
-  return { group, country, node };
-}
-
-function groupIcon(group) {
-  const match = GROUP_ICON_RULES.find(([pattern]) => pattern.test(String(group || '')));
-  return match ? match[1] : '•';
-}
-
-function rebuildRouteVisuals(payload) {
-  routeVisuals = new Map();
-  const groups = [
-    ...(Array.isArray(payload?.groups) ? payload.groups : []),
-    ...(payload?.global_group && typeof payload.global_group === 'object' ? [payload.global_group] : []),
-  ];
-  for (const group of groups) {
-    const groupName = String(group?.name || '');
-    if (groupName) routeVisuals.set(groupName, { icon: String(group?.icon || ''), kind: 'group' });
-    for (const node of Array.isArray(group?.nodes) ? group.nodes : []) {
-      const nodeName = String(node?.name || '');
-      if (nodeName && !routeVisuals.has(nodeName)) {
-        routeVisuals.set(nodeName, { icon: String(node?.icon || ''), kind: 'node' });
-      }
-    }
-  }
-}
-
-function ensureRouteVisuals() {
-  if (routeVisualsRequest) return;
-  routeVisualsRequest = fetchMihomoClashGroups()
-    .then((payload) => {
-      rebuildRouteVisuals(payload);
-      render();
-    })
-    .catch(() => {})
-    .finally(() => { routeVisualsRequest = null; });
-}
-
-function routeBadgeMarkup(route) {
-  const groupVisual = routeVisuals.get(route.group) || {};
-  const nodeVisual = routeVisuals.get(route.node) || {};
-  const countryCode = route.country || mihomoNodeCountryCode(route.node);
-  const flag = mihomoCountryFlag(countryCode);
-  const nodeName = route.node ? mihomoNodeDisplayName(route.node, countryCode) : '';
-  const groupMarker = groupVisual.icon
-    ? `<img src="${escapeHtml(groupVisual.icon)}" alt="" loading="lazy" referrerpolicy="no-referrer">`
-    : `<span class="xk-mihomo-log-group-icon" aria-hidden="true">${escapeHtml(groupIcon(route.group))}</span>`;
-  const nodeMarker = nodeVisual.icon
-    ? `<img src="${escapeHtml(nodeVisual.icon)}" alt="" loading="lazy" referrerpolicy="no-referrer">`
-    : '';
-  return [
-    route.group
-      ? `<span class="xk-mihomo-log-route"><span class="xk-mihomo-log-route-icon">${groupMarker}</span><span>${escapeHtml(route.group)}</span></span>`
-      : '',
-    flag?.svg
-      ? `<span class="xk-mihomo-log-country" data-country="${escapeHtml(flag.code)}" role="img" aria-label="${escapeHtml(flag.label)}" title="${escapeHtml(flag.label)}">${flag.svg}</span>`
-      : '',
-    route.node
-      ? `<span class="xk-mihomo-log-node">${nodeMarker}${escapeHtml(nodeName || route.node)}</span>`
-      : '',
-  ].join('');
-}
-
-function loadSettings() {
-  try {
-    const saved = JSON.parse(window.localStorage.getItem(LOG_SETTINGS_KEY) || '{}');
-    if (saved.order === 'newest' || saved.order === 'oldest') order = saved.order;
-    if (typeof saved.autoFollow === 'boolean') autoFollow = saved.autoFollow;
-  } catch (error) {}
-}
-
-function saveSettings() {
-  try { window.localStorage.setItem(LOG_SETTINGS_KEY, JSON.stringify({ order, autoFollow })); } catch (error) {}
-}
-
-function scrollToEdge(edge) {
-  const list = byId('mihomo-clash-logs-list');
-  if (!list) return;
-  list.scrollTop = edge === 'start' ? 0 : list.scrollHeight;
-}
-
-function rowPlainText(row) {
-  const route = parseRouteMeta(row?.message);
-  const meta = [route.group, route.country && countryFlag(route.country), route.node]
-    .filter(Boolean).join(' ');
-  return [
-    row?.time || '—',
-    row?.sequence ? `#${row.sequence}` : '',
-    String(row?.level || 'info').toUpperCase(),
-    meta,
-    row?.message || '—',
-    ...Object.entries(row?.fields || {}).map(([key, value]) => `${key}=${value}`),
-  ].filter(Boolean).join(' ');
-}
-
-function visibleRows() {
-  const filtered = filteredRows();
-  return order === 'newest' ? [...filtered].reverse() : filtered;
-}
-
-function annotatedLogText(value, devices) {
-  const text = String(value ?? '');
-  const aliases = (Array.isArray(devices) ? devices : [])
-    .map((device) => ({ ip: String(device?.ip || ''), name: String(device?.name || '') }))
-    .filter((device) => device.ip && device.name)
-    .sort((a, b) => b.ip.length - a.ip.length);
-  if (!aliases.length) return escapeHtml(text);
-  let cursor = 0;
-  let html = '';
-  while (cursor < text.length) {
-    let next = null;
-    for (const alias of aliases) {
-      let index = text.indexOf(alias.ip, cursor);
-      while (index >= 0) {
-        const left = index > 0 ? text[index - 1] : '';
-        const right = text[index + alias.ip.length] || '';
-        if (!/[\w.]/u.test(left) && !/[\w.]/u.test(right)) break;
-        index = text.indexOf(alias.ip, index + alias.ip.length);
-      }
-      if (index >= 0 && (!next || index < next.index || (index === next.index && alias.ip.length > next.alias.ip.length))) {
-        next = { index, alias };
-      }
-    }
-    if (!next) { html += escapeHtml(text.slice(cursor)); break; }
-    html += escapeHtml(text.slice(cursor, next.index + next.alias.ip.length));
-    html += `<span class="xk-mihomo-device-name" title="Имя устройства для ${escapeHtml(next.alias.ip)}">${escapeHtml(next.alias.name)}</span>`;
-    cursor = next.index + next.alias.ip.length;
-  }
-  return html;
-}
-
-function filteredRows() {
-  const needle = query.trim().toLocaleLowerCase('ru');
-  return rows.filter((row) => (level === 'all' || row.level === level)
-    && (!needle || searchText(row).includes(needle)));
-}
-
-function setState(copy, tone = 'neutral') {
-  const state = byId('mihomo-clash-logs-state');
-  if (!state) return;
-  state.textContent = String(copy || '');
-  state.dataset.tone = tone;
-}
-
-function render() {
-  const list = byId('mihomo-clash-logs-list');
-  const empty = byId('mihomo-clash-logs-empty');
-  if (!list || !empty) return;
-  const previousScrollTop = list.scrollTop;
-  const followTail = list.hidden
-    || list.scrollHeight <= list.clientHeight
-    || list.scrollHeight - list.clientHeight - list.scrollTop <= 24;
-  const visible = visibleRows();
-  list.innerHTML = visible.map((row) => {
-    const fields = Object.entries(row.fields || {})
-      .map(([key, value]) => `${key}=${value}`).join(' · ');
-    const sequence = Number.isFinite(Number(row.sequence)) ? `#${Number(row.sequence)}` : '';
-    const levelText = String(row.level || 'info').toUpperCase();
-    const route = parseRouteMeta(row.message);
-    return `<li data-log-level="${escapeHtml(row.level)}">
-      <article class="xk-mihomo-log-card">
-        <header class="xk-mihomo-log-card-head">
-          <time class="xk-mihomo-log-time">${escapeHtml(row.time || '—')}</time>
-          <span class="xk-mihomo-log-sequence">${escapeHtml(sequence)}</span>
-          <strong>${escapeHtml(levelText)}</strong>
-          ${routeBadgeMarkup(route)}
-        </header>
-        <div class="xk-mihomo-log-message">${annotatedLogText(row.message || '—', row.devices)}</div>
-        ${fields ? `<small>${annotatedLogText(fields, row.devices)}</small>` : ''}
-      </article>
-    </li>`;
-  }).join('');
-  list.hidden = visible.length === 0;
-  empty.hidden = visible.length > 0;
-  if (visible.length) {
-    const followEdge = order === 'newest' ? list.scrollTop <= 24 : list.scrollHeight - list.clientHeight - list.scrollTop <= 24;
-    if (autoFollow && (followEdge || followTail)) scrollToEdge(order === 'newest' ? 'start' : 'end');
-    else list.scrollTop = previousScrollTop;
-  }
-  const silent = String(runtime?.log_level || '').toLowerCase() === 'silent';
-  empty.textContent = rows.length && !visible.length
-    ? 'Записи по текущему фильтру не найдены.'
-    : (silent
-      ? 'В config.yaml задан log-level: silent. Логи работают, но Mihomo почти не создаёт новых записей.'
-      : 'Новые записи появятся здесь в реальном времени. История до открытия вкладки не загружается.');
-  if (paused) setState(`Пауза · ${rows.length}/${MAX_LOG_ROWS}`, 'warning');
-  else if (socket) setState(`Live · ${rows.length}/${MAX_LOG_ROWS}${silent ? ' · silent' : ''}`, 'positive');
-  const pause = byId('mihomo-clash-logs-pause');
-  if (pause) {
-    pause.setAttribute('aria-pressed', paused ? 'true' : 'false');
-    pause.classList.toggle('is-paused', paused);
-    pause.setAttribute('aria-label', paused ? 'Продолжить вывод логов' : 'Пауза логов');
-  }
-  const orderSelect = byId('mihomo-clash-logs-order');
-  if (orderSelect) orderSelect.value = order;
-  const follow = byId('mihomo-clash-logs-follow');
-  if (follow) {
-    follow.setAttribute('aria-pressed', autoFollow ? 'true' : 'false');
-    follow.textContent = autoFollow ? 'Автопрокрутка' : 'Автопрокрутка выкл.';
-  }
-}
-
-function setPaused(nextPaused) {
-  paused = !!nextPaused;
-  render();
-}
-
-function scheduleRender() {
-  if (renderFrame) return;
-  renderFrame = window.requestAnimationFrame(() => {
-    renderFrame = 0;
-    if (active && !paused) render();
-  });
-}
-
-function closeStream() {
-  const currentSocket = socket;
-  socket = null;
-  if (controller) { try { controller.abort(); } catch (error) {} }
+const SETTINGS = "xkeen:mihomo-clash-log-settings:v1";
+const model = createMihomoLogModel();
+let root = null,
+  view = null,
+  active = false,
+  stopped = false,
+  generation = 0,
+  socket = null,
   controller = null;
-  if (reconnectTimer) window.clearTimeout(reconnectTimer);
+let reconnectTimer = 0,
+  reconnectAttempt = 0,
+  renderFrame = 0,
+  statsTimer = 0;
+let level = "all",
+  localLevel = "all",
+  capabilities = {},
+  runtime = {},
+  summaryOpen = false;
+const visuals = new Map();
+const byId = (id) => document.getElementById(id);
+const upstreamLogLevel = () =>
+  ["debug", "info", "warning", "error"].includes(level) ? level : "info";
+function save() {
+  try {
+    localStorage.setItem(
+      SETTINGS,
+      JSON.stringify({ order: model.snapshot().order, summaryOpen }),
+    );
+  } catch {}
+}
+function load() {
+  try {
+    const s = JSON.parse(localStorage.getItem(SETTINGS) || "{}");
+    model.setOrder(s.order);
+    summaryOpen = s.summaryOpen === true;
+  } catch {}
+}
+function setState(text, tone = "neutral") {
+  const el = byId("mihomo-clash-logs-state");
+  if (!el) return;
+  if (el.textContent !== text) el.textContent = text;
+  el.dataset.tone = tone;
+}
+function render(force = false) {
+  if (!view) return;
+  const s = model.snapshot();
+  view.render(s, { force });
+  const pause = byId("mihomo-clash-logs-pause");
+  pause.setAttribute("aria-pressed", String(s.paused));
+  pause.classList.toggle("is-paused", s.paused);
+  pause.setAttribute(
+    "aria-label",
+    s.paused ? "Продолжить вывод логов" : "Пауза логов",
+  );
+  const label = pause.querySelector("span");
+  label.textContent = s.paused
+    ? `Продолжить${s.pending ? " +" + s.pending : ""}`
+    : "Пауза";
+  pause.hidden = stopped;
+  byId("mihomo-clash-logs-play").hidden = !stopped;
+  byId("mihomo-clash-logs-order").setAttribute(
+    "aria-pressed",
+    String(s.order === "newest"),
+  );
+  byId("mihomo-clash-logs-order").title =
+    s.order === "newest"
+      ? "Новые сверху. Нажмите — старые сверху"
+      : "Старые сверху. Нажмите — новые сверху";
+  if (stopped) setState("Остановлено");
+  else if (s.paused)
+    setState(
+      `Пауза · ${s.buffered}/500${s.evictedWhilePaused ? " · вытеснено " + s.evictedWhilePaused : ""}`,
+      "warning",
+    );
+  else if (
+    socket?.readyState === 1 ||
+    (socket?.readyState === undefined && socket)
+  )
+    setState(
+      `Онлайн · ${s.buffered}/500${runtime.log_level === "silent" ? " · silent" : ""}`,
+      "positive",
+    );
+  const bar = byId("mihomo-log-selection");
+  bar.hidden = !s.selected.length;
+  bar.querySelector("[data-count]").textContent = s.selected.length;
+}
+function schedule() {
+  if (!renderFrame)
+    renderFrame = requestAnimationFrame(() => {
+      renderFrame = 0;
+      if (active) render();
+    });
+  if (!statsTimer)
+    statsTimer = setTimeout(() => {
+      statsTimer = 0;
+      if (active) render(true);
+    }, 1000);
+}
+function closeStream() {
+  const old = socket;
+  socket = null;
+  controller?.abort();
+  controller = null;
+  if (reconnectTimer) clearTimeout(reconnectTimer);
   reconnectTimer = 0;
-  if (currentSocket) {
-    currentSocket.onopen = null;
-    currentSocket.onmessage = null;
-    currentSocket.onerror = null;
-    currentSocket.onclose = null;
-    try { currentSocket.close(); } catch (error) {}
+  if (old) {
+    old.onopen = old.onmessage = old.onerror = old.onclose = null;
+    try {
+      old.close();
+    } catch {}
   }
 }
-
-function scheduleReconnect(runGeneration, delay) {
-  if (!active || generation !== runGeneration || reconnectTimer) return;
-  reconnectTimer = window.setTimeout(() => {
-    reconnectTimer = 0;
-    if (active && generation === runGeneration) void openStream(runGeneration);
-  }, Math.max(250, Number(delay) || 750));
+function reconnect(run) {
+  if (!active || stopped || generation !== run || reconnectTimer) return;
+  reconnectAttempt += 1;
+  reconnectTimer = setTimeout(
+    () => {
+      reconnectTimer = 0;
+      void openStream(run);
+    },
+    Math.min(5000, 500 * 2 ** Math.min(3, reconnectAttempt - 1)),
+  );
 }
-
-async function openStream(runGeneration) {
-  if (!active || capabilities.logs_stream !== true) {
-    setState('Поток логов недоступен без WebSocket runtime.', 'warning');
-    render();
+async function openStream(run) {
+  if (!active || stopped || run !== generation) return;
+  if (capabilities.logs_stream !== true) {
+    setState("Поток логов недоступен без WebSocket runtime.", "warning");
     return;
   }
-  const requestController = new AbortController();
-  controller = requestController;
-  setState('Подключение…');
+  const request = new AbortController();
+  controller = request;
+  setState("Подключение…");
   try {
     const token = await requestMihomoClashWsToken({
-      signal: requestController.signal,
-      scope: 'mihomo-clash-logs',
+      signal: request.signal,
+      scope: "mihomo-clash-logs",
     });
-    if (!active || generation !== runGeneration || !token) return;
-    const nextSocket = new WebSocket(mihomoClashLogsWsUrl(token, upstreamLogLevel()));
-    socket = nextSocket;
-    nextSocket.onopen = () => { reconnectAttempt = 0; render(); };
-    nextSocket.onmessage = (event) => {
-      if (!active || generation !== runGeneration || socket !== nextSocket) return;
-      let message = null;
-      try { message = JSON.parse(event.data); } catch (error) { return; }
-      if (message?.type !== 'mihomo-clash-logs' || Number(message.schema_version) !== 1) return;
-      if (message.state === 'ended' && message?.payload?.reason === 'debug_window_expired') {
-        // The server deliberately caps debug. Return the next reconnect to
-        // the economical info stream instead of reopening debug forever.
-        level = 'all';
-        const select = byId('mihomo-clash-logs-level');
-        if (select) select.value = 'all';
-        setState('Debug завершён через 5 минут · возвращаем upstream info.', 'warning');
+    if (!active || stopped || generation !== run || request.signal.aborted)
+      return;
+    if (!token) {
+      setState("Не удалось открыть поток · повторяем…", "warning");
+      reconnect(run);
+      return;
+    }
+    const ws = new WebSocket(mihomoClashLogsWsUrl(token, upstreamLogLevel()));
+    socket = ws;
+    ws.onopen = () => {
+      if (socket !== ws) return;
+      reconnectAttempt = 0;
+      render(true);
+    };
+    ws.onmessage = (event) => {
+      if (!active || stopped || generation !== run || socket !== ws) return;
+      let message;
+      try {
+        message = JSON.parse(event.data);
+      } catch {
         return;
       }
-      if (message.state === 'error') {
-        const code = String(message?.error?.code || 'stream_failed');
-        setState(code === 'stream_busy'
-          ? 'Предыдущий поток завершается · повторяем подключение…'
-          : 'Поток прерван · повторяем подключение…', 'warning');
+      if (
+        message?.type !== "mihomo-clash-logs" ||
+        Number(message.schema_version) !== 1
+      )
+        return;
+      if (
+        message.state === "ended" &&
+        message.payload?.reason === "debug_window_expired"
+      ) {
+        level = "all";
+        byId("mihomo-clash-logs-level").value = "all";
+        setState(
+          "Debug завершён через 5 минут · возвращаем обычный поток.",
+          "warning",
+        );
+        closeStream();
+        reconnect(run);
         return;
       }
-      if (message.state !== 'live' || !message.payload) return;
-      rows.push(message.payload);
-      if (rows.length > MAX_LOG_ROWS) rows.splice(0, rows.length - MAX_LOG_ROWS);
-      // A busy Mihomo instance can deliver hundreds of records in one event
-      // loop turn. Rebuilding the whole 500-row list for every record makes
-      // the controls temporarily unresponsive, so coalesce paints per frame.
-      if (!paused) scheduleRender();
-      else setState(`Пауза · ${rows.length}/${MAX_LOG_ROWS}`, 'warning');
-    };
-    nextSocket.onerror = () => setState('Соединение с логами прервано.', 'warning');
-    nextSocket.onclose = () => {
-      if (socket === nextSocket) socket = null;
-      if (active && generation === runGeneration) {
-        reconnectAttempt += 1;
-        const delay = Math.min(5000, 500 * (2 ** Math.min(3, reconnectAttempt - 1)));
-        setState('Переподключение потока логов…', 'neutral');
-        scheduleReconnect(runGeneration, delay);
+      if (message.state === "error") {
+        setState(
+          message.error?.code === "stream_busy"
+            ? "Предыдущий поток завершается · повторяем подключение…"
+            : "Поток прерван · повторяем подключение…",
+          "warning",
+        );
+        return;
+      }
+      if (message.state === "live" && message.payload) {
+        model.append(message.payload);
+        schedule();
       }
     };
-  } catch (error) {
-    if (!requestController.signal.aborted && active && generation === runGeneration) {
-      reconnectAttempt += 1;
-      setState('Не удалось открыть поток · повторяем…', 'warning');
-      scheduleReconnect(runGeneration, Math.min(5000, 500 * (2 ** Math.min(3, reconnectAttempt - 1))));
+    ws.onerror = () => setState("Соединение с логами прервано.", "warning");
+    ws.onclose = () => {
+      if (socket !== ws) return;
+      socket = null;
+      if (active && !stopped && generation === run) {
+        setState("Переподключение потока логов…");
+        reconnect(run);
+      }
+    };
+  } catch {
+    if (!request.signal.aborted && active && !stopped && generation === run) {
+      setState("Не удалось открыть поток · повторяем…", "warning");
+      reconnect(run);
     }
   } finally {
-    if (controller === requestController) controller = null;
+    if (controller === request) controller = null;
   }
 }
-
+function rowText(r, tsv = false) {
+  return mihomoLogRowText(r, tsv);
+}
+async function copy(records, tsv = false) {
+  try {
+    await navigator.clipboard.writeText(
+      records.map((r) => rowText(r, tsv)).join("\n"),
+    );
+    setState(`Скопировано · ${records.length} записей`, "positive");
+  } catch {
+    setState("Не удалось скопировать записи.", "warning");
+  }
+}
+function filter(field, value) {
+  const s = model.snapshot();
+  if (field === "kind") {
+    const kinds = new Set(s.filters.kinds);
+    if (kinds.has(value)) kinds.delete(value);
+    else kinds.add(value);
+    model.setFilters({ kinds: [...kinds] });
+  } else if (field === "reset") {
+    model.setFilters({
+      query: "",
+      kinds: ["proxy", "direct", "block"],
+      node: "",
+      device: "",
+      domain: "",
+      level: "all",
+    });
+    byId("mihomo-clash-logs-filter").value = "";
+    byId("mihomo-log-local-level").value = "all";
+    localLevel = "all";
+  } else model.setFilters({ [field]: s.filters[field] === value ? "" : value });
+  render(true);
+}
+function onAction(action) {
+  const s = model.snapshot(),
+    row = s.records.find((r) => r.id === action.id);
+  if (action.type === "select") model.select(action.id, action);
+  else if (action.type === "select-all") model.select(null, { all: true });
+  else if (action.type === "clear-selection") model.clearSelection();
+  else if (action.type === "copy-raw" && row) {
+    void copy([row]);
+    return;
+  } else if (action.type === "copy-selected" || action.type === "copy-tsv") {
+    void copy(
+      s.visible.filter((r) => s.selected.includes(r.id)),
+      action.type === "copy-tsv",
+    );
+    return;
+  } else if (action.type.startsWith("filter-") && row) {
+    const field = action.type.slice(7);
+    if(field==='node'&&row.kind!=='proxy'){
+      if(row.kind)model.setFilters({kinds:[row.kind]});
+      render(true);return;
+    }
+    filter(
+      field,
+      field === "device"
+        ? row.sourceIp
+        : field === "domain"
+          ? row.destination
+          : row.node || row.group,
+    );
+    return;
+  }
+  render(true);
+}
+function applySummary() {
+  const box = byId("mihomo-log-summary");
+  box.classList.toggle("is-open", summaryOpen);
+  box.querySelector("[data-mlog-summary-body]").hidden = !summaryOpen;
+  const b = box.querySelector("[data-mlog-summary-toggle]");
+  b.setAttribute("aria-expanded", String(summaryOpen));
+  b.querySelector("[data-label]").textContent = summaryOpen
+    ? "Свернуть"
+    : "Развернуть";
+}
+function initView() {
+  if (view) return;
+  view = createMihomoLogView({
+    host: byId("mihomo-clash-logs-list"),
+    summary: byId("mihomo-log-summary"),
+    chips: byId("mihomo-log-chips"),
+    footer: byId("mihomo-log-stats"),
+    onAction,
+    routeIcon: (group) => visuals.get(group) || "",
+  });
+}
 function bind() {
-  if (!root || root.dataset.bound === '1') return;
-  root.dataset.bound = '1';
-  byId('mihomo-clash-logs-pause')?.addEventListener('click', () => setPaused(!paused));
-  byId('mihomo-clash-logs-clear')?.addEventListener('click', () => { rows = []; render(); });
-  byId('mihomo-clash-logs-level')?.addEventListener('change', (event) => {
-    level = event.target.value || 'all';
-    render();
-    // Changing the level is an upstream operation: close the old socket first
-    // so Mihomo does not keep a second stream alive while the new one starts.
+  if (root.dataset.bound === "1") return;
+  root.dataset.bound = "1";
+  root.addEventListener("click", (event) => {
+    const f = event.target.closest("[data-filter]");
+    if (f) {
+      filter(f.dataset.filter, f.dataset.value);
+      return;
+    }
+    const action = event.target.closest("[data-selection]");
+    if (action) onAction({ type: action.dataset.selection });
+    if (event.target.closest("[data-mlog-summary-toggle]")) {
+      summaryOpen = !summaryOpen;
+      applySummary();
+      save();
+      view?.refresh();
+    }
+  });
+  byId("mihomo-clash-logs-pause").addEventListener("click", () => {
+    model.setPaused(!model.snapshot().paused);
+    render(true);
+  });
+  byId("mihomo-clash-logs-stop").addEventListener("click", () => {
+    stopped = true;
+    generation += 1;
+    closeStream();
+    render(true);
+  });
+  byId("mihomo-clash-logs-play").addEventListener("click", () => {
+    stopped = false;
+    model.setPaused(false);
+    generation += 1;
+    void openStream(generation);
+    render(true);
+  });
+  byId("mihomo-clash-logs-clear").addEventListener("click", () => {
+    model.clear();
+    render(true);
+  });
+  byId("mihomo-clash-logs-copy").addEventListener(
+    "click",
+    () => void copy(model.snapshot().visible),
+  );
+  byId("mihomo-clash-logs-filter").addEventListener("input", (event) => {
+    model.setFilters({ query: event.target.value });
+    render(true);
+  });
+  byId("mihomo-log-local-level").addEventListener("change", (event) => {
+    localLevel = event.target.value;
+    model.setFilters({ level: localLevel });
+    render(true);
+  });
+  byId("mihomo-clash-logs-level").addEventListener("change", (event) => {
+    level = event.target.value;
+    generation += 1;
     closeStream();
     reconnectAttempt = 0;
-    if (active) void openStream(generation);
+    if (active && !stopped) void openStream(generation);
   });
-  byId('mihomo-clash-logs-filter')?.addEventListener('input', (event) => {
-    query = event.target.value || ''; render();
+  byId("mihomo-clash-logs-order").addEventListener("click", () => {
+    model.setOrder(model.snapshot().order === "newest" ? "oldest" : "newest");
+    save();
+    render(true);
+    view?.scrollNew();
   });
-  byId('mihomo-clash-logs-order')?.addEventListener('change', (event) => {
-    order = event.target.value === 'oldest' ? 'oldest' : 'newest';
-    autoFollow = true;
-    saveSettings();
-    render();
-    scrollToEdge(order === 'newest' ? 'start' : 'end');
+  root
+    .querySelector("[data-mlog-new]")
+    .addEventListener("click", () => view?.scrollNew());
+  byId("mihomo-log-fullscreen").addEventListener("click", () => {
+    root.classList.toggle("is-fullscreen");
+    byId("mihomo-log-fullscreen").setAttribute(
+      "aria-pressed",
+      String(root.classList.contains("is-fullscreen")),
+    );
+    view?.refresh();
   });
-  byId('mihomo-clash-logs-start')?.addEventListener('click', () => { autoFollow = false; saveSettings(); scrollToEdge('start'); render(); });
-  byId('mihomo-clash-logs-end')?.addEventListener('click', () => { autoFollow = false; saveSettings(); scrollToEdge('end'); render(); });
-  byId('mihomo-clash-logs-follow')?.addEventListener('click', () => {
-    autoFollow = !autoFollow;
-    saveSettings();
-    render();
-    if (autoFollow) scrollToEdge(order === 'newest' ? 'start' : 'end');
-  });
-  byId('mihomo-clash-logs-copy')?.addEventListener('click', async () => {
-    const text = visibleRows().map(rowPlainText).join('\n');
-    try {
-      await navigator.clipboard.writeText(text);
-      setState(`Скопировано · ${visibleRows().length} записей`, 'positive');
-    } catch (error) {
-      setState('Не удалось скопировать записи.', 'warning');
+  root.addEventListener("keydown", (event) => {
+    if (event.key === "/" && !event.target.closest("input,select,textarea")) {
+      event.preventDefault();
+      byId("mihomo-clash-logs-filter").focus();
+    }
+    if (event.key === "Escape") {
+      root.classList.remove("is-fullscreen");
+      byId("mihomo-log-fullscreen")?.setAttribute("aria-pressed", "false");
     }
   });
 }
-
 export function initMihomoClashLogs() {
-  root = byId('mihomo-clash-logs');
+  root = byId("mihomo-clash-logs");
   if (!root) return false;
-  loadSettings();
+  load();
   bind();
-  render();
+  applySummary();
   return true;
 }
-
-export function activateMihomoClashLogs(nextCapabilities = {}, nextRuntime = {}) {
+export function activateMihomoClashLogs(
+  nextCapabilities = {},
+  nextRuntime = {},
+) {
   if (!root && !initMihomoClashLogs()) return false;
   deactivateMihomoClashLogs();
   active = true;
-  paused = false;
+  stopped = false;
+  model.setPaused(false);
   capabilities = nextCapabilities || {};
   runtime = nextRuntime || {};
   reconnectAttempt = 0;
   generation += 1;
-  ensureRouteVisuals();
+  initView();
+  render(true);
   void openStream(generation);
+  const run = generation;
+  void fetchMihomoClashGroups()
+    .then((payload) => {
+      if (!active || generation !== run) return;
+      visuals.clear();
+      // GLOBAL arrives as a separate field, not inside `groups`; a route that
+      // names it still needs its icon.
+      for (const g of [...(payload?.groups || []), payload?.global_group])
+        if (g?.name && g.icon) visuals.set(g.name, g.icon);
+      view?.refresh();
+    })
+    .catch(() => {});
   return true;
 }
-
 export function deactivateMihomoClashLogs() {
   active = false;
   generation += 1;
-  if (renderFrame) window.cancelAnimationFrame(renderFrame);
-  renderFrame = 0;
   closeStream();
-  root?.setAttribute('aria-busy', 'false');
+  if (renderFrame) cancelAnimationFrame(renderFrame);
+  if (statsTimer) clearTimeout(statsTimer);
+  renderFrame = statsTimer = 0;
+  view?.destroy();
+  view = null;
+  root?.classList.remove("is-fullscreen");
   return true;
 }
-
 export const mihomoClashLogsApi = Object.freeze({
   init: initMihomoClashLogs,
   activate: activateMihomoClashLogs,

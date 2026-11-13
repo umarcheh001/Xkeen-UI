@@ -23,7 +23,7 @@ const NODE_CHIPS_MAX = 6;
 const KINDS = ['proxy', 'direct', 'block', 'dns'];
 const LEVELS = ['debug', 'info', 'warning', 'error'];
 const LEVEL_LABEL = { debug: 'debug', info: 'info', warning: 'warn', error: 'error' };
-const KIND_LABEL = { proxy: 'proxy', direct: 'direct', block: 'block', dns: 'dns' };
+const KIND_LABEL = { proxy: 'Через прокси', direct: 'Напрямую', block: 'Заблокировано', dns: 'DNS' };
 // DNS lookups are mostly noise next to real connections: hidden until the dns chip is on.
 const DEFAULT_KINDS = ['proxy', 'direct', 'block'];
 
@@ -45,6 +45,7 @@ const VIEW_CSS = `
 .rows { position: absolute; inset: 0 0 auto 0; will-change: transform; }
 .tr { position: absolute; top: 0; left: 0; right: 0; height: ${ROW_H}px; border-bottom: 1px solid color-mix(in srgb, var(--op-border) 55%, transparent); contain: strict; user-select: none; }
 .tr[hidden] { display: none; }
+.tr.stripe { background: var(--op-surface-2); }
 .tr:hover { background: var(--op-surface-2); }
 .tr.sel { background: var(--op-accent-soft); }
 .tr.open { background: var(--op-surface-2); }
@@ -74,6 +75,7 @@ const VIEW_CSS = `
 .pill { display: inline-flex; flex: 0 1 auto; align-items: center; gap: 5px; min-width: 0; height: 20px; padding: 0 8px; overflow: hidden; border: 1px solid transparent; border-radius: 999px; font: 600 11.5px/20px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
 .pill.in { flex: 0 0 auto; border-color: var(--op-border); background: var(--op-surface-2); color: var(--op-muted); font-weight: 500; }
 .pill.proxy { background: var(--op-accent-soft); color: var(--op-accent); font-family: inherit; }
+.pill.proxy .label { color: color-mix(in srgb, var(--op-accent) 65%, var(--op-text) 35%); }
 .pill.direct { background: var(--op-success-soft); color: var(--op-success); }
 .pill.block { background: var(--op-danger-soft); color: var(--op-danger); }
 .pill.dns { background: var(--op-warning-soft); color: var(--op-warning); }
@@ -397,7 +399,7 @@ export function createXrayLogView(options) {
     state.rowsBySeq.clear();
     state.freeRows = [];
     const head = mode === 'access'
-      ? '<span>Время</span><span>Устройство</span><span>Назначение</span><span>Маршрут</span><span>Порт</span><span></span>'
+      ? '<span>Время</span><span>Устройство</span><span>Назначение</span><span>Маршрут / узел</span><span>Порт</span><span></span>'
       : '<span>Время</span><span>Уровень</span><span>Модуль</span><span>Сообщение</span><span></span>';
     shadow.innerHTML = `${inlineStyle}<div class="wrap is-${mode}" part="wrap">
       <div class="thead" role="row"><span></span>
@@ -435,14 +437,14 @@ export function createXrayLogView(options) {
   function routeHtml(p, kind) {
     const inPill = p.inTag ? `<span class="pill in">${escapeHtml(p.inTag)}</span>` : '';
     const arrow = inPill ? '<span class="arr">→</span>' : '';
-    if (p.status === 'rejected') return `${inPill}${arrow}<span class="pill block">rejected</span>`;
+    if (p.status === 'rejected') return `${inPill}${arrow}<span class="pill block">Заблокировано</span>`;
     if (!p.outTag) return inPill;
     if (kind === 'proxy') {
       const info = nodeInfo(p.outTag);
       const group = info.group ? `<span class="grp">${escapeHtml(info.group)}</span>` : '';
-      return `${inPill}${arrow}<span class="pill proxy" title="${escapeHtml(p.outTag)}">${flagHtml(info)}${escapeHtml(info.label)}</span>${group}`;
+      return `${inPill}${arrow}<span class="pill proxy" title="${escapeHtml(p.outTag)}"><span class="label">Через прокси · </span>${flagHtml(info)}${escapeHtml(info.label)}</span>${group}`;
     }
-    return `${inPill}${arrow}<span class="pill ${kind || 'proxy'}">${escapeHtml(p.outTag)}</span>`;
+    return `${inPill}${arrow}<span class="pill ${kind || 'proxy'}" title="${escapeHtml(p.outTag)}">${escapeHtml(KIND_LABEL[kind] || p.outTag)}</span>`;
   }
 
   function rowHtml(record) {
@@ -517,6 +519,7 @@ export function createXrayLogView(options) {
   }
 
   function syncRowState(row, record) {
+    row.classList.toggle('stripe', (disp(record.ord) - baseDisp()) % 2 === 1);
     const sel = state.selected.has(record.seq);
     const open = state.openSeq === record.seq;
     if (row._sel !== sel) {
@@ -584,7 +587,6 @@ export function createXrayLogView(options) {
         <div><dt>Назначение</dt><dd>${escapeHtml(p.host || '—')}${p.port ? ':' + escapeHtml(p.port) : ''}${p.proto ? ' (' + escapeHtml(p.proto) + ')' : ''}</dd></div>
         <div><dt>${info ? 'Узел' : 'Outbound'}</dt><dd>${info ? flagHtml(info) + escapeHtml(info.label) : escapeHtml(p.outTag || '—')}</dd></div>
         ${info ? `<div><dt>Тег outbound${info.group ? ' / подписка' : ''}</dt><dd>${escapeHtml(p.outTag)}${info.group ? ' · ' + escapeHtml(info.group) : ''}</dd></div>` : ''}
-        <div><dt>Пользователь</dt><dd>${escapeHtml(p.email || '—')}</dd></div>
         ${p.reason ? `<div><dt>Причина</dt><dd>${escapeHtml(p.reason)}</dd></div>` : ''}
       </dl>
       <div class="line">${escapeHtml(record.line)}</div>

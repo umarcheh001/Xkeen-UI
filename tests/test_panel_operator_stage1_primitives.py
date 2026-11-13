@@ -150,9 +150,8 @@ def test_stage1_flat_effect_and_geometry_contract_is_static():
     assert ".xk-core-source-arch" in pill_blocks[3]
     assert ".xk-core-source-risk, .xk-core-source-installed" in pill_blocks[4]
     assert "#core-modal .xk-core-option-state" in pill_blocks[5]
-    assert "#view-xray-logs .xk-xlog-live" in pill_blocks[6]
-    assert "#view-xray-logs .xk-xlog-badge" in pill_blocks[7]
-    assert "#view-xray-logs .xk-xlog-bar" in pill_blocks[8]
+    for index, component in ((6, '.xk-xlog-live'), (7, '.xk-xlog-badge'), (8, '.xk-xlog-bar')):
+        assert f':is(#view-xray-logs, #mihomo-clash-logs) {component}' in pill_blocks[index]
     assert ".xk-jr-row > .outn" in pill_blocks[9]
 
     assert ")::before," in css

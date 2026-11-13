@@ -1,5 +1,29 @@
 import { test, expect, selectPanelView } from './fixtures.mjs';
 
+test('xray rows alternate their background after filtering and reversing order',async({page})=>{
+  await openLogs(page,'dark',{width:1440,height:900});
+  const colors=()=>rows(page).evaluateAll(els=>els.map(el=>getComputedStyle(el).backgroundColor));
+  const initial=await colors();
+  expect(initial[0]).not.toBe(initial[1]);expect(initial[0]).toBe(initial[2]);expect(initial[1]).toBe(initial[3]);
+  await page.locator('#xray-log-order').click();
+  const reversed=await colors();expect(reversed[0]).not.toBe(reversed[1]);
+  await page.locator('#xray-log-chips [data-xlog-act="kind"][data-value="block"]').click();
+  await expect(rows(page)).toHaveCount(3);
+  const filtered=await colors();expect(filtered[0]).not.toBe(filtered[1]);expect(filtered[0]).toBe(filtered[2]);
+});
+
+test('translated route labels keep technical log content intact',async({page})=>{
+  await openLogs(page,'dark',{width:1600,height:1000});
+  const table=page.locator('#xray-log-output');
+  await expect(table).toContainText('Маршрут / узел');
+  await expect(table).toContainText('Через прокси');
+  await expect(table).toContainText('Напрямую');
+  await expect(table).toContainText('Заблокировано');
+  await expect(page.locator('#xray-log-chips')).toContainText('DNS');
+  const colors=await page.evaluate(()=>['proxy','direct','block'].map(k=>getComputedStyle(document.querySelector(`#xray-log-chips [data-value="${k}"]`)).color));
+  expect(new Set(colors).size).toBe(3);
+});
+
 const restartLines = [
   '[2026-07-29 09:10:00] source=routing result=OK file=03_routing.json duration_ms=41\n',
   '[2026-07-29 09:12:00] source=xray-preflight result=FAIL file=04_outbounds.json phase=validation returncode=23 summary=invalid_rule\n',
@@ -69,8 +93,8 @@ const rows = (page) => page.locator('#xray-log-output .tr:not([hidden])');
 async function readLogsGeometry(page) {
   return page.evaluate(() => {
     const view = document.querySelector('#view-xray-logs');
-    const head = document.querySelector('.xk-xlog-head');
-    const search = document.querySelector('.xk-xlog-search input');
+    const head = view.querySelector('.xk-xlog-head');
+    const search = view.querySelector('.xk-xlog-search input');
     const output = document.querySelector('#xray-log-output');
     const detail = Array.from(document.querySelectorAll('.xk-jr-more')).at(-1) || null;
     const detailToggle = Array.from(document.querySelectorAll('.xk-jr-row > .chev')).at(-1) || null;
@@ -326,7 +350,7 @@ test.describe('Operator Console Stage 4 logs', () => {
       '.xk-xlog-search input',
       '#xray-log-more > summary',
       '#xray-log-fullscreen',
-    ].map((sel) => Math.round(document.querySelector(sel).getBoundingClientRect().height)));
+    ].map((sel) => Math.round(document.querySelector('#view-xray-logs').querySelector(sel).getBoundingClientRect().height)));
     expect(new Set(heights)).toEqual(new Set([32]));
   });
 
@@ -340,8 +364,8 @@ test.describe('Operator Console Stage 4 logs', () => {
     await expect(first.locator('.pill.proxy')).toContainText('Frankfurt-2');
     await expect(first.locator('.pill.proxy .flag svg')).toHaveCount(1);
     await expect(first.locator('.grp')).toContainText('Pecan');
-    await expect(rows(page).nth(1).locator('.pill.direct')).toContainText('direct');
-    await expect(rows(page).nth(2).locator('.pill.block')).toContainText('block');
+    await expect(rows(page).nth(1).locator('.pill.direct')).toContainText('Напрямую');
+    await expect(rows(page).nth(2).locator('.pill.block')).toContainText('Заблокировано');
 
     await expect(page.locator('[data-xlog-raw-note]')).toContainText('Не разобрано и скрыто: 1');
     await page.locator('#xray-log-more > summary').click();
@@ -389,8 +413,12 @@ test.describe('Operator Console Stage 4 logs', () => {
     await expect(rows(page)).toHaveCount(1);
     await page.locator('#xray-log-chips [data-xlog-act="reset"]').click();
 
-    await rows(page).nth(1).locator('.chev').click();
     const detail = page.locator('#xray-log-output .detail');
+    await rows(page).nth(0).locator('.chev').click();
+    await expect(detail.locator('.line')).toContainText(accessLines[0]);
+    await expect(detail.locator('dt')).not.toContainText(['Пользователь']);
+    await rows(page).nth(1).locator('.chev').click();
+    await expect(detail.locator('dt')).not.toContainText(['Пользователь']);
     await expect(detail).toContainText('192.168.1.20');
     await expect(detail.locator('.line')).toContainText(accessLines[1]);
     await detail.locator('[data-field="ip"]').click();
@@ -533,7 +561,7 @@ test.describe('Operator Console Stage 4 logs', () => {
 
   test('"/" focuses the search', async ({ page }) => {
     await openLogs(page, 'dark', { width: 1440, height: 900 });
-    await page.locator('.xk-xlog-title').click();
+    await page.locator('#view-xray-logs .xk-xlog-title').click();
     await page.keyboard.press('/');
     await expect(page.locator('#xray-log-filter')).toBeFocused();
   });
@@ -580,7 +608,7 @@ test.describe('Operator Console Stage 4 logs', () => {
     await expect(menu).toHaveAttribute('open', '');
     await page.locator('#xray-log-interval').selectOption('5000');
     await expect(menu).toHaveAttribute('open', '');
-    await page.locator('.xk-xlog-foot').click();
+    await page.locator('#view-xray-logs .xk-xlog-foot').click();
     await expect(menu).not.toHaveAttribute('open', '');
 
     await summary.click();
@@ -633,7 +661,7 @@ test.describe('Operator Console Stage 4 logs', () => {
     const toggle = page.locator('[data-xlog-summary-toggle]');
     const body = page.locator('[data-xlog-summary-body]');
     await expect(body).toBeHidden();
-    await expect(page.locator('[data-xlog-summary-mini]')).toContainText('proxy');
+    await expect(page.locator('[data-xlog-summary-mini]')).toContainText('Через прокси');
 
     await toggle.click();
     await expect(body).toBeVisible();
@@ -814,7 +842,7 @@ test.describe('Operator Console Stage 4 logs', () => {
   test('the logs card and the operations journal share edges and padding', async ({ page }) => {
     await openLogs(page, 'dark', { width: 1440, height: 900 });
     const boxes = await page.evaluate(() => [
-      document.querySelector('.xk-xlog-card'),
+      document.querySelector('#view-xray-logs .xk-xlog-card'),
       document.querySelector('#view-xray-logs .xk-restart-log-card'),
     ].map((el) => {
       const box = el.getBoundingClientRect();
