@@ -21,6 +21,7 @@ def run_js(body: str, data) -> object:
         pytest.skip("node is not available in this environment")
     script = f"""
     import * as parser from '{MODULE}';
+    import {{ RESTART_SOURCE_META }} from './xkeen-ui/static/js/features/restart_log_sources.js';
     const data = {json.dumps(data, ensure_ascii=False)};
     const out = (() => {{ {body} }})();
     console.log(JSON.stringify(out));
@@ -73,6 +74,20 @@ def test_values_with_commas_inside_stay_whole():
     assert rec["source"] == "Память"
     assert dict(rec["kv"])["cleared"] == "{'xray_logs': 1, 'mihomo': 0, 'geodat': 0, 'egress': 1}"
     assert dict(rec["kv"])["trimmed"] == "True"
+
+
+def test_legacy_optional_module_event_is_translated():
+    line = "2026-11-09 14:11:14,000 [INFO] optional module came without an explicit choice and is switched off | module_id=tool.server-diagnostics"
+    rec = build("core", [line])[0]
+    assert rec["source"] == "Модули"
+    assert rec["msg"] == "Дополнительный модуль отключён: он не был выбран пользователем"
+    assert rec["kv"] == [["module_id", "tool.server-diagnostics"]]
+    assert rec["raw"] == [line]
+
+
+def test_mihomo_batch_restart_has_the_same_description_as_xray():
+    out = run_js("return ['xray-subscriptions-batch', 'mihomo-subscriptions-batch'].map(s => RESTART_SOURCE_META[s]);", [])
+    assert out[1] == {**out[0], "label": "Подписки Mihomo"}
 
 
 def test_sources_get_names_a_user_recognises():

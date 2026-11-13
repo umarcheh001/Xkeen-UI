@@ -179,6 +179,12 @@ export const RESTART_SOURCE_META = Object.freeze({
     failureText: 'обновлены, но перезапуск xkeen завершился ошибкой',
     bucket: 'subscription',
   },
+  'mihomo-subscriptions-batch': {
+    label: 'Подписки Mihomo',
+    successText: 'обновлены одной пачкой, xkeen перезапущен',
+    failureText: 'обновлены, но перезапуск xkeen завершился ошибкой',
+    bucket: 'subscription',
+  },
   'xray-subscriptions-delete-all': {
     label: 'Подписки Xray',
     successText: 'удалены все, xkeen перезапущен',

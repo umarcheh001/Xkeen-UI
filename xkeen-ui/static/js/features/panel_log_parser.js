@@ -35,6 +35,7 @@ const CORE_SOURCES = [
   [/^self_update\b/i, 'Обновление'],
   [/^snapshot/i, 'Снимки'],
   [/^memory guard/i, 'Память'],
+  [/^optional module\b/i, 'Модули'],
   [/^routing\b/i, 'Маршрутизация'],
   [/^xkeen[.:\s]/i, 'Xkeen'],
   [/^devtools\b/i, 'DevTools'],
@@ -168,6 +169,9 @@ function parseCoreLine(line) {
     }
   }
   const source = panelLogCoreSource(msg);
+  if (msg === 'optional module came without an explicit choice and is switched off') {
+    msg = 'Дополнительный модуль отключён: он не был выбран пользователем';
+  }
   // "DNS-over-VLESS: правило…" -- the source column already says it.
   if (source && msg.startsWith(`${source}: `)) msg = msg.slice(source.length + 2);
   return record({
