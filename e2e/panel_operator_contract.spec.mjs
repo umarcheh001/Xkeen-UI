@@ -18,9 +18,10 @@ test.describe('Operator Console Stage 0 runtime contract', () => {
 
       const contract = await page.evaluate(() => {
         // A stylesheet of an optional module refines the operator styles and comes after them.
-        const core = (href) => !/\/static\/server-diagnostics\.css/.test(href || '');
-        const links = Array.from(document.querySelectorAll('link[rel~="stylesheet"]')).filter((link) => core(link.href));
-        const sheets = Array.from(document.styleSheets).filter((sheet) => core(sheet.href));
+        const core = (href, owner) => !/\/static\/server-diagnostics\.css/.test(href || '')
+          && !owner?.hasAttribute('data-xk-module-css');
+        const links = Array.from(document.querySelectorAll('link[rel~="stylesheet"]')).filter((link) => core(link.href, link));
+        const sheets = Array.from(document.styleSheets).filter((sheet) => core(sheet.href, sheet.ownerNode));
         return {
           lastLink: links.at(-1)?.href || '',
           lastSheet: sheets.at(-1)?.href || '',
