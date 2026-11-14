@@ -91,6 +91,10 @@ for (const theme of ['dark', 'light']) {
       await expect(help).toBeVisible();
       await expect(help).toContainText('HandlerService');
       await expect(help).toContainText('не атомарна');
+      await expect(help.locator('.xk-sub-hot-apply-help-card')).toHaveCount(4);
+      const helpBox = await help.locator('.xk-sub-hot-apply-help').boundingBox();
+      expect(helpBox.height).toBeLessThan(width === 850 ? 620 : 900);
+      await help.screenshot({ path: testInfo.outputPath(`hot-apply-help-${theme}-${width}.png`) });
       await page.keyboard.press('Escape');
       await expect(help).toBeHidden();
       await expect(page.locator('#outbounds-subscriptions-modal')).toBeVisible();
