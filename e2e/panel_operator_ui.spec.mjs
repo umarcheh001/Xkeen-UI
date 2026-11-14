@@ -38,6 +38,7 @@ test('operator stylesheet is isolated and loaded last', async ({ page }) => {
   const stylesheets = await page.evaluate(() => {
     // A stylesheet of an optional module refines the operator styles and comes after them.
     return Array.from(document.styleSheets)
+      .filter((sheet) => !sheet.ownerNode?.hasAttribute('data-xk-module-css'))
       .map((sheet) => sheet.href || 'inline')
       .filter((href) => !/\/static\/server-diagnostics\.css/.test(href));
   });

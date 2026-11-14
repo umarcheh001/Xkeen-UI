@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 678,
-      "size_bytes": 9030697,
+      "size_bytes": 9030776,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -14550,7 +14550,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/panel_operator_ui.spec.mjs",
-      "size_bytes": 6472,
+      "size_bytes": 6551,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
