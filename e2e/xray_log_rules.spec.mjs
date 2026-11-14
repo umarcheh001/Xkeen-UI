@@ -11,6 +11,8 @@ async function openView(page) {
     selection.innerHTML = '<span data-xlog-selcount>0</span><button type="button" data-xlog-act="copy-selected-tsv">Копировать таблицу</button>';
     window.__inlineRuleLookups = 0;
     const view = createXrayLogView({ root, selbar: selection,
+      domainHint: () => window.__destinationHint || '',
+      domainsVisible: () => window.__domainsVisible !== false,
       ruleTag: () => { window.__inlineRuleLookups++; return 'inline'; },
       onCopy: text => { window.__ruleCopy = text; } });
     const line = '2026/11/14 17:00:00.001000 from 192.168.10.2:53000 accepted tcp:example.org:443 [redirect -> proxy]';
@@ -108,8 +110,54 @@ test('access receipt defers rule matching to a background batch', async ({ page 
   await expect(page.locator('#rule-test .rule').first()).toHaveText('batch-rule');
 });
 
+test('confirmed destination leads the IP while hints, pause and ambiguity keep their meaning', async ({ page }) => {
+  await openView(page);
+  await page.evaluate(() => {
+    const { view, line } = window.__rules;
+    window.__destinationHint = 'shared.example';
+    window.__rules.ipLine = line.replace('example.org', '203.0.113.7');
+    view.reset([window.__rules.ipLine, window.__rules.ipLine.replace(':53000 ', ':53001 ')]);
+    view.updateRules(() => '', p => p.srcPort === '53000' ? 'exact.example' : '');
+  });
+  const destinations = page.locator('#rule-test .dst');
+  await expect(destinations.nth(0)).toHaveText('exact.example · 203.0.113.7');
+  await expect(destinations.nth(0).locator('small')).toHaveText(' · 203.0.113.7');
+  await expect(destinations.nth(1)).toHaveText('203.0.113.7 · shared.example');
+  await page.evaluate(() => { window.__domainsVisible = false; window.__rules.view.refreshDecorations(); });
+  await expect(destinations.nth(0)).toHaveText('203.0.113.7 · shared.example');
+  await page.evaluate(() => { window.__domainsVisible = true; window.__rules.view.refreshDecorations(); window.__rules.view.setSearch('exact.example'); });
+  await expect(page.locator('#rule-test .tr:not([hidden])')).toHaveCount(1);
+  await page.evaluate(() => window.__rules.view.setSearch(''));
+  await page.evaluate(() => {
+    window.__rules.view.setFrozen(true);
+    window.__rules.view.updateRules(() => '', () => '');
+  });
+  await expect(destinations.nth(0)).toHaveText('exact.example · 203.0.113.7');
+  await page.evaluate(() => window.__rules.view.setFrozen(false));
+  await expect(destinations.nth(0)).toHaveText('203.0.113.7 · shared.example');
+  await page.evaluate(() => window.__rules.view.updateRules(() => '', () => 'other.example'));
+  await expect(destinations.nth(0)).toHaveText('203.0.113.7 · shared.example');
+  await page.evaluate(() => window.__rules.view.copyVisible());
+  expect(await page.evaluate(() => window.__ruleCopy)).toContain('accepted tcp:203.0.113.7:443');
+});
+
+test('domain confirmation works through the shared diagnostic poll without rule tags', async ({ page }) => {
+  await openController(page, { domains: true, tags: false,
+    lines: ['2026/11/14 17:00:00.001000 from 192.168.10.2:53000 accepted tcp:203.0.113.7:443 [redirect -> direct]'],
+    diagnostic: [
+      '2026/11/14 17:00:00.000000 [Info] [1234] proxy/dokodemo: received request for 192.168.10.2:53000',
+      '2026/11/14 17:00:00.000100 [Info] [1234] app/dispatcher: taking detour [direct] for [tcp:exact.example:443]',
+      '2026/11/14 17:00:00.001100 [Info] [1234] proxy/freedom: connection opened to tcp:203.0.113.7:443, local endpoint 192.168.10.1:55000, remote endpoint 203.0.113.7:443',
+    ],
+  });
+  await expect(page.locator('#xray-log-output .dst')).toHaveText('exact.example · 203.0.113.7', { timeout: 9000 });
+  await expect(page.locator('#xray-log-output .rule')).toHaveCount(0);
+  await page.locator('#xray-log-output .chev').click();
+  await expect(page.locator('#xray-log-output .detail')).toContainText('exact.example');
+});
+
 async function openController(page, options = {}) {
-  await page.addInitScript(() => localStorage.setItem('xkeen.ui.xrayLogs.domainsWanted.v1', '0'));
+  await page.addInitScript(domains => localStorage.setItem('xkeen.ui.xrayLogs.domainsWanted.v1', domains ? '1' : '0'), !!options.domains);
   await page.route('**/api/xray-logs/status', route => options.statusError ? route.fulfill({ status: 500, json: {} }) : route.fulfill({ json: { loglevel: options.level || 'info', has_rule_tags: 'tags' in options ? options.tags : true, log_generation: options.generation || 1 } }));
   await page.route('**/api/xray-logs/devices**', route => route.fulfill({ json: { devices: [] } }));
   await page.route('**/api/xray-logs/outbound-names', route => route.fulfill({ json: { ok: true, names: {} } }));
@@ -122,12 +170,12 @@ async function openController(page, options = {}) {
       diagnosticRequests++;
       if (options.hold) await options.hold;
       return route.fulfill({ json: { mode: diagnosticRequests === 1 ? 'full' : 'append',
-        reset: diagnosticRequests === 1, skipped: false, caught_up: true, cursor: 'diagnostic', lines: diagnosticRequests === 1 ? [
+        reset: diagnosticRequests === 1, skipped: false, caught_up: true, cursor: 'diagnostic', lines: diagnosticRequests === 1 ? (options.diagnostic || [
           '2026/11/14 17:00:00.000000 [Info] [1234] proxy/dokodemo: received request for 192.168.10.2:53000',
           '2026/11/14 17:00:00.000100 [Info] [1234] app/dispatcher: Hit route rule: [debug-rule] so taking detour [proxy] for [tcp:example.org:443]',
-        ] : [] } });
+        ]) : [] } });
     }
-    return route.fulfill({ json: { mode: 'full', cursor: 'access', lines: ['2026/11/14 17:00:00.001000 from 192.168.10.2:53000 accepted tcp:example.org:443 [redirect -> proxy]'] } });
+    return route.fulfill({ json: { mode: 'full', cursor: 'access', lines: options.lines || ['2026/11/14 17:00:00.001000 from 192.168.10.2:53000 accepted tcp:example.org:443 [redirect -> proxy]'] } });
   });
   await page.goto('/');
   await selectPanelView(page, 'xray-logs');

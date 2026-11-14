@@ -192,7 +192,7 @@ let xrayLogsModuleApi = null;
       if (_xrayDomainsDisplay) {
         _diagnosticDomainsChanged = ingestXrayLogDestinationDomains([line], { source: 'error_log' }) || _diagnosticDomainsChanged;
       }
-      if (xrayRulesAvailable()) _ruleIndex.ingest(String(line || ''));
+      if (xrayRulesAvailable() || _xrayDomainsDisplay) _ruleIndex.ingest(String(line || ''));
     },
     onReset(meta) {
       _ruleIndex.reset();
@@ -203,7 +203,9 @@ let xrayLogsModuleApi = null;
     onComplete(meta) {
       if (!isLogsViewVisible()) return;
       if (meta.caught_up) _ruleIndex.complete();
-      if (_view && xrayRulesAvailable()) _view.updateRules((p, previous) => _ruleIndex.lookup(p, previous));
+      if (_view && (xrayRulesAvailable() || _xrayDomainsDisplay)) _view.updateRules(
+        (p, previous) => xrayRulesAvailable() ? _ruleIndex.lookup(p, previous) : previous,
+        (p, previous) => _ruleIndex.lookupDomain(p, previous));
       if (_diagnosticDomainsChanged && !_paused) {
         _diagnosticDomainsChanged = false;
         applyXrayLogFilterToOutput();
@@ -1472,6 +1474,7 @@ let xrayLogsModuleApi = null;
         const hint = getXrayDestinationDomainHint(ip);
         return hint && hint.domain ? hint.domain : '';
       },
+      domainsVisible: () => _xrayDomainsDisplay,
       nodeName: (tag) => _outboundNames[tag] || null,
       ansi: (html) => (_ansiEnabled ? ansiSgrToHtml(html) : html),
       onCopy: (text, count, asTable) => {

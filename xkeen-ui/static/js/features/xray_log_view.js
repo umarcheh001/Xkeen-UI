@@ -191,6 +191,7 @@ export function createXrayLogView(options) {
   const hooks = {
     deviceName: typeof opts.deviceName === 'function' ? opts.deviceName : () => '',
     domainHint: typeof opts.domainHint === 'function' ? opts.domainHint : () => '',
+    domainsVisible: typeof opts.domainsVisible === 'function' ? opts.domainsVisible : () => true,
     nodeName: typeof opts.nodeName === 'function' ? opts.nodeName : () => null,
     icon: typeof opts.icon === 'function' ? opts.icon : () => '',
     ansi: typeof opts.ansi === 'function' ? opts.ansi : null,
@@ -299,7 +300,7 @@ export function createXrayLogView(options) {
 
   function makeRecord(line) {
     const text = String(line ?? '').replace(/\r?\n$/, '');
-    const record = { seq: ++state.seq, ord: 0, line: text, lower: '', p: null, kind: '', level: '', domain: '', html: null, v: 0, ruleTag: '', ruleActive: true, ruleRevoked: false };
+    const record = { seq: ++state.seq, ord: 0, line: text, lower: '', p: null, kind: '', level: '', domain: '', html: null, v: 0, ruleTag: '', ruleActive: true, ruleRevoked: false, confirmedDomain: '', domainRevoked: false };
     if (state.mode === 'access') {
       const p = parseXrayAccessLine(text);
       if (p) {
@@ -371,7 +372,7 @@ export function createXrayLogView(options) {
     }
     if (f.groups.length) {
       if (!record.lower) record.lower = record.line.toLowerCase();
-      const lower = record.lower;
+      const lower = record.lower + (hooks.domainsVisible() && record.confirmedDomain ? ' ' + record.confirmedDomain : '');
       if (!f.groups.some((terms) => terms.every((term) => lower.includes(term)))) return false;
     }
     return true;
@@ -433,7 +434,11 @@ export function createXrayLogView(options) {
     return escapeHtml(value);
   }
 
-  function destinationHtml(p) {
+  function destinationHtml(record) {
+    const p = record.p;
+    if (isIpAddress(p.host) && hooks.domainsVisible() && record.confirmedDomain) {
+      return `${escapeHtml(record.confirmedDomain)} <small>· ${escapeHtml(p.host)}</small>`;
+    }
     const hint = isIpAddress(p.host) ? hooks.domainHint(p.host) : '';
     return `${escapeHtml(p.host || '—')}${hint ? ` <small>· ${escapeHtml(hint)}</small>` : ''}`;
   }
@@ -471,7 +476,7 @@ export function createXrayLogView(options) {
     } else {
       record.html = `<span class="lv"></span>${cb}<span class="ts">${escapeHtml(p.time)}</span>`
         + `<span class="dev" title="${escapeHtml(hooks.deviceName(p.srcIp) ? `${hooks.deviceName(p.srcIp)} · ${p.srcIp}` : p.srcIp)}">${deviceHtml(p.srcIp)}</span>`
-        + `<span class="dst" title="${escapeHtml(p.host ? `${p.host}:${p.port}` : '')}">${destinationHtml(p)}</span>`
+        + `<span class="dst" title="${escapeHtml(p.host ? `${p.host}:${p.port}` : '')}">${destinationHtml(record)}</span>`
         + `<span class="rt">${routeHtml(p, p.outKind)}</span>`
         + (state.rulesVisible ? `<span class="rule" title="${escapeHtml(record.ruleTag)}">${escapeHtml(record.ruleTag || '—')}</span>` : '')
         + `<span class="pp">${p.port ? `${escapeHtml(p.port)}/${escapeHtml(p.proto || 'tcp')}` : ''}</span>${chev}`;
@@ -593,6 +598,7 @@ export function createXrayLogView(options) {
       <dl>
         <div><dt>Устройство</dt><dd>${escapeHtml(device || '—')} · ${escapeHtml(p.srcIp)}</dd></div>
         <div><dt>Назначение</dt><dd>${escapeHtml(p.host || '—')}${p.port ? ':' + escapeHtml(p.port) : ''}${p.proto ? ' (' + escapeHtml(p.proto) + ')' : ''}</dd></div>
+        ${hooks.domainsVisible() && record.confirmedDomain && isIpAddress(p.host) ? `<div><dt>Домен</dt><dd>${escapeHtml(record.confirmedDomain)}</dd></div>` : ''}
         ${state.rulesVisible ? `<div><dt>Правило</dt><dd>${escapeHtml(record.ruleTag || 'Не определено')}</dd></div>` : ''}
         <div><dt>${info ? 'Узел' : 'Outbound'}</dt><dd>${info ? flagHtml(info) + escapeHtml(info.label) : escapeHtml(p.outTag || '—')}</dd></div>
         ${info ? `<div><dt>Тег outbound${info.group ? ' / подписка' : ''}</dt><dd>${escapeHtml(p.outTag)}${info.group ? ' · ' + escapeHtml(info.group) : ''}</dd></div>` : ''}
@@ -1059,7 +1065,7 @@ export function createXrayLogView(options) {
       if (state.pendingRulesLookup) {
         const lookup = state.pendingRulesLookup;
         state.pendingRulesLookup = null;
-        updateRules(lookup);
+        updateRules(...lookup);
       }
       refilter();
       renderAll();
@@ -1076,22 +1082,28 @@ export function createXrayLogView(options) {
     queueTableRender();
   }
 
-  function updateRules(lookup) {
-    if (state.frozen) { state.pendingRulesLookup = lookup; return; }
+  function updateRules(lookup, lookupDomain = null) {
+    if (state.frozen) { state.pendingRulesLookup = [lookup, lookupDomain]; return; }
     if (state.mode !== 'access') return;
     let changed = false;
+    let domainsChanged = false;
     for (const record of state.records) {
-      if (!record.p || !record.ruleActive || record.ruleRevoked) continue;
-      const tag = lookup(record.p, record.ruleTag) || '';
-      if (tag === record.ruleTag) continue;
+      if (!record.p || !record.ruleActive) continue;
+      const tag = record.ruleRevoked ? '' : (lookup(record.p, record.ruleTag) || '');
+      const domain = !lookupDomain || record.domainRevoked ? record.confirmedDomain : (lookupDomain(record.p, record.confirmedDomain) || '');
+      if (tag === record.ruleTag && domain === record.confirmedDomain) continue;
       if (record.ruleTag && !tag) record.ruleRevoked = true;
+      if (record.confirmedDomain && !domain) record.domainRevoked = true;
+      domainsChanged ||= domain !== record.confirmedDomain;
       record.ruleTag = tag;
+      record.confirmedDomain = domain;
       record.html = null;
       const row = state.rowsBySeq.get(record.seq);
       if (row) row._v = 0;
       if (dom.detail && state.openSeq === record.seq) dom.detail._seq = null;
       changed = true;
     }
+    if (domainsChanged && state.filter.groups.length) refilter();
     if (changed) queueTableRender();
   }
 

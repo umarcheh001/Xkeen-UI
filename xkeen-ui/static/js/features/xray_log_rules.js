@@ -1,4 +1,5 @@
 import { parseXrayErrorLine } from './xray_log_parser.js';
+import { normalizeXrayLogDomain } from './xray_log_domain_hints.js';
 
 const MAX_SESSIONS = 2048;
 const TTL = 30000;
@@ -44,17 +45,20 @@ export function createXrayLogRuleIndex({ now = Date.now } = {}) {
     }
   }
   function ingest(line) {
-    if (!line.includes('received request for ') && !line.includes('detour [') && !line.includes('tunneling request to ')) return;
+    if (!line.includes('received request for ') && !line.includes('detour [') && !line.includes('tunneling request to ') && !line.includes('connection opened to ')) return;
     const p = parseXrayErrorLine(line);
     if (!p?.session || !Number.isFinite(timestamp(p))) return;
     const source = p.module === 'proxy/dokodemo' && /^received request for (.+)$/.exec(p.message);
     const hit = p.module === 'app/dispatcher' && /^(?:Hit route rule: \[(.*)\] so )?taking detour \[(.*?)\] for \[((?:tcp|udp):.+)\]$/.exec(p.message);
     const tunnel = /^(?:proxy\/(?:vless|vmess)\/outbound|proxy\/(?:trojan|shadowsocks))$/.test(p.module)
       && /^tunneling request to ((?:tcp|udp):\S+) via /.exec(p.message);
-    if (!source && !hit && !tunnel) return;
+    const direct = p.module === 'proxy/freedom'
+      && /^connection opened to ((?:tcp|udp):[^\s,]+), local endpoint /.exec(p.message);
+    const target = tunnel || direct;
+    if (!source && !hit && !target) return;
     let item = sessions.get(p.session);
     if (!item) {
-      item = { created: now(), seen: now(), source: '', proto: '', out: '', tag: '', targets: new Set(), stamp: timestamp(p), conflict: false, ready: false, baseKey: '', keys: new Set() };
+      item = { created: now(), seen: now(), source: '', proto: '', out: '', tag: '', domain: '', targets: new Set(), stamp: timestamp(p), conflict: false, ready: false, baseKey: '', keys: new Set() };
       sessions.set(p.session, item);
       prune();
     }
@@ -67,14 +71,15 @@ export function createXrayLogRuleIndex({ now = Date.now } = {}) {
       const dest = destination(hit[3]);
       if (!dest) return;
       const tag = hit[1] || '';
+      const domain = normalizeXrayLogDomain(dest.target.split('|')[0]);
       if (tag.length > 1024) { item.conflict = true; return; }
-      if (item.proto && (item.tag !== tag || item.out !== hit[2] || item.proto !== dest.proto)) item.conflict = true;
-      Object.assign(item, { tag, out: hit[2], proto: dest.proto, stamp: timestamp(p), seen: now(), ready: false });
+      if (item.proto && (item.tag !== tag || item.domain !== domain || item.out !== hit[2] || item.proto !== dest.proto)) item.conflict = true;
+      Object.assign(item, { tag, domain, out: hit[2], proto: dest.proto, stamp: timestamp(p), seen: now(), ready: false });
       if (item.targets.size < 4) item.targets.add(dest.target);
       else if (!item.targets.has(dest.target)) item.conflict = true;
     }
-    if (tunnel) {
-      const dest = destination(tunnel[1]);
+    if (target) {
+      const dest = destination(target[1]);
       if (dest && item.targets.size < 4) item.targets.add(dest.target);
     }
     if (item.source && item.proto && item.out) {
@@ -102,7 +107,7 @@ export function createXrayLogRuleIndex({ now = Date.now } = {}) {
     prune();
     for (const item of sessions.values()) item.ready = now() - item.seen >= WINDOW;
   }
-  function lookup(p, previous = '') {
+  function lookup(p, previous = '', field = 'tag') {
     if (!p || p.mark !== '->') return '';
     const target = `${String(p.host).toLowerCase()}|${p.port}`;
     const bucket = buckets.get(`${String(p.srcIp).toLowerCase()}|${p.srcPort}|${p.proto || 'tcp'}|${p.outTag}|${target}`);
@@ -115,13 +120,14 @@ export function createXrayLogRuleIndex({ now = Date.now } = {}) {
     for (const id of bucket) {
       const item = sessions.get(id);
       if (now() - item.created > TTL || Math.abs(item.stamp - stamp) > WINDOW || !item.targets.has(target)) continue;
-      if (match || !item.ready || item.conflict || !item.tag) return '';
+      if (match || !item.ready || item.conflict || !item[field]) return '';
       match = item;
     }
-    if (match && previous && match.tag !== previous) return '';
-    return match?.tag || previous;
+    if (match && previous && match[field] !== previous) return '';
+    return match?.[field] || previous;
   }
-  return { ingest, complete, lookup, reset() { sessions.clear(); buckets.clear(); lostUntil = expiredUntil = -Infinity; } };
+  return { ingest, complete, lookup, lookupDomain(p, previous = '') { return lookup(p, previous, 'domain'); },
+    reset() { sessions.clear(); buckets.clear(); lostUntil = expiredUntil = -Infinity; } };
 }
 
 export function createXrayLogDiagnosticQueue({ consume, onComplete, onReset = () => {},

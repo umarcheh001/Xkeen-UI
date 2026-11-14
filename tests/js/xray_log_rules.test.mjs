@@ -64,6 +64,66 @@ test('sniffed routeOnly domain matches the explicit proxy tunnel target', () => 
   assert.equal(index.lookup(access(undefined, 'tcp:203.0.113.8:443')), '');
 });
 
+test('direct routeOnly matches the freedom target, never its local or remote endpoint', () => {
+  const { index, advance } = setup();
+  session(index, 1, '192.168.10.2:53000', 'direct-ru', 'tcp:example.org:443', 'direct');
+  index.ingest(errorLine(1, 'connection opened to tcp:203.0.113.7:443, local endpoint 192.168.10.1:55000, remote endpoint 203.0.113.8:443', 'proxy/freedom'));
+  advance();
+  assert.equal(index.lookup(access(undefined, 'tcp:203.0.113.7:443', 'direct')), 'direct-ru');
+  assert.equal(index.lookup(access(undefined, 'tcp:203.0.113.8:443', 'direct')), '');
+  assert.equal(index.lookup(access(undefined, 'tcp:192.168.10.1:55000', 'direct')), '');
+});
+
+test('direct UDP IPv6 target can arrive before the route hit', () => {
+  const { index, advance } = setup();
+  index.ingest(errorLine(1, 'connection opened to udp:[2001:db8::7]:443, local endpoint [::]:55000, remote endpoint [2001:db8::7]:443', 'proxy/freedom'));
+  session(index, 1, '[2001:db8::2]:53000', 'direct-udp', 'udp:example.org:443', 'direct');
+  advance();
+  assert.equal(index.lookup(access('[2001:db8::2]:53000', 'udp:[2001:db8::7]:443', 'direct')), 'direct-udp');
+});
+
+test('blocked routeOnly stays unknown without explicit target evidence', () => {
+  const { index, advance } = setup();
+  session(index, 1, '192.168.10.2:53000', 'block-ads', 'tcp:example.org:443', 'block');
+  index.ingest(errorLine(1, 'connection opened to tcp:203.0.113.7:443, local endpoint 192.168.10.1:55000, remote endpoint 203.0.113.7:443', 'proxy/blackhole'));
+  advance();
+  assert.equal(index.lookup(access(undefined, undefined, 'block')), 'block-ads');
+  assert.equal(index.lookup(access(undefined, 'tcp:203.0.113.7:443', 'block')), '');
+});
+
+test('a domain needs the same explicit destination proof even without a rule tag', () => {
+  const { index, advance } = setup();
+  session(index, 1, '192.168.10.2:53000', '', 'tcp:example.org:443', 'direct');
+  advance();
+  assert.equal(index.lookupDomain(access(undefined, 'tcp:203.0.113.7:443', 'direct')), '');
+  index.ingest(errorLine(1, 'connection opened to tcp:203.0.113.7:443, local endpoint 192.168.10.1:55000, remote endpoint 203.0.113.7:443', 'proxy/freedom'));
+  assert.equal(index.lookupDomain(access(undefined, 'tcp:203.0.113.7:443', 'direct')), 'example.org');
+  assert.equal(index.lookup(access(undefined, 'tcp:203.0.113.7:443', 'direct')), '');
+});
+
+test('domains sharing an IP are resolved per session and ambiguity revokes confirmation', () => {
+  const { index, advance } = setup();
+  for (const [id, source, domain] of [[1, '192.168.10.2:53000', 'one.example'], [2, '192.168.10.2:53001', 'two.example']]) {
+    session(index, id, source, 'same-rule', `tcp:${domain}:443`);
+    index.ingest(errorLine(id, 'tunneling request to tcp:203.0.113.7:443 via 198.51.100.10:443', 'proxy/vless/outbound'));
+  }
+  advance();
+  const first = access(undefined, 'tcp:203.0.113.7:443');
+  assert.equal(index.lookupDomain(first), 'one.example');
+  assert.equal(index.lookupDomain(access('192.168.10.2:53001', 'tcp:203.0.113.7:443')), 'two.example');
+  session(index, 3, '192.168.10.2:53000', 'same-rule', 'tcp:other.example:443');
+  index.ingest(errorLine(3, 'tunneling request to tcp:203.0.113.7:443 via 198.51.100.10:443', 'proxy/vless/outbound'));
+  advance();
+  assert.equal(index.lookupDomain(first, 'one.example'), '');
+});
+
+test('IP route destinations are not promoted to confirmed domains', () => {
+  const { index, advance } = setup();
+  session(index, 1, '192.168.10.2:53000', 'ip-rule', 'tcp:203.0.113.7:443');
+  advance();
+  assert.equal(index.lookupDomain(access(undefined, 'tcp:203.0.113.7:443')), '');
+});
+
 test('IPv6 UDP endpoints are matched without confusing bracket boundaries', () => {
   const { index, advance } = setup();
   session(index, 1, '[2001:db8::2]:53000', 'udp6', 'udp:[2001:db8::7]:443');
