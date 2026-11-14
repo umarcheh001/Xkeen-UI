@@ -1495,7 +1495,7 @@ let xrayLogsModuleApi = null;
       onRenameDevice: (ip, name) => { void openXrayDeviceNamesModal({ ip, name }); },
     });
     _view.setMaxLines(_maxLines);
-    _view.setRulesVisible(xrayRulesAvailable());
+    syncXrayRuleColumn(_view);
     _view.setOrder(readXrayLogOrder());
     _view.setShowRaw(!!extras.showRaw);
     _view.setShowDns(!!extras.showDns);
@@ -1538,7 +1538,7 @@ let xrayLogsModuleApi = null;
     const runtime = runtimeState || readXrayLogsRuntimeState();
     const view = viewState || readXrayLogsViewState(refs, runtime);
     xview.setMode(xrayLogViewMode());
-    xview.setRulesVisible(xrayRulesAvailable());
+    syncXrayRuleColumn(xview);
     if (_viewDecorStamp !== _decorStamp) {
       _viewDecorStamp = _decorStamp;
       xview.refreshDecorations();
@@ -2538,6 +2538,13 @@ let xrayLogsModuleApi = null;
     return _hasXrayRuleTags && _xrayLogLevelGivesDomains() && _isAccessFileName(_currentFile);
   }
 
+  function syncXrayRuleColumn(view) {
+    // Остановленный снимок сохраняет колонку независимо от нового уровня ядра.
+    if (!_liveWanted && !_streaming && _activeLogLevel === 'none'
+      && _isAccessFileName(_currentFile) && _lastLines.length) return;
+    view.setRulesVisible(xrayRulesAvailable());
+  }
+
   function wantsXrayDiagnosticHints() {
     return _isAccessFileName(_currentFile) && _xrayLogLevelGivesDomains()
       && (_xrayDomainsDisplay || xrayRulesAvailable()) && isLogsViewVisible();
@@ -2850,7 +2857,7 @@ let xrayLogsModuleApi = null;
       _hasXrayRuleTags = data.has_rule_tags === true;
       if (_xrayLogGeneration !== null && data.log_generation !== _xrayLogGeneration) stopXrayDomainHintsPolling();
       _xrayLogGeneration = data.log_generation;
-      if (_view) _view.setRulesVisible(xrayRulesAvailable());
+      if (_view) syncXrayRuleColumn(_view);
       maybeRefreshXrayDestinationDomainHints();
       const nowGivesDomains = level === 'info' || level === 'debug';
       // Уровень только что поднялся до резолвящего (напр. warning→info после

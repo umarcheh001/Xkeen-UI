@@ -45,9 +45,8 @@ const VIEW_CSS = `
 .thead { position: sticky; top: 0; z-index: 2; height: ${HEAD_H}px; border-bottom: 1px solid var(--op-border); background: var(--op-surface); color: var(--op-muted); font-size: 11px; font-weight: 650; letter-spacing: .03em; text-transform: uppercase; }
 .body { position: relative; overflow: hidden; contain: strict; }
 .rows { position: absolute; inset: 0 0 auto 0; will-change: transform; }
-.tr { position: absolute; top: 0; left: 0; right: 0; height: ${ROW_H}px; border-bottom: 1px solid color-mix(in srgb, var(--op-border) 55%, transparent); contain: strict; user-select: none; }
+.tr { position: absolute; top: 0; left: 0; right: 0; height: ${ROW_H}px; border-bottom: 1px solid color-mix(in srgb, var(--op-border) 40%, transparent); contain: strict; user-select: none; }
 .tr[hidden] { display: none; }
-.tr.stripe { background: var(--op-surface-2); }
 .tr:hover { background: var(--op-surface-2); }
 .tr.sel { background: var(--op-accent-soft); }
 .tr.open { background: var(--op-surface-2); }
@@ -529,7 +528,6 @@ export function createXrayLogView(options) {
   }
 
   function syncRowState(row, record) {
-    row.classList.toggle('stripe', (disp(record.ord) - baseDisp()) % 2 === 1);
     const sel = state.selected.has(record.seq);
     const open = state.openSeq === record.seq;
     if (row._sel !== sel) {

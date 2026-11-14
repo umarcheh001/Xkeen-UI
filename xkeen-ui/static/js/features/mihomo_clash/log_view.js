@@ -21,8 +21,8 @@ const CSS = `
 *{box-sizing:border-box}button{cursor:pointer;font:inherit;color:inherit}button:focus-visible{outline:2px solid var(--op-accent)}
 .header,.tr{display:grid;grid-template-columns:30px 76px minmax(150px,.8fr) minmax(180px,1.1fr) minmax(240px,1.4fr) minmax(130px,.7fr) 76px 24px;align-items:center;gap:10px;padding:0 10px}
 .header{position:sticky;top:0;height:30px;z-index:4;background:var(--op-surface-2);border-bottom:1px solid var(--op-border);border-left:3px solid transparent;font-size:10px;font-weight:650;text-transform:uppercase;color:var(--op-muted)}
-.body{position:relative}.tr{position:absolute;left:0;right:0;height:32px;border-bottom:1px solid var(--op-border);border-left:3px solid var(--op-border);background:var(--op-surface);cursor:default}
-.tr.stripe{background:var(--op-surface-2)}.tr.proxy{border-left-color:var(--op-accent)}.tr.direct{border-left-color:var(--op-success)}.tr.block,.tr.error{border-left-color:var(--op-danger)}.tr.dns{border-left-color:var(--op-warning)}
+.body{position:relative}.tr{position:absolute;left:0;right:0;height:32px;border-bottom:1px solid color-mix(in srgb,var(--op-border) 40%,transparent);border-left:3px solid var(--op-border);background:var(--op-surface);cursor:default}
+.tr.proxy{border-left-color:var(--op-accent)}.tr.direct{border-left-color:var(--op-success)}.tr.block,.tr.error{border-left-color:var(--op-danger)}.tr.dns{border-left-color:var(--op-warning)}
 .tr.selected{background:var(--op-accent-soft)}.tr>span{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.muted,.time,.port{color:var(--op-muted);font:11px var(--mono)}.device small{margin-left:7px;color:var(--op-muted);font:10px var(--mono)}
 .pill{display:inline-flex;align-items:center;gap:5px;max-width:100%;height:20px;vertical-align:middle;padding:0 8px;border-radius:999px;font-size:11.5px;overflow:hidden;white-space:nowrap}.pill.proxy{color:var(--op-accent);background:var(--op-accent-soft)}.pill.proxy .label{color:color-mix(in srgb,var(--op-accent) 65%,var(--op-text) 35%)}.pill.direct{color:var(--op-success);background:var(--op-success-soft)}.pill.block{color:var(--op-danger);background:var(--op-danger-soft)}.pill.dns{color:var(--op-warning);background:var(--op-warning-soft)}
 .flag{display:inline-flex;flex-shrink:0;width:18px;height:13px;border-radius:2px;overflow:hidden}.flag svg{width:18px;height:13px}.node{min-width:0;overflow:hidden;text-overflow:ellipsis}.route-icon{width:14px;height:14px;object-fit:contain}.rule{color:var(--op-muted);font:11px var(--mono)}
@@ -156,7 +156,6 @@ export function createMihomoLogView({
         body.append(el);
       }
       el.style.top = `${topOf(i, open)}px`;
-      el.classList.toggle("stripe", i % 2 === 1);
       el.classList.toggle("selected", snapshot.selected.includes(r.id));
       const key = `${openId === r.id}|${snapshot.selected.includes(r.id)}`;
       if (el._key !== key) {

@@ -110,7 +110,7 @@ test('access receipt defers rule matching to a background batch', async ({ page 
 
 async function openController(page, options = {}) {
   await page.addInitScript(() => localStorage.setItem('xkeen.ui.xrayLogs.domainsWanted.v1', '0'));
-  await page.route('**/api/xray-logs/status', route => options.statusError ? route.fulfill({ status: 500, json: {} }) : route.fulfill({ json: { loglevel: options.level || 'info', has_rule_tags: 'tags' in options ? options.tags : true, log_generation: 1 } }));
+  await page.route('**/api/xray-logs/status', route => options.statusError ? route.fulfill({ status: 500, json: {} }) : route.fulfill({ json: { loglevel: options.level || 'info', has_rule_tags: 'tags' in options ? options.tags : true, log_generation: options.generation || 1 } }));
   await page.route('**/api/xray-logs/devices**', route => route.fulfill({ json: { devices: [] } }));
   await page.route('**/api/xray-logs/outbound-names', route => route.fulfill({ json: { ok: true, names: {} } }));
   await page.route('**/api/restart-log', route => route.fulfill({ json: { lines: [] } }));
@@ -151,6 +151,35 @@ test('status failure hides rule availability instead of keeping stale data', asy
   await expect(page.locator('#xray-log-output .rule')).toHaveText('debug-rule', { timeout: 9000 });
   options.statusError = true;
   await expect(page.locator('#xray-log-output .thead')).not.toContainText('Правило', { timeout: 12000 });
+});
+
+test('stopping logs preserves the rule column and tags while filtering the snapshot', async ({ page }) => {
+  const options = {};
+  await openController(page, options);
+  const table = page.locator('#xray-log-output');
+  await expect(table.locator('.rule')).toHaveText('debug-rule', { timeout: 9000 });
+  await page.route('**/api/xray-logs/disable', route => {
+    options.level = 'none';
+    options.generation = 2;
+    return route.fulfill({ json: { ok: true } });
+  });
+  const stoppedStatus = page.waitForResponse(async response => response.url().endsWith('/api/xray-logs/status')
+    && (await response.json()).loglevel === 'none');
+  await page.locator('#xray-log-disable-btn').click();
+  await stoppedStatus;
+  await expect(page.locator('#xray-log-status')).toContainText('Логи остановлены');
+  await expect(table.locator('.rule-head')).toBeVisible();
+  await expect(table.locator('.rule')).toHaveText('debug-rule');
+  const search = page.locator('#xray-log-filter');
+  await search.fill('absent.invalid');
+  await search.press('Enter');
+  await expect(table.locator('.tr:not([hidden])')).toHaveCount(0);
+  await search.fill('example.org');
+  await search.press('Enter');
+  await expect(table.locator('.tr:not([hidden])')).toHaveCount(1);
+  await expect(table.locator('.rule')).toHaveText('debug-rule');
+  await table.locator('.chev').click();
+  await expect(table.locator('.detail')).toContainText('debug-rule');
 });
 
 test('a diagnostic response arriving after leaving the view cannot attach a tag', async ({ page }) => {

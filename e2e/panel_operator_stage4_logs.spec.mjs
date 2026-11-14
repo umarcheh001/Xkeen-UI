@@ -10,16 +10,17 @@ test('Xray log flags use the local sprite and an unknown flag becomes a globe',a
   await expect(table.locator('.tr').nth(1)).not.toContainText('🇿🇿');
 });
 
-test('xray rows alternate their background after filtering and reversing order',async({page})=>{
+test('xray rows keep one background and separators after filtering and reversing order',async({page})=>{
   await openLogs(page,'dark',{width:1440,height:900});
   const colors=()=>rows(page).evaluateAll(els=>els.map(el=>getComputedStyle(el).backgroundColor));
   const initial=await colors();
-  expect(initial[0]).not.toBe(initial[1]);expect(initial[0]).toBe(initial[2]);expect(initial[1]).toBe(initial[3]);
+  expect(new Set(initial).size).toBe(1);
+  expect(await rows(page).first().evaluate(el=>getComputedStyle(el).borderBottomColor)).not.toBe('rgba(0, 0, 0, 0)');
   await page.locator('#xray-log-order').click();
-  const reversed=await colors();expect(reversed[0]).not.toBe(reversed[1]);
+  const reversed=await colors();expect(new Set(reversed).size).toBe(1);
   await page.locator('#xray-log-chips [data-xlog-act="kind"][data-value="block"]').click();
   await expect(rows(page)).toHaveCount(3);
-  const filtered=await colors();expect(filtered[0]).not.toBe(filtered[1]);expect(filtered[0]).toBe(filtered[2]);
+  const filtered=await colors();expect(new Set(filtered).size).toBe(1);
 });
 
 test('translated route labels keep technical log content intact',async({page})=>{

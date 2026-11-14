@@ -82,6 +82,23 @@ const dto = (n, route = "Google[PL [PL] Warsaw]") => ({
   devices: [{ ip: "192.168.10.13", name: "Телефон" }],
 });
 
+test('rows keep one background and separators as events arrive and order changes', async ({ page }) => {
+  await open(page);
+  await emit(page, [dto(1), dto(2), dto(3)]);
+  const rows = page.locator('#mihomo-clash-logs-list .tr');
+  await expect(rows).toHaveCount(3);
+  const colors = () => rows.evaluateAll(els => els.map(el => getComputedStyle(el).backgroundColor));
+  expect(new Set(await colors()).size).toBe(1);
+  expect(await rows.first().evaluate(el => getComputedStyle(el).borderBottomColor)).not.toBe('rgba(0, 0, 0, 0)');
+  await emit(page, [dto(4)]);
+  await expect(rows).toHaveCount(4);
+  expect(new Set(await colors()).size).toBe(1);
+  await page.locator('#mihomo-clash-logs-order').click();
+  expect(new Set(await colors()).size).toBe(1);
+  await page.locator('#mihomo-clash-logs-filter').fill('host1');
+  await expect(rows).toHaveCount(1);
+});
+
 test('logs wait for Play on opening, returning and reloading', async ({ page }) => {
   let tokenRequests = 0;
   page.on('request', request => {
