@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 676,
-      "size_bytes": 9324490,
+      "size_bytes": 9326368,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -87,12 +87,12 @@
         "xray"
       ],
       "removable": true,
-      "unit_count": 152,
-      "size_bytes": 4032769,
+      "unit_count": 153,
+      "size_bytes": 4043819,
       "kind_counts": {
         "backend_route": 13,
         "backend_service": 20,
-        "backend_test": 52,
+        "backend_test": 53,
         "configuration": 4,
         "editor_schema": 4,
         "frontend_bundle": 1,
@@ -3676,7 +3676,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/xkeen.py",
-      "size_bytes": 9458,
+      "size_bytes": 10447,
       "depends_on": [
         "engine.mihomo"
       ],
@@ -10256,7 +10256,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_xkeen_service_control_fallback.py",
-      "size_bytes": 14431,
+      "size_bytes": 15320,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -21554,7 +21554,7 @@
       "module_id": "engine.xray",
       "kind": "backend_service",
       "path": "xkeen-ui/services/xray_subscriptions.py",
-      "size_bytes": 338783,
+      "size_bytes": 340717,
       "depends_on": [
         "core",
         "tool.editor",
@@ -22149,6 +22149,29 @@
     {
       "module_id": "engine.xray",
       "kind": "backend_test",
+      "path": "tests/test_xray_handler_service_local.py",
+      "size_bytes": 7821,
+      "depends_on": [
+        "core",
+        "tool.editor"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "xkeen",
+        "xray"
+      ],
+      "environment_variables": [
+        "XKEEN_REAL_XRAY"
+      ],
+      "removable": true
+    },
+    {
+      "module_id": "engine.xray",
+      "kind": "backend_test",
       "path": "tests/test_xray_inbounds_port_conflicts.py",
       "size_bytes": 3493,
       "depends_on": [
@@ -22577,7 +22600,7 @@
       "module_id": "engine.xray",
       "kind": "backend_test",
       "path": "tests/test_xray_subscriptions.py",
-      "size_bytes": 257762,
+      "size_bytes": 259057,
       "depends_on": [
         "core",
         "tool.editor"
@@ -36153,7 +36176,7 @@
       {
         "from": "engine.xray",
         "to": "core",
-        "unit_count": 152,
+        "unit_count": 153,
         "examples": [
           "xkeen-ui/routes/routing/__init__.py",
           "xkeen-ui/routes/routing/blueprint.py",
@@ -36194,7 +36217,7 @@
       {
         "from": "engine.xray",
         "to": "tool.editor",
-        "unit_count": 152,
+        "unit_count": 153,
         "examples": [
           "xkeen-ui/routes/routing/__init__.py",
           "xkeen-ui/routes/routing/blueprint.py",

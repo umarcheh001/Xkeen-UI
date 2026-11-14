@@ -1740,6 +1740,21 @@ def _check_live_config(xray_configs_dir: str) -> Dict[str, Any]:
     return xray_transactions.check_confdir(xray_configs_dir)
 
 
+def _xkeen_runtime_stopped() -> bool:
+    """Return the observed stopped state, without making restart decisions on probe errors."""
+    try:
+        from services.xkeen import get_xkeen_runtime_status
+
+        status = get_xkeen_runtime_status()
+    except Exception:
+        return False
+    return (
+        isinstance(status, dict)
+        and status.get("runtime_status") == "stopped"
+        and str(status.get("runtime_core") or "none") == "none"
+    )
+
+
 PREFLIGHT_ALREADY_BROKEN_WARNING = (
     "Xray отклонял конфигурацию ещё до этой операции: изменения сохранены, "
     "но ядро с такими файлами не запустится. Проверьте свои файлы конфигурации."
@@ -7236,6 +7251,7 @@ def refresh_due_subscriptions(
 
     batch_restart = bool(restart and restart_xkeen and env_flag("XKEEN_SUBSCRIPTIONS_RESTART_BATCH", True))
     item_restart = bool(restart and not batch_restart)
+    batch_guard = _operation_guard(ui_state_dir, xray_configs_dir) if batch_restart else None
 
     cache_token = _BATCH_FETCH_CACHE.set({})
     try:
@@ -7265,9 +7281,33 @@ def refresh_due_subscriptions(
             restarted = bool(restart_xkeen())
         except Exception:
             restarted = False
+        recovered = False
+        if not restarted and _xkeen_runtime_stopped() and batch_guard is not None:
+            # A failed restart can leave the router with no running core. Put
+            # back the last validated tree before asking the supervisor to
+            # start it again, so a bad subscription never strands the VPN.
+            try:
+                batch_guard.restore()
+            except Exception:
+                pass
+            try:
+                recovered = bool(restart_xkeen(source="xray-subscriptions-recovery"))
+            except TypeError:
+                recovered = bool(restart_xkeen())
+            except Exception:
+                recovered = False
         for item in results:
             if _refresh_result_needs_restart(item):
-                item["restarted"] = restarted
+                item["restarted"] = restarted or recovered
+                if recovered:
+                    item["ok"] = False
+                    item["recovered"] = True
+                    item["error"] = "Перезапуск Xray не применил обновление; восстановлена предыдущая конфигурация."
+                    warnings = item.get("warnings")
+                    if not isinstance(warnings, list):
+                        warnings = []
+                    warnings.append("Обновление подписки отложено после восстановления предыдущей конфигурации Xray.")
+                    item["warnings"] = warnings
 
     return results
 

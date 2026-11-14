@@ -82,6 +82,27 @@ def test_restart_xkeen_logs_result_from_verified_control_flow(tmp_path, monkeypa
     assert 'duration_ms=' in text
 
 
+def test_restart_xkeen_attempts_supervisor_start_when_restart_leaves_core_stopped(tmp_path, monkeypatch):
+    log_file = tmp_path / 'restart.log'
+    seen: list[str] = []
+    statuses = iter([
+        {'runtime_status': 'stopped', 'runtime_core': 'none'},
+        {'runtime_status': 'running', 'runtime_core': 'xray'},
+    ])
+
+    def fake_control(action: str, **_kwargs) -> bool:
+        seen.append(action)
+        return action == 'start'
+
+    monkeypatch.setattr(xkeen_service, 'control_xkeen_action', fake_control)
+    monkeypatch.setattr(xkeen_service, 'get_xkeen_runtime_status', lambda: next(statuses))
+
+    assert xkeen_service.restart_xkeen(['xkeen', '-restart'], str(log_file), source='batch') is True
+    assert seen == ['restart', 'start']
+    assert 'source=batch' in log_file.read_text(encoding='utf-8')
+    assert 'recovered=True' in log_file.read_text(encoding='utf-8')
+
+
 
 def test_service_routes_use_verified_control_helper_for_start_and_stop():
     text = Path('xkeen-ui/routes/service.py').read_text(encoding='utf-8')

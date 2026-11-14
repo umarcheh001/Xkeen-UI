@@ -6862,6 +6862,37 @@ def test_refresh_due_subscriptions_restarts_once_for_whole_batch(tmp_path: Path,
         assert (xray_dir / f"04_outbounds.{sub_id}.json").exists()
 
 
+def test_refresh_due_subscriptions_restores_previous_tree_when_batch_restart_stops_runtime(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir, xray_dir = _prepare_batch_subscriptions(tmp_path, monkeypatch, subs, ["sub_a"])
+    _set_due_offsets(subs, ui_state_dir, {"sub_a": -10})
+    old_fragment = xray_dir / "04_outbounds.sub_a.json"
+    old_fragment.write_text('{"outbounds":[{"tag":"old-node"}]}\n', encoding="utf-8")
+    before_state = subs.load_subscription_state(str(ui_state_dir))
+    monkeypatch.setattr(subs, "_xkeen_runtime_stopped", lambda: True)
+
+    restarts: list[str] = []
+
+    def restart(**kwargs):
+        restarts.append(kwargs.get("source", ""))
+        return len(restarts) == 2
+
+    results = subs.refresh_due_subscriptions(
+        str(ui_state_dir),
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=restart,
+        restart=True,
+    )
+
+    assert restarts == ["xray-subscriptions-batch", "xray-subscriptions-recovery"]
+    assert results[0]["ok"] is False
+    assert results[0]["recovered"] is True
+    assert old_fragment.read_text(encoding="utf-8") == '{"outbounds":[{"tag":"old-node"}]}\n'
+    assert subs.load_subscription_state(str(ui_state_dir)) == before_state
+
+
 def test_refresh_due_subscriptions_pulls_almost_due_into_same_batch(tmp_path: Path, monkeypatch):
     from services import xray_subscriptions as subs
 
