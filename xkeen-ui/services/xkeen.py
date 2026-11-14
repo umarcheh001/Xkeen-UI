@@ -207,8 +207,7 @@ def _wait_xkeen_restarted(
             elif now - candidate_since >= stable_for:
                 return True
         time.sleep(max(0.05, float(poll_interval or 0.25)))
-    current = _xkeen_runtime_identity()
-    return bool(current[0] and (saw_stopped or current != previous))
+    return False
 
 
 def control_xkeen_action(
@@ -247,6 +246,9 @@ def control_xkeen_action(
             continue
         if normalized == "restart":
             if _wait_xkeen_restarted(previous_identity, timeout=settle):
+                return True
+        elif normalized == "start":
+            if _wait_xkeen_restarted(("", ()), timeout=settle):
                 return True
         elif _wait_xkeen_running(expected_running, timeout=settle):
             return True

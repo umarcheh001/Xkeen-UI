@@ -186,6 +186,13 @@ class MemoryGuard:
         """Новый слепок тех же мест -- какими они стали к этому моменту."""
         return MemoryGuard(dirs=self._dirs, paths=self._paths)
 
+    def directory_files(self, directory: str) -> Dict[str, bytes]:
+        """Return the captured files directly inside one guarded directory."""
+        return {
+            os.path.basename(path): data for path, data in self._snap.items()
+            if os.path.dirname(path) == directory and data is not None
+        }
+
     @staticmethod
     def _read(path: str) -> Optional[bytes]:
         try:

@@ -6871,6 +6871,7 @@ def test_refresh_due_subscriptions_restores_previous_tree_when_batch_restart_sto
     old_fragment.write_text('{"outbounds":[{"tag":"old-node"}]}\n', encoding="utf-8")
     before_state = subs.load_subscription_state(str(ui_state_dir))
     monkeypatch.setattr(subs, "_xkeen_runtime_stopped", lambda: True)
+    monkeypatch.setattr(subs.xray_transactions, "check_confdir", lambda _: {"ok": True})
 
     restarts: list[str] = []
 
@@ -6889,8 +6890,126 @@ def test_refresh_due_subscriptions_restores_previous_tree_when_batch_restart_sto
     assert restarts == ["xray-subscriptions-batch", "xray-subscriptions-recovery"]
     assert results[0]["ok"] is False
     assert results[0]["recovered"] is True
+    assert results[0]["restarted"] is False
     assert old_fragment.read_text(encoding="utf-8") == '{"outbounds":[{"tag":"old-node"}]}\n'
-    assert subs.load_subscription_state(str(ui_state_dir)) == before_state
+    restored = subs.load_subscription_state(str(ui_state_dir))["subscriptions"][0]
+    assert restored["last_ok"] is False
+    assert restored["last_error"] == results[0]["error"]
+    assert restored["next_update_ts"] > before_state["subscriptions"][0]["next_update_ts"]
+    assert not restored.get("last_generated_outbounds")
+
+
+@pytest.mark.parametrize("stopped,recovery_ok", [(False, False), (True, False), (True, True)])
+def test_failed_refresh_is_not_reported_as_applied(tmp_path, monkeypatch, stopped, recovery_ok):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir, xray_dir = _prepare_batch_subscriptions(tmp_path, monkeypatch, subs, ["sub_a"])
+    _set_due_offsets(subs, ui_state_dir, {"sub_a": -10})
+    monkeypatch.setattr(subs, "_xkeen_runtime_stopped", lambda: stopped)
+    monkeypatch.setattr(subs.xray_transactions, "check_confdir", lambda _: {"ok": True})
+    calls = []
+
+    def restart(**kwargs):
+        calls.append(kwargs["source"])
+        return len(calls) > 1 and recovery_ok
+
+    results = subs.refresh_due_subscriptions(str(ui_state_dir), xray_configs_dir=str(xray_dir), restart_xkeen=restart)
+
+    assert results[0]["ok"] is False
+    assert results[0]["restarted"] is False
+    assert results[0]["recovered"] is (stopped and recovery_ok)
+    assert len(calls) == (2 if stopped else 1)
+    assert not (xray_dir / "04_outbounds.sub_a.json").exists()
+    state = subs.load_subscription_state(str(ui_state_dir))["subscriptions"][0]
+    assert state["last_ok"] is False
+    assert state["next_update_ts"] == results[0]["next_update_ts"]
+    assert subs.refresh_due_subscriptions(str(ui_state_dir), xray_configs_dir=str(xray_dir), restart_xkeen=restart) == []
+
+
+@pytest.mark.parametrize("failure", ["restore", "invalid", "unavailable"])
+def test_recovery_never_starts_an_unverified_rollback(tmp_path, monkeypatch, failure):
+    from services import xray_subscriptions as subs
+
+    calls = []
+    monkeypatch.setattr(subs, "_xkeen_runtime_stopped", lambda: True)
+    monkeypatch.setattr(subs.xray_transactions, "check_confdir", lambda _: {"ok": False if failure == "invalid" else None})
+
+    class Guard:
+        def directory_files(self, _directory):
+            return {}
+
+        def restore(self):
+            if failure == "restore":
+                raise OSError("disk full")
+
+    result = subs._restart_subscription_update(lambda **kw: calls.append(kw) or False, Guard(), str(tmp_path), "batch")
+
+    assert len(calls) == 1
+    assert result["restarted"] is False
+    assert result["recovered"] is False
+    assert result["code"] == ("rollback_failed" if failure == "restore" else "recovery_config_invalid")
+
+
+def test_manual_refresh_recovers_and_records_failed_apply(tmp_path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir, xray_dir = _prepare_batch_subscriptions(tmp_path, monkeypatch, subs, ["sub_a"])
+    monkeypatch.setattr(subs, "_xkeen_runtime_stopped", lambda: True)
+    monkeypatch.setattr(subs.xray_transactions, "check_confdir", lambda _: {"ok": True})
+    calls = []
+
+    def restart(**kw):
+        calls.append(kw["source"])
+        return len(calls) == 2
+
+    result = subs.refresh_subscription(str(ui_state_dir), "sub_a", xray_configs_dir=str(xray_dir), restart_xkeen=restart)
+
+    assert calls == ["xray-subscription-refresh", "xray-subscriptions-recovery"]
+    assert result["ok"] is False
+    assert result["recovered"] is True
+    assert not (xray_dir / "04_outbounds.sub_a.json").exists()
+    assert subs.load_subscription_state(str(ui_state_dir))["subscriptions"][0]["last_ok"] is False
+
+
+def test_legacy_restart_callback_exception_is_reported(tmp_path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    monkeypatch.setattr(subs, "_xkeen_runtime_stopped", lambda: False)
+
+    def restart():
+        raise OSError("start failed")
+
+    result = subs._restart_subscription_update(restart, subs.xray_transactions.MemoryGuard(), str(tmp_path), "batch")
+
+    assert result["code"] == "restart_failed"
+
+
+def test_batch_rollback_keeps_download_errors_and_retry_schedules(tmp_path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir, xray_dir = _prepare_batch_subscriptions(tmp_path, monkeypatch, subs, ["sub_a", "sub_b"])
+    _set_due_offsets(subs, ui_state_dir, {"sub_a": -10, "sub_b": -10})
+    state = subs.load_subscription_state(str(ui_state_dir))
+    for sub in state["subscriptions"]:
+        sub["scheduled_update_ts"] = sub["next_update_ts"]
+    subs._write_state(str(ui_state_dir), state)
+    monkeypatch.setattr(subs, "_xkeen_runtime_stopped", lambda: False)
+
+    def fetch(url):
+        if url.endswith("sub_a"):
+            raise OSError("provider unavailable")
+        return _vless(), {}
+
+    monkeypatch.setattr(subs, "fetch_subscription_body", fetch)
+    results = subs.refresh_due_subscriptions(str(ui_state_dir), xray_configs_dir=str(xray_dir), restart_xkeen=lambda **_: False)
+
+    assert all(item["ok"] is False for item in results)
+    for sub, result in zip(subs.load_subscription_state(str(ui_state_dir))["subscriptions"], results):
+        assert sub["last_ok"] is False
+        assert sub["last_error"] == result["error"]
+        assert sub["next_update_ts"] == result["next_update_ts"]
+        assert sub["first_scheduled_failure_ts"] > 0
+    assert "provider unavailable" in results[0]["error"]
 
 
 def test_refresh_due_subscriptions_pulls_almost_due_into_same_batch(tmp_path: Path, monkeypatch):
@@ -6946,7 +7065,10 @@ def test_refresh_due_subscriptions_does_not_restart_when_nothing_changed(tmp_pat
     _set_due_offsets(subs, ui_state_dir, {sub_id: -10 for sub_id in ids})
 
     restarts = []
-    restart_stub = lambda **kwargs: restarts.append(kwargs) or True
+
+    def restart_stub(**kwargs):
+        return restarts.append(kwargs) or True
+
     subs.refresh_due_subscriptions(
         str(ui_state_dir),
         xray_configs_dir=str(xray_dir),

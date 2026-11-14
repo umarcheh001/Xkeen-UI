@@ -1755,6 +1755,61 @@ def _xkeen_runtime_stopped() -> bool:
     )
 
 
+def _restart_subscription_update(
+    restart_xkeen: RestartCallback,
+    guard: xray_transactions.MemoryGuard,
+    xray_configs_dir: str,
+    source: str,
+) -> Dict[str, Any]:
+    from services import xray_handler_service
+
+    force_recovery = False
+    hot_result = None
+    try:
+        hot_result = xray_handler_service.try_apply(xray_configs_dir, guard.directory_files(xray_configs_dir))
+    except xray_handler_service.HotApplyUncertain:
+        force_recovery = True
+        hot_result = {"hot_apply_fallback": True}
+    if hot_result and hot_result.get("hot_applied"):
+        return hot_result
+
+    def attempt(restart_source: str) -> bool:
+        try:
+            try:
+                return bool(restart_xkeen(source=restart_source))
+            except TypeError:
+                return bool(restart_xkeen())
+        except Exception:
+            return False
+
+    if attempt(source):
+        return {"restarted": True, "apply_method": "restart", **(hot_result or {})}
+    result: Dict[str, Any] = {
+        "restarted": False,
+        "recovered": False,
+        "code": "restart_failed",
+        "error": "Не удалось применить обновление Xray; возвращена предыдущая конфигурация.",
+    }
+    try:
+        guard.restore()
+    except Exception:
+        result.update(code="rollback_failed", error="Не удалось восстановить конфигурацию Xray после ошибки перезапуска. Проверьте файлы и состояние ядра.")
+        return result
+    if force_recovery or _xkeen_runtime_stopped():
+        # Recovery must never start a partially restored or unvalidated tree.
+        try:
+            valid = xray_transactions.check_confdir(xray_configs_dir).get("ok") is True
+        except Exception:
+            valid = False
+        if not valid:
+            result.update(code="recovery_config_invalid", error="Предыдущая конфигурация Xray не прошла проверку; восстановительный запуск отменён.")
+        elif attempt("xray-subscriptions-recovery"):
+            result.update(recovered=True, error="Обновление Xray не применено; восстановлена предыдущая конфигурация и работа ядра.")
+        else:
+            result.update(code="recovery_failed", error="Предыдущая конфигурация Xray восстановлена, но запустить ядро не удалось.")
+    return result
+
+
 PREFLIGHT_ALREADY_BROKEN_WARNING = (
     "Xray отклонял конфигурацию ещё до этой операции: изменения сохранены, "
     "но ядро с такими файлами не запустится. Проверьте свои файлы конфигурации."
@@ -6881,12 +6936,13 @@ def _refresh_subscription_impl(
 
         restarted = False
         if restart and restart_xkeen and (changed or observatory_changed or routing_changed or outbounds_changed):
-            try:
-                restarted = bool(restart_xkeen(source="xray-subscription-refresh"))
-            except TypeError:
-                restarted = bool(restart_xkeen())
-            except Exception:
-                restarted = False
+            applied = _restart_subscription_update(
+                restart_xkeen, guard, xray_configs_dir, "xray-subscription-refresh"
+            )
+            result.update(applied)
+            restarted = applied["restarted"]
+            if not restarted and not applied.get("hot_applied"):
+                raise RuntimeError(applied["error"])
 
         result.update(
             {
@@ -7275,39 +7331,46 @@ def refresh_due_subscriptions(
         _BATCH_FETCH_CACHE.reset(cache_token)
 
     if batch_restart and any(_refresh_result_needs_restart(item) for item in results):
-        try:
-            restarted = bool(restart_xkeen(source="xray-subscriptions-batch"))
-        except TypeError:
-            restarted = bool(restart_xkeen())
-        except Exception:
-            restarted = False
-        recovered = False
-        if not restarted and _xkeen_runtime_stopped() and batch_guard is not None:
-            # A failed restart can leave the router with no running core. Put
-            # back the last validated tree before asking the supervisor to
-            # start it again, so a bad subscription never strands the VPN.
-            try:
-                batch_guard.restore()
-            except Exception:
-                pass
-            try:
-                recovered = bool(restart_xkeen(source="xray-subscriptions-recovery"))
-            except TypeError:
-                recovered = bool(restart_xkeen())
-            except Exception:
-                recovered = False
+        applied = _restart_subscription_update(
+            restart_xkeen, batch_guard, xray_configs_dir, "xray-subscriptions-batch"
+        )
+        apply_ok = applied["restarted"] or applied.get("hot_applied")
+        failed = [item for item in results if not item.get("ok")] if not apply_ok else []
         for item in results:
             if _refresh_result_needs_restart(item):
-                item["restarted"] = restarted or recovered
-                if recovered:
+                item.update(applied)
+                if not apply_ok:
                     item["ok"] = False
-                    item["recovered"] = True
-                    item["error"] = "Перезапуск Xray не применил обновление; восстановлена предыдущая конфигурация."
-                    warnings = item.get("warnings")
-                    if not isinstance(warnings, list):
-                        warnings = []
-                    warnings.append("Обновление подписки отложено после восстановления предыдущей конфигурации Xray.")
-                    item["warnings"] = warnings
+                    failed.append(item)
+        if failed:
+            with _STATE_LOCK:
+                state = load_subscription_state(ui_state_dir)
+                failed_by_id = {item["id"]: item for item in failed}
+                for sub in state.get("subscriptions") or []:
+                    item = failed_by_id.get(sub.get("id"))
+                    if item is None:
+                        continue
+                    retry = _refresh_error_retry_seconds(_clamp_interval(sub.get("interval_hours")))
+                    now = _now()
+                    if sub.get("last_ok") is True and not sub.get("last_success_ts"):
+                        sub["last_success_ts"] = sub.get("last_update_ts")
+                    try:
+                        scheduled = float(sub.get("scheduled_update_ts") or sub.get("next_update_ts") or 0)
+                    except (TypeError, ValueError):
+                        scheduled = 0
+                    if scheduled and not sub.get("scheduled_update_ts"):
+                        sub["scheduled_update_ts"] = scheduled
+                    if scheduled and scheduled <= now and not sub.get("first_scheduled_failure_ts"):
+                        sub["first_scheduled_failure_ts"] = now
+                    sub.update(
+                        last_ok=False,
+                        last_error=item["error"],
+                        last_update_ts=now,
+                        next_update_ts=now + retry,
+                        last_error_retry_seconds=retry,
+                    )
+                    item.update(next_update_ts=sub["next_update_ts"], retry_after_seconds=retry)
+                _write_state(ui_state_dir, state)
 
     return results
 
@@ -8548,6 +8611,7 @@ def start_subscription_scheduler(
                         total=len(results),
                         ok=ok_count,
                         restarted=any(r.get("restarted") for r in results),
+                        hot_applied=any(r.get("hot_applied") for r in results),
                     )
             except Exception as exc:
                 _log("warning", "xray subscriptions scheduler failed", error=str(exc))

@@ -5918,7 +5918,7 @@ let outboundsModuleApi = null;
                     <div class="xk-sub-controls">
                       <label class="dt-switch xk-sub-check" aria-label="Автообновление" data-tooltip="Включить плановое автообновление этой подписки."><input id="outbounds-subscriptions-enabled" type="checkbox" checked aria-label="Автообновление"><span class="dt-switch-slider" aria-hidden="true"></span><span class="xk-sub-switch-label">Автообн.</span></label>
                       <label class="dt-switch xk-sub-check" aria-label="Замер" data-tooltip-multiline data-tooltip="Фоновая проверка скорости узлов&#10;Xray сам, раз в заданный интервал, проверяет задержку каждого узла этой подписки.&#10;Нужно, чтобы балансировщики (служебный пул и отмеченные ниже) выбирали самый быстрый узел. Без замеров им не по чему выбирать.&#10;Выключить можно, если узлы подписки используются только напрямую по тегу. На кнопку «Пинг всех узлов» это не влияет."><input id="outbounds-subscriptions-ping" type="checkbox" checked aria-label="Замер"><span class="dt-switch-slider" aria-hidden="true"></span><span class="xk-sub-switch-label">Замер</span></label>
-                      <label class="dt-switch xk-sub-check" aria-label="Обновить сразу" data-tooltip-multiline data-tooltip="Скачать сразу после сохранения&#10;Подписка скачивается, и Xray перезапускается сразу.&#10;Сними, если добавляешь несколько подписок подряд: сохрани их все, а потом нажми «Обновить просроченные» — они скачаются одной пачкой с одним перезапуском."><input id="outbounds-subscriptions-refresh-now" type="checkbox" checked aria-label="Обновить сразу"><span class="dt-switch-slider" aria-hidden="true"></span><span class="xk-sub-switch-label">Сразу</span></label>
+                      <label class="dt-switch xk-sub-check" aria-label="Обновить сразу" data-tooltip-multiline data-tooltip="Скачать сразу после сохранения&#10;Подписка скачивается и сразу применяется в Xray.&#10;Сними, если добавляешь несколько подписок подряд: сохрани их все, а потом нажми «Обновить просроченные» — они скачаются одной пачкой."><input id="outbounds-subscriptions-refresh-now" type="checkbox" checked aria-label="Обновить сразу"><span class="dt-switch-slider" aria-hidden="true"></span><span class="xk-sub-switch-label">Сразу</span></label>
                       <label class="dt-switch xk-sub-check xk-sub-auto-rule-check" aria-label="Пул" data-tooltip-multiline data-tooltip="Пускать трафик через самый быстрый узел&#10;Узлы подписки попадают в общий служебный балансировщик proxy, а панель держит правило, по которому трафик клиентов роутера (redirect/tproxy) идёт через этот балансировщик.&#10;Xray сам выбирает узел с наименьшей задержкой, а если живых узлов нет, пускает трафик напрямую.&#10;Выключи, если подписка нужна только в других балансировщиках, отмеченных ниже.&#10;Работает только вместе с «Замером»: при включении «Пула» он включается сам.">
                         <input id="outbounds-subscriptions-routing-auto-rule" type="checkbox" checked aria-label="Пул">
                         <span class="dt-switch-slider" aria-hidden="true"></span><span class="xk-sub-switch-label">Пул</span>
@@ -5954,7 +5954,7 @@ let outboundsModuleApi = null;
                     </div>
                     <div class="xk-sub-list-head-actions">
                       <div id="outbounds-subscriptions-summary" class="xk-pool-summary">0</div>
-                      <button type="button" id="outbounds-subscriptions-refresh-due-btn" class="btn-secondary btn-compact" title="Обновить просроченные" data-tooltip-multiline data-tooltip="Обновить одной пачкой&#10;Скачивает подписки, у которых наступил срок, и те, что сохранены без «Сразу» и ещё ни разу не скачивались.&#10;Xray перезапускается один раз на всю пачку.">${iconHtml('refresh')}<span class="xk-action-label">Обновить просроченные</span><span id="outbounds-subscriptions-refresh-due-count" class="xk-sub-due-count" hidden></span></button>
+                      <button type="button" id="outbounds-subscriptions-refresh-due-btn" class="btn-secondary btn-compact" title="Обновить просроченные" data-tooltip-multiline data-tooltip="Обновить одной пачкой&#10;Скачивает подписки, у которых наступил срок, и те, что сохранены без «Сразу» и ещё ни разу не скачивались.&#10;Если нужен перезапуск Xray, он выполняется один раз на всю пачку.">${iconHtml('refresh')}<span class="xk-action-label">Обновить просроченные</span><span id="outbounds-subscriptions-refresh-due-count" class="xk-sub-due-count" hidden></span></button>
                       <button type="button" id="outbounds-subscriptions-align-btn" class="btn-secondary btn-compact" title="Выровнять расписание" data-tooltip="Свести время следующего обновления всех подписок к одному моменту, чтобы дальше они обновлялись одной пачкой.">${iconHtml('normalize')}<span class="xk-action-label">Выровнять расписание</span></button>
                       <button type="button" id="outbounds-subscriptions-delete-all-btn" class="btn-secondary btn-compact xk-sub-delete-all" aria-label="Удалить все подписки" data-tooltip-multiline data-tooltip="Удалить все подписки&#10;Стирает все подписки разом и возвращает конфигурацию к вашим серверам. Вернуть удалённое нельзя.&#10;Чтобы отключить подписки на время, используй переключатель «Подписки работают»." hidden>${iconHtml('trash')}</button>
                     </div>
@@ -8316,6 +8316,8 @@ let outboundsModuleApi = null;
         }
         if (!changed) {
           try { toastXkeen('Подписка проверена: изменений нет.', 'info'); } catch (e4) {}
+        } else if (data.hot_applied) {
+          try { toastXkeen('Подписка Xray применена без перезапуска ядра.', 'success'); } catch (eHot) {}
         } else if (!data.restarted) {
           const restartNote = restart ? ' Перезапуск xkeen не выполнялся.' : ' Авто-перезапуск xkeen выключен.';
           const routeToast = routingChanged ? ' Пул и маршрутизация тоже обновлены.' : '';
@@ -8819,6 +8821,8 @@ let outboundsModuleApi = null;
             ? 'Просроченные подписки проверены: изменений нет.'
             : 'Обновлять пока нечего: просроченных подписок нет.';
           try { toastXkeen(idleMsg, 'info'); } catch (e3) {}
+        } else if (results.some((item) => item && item.hot_applied)) {
+          try { toastXkeen(`Подписки Xray применены без перезапуска: ${changedCount}.`, 'success'); } catch (eHot) {}
         } else if (!restartedCount) {
           const restartNote = restart ? ' Перезапуск xkeen не выполнялся.' : ' Авто-перезапуск xkeen выключен.';
           try { toastXkeen(`Подписки Xray обновлены: ${changedCount}.` + restartNote, 'success'); } catch (e4) {}
