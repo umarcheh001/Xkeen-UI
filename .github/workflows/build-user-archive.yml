@@ -58,7 +58,9 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version: "1.23"
-          cache-dependency-path: tools/xk-geodat/go.sum
+          cache-dependency-path: |
+            tools/xk-geodat/go.sum
+            tools/happ-decryptor/go.sum
 
       - name: Install Python dependencies
         run: python -m pip install -r requirements-dev.txt
@@ -191,7 +193,9 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version-file: tools/happ-decryptor/go.mod
-          cache-dependency-path: tools/happ-decryptor/go.sum
+          # Both toolchains share the Go cache restored by the first setup-go.
+          # Restoring it again conflicts with existing read-only module files.
+          cache: false
 
       - name: Test happ-decryptor
         working-directory: tools/happ-decryptor

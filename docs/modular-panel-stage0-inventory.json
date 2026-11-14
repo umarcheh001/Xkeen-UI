@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 677,
-      "size_bytes": 9335597,
+      "size_bytes": 9335771,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -10279,7 +10279,7 @@
       "module_id": "core",
       "kind": "configuration",
       "path": ".github/workflows/build-user-archive.yml",
-      "size_bytes": 17401,
+      "size_bytes": 17575,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
