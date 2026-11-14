@@ -12,7 +12,7 @@ const model = createMihomoLogModel();
 let root = null,
   view = null,
   active = false,
-  stopped = false,
+  stopped = true,
   generation = 0,
   socket = null,
   controller = null;
@@ -408,7 +408,7 @@ export function activateMihomoClashLogs(
   if (!root && !initMihomoClashLogs()) return false;
   deactivateMihomoClashLogs();
   active = true;
-  stopped = false;
+  stopped = true;
   model.setPaused(false);
   capabilities = nextCapabilities || {};
   runtime = nextRuntime || {};
@@ -416,11 +416,10 @@ export function activateMihomoClashLogs(
   generation += 1;
   initView();
   render(true);
-  void openStream(generation);
-  const run = generation;
+  const currentView = view;
   void fetchMihomoClashGroups()
     .then((payload) => {
-      if (!active || generation !== run) return;
+      if (!active || view !== currentView) return;
       visuals.clear();
       // GLOBAL arrives as a separate field, not inside `groups`; a route that
       // names it still needs its icon.

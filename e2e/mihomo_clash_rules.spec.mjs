@@ -261,6 +261,7 @@ test('structured logs use a full workspace tab, one on-demand socket, ring buffe
   await page.locator('#mihomo-clash-tab-logs').click();
   await expect(page.locator('#mihomo-clash-panel-logs')).toBeVisible();
   await expect(page.locator('#mihomo-clash-panel-rules')).toBeHidden();
+  await page.locator('#mihomo-clash-logs-play').click();
   const workspaceGeometry = await page.evaluate(() => {
     const panel = document.querySelector('#mihomo-clash-panel-logs').getBoundingClientRect();
     const workspace = document.querySelector('#mihomo-clash-logs').getBoundingClientRect();

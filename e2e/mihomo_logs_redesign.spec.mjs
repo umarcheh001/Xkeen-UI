@@ -1,6 +1,6 @@
 import { test, expect, selectPanelView } from "./fixtures.mjs";
 
-async function open(page, groups = [], globalGroup = null) {
+async function open(page, groups = [], globalGroup = null, start = true) {
   await page.addInitScript(() => {
     localStorage.setItem("xkeen-theme", "dark");
     window.__logs = [];
@@ -55,6 +55,8 @@ async function open(page, groups = [], globalGroup = null) {
   await page.goto("/");
   await selectPanelView(page, "mihomo");
   await page.locator("#mihomo-clash-tab-logs").click();
+  if (!start) return;
+  await page.locator("#mihomo-clash-logs-play").click();
   await expect
     .poll(() =>
       page.evaluate(
@@ -78,6 +80,51 @@ const dto = (n, route = "Google[PL [PL] Warsaw]") => ({
   level: "info",
   message: `[TCP] 192.168.10.13:${40000 + n} --> host${n}.test:443 match RuleSet(google@domain) using ${route}`,
   devices: [{ ip: "192.168.10.13", name: "Телефон" }],
+});
+
+test('logs wait for Play on opening, returning and reloading', async ({ page }) => {
+  let tokenRequests = 0;
+  page.on('request', request => {
+    if (request.url().includes('/api/ws-token') && request.postDataJSON()?.scope === 'mihomo-clash-logs') tokenRequests += 1;
+  });
+  await open(page, [], null, false);
+  const play = page.locator('#mihomo-clash-logs-play');
+  const state = page.locator('#mihomo-clash-logs-state');
+  const sockets = () => page.evaluate(() => window.__logs.filter(s => s.url.includes('/logs') && !s.closed).length);
+  await expect(play).toBeVisible();
+  await expect(state).toHaveText('Остановлено');
+  expect(await sockets()).toBe(0);
+  expect(tokenRequests).toBe(0);
+
+  await play.click();
+  await expect.poll(sockets).toBe(1);
+  await emit(page, [dto(1)]);
+  await expect(page.locator('#mihomo-clash-logs-list .tr')).toHaveCount(1);
+  await page.locator('#mihomo-clash-tab-control').click();
+  await expect.poll(sockets).toBe(0);
+  await page.locator('#mihomo-clash-tab-logs').click();
+  await expect(play).toBeVisible();
+  await expect(state).toHaveText('Остановлено');
+  await expect(page.locator('#mihomo-clash-logs-list .tr')).toHaveCount(1);
+  expect(await sockets()).toBe(0);
+  expect(tokenRequests).toBe(1);
+
+  await play.click();
+  await expect.poll(sockets).toBe(1);
+  await page.locator('#mihomo-clash-logs-stop').click();
+  await page.locator('#mihomo-clash-tab-control').click();
+  await page.locator('#mihomo-clash-tab-logs').click();
+  await expect(state).toHaveText('Остановлено');
+  expect(await sockets()).toBe(0);
+  expect(tokenRequests).toBe(2);
+
+  await page.reload();
+  await selectPanelView(page, 'mihomo');
+  await page.locator('#mihomo-clash-tab-logs').click();
+  await expect(play).toBeVisible();
+  await expect(state).toHaveText('Остановлено');
+  expect(await sockets()).toBe(0);
+  expect(tokenRequests).toBe(2);
 });
 
 test('review layout keeps light labels and centered controls with compact details',async({page})=>{
