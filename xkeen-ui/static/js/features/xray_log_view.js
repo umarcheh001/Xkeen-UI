@@ -40,6 +40,8 @@ const VIEW_CSS = `
 * { box-sizing: border-box; }
 .ic { display: block; flex: 0 0 auto; width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
 .thead, .tr { display: grid; grid-template-columns: 3px 26px 64px minmax(150px, .6fr) minmax(200px, .95fr) minmax(280px, 1.25fr) 72px 26px; align-items: center; column-gap: 12px; padding-right: 8px; }
+.has-rules .thead, .has-rules .tr { grid-template-columns: 3px 26px 64px minmax(150px, .65fr) minmax(190px, .85fr) minmax(280px, 1.25fr) minmax(125px, .6fr) 72px 26px; }
+.rule { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--op-muted); font: 12px var(--mono); }
 .thead { position: sticky; top: 0; z-index: 2; height: ${HEAD_H}px; border-bottom: 1px solid var(--op-border); background: var(--op-surface); color: var(--op-muted); font-size: 11px; font-weight: 650; letter-spacing: .03em; text-transform: uppercase; }
 .body { position: relative; overflow: hidden; contain: strict; }
 .rows { position: absolute; inset: 0 0 auto 0; will-change: transform; }
@@ -114,6 +116,8 @@ const VIEW_CSS = `
   .wrap.is-error { min-width: 520px; }
   .thead, .tr { grid-template-columns: 3px 26px 60px minmax(90px, .6fr) minmax(140px, 1fr) minmax(170px, 1fr) 0 26px; column-gap: 8px; }
   .pp, .thead > :nth-child(7) { visibility: hidden; }
+  .has-rules .thead, .has-rules .tr { grid-template-columns: 3px 26px 60px minmax(90px, .6fr) minmax(140px, 1fr) minmax(170px, 1fr) 0 0 26px; column-gap: 8px; }
+  .has-rules .rule, .has-rules .rule-head, .has-rules .thead > :nth-child(8) { visibility: hidden; }
   .wrap.is-error .thead, .wrap.is-error .tr { grid-template-columns: 3px 26px 76px 44px minmax(90px, .4fr) minmax(0, 1fr) 26px; column-gap: 8px; }
 }
 `;
@@ -207,6 +211,9 @@ export function createXrayLogView(options) {
     records: [],
     visible: [],
     frozen: false,
+    rulesVisible: false,
+    pendingRulesVisible: null,
+    pendingRulesLookup: null,
     // The newest first or, as before, the oldest. The table follows the new
     // rows while it stands at their edge (stuck); away from it, it holds still
     // and counts what came meanwhile (unseen).
@@ -293,7 +300,7 @@ export function createXrayLogView(options) {
 
   function makeRecord(line) {
     const text = String(line ?? '').replace(/\r?\n$/, '');
-    const record = { seq: ++state.seq, ord: 0, line: text, lower: '', p: null, kind: '', level: '', domain: '', html: null, v: 0 };
+    const record = { seq: ++state.seq, ord: 0, line: text, lower: '', p: null, kind: '', level: '', domain: '', html: null, v: 0, ruleTag: '', ruleActive: true, ruleRevoked: false };
     if (state.mode === 'access') {
       const p = parseXrayAccessLine(text);
       if (p) {
@@ -401,9 +408,9 @@ export function createXrayLogView(options) {
     state.rowsBySeq.clear();
     state.freeRows = [];
     const head = mode === 'access'
-      ? '<span>Время</span><span>Устройство</span><span>Назначение</span><span>Маршрут / узел</span><span>Порт</span><span></span>'
+      ? '<span>Время</span><span>Устройство</span><span>Назначение</span><span>Маршрут / узел</span>' + (state.rulesVisible ? '<span class="rule-head">Правило</span>' : '') + '<span>Порт</span><span></span>'
       : '<span>Время</span><span>Уровень</span><span>Модуль</span><span>Сообщение</span><span></span>';
-    shadow.innerHTML = `${inlineStyle}<div class="wrap is-${mode}" part="wrap">
+    shadow.innerHTML = `${inlineStyle}<div class="wrap is-${mode}${mode === 'access' && state.rulesVisible ? ' has-rules' : ''}" part="wrap">
       <div class="thead" role="row"><span></span>
         <span class="cb" role="checkbox" aria-checked="false" aria-label="Выбрать все видимые строки" data-act="select-all"></span>${head}</div>
       <div class="body" role="rowgroup"><div class="rows"></div></div>
@@ -467,6 +474,7 @@ export function createXrayLogView(options) {
         + `<span class="dev" title="${escapeHtml(hooks.deviceName(p.srcIp) ? `${hooks.deviceName(p.srcIp)} · ${p.srcIp}` : p.srcIp)}">${deviceHtml(p.srcIp)}</span>`
         + `<span class="dst" title="${escapeHtml(p.host ? `${p.host}:${p.port}` : '')}">${destinationHtml(p)}</span>`
         + `<span class="rt">${routeHtml(p, p.outKind)}</span>`
+        + (state.rulesVisible ? `<span class="rule" title="${escapeHtml(record.ruleTag)}">${escapeHtml(record.ruleTag || '—')}</span>` : '')
         + `<span class="pp">${p.port ? `${escapeHtml(p.port)}/${escapeHtml(p.proto || 'tcp')}` : ''}</span>${chev}`;
     }
     record.v = state.decoVersion;
@@ -587,6 +595,7 @@ export function createXrayLogView(options) {
       <dl>
         <div><dt>Устройство</dt><dd>${escapeHtml(device || '—')} · ${escapeHtml(p.srcIp)}</dd></div>
         <div><dt>Назначение</dt><dd>${escapeHtml(p.host || '—')}${p.port ? ':' + escapeHtml(p.port) : ''}${p.proto ? ' (' + escapeHtml(p.proto) + ')' : ''}</dd></div>
+        ${state.rulesVisible ? `<div><dt>Правило</dt><dd>${escapeHtml(record.ruleTag || 'Не определено')}</dd></div>` : ''}
         <div><dt>${info ? 'Узел' : 'Outbound'}</dt><dd>${info ? flagHtml(info) + escapeHtml(info.label) : escapeHtml(p.outTag || '—')}</dd></div>
         ${info ? `<div><dt>Тег outbound${info.group ? ' / подписка' : ''}</dt><dd>${escapeHtml(p.outTag)}${info.group ? ' · ' + escapeHtml(info.group) : ''}</dd></div>` : ''}
         ${p.reason ? `<div><dt>Причина</dt><dd>${escapeHtml(p.reason)}</dd></div>` : ''}
@@ -1044,9 +1053,48 @@ export function createXrayLogView(options) {
     if (next && state.renderQueued) flushTableRender();
     state.frozen = next;
     if (!next) {
+      if (state.pendingRulesVisible !== null) {
+        const visible = state.pendingRulesVisible;
+        state.pendingRulesVisible = null;
+        setRulesVisible(visible);
+      }
+      if (state.pendingRulesLookup) {
+        const lookup = state.pendingRulesLookup;
+        state.pendingRulesLookup = null;
+        updateRules(lookup);
+      }
       refilter();
       renderAll();
     }
+  }
+
+  function setRulesVisible(on) {
+    const next = !!on;
+    if (state.frozen) { state.pendingRulesVisible = next; return; }
+    if (state.rulesVisible === next) return;
+    state.rulesVisible = next;
+    state.decoVersion++;
+    buildShell(state.mode);
+    queueTableRender();
+  }
+
+  function updateRules(lookup) {
+    if (state.frozen) { state.pendingRulesLookup = lookup; return; }
+    if (state.mode !== 'access') return;
+    let changed = false;
+    for (const record of state.records) {
+      if (!record.p || !record.ruleActive || record.ruleRevoked) continue;
+      const tag = lookup(record.p, record.ruleTag) || '';
+      if (tag === record.ruleTag) continue;
+      if (record.ruleTag && !tag) record.ruleRevoked = true;
+      record.ruleTag = tag;
+      record.html = null;
+      const row = state.rowsBySeq.get(record.seq);
+      if (row) row._v = 0;
+      if (dom.detail && state.openSeq === record.seq) dom.detail._seq = null;
+      changed = true;
+    }
+    if (changed) queueTableRender();
   }
 
   function applyFilter() {
@@ -1158,9 +1206,10 @@ export function createXrayLogView(options) {
 
   function recordsToTsv(records) {
     const head = ['Время', 'Устройство', 'IP', 'Назначение', 'Порт', 'Протокол', 'Inbound', 'Outbound', 'Узел'];
+    if (state.rulesVisible) head.push('Правило', 'Оригинал');
     const rows = records.map((record) => {
       const p = record.p;
-      if (!p) return [record.line];
+      if (!p) return state.rulesVisible ? [...Array(10).fill(''), record.line] : [record.line];
       const info = p.outKind === 'proxy' ? nodeInfo(p.outTag) : null;
       return [
         `${p.date} ${p.time}${p.frac}`,
@@ -1172,6 +1221,7 @@ export function createXrayLogView(options) {
         p.inTag,
         p.outTag,
         info ? info.label : '',
+        ...(state.rulesVisible ? [record.ruleTag, record.line] : []),
       ];
     });
     return [head, ...rows].map((cols) => cols.map((v) => String(v ?? '').replace(/[\t\r\n]+/g, ' ')).join('\t')).join('\n');
@@ -1362,6 +1412,12 @@ export function createXrayLogView(options) {
     reset,
     append,
     setFrozen,
+    setRulesVisible,
+    updateRules,
+    resetRules() {
+      state.pendingRulesLookup = null;
+      for (const record of state.records) record.ruleActive = false;
+    },
     setSearch,
     addCondition,
     resetFilter,

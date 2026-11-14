@@ -17,6 +17,7 @@ import {
 } from 'xk-core/js/features/xkeen_runtime.js';
 import { iconHtml } from 'xk-core/js/ui/operator_icons.js';
 import { createXrayLogView } from './xray_log_view.js';
+import { createXrayLogRuleIndex, createXrayLogDiagnosticQueue } from './xray_log_rules.js';
 
 let xrayLogsModuleApi = null;
 
@@ -135,6 +136,8 @@ let xrayLogsModuleApi = null;
   const ALLOWED_LOGLEVELS = ['debug', 'info', 'warning', 'error'];
 
   let _activeLogLevel = 'none'; // last known active loglevel from /api/xray-logs/status
+  let _hasXrayRuleTags = false;
+  let _xrayLogGeneration = null;
   let _applyLevelTimer = null;
 
   let _saveTimer = null;
@@ -180,6 +183,33 @@ let xrayLogsModuleApi = null;
   let _xrayDestinationDomainHintsLastFetchAt = 0;
   let _xrayDomainHintsCursor = '';
   let _xrayDomainHintsTimer = null;
+  let _diagnosticEpoch = 0;
+  let _diagnosticAbort = null;
+  let _diagnosticDomainsChanged = false;
+  const _ruleIndex = createXrayLogRuleIndex();
+  const _diagnosticQueue = createXrayLogDiagnosticQueue({
+    consume(line) {
+      if (_xrayDomainsDisplay) {
+        _diagnosticDomainsChanged = ingestXrayLogDestinationDomains([line], { source: 'error_log' }) || _diagnosticDomainsChanged;
+      }
+      if (xrayRulesAvailable()) _ruleIndex.ingest(String(line || ''));
+    },
+    onReset(meta) {
+      _ruleIndex.reset();
+      _xrayDestinationDomainsByConnId = Object.create(null);
+      _xrayDestinationDomainConnOrder = [];
+      if (!meta?.initial && _view) _view.resetRules();
+    },
+    onComplete(meta) {
+      if (!isLogsViewVisible()) return;
+      if (meta.caught_up) _ruleIndex.complete();
+      if (_view && xrayRulesAvailable()) _view.updateRules((p, previous) => _ruleIndex.lookup(p, previous));
+      if (_diagnosticDomainsChanged && !_paused) {
+        _diagnosticDomainsChanged = false;
+        applyXrayLogFilterToOutput();
+      }
+    },
+  });
   let _xrayDomainCacheSaveTimer = null;
   // Показывать ли DNS-бейджи рядом с IP (persisted). Чистый display-флаг:
   // не трогает loglevel и не зависит от Live. Default false = «только IP»
@@ -1465,6 +1495,7 @@ let xrayLogsModuleApi = null;
       onRenameDevice: (ip, name) => { void openXrayDeviceNamesModal({ ip, name }); },
     });
     _view.setMaxLines(_maxLines);
+    _view.setRulesVisible(xrayRulesAvailable());
     _view.setOrder(readXrayLogOrder());
     _view.setShowRaw(!!extras.showRaw);
     _view.setShowDns(!!extras.showDns);
@@ -1507,6 +1538,7 @@ let xrayLogsModuleApi = null;
     const runtime = runtimeState || readXrayLogsRuntimeState();
     const view = viewState || readXrayLogsViewState(refs, runtime);
     xview.setMode(xrayLogViewMode());
+    xview.setRulesVisible(xrayRulesAvailable());
     if (_viewDecorStamp !== _decorStamp) {
       _viewDecorStamp = _decorStamp;
       xview.refreshDecorations();
@@ -2395,6 +2427,8 @@ let xrayLogsModuleApi = null;
       if (!raw) return;
 
       const connId = extractXrayLogConnectionId(raw);
+      const destinations = collectXrayLogDestinationIpPorts(raw);
+      if (!connId && !destinations.length) return;
       const candidates = collectXrayLogDomainCandidates(raw);
       const firstDomain = candidates.length ? candidates[0].domain : '';
 
@@ -2402,7 +2436,6 @@ let xrayLogsModuleApi = null;
         rememberXrayDestinationConnDomain(connId, firstDomain);
       }
 
-      const destinations = collectXrayLogDestinationIpPorts(raw);
       if (!destinations.length) return;
 
       const connDomain = connId ? normalizeXrayLogDomain(_xrayDestinationDomainsByConnId[connId]) : '';
@@ -2430,14 +2463,19 @@ let xrayLogsModuleApi = null;
   }
 
   async function refreshXrayDestinationDomainHints(options) {
-    const opts = options || {};
     if (_xrayDestinationDomainHintsRequest) return _xrayDestinationDomainHintsRequest;
+
+    const epoch = _diagnosticEpoch;
+    const initial = !_xrayDomainHintsCursor;
+    const abort = new AbortController();
+    _diagnosticAbort = abort;
 
     _xrayDestinationDomainHintsRequest = (async () => {
       try {
         const params = new URLSearchParams();
         params.set('file', 'error');
         params.set('source', 'domain_hints');
+        params.set('diagnostic', '1');
 
         if (_xrayDomainHintsCursor) {
           params.set('cursor', _xrayDomainHintsCursor);
@@ -2445,26 +2483,27 @@ let xrayLogsModuleApi = null;
           params.set('max_lines', String(Math.max(50, Math.min(MAX_MAX_LINES, XRAY_DESTINATION_DOMAIN_HINTS_INIT_LINES))));
         }
 
-        const res = await fetch('/api/xray-logs?' + params.toString(), { cache: 'no-store' });
+        const res = await fetch('/api/xray-logs?' + params.toString(), { cache: 'no-store', signal: abort.signal });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error('http ' + res.status);
+        if (epoch !== _diagnosticEpoch || !isLogsViewVisible()) return false;
 
         if (data.cursor) _xrayDomainHintsCursor = String(data.cursor);
 
         const lines = Array.isArray(data.lines) ? data.lines : [];
-        const changed = lines.length > 0 && ingestXrayLogDestinationDomains(lines, { source: 'error_log' });
+        _diagnosticQueue.push(lines, { ...data, initial, reset: data.reset || data.exists === false });
         _xrayDestinationDomainHintsLastFetchAt = Date.now();
         // НЕ перерисовываем экран на паузе: кеш доменов обновляем, но вывод заморожен
         // (иначе фоновый опрос каждые 2.5с показывал бы накопленные строки — пауза «не держит»).
-        if (opts.render !== false && !_paused) {
-          try { applyXrayLogFilterToOutput(); } catch (e) {}
-        }
-        return changed;
+        return lines.length > 0;
       } catch (e) {
         _xrayDestinationDomainHintsLastFetchAt = Date.now();
         return false;
       } finally {
-        _xrayDestinationDomainHintsRequest = null;
+        if (epoch === _diagnosticEpoch) {
+          _xrayDestinationDomainHintsRequest = null;
+          _diagnosticAbort = null;
+        }
       }
     })();
 
@@ -2476,6 +2515,15 @@ let xrayLogsModuleApi = null;
       clearInterval(_xrayDomainHintsTimer);
       _xrayDomainHintsTimer = null;
     }
+    _diagnosticEpoch++;
+    if (_diagnosticAbort) _diagnosticAbort.abort();
+    _diagnosticAbort = null;
+    _xrayDestinationDomainHintsRequest = null;
+    _xrayDomainHintsCursor = '';
+    _diagnosticQueue.reset();
+    _ruleIndex.reset();
+    _diagnosticDomainsChanged = false;
+    if (_view) _view.resetRules();
   }
 
   // Domain hints имеют смысл только когда Xray пишет error.log на уровне info/debug
@@ -2486,12 +2534,21 @@ let xrayLogsModuleApi = null;
     return lvl === 'info' || lvl === 'debug';
   }
 
+  function xrayRulesAvailable() {
+    return _hasXrayRuleTags && _xrayLogLevelGivesDomains() && _isAccessFileName(_currentFile);
+  }
+
+  function wantsXrayDiagnosticHints() {
+    return _isAccessFileName(_currentFile) && _xrayLogLevelGivesDomains()
+      && (_xrayDomainsDisplay || xrayRulesAvailable()) && isLogsViewVisible();
+  }
+
   function ensureXrayDomainHintsPolling() {
     if (_xrayDomainHintsTimer) return;
     void refreshXrayDestinationDomainHints({ render: true });
     _xrayDomainHintsTimer = setInterval(() => {
       try {
-        if (!_isAccessFileName(_currentFile) || !_xrayLogLevelGivesDomains()) {
+        if (!wantsXrayDiagnosticHints()) {
           stopXrayDomainHintsPolling();
           return;
         }
@@ -2501,8 +2558,8 @@ let xrayLogsModuleApi = null;
   }
 
   function maybeRefreshXrayDestinationDomainHints(options) {
-    if (!_isAccessFileName(_currentFile) || !_xrayLogLevelGivesDomains()) {
-      stopXrayDomainHintsPolling();
+    if (!wantsXrayDiagnosticHints()) {
+      if (_xrayDomainHintsTimer || _xrayDestinationDomainHintsRequest) stopXrayDomainHintsPolling();
       return;
     }
     ensureXrayDomainHintsPolling();
@@ -2519,6 +2576,7 @@ let xrayLogsModuleApi = null;
     if (!_isAccessFileName(_currentFile)) return;
     if (!(_liveWanted || _streaming)) return;
     if (!_xrayLogLevelGivesDomains()) return;
+    if (!wantsXrayDiagnosticHints()) return;
     try { stopXrayDomainHintsPolling(); } catch (e) {}
     _xrayDomainHintsCursor = '';
     try { ensureXrayDomainHintsPolling(); } catch (e) {}
@@ -2789,6 +2847,11 @@ let xrayLogsModuleApi = null;
       const prevLevel = String(_activeLogLevel || 'none').toLowerCase();
       const prevGaveDomains = prevLevel === 'info' || prevLevel === 'debug';
       _activeLogLevel = level;
+      _hasXrayRuleTags = data.has_rule_tags === true;
+      if (_xrayLogGeneration !== null && data.log_generation !== _xrayLogGeneration) stopXrayDomainHintsPolling();
+      _xrayLogGeneration = data.log_generation;
+      if (_view) _view.setRulesVisible(xrayRulesAvailable());
+      maybeRefreshXrayDestinationDomainHints();
       const nowGivesDomains = level === 'info' || level === 'debug';
       // Уровень только что поднялся до резолвящего (напр. warning→info после
       // enable/рестарта ядра): делаем свежий полный снимок error.log, иначе
@@ -2823,6 +2886,9 @@ let xrayLogsModuleApi = null;
     } catch (e) {
       console.error('xray log status error', e);
       _activeLogLevel = 'none';
+      _hasXrayRuleTags = false;
+      stopXrayDomainHintsPolling();
+      if (_view) _view.setRulesVisible(false);
       // Уровень неизвестен — снимаем debounce, чтобы переустановка info могла
       // повториться на следующем успешном опросе (если enable не удался).
       _xrayResolveEnsurePending = false;

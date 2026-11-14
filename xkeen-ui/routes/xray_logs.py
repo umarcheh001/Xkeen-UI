@@ -30,6 +30,7 @@ from services.xray_log_api import (
     disable_logs,
     enable_logs,
     get_status,
+    get_log_generation,
     resolve_xray_log_path_for_ws,
 )
 from services.xray_subscriptions import list_subscriptions
@@ -80,6 +81,54 @@ def _xray_decode_cursor(cur: Optional[str]) -> Optional[Dict[str, Any]]:
         return obj if isinstance(obj, dict) else None
     except Exception:
         return None
+
+
+def _diagnostic_tail(path: str, cur: Optional[Dict[str, Any]], max_lines: int) -> dict:
+    """Read a fresh bounded window; stale cursors must not build an endless backlog."""
+    limit = 128 * 1024
+    generation = get_log_generation()
+    with open(path, "rb") as stream:
+        stat = os.fstat(stream.fileno())
+        size, ino = stat.st_size, stat.st_ino
+        try:
+            offset = int(cur.get("off", -1)) if cur else -1
+            valid = bool(cur and cur.get("g") == generation and cur.get("ino") == ino and 0 <= offset <= size)
+            if valid:
+                stream.seek(max(0, offset - 64))
+                valid = _xray_b64e(stream.read(min(64, offset))) == cur.get("boundary")
+        except (TypeError, ValueError, OverflowError):
+            valid, offset = False, -1
+        skipped = (size - offset > limit) if valid else size > limit
+        reset = not valid or skipped
+        start = max(0, size - limit) if reset else offset
+        carry = b"" if reset else _xray_b64d(str(cur.get("carry", "")))[:4096]
+        drop_first = False
+        if reset and start:
+            stream.seek(start - 1)
+            drop_first = stream.read(1) != b"\n"
+        stream.seek(start)
+        data = carry + stream.read(limit)
+        new_offset = stream.tell()
+        caught_up = new_offset >= os.fstat(stream.fileno()).st_size
+        stream.seek(max(0, new_offset - 64))
+        boundary = _xray_b64e(stream.read(min(64, new_offset)))
+    parts = data.splitlines(True)
+    if drop_first and parts:
+        parts.pop(0)
+    carry = b""
+    if parts and not parts[-1].endswith((b"\n", b"\r")):
+        carry = parts.pop()
+    if len(carry) > 4096:
+        carry, skipped, reset = b"", True, True
+    if len(parts) > max_lines:
+        parts, skipped, reset = parts[-max_lines:], True, True
+    return {
+        "lines": adjust_log_timezone([line.decode("utf-8", "replace") for line in parts]),
+        "mode": "full" if reset else "append",
+        "cursor": _xray_encode_cursor({"ino": ino, "off": new_offset, "carry": _xray_b64e(carry), "g": generation, "boundary": boundary}),
+        "exists": True, "size": size, "mtime": stat.st_mtime, "ino": ino,
+        "reset": reset, "skipped": skipped, "caught_up": caught_up,
+    }
 
 
 def create_xray_logs_blueprint(
@@ -161,6 +210,12 @@ def create_xray_logs_blueprint(
                 jsonify({"lines": [], "mode": "full", "cursor": "", "exists": False, "size": 0, "mtime": 0.0, "ino": 0}),
                 200,
             )
+
+        if request.args.get("diagnostic") == "1" and str(file_name).lower() in ("error", "error.log"):
+            try:
+                return jsonify(_diagnostic_tail(path, _xray_decode_cursor(cursor), max_lines)), 200
+            except OSError:
+                return jsonify({"lines": [], "cursor": "", "reset": True, "skipped": True, "caught_up": False}), 200
 
         # Try incremental append mode first (when cursor matches the same file inode)
         cur = _xray_decode_cursor(cursor)

@@ -28,6 +28,8 @@ _CONFIG_PATH: str = ""
 _ACCESS_LOG: str = ""
 _ERROR_LOG: str = ""
 _TZ_OFFSET_HOURS: int = 3
+_LOG_GENERATION: int = 0
+_RULE_TAG_CACHE: tuple = ()
 
 
 # Simple cache for tail_lines() to avoid rereading unchanged files.
@@ -138,6 +140,8 @@ def resolve_xray_log_path_for_ws(file_name: str) -> Optional[str]:
 def clear_logs(file_name: Optional[str] = None) -> None:
     """Clear Xray logs (and their *.saved snapshots)."""
 
+    global _LOG_GENERATION
+    _LOG_GENERATION += 1
     targets: List[str] = []
     if file_name in ("error", "error.log"):
         targets = [_ERROR_LOG]
@@ -161,6 +165,46 @@ def clear_logs(file_name: Optional[str] = None) -> None:
                 pass
 
 
+def has_xray_rule_tags() -> Optional[bool]:
+    """Inspect emitted JSON fragments, never the editor's JSONC drafts."""
+    from services import xray_config_files
+    from utils import jsonio
+
+    global _RULE_TAG_CACHE
+    directory = xray_config_files.XRAY_CONFIGS_DIR
+    try:
+        signature = []
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                if entry.name.lower().endswith(".json") and entry.is_file():
+                    stat = entry.stat()
+                    signature.append((entry.path, stat.st_mtime_ns, stat.st_size))
+        key = tuple(sorted(signature))
+        if _RULE_TAG_CACHE and _RULE_TAG_CACHE[0] == (directory, key):
+            return _RULE_TAG_CACHE[1]
+        found = False
+        for path, _, _ in key:
+            data = jsonio.load_json(path)
+            if not isinstance(data, dict):
+                return None
+            routing = data.get("routing", {})
+            rules = routing.get("rules", []) if isinstance(routing, dict) else []
+            if not isinstance(rules, list):
+                return None
+            found = found or any(isinstance(rule, dict) and isinstance(rule.get("ruleTag"), str)
+                                 and bool(rule["ruleTag"].strip()) for rule in rules)
+        _RULE_TAG_CACHE = ((directory, key), bool(found))
+        return bool(found)
+    except FileNotFoundError:
+        return False
+    except (OSError, TypeError, ValueError):
+        return None
+
+
+def get_log_generation() -> int:
+    return _LOG_GENERATION
+
+
 def get_status() -> Dict[str, Any]:
     """Return current loglevel and paths."""
     cfg = load_xray_log_config()
@@ -169,6 +213,8 @@ def get_status() -> Dict[str, Any]:
         "loglevel": log_cfg.get("loglevel", "none"),
         "access": log_cfg.get("access", _ACCESS_LOG),
         "error": log_cfg.get("error", _ERROR_LOG),
+        "has_rule_tags": has_xray_rule_tags(),
+        "log_generation": get_log_generation(),
     }
 
 
@@ -198,6 +244,7 @@ def enable_logs(
     Returns: (resp_ok, detail, normalized_level, xray_restarted)
     """
 
+    global _LOG_GENERATION
     lvl = str(level or "warning").strip().lower()
     allowed = {"debug", "info", "warning", "error", "none"}
     if lvl not in allowed:
@@ -212,6 +259,8 @@ def enable_logs(
     cfg["log"]["loglevel"] = lvl
     if not save_xray_log_config(cfg):
         return False, "failed to save xray log config", lvl, False
+
+    _LOG_GENERATION += 1
 
     ok, detail = (True, "")
     xray_restarted = False
