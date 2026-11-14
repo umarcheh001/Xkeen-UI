@@ -109,7 +109,7 @@ def test_xray_request_profile_has_field_help_drawer():
     assert "Happ/3.18.3/Android/17771400994551771562" in outbounds_src
     assert "Happ/3.18.3/iOS/&lt;идентификатор-устройства&gt;" in outbounds_src
     assert "Формат User-Agent зависит от провайдера" in outbounds_src
-    assert "function subsShowRequestProfileHelp(show)" in outbounds_src
+    assert "function subsShowHelp(show, kind = 'requestProfile')" in outbounds_src
     assert "xk-sub-request-profile-help-body" in operator_styles_src
 
 

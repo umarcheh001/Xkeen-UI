@@ -15,7 +15,18 @@ from services import xray_transactions
 from services.url_policy import env_flag
 from utils.jsonc import strip_json_comments_text
 
-_LOCK = threading.Lock()
+_LOCK = threading.RLock()
+
+
+def loopback_server(value):
+    listen = str(value or "")
+    try:
+        host, port = listen.rsplit(":", 1)
+        if ipaddress.ip_address(host.strip("[]")).is_loopback and 0 < int(port) < 65536:
+            return listen
+    except ValueError:
+        pass
+    return None
 
 
 class HotApplyUncertain(RuntimeError):
@@ -50,13 +61,8 @@ def _plan(before: dict[str, bytes], after: dict[str, bytes]):
                 dest[tag] = outbound
     if not old or old.keys() != new.keys() or not isinstance(api, dict):
         return None
-    listen = str(api.get("listen") or "")
-    try:
-        host, port = listen.rsplit(":", 1)
-        local = ipaddress.ip_address(host.strip("[]")).is_loopback and 0 < int(port) < 65536
-    except ValueError:
-        return None
-    if not local:
+    listen = loopback_server(api.get("listen"))
+    if not listen:
         return None
     if "HandlerService" not in api.get("services", []):
         return None

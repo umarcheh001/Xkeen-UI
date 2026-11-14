@@ -258,9 +258,78 @@ def test_panel_handler_service_applies_rotation_without_restart(xray_runtime, mo
     assert "example.net" in _api(server, "lso").stdout
 
 
+@pytest.mark.parametrize("verification_fails", [False, True])
+def test_one_click_setup_and_rollback_with_real_xray(xray_runtime, tmp_path, monkeypatch, verification_fails):
+    from services import xray_handler_service as hot
+    from services import xray_handler_setup as setup
+
+    original, _server, config, path = xray_runtime
+    config.pop("api")
+    path.write_text(json.dumps(config), encoding="utf-8")
+    baseline = path.read_bytes()
+    state, raw = tmp_path / "state", tmp_path / "jsonc"
+    state.mkdir()
+    raw.mkdir()
+    monkeypatch.setenv("XKEEN_XRAY_BINARY", XRAY)
+    monkeypatch.setenv(setup.KEY, "0")
+    monkeypatch.setenv("XKEEN_UI_ENV_FILE", str(state / "devtools.env"))
+    monkeypatch.setattr(setup, "jsonc_path_for", lambda name: str(raw / (Path(name).name + "c")))
+    monkeypatch.setattr(setup, "detect_xkeen_runtime_core", lambda: "xray")
+    process = original
+    calls = []
+
+    def restart(**kwargs):
+        nonlocal process
+        calls.append(kwargs["source"])
+        if process.poll() is None:
+            process.terminate()
+            process.wait(timeout=5)
+        process = subprocess.Popen([XRAY, "run", "-confdir", str(tmp_path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        api = setup._documents(str(tmp_path))[2].get("listen")
+        if not api:
+            time.sleep(0.5)
+            return process.poll() is None
+        deadline = time.monotonic() + 10
+        while process.poll() is None and time.monotonic() < deadline:
+            if _api(api, "lso").returncode == 0:
+                return True
+            time.sleep(0.1)
+        return False
+
+    try:
+        if verification_fails:
+            monkeypatch.setattr(hot, "_runtime", lambda *_: {"unmatched": {}})
+            with pytest.raises(ValueError, match="API Xray"):
+                setup.configure(str(tmp_path), str(state), True, restart)
+            assert path.read_bytes() == baseline
+            assert not (tmp_path / "99_xkeen_subscription_api.json").exists()
+            assert os.environ[setup.KEY] == "0"
+            assert process.poll() is None and len(calls) == 2
+            return
+        result = setup.configure(str(tmp_path), str(state), True, restart)
+        assert result["enabled"] and result["ready"] and result["restarted"]
+        assert process.pid != original.pid
+        pid = process.pid
+        result = setup.configure(str(tmp_path), str(state), False, restart)
+        assert not result["enabled"] and not result["restarted"]
+        result = setup.configure(str(tmp_path), str(state), True, restart)
+        assert result["ready"] and not result["restarted"]
+        previous = {p.name: p.read_bytes() for p in tmp_path.iterdir() if p.is_file()}
+        config["outbounds"][1]["streamSettings"]["realitySettings"].update(serverName="example.net", shortId="fedcba9876543210")
+        path.write_text(json.dumps(config), encoding="utf-8")
+        assert hot.try_apply(str(tmp_path), previous)["hot_applied"] is True
+        assert process.pid == pid and calls == ["xray-handler-setup"]
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            process.wait(timeout=5)
+
+
 @pytest.mark.parametrize("outcome", ["success", "stopped", "running", "recovery_failed"])
 def test_subscription_batch_with_real_xray_preserves_validated_tree(tmp_path, monkeypatch, outcome):
     from services import xray_subscriptions as subs
+
+    monkeypatch.setenv("XKEEN_SUBSCRIPTIONS_HOT_APPLY", "0")
 
     configs = tmp_path / "configs"
     state_dir = tmp_path / "state"
@@ -533,18 +602,21 @@ def test_real_reality_stream_leastping_fallback_and_dns_survive_panel_rotation(t
         assert "socks -> reserve" in (tmp_path / "client.log").read_text(encoding="utf-8")
         probe_ready.set()
         deadline = time.monotonic() + 8
+        # Keep a second stream through the observed node, as well as the
+        # original reserve stream. An initial timed-out probe can publish its
+        # dead report after the next probe succeeds, so wait for a real choice.
         while time.monotonic() < deadline:
             if "sub--dynamic-reality" in _api(api, "bi", "pool").stdout:
-                break
+                candidate = _socks_stream(socks_port, echo.server_address[1])
+                candidate.sendall(b"selected")
+                assert _receive(candidate, 8) == b"selected"
+                if "socks -> sub--dynamic-reality" in (tmp_path / "client.log").read_text(encoding="utf-8"):
+                    selected_stream = stack.enter_context(candidate)
+                    break
+                candidate.close()
             time.sleep(0.1)
         else:
             pytest.fail("leastPing did not select the observed subscription node")
-        # Keep a second stream through the observed node, as well as the
-        # original stream opened while only the reserve was available.
-        selected_stream = stack.enter_context(_socks_stream(socks_port, echo.server_address[1]))
-        selected_stream.sendall(b"selected")
-        assert _receive(selected_stream, 8) == b"selected"
-        assert "socks -> sub--dynamic-reality" in (tmp_path / "client.log").read_text(encoding="utf-8")
         node["streamSettings"]["realitySettings"].update(serverName="beta.example.test", shortId="fedcba9876543210")
         failed = []
         if mode == "api_failure":

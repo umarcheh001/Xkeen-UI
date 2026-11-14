@@ -4519,6 +4519,12 @@ let outboundsModuleApi = null;
       requestProfileHelpClose: 'outbounds-subscriptions-request-profile-help-close',
       requestProfileHelpDone: 'outbounds-subscriptions-request-profile-help-done',
       requestProfileStatus: 'outbounds-subscriptions-request-profile-status',
+      hotApply: 'outbounds-subscriptions-hot-apply',
+      hotApplyStatus: 'outbounds-subscriptions-hot-apply-status',
+      hotApplyHelp: 'outbounds-subscriptions-hot-apply-help',
+      hotApplyHelpModal: 'outbounds-subscriptions-hot-apply-help-modal',
+      hotApplyHelpClose: 'outbounds-subscriptions-hot-apply-help-close',
+      hotApplyHelpDone: 'outbounds-subscriptions-hot-apply-help-done',
       routingMode: 'outbounds-subscriptions-routing-mode',
       routingAutoRule: 'outbounds-subscriptions-routing-auto-rule',
       poolWarning: 'outbounds-subscriptions-pool-warning',
@@ -4562,6 +4568,8 @@ let outboundsModuleApi = null;
     let _subscriptionsPaused = false;
     let _subscriptionsPausedTs = 0;
     let _subscriptionsSwitchBusy = false;
+    let _subscriptionHotApplyEnabled = false;
+    let _subscriptionHotApplyBusy = false;
     let _subscriptionRoutingBalancers = [];
     let _subscriptionEditId = '';
     let _subscriptionNodePingState = Object.create(null);
@@ -5798,6 +5806,18 @@ let outboundsModuleApi = null;
                   </div>
                 </div>
               </details>
+              <div class="xk-sub-hot-apply" aria-label="Обновление всех подписок">
+                <div class="xk-sub-hot-apply-copy">
+                  <strong>Обновление без перезапуска</strong>
+                  <span id="outbounds-subscriptions-hot-apply-status" class="xk-sub-field-hint" role="status" aria-live="polite">Проверяю локальный API Xray…</span>
+                </div>
+                <label class="dt-switch xk-sub-check xk-sub-hot-apply-switch">
+                  <input id="outbounds-subscriptions-hot-apply" type="checkbox" disabled aria-label="Обновление без перезапуска" aria-describedby="outbounds-subscriptions-hot-apply-status">
+                  <span class="dt-switch-slider" aria-hidden="true"></span>
+                  <span class="xk-sub-switch-label">Для всех</span>
+                </label>
+                <button type="button" id="outbounds-subscriptions-hot-apply-help" class="btn-secondary btn-compact xk-sub-icon-btn" title="Как работает обновление без перезапуска" aria-label="Справка об обновлении без перезапуска">${iconHtml('help')}</button>
+              </div>
               <div class="xk-sub-grid">
                 <section class="xk-sub-panel xk-sub-form-panel">
                   <div class="xk-sub-panelhead xk-sub-form-head">
@@ -6071,6 +6091,21 @@ let outboundsModuleApi = null;
             </div>
           </div>
         </div>
+        <div id="outbounds-subscriptions-hot-apply-help-modal" class="modal hidden" data-operator-modal-family="drawer-help" role="dialog" aria-modal="true" aria-label="Обновление без перезапуска">
+          <div class="modal-content xk-sub-hot-apply-help">
+            <div class="modal-header">
+              <span class="modal-title">Обновление без перезапуска</span>
+              <button type="button" class="modal-close" id="outbounds-subscriptions-hot-apply-help-close" aria-label="Закрыть справку">${iconHtml('close')}</button>
+            </div>
+            <div class="modal-body xk-sub-hot-apply-help-body">
+              <section><h3>Что сохраняется</h3><p>Когда провайдер меняет только SNI или shortId у REALITY-узлов, панель применяет новые параметры через HandlerService. Открытые соединения продолжают работать. Пулы, leastPing, замер и DNS сохраняют свои настройки.</p></section>
+              <section><h3>Включение одним нажатием</h3><p>Настройка действует на все подписки Xray. При первом включении панель создаёт или дополняет локальный API, проверяет конфигурацию и один раз перезапускает Xray. Если API уже готов, перезапуск не нужен. Поддерживаются официальное ядро и форк Jolymmiles.</p></section>
+              <section><h3>Когда нужен перезапуск</h3><p>Новые узлы, смена адреса или ключей, изменения маршрутов и узлы с Mux применяются обычным перезапуском. При ошибке API панель проверяет откат и использует безопасный перезапуск с восстановлением прежней конфигурации.</p></section>
+              <section><h3>Что важно знать</h3><p>Замена узла в API не атомарна: новое соединение в этот короткий момент может перейти на резервный узел или потребовать повтора. Выключение переключателя возвращает обычное применение подписок; локальный API остаётся для других функций. Переключатель не скачивает подписки и не меняет их расписание.</p></section>
+            </div>
+            <div class="modal-actions"><button type="button" id="outbounds-subscriptions-hot-apply-help-done" class="btn-primary">Понятно</button></div>
+          </div>
+        </div>
       `);
 
       modal = $(SUB_IDS.modal);
@@ -6192,8 +6227,8 @@ let outboundsModuleApi = null;
       try { syncXkeenBodyScrollLock(!!show); } catch (e2) {}
     }
 
-    function subsShowRequestProfileHelp(show) {
-      const helpModal = $(SUB_IDS.requestProfileHelpModal);
+    function subsShowHelp(show, kind = 'requestProfile') {
+      const helpModal = $(SUB_IDS[kind + 'HelpModal']);
       if (!helpModal) return;
       try {
         if (show) helpModal.classList.remove('hidden');
@@ -6203,9 +6238,9 @@ let outboundsModuleApi = null;
       const subscriptionsOpen = !!(subscriptionsModal && !subscriptionsModal.classList.contains('hidden'));
       try { syncXkeenBodyScrollLock(!!show || subscriptionsOpen); } catch (e2) {}
       if (show) {
-        try { $(SUB_IDS.requestProfileHelpClose).focus(); } catch (e3) {}
+        try { $(SUB_IDS[kind + 'HelpClose']).focus(); } catch (e3) {}
       } else {
-        try { $(SUB_IDS.requestProfileHelp).focus(); } catch (e4) {}
+        try { $(SUB_IDS[kind + 'Help']).focus(); } catch (e4) {}
       }
     }
 
@@ -8073,6 +8108,72 @@ let outboundsModuleApi = null;
       }
     }
 
+    function subsRenderHotApply(data, error = false) {
+      const input = $(SUB_IDS.hotApply);
+      const status = $(SUB_IDS.hotApplyStatus);
+      if (!input || !status) return;
+      _subscriptionHotApplyEnabled = !!data.enabled;
+      input.checked = _subscriptionHotApplyEnabled;
+      input.disabled = _subscriptionHotApplyBusy;
+      status.textContent = String(data.message || '');
+      status.classList.toggle('is-error', error);
+      status.setAttribute('aria-busy', String(_subscriptionHotApplyBusy));
+    }
+
+    async function subsLoadHotApply() {
+      if (_subscriptionHotApplyBusy) return;
+      try {
+        const res = await fetch('/api/xray/subscriptions/hot-apply', { cache: 'no-store' });
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || 'Не удалось проверить настройку.');
+        subsRenderHotApply(data);
+      } catch (error) {
+        subsRenderHotApply({ enabled: _subscriptionHotApplyEnabled, message: String(error.message || error) }, true);
+        $(SUB_IDS.hotApply).disabled = true;
+      }
+    }
+
+    async function subsToggleHotApply() {
+      if (_subscriptionHotApplyBusy) return;
+      const enabled = $(SUB_IDS.hotApply).checked;
+      _subscriptionHotApplyBusy = true;
+      subsRenderHotApply({ enabled, message: enabled ? 'Настраиваю и проверяю локальный API Xray…' : 'Выключаю обновление без перезапуска…' });
+      let outcome = { enabled: !enabled };
+      let failed = false;
+      try {
+        let res;
+        try {
+          res = await fetch('/api/xray/subscriptions/hot-apply', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }),
+          });
+        } catch (linkError) {
+          // A core restart can interrupt the response: read the saved outcome
+          // without sending the setup operation a second time.
+          for (let attempt = 0; attempt < 15; attempt += 1) {
+            await latencyJobSleep(2000);
+            try {
+              const check = await fetch('/api/xray/subscriptions/hot-apply', { cache: 'no-store' });
+              const data = await check.json();
+              if (check.ok && data.ok && data.enabled === enabled && (!enabled || data.ready)) {
+                outcome = data;
+                return;
+              }
+            } catch (eCheck) {}
+          }
+          throw linkError;
+        }
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || 'Не удалось изменить настройку.');
+        outcome = data;
+      } catch (error) {
+        failed = true;
+        outcome.message = String(error.message || error);
+      } finally {
+        _subscriptionHotApplyBusy = false;
+        subsRenderHotApply(outcome, failed);
+      }
+    }
+
     function subsClearPreview(silent) {
       if (!_subscriptionPreview) {
         try { subsSyncSubscriptionFormState(); } catch (e) {}
@@ -9175,7 +9276,7 @@ let outboundsModuleApi = null;
       try { subsResetForm(); } catch (e) {}
       subsShow(true);
       subsSetStatus('', false);
-      await Promise.all([subsLoadDetectedRequestProfile(), subsLoad()]);
+      await Promise.all([subsLoadDetectedRequestProfile(), subsLoad(), subsLoadHotApply()]);
       try { subsSyncSubscriptionFormState(); } catch (e) {}
       try { $(SUB_IDS.url).focus(); } catch (e) {}
     }
@@ -9188,7 +9289,8 @@ let outboundsModuleApi = null;
       });
       if (!ok) return false;
       try { subsDiscardUnprotectedDraftOnClose(); } catch (e) {}
-      try { subsShowRequestProfileHelp(false); } catch (e0) {}
+      try { subsShowHelp(false); } catch (e0) {}
+      try { subsShowHelp(false, 'hotApply'); } catch (eHot) {}
       clearTimeout(_subscriptionFilterTimer);
       clearTimeout(_subscriptionScheduleTimer);
       ++_subscriptionFilterGeneration;
@@ -9269,22 +9371,19 @@ let outboundsModuleApi = null;
         subsClearPreview(true);
         subsSyncSubscriptionFormState();
       });
-      wireButton(SUB_IDS.requestProfileHelp, () => {
-        subsShowRequestProfileHelp(true);
-      });
-      wireButton(SUB_IDS.requestProfileHelpClose, () => {
-        subsShowRequestProfileHelp(false);
-      });
-      wireButton(SUB_IDS.requestProfileHelpDone, () => {
-        subsShowRequestProfileHelp(false);
-      });
-      const requestProfileHelpModal = $(SUB_IDS.requestProfileHelpModal);
-      if (requestProfileHelpModal && (!requestProfileHelpModal.dataset || requestProfileHelpModal.dataset.xkSubHelpBound !== '1')) {
-        requestProfileHelpModal.addEventListener('click', (event) => {
-          if (event && event.target === requestProfileHelpModal) subsShowRequestProfileHelp(false);
-        });
-        if (requestProfileHelpModal.dataset) requestProfileHelpModal.dataset.xkSubHelpBound = '1';
+      for (const kind of ['requestProfile', 'hotApply']) {
+        wireButton(SUB_IDS[kind + 'Help'], () => subsShowHelp(true, kind));
+        wireButton(SUB_IDS[kind + 'HelpClose'], () => subsShowHelp(false, kind));
+        wireButton(SUB_IDS[kind + 'HelpDone'], () => subsShowHelp(false, kind));
+        const help = $(SUB_IDS[kind + 'HelpModal']);
+        if (help && help.dataset.xkSubHelpBound !== '1') {
+          help.addEventListener('click', (event) => {
+            if (event.target === help) subsShowHelp(false, kind);
+          });
+          help.dataset.xkSubHelpBound = '1';
+        }
       }
+      $(SUB_IDS.hotApply).addEventListener('change', () => void subsToggleHotApply());
 
       const form = $(SUB_IDS.form);
       if (form) {
@@ -9436,9 +9535,15 @@ let outboundsModuleApi = null;
 
       document.addEventListener('keydown', (e) => {
         if (!e || e.key !== 'Escape') return;
+        const hotHelp = $(SUB_IDS.hotApplyHelpModal);
+        if (hotHelp && !hotHelp.classList.contains('hidden')) {
+          e.stopImmediatePropagation();
+          subsShowHelp(false, 'hotApply');
+          return;
+        }
         const helpModal = $(SUB_IDS.requestProfileHelpModal);
         if (helpModal && !helpModal.classList.contains('hidden')) {
-          subsShowRequestProfileHelp(false);
+          subsShowHelp(false);
           return;
         }
         const m = $(SUB_IDS.modal);
