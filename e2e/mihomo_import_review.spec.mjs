@@ -6,7 +6,7 @@ const CONFIG = 'mixed-port: 7890\nproxies: []\nproxy-groups:\n  - name: Main\n  
 const LINK = 'vless://11111111-1111-1111-1111-111111111111@example.com:443?type=tcp#Review';
 async function editor(page, text) {
   return page.evaluate(async value => {
-    const { getMihomoPanelApi } = await import('/static/js/features/mihomo_panel.js');
+    const getMihomoPanelApi = () => window.XKeen.features.mihomoPanel;
     const api = getMihomoPanelApi();
     if (value !== undefined) api.setEditorText(value);
     return api.getEditorText();
@@ -230,7 +230,7 @@ test('draft defers registration until toolbar saves the matching nodes', async (
   await expect(page.locator('#mihomo-import-modal')).toBeHidden();
   expect(registrations).toBe(0);
   await page.evaluate(async () => {
-    const { getMihomoPanelApi } = await import('/static/js/features/mihomo_panel.js');
+    const getMihomoPanelApi = () => window.XKeen.features.mihomoPanel;
     await getMihomoPanelApi().saveConfig();
   });
   expect(registrations).toBe(1);
@@ -247,7 +247,7 @@ test('save marks the imported snapshot clean and does not repeat insertion on an
   await page.locator('#mihomo-import-save-btn').click();
   await expect(page.locator('#mihomo-import-action-status')).toContainText('Файл сохранён');
   const dirty = await page.evaluate(async () => {
-    const { getMihomoPanelApi } = await import('/static/js/features/mihomo_panel.js');
+    const getMihomoPanelApi = () => window.XKeen.features.mihomoPanel;
     return getMihomoPanelApi().isEditorDirty();
   });
   expect(dirty).toBe(false);
@@ -314,16 +314,16 @@ test('editor restart status is not shown in the import dialog', async ({ page })
   await page.route('**/api/mihomo-config?async=1', route => route.fulfill({ status: 202, json: {
     ok: true, saved: true, revision: 'saved', restart_job_id: 'toolbar-job',
   } }));
-  await page.route('**/api/restart-job/toolbar-job', route => route.abort('failed'));
+  let registrationRequested = false;
+  await page.route('**/api/restart-job/toolbar-job', route => {
+    registrationRequested = true;
+    return route.abort('failed');
+  });
   await page.evaluate(async () => {
-    const { getMihomoPanelApi } = await import('/static/js/features/mihomo_panel.js');
+    const getMihomoPanelApi = () => window.XKeen.features.mihomoPanel;
     await getMihomoPanelApi().saveAndRestart();
   });
-  const registration = await page.evaluate(async () => {
-    const { getMihomoConfigOperations } = await import('/static/js/features/mihomo_config_operations.js');
-    return getMihomoConfigOperations().operation.registration;
-  });
-  expect(registration).toBeDefined();
+  await expect.poll(() => registrationRequested).toBe(true);
   const menu = page.locator('.xk-mihomo-menu');
   if (!await menu.evaluate(el => el.open)) await menu.locator('summary').click();
   await page.locator('#mihomo-import-node-btn').click();
@@ -344,7 +344,7 @@ test('successful editor apply log does not appear when opening the import dialog
     ok: true, running: true, api_checked: true,
   } }));
   await page.evaluate(async () => {
-    const { getMihomoPanelApi } = await import('/static/js/features/mihomo_panel.js');
+    const getMihomoPanelApi = () => window.XKeen.features.mihomoPanel;
     await getMihomoPanelApi().saveAndRestart();
   });
   const menu = page.locator('.xk-mihomo-menu');

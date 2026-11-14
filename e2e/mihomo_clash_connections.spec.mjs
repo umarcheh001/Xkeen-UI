@@ -121,7 +121,7 @@ test('Mihomo connections use HTTP fallback, local filters, inspector and confirm
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
-    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    const mod = await (await import('xk-module/engine.mihomo')).load('clash');
     mod.activateMihomoClashWorkspace({ reason: 'e2e' });
   });
   await page.locator('#mihomo-clash-tab-connections').click();
@@ -354,7 +354,7 @@ test('Mihomo connections mobile table becomes records without horizontal overflo
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
-    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    const mod = await (await import('xk-module/engine.mihomo')).load('clash');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-mobile' });
   });
   await page.locator('#mihomo-clash-tab-connections').click();

@@ -701,6 +701,9 @@ test.describe('Operator Console Stage 4 logs', () => {
 
     for (const width of [1440, 390, 360]) {
       await page.setViewportSize({ width, height: 900 });
+      // Escape restores focus and may scroll the sticky header into view.
+      await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       const header = await page.locator('.panel-header-shell').boundingBox();
       const logs = await page.locator('#view-xray-logs > .xk-logs-live-card').boundingBox();

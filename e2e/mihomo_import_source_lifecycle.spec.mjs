@@ -16,7 +16,7 @@ async function prepare(page, { theme = 'dark', engine = 'codemirror' } = {}) {
   await selectPanelView(page, 'mihomo');
   await openMihomoConfig(page);
   await page.evaluate(async (content) => {
-    const { getMihomoPanelApi } = await import('/static/js/features/mihomo_panel.js');
+    const getMihomoPanelApi = () => window.XKeen.features.mihomoPanel;
     getMihomoPanelApi().setEditorText(content);
   }, CONFIG);
   if (engine === 'monaco') {
@@ -102,7 +102,7 @@ test('source/result have no preview runtime; disclosure loads CM and close reset
 test('status summarizes nodes and subscriptions without rendering source credentials', async ({ page }) => {
   await prepare(page);
   await page.evaluate(async (content) => {
-    const { getMihomoPanelApi } = await import('/static/js/features/mihomo_panel.js');
+    const getMihomoPanelApi = () => window.XKeen.features.mihomoPanel;
     getMihomoPanelApi().setEditorText(content);
   }, `${CONFIG}\nproxies:\n  - name: Stage3\n    type: vless\n    server: example.com\n    port: 443\n    uuid: 11111111-1111-1111-1111-111111111111\n`);
   await open(page);

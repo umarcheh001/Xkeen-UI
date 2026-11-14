@@ -247,7 +247,7 @@ test('Mihomo egress card shows routed IP, refreshes and stays compact on mobile'
   await page.reload();
   await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
-    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    const mod = await (await import('xk-module/engine.mihomo')).load('clash');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-egress-card' });
   });
 
@@ -281,7 +281,7 @@ test('Mihomo egress card shows routed IP, refreshes and stays compact on mobile'
   await page.reload();
   await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
-    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    const mod = await (await import('xk-module/engine.mihomo')).load('clash');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-egress-persisted' });
   });
   await expect(page.locator('#mihomo-clash-egress-toggle')).toHaveAttribute('aria-expanded', 'true');
@@ -316,7 +316,7 @@ test('Mihomo DNS diagnostics toggle keeps action labels inline', async ({ page }
   await page.reload();
   await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
-    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    const mod = await (await import('xk-module/engine.mihomo')).load('clash');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-dns-diagnostics' });
   });
 
@@ -404,7 +404,7 @@ test('Mihomo egress card offers confirmed automatic loopback listener setup', as
   await page.reload();
   await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
-    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    const mod = await (await import('xk-module/engine.mihomo')).load('clash');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-egress-auto-setup' });
   });
 
@@ -461,7 +461,7 @@ test('Mihomo groups workspace filters, confirms selection and uses provider dela
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
-    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    const mod = await (await import('xk-module/engine.mihomo')).load('clash');
     mod.activateMihomoClashWorkspace({ reason: 'e2e' });
   });
   await expect(page.locator('#mihomo-clash-groups-list')).toContainText('AUTO');
@@ -675,7 +675,7 @@ test('Mihomo group disclosure state survives reload without mounting collapsed c
   await page.reload();
   await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
-    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    const mod = await (await import('xk-module/engine.mihomo')).load('clash');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-disclosure-persistence' });
   });
   await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head')).toHaveAttribute('aria-expanded', 'false');
@@ -690,7 +690,7 @@ test('Mihomo group disclosure state survives reload without mounting collapsed c
   await page.reload();
   await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
-    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    const mod = await (await import('xk-module/engine.mihomo')).load('clash');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-disclosure-restored' });
   });
   await expect(page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head')).toHaveAttribute('aria-expanded', 'true');
@@ -768,7 +768,7 @@ test('Mihomo GLOBAL selector follows runtime mode and reconciles selection local
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
-    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    const mod = await (await import('xk-module/engine.mihomo')).load('clash');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-global-selector' });
   });
 

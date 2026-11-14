@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 677,
-      "size_bytes": 9011768,
+      "size_bytes": 9012539,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -134,7 +134,7 @@
       ],
       "removable": true,
       "unit_count": 161,
-      "size_bytes": 3898421,
+      "size_bytes": 3898363,
       "kind_counts": {
         "app_runtime": 4,
         "backend_route": 2,
@@ -6768,7 +6768,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_module_boundaries.py",
-      "size_bytes": 20885,
+      "size_bytes": 21422,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -14468,7 +14468,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/panel_operator_stage4_logs.spec.mjs",
-      "size_bytes": 49589,
+      "size_bytes": 49823,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -20249,7 +20249,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_test",
       "path": "e2e/mihomo_clash_connections.spec.mjs",
-      "size_bytes": 24020,
+      "size_bytes": 24028,
       "depends_on": [
         "core",
         "tool.editor"
@@ -20291,7 +20291,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_test",
       "path": "e2e/mihomo_clash_groups_latency.spec.mjs",
-      "size_bytes": 46546,
+      "size_bytes": 46641,
       "depends_on": [
         "core",
         "tool.editor"
@@ -20312,7 +20312,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_test",
       "path": "e2e/mihomo_clash_groups_workspace.spec.mjs",
-      "size_bytes": 40817,
+      "size_bytes": 40849,
       "depends_on": [
         "core",
         "tool.editor"
@@ -20480,7 +20480,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_test",
       "path": "e2e/mihomo_import_review.spec.mjs",
-      "size_bytes": 24519,
+      "size_bytes": 24318,
       "depends_on": [
         "core",
         "tool.editor"
@@ -20501,7 +20501,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_test",
       "path": "e2e/mihomo_import_source_lifecycle.spec.mjs",
-      "size_bytes": 30169,
+      "size_bytes": 30137,
       "depends_on": [
         "core",
         "tool.editor"
@@ -20522,7 +20522,7 @@
       "module_id": "engine.mihomo",
       "kind": "frontend_test",
       "path": "e2e/mihomo_import_xhttp.spec.mjs",
-      "size_bytes": 3940,
+      "size_bytes": 3980,
       "depends_on": [
         "core",
         "tool.editor"

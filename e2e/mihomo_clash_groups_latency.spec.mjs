@@ -37,7 +37,7 @@ test('Smart availability follows merged probes across groups and a later timeout
   await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
     window.XKeen?.ui?.settings?.setLocal?.({ mihomo: { latencyPreset: 'all' } });
-    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    const mod = await (await import('xk-module/engine.mihomo')).load('clash');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-smart-availability' });
   });
   const smart = page.locator('[data-group-name="Smart"]');
@@ -85,7 +85,7 @@ test('expired successful Smart probe no longer overrides the unavailable core sn
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
-    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    const mod = await (await import('xk-module/engine.mihomo')).load('clash');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-smart-availability-expiry' });
   });
   const group = page.locator('[data-group-name="Smart"]');
@@ -94,8 +94,8 @@ test('expired successful Smart probe no longer overrides the unavailable core sn
   await expect(group.locator('.xk-mihomo-group-title > small')).toContainText('1/1 доступны');
   await page.clock.fastForward((5 * 60 * 1000) + 100);
   await page.evaluate(async () => {
-    const mod = await import('/static/js/features/mihomo_clash/groups.js');
-    await mod.refreshMihomoClashGroups();
+    const mod = await (await import('xk-module/engine.mihomo')).load('clash');
+    await mod.refreshMihomoClashStatus({ reason: 'e2e-groups-refresh' });
   });
   await expect(group.locator('.xk-mihomo-group-title > small')).toContainText('0/1 доступны');
   await expect(group.locator('[data-node-name="Poland"] .xk-mihomo-node-delay')).toHaveAttribute('data-delay-tone', 'unavailable');
@@ -119,7 +119,7 @@ test('Mihomo latency stays visible but is marked stale after five minutes and gr
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
-    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    const mod = await (await import('xk-module/engine.mihomo')).load('clash');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-delay-freshness' });
   });
   await expect(page.locator('#mihomo-clash-groups-list')).toContainText('AUTO');
@@ -175,7 +175,7 @@ test('auto freshness follows provider healthcheck interval and core group mode u
   await page.evaluate(async () => {
     const settings = window.XKeen?.ui?.settings;
     settings?.setLocal?.({ mihomo: { latencyFreshness: 'auto', latencyTestMode: 'core' } });
-    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    const mod = await (await import('xk-module/engine.mihomo')).load('clash');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-core-group-mode' });
   });
   await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head').click();
@@ -215,7 +215,7 @@ test('core batch mode still probes a selector group node by node', async ({ page
   await page.evaluate(async () => {
     const settings = window.XKeen?.ui?.settings;
     settings?.setLocal?.({ mihomo: { latencyTestMode: 'core' } });
-    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    const mod = await (await import('xk-module/engine.mihomo')).load('clash');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-core-mode-selector' });
   });
   await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head').click();
@@ -239,7 +239,7 @@ test('server cards replace provider emoji with one rectangular country flag', as
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
-    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    const mod = await (await import('xk-module/engine.mihomo')).load('clash');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-country' });
   });
   await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head').click();
@@ -260,7 +260,7 @@ test('complex country flags use complete inline SVG artwork', async ({ page }) =
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
-    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    const mod = await (await import('xk-module/engine.mihomo')).load('clash');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-complex-flags' });
   });
   await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head').click();
@@ -291,7 +291,7 @@ test('visible delay test probes every node beyond the old eight-item limit and r
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
-    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    const mod = await (await import('xk-module/engine.mihomo')).load('clash');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-complete-delay-queue' });
   });
   await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head').click();
@@ -326,7 +326,7 @@ test('visible delay test waits for the backend rolling limit instead of failing 
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
-    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    const mod = await (await import('xk-module/engine.mihomo')).load('clash');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-delay-rate-limit' });
   });
   await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head').click();
@@ -356,7 +356,7 @@ test('retryable Mihomo 503 reads as a node that did not answer, not a panel erro
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
-    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    const mod = await (await import('xk-module/engine.mihomo')).load('clash');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-delay-503-timeout' });
   });
   await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head').click();
@@ -398,7 +398,7 @@ test('group delay probes unique nodes without group endpoint and reconciles the 
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
-    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    const mod = await (await import('xk-module/engine.mihomo')).load('clash');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-group-delay-batch' });
   });
   await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head').click();
@@ -475,7 +475,7 @@ test('nested group card probes itself and falls back to its selected terminal pr
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
-    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    const mod = await (await import('xk-module/engine.mihomo')).load('clash');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-nested-group-delay' });
   });
   await page.locator('[data-group-name="Blocked services"] .xk-mihomo-group-head').click();
@@ -523,7 +523,7 @@ test('visible delay de-duplicates the same provider node across expanded groups'
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
-    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    const mod = await (await import('xk-module/engine.mihomo')).load('clash');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-visible-delay-deduplication' });
   });
   await page.locator('[data-group-name="AUTO"] .xk-mihomo-group-head').click();
@@ -565,7 +565,7 @@ test('group delay test keeps shared node progress inside the selected group', as
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
-    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    const mod = await (await import('xk-module/engine.mihomo')).load('clash');
     mod.activateMihomoClashWorkspace({ reason: 'e2e-group-delay-scope' });
   });
   await expect(page.locator('#mihomo-clash-groups-list')).toContainText('AUTO');
@@ -793,7 +793,7 @@ test('Mihomo group disclosures keep the workspace compact and keyboard accessibl
   await page.goto('/');
   await selectPanelView(page, 'mihomo');
   await page.evaluate(async () => {
-    const mod = await import('/static/js/features/mihomo_clash/index.js');
+    const mod = await (await import('xk-module/engine.mihomo')).load('clash');
     mod.activateMihomoClashWorkspace({ reason: 'e2e' });
   });
   await expect(page.locator('#mihomo-clash-groups-list')).toContainText('AUTO');

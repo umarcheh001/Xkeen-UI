@@ -20,6 +20,17 @@ STATIC = PANEL / "static"
 BUILD = STATIC / "frontend-build"
 
 
+def test_mihomo_browser_tests_use_the_module_instance() -> None:
+    sources = list((ROOT / "e2e").glob("*.spec.mjs"))
+    assert len(sources) > 100
+    private_state = re.compile(
+        r"import\(['\"]/static/js/features/(?:mihomo_clash/(?:index|groups)"
+        r"|mihomo_(?:panel|config_operations|import))\.js['\"]\)"
+    )
+    offenders = [path.name for path in sources if private_state.search(path.read_text(encoding="utf-8"))]
+    assert offenders == [], "Raw imports create a second Mihomo instance: " + ", ".join(offenders)
+
+
 def separate_modules() -> dict[str, str]:
     """`SEPARATE_MODULES` of vite.module.config.mjs: module id to its entry file."""
 
