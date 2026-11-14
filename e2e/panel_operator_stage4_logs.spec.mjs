@@ -99,6 +99,139 @@ async function openLogs(page, theme, viewport, options = {}) {
 
 const rows = (page) => page.locator('#xray-log-output .tr:not([hidden])');
 
+async function openFrameTestView(page, mode = 'access') {
+  await page.goto('/');
+  await page.evaluate(async mode => {
+    const { createXrayLogView } = await import('/static/js/features/xray_log_view.js');
+    const root = document.createElement('div');
+    root.style.cssText = 'height:360px;width:1280px;overflow:auto';
+    document.body.append(root);
+    const view = createXrayLogView({ root });
+    const line = n => mode === 'access'
+      ? `2026/11/14 13:21:42 from 192.168.10.13:53535 accepted tcp:frame${n}.test:443 [redirect-in -> direct]`
+      : `2026/11/14 13:21:42 [Warning] [3021571] app/dispatcher: frame${n}.test`;
+    view.setMode(mode); view.setMaxLines(50);
+    view.reset(Array.from({ length: 50 }, (_, n) => line(n)));
+    window.__frameTest = { root, view, line };
+    window.__withHeldFrames = run => {
+      const original = window.requestAnimationFrame, cancel = window.cancelAnimationFrame;
+      const pending = new Map(); let id = 1000000;
+      window.requestAnimationFrame = callback => { pending.set(++id, callback); return id; };
+      window.cancelAnimationFrame = id => pending.delete(id);
+      const flush = () => { const callbacks = [...pending.values()]; pending.clear(); for (const callback of callbacks) callback(performance.now()); };
+      try { return run({ ...window.__frameTest, pending, flush }); }
+      finally { window.requestAnimationFrame = original; window.cancelAnimationFrame = cancel; }
+    };
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  }, mode);
+}
+
+test('frame batching defers repeated stream counters until the scheduled output update', async ({ page }) => {
+  await page.addInitScript(() => {
+    class Socket {
+      static OPEN = 1;
+      static CONNECTING = 0;
+      constructor(url) {
+        this.readyState = 1;
+        if (String(url).includes('/ws/xray-logs')) window.__frameSocket = this;
+        setTimeout(() => this.onopen?.({}), 0);
+      }
+      send() {}
+      close() { this.readyState = 3; }
+      emit(line) { this.onmessage?.({ data: JSON.stringify({ type: 'line', line }) }); }
+    }
+    window.WebSocket = Socket;
+  });
+  await openLogs(page, 'dark', { width: 1440, height: 900 }, { accessLines: manyAccessLines(50) });
+  await page.route('**/api/ws-token', route => route.fulfill({ json: { ok: true, token: 'frame' } }));
+  await page.locator('#xray-log-enable-btn').click();
+  await expect.poll(() => page.evaluate(() => typeof window.__frameSocket?.onmessage)).toBe('function');
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const unchanged = await page.evaluate(lines => {
+    const footer = document.querySelector('#xray-log-stats');
+    const before = footer.innerHTML;
+    for (const line of lines) window.__frameSocket.emit(line);
+    return before === footer.innerHTML;
+  }, manyAccessLines(10, 50));
+  expect(unchanged).toBe(true);
+  await expect(page.locator('#xray-log-stats [data-kind="shown"] .xk-log-counter-value')).toHaveText('60 из 60');
+  await expect(page.locator('#xray-log-output')).toContainText('h59.example.com');
+});
+
+for (const mode of ['access', 'error']) {
+  test(`frame batching coalesces ${mode} rows without delaying parsing or changing the buffer limit`, async ({ page }) => {
+    await openFrameTestView(page, mode);
+    const result = await page.evaluate(() => window.__withHeldFrames(({ root, view, line, pending, flush }) => {
+      const before = root.shadowRoot.innerHTML;
+      for (let n = 50; n < 60; n++) view.append([line(n)]);
+      const result = { unchanged: before === root.shadowRoot.innerHTML, frames: pending.size,
+        total: view.stats().total, lines: view.visibleLines() };
+      flush(); result.after = root.shadowRoot.textContent;
+      return result;
+    }));
+    expect(result.unchanged).toBe(true);
+    expect(result.frames).toBe(1);
+    expect(result.total).toBe(50);
+    expect(result.lines).toHaveLength(50);
+    expect(result.lines[0]).toContain('frame10.test');
+    expect(result.lines.at(-1)).toContain('frame59.test');
+    expect(result.after).toContain('frame59.test');
+  });
+}
+
+test('frame batching freezes the pending update and keeps later arrivals off the paused table', async ({ page }) => {
+  await openFrameTestView(page);
+  const result = await page.evaluate(() => window.__withHeldFrames(({ root, view, line, pending, flush }) => {
+    view.append([line(50)]); view.setFrozen(true);
+    const paused = root.shadowRoot.innerHTML;
+    const result = { paused: root.shadowRoot.textContent, frames: pending.size };
+    for (let n = 51; n < 111; n++) view.append([line(n)]);
+    flush(); result.unchanged = paused === root.shadowRoot.innerHTML;
+    view.setFrozen(false); result.resumed = root.shadowRoot.textContent;
+    result.total = view.stats().total;
+    return result;
+  }));
+  expect(result.paused).toContain('frame50.test');
+  expect(result.frames).toBe(0);
+  expect(result.unchanged).toBe(true);
+  expect(result.resumed).toContain('frame110.test');
+  expect(result.total).toBe(50);
+});
+
+test('frame batching cancels a pending append when a new snapshot replaces the buffer', async ({ page }) => {
+  await openFrameTestView(page);
+  const result = await page.evaluate(() => window.__withHeldFrames(({ root, view, line, pending, flush }) => {
+    view.append([line(50)]); view.reset([line(200)]);
+    const frames = pending.size;
+    flush();
+    return { frames, text: root.shadowRoot.textContent, lines: view.visibleLines() };
+  }));
+  expect(result.frames).toBe(0);
+  expect(result.lines).toHaveLength(1);
+  expect(result.text).toContain('frame200.test');
+  expect(result.text).not.toContain('frame50.test');
+});
+
+for (const order of ['oldest', 'newest']) {
+  test(`frame batching preserves the reading anchor while trimming ${order} rows`, async ({ page }) => {
+    await openFrameTestView(page);
+    const result = await page.evaluate(order => window.__withHeldFrames(({ root, view, line, flush }) => {
+      view.setOrder(order); root.scrollTop = 600;
+      root.dispatchEvent(new Event('scroll')); flush();
+      const visible = () => [...root.shadowRoot.querySelectorAll('.tr')].filter(row => !row.hidden)
+        .map(row => ({ text: row.textContent.match(/frame\d+\.test/)[0], top: row.getBoundingClientRect().top }))
+        .filter(row => row.top >= root.getBoundingClientRect().top + 30).sort((a, b) => a.top - b.top)[0];
+      const before = visible();
+      for (let n = 50; n < 55; n++) view.append([line(n)]);
+      flush();
+      return { before, after: visible(), unseen: view.unseen() };
+    }), order);
+    expect(result.after.text).toBe(result.before.text);
+    expect(Math.abs(result.after.top - result.before.top)).toBeLessThan(1);
+    expect(result.unseen).toBe(5);
+  });
+}
+
 
 async function readLogsGeometry(page) {
   return page.evaluate(() => {

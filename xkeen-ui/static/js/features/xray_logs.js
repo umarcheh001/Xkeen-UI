@@ -1569,17 +1569,13 @@ let xrayLogsModuleApi = null;
   }
 
   function scheduleXrayLogOutputRender() {
-    if (_xrayLogOutputRenderTimer) {
-      try { updateXrayLogStats(); } catch (e) {}
-      return false;
-    }
+    if (_xrayLogOutputRenderTimer) return false;
 
     _xrayLogOutputRenderTimer = setTimeout(() => {
       _xrayLogOutputRenderTimer = null;
       _pendingCount = 0;
       applyXrayLogFilterToOutput();
     }, LOG_RENDER_DEBOUNCE_MS);
-    try { updateXrayLogStats(); } catch (e) {}
     return true;
   }
 

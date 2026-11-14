@@ -238,7 +238,8 @@ export function createXrayLogView(options) {
     emptyHtml: '',
     statsTimer: null,
     statsDirty: false,
-    renderQueued: false,
+    renderQueued: 0,
+    scrollDelta: 0,
     scrollTop: 0,
     viewH: 0,
     rowsBySeq: new Map(),
@@ -383,6 +384,7 @@ export function createXrayLogView(options) {
   }
 
   function refilter() {
+    state.scrollDelta = 0;
     state.visible = [];
     state.ord = 0;
     state.records.forEach((record) => { if (matches(record)) pushVisible(record); });
@@ -742,10 +744,22 @@ export function createXrayLogView(options) {
     }
   }
 
-  function renderAll() {
+  function flushTableRender() {
+    if (state.renderQueued) cancelAnimationFrame(state.renderQueued);
+    state.renderQueued = 0;
     if (state.stuck) scrollToNew();
+    else if (state.scrollDelta) keepPlace(state.scrollDelta);
+    state.scrollDelta = 0;
     renderTable();
     renderEmpty();
+  }
+
+  function queueTableRender() {
+    if (!state.renderQueued) state.renderQueued = requestAnimationFrame(flushTableRender);
+  }
+
+  function renderAll() {
+    flushTableRender();
     renderSelbar();
     markStatsDirty(true);
   }
@@ -757,12 +771,7 @@ export function createXrayLogView(options) {
       state.stuck = atNewEdge();
       if (state.stuck) state.unseen = 0;
     }
-    if (state.renderQueued) return;
-    state.renderQueued = true;
-    requestAnimationFrame(() => {
-      state.renderQueued = false;
-      renderTable();
-    });
+    queueTableRender();
   }
 
   if (typeof ResizeObserver === 'function') {
@@ -929,19 +938,14 @@ export function createXrayLogView(options) {
       let cut = 0;
       while (cut < state.visible.length && state.visible[cut].seq < firstSeq) cut += 1;
       if (cut) {
-        const gone = state.visible.splice(0, cut);
-        gone.forEach((record) => {
-          const row = state.rowsBySeq.get(record.seq);
-          if (row) releaseRow(row);
-        });
+        state.visible.splice(0, cut);
         state.baseOrd = state.visible.length ? state.visible[0].ord : state.ord;
         // Row offsets grow with every line; renumber long before float precision matters.
         if (state.baseOrd > 200000) renumber();
         // Keep the same lines under the eye when away from the end (oldest
         // first: the cut rows stood above them).
         if (!state.stuck && !newestFirst()) {
-          state.scrollTop = Math.max(0, state.scrollTop - cut * ROW_H);
-          host.scrollTop = state.scrollTop;
+          state.scrollDelta -= cut * ROW_H;
         }
       }
     }
@@ -949,6 +953,9 @@ export function createXrayLogView(options) {
   }
 
   function clearRecords() {
+    if (state.renderQueued) cancelAnimationFrame(state.renderQueued);
+    state.renderQueued = 0;
+    state.scrollDelta = 0;
     state.records = [];
     state.visible = [];
     state.ord = 0;
@@ -979,7 +986,6 @@ export function createXrayLogView(options) {
   function append(lines) {
     const list = Array.isArray(lines) ? lines : [];
     if (!list.length) return;
-    const stick = state.stuck;
     const added = [];
     for (let i = 0; i < list.length; i += 1) {
       const record = makeRecord(list[i]);
@@ -997,17 +1003,12 @@ export function createXrayLogView(options) {
     if (shown.length) {
       shown.forEach(pushVisible);
       if (state.visible.length === shown.length) state.baseOrd = state.visible[0].ord;
-      if (stick) {
-        scrollToNew();
-      } else {
+      if (!state.stuck) {
         state.unseen += shown.length;
-        if (newestFirst()) keepPlace(shown.length * ROW_H);
+        if (newestFirst()) state.scrollDelta += shown.length * ROW_H;
       }
-      renderTable();
-      renderEmpty();
-    } else {
-      renderTable();
     }
+    queueTableRender();
     markStatsDirty(false);
   }
 
@@ -1040,6 +1041,7 @@ export function createXrayLogView(options) {
   function setFrozen(on) {
     const next = !!on;
     if (next === state.frozen) return;
+    if (next && state.renderQueued) flushTableRender();
     state.frozen = next;
     if (!next) {
       refilter();
