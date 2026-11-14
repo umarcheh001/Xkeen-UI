@@ -10569,6 +10569,54 @@ body.panel-page #outbounds-subscriptions-request-profile-help-modal .xk-sub-requ
 
 
 
+body.panel-page #outbounds-subscriptions-modal .xk-sub-hot-apply {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-control-radius);
+  background: var(--op-editor);
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-hot-apply-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  font-size: calc(12px * var(--xk-font-scale, 1));
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-hot-apply-copy .is-error {
+  color: var(--op-danger, #ef6464);
+}
+
+body.panel-page #outbounds-subscriptions-modal .xk-sub-hot-apply-switch {
+  white-space: nowrap;
+  margin: 0;
+}
+
+body.panel-page #outbounds-subscriptions-hot-apply-help-modal .xk-sub-hot-apply-help {
+  width: min(640px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+}
+
+body.panel-page #outbounds-subscriptions-hot-apply-help-modal .xk-sub-hot-apply-help-body {
+  display: grid;
+  gap: 16px;
+  line-height: 1.55;
+}
+
+body.panel-page #outbounds-subscriptions-hot-apply-help-modal :is(h3, p) {
+  margin: 0;
+}
+
+body.panel-page #outbounds-subscriptions-hot-apply-help-modal h3 {
+  font-size: inherit;
+  margin-bottom: 5px;
+}
+
 body.panel-page #outbounds-subscriptions-modal .xk-sub-controls {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -16590,6 +16638,19 @@ body.panel-page #toast-container {
   }
 
 @media (max-width: 480px) {
+  body.panel-page #outbounds-subscriptions-modal .xk-sub-hot-apply {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+
+  body.panel-page #outbounds-subscriptions-modal .xk-sub-hot-apply-copy {
+    grid-column: 1 / -1;
+  }
+
+  body.panel-page #outbounds-subscriptions-modal .xk-sub-hot-apply-switch {
+    justify-self: start;
+  }
+
 
 
 

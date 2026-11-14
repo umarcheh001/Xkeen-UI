@@ -431,6 +431,24 @@ test('the refresh-due button shows no counter when nothing is waiting', async ({
   await expect(page.locator('#outbounds-subscriptions-refresh-due-count')).toBeHidden();
 });
 
+for (const batch of [false, true]) {
+  test(`HandlerService ${batch ? 'batch' : 'manual'} update reports application without restart`, async ({ page }) => {
+    await routeSubscriptions(page, [buildDemoSubscription(buildDemoNodes().slice(0, 2), {
+      next_update_ts: 0,
+    })]);
+    const result = { ok: true, changed: true, hot_applied: true, restarted: false, count: 2 };
+    const endpoint = batch ? 'refresh-due' : 'demo-sub/refresh';
+    await page.route(`**/api/xray/subscriptions/${endpoint}?*`, async (route) => {
+      await route.fulfill({ json: batch ? { ok: true, updated: 1, ok_count: 1, results: [result] } : result });
+    });
+    await openSubscriptionsModal(page);
+    await page.locator(batch
+      ? '#outbounds-subscriptions-refresh-due-btn'
+      : 'tr[data-sub-id="demo-sub"] .xk-sub-refresh').click();
+    await expect(page.locator('#toast-container .toast').filter({ hasText: 'без перезапуска' })).toBeVisible();
+  });
+}
+
 test('the form says whether saving adds a subscription or changes the open one', async ({ page }) => {
   await routeSubscriptions(page, [buildDemoSubscription([], { tag: 'VPS_DE_SUB' })]);
   await openSubscriptionsModal(page);

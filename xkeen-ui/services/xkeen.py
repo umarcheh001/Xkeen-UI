@@ -207,8 +207,7 @@ def _wait_xkeen_restarted(
             elif now - candidate_since >= stable_for:
                 return True
         time.sleep(max(0.05, float(poll_interval or 0.25)))
-    current = _xkeen_runtime_identity()
-    return bool(current[0] and (saw_stopped or current != previous))
+    return False
 
 
 def control_xkeen_action(
@@ -248,6 +247,9 @@ def control_xkeen_action(
         if normalized == "restart":
             if _wait_xkeen_restarted(previous_identity, timeout=settle):
                 return True
+        elif normalized == "start":
+            if _wait_xkeen_restarted(("", ()), timeout=settle):
+                return True
         elif _wait_xkeen_running(expected_running, timeout=settle):
             return True
 
@@ -274,6 +276,24 @@ def restart_xkeen(
         dispatch_timeout=dispatch_timeout,
         settle_timeout=8.0,
     )
+    recovered = False
+    recovery_attempted = False
+    try:
+        runtime_before_recovery = get_xkeen_runtime_status()
+    except Exception:
+        runtime_before_recovery = {}
+    if not ok and runtime_before_recovery.get("runtime_status") == "stopped":
+        # Some router builds return from restart after stopping the core. Give
+        # the supervisor's normal start path one chance before reporting a
+        # failed restart to callers.
+        recovery_attempted = True
+        recovered = control_xkeen_action(
+            "start",
+            prefer_init=True,
+            dispatch_timeout=dispatch_timeout,
+            settle_timeout=8.0,
+        )
+        ok = recovered
     try:
         from services.mihomo_clash_cache import invalidate_shared_mihomo_cache
 
@@ -285,5 +305,16 @@ def restart_xkeen(
         # historical restart result contract.
         pass
     duration_ms = max(0, int(round((time.monotonic() - started_at) * 1000)))
-    append_restart_log(log_file, ok, source=source, duration_ms=duration_ms, **get_xkeen_runtime_status())
+    try:
+        runtime_status = get_xkeen_runtime_status()
+    except Exception:
+        runtime_status = {"runtime_status": "unknown", "runtime_core": "none"}
+    append_restart_log(
+        log_file,
+        ok,
+        source=source,
+        duration_ms=duration_ms,
+        **({"recovery_attempted": True, "recovered": bool(recovered)} if recovery_attempted else {}),
+        **runtime_status,
+    )
     return ok

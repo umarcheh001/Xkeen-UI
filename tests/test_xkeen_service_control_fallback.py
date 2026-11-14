@@ -42,11 +42,11 @@ def test_control_xkeen_action_falls_back_when_first_command_does_not_change_runt
 
     attempts = {'count': 0}
 
-    def fake_wait(expected_running: bool, *, timeout: float, poll_interval: float = 0.25) -> bool:
+    def fake_wait(previous, *, timeout: float) -> bool:
         attempts['count'] += 1
-        return attempts['count'] >= 2 and expected_running is True
+        return attempts['count'] >= 2 and previous == ('', ())
 
-    monkeypatch.setattr(xkeen_service, '_wait_xkeen_running', fake_wait)
+    monkeypatch.setattr(xkeen_service, '_wait_xkeen_restarted', fake_wait)
     monkeypatch.setattr(xkeen_service, '_xkeen_runtime_identity', lambda: ('', ()))
     monkeypatch.setattr(xkeen_service, 'is_xkeen_running', lambda: False)
 
@@ -80,6 +80,27 @@ def test_restart_xkeen_logs_result_from_verified_control_flow(tmp_path, monkeypa
     assert 'runtime_status=running' in text
     assert 'runtime_core=xray' in text
     assert 'duration_ms=' in text
+
+
+def test_restart_xkeen_attempts_supervisor_start_when_restart_leaves_core_stopped(tmp_path, monkeypatch):
+    log_file = tmp_path / 'restart.log'
+    seen: list[str] = []
+    statuses = iter([
+        {'runtime_status': 'stopped', 'runtime_core': 'none'},
+        {'runtime_status': 'running', 'runtime_core': 'xray'},
+    ])
+
+    def fake_control(action: str, **_kwargs) -> bool:
+        seen.append(action)
+        return action == 'start'
+
+    monkeypatch.setattr(xkeen_service, 'control_xkeen_action', fake_control)
+    monkeypatch.setattr(xkeen_service, 'get_xkeen_runtime_status', lambda: next(statuses))
+
+    assert xkeen_service.restart_xkeen(['xkeen', '-restart'], str(log_file), source='batch') is True
+    assert seen == ['restart', 'start']
+    assert 'source=batch' in log_file.read_text(encoding='utf-8')
+    assert 'recovered=True' in log_file.read_text(encoding='utf-8')
 
 
 
@@ -371,6 +392,14 @@ def test_restart_gives_up_when_the_new_process_never_settles(monkeypatch):
         xkeen_service.time, 'sleep', lambda seconds: clock.__setitem__('now', clock['now'] + seconds)
     )
 
-    # Ядро «запущено», но каждый раз другое: по истечении срока верим имени процесса.
-    assert xkeen_service._wait_xkeen_restarted(('xray', (101,)), timeout=3) is True
+    assert xkeen_service._wait_xkeen_restarted(('xray', (101,)), timeout=3) is False
     assert clock['now'] >= 3.0
+
+
+def test_restart_rejects_a_process_seen_only_at_the_deadline(monkeypatch):
+    clock = {'now': 0.0}
+    monkeypatch.setattr(xkeen_service, '_xkeen_runtime_identity', lambda: ('xray', (202,)) if clock['now'] >= 0.75 else ('', ()))
+    monkeypatch.setattr(xkeen_service.time, 'monotonic', lambda: clock['now'])
+    monkeypatch.setattr(xkeen_service.time, 'sleep', lambda seconds: clock.__setitem__('now', clock['now'] + seconds))
+
+    assert xkeen_service._wait_xkeen_restarted(('xray', (101,)), timeout=1) is False

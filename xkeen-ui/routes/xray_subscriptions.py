@@ -154,6 +154,27 @@ def create_xray_subscriptions_blueprint(
         except ValueError as exc:
             return error_response(str(exc), 400, ok=False)
 
+    @bp.route("/api/xray/subscriptions/hot-apply", methods=["GET", "POST"])
+    def api_xray_subscription_hot_apply():
+        from services import xray_handler_setup
+
+        if request.method == "GET":
+            return jsonify({"ok": True, **xray_handler_setup.status(xray_configs_dir)})
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict) or type(payload.get("enabled")) is not bool:
+            return error_response("Укажите enabled: true или false.", 400, ok=False)
+        try:
+            result = xray_handler_setup.configure(
+                xray_configs_dir, ui_state_dir, payload["enabled"], restart_xkeen,
+                snapshot=snapshot_xray_config_before_overwrite,
+            )
+            return jsonify({"ok": True, **result})
+        except ValueError as exc:
+            return error_response(str(exc), 409, ok=False)
+        except Exception as exc:
+            return exception_response("Не удалось настроить обновление без перезапуска.", 500, ok=False, exc=exc,
+                                      log_tag="xray_subscriptions.hot_apply_failed")
+
     @bp.post("/api/xray/subscriptions/schedule-preview")
     def api_subscription_schedule_preview():
         payload = request.get_json(silent=True) or {}

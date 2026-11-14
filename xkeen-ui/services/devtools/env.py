@@ -62,6 +62,7 @@ ENV_WHITELIST: Tuple[str, ...] = (
     "XKEEN_SUBSCRIPTIONS_RESTART_BATCH",
     "XKEEN_SUBSCRIPTIONS_SNAPSHOT",
     "XKEEN_SUBSCRIPTIONS_PREFLIGHT",
+    "XKEEN_SUBSCRIPTIONS_HOT_APPLY",
     "XKEEN_MIHOMO_SUBSCRIPTIONS_SCHEDULER",
     "XKEEN_MIHOMO_SUBSCRIPTIONS_SCHEDULER_TICK",
     "XKEEN_MIHOMO_SUBSCRIPTIONS_LOOKAHEAD_SEC",
@@ -398,6 +399,8 @@ def _default_effective_value(
         return "1"
     if k == "XKEEN_SUBSCRIPTIONS_PREFLIGHT":
         return "1"
+    if k == "XKEEN_SUBSCRIPTIONS_HOT_APPLY":
+        return "0"
     if k == "XKEEN_SUBSCRIPTIONS_SNAPSHOT":
         # Off by default: the fragment is reproducible by refreshing.
         return "0"
