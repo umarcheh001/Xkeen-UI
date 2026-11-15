@@ -48,6 +48,14 @@ def test_stopped_core_is_refused_by_default(monkeypatch):
     assert state["control_calls"] == []
 
 
+def test_log_restart_uses_the_configured_slow_restart_wait(monkeypatch):
+    state = _install(monkeypatch, running=True, control_result=True)
+    monkeypatch.setattr(xray_svc, 'get_xkeen_restart_settle_timeout', lambda: 45.0)
+    assert xray_svc.restart_xray_core()[0] is True
+    assert state['control_calls'][0][1]['settle_timeout'] == 45.0
+    assert state['control_calls'][0][1]['return_details'] is True
+
+
 def test_stopped_core_is_started_when_requested(monkeypatch):
     state = _install(monkeypatch, running=False, control_result=True)
 

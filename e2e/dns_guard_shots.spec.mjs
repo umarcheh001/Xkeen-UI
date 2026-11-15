@@ -229,6 +229,68 @@ test('Mihomo DNS: the guard handed DNS back', async ({ page }) => {
   await shoot(page, '#mihomo-dns-modal .modal-content', '4-mihomo-guard-released');
 });
 
+for (const theme of ['light', 'dark']) {
+  test(`Mihomo DNS switches match UI Settings in ${theme} theme`, async ({ page }) => {
+    await page.addInitScript((value) => localStorage.setItem('xkeen-theme', value), theme);
+    await page.route('**/api/mihomo/dns', (route) => route.fulfill({ json: MIHOMO_RULE_PROVIDER_STATUS }));
+    await page.goto('/');
+    await page.addStyleTag({ content: '.dt-switch-slider, .dt-switch-slider::after { transition: none !important; }' });
+    await page.locator('[aria-controls="xk-mihomo-panel-menu"]').click();
+    await page.locator('#ui-settings-open-btn').click();
+    await expect(page.locator('#ui-settings-modal')).toBeVisible();
+    const reference = page.locator('#ui-settings-modal .xk-ui-settings-toggle input').first();
+    await expect(reference).toBeAttached();
+
+    const states = [
+      { checked: false, disabled: false },
+      { checked: true, disabled: false },
+      { checked: false, disabled: true },
+      { checked: true, disabled: true },
+    ];
+    const readSwitch = (input, state) => input.evaluate((node, value) => {
+      node.checked = value.checked;
+      node.disabled = value.disabled;
+      const track = getComputedStyle(node.nextElementSibling);
+      const thumb = getComputedStyle(node.nextElementSibling, '::after');
+      return {
+        width: track.width,
+        height: track.height,
+        borderRadius: track.borderRadius,
+        borderColor: track.borderColor,
+        trackBackground: track.backgroundColor,
+        trackImage: track.backgroundImage,
+        opacity: track.opacity,
+        thumbBackground: thumb.backgroundColor,
+        thumbImage: thumb.backgroundImage,
+        thumbWidth: thumb.width,
+        thumbHeight: thumb.height,
+        thumbTransform: thumb.transform,
+      };
+    }, state);
+    const palette = [];
+    for (const state of states) palette.push(await readSwitch(reference, state));
+    await page.locator('#ui-settings-close-btn').click();
+
+    await selectPanelView(page, 'mihomo');
+    await openMihomoConfig(page);
+    await page.locator('#mihomo-dns-btn').click();
+    await expect(page.locator('#mihomo-dns-modal')).toBeVisible();
+    const switches = page.locator('#mihomo-dns-modal .dt-switch input');
+    await expect(switches).toHaveCount(4);
+    for (const input of await switches.all()) {
+      for (let i = 0; i < states.length; i += 1) {
+        expect(await readSwitch(input, states[i]), `${await input.getAttribute('id')}: ${JSON.stringify(states[i])}`).toEqual(palette[i]);
+      }
+    }
+    // Keep the preview useful: show the enabled and disabled states together.
+    await readSwitch(switches.nth(0), states[0]);
+    await readSwitch(switches.nth(1), states[1]);
+    await readSwitch(switches.nth(2), states[0]);
+    await readSwitch(switches.nth(3), states[1]);
+    await page.locator('#mihomo-dns-modal .modal-content').screenshot({ path: `${SHOTS}/mihomo-switches-${theme}.png` });
+  });
+}
+
 test('Mihomo DNS: user-owned DNS can be returned to Keenetic without restoring a snapshot', async ({ page }) => {
   const postBodies = [];
   await openMihomo(page, MIHOMO_CUSTOM_DNS);

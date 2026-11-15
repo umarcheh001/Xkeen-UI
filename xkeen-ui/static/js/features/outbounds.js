@@ -6098,10 +6098,36 @@ let outboundsModuleApi = null;
               <button type="button" class="modal-close" id="outbounds-subscriptions-hot-apply-help-close" aria-label="Закрыть справку">${iconHtml('close')}</button>
             </div>
             <div class="modal-body xk-sub-hot-apply-help-body">
-              <section><h3>Что сохраняется</h3><p>Когда провайдер меняет только SNI или shortId у REALITY-узлов, панель применяет новые параметры через HandlerService. Открытые соединения продолжают работать. Пулы, leastPing, замер и DNS сохраняют свои настройки.</p></section>
-              <section><h3>Включение одним нажатием</h3><p>Настройка действует на все подписки Xray. При первом включении панель создаёт или дополняет локальный API, проверяет конфигурацию и один раз перезапускает Xray. Если API уже готов, перезапуск не нужен. Поддерживаются официальное ядро и форк Jolymmiles.</p></section>
-              <section><h3>Когда нужен перезапуск</h3><p>Новые узлы, смена адреса или ключей, изменения маршрутов и узлы с Mux применяются обычным перезапуском. При ошибке API панель проверяет откат и использует безопасный перезапуск с восстановлением прежней конфигурации.</p></section>
-              <section><h3>Что важно знать</h3><p>Замена узла в API не атомарна: новое соединение в этот короткий момент может перейти на резервный узел или потребовать повтора. Выключение переключателя возвращает обычное применение подписок; локальный API остаётся для других функций. Переключатель не скачивает подписки и не меняет их расписание.</p></section>
+              <div class="xk-sub-hot-apply-help-intro">
+                <span class="xk-sub-hot-apply-help-intro-mark" aria-hidden="true">↻</span>
+                <div>
+                  <span class="xk-sub-hot-apply-help-kicker">HandlerService · Xray</span>
+                  <strong>Меняйте параметры REALITY без остановки активных соединений</strong>
+                  <p>SNI и shortId применяются сразу через локальный API. Настройка действует на все подписки в этом окне.</p>
+                </div>
+              </div>
+              <div class="xk-sub-hot-apply-help-grid">
+                <section class="xk-sub-hot-apply-help-card is-positive">
+                  <div class="xk-sub-hot-apply-help-card-head"><span>01</span><h3>Обновляется сразу</h3></div>
+                  <p>SNI и shortId REALITY. Открытые соединения, пулы, leastPing, замер и DNS продолжают работать.</p>
+                </section>
+                <section class="xk-sub-hot-apply-help-card is-accent">
+                  <div class="xk-sub-hot-apply-help-card-head"><span>02</span><h3>Первое включение</h3></div>
+                  <p>Панель проверит конфигурацию, настроит локальный API и один раз перезапустит Xray. Официальное ядро и форк Jolymmiles поддерживаются.</p>
+                </section>
+                <section class="xk-sub-hot-apply-help-card is-warning">
+                  <div class="xk-sub-hot-apply-help-card-head"><span>03</span><h3>Когда нужен перезапуск</h3></div>
+                  <p>Новые узлы, адреса, ключи, маршруты и узлы с Mux применяются обычным способом.</p>
+                </section>
+                <section class="xk-sub-hot-apply-help-card is-neutral">
+                  <div class="xk-sub-hot-apply-help-card-head"><span>04</span><h3>Что делает переключатель</h3></div>
+                  <p>Включает режим для всех подписок. Расписание и загрузку подписок он не меняет. Локальный API остаётся доступен другим функциям.</p>
+                </section>
+              </div>
+              <div class="xk-sub-hot-apply-help-callout">
+                <span class="xk-sub-hot-apply-help-callout-label">Важно</span>
+                <p>Замена узла в API не атомарна: новое соединение в этот короткий момент может уйти на резервный узел или потребовать повтора. При ошибке панель проверяет откат и возвращает прежнюю конфигурацию.</p>
+              </div>
             </div>
             <div class="modal-actions"><button type="button" id="outbounds-subscriptions-hot-apply-help-done" class="btn-primary">Понятно</button></div>
           </div>

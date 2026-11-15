@@ -18,6 +18,7 @@ import threading
 import time
 
 from services import xray_transactions
+from services.xray import RESTART_IN_PROGRESS
 from services.io.atomic import _atomic_write_json, _atomic_write_text
 from utils.jsonc import strip_json_comments_text
 
@@ -311,6 +312,7 @@ class RoutingDebug:
             paths = [str(p) for p in self.configs.iterdir() if p.is_file()] if logging or before['active'] or before['originals'] or self._needs_cleanup else []
             guard = xray_transactions.MemoryGuard(paths=paths + [str(self.state_path)])
             action_started = False
+            restart_in_progress = False
             writes = {} if writes is None else writes
             self._performing = True
             try:
@@ -323,6 +325,9 @@ class RoutingDebug:
                 action_started = True
                 result = action()
                 if not result[0]:
+                    restart_in_progress = result[1] == RESTART_IN_PROGRESS
+                    if restart_in_progress:
+                        raise ValueError(f'{RESTART_IN_PROGRESS}. Настройки возвращены; дождитесь завершения команды.')
                     raise ValueError('Не удалось применить перезапуск Xray. Настройки возвращены.')
                 if self._state['active']:
                     if any(xray_transactions.MemoryGuard._read(path) != writes.get(path, guard._snap[path]) for path in paths):
@@ -344,7 +349,7 @@ class RoutingDebug:
                     self._state.update(active=False, rules={}, generation=secrets.token_hex(8))
                     _atomic_write_json(str(self.state_path), self._state, mode=0o600)
                     raise ValueError('Конфигурация изменена другим запросом. Его изменения сохранены; полный откат не выполнен. Повторите Пуск.') from exc
-                if action_started and recover is not None:
+                if action_started and recover is not None and not restart_in_progress:
                     try:
                         recovered = recover()[0]
                     except Exception:

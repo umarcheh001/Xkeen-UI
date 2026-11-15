@@ -262,7 +262,7 @@ def test_unknown_version_still_allows_disabling(debug, monkeypatch):
     assert not debug.status()['enabled']
 
 
-def _app(debug, monkeypatch, *, auth=False):
+def _app(debug, monkeypatch, *, auth=False, restart=None):
     from flask import Flask
     from routes.xray_logs import create_xray_logs_blueprint
     from services import xray_config_files, xray_log_api, xray_routing_debug
@@ -280,7 +280,7 @@ def _app(debug, monkeypatch, *, auth=False):
     calls = []
     app = Flask(__name__)
     app.register_blueprint(create_xray_logs_blueprint(ws_debug=lambda *a, **k: None,
-        restart_xray_core=lambda **k: (calls.append(k) or True, 'ok'), ui_state_dir=str(debug.state_path.parent)))
+        restart_xray_core=restart or (lambda **k: (calls.append(k) or True, 'ok')), ui_state_dir=str(debug.state_path.parent)))
     if auth:
         from services import auth_setup
         monkeypatch.setenv('XKEEN_UI_SECRET_KEY', 'test-routing-debug-key')
@@ -644,7 +644,7 @@ def test_runtime_failure_preserves_bool_contract_for_normal_recovery(debug, monk
     app, _ = _app(debug, monkeypatch)
     service = app.extensions['xkeen.xray_routing_debug']
     service.configure(True, logging=False, restart=lambda: (True, 'ok'))
-    monkeypatch.setattr(xkeen, '_control_xkeen_action', lambda *a, **k: False)
+    monkeypatch.setattr(xkeen, '_control_xkeen_action_result', lambda *a, **k: xkeen._ControlResult(False))
     with app.app_context():
         assert xkeen.control_xkeen_action('restart') is False
 
@@ -670,6 +670,85 @@ def test_mihomo_restart_is_independent_of_wanted_debug_and_broken_xray_config(de
     service.configure(True, logging=False, restart=lambda: pytest.fail('restart'))
     (debug.configs / 'routing.json').write_bytes(b'{broken')
     monkeypatch.setattr(cores, 'core_runtime', lambda: SimpleNamespace(owner='mihomo'))
-    monkeypatch.setattr(xkeen, '_control_xkeen_action', lambda *a, **k: True)
+    monkeypatch.setattr(xkeen, '_control_xkeen_action_result', lambda *a, **k: xkeen._ControlResult(True))
     with app.app_context():
         assert xkeen.control_xkeen_action('restart') is True
+
+
+@pytest.mark.parametrize('ok,in_flight', [(True, False), (False, False), (False, True)])
+def test_runtime_extension_receives_bool_and_preserves_control_details(debug, monkeypatch, ok, in_flight):
+    from services import xkeen
+    app, _ = _app(debug, monkeypatch)
+    service = app.extensions['xkeen.xray_routing_debug']
+    (debug.configs / '01_log.json').write_bytes(b'{"log":{"loglevel":"warning"}}')
+    service.configure(True, logging=True, restart=lambda: (True, 'ok'))
+    calls = []
+    def control(action, execute):
+        def checked_execute():
+            value = execute()
+            assert type(value) is bool
+            calls.append(action)
+            return value
+        return service.control_runtime(action, checked_execute)
+    app.extensions['xkeen.runtime_control'] = control
+    monkeypatch.setattr(xkeen, '_control_xkeen_action_result', lambda *a, **k: xkeen._ControlResult(ok, in_flight))
+    with app.app_context():
+        result = xkeen.control_xkeen_action('restart', return_details=True)
+    assert result == xkeen._ControlResult(ok, in_flight)
+    assert calls == ['restart']
+
+
+def test_active_debug_does_not_recover_an_in_flight_manual_restart(debug, monkeypatch):
+    from services import xkeen
+    app, _ = _app(debug, monkeypatch)
+    (debug.configs / '01_log.json').write_bytes(b'{"log":{"loglevel":"warning"}}')
+    service = app.extensions['xkeen.xray_routing_debug']
+    service.configure(True, logging=True, restart=lambda: (True, 'ok'))
+    calls = []
+    def execute(action, **kwargs):
+        calls.append(action)
+        return xkeen._ControlResult(False, in_flight=True)
+    monkeypatch.setattr(xkeen, '_control_xkeen_action_result', execute)
+    monkeypatch.setattr(xkeen, 'get_xkeen_runtime_status', lambda: {'runtime_status': 'stopped', 'runtime_core': 'none'})
+    monkeypatch.setattr(xkeen, 'append_restart_log', lambda *a, **k: None)
+    with app.app_context():
+        assert xkeen.restart_xkeen(['xkeen', '-restart'], '') is False
+    assert calls == ['restart']
+
+
+@pytest.mark.parametrize('endpoint,payload,status', [
+    ('enable', {'loglevel': 'info'}, 500),
+    ('disable', {}, 500),
+    ('routing-debug', {'enabled': False}, 409),
+])
+def test_log_controls_do_not_recover_an_in_flight_restart(debug, monkeypatch, endpoint, payload, status):
+    from services import xkeen, xray
+    app, _ = _app(debug, monkeypatch, restart=xray.restart_xray_core)
+    (debug.configs / '01_log.json').write_bytes(b'{"log":{"loglevel":"warning"}}')
+    service = app.extensions['xkeen.xray_routing_debug']
+    service.configure(True, logging=True, restart=lambda: (True, 'ok'))
+    before = {path.name: path.read_bytes() for path in debug.configs.iterdir()}
+    calls = []
+    def execute(action, **kwargs):
+        calls.append(action)
+        return xkeen._ControlResult(False, in_flight=True)
+    monkeypatch.setattr(xkeen, '_control_xkeen_action_result', execute)
+    monkeypatch.setattr(xray, '_pidof', lambda name: [123])
+    result = app.test_client().post('/api/xray-logs/' + endpoint, json=payload)
+    assert result.status_code == status
+    assert not result.json['ok']
+    assert 'ещё выполняется' in result.json['error']
+    assert calls == ['restart']
+    assert {path.name: path.read_bytes() for path in debug.configs.iterdir()} == before
+
+
+def test_runtime_prepare_failure_does_not_execute_a_control_command(debug, monkeypatch):
+    from services import xkeen
+    app, _ = _app(debug, monkeypatch)
+    service = app.extensions['xkeen.xray_routing_debug']
+    service.configure(True, logging=False, restart=lambda: pytest.fail('restart'))
+    (debug.configs / '01_log.json').write_bytes(b'{"log":{"loglevel":"warning"}}')
+    (debug.configs / 'routing.json').write_bytes(b'{broken')
+    monkeypatch.setattr(xkeen, '_control_xkeen_action_result', lambda *a, **k: pytest.fail('execute'))
+    with app.app_context():
+        assert xkeen.control_xkeen_action('restart', return_details=True) == xkeen._ControlResult(False)

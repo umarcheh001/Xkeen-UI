@@ -123,6 +123,7 @@ import { iconHtml } from '../../ui/operator_icons.js';
     'XKEEN_UI_ENV_FILE': 'Путь к env‑файлу DevTools (по умолчанию <UI_STATE_DIR>/devtools.env). Обычно менять не нужно. Эта переменная отображается только для информации (read‑only).',
     'XKEEN_UI_SECRET_KEY': 'Секретный ключ Flask/сессий. При смене ключа текущие сессии станут недействительными. Значение не отображается.',
     'XKEEN_RESTART_LOG_FILE': 'Файл, куда пишутся сообщения/ошибки при запуске/перезапуске UI (для диагностики). По умолчанию: <UI_STATE_DIR>/restart.log.',
+    'XKEEN_RESTART_SETTLE_TIMEOUT': 'Максимальное ожидание нового стабильного процесса после перезапуска XKeen, в секундах. По умолчанию 60, допустимый диапазон 2–300. Увеличьте значение для медленных роутеров; применяется сразу, перезапуск панели не нужен.',
 
     // Сведения о сборке и доступ к GitHub
     'XKEEN_UI_UPDATE_REPO': 'Репозиторий панели (owner/repo), который показывается как источник сборки. По умолчанию: umarcheh001/Xkeen-UI.',
@@ -356,9 +357,11 @@ import { iconHtml } from '../../ui/operator_icons.js';
     'XKEEN_PORT_EXCLUDE_FILE',
     'XKEEN_IP_EXCLUDE_FILE',
     'XKEEN_RESTART_LOG_FILE',
+    'XKEEN_RESTART_SETTLE_TIMEOUT',
   ]);
 
   ENV_NO_RESTART_KEYS.add('XKEEN_ALLOW_SHELL');
+  ENV_NO_RESTART_KEYS.add('XKEEN_RESTART_SETTLE_TIMEOUT');
   ENV_NO_RESTART_KEYS.add('XKEEN_AUTH_LOGIN_WINDOW_SECONDS');
   ENV_NO_RESTART_KEYS.add('XKEEN_AUTH_LOGIN_MAX_ATTEMPTS');
   ENV_NO_RESTART_KEYS.add('XKEEN_AUTH_LOGIN_LOCKOUT_SECONDS');
@@ -626,7 +629,7 @@ import { iconHtml } from '../../ui/operator_icons.js';
       icon: 'tools',
       title: 'Xray и списки XKeen',
       desc: 'Пути фрагментов Xray, preflight-таймаут и файлы списков портов/IP.',
-      keys: ['XKEEN_XRAY_TEST_TIMEOUT', 'XKEEN_CONFIG_FILE', 'XKEEN_INIT_SCRIPT'],
+      keys: ['XKEEN_XRAY_TEST_TIMEOUT', 'XKEEN_CONFIG_FILE', 'XKEEN_INIT_SCRIPT', 'XKEEN_RESTART_SETTLE_TIMEOUT'],
       prefixes: ['XKEEN_XRAY_', 'XKEEN_PORT_', 'XKEEN_IP_'],
     },
     {

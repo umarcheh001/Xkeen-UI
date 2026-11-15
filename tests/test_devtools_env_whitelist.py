@@ -162,6 +162,7 @@ def test_every_whitelisted_key_is_described_and_grouped():
         ("XKEEN_MIHOMO_DNS_QUERY_ENABLE", "1"),
         ("XKEEN_MIHOMO_DNS_FLUSH_ENABLE", "1"),
         ("XKEEN_MIHOMO_FAKE_IP_FLUSH_ENABLE", "1"),
+        ("XKEEN_RESTART_SETTLE_TIMEOUT", "60"),
     ],
 )
 def test_subscription_defaults_match_runtime(key, expected):

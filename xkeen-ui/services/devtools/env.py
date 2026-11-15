@@ -86,6 +86,7 @@ ENV_WHITELIST: Tuple[str, ...] = (
     "XKEEN_GEODAT_ALLOW_PRIVATE_HOSTS",
     "XKEEN_INIT_SCRIPT",
     "XKEEN_RESTART_LOG_FILE",
+    "XKEEN_RESTART_SETTLE_TIMEOUT",
     # self-update (GitHub)
     "XKEEN_UI_UPDATE_REPO",
     "XKEEN_UI_UPDATE_CHANNEL",
@@ -291,6 +292,9 @@ def _default_effective_value(
     if k == "XKEEN_RESTART_LOG_FILE":
         # app.py uses <UI_STATE_DIR>/restart.log
         return os.path.join(ui_state_dir, "restart.log")
+
+    if k == "XKEEN_RESTART_SETTLE_TIMEOUT":
+        return "60"
 
     if k == "XKEEN_AUTH_LOGIN_WINDOW_SECONDS":
         return "300"

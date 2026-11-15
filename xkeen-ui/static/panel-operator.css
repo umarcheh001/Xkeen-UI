@@ -10598,23 +10598,141 @@ body.panel-page #outbounds-subscriptions-modal .xk-sub-hot-apply-switch {
 }
 
 body.panel-page #outbounds-subscriptions-hot-apply-help-modal .xk-sub-hot-apply-help {
-  width: min(640px, calc(100vw - 32px));
-  max-height: calc(100dvh - 32px);
+  width: min(720px, calc(100vw - 36px));
+  height: auto !important;
+  min-height: 0;
+  max-height: min(780px, calc(100dvh - 36px));
+  grid-template-rows: auto auto auto !important;
 }
 
 body.panel-page #outbounds-subscriptions-hot-apply-help-modal .xk-sub-hot-apply-help-body {
   display: grid;
-  gap: 16px;
-  line-height: 1.55;
+  align-content: start;
+  gap: 12px;
+  padding: 14px;
+  color: var(--op-text);
 }
 
-body.panel-page #outbounds-subscriptions-hot-apply-help-modal :is(h3, p) {
+body.panel-page #outbounds-subscriptions-hot-apply-help-modal :is(h3, p, strong) {
   margin: 0;
 }
 
-body.panel-page #outbounds-subscriptions-hot-apply-help-modal h3 {
-  font-size: inherit;
-  margin-bottom: 5px;
+body.panel-page #outbounds-subscriptions-hot-apply-help-modal .xk-sub-hot-apply-help-intro {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 11px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid var(--op-accent-border);
+  border-radius: var(--op-control-radius);
+  background: var(--op-accent-soft);
+}
+
+body.panel-page #outbounds-subscriptions-hot-apply-help-modal .xk-sub-hot-apply-help-intro-mark {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid var(--op-accent-border);
+  border-radius: 50%;
+  color: var(--op-accent-hover);
+  font-size: 20px;
+  line-height: 1;
+}
+
+body.panel-page #outbounds-subscriptions-hot-apply-help-modal .xk-sub-hot-apply-help-intro > div {
+  display: grid;
+  gap: 4px;
+}
+
+body.panel-page #outbounds-subscriptions-hot-apply-help-modal .xk-sub-hot-apply-help-kicker {
+  color: var(--op-accent-hover);
+  font-size: calc(10px * var(--xk-font-scale, 1));
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+body.panel-page #outbounds-subscriptions-hot-apply-help-modal .xk-sub-hot-apply-help-intro strong {
+  color: var(--op-text-strong);
+  font-size: calc(14px * var(--xk-font-scale, 1));
+  line-height: 1.35;
+}
+
+body.panel-page #outbounds-subscriptions-hot-apply-help-modal .xk-sub-hot-apply-help-intro p,
+body.panel-page #outbounds-subscriptions-hot-apply-help-modal .xk-sub-hot-apply-help-card p,
+body.panel-page #outbounds-subscriptions-hot-apply-help-modal .xk-sub-hot-apply-help-callout p {
+  color: var(--op-muted);
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+  line-height: 1.45;
+}
+
+body.panel-page #outbounds-subscriptions-hot-apply-help-modal .xk-sub-hot-apply-help-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+body.panel-page #outbounds-subscriptions-hot-apply-help-modal .xk-sub-hot-apply-help-card {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--op-border);
+  border-left: 3px solid var(--op-border-strong);
+  border-radius: var(--op-control-radius);
+  background: var(--op-surface-2);
+}
+
+body.panel-page #outbounds-subscriptions-hot-apply-help-modal .xk-sub-hot-apply-help-card.is-positive {
+  border-left-color: var(--op-success);
+}
+
+body.panel-page #outbounds-subscriptions-hot-apply-help-modal .xk-sub-hot-apply-help-card.is-accent {
+  border-left-color: var(--op-accent);
+}
+
+body.panel-page #outbounds-subscriptions-hot-apply-help-modal .xk-sub-hot-apply-help-card.is-warning {
+  border-left-color: var(--op-warning);
+}
+
+body.panel-page #outbounds-subscriptions-hot-apply-help-modal .xk-sub-hot-apply-help-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+body.panel-page #outbounds-subscriptions-hot-apply-help-modal .xk-sub-hot-apply-help-card-head > span {
+  color: var(--op-data-faint);
+  font-size: calc(10px * var(--xk-font-scale, 1));
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+body.panel-page #outbounds-subscriptions-hot-apply-help-modal .xk-sub-hot-apply-help-card h3 {
+  color: var(--op-text-strong);
+  font-size: calc(12px * var(--xk-font-scale, 1));
+  line-height: 1.3;
+}
+
+body.panel-page #outbounds-subscriptions-hot-apply-help-modal .xk-sub-hot-apply-help-callout {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 10px 12px;
+  border: 1px solid var(--op-warning-border);
+  border-radius: var(--op-control-radius);
+  background: var(--op-warning-soft);
+}
+
+body.panel-page #outbounds-subscriptions-hot-apply-help-modal .xk-sub-hot-apply-help-callout-label {
+  color: var(--op-warning-strong);
+  font-size: calc(11px * var(--xk-font-scale, 1));
+  font-weight: 700;
+  line-height: 1.45;
 }
 
 body.panel-page #outbounds-subscriptions-modal .xk-sub-controls {
@@ -12090,9 +12208,7 @@ body.panel-page #ui-settings-modal .xk-ui-settings-item-meta {
   font-size: calc(10px * var(--xk-font-scale, 1));
 }
 
-/* UI settings used the old blue-glass switch wrapper and fully rounded status
- * pills.  Keep controls compact, but make them read as the same neutral
- * operator controls used throughout the panel. */
+/* UI Settings and Mihomo DNS share the same switch geometry and state colors. */
 body.panel-page #ui-settings-modal .xk-ui-settings-toggle.dt-switch,
 html[data-theme="light"] body.panel-page #ui-settings-modal .xk-ui-settings-toggle.dt-switch {
   display: inline-flex;
@@ -12106,8 +12222,8 @@ html[data-theme="light"] body.panel-page #ui-settings-modal .xk-ui-settings-togg
   box-shadow: none !important;
 }
 
-body.panel-page #ui-settings-modal .xk-ui-settings-toggle .dt-switch-slider,
-html[data-theme="light"] body.panel-page #ui-settings-modal .xk-ui-settings-toggle .dt-switch-slider {
+body.panel-page :is(#ui-settings-modal .xk-ui-settings-toggle, #mihomo-dns-modal .dt-switch.xk-switch-bare) .dt-switch-slider,
+html[data-theme="light"] body.panel-page :is(#ui-settings-modal .xk-ui-settings-toggle, #mihomo-dns-modal .dt-switch.xk-switch-bare) .dt-switch-slider {
   box-sizing: border-box;
   width: 34px;
   min-width: 34px;
@@ -12118,8 +12234,8 @@ html[data-theme="light"] body.panel-page #ui-settings-modal .xk-ui-settings-togg
   box-shadow: none !important;
 }
 
-body.panel-page #ui-settings-modal .xk-ui-settings-toggle .dt-switch-slider::after,
-html[data-theme="light"] body.panel-page #ui-settings-modal .xk-ui-settings-toggle .dt-switch-slider::after {
+body.panel-page :is(#ui-settings-modal .xk-ui-settings-toggle, #mihomo-dns-modal .dt-switch.xk-switch-bare) .dt-switch-slider::after,
+html[data-theme="light"] body.panel-page :is(#ui-settings-modal .xk-ui-settings-toggle, #mihomo-dns-modal .dt-switch.xk-switch-bare) .dt-switch-slider::after {
   box-sizing: border-box;
   top: 1px;
   left: 1px;
@@ -12131,19 +12247,19 @@ html[data-theme="light"] body.panel-page #ui-settings-modal .xk-ui-settings-togg
   box-shadow: none !important;
 }
 
-body.panel-page #ui-settings-modal .xk-ui-settings-toggle input:checked + .dt-switch-slider,
-html[data-theme="light"] body.panel-page #ui-settings-modal .xk-ui-settings-toggle input:checked + .dt-switch-slider {
+body.panel-page :is(#ui-settings-modal .xk-ui-settings-toggle, #mihomo-dns-modal .dt-switch.xk-switch-bare) input:checked + .dt-switch-slider,
+html[data-theme="light"] body.panel-page :is(#ui-settings-modal .xk-ui-settings-toggle, #mihomo-dns-modal .dt-switch.xk-switch-bare) input:checked + .dt-switch-slider {
   border-color: var(--op-accent-border) !important;
   background: var(--op-accent) !important;
 }
 
-body.panel-page #ui-settings-modal .xk-ui-settings-toggle input:checked + .dt-switch-slider::after,
-html[data-theme="light"] body.panel-page #ui-settings-modal .xk-ui-settings-toggle input:checked + .dt-switch-slider::after {
+body.panel-page :is(#ui-settings-modal .xk-ui-settings-toggle, #mihomo-dns-modal .dt-switch.xk-switch-bare) input:checked + .dt-switch-slider::after,
+html[data-theme="light"] body.panel-page :is(#ui-settings-modal .xk-ui-settings-toggle, #mihomo-dns-modal .dt-switch.xk-switch-bare) input:checked + .dt-switch-slider::after {
   background: #fff !important;
   transform: translateX(14px) !important;
 }
 
-body.panel-page #ui-settings-modal .xk-ui-settings-toggle input:not(:checked) + .dt-switch-slider::after {
+body.panel-page :is(#ui-settings-modal .xk-ui-settings-toggle, #mihomo-dns-modal .dt-switch.xk-switch-bare) input:not(:checked) + .dt-switch-slider::after {
   transform: none !important;
 }
 
@@ -16649,6 +16765,23 @@ body.panel-page #toast-container {
 
   body.panel-page #outbounds-subscriptions-modal .xk-sub-hot-apply-switch {
     justify-self: start;
+  }
+
+  body.panel-page #outbounds-subscriptions-hot-apply-help-modal .xk-sub-hot-apply-help {
+    max-height: calc(100dvh - 16px);
+  }
+
+  body.panel-page #outbounds-subscriptions-hot-apply-help-modal .xk-sub-hot-apply-help-body {
+    padding: 12px;
+  }
+
+  body.panel-page #outbounds-subscriptions-hot-apply-help-modal .xk-sub-hot-apply-help-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.panel-page #outbounds-subscriptions-hot-apply-help-modal .xk-sub-hot-apply-help-intro {
+    grid-template-columns: 32px minmax(0, 1fr);
+    gap: 9px;
   }
 
 

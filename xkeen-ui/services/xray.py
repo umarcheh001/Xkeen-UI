@@ -22,7 +22,9 @@ import subprocess
 import threading
 from typing import List, Tuple
 
-from services.xkeen import control_xkeen_action
+from services.xkeen import control_xkeen_action, get_xkeen_restart_settle_timeout, _normalize_control_result
+
+RESTART_IN_PROGRESS = 'Перезапуск Xray ещё выполняется'
 
 
 def _pidof(name: str) -> List[int]:
@@ -83,15 +85,18 @@ def restart_xray_core(
             return False, "xray not running"
 
         # Give the core enough time to come back; mirror the manual restart button.
-        settle = max(8.0, float(timeout_sec or 0))
-        ok = control_xkeen_action(
+        settle = max(8.0, float(timeout_sec or 0), get_xkeen_restart_settle_timeout())
+        result = _normalize_control_result(control_xkeen_action(
             "restart",
             prefer_init=True,
             settle_timeout=settle,
-        )
+            return_details=True,
+        ))
+        if result.in_flight:
+            return False, RESTART_IN_PROGRESS
         # control_xkeen_action manages both supported cores and can report success while
         # Mihomo (rather than Xray) is the process that came back. Log controls are Xray-
         # specific, so verify the requested core explicitly before confirming Start.
-        if ok and _pidof("xray"):
+        if result.ok and _pidof("xray"):
             return True, ("restarted" if running else "started")
         return False, "xray did not start"

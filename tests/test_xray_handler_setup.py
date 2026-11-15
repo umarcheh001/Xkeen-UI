@@ -53,6 +53,26 @@ def test_one_click_setup_and_disable_preserve_other_configs(context):
     assert os.environ[setup.KEY] == "0"
 
 
+def test_setup_waits_for_handler_api_after_restart(context, monkeypatch):
+    configs, state, _raw, calls, restart = context
+    expected = {"direct": {"tag": "direct"}}
+    attempts = 0
+
+    def delayed_runtime(*_args):
+        nonlocal attempts
+        attempts += 1
+        if attempts < 4:
+            raise RuntimeError("xray_api_command_failed")
+        return expected
+
+    monkeypatch.setattr(setup.hot, "_runtime", delayed_runtime)
+    result = setup.configure(configs, state, True, restart)
+
+    assert result["enabled"] and result["restarted"]
+    assert attempts == 4
+    assert calls == ["xray-handler-setup"]
+
+
 def test_existing_api_keeps_services_fields_and_comments(context):
     configs, state, raw, calls, restart = context
     path = Path(configs) / "00_base.json"

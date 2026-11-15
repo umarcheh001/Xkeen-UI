@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 import os
 import socket
+import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 from services import xray_handler_service as hot
@@ -18,6 +20,28 @@ from services.xray_config_files import jsonc_path_for
 from utils.jsonc import strip_json_comments_text
 
 KEY = "XKEEN_SUBSCRIPTIONS_HOT_APPLY"
+
+
+def _runtime_after_restart(binary, server, expected):
+    deadline = time.monotonic() + xray_transactions.check_timeout()
+    last_error = None
+    while True:
+        try:
+            actual = hot._runtime(binary, server)
+        except subprocess.TimeoutExpired as exc:
+            last_error = exc
+        except RuntimeError as exc:
+            if str(exc) != "xray_api_command_failed":
+                raise
+            last_error = exc
+        else:
+            if actual != expected:
+                raise ValueError("API Xray не подтвердил конфигурацию outbound.")
+            return
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise ValueError("Локальный API Xray не ответил после перезапуска.") from last_error
+        time.sleep(min(0.25, remaining))
 
 
 def _documents(configs_dir):
@@ -138,7 +162,9 @@ def configure(configs_dir, ui_state_dir, enabled, restart_xkeen, snapshot=None):
             files = {p.name: p.read_bytes() for p in Path(configs_dir).iterdir() if p.is_file()}
             with tempfile.TemporaryDirectory(prefix="xkeen-handler-setup-") as temp:
                 expected, _default = hot._compiled(binary, files, Path(temp) / "compiled")
-            if hot._runtime(binary, updated_api["listen"]) != expected:
+            if restarted:
+                _runtime_after_restart(binary, updated_api["listen"], expected)
+            elif hot._runtime(binary, updated_api["listen"]) != expected:
                 raise ValueError("API Xray не подтвердил конфигурацию outbound.")
             env.set_env(ui_state_dir, {KEY: "1"})
         except Exception as exc:
