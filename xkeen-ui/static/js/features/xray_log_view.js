@@ -1094,7 +1094,12 @@ export function createXrayLogView(options) {
       if (tag === record.ruleTag && domain === record.confirmedDomain) continue;
       if (record.ruleTag && !tag) record.ruleRevoked = true;
       if (record.confirmedDomain && !domain) record.domainRevoked = true;
-      domainsChanged ||= domain !== record.confirmedDomain;
+      if (domain !== record.confirmedDomain) {
+        countRecord(record, -1);
+        record.domain = xrayRegistrableDomain(isIpAddress(record.p.host) && domain ? domain : record.p.host);
+        countRecord(record, 1);
+        domainsChanged = true;
+      }
       record.ruleTag = tag;
       record.confirmedDomain = domain;
       record.html = null;
@@ -1103,7 +1108,10 @@ export function createXrayLogView(options) {
       if (dom.detail && state.openSeq === record.seq) dom.detail._seq = null;
       changed = true;
     }
-    if (domainsChanged && state.filter.groups.length) refilter();
+    if (domainsChanged) {
+      if (state.filter.groups.length || state.filter.conditions.some(cond => cond.field === 'domain')) refilter();
+      markStatsDirty(false);
+    }
     if (changed) queueTableRender();
   }
 

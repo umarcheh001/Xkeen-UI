@@ -7,7 +7,93 @@ import pytest
 
 
 @pytest.fixture
-def debug(tmp_path, monkeypatch):
+def viewer_timers(monkeypatch):
+    timers = []
+
+    class Timer:
+        def __init__(self, interval, function):
+            self.interval, self.function = interval, function
+            self.cancelled = False
+            timers.append(self)
+
+        def start(self):
+            pass
+
+        def cancel(self):
+            self.cancelled = True
+
+    monkeypatch.setattr('services.xray_routing_debug.threading.Timer', Timer)
+    return timers
+
+
+@pytest.fixture
+def viewer_watch(debug, viewer_timers):
+    restarts, errors = [], []
+    debug.watch_viewers(logging=lambda: True,
+                        restart=lambda: (restarts.append(True) or True, 'ok'),
+                        on_error=lambda: errors.append(True))
+    return viewer_timers, restarts, errors
+
+
+def test_last_viewer_gets_grace_and_expiry_removes_hooks(debug, viewer_watch):
+    timers, restarts, _ = viewer_watch
+    original = (debug.configs / 'routing.json').read_bytes()
+    debug.configure(True, logging=True, restart=lambda: (True, 'ok'))
+    first, second = object(), object()
+    debug.viewer_join(first)
+    debug.viewer_join(second)
+    assert timers[0].cancelled
+    debug.viewer_leave(first)
+    assert len(timers) == 1
+    assert debug.status()['active']
+    debug.viewer_leave(second)
+    assert timers[-1].interval == 30
+    assert restarts == []
+    timers[-1].function()
+    assert not debug.status()['enabled']
+    assert not debug.status()['active']
+    assert (debug.configs / 'routing.json').read_bytes() == original
+    assert restarts == [True]
+
+
+def test_returning_viewer_cancels_expiry_and_stale_callback(debug, viewer_watch):
+    timers, restarts, _ = viewer_watch
+    debug.configure(True, logging=True, restart=lambda: (True, 'ok'))
+    timer = timers[-1]
+    debug.viewer_join(object())
+    timer.function()
+    assert debug.status()['active']
+    assert restarts == []
+
+
+def test_expiry_failure_is_reported_and_retried(debug, viewer_watch):
+    timers, _, errors = viewer_watch
+    debug.configure(True, logging=True, restart=lambda: (True, 'ok'))
+    debug.watch_viewers(logging=lambda: True, restart=lambda: (False, 'failed'),
+                        on_error=lambda: errors.append(True))
+    count = len(timers)
+    timers[-1].function()
+    assert debug.status()['enabled']
+    assert 'webhook' in json.loads((debug.configs / 'routing.json').read_bytes())['routing']['rules'][0]
+    assert errors == [True]
+    assert len(timers) == count + 1 and timers[-1].interval == 30
+    debug.configure(False, logging=True, restart=lambda: (True, 'ok'))
+    assert timers[-1].cancelled
+
+
+def test_restored_enabled_state_expires_without_requests(debug, viewer_watch):
+    from services.xray_routing_debug import RoutingDebug
+    timers, restarts, _ = viewer_watch
+    debug.configure(True, logging=False, restart=lambda: pytest.fail('restart'))
+    loaded = RoutingDebug(str(debug.configs), str(debug.state_path.parent))
+    loaded.watch_viewers(logging=lambda: False, restart=lambda: pytest.fail('restart'), on_error=lambda: pytest.fail('error'))
+    timers[-1].function()
+    assert not loaded.status()['enabled']
+    assert restarts == []
+
+
+@pytest.fixture
+def debug(tmp_path, monkeypatch, viewer_timers):
     from services import xray_routing_debug as api
     monkeypatch.setattr(api.time, 'time', lambda: 100)
     monkeypatch.setattr('services.cores.read_last_core', lambda: None)
@@ -114,6 +200,41 @@ def test_event_requires_loopback_secret_and_known_rule_and_valid_endpoints(debug
     assert not debug.ingest(key, {**event, 'routeTarget': 'udp:ads.example:444'})
 
 
+@pytest.mark.parametrize('started', [100.001, 100.999])
+def test_integer_webhook_timestamp_accepts_the_activation_second_only(debug, monkeypatch, started):
+    monkeypatch.setattr('services.xray_routing_debug.time.time', lambda: started)
+    debug.configure(True, logging=True, restart=lambda: (True, 'ok'))
+    key = next(iter(debug._state['rules']))
+    event = {'source': '192.168.1.2:12345', 'originalTarget': 'tcp:1.1.1.1:443',
+             'routeTarget': 'tcp:ads.example:443', 'network': 'tcp',
+             'inboundTag': 'redirect', 'outboundTag': 'block', 'ts': 100}
+    assert debug.ingest(key, event)
+    assert not debug.ingest(key, {**event, 'ts': 99.999})
+    assert debug.ingest(key, {**event, 'ts': 101})
+    payload = debug.events()
+    assert payload['since'] == started * 1000
+    assert [row['stamp'] for row in payload['events']] == [100000, 101000]
+    debug.perform(True, lambda: (True, 'ok'))
+    assert not debug.ingest(key, event)
+
+
+def test_restored_hooks_still_exclude_delayed_events_from_the_partial_startup_second(debug, monkeypatch):
+    from services.xray_routing_debug import RoutingDebug
+    debug.configure(True, logging=True, restart=lambda: (True, 'ok'))
+    key = next(iter(debug._state['rules']))
+    monkeypatch.setattr('services.xray_routing_debug.time.time', lambda: 100.250)
+    restored = RoutingDebug(str(debug.configs), str(debug.state_path.parent))
+    monkeypatch.setattr(restored, 'version', lambda: '26.11.9')
+    event = {'source': '192.168.1.2:12345', 'originalTarget': 'tcp:1.1.1.1:443',
+             'network': 'tcp', 'inboundTag': 'redirect', 'outboundTag': 'block', 'ts': 100}
+    assert not restored.ingest(key, event)
+    assert restored.ingest(key, {**event, 'ts': 101})
+    payload = restored.events()
+    assert payload['since'] == 101000
+    assert [row['stamp'] for row in payload['events']] == [101000]
+    assert restored.status()['active']
+
+
 def test_events_are_bounded_expire_and_stop_does_not_forget_intent(debug, monkeypatch):
     from services import xray_routing_debug as api
     clock = [0.0]
@@ -208,6 +329,72 @@ def test_switch_rejects_non_boolean_input(debug, monkeypatch):
     app, _calls = _app(debug, monkeypatch)
     for value in ['false', 1, None, {}]:
         assert app.test_client().post('/api/xray-logs/routing-debug', json={'enabled': value}).status_code == 400
+
+
+def test_repeated_stop_does_not_restart_or_overwrite_saved_logs(debug, monkeypatch):
+    app, calls = _app(debug, monkeypatch)
+    client = app.test_client()
+    assert client.post('/api/xray-logs/disable').json['xray_restarted'] is False
+    assert calls == []
+    client.post('/api/xray-logs/routing-debug', json={'enabled': True})
+    client.post('/api/xray-logs/enable', json={'loglevel': 'warning'})
+    access = debug.configs / 'access.log'
+    access.write_bytes(b'captured connections\n')
+    assert client.post('/api/xray-logs/disable').json['xray_restarted'] is True
+    access.write_bytes(b'')
+    assert client.post('/api/xray-logs/disable').json['xray_restarted'] is False
+    assert len(calls) == 2
+    assert access.with_name('access.log.saved').read_bytes() == b'captured connections\n'
+
+
+def test_stopped_log_config_still_restarts_to_remove_remaining_hooks(debug, monkeypatch):
+    app, calls = _app(debug, monkeypatch)
+    service = app.extensions['xkeen.xray_routing_debug']
+    service.configure(True, logging=True, restart=lambda: (True, 'ok'))
+    assert json.loads((debug.configs / '01_log.json').read_bytes())['log']['loglevel'] == 'none'
+    (debug.configs / 'access.log').write_bytes(b'')
+    saved = debug.configs / 'access.log.saved'
+    saved.write_bytes(b'captured connections\n')
+    assert app.test_client().post('/api/xray-logs/disable').json['xray_restarted'] is True
+    assert len(calls) == 1
+    assert 'webhook' not in json.loads((debug.configs / 'routing.json').read_bytes())['routing']['rules'][0]
+    assert saved.read_bytes() == b'captured connections\n'
+
+
+@pytest.mark.parametrize('running', [True, False])
+def test_presence_stream_disconnect_arms_expiry_and_preserves_log_level(debug, monkeypatch, viewer_timers, running):
+    app, calls = _app(debug, monkeypatch)
+    client = app.test_client()
+    assert client.post('/api/xray-logs/routing-debug/viewer').status_code == 409
+    client.post('/api/xray-logs/routing-debug', json={'enabled': True})
+    client.post('/api/xray-logs/enable', json={'loglevel': 'warning'})
+    first = client.post('/api/xray-logs/routing-debug/viewer', buffered=False)
+    second = client.post('/api/xray-logs/routing-debug/viewer', buffered=False)
+    assert first.status_code == 200 and first.mimetype == 'text/event-stream'
+    assert next(first.response) == b': viewer\n\n'
+    count = len(viewer_timers)
+    first.close()
+    assert len(viewer_timers) == count
+    second.close()
+    assert len(viewer_timers) == count + 1
+    # Exercise config removal without actually starting a router core.
+    monkeypatch.setattr('services.xkeen._process_ids', lambda name: ['123'] if running else [])
+    viewer_timers[-1].function()
+    status = client.get('/api/xray-logs/status').json
+    assert not status['routing_debug']['enabled']
+    assert status['loglevel'] == 'warning'
+    assert len(calls) == (2 if running else 1)
+
+
+def test_presence_stream_requires_session(debug, monkeypatch):
+    app, _ = _app(debug, monkeypatch, auth=True)
+    client = app.test_client()
+    assert client.post('/api/xray-logs/routing-debug/viewer').status_code == 401
+    with client.session_transaction() as session:
+        session['auth'] = True
+        session['csrf'] = 'viewer-csrf'
+    assert client.post('/api/xray-logs/routing-debug/viewer').status_code == 403
+    assert client.post('/api/xray-logs/routing-debug/viewer', headers={'X-CSRF-Token': 'viewer-csrf'}).status_code == 409
 
 
 def test_non_ascii_token_is_rejected(debug):

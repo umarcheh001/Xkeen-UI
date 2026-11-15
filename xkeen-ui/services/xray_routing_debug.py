@@ -77,7 +77,8 @@ class RoutingDebug:
                 base64.b64decode(original['bytes'], validate=True).decode('utf-8')
             self._state.update({key: saved[key] for key in ('enabled', 'active', 'rules', 'originals')})
             self._state['fingerprint'] = saved.get('fingerprint', '')
-            self._state['since'] = time.time() * 1000
+            # Restored hooks may still deliver callbacks queued before this panel started.
+            self._state['since'] = math.ceil(time.time()) * 1000
             self._needs_cleanup = False
         except (OSError, ValueError):
             pass
@@ -90,6 +91,49 @@ class RoutingDebug:
         self._first_id = 1
         self._expired_until = 0
         self._version_cache = (None, '')
+        self._viewers = set()
+        self._viewer_timer = None
+        self._viewer_callbacks = None
+
+    def watch_viewers(self, *, logging, restart, on_error):
+        with self._operations:
+            self._viewer_callbacks = (logging, restart, on_error)
+            self._schedule_viewer_expiry()
+
+    def _schedule_viewer_expiry(self):
+        if self._viewer_timer is not None:
+            self._viewer_timer.cancel()
+            self._viewer_timer = None
+        if not self._viewer_callbacks or not self._state['enabled'] or self._viewers:
+            return
+
+        def expire():
+            with self._operations:
+                if self._viewer_timer is not timer:
+                    return
+                self._viewer_timer = None
+                logging, restart, on_error = self._viewer_callbacks
+                try:
+                    self.configure(False, logging=logging(), restart=restart)
+                except Exception:
+                    on_error()
+                    self._schedule_viewer_expiry()
+
+        timer = threading.Timer(30, expire)
+        timer.daemon = True
+        self._viewer_timer = timer
+        timer.start()
+
+    def viewer_join(self, viewer):
+        with self._operations:
+            self._viewers.add(viewer)
+            self._schedule_viewer_expiry()
+
+    def viewer_leave(self, viewer):
+        with self._operations:
+            self._viewers.discard(viewer)
+            if not self._viewers:
+                self._schedule_viewer_expiry()
 
     def version(self):
         binary = xray_transactions.xray_binary()
@@ -334,7 +378,9 @@ class RoutingDebug:
 
     def configure(self, enabled, *, logging, restart):
         with self._operations:
-            return self._configure(enabled, logging=logging, restart=restart)
+            result = self._configure(enabled, logging=logging, restart=restart)
+            self._schedule_viewer_expiry()
+            return result
 
     def _configure(self, enabled, *, logging, restart):
         current = self.status()
@@ -374,7 +420,8 @@ class RoutingDebug:
                 or (source[0] and source[0] != proto)
                 or isinstance(stamp, bool) or not isinstance(stamp, (int, float))
                 or not math.isfinite(stamp) or not 0 <= stamp < 2**40
-                or stamp * 1000 < state.get('since', 0)
+                # Xray webhook timestamps have whole-second precision.
+                or stamp < math.floor(state.get('since', 0) / 1000)
                 or (event.get('routeTarget') and (not routed or routed[0] != proto or routed[2] != target[2]))):
             return False
         for key in ('inboundTag', 'outboundTag'):

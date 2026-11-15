@@ -247,30 +247,36 @@ def disable_logs(
     *,
     restart_xray_core: Optional[Callable[..., Tuple[bool, str]]] = None,
     on_saved: Optional[Callable[[bytes], None]] = None,
+    force_restart: bool = False,
 ) -> Tuple[bool, str, bool]:
-    """Disable logs (loglevel=none), snapshot current logs, restart Xray core.
+    """Disable logs once, retaining the saved snapshot on repeated Stop.
+
+    force_restart applies hook removal already prepared by the caller.
 
     Returns: (resp_ok, detail, xray_restarted)
     """
-
-    # Snapshot current logs to *.saved
-    try:
-        if _ACCESS_LOG and os.path.isfile(_ACCESS_LOG):
-            shutil.copy2(_ACCESS_LOG, _saved_path(_ACCESS_LOG))
-        if _ERROR_LOG and os.path.isfile(_ERROR_LOG):
-            shutil.copy2(_ERROR_LOG, _saved_path(_ERROR_LOG))
-    except Exception:
-        pass
 
     cfg = load_xray_log_config()
     if not isinstance(cfg, dict):
         cfg = {}
     cfg.setdefault("log", {})
-    cfg["log"]["loglevel"] = "none"
-    if not save_xray_log_config(cfg):
-        return False, "failed to save xray log config", False
-    if on_saved is not None:
-        on_saved((json.dumps(cfg, ensure_ascii=False, indent=2) + '\n').encode('utf-8'))
+    already_disabled = cfg["log"].get("loglevel") == "none"
+    if already_disabled and not force_restart:
+        return True, "", False
+    if not already_disabled:
+        # Keep the first snapshot: a stopped core may have emptied its live files.
+        try:
+            if _ACCESS_LOG and os.path.isfile(_ACCESS_LOG):
+                shutil.copy2(_ACCESS_LOG, _saved_path(_ACCESS_LOG))
+            if _ERROR_LOG and os.path.isfile(_ERROR_LOG):
+                shutil.copy2(_ERROR_LOG, _saved_path(_ERROR_LOG))
+        except Exception:
+            pass
+        cfg["log"]["loglevel"] = "none"
+        if not save_xray_log_config(cfg):
+            return False, "failed to save xray log config", False
+        if on_saved is not None:
+            on_saved((json.dumps(cfg, ensure_ascii=False, indent=2) + '\n').encode('utf-8'))
 
     ok, detail = (True, "")
     xray_restarted = False

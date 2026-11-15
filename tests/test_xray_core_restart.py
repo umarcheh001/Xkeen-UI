@@ -121,3 +121,23 @@ def test_log_controls_fail_before_restart_when_config_cannot_be_saved(monkeypatc
     assert enabled == (False, "failed to save xray log config", "info", False)
     assert disabled == (False, "failed to save xray log config", False)
     assert restart_calls == []
+
+
+def test_repeated_log_stop_keeps_saved_snapshot_without_writing_or_restarting(tmp_path, monkeypatch):
+    from services import xray_log_api
+
+    access = tmp_path / 'access.log'
+    saved = tmp_path / 'access.log.saved'
+    access.write_bytes(b'')
+    saved.write_bytes(b'captured connections\n')
+    monkeypatch.setattr(xray_log_api, '_ACCESS_LOG', str(access))
+    monkeypatch.setattr(xray_log_api, '_ERROR_LOG', '')
+    monkeypatch.setattr(xray_log_api, 'load_xray_log_config', lambda: {'log': {'loglevel': 'none'}})
+    writes, restarts = [], []
+    monkeypatch.setattr(xray_log_api, 'save_xray_log_config', lambda cfg: writes.append(cfg) or True)
+
+    result = xray_log_api.disable_logs(restart_xray_core=lambda: (restarts.append(True) or True, 'restarted'))
+
+    assert result == (True, '', False)
+    assert saved.read_bytes() == b'captured connections\n'
+    assert writes == [] and restarts == []

@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 678,
-      "size_bytes": 9031978,
+      "size_bytes": 9031954,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -88,7 +88,7 @@
       ],
       "removable": true,
       "unit_count": 162,
-      "size_bytes": 4213146,
+      "size_bytes": 4237281,
       "kind_counts": {
         "backend_route": 13,
         "backend_service": 23,
@@ -102,7 +102,7 @@
         "frontend_ui": 1,
         "template": 5
       },
-      "route_count": 69,
+      "route_count": 70,
       "background_task_count": 3,
       "ui_surface_count": 14,
       "representative_paths": [
@@ -15488,7 +15488,7 @@
       "module_id": "core",
       "kind": "frontend_ui",
       "path": "xkeen-ui/static/js/ui/spinner_fetch.js",
-      "size_bytes": 19169,
+      "size_bytes": 19145,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -21269,7 +21269,7 @@
       "module_id": "engine.xray",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/xray_logs.py",
-      "size_bytes": 18627,
+      "size_bytes": 20038,
       "depends_on": [
         "core",
         "tool.editor"
@@ -21336,6 +21336,11 @@
         {
           "method": "POST",
           "path": "/api/xray-logs/routing-debug",
+          "decorator": "bp.post"
+        },
+        {
+          "method": "POST",
+          "path": "/api/xray-logs/routing-debug/viewer",
           "decorator": "bp.post"
         },
         {
@@ -21798,7 +21803,7 @@
       "module_id": "engine.xray",
       "kind": "backend_service",
       "path": "xkeen-ui/services/xray_log_api.py",
-      "size_bytes": 9022,
+      "size_bytes": 9379,
       "depends_on": [
         "core",
         "tool.editor"
@@ -21903,13 +21908,15 @@
       "module_id": "engine.xray",
       "kind": "backend_service",
       "path": "xkeen-ui/services/xray_routing_debug.py",
-      "size_bytes": 22047,
+      "size_bytes": 23803,
       "depends_on": [
         "core",
         "tool.editor"
       ],
-      "starts_background_task": false,
-      "background_markers": [],
+      "starts_background_task": true,
+      "background_markers": [
+        "daemon_thread"
+      ],
       "registers_routes": false,
       "routes": [],
       "frontend_bundle": [],
@@ -22501,7 +22508,7 @@
       "module_id": "engine.xray",
       "kind": "backend_test",
       "path": "tests/test_xray_core_restart.py",
-      "size_bytes": 3978,
+      "size_bytes": 4886,
       "depends_on": [
         "core",
         "tool.editor"
@@ -22918,7 +22925,7 @@
       "module_id": "engine.xray",
       "kind": "backend_test",
       "path": "tests/test_xray_routing_debug.py",
-      "size_bytes": 24057,
+      "size_bytes": 32579,
       "depends_on": [
         "core",
         "tool.editor"
@@ -24552,7 +24559,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/xray_log_rules.js",
-      "size_bytes": 11363,
+      "size_bytes": 12381,
       "depends_on": [
         "core",
         "tool.editor"
@@ -24582,7 +24589,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/xray_log_view.js",
-      "size_bytes": 63306,
+      "size_bytes": 63617,
       "depends_on": [
         "core",
         "tool.editor"
@@ -24612,7 +24619,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/xray_logs.js",
-      "size_bytes": 192431,
+      "size_bytes": 194371,
       "depends_on": [
         "core",
         "tool.editor"
@@ -24863,7 +24870,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_test",
       "path": "e2e/xray_log_rules.spec.mjs",
-      "size_bytes": 19767,
+      "size_bytes": 27679,
       "depends_on": [
         "core",
         "tool.editor"
@@ -31535,7 +31542,7 @@
     }
   ],
   "routes": {
-    "endpoint_count": 364,
+    "endpoint_count": 365,
     "files_with_routes": 52,
     "endpoint_files": [
       {
@@ -32984,6 +32991,11 @@
           {
             "method": "POST",
             "path": "/api/xray-logs/routing-debug",
+            "decorator": "bp.post"
+          },
+          {
+            "method": "POST",
+            "path": "/api/xray-logs/routing-debug/viewer",
             "decorator": "bp.post"
           },
           {

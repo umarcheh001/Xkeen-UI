@@ -21,7 +21,9 @@ test('diagnostic index confirms domains after settle and no longer exposes rule 
   assert.equal(index.lookup, undefined);
   session(index); tunnel(index);
   assert.equal(index.lookupDomain(access()), '');
-  advance();
+  advance(1999);
+  assert.equal(index.lookupDomain(access()), '');
+  advance(1);
   assert.equal(index.lookupDomain(access()), 'example.org');
   assert.equal(index.lookupDomain(access(undefined, undefined, 'other')), '');
 });

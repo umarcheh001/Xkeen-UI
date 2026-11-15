@@ -9,8 +9,11 @@ async function openView(page) {
     document.body.append(root);
     const selection = document.createElement('div'); selection.id = 'rule-selection'; selection.style.cssText = 'position:fixed;bottom:0;left:0;z-index:10000'; document.body.append(selection);
     selection.innerHTML = '<span data-xlog-selcount>0</span><button type="button" data-xlog-act="copy-selected-tsv">Копировать таблицу</button>';
+    const summary = document.createElement('div'); summary.id = 'rule-summary'; summary.hidden = true;
+    summary.innerHTML = '<span data-xlog-summary-extra></span><div data-xlog-summary-body></div>';
+    document.body.append(summary);
     window.__inlineRuleLookups = 0;
-    const view = createXrayLogView({ root, selbar: selection,
+    const view = createXrayLogView({ root, selbar: selection, summary,
       domainHint: () => window.__destinationHint || '',
       domainsVisible: () => window.__domainsVisible !== false,
       ruleTag: () => { window.__inlineRuleLookups++; return 'inline'; },
@@ -141,6 +144,83 @@ test('confirmed destination leads the IP while hints, pause and ambiguity keep t
   expect(await page.evaluate(() => window.__ruleCopy)).toContain('accepted tcp:203.0.113.7:443');
 });
 
+test('summary follows confirmed domains per connection through filtering, pause, revocation and trimming', async ({ page }) => {
+  await openView(page);
+  await page.evaluate(() => {
+    const { view, line } = window.__rules;
+    const ipLine = line.replace('example.org', '203.0.113.7');
+    window.__rules.ipLine = ipLine;
+    view.reset([ipLine, ipLine.replace(':53000 ', ':53001 ')]);
+  });
+  const summary = page.locator('#rule-summary');
+  const domain = value => summary.locator(`[data-field="domain"][data-value="${value}"]`);
+  await expect(domain('203.0.113.7')).toHaveCount(1);
+  await page.evaluate(() => window.__rules.view.updateRules(() => '', p => p.srcPort === '53000' ? 'gateway.icloud.com' : 'mtalk.google.com'));
+  await expect(domain('icloud.com')).toHaveCount(1);
+  await expect(domain('google.com')).toHaveCount(1);
+  await expect(domain('203.0.113.7')).toHaveCount(0);
+  await domain('icloud.com').evaluate(el => el.click());
+  await expect(page.locator('#rule-test .tr:not([hidden])')).toHaveCount(1);
+  await page.evaluate(() => {
+    window.__rules.view.setFrozen(true);
+    window.__rules.view.updateRules(() => '', p => p.srcPort === '53000' ? '' : 'mtalk.google.com');
+  });
+  await expect(domain('icloud.com')).toHaveCount(1);
+  await expect(page.locator('#rule-test .tr:not([hidden]) .dst')).toContainText('gateway.icloud.com');
+  await page.evaluate(() => window.__rules.view.setFrozen(false));
+  await expect(domain('icloud.com')).toHaveCount(0);
+  await expect(domain('203.0.113.7')).toHaveCount(1);
+  await expect(page.locator('#rule-test .tr:not([hidden])')).toHaveCount(0);
+  await page.evaluate(() => {
+    const { view, ipLine } = window.__rules;
+    view.resetFilter();
+    view.setMaxLines(50);
+    view.append(Array.from({ length: 50 }, (_, n) => ipLine.replace(':53000 ', `:${54000 + n} `)));
+  });
+  await expect(domain('google.com')).toHaveCount(0);
+  await expect(domain('203.0.113.7').locator('..').locator('em')).toHaveText('50');
+});
+
+test('a 5000-row table keeps proven rules and domains after unrelated index evictions', async ({ page }) => {
+  await openView(page);
+  await page.evaluate(async () => {
+    const { createXrayRoutingEventIndex } = await import('/static/js/features/xray_log_rules.js');
+    const { view, root, line } = window.__rules;
+    let clock = 0;
+    const index = createXrayRoutingEventIndex({ now: () => clock });
+    index.begin({ generation: 'load', since: 0, events: [] });
+    view.reset([]); view.setMaxLines(5000); view.setRulesVisible(true);
+    for (let start = 1; start <= 5000; start += 500) {
+      const lines = [];
+      for (let id = start; id < start + 500; id++) {
+        const srcPort = String(10000 + id);
+        const second = Math.floor((id - 1) / 100);
+        lines.push(line.replace('17:00:00.001000', `17:00:${String(second).padStart(2, '0')}.500000`)
+          .replace(':53000 ', `:${srcPort} `).replace('example.org', '203.0.113.7'));
+        index.ingest({ id, stamp: Date.UTC(2026, 10, 14, 17, 0, second), srcIp: '192.168.10.2', srcPort,
+          host: '203.0.113.7', port: '443', proto: 'tcp', inTag: 'redirect', outTag: 'proxy',
+          tag: 'load-rule', domain: 'load.example' });
+      }
+      view.append(lines);
+      clock += 5000;
+      view.updateRules((p, previous) => index.lookup(p, previous), (p, previous) => index.lookupDomain(p, previous));
+    }
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    root.scrollTop = 0;
+    root.dispatchEvent(new Event('scroll'));
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
+  const table = page.locator('#rule-test');
+  expect(await page.evaluate(() => {
+    const { view, root } = window.__rules;
+    return view.lineBySeq(Number(root.shadowRoot.querySelector('.tr:not([hidden])').dataset.seq));
+  })).toContain(':10001 ');
+  await expect(table.locator('.tr:not([hidden]) .rule').first()).toHaveText('load-rule');
+  await expect(table.locator('.tr:not([hidden]) .dst').first()).toHaveText('load.example · 203.0.113.7');
+  expect(await page.evaluate(() => window.__rules.view.stats().total)).toBe(5000);
+  await expect(page.locator('#rule-summary [data-field="domain"][data-value="load.example"]')).toHaveCount(1);
+});
+
 test('domain confirmation works through the shared diagnostic poll without rule tags', async ({ page }) => {
   await openController(page, { domains: true, tags: false, debug: false,
     lines: ['2026/11/14 17:00:00.001000 from 192.168.10.2:53000 accepted tcp:203.0.113.7:443 [redirect -> direct]'],
@@ -173,6 +253,7 @@ async function openController(page, options = {}) {
   });
   await page.route('**/api/xray-logs/routing-debug/events', async route => {
     diagnosticRequests++;
+    options.pollTimes?.push(performance.now());
     if (options.hold) await options.hold;
     return route.fulfill({ json: { generation: String(options.generation || 1), since: 0, dropped: 0,
       events: options.events || [{ id: 1, stamp: Date.UTC(2026, 10, 14, 17), srcIp: '192.168.10.2', srcPort: '53000',
@@ -183,6 +264,7 @@ async function openController(page, options = {}) {
     const url = new URL(route.request().url());
     if (url.searchParams.get('file') === 'error') {
       diagnosticRequests++;
+      options.pollTimes?.push(performance.now());
       if (options.hold) await options.hold;
       return route.fulfill({ json: { mode: diagnosticRequests === 1 ? 'full' : 'append',
         reset: diagnosticRequests === 1, skipped: false, caught_up: true, cursor: 'diagnostic', lines: diagnosticRequests === 1 ? (options.diagnostic || [
@@ -197,6 +279,55 @@ async function openController(page, options = {}) {
   await expect(page.locator('#xray-log-output .tr').first()).toBeVisible();
   return () => diagnosticRequests;
 }
+
+for (const debug of [false, true]) {
+  test(`shared metadata polling refreshes every second: routing debug=${debug}`, async ({ page }) => {
+    const pollTimes = [];
+    await openController(page, { debug, domains: true, level: debug ? 'warning' : 'info', pollTimes });
+    await expect.poll(() => pollTimes.length, { timeout: 8000 }).toBeGreaterThanOrEqual(3);
+    const interval = pollTimes.at(-1) - pollTimes.at(-2);
+    expect(interval).toBeGreaterThan(750);
+    expect(interval).toBeLessThan(1800);
+  });
+}
+
+test('routing presence stays on pause and in background, closes on navigation and returns', async ({ page }) => {
+  await page.addInitScript(() => {
+    const original = window.fetch.bind(window);
+    window.__presence = { opened: 0, closed: 0 };
+    window.fetch = (url, init) => {
+      if (String(url).endsWith('/api/xray-logs/routing-debug/viewer')) {
+        window.__presence.opened++;
+        return Promise.resolve(new Response(new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode(': viewer\n\n'));
+            init.signal.addEventListener('abort', () => {
+              window.__presence.closed++;
+              controller.error(new DOMException('Aborted', 'AbortError'));
+            }, { once: true });
+          },
+        }), { headers: { 'Content-Type': 'text/event-stream' } }));
+      }
+      return original(url, init);
+    };
+  });
+  await openController(page);
+  await expect.poll(() => page.evaluate(() => window.__presence.opened)).toBe(1);
+  await page.locator('#xray-log-pause').evaluate(el => el.click());
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  expect(await page.evaluate(() => window.__presence.closed)).toBe(0);
+  await selectPanelView(page, 'routing');
+  await expect.poll(() => page.evaluate(() => window.__presence.closed)).toBe(1);
+  await selectPanelView(page, 'xray-logs');
+  await expect.poll(() => page.evaluate(() => window.__presence.opened)).toBe(2);
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide')));
+  await expect.poll(() => page.evaluate(() => window.__presence.closed)).toBe(2);
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+  await expect.poll(() => page.evaluate(() => window.__presence.opened)).toBe(3);
+});
 
 test('routing debug is third in View, off means no column or event polling, choice survives reload', async ({ page }) => {
   const options = { debug: false, level: 'warning' };
@@ -260,16 +391,22 @@ test('stopping logs preserves the rule column and tags while filtering the snaps
   await openController(page, options);
   const table = page.locator('#xray-log-output');
   await expect(table.locator('.rule')).toHaveText('debug-rule', { timeout: 9000 });
+  let stops = 0;
   await page.route('**/api/xray-logs/disable', route => {
     options.level = 'none';
     options.generation = 2;
-    return route.fulfill({ json: { ok: true } });
+    return route.fulfill({ json: { ok: true, xray_restarted: ++stops === 1 } });
   });
   const stoppedStatus = page.waitForResponse(async response => response.url().endsWith('/api/xray-logs/status')
     && (await response.json()).loglevel === 'none');
   await page.locator('#xray-log-disable-btn').click();
   await stoppedStatus;
   await expect(page.locator('#xray-log-status')).toContainText('Логи остановлены');
+  await expect(page.locator('#xray-log-status')).toContainText('Xray перезапущен');
+  await page.locator('#xray-log-disable-btn').click();
+  await expect(page.locator('#xray-log-status')).toContainText('Логи остановлены');
+  await expect(page.locator('#xray-log-status')).not.toContainText('перезапущен');
+  expect(stops).toBe(2);
   await expect(table.locator('.rule-head')).toBeVisible();
   await expect(table.locator('.rule')).toHaveText('debug-rule');
   const search = page.locator('#xray-log-filter');
@@ -282,6 +419,13 @@ test('stopping logs preserves the rule column and tags while filtering the snaps
   await expect(table.locator('.rule')).toHaveText('debug-rule');
   await table.locator('.chev').click();
   await expect(table.locator('.detail')).toContainText('debug-rule');
+  await page.locator('#xray-log-more > summary').click();
+  const debugToggle = page.locator('#xray-log-routing-debug');
+  await debugToggle.locator('..').locator('..').click();
+  await expect(table.locator('.rule-head')).toHaveCount(0);
+  await expect(debugToggle).toBeEnabled();
+  await debugToggle.locator('..').locator('..').click();
+  await expect(table.locator('.rule')).toHaveText('debug-rule');
 });
 
 test('a diagnostic response arriving after leaving the view cannot attach a tag', async ({ page }) => {

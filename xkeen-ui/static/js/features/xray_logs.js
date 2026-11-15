@@ -85,7 +85,7 @@ let xrayLogsModuleApi = null;
   const XRAY_DEVICE_NAMES_API = '/api/xray-logs/devices';
   const XRAY_DEVICE_NAMES_REFRESH_MS = 60000;
   const XRAY_DEVICE_NAMES_STALE_MS = 30000;
-  const XRAY_DESTINATION_DOMAIN_HINTS_POLL_MS = 2500;
+  const XRAY_DESTINATION_DOMAIN_HINTS_POLL_MS = 1000;
   const XRAY_DESTINATION_DOMAIN_HINTS_INIT_LINES = isPerfLite() ? 2500 : 5000;
   const XRAY_DESTINATION_DOMAIN_CACHE_MAX = 500;
   const XRAY_DESTINATION_CONN_CACHE_MAX = isPerfLite() ? 1000 : 2000;
@@ -138,6 +138,48 @@ let xrayLogsModuleApi = null;
   let _activeLogLevel = 'none'; // last known active loglevel from /api/xray-logs/status
   let _routingDebug = { enabled: false, active: false, supported: false, reason: 'Не удалось определить версию Xray.' };
   let _routingDebugBusy = false;
+  let _routingViewer = null;
+  let _routingViewerRetry = null;
+  let _routingViewerSuspended = false;
+
+  function syncRoutingViewer() {
+    const wanted = !_routingViewerSuspended && _routingDebug.enabled && isLogsViewVisible();
+    if (!wanted) {
+      if (_routingViewerRetry) clearTimeout(_routingViewerRetry);
+      _routingViewerRetry = null;
+      const viewer = _routingViewer;
+      _routingViewer = null;
+      if (viewer) viewer.abort();
+      return;
+    }
+    if (_routingViewer || _routingViewerRetry) return;
+    const viewer = new AbortController();
+    _routingViewer = viewer;
+    void (async () => {
+      try {
+        const response = await fetch('/api/xray-logs/routing-debug/viewer', {
+          method: 'POST', cache: 'no-store', signal: viewer.signal,
+        });
+        if (!response.ok || !response.body) return;
+        const reader = response.body.getReader();
+        try {
+          while (!(await reader.read()).done) {}
+        } finally {
+          reader.releaseLock();
+        }
+      } catch (error) {
+        // A transient disconnect gets another chance within the server's grace period.
+      } finally {
+        if (_routingViewer === viewer) {
+          _routingViewer = null;
+          _routingViewerRetry = setTimeout(() => {
+            _routingViewerRetry = null;
+            syncRoutingViewer();
+          }, 3000);
+        }
+      }
+    })();
+  }
   let _xrayLogGeneration = null;
   let _applyLevelTimer = null;
 
@@ -2513,7 +2555,7 @@ let xrayLogsModuleApi = null;
         _diagnosticQueue.push(lines, { ...data, initial, reset: data.reset || data.exists === false });
         _xrayDestinationDomainHintsLastFetchAt = Date.now();
         // НЕ перерисовываем экран на паузе: кеш доменов обновляем, но вывод заморожен
-        // (иначе фоновый опрос каждые 2.5с показывал бы накопленные строки — пауза «не держит»).
+        // (иначе фоновый опрос показывал бы накопленные строки — пауза «не держит»).
         return lines.length > 0;
       } catch (e) {
         _xrayDestinationDomainHintsLastFetchAt = Date.now();
@@ -2581,9 +2623,10 @@ let xrayLogsModuleApi = null;
       if (!res.ok || !data.ok) throw new Error(data.error || 'Не удалось изменить отладку маршрутизации.');
       stopXrayDomainHintsPolling();
       _routingDebug = data;
+      syncRoutingViewer();
       if (_view) syncXrayRuleColumn(_view);
       await refreshXrayLogStatus();
-      if (_isAccessFileName(_currentFile)) await fetchXrayLogsOnce('manual', { resetCursor: true, forceRender: true });
+      if (_isAccessFileName(_currentFile) && _activeLogLevel !== 'none') await fetchXrayLogsOnce('manual', { resetCursor: true, forceRender: true });
     } catch (error) {
       toast(error.message || 'Не удалось изменить отладку маршрутизации.', 'error');
     } finally {
@@ -2903,6 +2946,7 @@ let xrayLogsModuleApi = null;
       _activeLogLevel = level;
       const previousDebug = _routingDebug;
       _routingDebug = data.routing_debug || { enabled: false, active: false, supported: false, reason: 'Не удалось определить версию Xray.' };
+      syncRoutingViewer();
       if (previousDebug.generation !== undefined && (previousDebug.active !== _routingDebug.active
         || previousDebug.enabled !== _routingDebug.enabled || previousDebug.generation !== _routingDebug.generation)) stopXrayDomainHintsPolling();
       syncRoutingDebugToggle();
@@ -3938,15 +3982,18 @@ let xrayLogsModuleApi = null;
       const res = await fetch('/api/xray-logs/disable', { method: 'POST' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error('http ' + res.status);
+      const message = data.xray_restarted
+        ? 'Логи остановлены (loglevel=none). Xray перезапущен.'
+        : 'Логи остановлены (loglevel=none).';
       setXrayLogUiStatus({
         phase: 'ready',
         tone: 'muted',
         transport: '',
-        message: 'Логи остановлены (loglevel=none). Xray перезапущен.',
+        message,
         file: _currentFile || 'access',
       });
 
-      if (statusEl) statusEl.textContent = 'Логи остановлены (loglevel=none). Xray перезапущен.';
+      if (statusEl) statusEl.textContent = message;
       try { await refreshXrayLogStatus(); } catch (e) {}
       setXrayHeaderBadgeState('off', 'none');
     } catch (e) {
@@ -5028,12 +5075,21 @@ function bindFilterUi() {
     // Clean up polling/WS on page lifecycle transitions without blocking BFCache.
     try {
       window.addEventListener('pagehide', () => {
+        _routingViewerSuspended = true;
+        syncRoutingViewer();
         // Avoid promoting untouched template defaults over synced server prefs.
         if (_logsViewPrefsUserTouched) persistLocalLogsViewDraft();
         try { stopXrayLogAuto(); } catch (e) {}
         try { if (_statusTimer) clearInterval(_statusTimer); } catch (e2) {}
         _statusTimer = null;
       });
+      window.addEventListener('pageshow', () => {
+        _routingViewerSuspended = false;
+        syncRoutingViewer();
+        ensureXrayLogStatusPolling();
+        void refreshXrayLogStatus();
+      });
+      document.addEventListener('xkeen:panel-view-changed', () => syncRoutingViewer());
     } catch (e) {}
 
     // initial status refresh (safe on pages without logs)
@@ -5042,9 +5098,7 @@ function bindFilterUi() {
     // Also poll status in background to keep the header badge up to date
     // even when the user does not open the "Логи Xray онлайн" tab.
     try {
-      if (!_statusTimer) _statusTimer = setInterval(() => {
-        try { void refreshXrayLogStatus(); } catch (e) {}
-      }, 10000);
+      ensureXrayLogStatusPolling();
     } catch (e) {}
 
     // Refresh once when tab becomes active again
@@ -5061,6 +5115,12 @@ function bindFilterUi() {
       });
     } catch (e) {}
 
+  }
+
+  function ensureXrayLogStatusPolling() {
+    if (!_statusTimer) _statusTimer = setInterval(() => {
+      try { void refreshXrayLogStatus(); } catch (e) {}
+    }, 10000);
   }
 
   const api = {

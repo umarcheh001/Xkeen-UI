@@ -17,7 +17,10 @@ test('webhook confirms blocked domain and rule only after settle, using the full
   const { index, advance } = setup();
   index.ingest(event());
   assert.equal(index.lookup(access()), '');
-  advance();
+  advance(1999);
+  assert.equal(index.lookup(access()), '');
+  assert.equal(index.lookupDomain(access()), '');
+  advance(1);
   assert.equal(index.lookup(access()), 'ads');
   assert.equal(index.lookupDomain(access()), 'ads.example');
   assert.equal(index.lookup(access('53001')), '');
@@ -147,6 +150,116 @@ test('client eviction cannot turn two matching connections into a confirmed surv
   for (let n = 3; n <= 2049; n++) index.ingest(event(n, { srcPort: String(10000 + n) }));
   advance();
   assert.equal(index.lookup(access()), '');
+});
+
+function unrelated(index, start, end) {
+  for (let id = start; id <= end; id++) index.ingest(event(id, {
+    srcPort: String(10000 + id), stamp: event().stamp + 5000 + id * 2,
+  }));
+}
+
+test('unrelated evictions preserve confirmed metadata even after tuple barriers are folded', () => {
+  const { index, advance } = setup();
+  index.ingest(event()); advance();
+  const tag = index.lookup(access()), domain = index.lookupDomain(access());
+  assert.equal(tag, 'ads'); assert.equal(domain, 'ads.example');
+  unrelated(index, 2, 3000); advance();
+  assert.equal(index.lookup(access(), tag), tag);
+  assert.equal(index.lookupDomain(access(), domain), domain);
+  assert.equal(index.lookup(access()), '');
+  unrelated(index, 3001, 6200); advance();
+  assert.equal(index.lookup(access(), tag), tag);
+  assert.equal(index.lookupDomain(access(), domain), domain);
+  assert.equal(index.lookup(access()), '');
+});
+
+test('evicting both ambiguous candidates revokes earlier proof even with identical metadata', () => {
+  const { index, advance } = setup();
+  index.ingest(event()); advance();
+  assert.equal(index.lookup(access()), 'ads');
+  index.ingest(event(2));
+  unrelated(index, 3, 3000); advance();
+  assert.equal(index.lookup(access(), 'ads'), '');
+  assert.equal(index.lookupDomain(access(), 'ads.example'), '');
+});
+
+test('a delayed reused tuple revokes proof after its original candidate was evicted', () => {
+  const { index, advance } = setup();
+  index.ingest(event()); advance();
+  assert.equal(index.lookup(access()), 'ads');
+  unrelated(index, 2, 3000); advance();
+  assert.equal(index.lookup(access(), 'ads'), 'ads');
+  index.ingest(event(3001)); advance();
+  assert.equal(index.lookup(access(), 'ads'), '');
+  unrelated(index, 3002, 6200); advance();
+  assert.equal(index.lookup(access(), 'ads'), '');
+  assert.equal(index.lookupDomain(access(), 'ads.example'), '');
+});
+
+test('late candidates behind a folded barrier cannot preserve a false prior confirmation', () => {
+  const { index, advance } = setup();
+  index.ingest(event()); advance();
+  assert.equal(index.lookup(access()), 'ads');
+  unrelated(index, 2, 6200); advance();
+  index.ingest(event(6201));
+  unrelated(index, 6202, 8300); advance();
+  assert.equal(index.lookup(access(), 'ads'), '');
+});
+
+test('expiry of one conflicting candidate revokes earlier proof even for the same tag', () => {
+  const { index, advance } = setup();
+  index.ingest(event()); advance();
+  assert.equal(index.lookup(access()), 'ads');
+  advance(27000);
+  index.ingest(event(2)); advance();
+  assert.equal(index.lookup(access(), 'ads'), '');
+  assert.equal(index.lookupDomain(access(), 'ads.example'), '');
+});
+
+test('overlapping timestamp windows revoke proof after both candidates are evicted', () => {
+  const { index, advance } = setup();
+  const row = { ...access(), frac: '.500000', time: '17:00:01' };
+  index.ingest(event()); advance();
+  assert.equal(index.lookup(row), 'ads');
+  index.ingest(event(2, { stamp: event().stamp + 3000 }));
+  unrelated(index, 3, 3000); advance();
+  assert.equal(index.lookup(row, 'ads'), '');
+  assert.equal(index.lookupDomain(row, 'ads.example'), '');
+});
+
+test('a later candidate overlapping an evicted window still revokes proof', () => {
+  const { index, advance } = setup();
+  const row = { ...access(), time: '17:00:01' };
+  index.ingest(event()); advance();
+  assert.equal(index.lookup(row), 'ads');
+  unrelated(index, 2, 3000);
+  index.ingest(event(3001, { stamp: event().stamp + 3000 }));
+  unrelated(index, 3002, 6200); advance();
+  assert.equal(index.lookup(row, 'ads'), '');
+});
+
+test('overlapping late windows remain unsafe after the original tuple barrier was folded', () => {
+  const { index, advance } = setup();
+  const row = { ...access(), time: '17:00:01' };
+  index.ingest(event()); advance();
+  assert.equal(index.lookup(row), 'ads');
+  for (let id = 2; id <= 6200; id++) index.ingest(event(id, {
+    srcPort: String(10000 + id), stamp: event().stamp - 100000,
+  }));
+  index.ingest(event(6201, { stamp: event().stamp + 3000 }));
+  unrelated(index, 6202, 8300); advance();
+  assert.equal(index.lookup(row, 'ads'), '');
+});
+
+test('TTL cannot hide a conflict whose timestamp windows overlap', () => {
+  const { index, advance } = setup();
+  const row = { ...access(), time: '17:00:01' };
+  index.ingest(event()); advance();
+  assert.equal(index.lookup(row), 'ads');
+  advance(27000);
+  index.ingest(event(2, { stamp: event().stamp + 3000 })); advance();
+  assert.equal(index.lookup(row, 'ads'), '');
+  assert.equal(index.lookupDomain(row, 'ads.example'), '');
 });
 
 test('tag delimiters cannot make different inbound/outbound tuples collide', () => {

@@ -16,9 +16,10 @@ from __future__ import annotations
 import base64
 import json
 import os
+import time
 from typing import Any, Dict, Optional, Tuple
 
-from flask import Blueprint, jsonify, request, send_file
+from flask import Blueprint, Response, jsonify, request, send_file
 
 from services.xray_logs import read_new_lines as _svc_read_new_lines
 from services.xray_logs import tail_lines_fast as _svc_tail_lines_fast
@@ -150,9 +151,41 @@ def create_xray_logs_blueprint(
     def bind_routing_debug(state):
         state.app.extensions['xkeen.xray_routing_debug'] = debug
         state.app.extensions['xkeen.runtime_control'] = debug.control_runtime
+        app = state.app
+
+        def expire_restart():
+            from services.xkeen import _process_ids
+            if not _process_ids('xray'):
+                return True, ''
+            with app.app_context():
+                return recover_core()
+
+        debug.watch_viewers(logging=logs_enabled, restart=expire_restart,
+                            on_error=lambda: app.logger.exception('Не удалось автоматически выключить отладку маршрутизации Xray'))
+
+    def logs_enabled():
+        return str(load_xray_log_config().get('log', {}).get('loglevel', 'none')).lower() != 'none'
 
     def recover_core():
         return restart_xray_core()
+
+    @bp.post('/api/xray-logs/routing-debug/viewer')
+    def api_xray_routing_viewer():
+        if not debug.status()['enabled']:
+            return jsonify({'ok': False}), 409
+
+        def presence():
+            viewer = object()
+            debug.viewer_join(viewer)
+            try:
+                while debug.status()['enabled']:
+                    yield b': viewer\n\n'
+                    time.sleep(5)
+            finally:
+                debug.viewer_leave(viewer)
+
+        return Response(presence(), mimetype='text/event-stream',
+                        headers={'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no'})
 
     @bp.post('/api/xray-logs/routing-event/<rule_key>')
     def api_xray_routing_event(rule_key):
@@ -180,7 +213,7 @@ def create_xray_logs_blueprint(
         data = request.get_json(silent=True)
         if not isinstance(data, dict) or type(data.get('enabled')) is not bool:
             return jsonify({'ok': False, 'error': 'Нужно указать enabled: true или false.'}), 400
-        logging = str(load_xray_log_config().get('log', {}).get('loglevel', 'none')).lower() != 'none'
+        logging = logs_enabled()
         try:
             return jsonify(debug.configure(data['enabled'], logging=logging, restart=recover_core)), 200
         except ValueError as exc:
@@ -442,8 +475,10 @@ def create_xray_logs_blueprint(
         """Disable Xray logs (loglevel=none), snapshot logs, restart Xray core."""
         writes = {}
         try:
+            # Removing hooks still needs a restart when loglevel was already none.
             resp_ok, detail, xray_restarted = debug.perform(False,
                 lambda: disable_logs(restart_xray_core=restart_xray_core,
+                                     force_restart=any(path != str(debug.state_path) for path in writes),
                                      on_saved=lambda raw: writes.update({xray_log_api._CONFIG_PATH: raw})),
                 recover=recover_core, writes=writes)
         except Exception as exc:

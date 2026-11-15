@@ -170,7 +170,7 @@
 
     // Xray logs enable/disable restarts ONLY Xray core (no xkeen-ui restart)
     if ((path === '/api/xray-logs/enable' || path === '/api/xray-logs/disable') && method === 'POST') {
-      return { message: 'Применение настроек логов и перезапуск Xray...' };
+      return { message: 'Применение настроек логов Xray...' };
     }
 
     // xkeen *.lst endpoints (restart controlled by JSON body.restart; backend defaults restart=true)

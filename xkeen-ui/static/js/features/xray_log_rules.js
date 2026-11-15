@@ -137,24 +137,33 @@ function hostKey(value) {
 
 export function createXrayRoutingEventIndex({ now = Date.now } = {}) {
   const items = new Map(), buckets = new Map(), evicted = new Map();
-  let generation = '', since = 0, dropped = 0, lastId = 0, coveredId = 0, lostUntil = -Infinity, expiredUntil = -Infinity;
+  let generation = '', since = 0, dropped = 0, lastId = 0, coveredId = 0, lostUntil = -Infinity, expiredUntil = -Infinity, evictedUntil = -Infinity;
   const key = p => JSON.stringify([hostKey(p.srcIp), p.srcPort, p.proto || 'tcp', p.inTag, p.outTag, hostKey(p.host), p.port]);
   function prune() {
     for (const [id, item] of items) {
       if (items.size <= MAX_SESSIONS && now() - item.received <= TTL) break;
+      const bucket = buckets.get(item.key);
+      const conflicting = [...bucket].some(other => other !== id && Math.abs(items.get(other).stamp - item.stamp) <= 2 * WINDOW);
       if (items.size > MAX_SESSIONS) {
-        const cutoff = Math.max(evicted.get(item.key) || -Infinity, item.stamp + WINDOW);
+        const barrier = evicted.get(item.key) || { until: -Infinity, ambiguousUntil: -Infinity };
+        const ambiguous = conflicting || item.stamp <= barrier.until + WINDOW || item.stamp <= evictedUntil + WINDOW;
+        if (ambiguous) barrier.ambiguousUntil = Math.max(barrier.ambiguousUntil, item.stamp + WINDOW);
+        if (item.stamp <= evictedUntil + WINDOW) lostUntil = Math.max(lostUntil, barrier.ambiguousUntil);
+        barrier.until = Math.max(barrier.until, item.stamp + WINDOW);
         evicted.delete(item.key);
-        evicted.set(item.key, cutoff);
+        evicted.set(item.key, barrier);
         if (evicted.size > MAX_SESSIONS) {
           // Fold old tuple barriers into a global cutoff to keep memory bounded.
-          const [oldest, stamp] = evicted.entries().next().value;
-          lostUntil = Math.max(lostUntil, stamp);
+          const [oldest, barrier] = evicted.entries().next().value;
+          evictedUntil = Math.max(evictedUntil, barrier.until);
+          lostUntil = Math.max(lostUntil, barrier.ambiguousUntil);
           evicted.delete(oldest);
         }
-      } else expiredUntil = Math.max(expiredUntil, item.stamp + WINDOW);
+      } else {
+        expiredUntil = Math.max(expiredUntil, item.stamp + WINDOW);
+        if (conflicting) lostUntil = Math.max(lostUntil, item.stamp + WINDOW);
+      }
       items.delete(id);
-      const bucket = buckets.get(item.key);
       bucket?.delete(id);
       if (bucket && !bucket.size) buckets.delete(item.key);
     }
@@ -171,7 +180,7 @@ export function createXrayRoutingEventIndex({ now = Date.now } = {}) {
       evicted.clear();
       generation = payload.generation;
       since = Number(payload.since) || 0;
-      dropped = lastId = 0; lostUntil = expiredUntil = -Infinity;
+      dropped = lastId = 0; lostUntil = expiredUntil = evictedUntil = -Infinity;
       coveredId = Math.max(0, (Number(payload.first_id) || 1) - 1);
     }
     const events = Array.isArray(payload.events) ? payload.events.slice(-MAX_SESSIONS) : [];
@@ -200,13 +209,16 @@ export function createXrayRoutingEventIndex({ now = Date.now } = {}) {
     const stamp = timestamp(p);
     if (!Number.isFinite(stamp) || stamp < since) return '';
     prune();
-    if (stamp <= lostUntil || stamp <= (evicted.get(key(p)) ?? -Infinity)) return '';
-    if (!previous && stamp <= expiredUntil) return '';
+    const barrier = evicted.get(key(p));
+    if (stamp <= lostUntil || stamp <= (barrier?.ambiguousUntil ?? -Infinity)) return '';
+    const forgotten = stamp <= Math.max(evictedUntil, barrier?.until ?? -Infinity);
+    // Capacity alone cannot revoke proof; surviving or lost conflicting candidates can.
+    if (!previous && (forgotten || stamp <= expiredUntil)) return '';
     let match = null;
     for (const id of buckets.get(key(p)) || []) {
       const item = items.get(id);
       if (Math.abs(item.stamp - stamp) > WINDOW) continue;
-      if (match || now() - item.received < WINDOW || !item[field]) return '';
+      if (forgotten || match || now() - item.received < WINDOW || !item[field]) return '';
       match = item;
     }
     if (match && previous && match[field] !== previous) return '';
@@ -214,7 +226,7 @@ export function createXrayRoutingEventIndex({ now = Date.now } = {}) {
   }
   return { begin, ingest, lookup, markLost,
     lookupDomain(p, previous = '') { return lookup(p, previous, 'domain'); },
-    reset() { items.clear(); buckets.clear(); evicted.clear(); generation = ''; since = dropped = lastId = coveredId = 0; lostUntil = expiredUntil = -Infinity; } };
+    reset() { items.clear(); buckets.clear(); evicted.clear(); generation = ''; since = dropped = lastId = coveredId = 0; lostUntil = expiredUntil = evictedUntil = -Infinity; } };
 }
 
 export function createXrayLogDiagnosticQueue({ consume, onComplete, onReset = () => {},
