@@ -142,7 +142,7 @@ test('confirmed destination leads the IP while hints, pause and ambiguity keep t
 });
 
 test('domain confirmation works through the shared diagnostic poll without rule tags', async ({ page }) => {
-  await openController(page, { domains: true, tags: false,
+  await openController(page, { domains: true, tags: false, debug: false,
     lines: ['2026/11/14 17:00:00.001000 from 192.168.10.2:53000 accepted tcp:203.0.113.7:443 [redirect -> direct]'],
     diagnostic: [
       '2026/11/14 17:00:00.000000 [Info] [1234] proxy/dokodemo: received request for 192.168.10.2:53000',
@@ -158,12 +158,27 @@ test('domain confirmation works through the shared diagnostic poll without rule 
 
 async function openController(page, options = {}) {
   await page.addInitScript(domains => localStorage.setItem('xkeen.ui.xrayLogs.domainsWanted.v1', domains ? '1' : '0'), !!options.domains);
-  await page.route('**/api/xray-logs/status', route => options.statusError ? route.fulfill({ status: 500, json: {} }) : route.fulfill({ json: { loglevel: options.level || 'info', has_rule_tags: 'tags' in options ? options.tags : true, log_generation: options.generation || 1 } }));
+  const debugStatus = () => ({ enabled: options.debug !== false, active: options.active ?? (options.debug !== false && options.level !== 'none'),
+    supported: options.supported !== false, version: options.version || '26.11.9',
+    reason: options.reason || '', generation: String(options.generation || 1) });
+  await page.route('**/api/xray-logs/status', route => options.statusError ? route.fulfill({ status: 500, json: {} }) : route.fulfill({ json: { loglevel: options.level || 'info', has_rule_tags: 'tags' in options ? options.tags : true, log_generation: options.generation || 1, routing_debug: debugStatus() } }));
   await page.route('**/api/xray-logs/devices**', route => route.fulfill({ json: { devices: [] } }));
   await page.route('**/api/xray-logs/outbound-names', route => route.fulfill({ json: { ok: true, names: {} } }));
   await page.route('**/api/restart-log', route => route.fulfill({ json: { lines: [] } }));
   await page.route('**/api/ws-token', route => route.fulfill({ status: 503, json: { ok: false } }));
   let diagnosticRequests = 0;
+  await page.route('**/api/xray-logs/routing-debug', route => {
+    options.debug = route.request().postDataJSON().enabled;
+    return route.fulfill({ json: { ok: true, ...debugStatus() } });
+  });
+  await page.route('**/api/xray-logs/routing-debug/events', async route => {
+    diagnosticRequests++;
+    if (options.hold) await options.hold;
+    return route.fulfill({ json: { generation: String(options.generation || 1), since: 0, dropped: 0,
+      events: options.events || [{ id: 1, stamp: Date.UTC(2026, 10, 14, 17), srcIp: '192.168.10.2', srcPort: '53000',
+        host: 'example.org', port: '443', proto: 'tcp', inTag: 'redirect', outTag: 'proxy', tag: 'debug-rule', domain: 'example.org' }],
+    } });
+  });
   await page.route('**/api/xray-logs?**', async route => {
     const url = new URL(route.request().url());
     if (url.searchParams.get('file') === 'error') {
@@ -182,6 +197,45 @@ async function openController(page, options = {}) {
   await expect(page.locator('#xray-log-output .tr').first()).toBeVisible();
   return () => diagnosticRequests;
 }
+
+test('routing debug is third in View, off means no column or event polling, choice survives reload', async ({ page }) => {
+  const options = { debug: false, level: 'warning' };
+  const requests = await openController(page, options);
+  const toggle = page.locator('#xray-log-routing-debug');
+  await page.locator('#xray-log-more > summary').click();
+  await expect(toggle).not.toBeChecked();
+  expect(await toggle.evaluate(el => Array.from(el.closest('[role="menu"]').querySelectorAll('label')).indexOf(el.closest('label')))).toBe(2);
+  await expect(page.locator('#xray-log-output .rule')).toHaveCount(0);
+  expect(requests()).toBe(0);
+  await toggle.locator('..').locator('..').click();
+  await expect(page.locator('#xray-log-output .rule')).toHaveText('debug-rule', { timeout: 9000 });
+  await page.reload();
+  await selectPanelView(page, 'xray-logs');
+  await page.locator('#xray-log-more > summary').click();
+  await expect(toggle).toBeChecked();
+  await toggle.locator('..').locator('..').click();
+  await expect(page.locator('#xray-log-output .rule')).toHaveCount(0);
+});
+
+for (const [version, reason] of [['26.3.26', 'Требуется Xray 26.3.27 или новее.'], ['', 'Не удалось определить версию Xray.']]) {
+  test(`unsupported routing debug is disabled with a reason: ${version || 'unknown'}`, async ({ page }) => {
+    await openController(page, { debug: false, supported: false, version, reason });
+    await page.locator('#xray-log-more > summary').click();
+    const toggle = page.locator('#xray-log-routing-debug');
+    await expect(toggle).toBeDisabled();
+    await expect(toggle.locator('..').locator('..')).toHaveAttribute('data-tooltip', reason);
+  });
+}
+
+test('warning routing debug confirms blocked domain without diagnostic error-log fallback', async ({ page }) => {
+  await openController(page, { level: 'warning', domains: true,
+    lines: ['2026/11/14 17:00:00.001000 from 192.168.10.2:53000 accepted udp:172.224.181.15:443 [tproxy -> block]'],
+    events: [{ id: 1, stamp: Date.UTC(2026, 10, 14, 17), srcIp: '192.168.10.2', srcPort: '53000',
+      host: '172.224.181.15', port: '443', proto: 'udp', inTag: 'tproxy', outTag: 'block', tag: '30_block_quic_foreign', domain: 'mask.icloud.com' }],
+  });
+  await expect(page.locator('#xray-log-output .rule')).toHaveText('30_block_quic_foreign', { timeout: 9000 });
+  await expect(page.locator('#xray-log-output .dst')).toHaveText('mask.icloud.com · 172.224.181.15');
+});
 
 test('phone hides the rule column but retains the tag in row details', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -248,7 +302,34 @@ test('rules work with domain display off through the existing diagnostic poll', 
   expect(await page.evaluate(() => localStorage.getItem('xkeen.ui.xrayLogs.domainsWanted.v1'))).toBe('0');
 });
 
-for (const options of [{ level: 'warning', tags: true }, { level: 'info', tags: false }, { level: 'info', tags: null }]) {
+test('starting wanted debug with domains keeps warning and applies hooks in one enable', async ({ page }) => {
+  const options = { level: 'none', domains: true };
+  let requested;
+  await page.route('**/api/xray-logs/enable', route => {
+    requested = route.request().postDataJSON().loglevel;
+    options.level = requested;
+    return route.fulfill({ json: { ok: true, loglevel: requested, xray_restarted: true } });
+  });
+  await openController(page, options);
+  await page.locator('#xray-log-enable-btn').click();
+  await expect.poll(() => requested).toBe('warning');
+});
+
+test('Start reapplies an invalidated wanted debug session without changing warning', async ({ page }) => {
+  const options = { level: 'warning', active: false };
+  let restarts = 0;
+  await page.route('**/api/xray-logs/enable', route => {
+    restarts++;
+    expect(route.request().postDataJSON().loglevel).toBe('warning');
+    options.active = true;
+    return route.fulfill({ json: { ok: true, loglevel: 'warning', xray_restarted: true } });
+  });
+  await openController(page, options);
+  await page.locator('#xray-log-enable-btn').click();
+  await expect.poll(() => restarts).toBe(1);
+});
+
+for (const options of [{ level: 'warning', tags: true, debug: false }, { level: 'info', tags: false, debug: false }, { level: 'info', tags: null, debug: false }]) {
   test(`rule column stays hidden for ${options.level} / tags=${options.tags}`, async ({ page }) => {
     const requests = await openController(page, options);
     await expect(page.locator('#xray-log-output .thead')).not.toContainText('Правило');

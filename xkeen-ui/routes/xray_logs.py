@@ -31,6 +31,7 @@ from services.xray_log_api import (
     enable_logs,
     get_status,
     get_log_generation,
+    load_xray_log_config,
     resolve_xray_log_path_for_ws,
 )
 from services.xray_subscriptions import list_subscriptions
@@ -139,6 +140,53 @@ def create_xray_logs_blueprint(
     append_restart_log: Any = None,
 ) -> Blueprint:
     bp = Blueprint("xray_logs", __name__)
+    from core.paths import UI_STATE_DIR
+    from services import xray_config_files
+    from services import xray_log_api
+    from services.xray_routing_debug import RoutingDebug, HEADER
+    debug = RoutingDebug(xray_config_files.XRAY_CONFIGS_DIR, ui_state_dir or UI_STATE_DIR)
+
+    @bp.record_once
+    def bind_routing_debug(state):
+        state.app.extensions['xkeen.xray_routing_debug'] = debug
+        state.app.extensions['xkeen.runtime_control'] = debug.control_runtime
+
+    def recover_core():
+        return restart_xray_core()
+
+    @bp.post('/api/xray-logs/routing-event/<rule_key>')
+    def api_xray_routing_event(rule_key):
+        if not debug.authorize(request.remote_addr, request.headers.get(HEADER, '')):
+            return jsonify({'ok': False, 'error': 'forbidden'}), 403
+        if request.content_length is None or request.content_length > 16384:
+            return jsonify({'ok': False, 'error': 'payload too large'}), 413
+        if not debug.ingest(rule_key, request.get_json(silent=True)):
+            return jsonify({'ok': False, 'error': 'invalid event'}), 400
+        return '', 204
+
+    @bp.get('/api/xray-logs/routing-debug/events')
+    def api_xray_routing_events():
+        from services import xray_log_api
+        data = debug.events()
+        offset = xray_log_api._TZ_OFFSET_HOURS * 3600000
+        data['events'] = [{**event, 'stamp': event['stamp'] + offset} for event in data['events']]
+        data['since'] += offset
+        if data['expired_until']:
+            data['expired_until'] += offset
+        return jsonify(data), 200
+
+    @bp.post('/api/xray-logs/routing-debug')
+    def api_xray_routing_debug():
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict) or type(data.get('enabled')) is not bool:
+            return jsonify({'ok': False, 'error': 'Нужно указать enabled: true или false.'}), 400
+        logging = str(load_xray_log_config().get('log', {}).get('loglevel', 'none')).lower() != 'none'
+        try:
+            return jsonify(debug.configure(data['enabled'], logging=logging, restart=recover_core)), 200
+        except ValueError as exc:
+            return jsonify({'ok': False, 'error': str(exc)}), 409
+        except Exception:
+            return jsonify({'ok': False, 'error': 'Не удалось сохранить отладку маршрутизации.'}), 500
 
     def _append_restart_log(ok: bool, source: str = "api", **meta: object) -> None:
         if append_restart_log is None:
@@ -299,7 +347,7 @@ def create_xray_logs_blueprint(
     @bp.get("/api/xray-logs/status")
     def api_xray_logs_status():
         """Return current loglevel and paths."""
-        return jsonify(get_status()), 200
+        return jsonify({**get_status(), 'routing_debug': debug.status()}), 200
 
     @bp.get("/api/xray-logs/devices")
     def api_xray_logs_devices():
@@ -361,8 +409,14 @@ def create_xray_logs_blueprint(
         """Enable Xray logs by setting loglevel and restarting Xray core."""
         data = request.get_json(silent=True) or {}
         level = str(data.get("loglevel") or "warning").strip().lower()
-
-        resp_ok, detail, normalized_level, xray_restarted = enable_logs(level, restart_xray_core=restart_xray_core)
+        writes = {}
+        try:
+            resp_ok, detail, normalized_level, xray_restarted = debug.perform(True,
+                lambda: enable_logs(level, restart_xray_core=restart_xray_core,
+                                    on_saved=lambda raw: writes.update({xray_log_api._CONFIG_PATH: raw})),
+                recover=recover_core, writes=writes)
+        except Exception as exc:
+            return jsonify({'ok': False, 'error': str(exc), 'detail': str(exc)}), 500
         _append_restart_log(
             resp_ok,
             source="xray-logs-enable",
@@ -386,7 +440,14 @@ def create_xray_logs_blueprint(
     @bp.post("/api/xray-logs/disable")
     def api_xray_logs_disable():
         """Disable Xray logs (loglevel=none), snapshot logs, restart Xray core."""
-        resp_ok, detail, xray_restarted = disable_logs(restart_xray_core=restart_xray_core)
+        writes = {}
+        try:
+            resp_ok, detail, xray_restarted = debug.perform(False,
+                lambda: disable_logs(restart_xray_core=restart_xray_core,
+                                     on_saved=lambda raw: writes.update({xray_log_api._CONFIG_PATH: raw})),
+                recover=recover_core, writes=writes)
+        except Exception as exc:
+            return jsonify({'ok': False, 'error': str(exc), 'detail': str(exc)}), 500
         _append_restart_log(
             resp_ok,
             source="xray-logs-disable",

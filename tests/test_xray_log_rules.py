@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import pytest
 
 from flask import Flask
 
@@ -21,27 +22,18 @@ def _client(monkeypatch, tmp_path):
     return app.test_client()
 
 
-def test_status_reads_tags_from_applied_fragments_and_invalidates_cache(monkeypatch, tmp_path):
+def test_status_reports_explicit_debug_mode_without_legacy_tag_scan(monkeypatch, tmp_path):
     client = _client(monkeypatch, tmp_path)
-    fragment = tmp_path / "custom.json"
-    fragment.write_bytes(b'{"routing":{"rules":[{"ruleTag":"","outboundTag":"direct"}]}}')
-    (tmp_path / "disabled.jsonc").write_bytes(b'{"routing":{"rules":[{"ruleTag":"draft"}]}}')
-    assert client.get('/api/xray-logs/status').json.get('has_rule_tags') is False
-    fragment.write_bytes(b'{"routing":{"rules":[{"ruleTag":"confirmed","outboundTag":"direct"}]}}')
-    assert client.get('/api/xray-logs/status').json['has_rule_tags'] is True
-    fragment.write_bytes(b'{"routing":{"rules":[]}}')
-    assert client.get('/api/xray-logs/status').json['has_rule_tags'] is False
-    fragment.write_bytes(b'{broken')
-    assert client.get('/api/xray-logs/status').json['has_rule_tags'] is None
+    status = client.get('/api/xray-logs/status').json
+    assert status['routing_debug']['enabled'] is False
+    assert 'has_rule_tags' not in status
 
 
-def test_status_ignores_commented_rules_and_reuses_unchanged_files(monkeypatch, tmp_path):
+def test_disabled_status_does_not_read_routing_configs(monkeypatch, tmp_path):
     client = _client(monkeypatch, tmp_path)
-    (tmp_path / 'routing.json').write_bytes(b'{"routing":{"rules":[/* {"ruleTag":"off"} */]}}')
-    assert client.get('/api/xray-logs/status').json.get('has_rule_tags') is False
-    from utils import jsonio
-    monkeypatch.setattr(jsonio, 'load_json', lambda *a, **kw: (_ for _ in ()).throw(AssertionError('uncached read')))
-    assert client.get('/api/xray-logs/status').json['has_rule_tags'] is False
+    from pathlib import Path
+    monkeypatch.setattr(Path, 'iterdir', lambda *a: pytest.fail('unexpected routing scan'))
+    assert client.get('/api/xray-logs/status').json['routing_debug']['enabled'] is False
 
 
 def test_diagnostic_cursor_is_bounded_and_catches_up_after_overrun(monkeypatch, tmp_path):

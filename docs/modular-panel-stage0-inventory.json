@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 678,
-      "size_bytes": 9030784,
+      "size_bytes": 9031978,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -87,12 +87,12 @@
         "xray"
       ],
       "removable": true,
-      "unit_count": 160,
-      "size_bytes": 4152652,
+      "unit_count": 162,
+      "size_bytes": 4213146,
       "kind_counts": {
         "backend_route": 13,
-        "backend_service": 22,
-        "backend_test": 56,
+        "backend_service": 23,
+        "backend_test": 57,
         "configuration": 4,
         "editor_schema": 4,
         "frontend_bundle": 1,
@@ -102,7 +102,7 @@
         "frontend_ui": 1,
         "template": 5
       },
-      "route_count": 66,
+      "route_count": 69,
       "background_task_count": 3,
       "ui_surface_count": 14,
       "representative_paths": [
@@ -457,7 +457,7 @@
       "module_id": "core",
       "kind": "app_runtime",
       "path": "xkeen-ui/app_factory.py",
-      "size_bytes": 36433,
+      "size_bytes": 36469,
       "depends_on": [
         "engine.mihomo",
         "engine.xray",
@@ -1565,7 +1565,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/auth_setup.py",
-      "size_bytes": 6684,
+      "size_bytes": 7118,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -3678,7 +3678,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/xkeen.py",
-      "size_bytes": 10483,
+      "size_bytes": 11207,
       "depends_on": [
         "engine.mihomo"
       ],
@@ -21269,7 +21269,7 @@
       "module_id": "engine.xray",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/xray_logs.py",
-      "size_bytes": 15468,
+      "size_bytes": 18627,
       "depends_on": [
         "core",
         "tool.editor"
@@ -21305,6 +21305,11 @@
         },
         {
           "method": "GET",
+          "path": "/api/xray-logs/routing-debug/events",
+          "decorator": "bp.get"
+        },
+        {
+          "method": "GET",
           "path": "/api/xray-logs/status",
           "decorator": "bp.get"
         },
@@ -21326,6 +21331,16 @@
         {
           "method": "POST",
           "path": "/api/xray-logs/enable",
+          "decorator": "bp.post"
+        },
+        {
+          "method": "POST",
+          "path": "/api/xray-logs/routing-debug",
+          "decorator": "bp.post"
+        },
+        {
+          "method": "POST",
+          "path": "/api/xray-logs/routing-event/<rule_key>",
           "decorator": "bp.post"
         }
       ],
@@ -21783,7 +21798,7 @@
       "module_id": "engine.xray",
       "kind": "backend_service",
       "path": "xkeen-ui/services/xray_log_api.py",
-      "size_bytes": 10162,
+      "size_bytes": 9022,
       "depends_on": [
         "core",
         "tool.editor"
@@ -21887,6 +21902,29 @@
     {
       "module_id": "engine.xray",
       "kind": "backend_service",
+      "path": "xkeen-ui/services/xray_routing_debug.py",
+      "size_bytes": 22047,
+      "depends_on": [
+        "core",
+        "tool.editor"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "xkeen",
+        "xray"
+      ],
+      "environment_variables": [
+        "XKEEN_UI_PORT"
+      ],
+      "removable": true
+    },
+    {
+      "module_id": "engine.xray",
+      "kind": "backend_service",
       "path": "xkeen-ui/services/xray_subscription_displacement.py",
       "size_bytes": 16742,
       "depends_on": [
@@ -21957,7 +21995,7 @@
       "module_id": "engine.xray",
       "kind": "backend_service",
       "path": "xkeen-ui/services/xray_transactions.py",
-      "size_bytes": 9260,
+      "size_bytes": 9716,
       "depends_on": [
         "core",
         "tool.editor"
@@ -22665,7 +22703,7 @@
       "module_id": "engine.xray",
       "kind": "backend_test",
       "path": "tests/test_xray_log_rules.py",
-      "size_bytes": 4464,
+      "size_bytes": 3689,
       "depends_on": [
         "core",
         "tool.editor"
@@ -22873,6 +22911,30 @@
       "environment_variables": [
         "XKEEN_XRAY_ROUTING_FILE_RAW",
         "XKEEN_XRAY_TEST_TIMEOUT"
+      ],
+      "removable": true
+    },
+    {
+      "module_id": "engine.xray",
+      "kind": "backend_test",
+      "path": "tests/test_xray_routing_debug.py",
+      "size_bytes": 24057,
+      "depends_on": [
+        "core",
+        "tool.editor"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "xkeen",
+        "xray"
+      ],
+      "environment_variables": [
+        "XKEEN_UI_PORT",
+        "XKEEN_UI_SECRET_KEY"
       ],
       "removable": true
     },
@@ -24490,7 +24552,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/xray_log_rules.js",
-      "size_bytes": 6915,
+      "size_bytes": 11363,
       "depends_on": [
         "core",
         "tool.editor"
@@ -24550,7 +24612,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/xray_logs.js",
-      "size_bytes": 189325,
+      "size_bytes": 192431,
       "depends_on": [
         "core",
         "tool.editor"
@@ -24801,7 +24863,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_test",
       "path": "e2e/xray_log_rules.spec.mjs",
-      "size_bytes": 15008,
+      "size_bytes": 19767,
       "depends_on": [
         "core",
         "tool.editor"
@@ -24961,7 +25023,7 @@
       "module_id": "engine.xray",
       "kind": "template",
       "path": "xkeen-ui/templates/panel/screens/xray_logs.html",
-      "size_bytes": 12342,
+      "size_bytes": 12719,
       "depends_on": [
         "core",
         "tool.editor"
@@ -31473,7 +31535,7 @@
     }
   ],
   "routes": {
-    "endpoint_count": 361,
+    "endpoint_count": 364,
     "files_with_routes": 52,
     "endpoint_files": [
       {
@@ -32891,6 +32953,11 @@
           },
           {
             "method": "GET",
+            "path": "/api/xray-logs/routing-debug/events",
+            "decorator": "bp.get"
+          },
+          {
+            "method": "GET",
             "path": "/api/xray-logs/status",
             "decorator": "bp.get"
           },
@@ -32912,6 +32979,16 @@
           {
             "method": "POST",
             "path": "/api/xray-logs/enable",
+            "decorator": "bp.post"
+          },
+          {
+            "method": "POST",
+            "path": "/api/xray-logs/routing-debug",
+            "decorator": "bp.post"
+          },
+          {
+            "method": "POST",
+            "path": "/api/xray-logs/routing-event/<rule_key>",
             "decorator": "bp.post"
           }
         ]
@@ -36813,7 +36890,7 @@
       {
         "from": "engine.xray",
         "to": "core",
-        "unit_count": 160,
+        "unit_count": 162,
         "examples": [
           "xkeen-ui/routes/routing/__init__.py",
           "xkeen-ui/routes/routing/blueprint.py",
@@ -36854,7 +36931,7 @@
       {
         "from": "engine.xray",
         "to": "tool.editor",
-        "unit_count": 160,
+        "unit_count": 162,
         "examples": [
           "xkeen-ui/routes/routing/__init__.py",
           "xkeen-ui/routes/routing/blueprint.py",
@@ -37233,7 +37310,7 @@
       {
         "from": "engine.xray",
         "to": "core",
-        "unit_count": 90,
+        "unit_count": 91,
         "examples": [
           "xkeen-ui/routes/routing/__init__.py",
           "xkeen-ui/routes/routing/blueprint.py",
@@ -37274,7 +37351,7 @@
       {
         "from": "engine.xray",
         "to": "tool.editor",
-        "unit_count": 90,
+        "unit_count": 91,
         "examples": [
           "xkeen-ui/routes/routing/__init__.py",
           "xkeen-ui/routes/routing/blueprint.py",

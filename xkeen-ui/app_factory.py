@@ -672,7 +672,8 @@ def create_app(*, ws_runtime: bool = False):
         return _svc_read_operation_diagnostic(UI_STATE_DIR, ref)
 
     def restart_xkeen(source: str = "api"):
-        return _svc_restart_xkeen(XKEEN_RESTART_CMD, RESTART_LOG_FILE, source=source)
+        with app.app_context():
+            return _svc_restart_xkeen(XKEEN_RESTART_CMD, RESTART_LOG_FILE, source=source)
 
     def restart_xray_core(**kwargs) -> tuple[bool, str]:
         if _svc_restart_xray_core is None:

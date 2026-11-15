@@ -17,7 +17,7 @@ import {
 } from 'xk-core/js/features/xkeen_runtime.js';
 import { iconHtml } from 'xk-core/js/ui/operator_icons.js';
 import { createXrayLogView } from './xray_log_view.js';
-import { createXrayLogRuleIndex, createXrayLogDiagnosticQueue } from './xray_log_rules.js';
+import { createXrayLogDomainIndex, createXrayRoutingEventIndex, createXrayLogDiagnosticQueue } from './xray_log_rules.js';
 
 let xrayLogsModuleApi = null;
 
@@ -136,7 +136,8 @@ let xrayLogsModuleApi = null;
   const ALLOWED_LOGLEVELS = ['debug', 'info', 'warning', 'error'];
 
   let _activeLogLevel = 'none'; // last known active loglevel from /api/xray-logs/status
-  let _hasXrayRuleTags = false;
+  let _routingDebug = { enabled: false, active: false, supported: false, reason: 'Не удалось определить версию Xray.' };
+  let _routingDebugBusy = false;
   let _xrayLogGeneration = null;
   let _applyLevelTimer = null;
 
@@ -186,26 +187,32 @@ let xrayLogsModuleApi = null;
   let _diagnosticEpoch = 0;
   let _diagnosticAbort = null;
   let _diagnosticDomainsChanged = false;
-  const _ruleIndex = createXrayLogRuleIndex();
+  const _domainIndex = createXrayLogDomainIndex();
+  const _routingIndex = createXrayRoutingEventIndex();
   const _diagnosticQueue = createXrayLogDiagnosticQueue({
     consume(line) {
+      if (line && typeof line === 'object') { _routingIndex.ingest(line); return; }
       if (_xrayDomainsDisplay) {
         _diagnosticDomainsChanged = ingestXrayLogDestinationDomains([line], { source: 'error_log' }) || _diagnosticDomainsChanged;
       }
-      if (xrayRulesAvailable() || _xrayDomainsDisplay) _ruleIndex.ingest(String(line || ''));
+      if (_xrayDomainsDisplay) _domainIndex.ingest(String(line || ''));
     },
     onReset(meta) {
-      _ruleIndex.reset();
+      _domainIndex.reset();
+      if (meta.routing) {
+        if (!meta.reset) _routingIndex.markLost(meta.latestStamp);
+        return;
+      }
       _xrayDestinationDomainsByConnId = Object.create(null);
       _xrayDestinationDomainConnOrder = [];
       if (!meta?.initial && _view) _view.resetRules();
     },
     onComplete(meta) {
       if (!isLogsViewVisible()) return;
-      if (meta.caught_up) _ruleIndex.complete();
-      if (_view && (xrayRulesAvailable() || _xrayDomainsDisplay)) _view.updateRules(
-        (p, previous) => xrayRulesAvailable() ? _ruleIndex.lookup(p, previous) : previous,
-        (p, previous) => _ruleIndex.lookupDomain(p, previous));
+      if (meta.caught_up) _domainIndex.complete();
+      if (_view && (_routingDebug.enabled || _xrayDomainsDisplay)) _view.updateRules(
+        (p, previous) => _routingDebug.enabled ? _routingIndex.lookup(p, previous) : previous,
+        (p, previous) => _routingDebug.active ? _routingIndex.lookupDomain(p, previous) : _domainIndex.lookupDomain(p, previous));
       if (_diagnosticDomainsChanged && !_paused) {
         _diagnosticDomainsChanged = false;
         applyXrayLogFilterToOutput();
@@ -2369,6 +2376,7 @@ let xrayLogsModuleApi = null;
   // warning/error -> info; дальше он персистентен и переключение показа — чисто
   // визуальное. Остановленные логи (none) не трогаем — их выключили намеренно.
   function ensureXrayResolveLoglevelForLive() {
+    if (_routingDebug.enabled) return;
     if (!_xrayDomainsDisplay) return;
     // Не рестартуем Xray по факту восстановления состояния/переоткрытия вкладки.
     // Подъём уровня до info (полный рестарт ядра) допустим только после явного
@@ -2486,10 +2494,18 @@ let xrayLogsModuleApi = null;
           params.set('max_lines', String(Math.max(50, Math.min(MAX_MAX_LINES, XRAY_DESTINATION_DOMAIN_HINTS_INIT_LINES))));
         }
 
-        const res = await fetch('/api/xray-logs?' + params.toString(), { cache: 'no-store', signal: abort.signal });
+        const routing = _routingDebug.active;
+        const res = await fetch(routing ? '/api/xray-logs/routing-debug/events' : '/api/xray-logs?' + params.toString(), { cache: 'no-store', signal: abort.signal });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error('http ' + res.status);
         if (epoch !== _diagnosticEpoch || !isLogsViewVisible()) return false;
+
+        if (routing) {
+          const batch = _routingIndex.begin(data);
+          _xrayDomainHintsCursor = String(data.generation || 'routing');
+          _diagnosticQueue.push(batch.events, { ...batch, routing: true, initial, caught_up: true });
+          return batch.events.length > 0;
+        }
 
         if (data.cursor) _xrayDomainHintsCursor = String(data.cursor);
 
@@ -2524,7 +2540,8 @@ let xrayLogsModuleApi = null;
     _xrayDestinationDomainHintsRequest = null;
     _xrayDomainHintsCursor = '';
     _diagnosticQueue.reset();
-    _ruleIndex.reset();
+    _domainIndex.reset();
+    _routingIndex.reset();
     _diagnosticDomainsChanged = false;
     if (_view) _view.resetRules();
   }
@@ -2538,19 +2555,46 @@ let xrayLogsModuleApi = null;
   }
 
   function xrayRulesAvailable() {
-    return _hasXrayRuleTags && _xrayLogLevelGivesDomains() && _isAccessFileName(_currentFile);
+    return _routingDebug.enabled && _isAccessFileName(_currentFile);
   }
 
   function syncXrayRuleColumn(view) {
-    // Остановленный снимок сохраняет колонку независимо от нового уровня ядра.
-    if (!_liveWanted && !_streaming && _activeLogLevel === 'none'
-      && _isAccessFileName(_currentFile) && _lastLines.length) return;
     view.setRulesVisible(xrayRulesAvailable());
   }
 
+  function syncRoutingDebugToggle() {
+    const input = $('xray-log-routing-debug');
+    if (!input) return;
+    input.checked = !!_routingDebug.enabled;
+    input.disabled = _routingDebugBusy || (!_routingDebug.supported && !_routingDebug.enabled);
+    const message = _routingDebug.reason || 'При работающих логах изменение перезапустит Xray. Уровень журнала сохраняется.';
+    input.closest('label')?.setAttribute('data-tooltip', message);
+  }
+
+  async function changeRoutingDebug(enabled) {
+    _routingDebugBusy = true;
+    syncRoutingDebugToggle();
+    try {
+      const res = await fetch('/api/xray-logs/routing-debug', { method: 'POST',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Не удалось изменить отладку маршрутизации.');
+      stopXrayDomainHintsPolling();
+      _routingDebug = data;
+      if (_view) syncXrayRuleColumn(_view);
+      await refreshXrayLogStatus();
+      if (_isAccessFileName(_currentFile)) await fetchXrayLogsOnce('manual', { resetCursor: true, forceRender: true });
+    } catch (error) {
+      toast(error.message || 'Не удалось изменить отладку маршрутизации.', 'error');
+    } finally {
+      _routingDebugBusy = false;
+      syncRoutingDebugToggle();
+    }
+  }
+
   function wantsXrayDiagnosticHints() {
-    return _isAccessFileName(_currentFile) && _xrayLogLevelGivesDomains()
-      && (_xrayDomainsDisplay || xrayRulesAvailable()) && isLogsViewVisible();
+    return _isAccessFileName(_currentFile) && isLogsViewVisible()
+      && (_routingDebug.active || (_xrayDomainsDisplay && _xrayLogLevelGivesDomains()));
   }
 
   function ensureXrayDomainHintsPolling() {
@@ -2857,7 +2901,11 @@ let xrayLogsModuleApi = null;
       const prevLevel = String(_activeLogLevel || 'none').toLowerCase();
       const prevGaveDomains = prevLevel === 'info' || prevLevel === 'debug';
       _activeLogLevel = level;
-      _hasXrayRuleTags = data.has_rule_tags === true;
+      const previousDebug = _routingDebug;
+      _routingDebug = data.routing_debug || { enabled: false, active: false, supported: false, reason: 'Не удалось определить версию Xray.' };
+      if (previousDebug.generation !== undefined && (previousDebug.active !== _routingDebug.active
+        || previousDebug.enabled !== _routingDebug.enabled || previousDebug.generation !== _routingDebug.generation)) stopXrayDomainHintsPolling();
+      syncRoutingDebugToggle();
       if (_xrayLogGeneration !== null && data.log_generation !== _xrayLogGeneration) stopXrayDomainHintsPolling();
       _xrayLogGeneration = data.log_generation;
       if (_view) syncXrayRuleColumn(_view);
@@ -2896,7 +2944,8 @@ let xrayLogsModuleApi = null;
     } catch (e) {
       console.error('xray log status error', e);
       _activeLogLevel = 'none';
-      _hasXrayRuleTags = false;
+      _routingDebug = { enabled: false, active: false, supported: false, reason: 'Не удалось получить состояние отладки.' };
+      syncRoutingDebugToggle();
       stopXrayDomainHintsPolling();
       if (_view) _view.setRulesVisible(false);
       // Уровень неизвестен — снимаем debounce, чтобы переустановка info могла
@@ -3767,7 +3816,7 @@ let xrayLogsModuleApi = null;
 
       // Pick the desired loglevel from the selector (UI preference).
       const lvlSel = $('xray-log-level');
-      const selected = String((lvlSel && lvlSel.value) || 'warning').toLowerCase();
+      const selected = String((_routingDebug.enabled && _activeLogLevel !== 'none' ? _activeLogLevel : lvlSel?.value) || 'warning').toLowerCase();
       let loglevel = ALLOWED_LOGLEVELS.includes(selected) ? selected : 'warning';
 
       // Резолвинг доменов требует info. Если показ доменов включён и мы на
@@ -3776,7 +3825,7 @@ let xrayLogsModuleApi = null;
       // рестарт (warning→info): два быстрых `xkeen -restart` подряд конфликтуют,
       // и xray остаётся на старом уровне — error.log пуст, домены молчат
       // (см. диагностику: fetch error.log size=64/lines=0 при двойном рестарте).
-      if (_xrayDomainsDisplay && _isAccessFileName(_currentFile)
+      if (!_routingDebug.enabled && _xrayDomainsDisplay && _isAccessFileName(_currentFile)
           && (loglevel === 'warning' || loglevel === 'error')) {
         loglevel = 'info';
         try { if (lvlSel && lvlSel.value !== 'info') lvlSel.value = 'info'; } catch (e) {}
@@ -4496,7 +4545,7 @@ function copyXrayContextModal() {
 	      }
 	      // Пуск: when Xray already writes logs, only the online stream starts;
 	      // otherwise logging is enabled first (this restarts the core).
-	      if (String(_activeLogLevel || 'none') !== 'none') {
+	      if (String(_activeLogLevel || 'none') !== 'none' && !(_routingDebug.enabled && !_routingDebug.active)) {
 	        if (_paused) xrayLogsTogglePause();
 	        setXrayLogsLiveWanted(true, { skipRender: true });
 	        try { scheduleSaveUiState(); } catch (e2) {}
@@ -4542,6 +4591,11 @@ function copyXrayContextModal() {
 	  }
 
 	  bindXrayLogViewUi();
+
+    const routingDebugToggle = $('xray-log-routing-debug');
+    if (routingDebugToggle) routingDebugToggle.addEventListener('change', () => {
+      void changeRoutingDebug(!!routingDebugToggle.checked);
+    });
 
 	  if (liveEl) {
 	    _liveWanted = !!liveEl.checked;

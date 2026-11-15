@@ -171,6 +171,13 @@ def init_auth(app) -> None:
 
         path = request.path or ""
 
+        # One machine-only Xray callback: loopback + private token replace cookies/CSRF.
+        if request.endpoint == 'xray_logs.api_xray_routing_event':
+            inbox = app.extensions.get('xkeen.xray_routing_debug')
+            if inbox and inbox.authorize(request.remote_addr, request.headers.get('X-Xkeen-Routing-Token', '')):
+                return None
+            return jsonify({'ok': False, 'error': 'forbidden'}), 403
+
         # Always allow static assets
         if path.startswith("/static/") or path in (
             "/ui/branding.json",

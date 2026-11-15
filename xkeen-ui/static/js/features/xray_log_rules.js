@@ -20,7 +20,7 @@ function destination(value) {
   return m && endpoint(m[2]) ? { proto: m[1], target: endpoint(m[2]) } : null;
 }
 
-export function createXrayLogRuleIndex({ now = Date.now } = {}) {
+export function createXrayLogDomainIndex({ now = Date.now } = {}) {
   const sessions = new Map();
   const buckets = new Map();
   let lostUntil = -Infinity, expiredUntil = -Infinity;
@@ -49,7 +49,7 @@ export function createXrayLogRuleIndex({ now = Date.now } = {}) {
     const p = parseXrayErrorLine(line);
     if (!p?.session || !Number.isFinite(timestamp(p))) return;
     const source = p.module === 'proxy/dokodemo' && /^received request for (.+)$/.exec(p.message);
-    const hit = p.module === 'app/dispatcher' && /^(?:Hit route rule: \[(.*)\] so )?taking detour \[(.*?)\] for \[((?:tcp|udp):.+)\]$/.exec(p.message);
+    const hit = p.module === 'app/dispatcher' && /^(?:Hit route rule: \[.*\] so )?taking detour \[(.*?)\] for \[((?:tcp|udp):.+)\]$/.exec(p.message);
     const tunnel = /^(?:proxy\/(?:vless|vmess)\/outbound|proxy\/(?:trojan|shadowsocks))$/.test(p.module)
       && /^tunneling request to ((?:tcp|udp):\S+) via /.exec(p.message);
     const direct = p.module === 'proxy/freedom'
@@ -58,7 +58,7 @@ export function createXrayLogRuleIndex({ now = Date.now } = {}) {
     if (!source && !hit && !target) return;
     let item = sessions.get(p.session);
     if (!item) {
-      item = { created: now(), seen: now(), source: '', proto: '', out: '', tag: '', domain: '', targets: new Set(), stamp: timestamp(p), conflict: false, ready: false, baseKey: '', keys: new Set() };
+      item = { created: now(), seen: now(), source: '', proto: '', out: '', domain: '', targets: new Set(), stamp: timestamp(p), conflict: false, ready: false, baseKey: '', keys: new Set() };
       sessions.set(p.session, item);
       prune();
     }
@@ -68,13 +68,11 @@ export function createXrayLogRuleIndex({ now = Date.now } = {}) {
       item.source = value;
     }
     if (hit) {
-      const dest = destination(hit[3]);
+      const dest = destination(hit[2]);
       if (!dest) return;
-      const tag = hit[1] || '';
       const domain = normalizeXrayLogDomain(dest.target.split('|')[0]);
-      if (tag.length > 1024) { item.conflict = true; return; }
-      if (item.proto && (item.tag !== tag || item.domain !== domain || item.out !== hit[2] || item.proto !== dest.proto)) item.conflict = true;
-      Object.assign(item, { tag, domain, out: hit[2], proto: dest.proto, stamp: timestamp(p), seen: now(), ready: false });
+      if (item.proto && (item.domain !== domain || item.out !== hit[1] || item.proto !== dest.proto)) item.conflict = true;
+      Object.assign(item, { domain, out: hit[1], proto: dest.proto, stamp: timestamp(p), seen: now(), ready: false });
       if (item.targets.size < 4) item.targets.add(dest.target);
       else if (!item.targets.has(dest.target)) item.conflict = true;
     }
@@ -107,7 +105,7 @@ export function createXrayLogRuleIndex({ now = Date.now } = {}) {
     prune();
     for (const item of sessions.values()) item.ready = now() - item.seen >= WINDOW;
   }
-  function lookup(p, previous = '', field = 'tag') {
+  function lookupDomain(p, previous = '') {
     if (!p || p.mark !== '->') return '';
     const target = `${String(p.host).toLowerCase()}|${p.port}`;
     const bucket = buckets.get(`${String(p.srcIp).toLowerCase()}|${p.srcPort}|${p.proto || 'tcp'}|${p.outTag}|${target}`);
@@ -120,14 +118,103 @@ export function createXrayLogRuleIndex({ now = Date.now } = {}) {
     for (const id of bucket) {
       const item = sessions.get(id);
       if (now() - item.created > TTL || Math.abs(item.stamp - stamp) > WINDOW || !item.targets.has(target)) continue;
-      if (match || !item.ready || item.conflict || !item[field]) return '';
+      if (match || !item.ready || item.conflict || !item.domain) return '';
+      match = item;
+    }
+    if (match && previous && match.domain !== previous) return '';
+    return match?.domain || previous;
+  }
+  return { ingest, complete, lookupDomain,
+    reset() { sessions.clear(); buckets.clear(); lostUntil = expiredUntil = -Infinity; } };
+}
+
+function hostKey(value) {
+  const host = String(value || '').toLowerCase();
+  if (host.length > 512) return '';
+  if (!host.includes(':')) return host;
+  try { return new URL(`http://[${host}]`).hostname.slice(1, -1); } catch { return ''; }
+}
+
+export function createXrayRoutingEventIndex({ now = Date.now } = {}) {
+  const items = new Map(), buckets = new Map(), evicted = new Map();
+  let generation = '', since = 0, dropped = 0, lastId = 0, coveredId = 0, lostUntil = -Infinity, expiredUntil = -Infinity;
+  const key = p => JSON.stringify([hostKey(p.srcIp), p.srcPort, p.proto || 'tcp', p.inTag, p.outTag, hostKey(p.host), p.port]);
+  function prune() {
+    for (const [id, item] of items) {
+      if (items.size <= MAX_SESSIONS && now() - item.received <= TTL) break;
+      if (items.size > MAX_SESSIONS) {
+        const cutoff = Math.max(evicted.get(item.key) || -Infinity, item.stamp + WINDOW);
+        evicted.delete(item.key);
+        evicted.set(item.key, cutoff);
+        if (evicted.size > MAX_SESSIONS) {
+          // Fold old tuple barriers into a global cutoff to keep memory bounded.
+          const [oldest, stamp] = evicted.entries().next().value;
+          lostUntil = Math.max(lostUntil, stamp);
+          evicted.delete(oldest);
+        }
+      } else expiredUntil = Math.max(expiredUntil, item.stamp + WINDOW);
+      items.delete(id);
+      const bucket = buckets.get(item.key);
+      bucket?.delete(id);
+      if (bucket && !bucket.size) buckets.delete(item.key);
+    }
+  }
+  function markLost(stamp) {
+    // Without a timestamp barrier, only a new generation can prove a match again.
+    lostUntil = Number.isFinite(stamp) ? Math.max(lostUntil, stamp + WINDOW) : Infinity;
+    items.clear(); buckets.clear();
+  }
+  function begin(payload) {
+    const reset = generation !== payload.generation;
+    if (reset) {
+      items.clear(); buckets.clear();
+      evicted.clear();
+      generation = payload.generation;
+      since = Number(payload.since) || 0;
+      dropped = lastId = 0; lostUntil = expiredUntil = -Infinity;
+      coveredId = Math.max(0, (Number(payload.first_id) || 1) - 1);
+    }
+    const events = Array.isArray(payload.events) ? payload.events.slice(-MAX_SESSIONS) : [];
+    const latestStamp = events.reduce((max, item) => Number.isFinite(item.stamp) ? Math.max(max, item.stamp) : max, -Infinity);
+    const next = events.find(item => item.id > coveredId);
+    if ((next && next.id > coveredId + 1) || (Number(payload.dropped) > dropped && !events.length)
+      || (payload.events?.length || 0) > MAX_SESSIONS) markLost(latestStamp);
+    coveredId = events.reduce((max, item) => Number.isSafeInteger(item.id) ? Math.max(max, item.id) : max, coveredId);
+    if (Number.isFinite(payload.expired_until)) expiredUntil = Math.max(expiredUntil, payload.expired_until);
+    dropped = Number(payload.dropped) || 0;
+    return { events: events.filter(item => item.id > lastId), reset, latestStamp };
+  }
+  function ingest(event) {
+    if (!event || !Number.isSafeInteger(event.id) || event.id <= lastId || !Number.isFinite(event.stamp)) return;
+    lastId = event.id;
+    if (['srcIp', 'srcPort', 'host', 'port', 'inTag', 'outTag', 'tag'].some(field => typeof event[field] !== 'string' || event[field].length > (field === 'tag' ? 1024 : 512))
+      || !hostKey(event.host) || !hostKey(event.srcIp) || !['tcp', 'udp'].includes(event.proto)) return;
+    const item = { ...event, domain: normalizeXrayLogDomain(event.domain), received: now(), key: key(event) };
+    items.set(event.id, item);
+    if (!buckets.has(item.key)) buckets.set(item.key, new Set());
+    buckets.get(item.key).add(event.id);
+    prune();
+  }
+  function lookup(p, previous = '', field = 'tag') {
+    if (!p || p.mark !== '->') return '';
+    const stamp = timestamp(p);
+    if (!Number.isFinite(stamp) || stamp < since) return '';
+    prune();
+    if (stamp <= lostUntil || stamp <= (evicted.get(key(p)) ?? -Infinity)) return '';
+    if (!previous && stamp <= expiredUntil) return '';
+    let match = null;
+    for (const id of buckets.get(key(p)) || []) {
+      const item = items.get(id);
+      if (Math.abs(item.stamp - stamp) > WINDOW) continue;
+      if (match || now() - item.received < WINDOW || !item[field]) return '';
       match = item;
     }
     if (match && previous && match[field] !== previous) return '';
     return match?.[field] || previous;
   }
-  return { ingest, complete, lookup, lookupDomain(p, previous = '') { return lookup(p, previous, 'domain'); },
-    reset() { sessions.clear(); buckets.clear(); lostUntil = expiredUntil = -Infinity; } };
+  return { begin, ingest, lookup, markLost,
+    lookupDomain(p, previous = '') { return lookup(p, previous, 'domain'); },
+    reset() { items.clear(); buckets.clear(); evicted.clear(); generation = ''; since = dropped = lastId = coveredId = 0; lostUntil = expiredUntil = -Infinity; } };
 }
 
 export function createXrayLogDiagnosticQueue({ consume, onComplete, onReset = () => {},

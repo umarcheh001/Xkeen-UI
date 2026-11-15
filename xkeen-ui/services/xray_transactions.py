@@ -201,13 +201,21 @@ class MemoryGuard:
         except FileNotFoundError:
             return None
 
-    def restore(self) -> None:
-        for directory in self._dirs:
+    def restore(self, *, expected: Optional[Dict[str, Optional[bytes]]] = None) -> list[str]:
+        """With expected bytes, preserve files another writer changed after us."""
+        conflicts = []
+        for directory in self._dirs if expected is None else ():
             for name in os.listdir(directory):
                 path = os.path.join(directory, name)
                 if os.path.isfile(path) and path not in self._snap:
                     os.remove(path)
         for path, data in self._snap.items():
+            if expected is not None:
+                if path not in expected:
+                    continue
+                if self._read(path) != expected[path]:
+                    conflicts.append(path)
+                    continue
             if data is None:
                 try:
                     os.remove(path)
@@ -218,3 +226,4 @@ class MemoryGuard:
                 with open(temp, "wb") as handle:
                     handle.write(data)
                 os.replace(temp, path)
+        return conflicts

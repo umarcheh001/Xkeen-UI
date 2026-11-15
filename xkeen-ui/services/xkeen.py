@@ -218,6 +218,22 @@ def control_xkeen_action(
     dispatch_timeout: float = 1.5,
     settle_timeout: float = 8.0,
 ) -> bool:
+    # Engines may prepare temporary configuration without a core -> engine import.
+    from flask import current_app, has_app_context
+    control = current_app.extensions.get('xkeen.runtime_control') if has_app_context() else None
+    execute = lambda: _control_xkeen_action(action, primary_cmd=primary_cmd, prefer_init=prefer_init,
+                                           dispatch_timeout=dispatch_timeout, settle_timeout=settle_timeout)
+    return control(action, execute) if control is not None else execute()
+
+
+def _control_xkeen_action(
+    action: str,
+    *,
+    primary_cmd: Sequence[str] | None = None,
+    prefer_init: bool = True,
+    dispatch_timeout: float = 1.5,
+    settle_timeout: float = 8.0,
+) -> bool:
     """Execute xkeen service-control action with runtime verification.
 
     The command is considered successful only when the observed runtime state
