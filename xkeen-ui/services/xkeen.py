@@ -2,14 +2,45 @@
 
 from __future__ import annotations
 
-import time
+import os
 import subprocess
+import time
+from dataclasses import dataclass
 from typing import Iterable, List, Sequence
 
 from services.restart_log import append_restart_log as _append_restart_log
 from services.restart_log import append_restart_log_text as _append_restart_log_text
 from services.restart_log import read_restart_log as _read_restart_log
 from services.xkeen_commands_catalog import build_xkeen_cmd, resolve_xkeen_init_script
+
+
+DEFAULT_RESTART_SETTLE_TIMEOUT = 60.0
+RESTART_SETTLE_TIMEOUT_ENV = "XKEEN_RESTART_SETTLE_TIMEOUT"
+
+
+@dataclass(frozen=True)
+class _DispatchResult:
+    """Whether a control command started and whether its process finished."""
+
+    launched: bool
+    completed: bool
+    returncode: int | None = None
+
+
+@dataclass(frozen=True)
+class _ControlResult:
+    ok: bool
+    in_flight: bool = False
+
+
+def get_xkeen_restart_settle_timeout() -> float:
+    """Return the bounded wait used to verify a slow router restart."""
+
+    try:
+        value = float(os.environ.get(RESTART_SETTLE_TIMEOUT_ENV, DEFAULT_RESTART_SETTLE_TIMEOUT))
+    except (TypeError, ValueError):
+        value = DEFAULT_RESTART_SETTLE_TIMEOUT
+    return min(300.0, max(2.0, value))
 
 
 def append_restart_log(log_file: str, ok: bool, source: str = "api", **meta: object) -> None:
@@ -137,7 +168,7 @@ def _dispatch_xkeen_control_command(
     cmd: Sequence[str],
     *,
     dispatch_timeout: float,
-) -> bool:
+) -> _DispatchResult:
     try:
         proc = subprocess.Popen(
             list(cmd),
@@ -148,15 +179,28 @@ def _dispatch_xkeen_control_command(
             start_new_session=True,
         )
     except Exception:
-        return False
+        return _DispatchResult(False, True, None)
 
     try:
         rc = proc.wait(timeout=max(0.1, float(dispatch_timeout or 0)))
-        return rc == 0
+        return _DispatchResult(True, True, int(rc))
     except subprocess.TimeoutExpired:
-        return True
+        # The command was accepted but is still running.  Do not dispatch a
+        # compatibility fallback while it can still complete the same action.
+        return _DispatchResult(True, False, None)
     except Exception:
-        return False
+        # A started process with an unknown wait result is still in flight.
+        return _DispatchResult(True, False, None)
+
+
+def _normalize_dispatch_result(result: object) -> _DispatchResult:
+    """Keep test/integration monkeypatches returning the old bool contract working."""
+
+    if isinstance(result, _DispatchResult):
+        return result
+    if result is True:
+        return _DispatchResult(True, True, 0)
+    return _DispatchResult(False, True, None)
 
 
 def _wait_xkeen_running(expected_running: bool, *, timeout: float, poll_interval: float = 0.25) -> bool:
@@ -210,14 +254,14 @@ def _wait_xkeen_restarted(
     return False
 
 
-def control_xkeen_action(
+def _control_xkeen_action_result(
     action: str,
     *,
     primary_cmd: Sequence[str] | None = None,
     prefer_init: bool = True,
     dispatch_timeout: float = 1.5,
-    settle_timeout: float = 8.0,
-) -> bool:
+    settle_timeout: float = DEFAULT_RESTART_SETTLE_TIMEOUT,
+) -> _ControlResult:
     """Execute xkeen service-control action with runtime verification.
 
     The command is considered successful only when the observed runtime state
@@ -227,13 +271,13 @@ def control_xkeen_action(
 
     normalized = str(action or "").strip().lower()
     if normalized not in {"start", "stop", "restart"}:
-        return False
+        return _ControlResult(False)
 
     expected_running = normalized != "stop"
     if normalized == "start" and is_xkeen_running():
-        return True
+        return _ControlResult(True)
     if normalized == "stop" and not is_xkeen_running():
-        return True
+        return _ControlResult(True)
 
     previous_identity = _xkeen_runtime_identity() if normalized == "restart" else ("", ())
     settle = max(2.0, float(settle_timeout or 0))
@@ -242,18 +286,60 @@ def control_xkeen_action(
         primary_cmd=primary_cmd,
         prefer_init=prefer_init,
     ):
-        if not _dispatch_xkeen_control_command(cmd, dispatch_timeout=dispatch_timeout):
+        dispatch = _normalize_dispatch_result(
+            _dispatch_xkeen_control_command(cmd, dispatch_timeout=dispatch_timeout)
+        )
+        if not dispatch.launched:
+            continue
+        if dispatch.completed and dispatch.returncode not in (None, 0):
+            # A command that finished with an error is eligible for the next
+            # compatibility candidate; it cannot still be changing runtime.
             continue
         if normalized == "restart":
             if _wait_xkeen_restarted(previous_identity, timeout=settle):
-                return True
+                return _ControlResult(True)
         elif normalized == "start":
             if _wait_xkeen_restarted(("", ()), timeout=settle):
-                return True
+                return _ControlResult(True)
         elif _wait_xkeen_running(expected_running, timeout=settle):
-            return True
+            return _ControlResult(True)
 
-    return False
+        # A timed-out child may still be performing the restart.  Returning
+        # here prevents the next compatibility candidate from starting a
+        # second restart on top of it.
+        if not dispatch.completed:
+            return _ControlResult(False, in_flight=True)
+
+    return _ControlResult(False)
+
+
+def _normalize_control_result(result: object) -> _ControlResult:
+    """Keep integrations that monkeypatch the historical bool return working."""
+
+    if isinstance(result, _ControlResult):
+        return result
+    return _ControlResult(bool(result))
+
+
+def control_xkeen_action(
+    action: str,
+    *,
+    primary_cmd: Sequence[str] | None = None,
+    prefer_init: bool = True,
+    dispatch_timeout: float = 1.5,
+    settle_timeout: float = DEFAULT_RESTART_SETTLE_TIMEOUT,
+    return_details: bool = False,
+) -> bool | _ControlResult:
+    """Execute xkeen service-control action and return its verified status."""
+
+    result = _control_xkeen_action_result(
+        action,
+        primary_cmd=primary_cmd,
+        prefer_init=prefer_init,
+        dispatch_timeout=dispatch_timeout,
+        settle_timeout=settle_timeout,
+    )
+    return result if return_details else result.ok
 
 
 def restart_xkeen(
@@ -269,20 +355,26 @@ def restart_xkeen(
     the managed core never comes back.
     """
     started_at = time.monotonic()
-    ok = control_xkeen_action(
+    control_result = _normalize_control_result(control_xkeen_action(
         "restart",
         primary_cmd=restart_cmd,
         prefer_init=True,
         dispatch_timeout=dispatch_timeout,
-        settle_timeout=8.0,
-    )
+        settle_timeout=get_xkeen_restart_settle_timeout(),
+        return_details=True,
+    ))
+    ok = control_result.ok
     recovered = False
     recovery_attempted = False
     try:
         runtime_before_recovery = get_xkeen_runtime_status()
     except Exception:
         runtime_before_recovery = {}
-    if not ok and runtime_before_recovery.get("runtime_status") == "stopped":
+    if (
+        not ok
+        and not control_result.in_flight
+        and runtime_before_recovery.get("runtime_status") == "stopped"
+    ):
         # Some router builds return from restart after stopping the core. Give
         # the supervisor's normal start path one chance before reporting a
         # failed restart to callers.
@@ -291,7 +383,7 @@ def restart_xkeen(
             "start",
             prefer_init=True,
             dispatch_timeout=dispatch_timeout,
-            settle_timeout=8.0,
+            settle_timeout=get_xkeen_restart_settle_timeout(),
         )
         ok = recovered
     try:

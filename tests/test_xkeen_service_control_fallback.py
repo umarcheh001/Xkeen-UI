@@ -57,13 +57,53 @@ def test_control_xkeen_action_falls_back_when_first_command_does_not_change_runt
     ]
 
 
+def test_control_xkeen_action_never_falls_back_while_first_command_is_in_flight(monkeypatch):
+    monkeypatch.setattr(
+        xkeen_service,
+        'build_xkeen_control_cmds',
+        lambda action, primary_cmd=None, prefer_init=True: [
+            ['xkeen', f'-{action}'],
+            ['/opt/etc/init.d/S05xkeen', action],
+        ],
+    )
+
+    dispatched: list[tuple[str, ...]] = []
+    monkeypatch.setattr(
+        xkeen_service,
+        '_dispatch_xkeen_control_command',
+        lambda cmd, dispatch_timeout: (
+            dispatched.append(tuple(cmd))
+            or xkeen_service._DispatchResult(launched=True, completed=False)
+        ),
+    )
+    monkeypatch.setattr(xkeen_service, '_xkeen_runtime_identity', lambda: ('xray', (101,)))
+    monkeypatch.setattr(xkeen_service, 'is_xkeen_running', lambda: True)
+    monkeypatch.setattr(xkeen_service, '_wait_xkeen_restarted', lambda *_args, **_kwargs: False)
+
+    assert xkeen_service.control_xkeen_action('restart', settle_timeout=2) is False
+    assert dispatched == [('xkeen', '-restart')]
+
+
+def test_restart_timeout_is_configurable_and_bounded(monkeypatch):
+    monkeypatch.setenv(xkeen_service.RESTART_SETTLE_TIMEOUT_ENV, '55')
+    assert xkeen_service.get_xkeen_restart_settle_timeout() == 55.0
+
+    monkeypatch.setenv(xkeen_service.RESTART_SETTLE_TIMEOUT_ENV, 'not-a-number')
+    assert xkeen_service.get_xkeen_restart_settle_timeout() == xkeen_service.DEFAULT_RESTART_SETTLE_TIMEOUT
+
+    monkeypatch.setenv(xkeen_service.RESTART_SETTLE_TIMEOUT_ENV, '999')
+    assert xkeen_service.get_xkeen_restart_settle_timeout() == 300.0
+
+
 
 def test_restart_xkeen_logs_result_from_verified_control_flow(tmp_path, monkeypatch):
     log_file = tmp_path / 'restart.log'
     seen: list[tuple[str, tuple[str, ...] | None]] = []
+    settle_timeouts: list[float] = []
 
     def fake_control(action: str, **kwargs) -> bool:
         primary = kwargs.get('primary_cmd')
+        settle_timeouts.append(float(kwargs.get('settle_timeout')))
         seen.append((action, tuple(primary) if primary else None))
         return True
 
@@ -74,6 +114,7 @@ def test_restart_xkeen_logs_result_from_verified_control_flow(tmp_path, monkeypa
 
     assert ok is True
     assert seen == [('restart', ('xkeen', '-restart'))]
+    assert settle_timeouts == [xkeen_service.DEFAULT_RESTART_SETTLE_TIMEOUT]
     text = log_file.read_text(encoding='utf-8')
     assert 'source=api-button' in text
     assert 'result=OK' in text
@@ -101,6 +142,27 @@ def test_restart_xkeen_attempts_supervisor_start_when_restart_leaves_core_stoppe
     assert seen == ['restart', 'start']
     assert 'source=batch' in log_file.read_text(encoding='utf-8')
     assert 'recovered=True' in log_file.read_text(encoding='utf-8')
+
+
+def test_restart_xkeen_does_not_recover_while_restart_command_is_in_flight(tmp_path, monkeypatch):
+    log_file = tmp_path / 'restart.log'
+    seen: list[str] = []
+
+    def fake_control(action: str, **kwargs):
+        seen.append(action)
+        if kwargs.get('return_details'):
+            return xkeen_service._ControlResult(False, in_flight=action == 'restart')
+        return action == 'restart'
+
+    monkeypatch.setattr(xkeen_service, 'control_xkeen_action', fake_control)
+    monkeypatch.setattr(
+        xkeen_service,
+        'get_xkeen_runtime_status',
+        lambda: {'runtime_status': 'stopped', 'runtime_core': 'none'},
+    )
+
+    assert xkeen_service.restart_xkeen(['xkeen', '-restart'], str(log_file), source='slow') is False
+    assert seen == ['restart']
 
 
 

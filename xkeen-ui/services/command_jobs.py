@@ -136,10 +136,14 @@ def _sync_restart_log(job: "CommandJob" | None) -> None:
     ok = job.status == "finished" and job.exit_code == 0
     runtime = {}
     try:
-        from services.xkeen import _wait_xkeen_running, get_xkeen_runtime_status
+        from services.xkeen import (
+            _wait_xkeen_running,
+            get_xkeen_restart_settle_timeout,
+            get_xkeen_runtime_status,
+        )
 
         if ok:
-            ok = _wait_xkeen_running(True, timeout=8.0)
+            ok = _wait_xkeen_running(True, timeout=get_xkeen_restart_settle_timeout())
         runtime = get_xkeen_runtime_status()
     except Exception:
         ok = False
