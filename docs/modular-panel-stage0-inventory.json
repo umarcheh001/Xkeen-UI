@@ -88,7 +88,7 @@
       ],
       "removable": true,
       "unit_count": 160,
-      "size_bytes": 4148521,
+      "size_bytes": 4150239,
       "kind_counts": {
         "backend_route": 13,
         "backend_service": 22,
@@ -21721,7 +21721,7 @@
       "module_id": "engine.xray",
       "kind": "backend_service",
       "path": "xkeen-ui/services/xray_handler_service.py",
-      "size_bytes": 7478,
+      "size_bytes": 7568,
       "depends_on": [
         "core",
         "tool.editor"
@@ -21744,7 +21744,7 @@
       "module_id": "engine.xray",
       "kind": "backend_service",
       "path": "xkeen-ui/services/xray_handler_setup.py",
-      "size_bytes": 9599,
+      "size_bytes": 10602,
       "depends_on": [
         "core",
         "tool.editor"
@@ -22563,7 +22563,7 @@
       "module_id": "engine.xray",
       "kind": "backend_test",
       "path": "tests/test_xray_handler_setup.py",
-      "size_bytes": 7424,
+      "size_bytes": 8049,
       "depends_on": [
         "core",
         "tool.editor"

@@ -90,8 +90,8 @@ def _plan(before: dict[str, bytes], after: dict[str, bytes]):
     return listen, old, new, changed
 
 
-def _command(binary: str, *args: str):
-    proc = subprocess.run([binary, *args], capture_output=True, text=True, timeout=10, check=False)
+def _command(binary: str, *args: str, timeout: int = 10):
+    proc = subprocess.run([binary, *args], capture_output=True, text=True, timeout=timeout, check=False)
     if proc.returncode:
         # CLI output can contain subscription credentials.
         raise RuntimeError("xray_api_command_failed")
@@ -118,7 +118,10 @@ def _compiled(binary: str, files: dict[str, bytes], directory: Path):
             path = directory / name
             path.write_text(json.dumps({"outbounds": obj.get("outbounds", [])}), encoding="utf-8")
             paths.append(str(path))
-    result = _json_output(_command(binary, "convert", "pb", "-debug", "-type", *paths))
+    result = _json_output(_command(
+        binary, "convert", "pb", "-debug", "-type", *paths,
+        timeout=xray_transactions.check_timeout(),
+    ))
     entries = result["outbound"]
     return {item["tag"]: item for item in entries}, entries[0]["tag"]
 
