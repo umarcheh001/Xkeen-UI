@@ -98,7 +98,7 @@ function cell(label, value) {
 
 const DETAIL_LABELS = {
   hardware: "Аппаратная версия", software: "Версия ПО", webui: "Версия веб-интерфейса",
-  customization: "Версия оператора", manufacturer: "Производитель", usb_vendor: "USB VID", usb_product: "USB PID",
+  customization: "Версия оператора", manufacturer: "Производитель по Keenetic", usb_vendor: "USB VID", usb_product: "USB PID",
   serial: "Серийный номер", iccid: "ICCID SIM", imsi: "IMSI", phone: "Номер телефона",
   wan_address: "Адрес в мобильной сети", wan_ipv6: "IPv6 в мобильной сети", wan_dns: "DNS мобильной сети", wan_ipv6_dns: "DNS IPv6",
   supported_networks: "Поддерживаемые сети", workmode: "Режим сети", profile: "Профиль подключения", cell_id: "Cell ID", plmn: "PLMN (MCC/MNC)",
@@ -119,7 +119,8 @@ function extraDetails(item) {
     ["Длительность сеанса", t.session_seconds, durationText], ["Всего в сети", t.total_seconds, durationText],
   ].filter(([, value]) => value != null).map(([label, value, format]) => cell(label, format(value))).join("");
   const network = [["Подключение", item.name], ["Тип интерфейса", item.interface_type], ["Маска подсети", item.mask],
-    ["Адрес модема", item.web_address], ["Адрес в мобильной сети (RCI)", item.wan_address], ["Приоритет подключения", item.priority],
+    ["Адрес модема", item.web_address], ["Адрес в мобильной сети (Keenetic)", item.wan_address === item.details?.wan_address ? "" : item.wan_address],
+    ["Приоритет выхода в интернет", item.priority == null ? "" : `${item.priority} (больше — выше)`],
     ["PCI", item.phy_cell_id], ["EARFCN", item.earfcn], ["Уровень сигнала (код)", item.signal_level]]
     .filter(([, value]) => value != null && value !== "").map(([label, value]) => cell(label, value)).join("");
   return `<details class="xkt-modem-details"><summary>Дополнительные сведения${item.web_telemetry ? " · данные модема и Keenetic" : " · данные Keenetic"}</summary><dl class="xkt-info">${network}${details}${traffic}</dl></details>`;

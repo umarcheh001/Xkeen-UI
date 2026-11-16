@@ -15,7 +15,8 @@ for (const width of [1440, 390]) {
       id: 'CdcEthernet0', name: 'Mobile Broadband', model: 'E3372-325', operator: 'Beeline', technology: '4G',
       connected: true, imei: '111111111115802', band: '1', bandwidth: 15, earfcn: 525, phy_cell_id: '445',
       tac: '3626', enb_id: '0262229', apn: 'internet.beeline.ru', rsrp: -108, rsrq: -9.5, cinr: 6, rssi: -80,
-      web_telemetry: true, details: { hardware: 'CL5E3372M', dlfrequency: '2162500kHz', txpower: 'PPusch:18dBm PPucch:999dBm' },
+      wan_address: '10.165.195.26', priority: 350,
+      web_telemetry: true, details: { wan_address: '10.165.195.26', manufacturer: 'Mobile', hardware: 'CL5E3372M', dlfrequency: '2162500kHz', txpower: 'PPusch:18dBm PPucch:999dBm' },
       traffic: { received_bytes: 41217928, send_bytes_per_second: 0 },
     }]);
     const card = view.locator('.xkt-modem');
@@ -25,6 +26,9 @@ for (const width of [1440, 390]) {
     await expect(card).toContainText('CL5E3372M');
     await expect(card).toContainText('2162500kHz');
     await expect(card).toContainText('39 МБ');
+    await expect(card.locator('dd').filter({ hasText: /^10\.165\.195\.26$/ })).toHaveCount(1);
+    await expect(card).toContainText('Производитель по Keenetic');
+    await expect(card).toContainText('350 (больше — выше)');
     await expect(card).not.toContainText('111111111115802');
     expect(await card.evaluate(e => e.scrollWidth <= e.clientWidth)).toBe(true);
     await view.screenshot({ path: testInfo.outputPath(`modem-${width}.png`) });
