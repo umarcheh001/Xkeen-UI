@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 680,
-      "size_bytes": 9059382,
+      "size_bytes": 9059403,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -14697,7 +14697,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/router_resource_dashboard.spec.mjs",
-      "size_bytes": 108495,
+      "size_bytes": 108516,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],

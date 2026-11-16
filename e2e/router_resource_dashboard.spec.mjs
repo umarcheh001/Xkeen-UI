@@ -1569,7 +1569,7 @@ test('modems render carriers', async ({ page }) => {
   await expect(card.locator('[data-signal="rsrp"]')).toContainText('отличный');
   await expect(card.locator('[data-signal="cinr"]')).toContainText('хорошо');
   // the details in four columns
-  const cells = card.locator('.xkt-info-c');
+  const cells = card.locator(':scope > .xkt-info > .xkt-info-c');
   await expect(cells).toHaveCount(8);
   const tops = [];
   for (let i = 0; i < 8; i += 1) tops.push(Math.round((await rect(cells.nth(i))).top));
