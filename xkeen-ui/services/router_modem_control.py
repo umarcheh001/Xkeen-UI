@@ -212,7 +212,7 @@ class ModemControlService:
         self._clock = clock
         self._rci_fetcher = rci_fetcher
         self._sampler_explicit = sampler is not None
-        self._sampler = sampler or (lambda: sample_router_lte(rci_fetcher=rci_fetcher, clock=clock))
+        self._sampler = sampler or (lambda: sample_router_lte(rci_fetcher=rci_fetcher, clock=clock, include_web=False))
         self._device_enumerator = device_enumerator
         self._runner = runner
         self._tty_exchange = tty_exchange or _default_tty_exchange

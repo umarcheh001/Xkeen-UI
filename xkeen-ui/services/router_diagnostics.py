@@ -459,6 +459,19 @@ def normalize_lte(payload: Any, *, sampled_at: int) -> dict[str, Any]:
             "manufacturer": str(_first(ati, "manufacturer") or _first(raw, "manufacturer") or "")[:96],
             "firmware": firmware,
             "carriers": active_carriers(raw),
+            "interface_type": str(raw.get("type") or "")[:32],
+            "web_address": str(raw.get("web-address") or "")[:64],
+            "wan_address": str(raw.get("wwan-address") or "")[:64],
+            "details": {key: str(value)[:256] for key, value in {
+                "hardware": ati.get("hardware"),
+                "software": ati.get("revision"),
+                "manufacturer": _first(ati, "manufacturer") or raw.get("manufacturer"),
+                "usb_vendor": raw.get("vendor"),
+                "usb_product": raw.get("model"),
+                "serial": ("•••• " + str(raw["serial"])[-4:]) if raw.get("serial") else None,
+                "iccid": ("•••• " + str(raw["uiccid"])[-4:]) if raw.get("uiccid") else None,
+                "imsi": ("•••• " + str(raw["imsi"])[-4:]) if raw.get("imsi") else None,
+            }.items() if value is not None and str(value).strip()},
         }
         items.append(item)
 
@@ -513,6 +526,7 @@ def sample_router_lte(
     *,
     rci_fetcher: Callable[[str], Any] = fetch_rci_json,
     clock: Callable[[], float] = time.time,
+    include_web: bool = True,
 ) -> dict[str, Any]:
     """Probe optional modem branches on demand; LTE absence is not an error."""
     sampled_at = int(clock())
@@ -526,6 +540,16 @@ def sample_router_lte(
             successful_fetch = True
             result["source"] = path
             result["rci_available"] = True
+            if result.get("available") and include_web:
+                from services.router_modem_web import enrich_modem
+
+                deadline = time.monotonic() + 8
+                for item in result["items"]:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    enrich_modem(item, budget=remaining)
+                result.update({key: value for key, value in result["items"][0].items() if key not in {"id", "name", "carriers"}})
             if result.get("available"):
                 return result
         except RciUnavailable:

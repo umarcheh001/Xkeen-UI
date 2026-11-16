@@ -38,13 +38,13 @@
         "gevent-websocket (optional)"
       ],
       "removable": false,
-      "unit_count": 678,
-      "size_bytes": 9046396,
+      "unit_count": 680,
+      "size_bytes": 9058817,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
-        "backend_service": 98,
-        "backend_test": 302,
+        "backend_service": 99,
+        "backend_test": 303,
         "configuration": 12,
         "frontend_bundle": 10,
         "frontend_entrypoint": 4,
@@ -363,7 +363,7 @@
       ],
       "removable": true,
       "unit_count": 49,
-      "size_bytes": 603355,
+      "size_bytes": 606911,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 9,
@@ -3288,7 +3288,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/router_diagnostics.py",
-      "size_bytes": 57147,
+      "size_bytes": 58625,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -3308,7 +3308,27 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/router_modem_control.py",
-      "size_bytes": 14885,
+      "size_bytes": 14904,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_service",
+      "path": "xkeen-ui/services/router_modem_web.py",
+      "size_bytes": 5900,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -8769,6 +8789,26 @@
       "kind": "backend_test",
       "path": "tests/test_router_modem_control.py",
       "size_bytes": 6477,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_router_modem_web.py",
+      "size_bytes": 3653,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -14617,7 +14657,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/router_modem_controls.spec.mjs",
-      "size_bytes": 5946,
+      "size_bytes": 7317,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -26447,7 +26487,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor/tool_modems.js",
-      "size_bytes": 16647,
+      "size_bytes": 19985,
       "depends_on": [
         "core"
       ],
@@ -26555,7 +26595,7 @@
       "module_id": "tool.advanced-diagnostics",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/resource_monitor/tools_css.js",
-      "size_bytes": 16869,
+      "size_bytes": 17087,
       "depends_on": [
         "core"
       ],
@@ -38027,7 +38067,7 @@
         },
         "tool.advanced-diagnostics": {
           "unit_count": 49,
-          "size_bytes": 603355
+          "size_bytes": 606911
         }
       },
       "next_stage": "Этапы 4, 5 и 6."

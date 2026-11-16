@@ -145,6 +145,9 @@ export const TOOLS_CSS = `
 .xkt-info-c { min-width: 0; }
 .xkt-info dt { color: var(--op-muted); font-size: 12px; }
 .xkt-info dd { margin: 2px 0 0; overflow: hidden; color: var(--op-text-strong); font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.xkt-modem-details summary { cursor: pointer; color: var(--op-text); font-size: 13px; }
+.xkt-modem-details[open] summary { margin-bottom: 12px; }
+.xkt-modem-details dd { white-space: normal; overflow-wrap: anywhere; }
 .xkt-probe { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .xkt-probe-status { color: var(--op-muted); font-size: 12px; }
 .xkt-probe-status[hidden] { display: none; }

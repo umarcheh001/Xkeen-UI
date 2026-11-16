@@ -3,7 +3,7 @@
 // can only probe the control port; restarting a modem is not offered (see
 // docs/superpowers/specs/2026-10-04-router-modem-controls-design.md).
 
-import { NBSP, clockText, durationText, esc, num, percentWidth, toNumber } from "./tools_format.js";
+import { NBSP, bitsText, bytesText, clockText, durationText, esc, num, percentWidth, toNumber } from "./tools_format.js";
 import { isAborted, requestJson } from "./tools_net.js";
 
 const LTE_ENDPOINT = "/api/system/router/lte";
@@ -96,6 +96,35 @@ function cell(label, value) {
   return `<div class="xkt-info-c"><dt>${label}</dt><dd>${esc(text)}</dd></div>`;
 }
 
+const DETAIL_LABELS = {
+  hardware: "Аппаратная версия", software: "Версия ПО", webui: "Версия веб-интерфейса",
+  customization: "Версия оператора", manufacturer: "Производитель", usb_vendor: "USB VID", usb_product: "USB PID",
+  serial: "Серийный номер", iccid: "ICCID SIM", imsi: "IMSI", phone: "Номер телефона",
+  wan_address: "Адрес в мобильной сети", wan_ipv6: "IPv6 в мобильной сети", wan_dns: "DNS мобильной сети", wan_ipv6_dns: "DNS IPv6",
+  supported_networks: "Поддерживаемые сети", workmode: "Режим сети", profile: "Профиль подключения", cell_id: "Cell ID", plmn: "PLMN (MCC/MNC)",
+  earfcn: "EARFCN (приём / передача)", ulbandwidth: "Ширина канала передачи", dlbandwidth: "Ширина канала приёма",
+  ulfrequency: "Частота передачи", dlfrequency: "Частота приёма", txpower: "Мощность передачи", transmode: "Режим MIMO",
+  rrc_status: "Состояние RRC (код)", cqi0: "CQI 0 (код)", cqi1: "CQI 1 (код)", ul_mcs: "MCS передачи", dl_mcs: "MCS приёма",
+  rscp: "RSCP", ecio: "Ec/Io", lac: "LAC", rac: "RAC",
+};
+
+function extraDetails(item) {
+  const details = Object.entries(item.details || {}).filter(([key, value]) => DETAIL_LABELS[key] && value != null && String(value).trim() !== "")
+    .map(([key, value]) => cell(DETAIL_LABELS[key], value)).join("");
+  const t = item.traffic || {};
+  const traffic = [
+    ["Принято за сеанс", t.received_bytes, bytesText], ["Отправлено за сеанс", t.sent_bytes, bytesText],
+    ["Приём сейчас", t.receive_bytes_per_second, (v) => bitsText(v * 8)], ["Передача сейчас", t.send_bytes_per_second, (v) => bitsText(v * 8)],
+    ["Всего принято", t.total_received_bytes, bytesText], ["Всего отправлено", t.total_sent_bytes, bytesText],
+    ["Длительность сеанса", t.session_seconds, durationText], ["Всего в сети", t.total_seconds, durationText],
+  ].filter(([, value]) => value != null).map(([label, value, format]) => cell(label, format(value))).join("");
+  const network = [["Подключение", item.name], ["Тип интерфейса", item.interface_type], ["Маска подсети", item.mask],
+    ["Адрес модема", item.web_address], ["Адрес в мобильной сети (RCI)", item.wan_address], ["Приоритет подключения", item.priority],
+    ["PCI", item.phy_cell_id], ["EARFCN", item.earfcn], ["Уровень сигнала (код)", item.signal_level]]
+    .filter(([, value]) => value != null && value !== "").map(([label, value]) => cell(label, value)).join("");
+  return `<details class="xkt-modem-details"><summary>Дополнительные сведения${item.web_telemetry ? " · данные модема и Keenetic" : " · данные Keenetic"}</summary><dl class="xkt-info">${network}${details}${traffic}</dl></details>`;
+}
+
 function isConnected(item) {
   return item.connected === true || String(item.connection_state || "").toLowerCase() === "connected";
 }
@@ -111,7 +140,7 @@ function cardHtml(item, index) {
   const uptime = connected ? durationText(item.uptime) : "";
   const aggHead = carriers.length > 1
     ? "Агрегация частот: модем принимает сразу на нескольких частотах, их ширина складывается"
-    : carriers.length === 1 ? "Агрегации нет: модем работает на одной частоте" : "";
+    : carriers.length === 1 ? (item.carriers?.length ? "Модем сообщает одну активную частоту" : "Рабочий диапазон модема; сведения об агрегации недоступны") : "";
   return `<article class="xkt-modem" data-modem-id="${esc(item.id)}" data-connected="${connected}"${item.default_route === true ? ' data-primary="true"' : ""}>
     <header class="xkt-modem-h">
       <div class="xkt-modem-t"><strong>${esc(title)}</strong>${label ? `<span class="xkt-agg">${esc(label)}</span>` : ""}<span class="xkt-modem-sub">${esc(sub)}</span></div>
@@ -120,6 +149,7 @@ function cardHtml(item, index) {
     <div class="xkt-signals">${signalTile("rsrp", item.rsrp)}${signalTile("rsrq", item.rsrq)}${signalTile("cinr", item.cinr)}${signalTile("rssi", item.rssi)}</div>
     ${carriers.length ? `<div class="xkt-agg-h">${aggHead}</div><div class="xkt-carriers" style="--n:${carriers.length}">${carriers.map((carrier, i) => carrierTile(carrier, i, carriers.length)).join("")}</div>` : ""}
     <dl class="xkt-info">${cell("Базовая станция", stationText(item))}${cell("TAC", item.tac)}${cell("До вышки", distanceText(item.distance))}${cell("APN", item.apn)}${cell("SIM", item.sim)}${cell("Роуминг", roaming)}${cell("Прошивка модема", item.firmware)}${cell("IMEI", maskImei(item.imei))}</dl>
+    ${extraDetails(item)}
     <div class="xkt-probe"><button type="button" class="xkt-btn" data-probe="${esc(item.id)}">Проверить управление</button><span class="xkt-probe-status" role="status" aria-live="polite" hidden></span></div>
   </article>`;
 }
