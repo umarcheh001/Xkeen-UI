@@ -1,5 +1,6 @@
 """Read optional HiLink telemetry from the modem address reported by RCI."""
 
+from http.client import HTTPException
 import ipaddress
 import re
 import time
@@ -64,7 +65,7 @@ def enrich_modem(item, *, fetcher=_fetch, clock=time.monotonic, budget=6):
             break
         try:
             data = fetcher(host, path, min(1.5, remaining))
-        except (OSError, ValueError, ET.ParseError):
+        except (OSError, ValueError, ET.ParseError, HTTPException):
             if path == "device/information":
                 return
             continue

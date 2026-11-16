@@ -1,3 +1,5 @@
+from http.client import BadStatusLine, IncompleteRead
+
 import pytest
 
 from services.router_modem_web import _fetch, enrich_modem, modem_web_address
@@ -52,11 +54,12 @@ def test_no_enrichment_when_identity_cannot_be_confirmed(identity):
     assert item["rsrp"] == -110 and not item.get("web_telemetry")
 
 
-def test_unavailable_api_keeps_rci_data():
+@pytest.mark.parametrize("error", [OSError("unavailable"), IncompleteRead(b"partial"), BadStatusLine("invalid")])
+def test_unavailable_api_keeps_rci_data(error):
     item = modem()
 
     def fail(*args):
-        raise OSError("unavailable")
+        raise error
 
     enrich_modem(item, fetcher=fail)
     assert item["rsrp"] == -110 and not item.get("web_telemetry")
