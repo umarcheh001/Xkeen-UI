@@ -166,6 +166,7 @@ test('panel workspaces keep a usable scroll region across desktop and short view
       await page.evaluate((id) => {
         window.scrollTo(0, 0);
         const node = document.getElementById(id);
+        node.scrollTop = node.scrollHeight;
         node.dispatchEvent(new WheelEvent('wheel', {
           bubbles: true,
           cancelable: true,
@@ -177,10 +178,15 @@ test('panel workspaces keep a usable scroll region across desktop and short view
 
       // The outer document and the active workspace retain independent
       // positions: a page scroll must not reset the focused workspace.
-      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-      const afterOuter = await readScrollContract(page, viewId);
-      expect(afterOuter.outerScrollTop, label).toBeGreaterThan(0);
-      expect(afterOuter.viewScrollTop, label).toBe(afterInner.viewScrollTop);
+      // Read both positions together so background rendering cannot change the layout between them.
+      const afterOuter = await page.evaluate((id) => {
+        const view = document.getElementById(id);
+        const innerBefore = view.scrollTop;
+        window.scrollTo(0, document.documentElement.scrollHeight);
+        return { innerBefore, innerAfter: view.scrollTop, outerTop: window.scrollY };
+      }, viewId);
+      expect(afterOuter.outerTop, label).toBeGreaterThan(0);
+      expect(afterOuter.innerAfter, label).toBe(afterOuter.innerBefore);
 
       await page.locator(`[data-issue33-probe="${viewId}"]`).evaluate((node) => node.remove());
       await page.evaluate(() => window.scrollTo(0, 0));
