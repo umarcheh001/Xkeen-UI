@@ -38,13 +38,13 @@
         "gevent-websocket (optional)"
       ],
       "removable": false,
-      "unit_count": 680,
-      "size_bytes": 9059700,
+      "unit_count": 681,
+      "size_bytes": 9064891,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
         "backend_service": 99,
-        "backend_test": 303,
+        "backend_test": 304,
         "configuration": 12,
         "frontend_bundle": 10,
         "frontend_entrypoint": 4,
@@ -88,7 +88,7 @@
       ],
       "removable": true,
       "unit_count": 162,
-      "size_bytes": 4245163,
+      "size_bytes": 4246382,
       "kind_counts": {
         "backend_route": 13,
         "backend_service": 23,
@@ -3679,7 +3679,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/ws_wsgi.py",
-      "size_bytes": 13610,
+      "size_bytes": 13775,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -10169,6 +10169,26 @@
         "XKEEN_UI_CACHE_NS",
         "XKEEN_UI_GITHUB_TOKEN"
       ],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
+      "path": "tests/test_ws_events_lifecycle.py",
+      "size_bytes": 5026,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
       "removable": false
     },
     {
@@ -22618,7 +22638,7 @@
       "module_id": "engine.xray",
       "kind": "backend_test",
       "path": "tests/test_xray_handler_service_local.py",
-      "size_bytes": 29066,
+      "size_bytes": 30285,
       "depends_on": [
         "core",
         "tool.editor"

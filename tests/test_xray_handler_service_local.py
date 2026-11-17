@@ -634,6 +634,20 @@ def test_real_reality_stream_leastping_fallback_and_dns_survive_panel_rotation(t
             state["subscriptions"][0]["next_update_ts"] = 0
             subs._write_state(str(state_dir), state)
             result = subs.refresh_due_subscriptions(str(state_dir), xray_configs_dir=str(configs), restart_xkeen=start_client)[0]
+        elif mode == "manual":
+            from flask import Flask
+            from routes.xray_subscriptions import create_xray_subscriptions_blueprint
+
+            app = Flask(__name__)
+            app.config["TESTING"] = True
+            app.register_blueprint(create_xray_subscriptions_blueprint(
+                ui_state_dir=str(state_dir), xray_configs_dir=str(configs),
+                restart_xkeen=start_client, snapshot_xray_config_before_overwrite=lambda _path: None,
+            ))
+            panel = app.test_client()
+            response = panel.post("/api/xray/subscriptions/sub/refresh", json={})
+            assert response.status_code == 200
+            result = response.get_json()
         else:
             result = subs.refresh_subscription(str(state_dir), "sub", xray_configs_dir=str(configs), restart_xkeen=start_client)
         assert result["ok"], result
@@ -653,3 +667,11 @@ def test_real_reality_stream_leastping_fallback_and_dns_survive_panel_rotation(t
             assert _receive(new_stream, 3) == b"new"
         assert "issue43-pool" in _api(api, "lsrules").stdout
         assert "beta.example.test" in _api(api, "lso").stdout
+        expected, _default = hot._compiled(XRAY, {p.name: p.read_bytes() for p in configs.iterdir() if p.is_file()}, tmp_path / "expected")
+        assert hot._runtime(XRAY, api) == expected
+        if mode == "manual":
+            unchanged = panel.post("/api/xray/subscriptions/sub/refresh", json={})
+            assert unchanged.status_code == 200
+            result = unchanged.get_json()
+            assert result["ok"] and not result["changed"] and not result["restarted"]
+            assert process.pid == pid

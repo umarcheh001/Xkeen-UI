@@ -402,18 +402,21 @@ def handle_events_request(
         _close_ws(ws)
         return []
 
-    subscribe_ws(ws)
-    ws_debug("ws_events: subscriber added", total=len(event_subscribers), client=client_ip)
-
     try:
-        while True:
-            _gevent_sleep(60.0)
+        subscribe_ws(ws)
+        ws_debug("ws_events: subscriber added", total=len(event_subscribers), client=client_ip)
+        # Reading processes close/ping frames and TCP EOF even when no events are broadcast.
+        while ws.receive() is not None:
+            pass
     except WebSocketError as e:
         ws_debug("ws_events: WebSocketError in main loop, client probably closed", error=str(e))
     except Exception as e:
         ws_debug("ws_events: unexpected error in main loop", error=str(e))
     finally:
-        unsubscribe_ws(ws)
+        try:
+            unsubscribe_ws(ws)
+        finally:
+            _close_ws(ws)
         ws_debug("ws_events: subscriber removed", total=len(event_subscribers))
 
     return []
