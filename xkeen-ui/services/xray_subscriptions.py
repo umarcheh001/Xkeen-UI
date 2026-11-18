@@ -1728,9 +1728,10 @@ def _operation_guard(ui_state_dir: str, xray_configs_dir: str) -> xray_transacti
         jsonc_dir = os.path.dirname(jsonc_path_for(_config_fragment_path(xray_configs_dir, ROUTING_FILE)))
     except Exception:
         jsonc_dir = ""
+    from services.dns_over_vless import _state_path as dns_state_path
     return xray_transactions.MemoryGuard(
         dirs=[xray_configs_dir, jsonc_dir, ensure_paused_store_dir(ui_state_dir)],
-        paths=[subscription_state_path(ui_state_dir)],
+        paths=[subscription_state_path(ui_state_dir), dns_state_path(ui_state_dir)],
     )
 
 

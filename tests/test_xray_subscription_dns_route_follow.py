@@ -128,6 +128,35 @@ def test_deleted_subscription_leaves_the_dns_route(stand):
     assert "Маршрут DNS-over-VLESS обновлён" in result["warning"]
 
 
+@pytest.mark.parametrize("legacy", [False, True])
+def test_deleted_subscription_replaces_its_non_ip_node_in_the_same_restart(stand, legacy):
+    state, configs, routing_path = stand
+    _add_subscription(state, configs, [])
+    runtime = dns._collect_runtime(str(configs), json.loads(routing_path.read_text(encoding="utf-8")))
+    node = next(item["tag"] for item in dns._proxy_outbounds(runtime) if item["tag"].startswith(SUB_ID))
+    fragment = dns._managed_fragment(["9.9.9.9"], pass_node=node, legacy_route=legacy, hosts={"local.test": "192.0.2.1"})
+    _write(configs / dns.MANAGED_FRAGMENT, fragment)
+    _write(state / dns.STATE_FILENAME, {
+        "enabled": True, "target": {"source": SOURCE}, "original_dns_override": False,
+        "pass_non_ip": True, "pass_non_ip_node": node,
+        "pass_non_ip_health": {"ok": False, "node": node, "exhausted": True, "checked_at": 1},
+    })
+    restarts = []
+
+    result = subs.delete_subscription(str(state), SUB_ID, xray_configs_dir=str(configs),
+                                      restart_xkeen=lambda **kw: restarts.append(kw) or True)
+
+    assert _balancer(routing_path, dns.BALANCER_TAG)["selector"] == ["my_proxy"], result["warning"]
+    saved = json.loads((state / dns.STATE_FILENAME).read_text(encoding="utf-8"))
+    assert saved["pass_non_ip_node"] == "my_proxy_1"
+    assert saved["original_dns_override"] is False
+    assert "pass_non_ip_health" not in saved
+    written = json.loads((configs / dns.MANAGED_FRAGMENT).read_text(encoding="utf-8"))
+    assert written == dns._managed_fragment(["9.9.9.9"], pass_node="my_proxy_1", legacy_route=legacy,
+                                           hosts={"local.test": "192.0.2.1"})
+    assert len(restarts) == 1
+
+
 def test_route_built_from_another_balancer_is_not_touched(stand):
     state, configs, routing_path = stand
     # DNS идёт через другой балансировщик: подписка, отмеченная в `mine`, его не касается.
@@ -143,6 +172,28 @@ def test_route_built_from_another_balancer_is_not_touched(stand):
     assert _balancer(routing_path, dns.BALANCER_TAG)["selector"] == ["my_proxy"]
     stored = subs.list_subscriptions(str(state))[0]
     assert not any("DNS-over-VLESS" in text for text in stored.get("last_warnings") or [])
+
+
+def test_rejected_subscription_delete_restores_the_dns_state_with_the_configuration(stand, monkeypatch):
+    state, configs, routing = stand
+    _add_subscription(state, configs, [])
+    runtime = dns._collect_runtime(str(configs), json.loads(routing.read_text(encoding="utf-8")))
+    node = next(item["tag"] for item in dns._proxy_outbounds(runtime) if item["tag"].startswith(SUB_ID))
+    _write(configs / dns.MANAGED_FRAGMENT, dns._managed_fragment(pass_node=node))
+    _write(state / dns.STATE_FILENAME, {"enabled": True, "target": {"source": SOURCE},
+                                      "pass_non_ip": True, "pass_non_ip_node": node})
+    watched = [state / dns.STATE_FILENAME, Path(subs.subscription_state_path(str(state))),
+               *configs.glob("*.json")]
+    before = {path: path.read_bytes() for path in watched}
+    monkeypatch.setattr(subs, "_check_live_config", lambda _: {
+        "ok": any(item["id"] == SUB_ID for item in subs.list_subscriptions(str(state))),
+        "details": "reject deletion only",
+    })
+
+    with pytest.raises(subs.SubscriptionConfigRejected):
+        subs.delete_subscription(str(state), SUB_ID, xray_configs_dir=str(configs))
+
+    assert all(path.read_bytes() == data for path, data in before.items())
 
 
 def test_a_failed_follow_is_reported_and_does_not_stop_the_subscription(stand, monkeypatch):

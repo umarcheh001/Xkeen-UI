@@ -3615,10 +3615,73 @@ def _followed_clone(
     if target.get("kind") != "balancer" or not isinstance(clone, dict) or not clone.get("selector"):
         return None
     if state.get("pass_non_ip"):
-        live = {item["tag"] for item in _proxy_outbounds(runtime)}
-        if _clean_tag(state.get("pass_non_ip_node")) not in live:
+        try:
+            _pick_pass_node(None, state.get("pass_non_ip_node"), runtime, routing, selection)
+        except DnsOverVlessError:
             return None
     return clone
+
+
+def _source_route_changes(
+    runtime: Dict[str, Any], routing: Dict[str, Any], state: Dict[str, Any],
+    presence: Dict[str, bool], facts: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
+    """Prepare only the derived route and a vanished pass-through node; preserve hand edits."""
+    if not state.get("enabled"):
+        return None
+    selection = _stored_selection(state)
+    clone = _followed_clone(runtime, routing, state, selection)
+    if clone is None or not all(presence.get(key) for key in ("fragment", "capture_rule", "local_rule", "direct_rule")):
+        return None
+    expected_rule = {"type": "field", "inboundTag": [DNS_IN_TAG], "ruleTag": PROXY_RULE_TAG, "balancerTag": BALANCER_TAG}
+    if facts.get("proxy_rule") != expected_rule:
+        return None
+    previous = _find_managed_clone(routing)
+    # Changing membership must not reinterpret the strategy when probe coverage changes.
+    if "strategy" in previous:
+        clone["strategy"] = copy.deepcopy(previous["strategy"])
+    else:
+        clone.pop("strategy", None)
+    # Subscription edits change membership, not the owner's strategy or other fields.
+    shape = lambda value: {key: item for key, item in value.items() if key not in {"selector", "fallbackTag"}}
+    if shape(previous) != shape(clone):
+        return None
+    fallback = facts.get("managed_fallback")
+    if not facts.get("safe_fallback") and any(_clean_tag(item.get("tag")) == fallback for item in runtime.get("outbounds", [])):
+        return None
+    if fallback and facts.get("safe_fallback"):
+        clone["fallbackTag"] = fallback
+    next_routing = copy.deepcopy(routing)
+    balancers = next_routing["routing"]["balancers"]
+    for index, item in enumerate(balancers):
+        if isinstance(item, dict) and _clean_tag(item.get("tag")) == BALANCER_TAG:
+            balancers[index] = clone
+    fragment = copy.deepcopy(facts["fragment"])
+    next_state = copy.deepcopy(state)
+    if state.get("pass_non_ip"):
+        node = _pick_pass_node(None, state.get("pass_non_ip_node"), runtime, routing, selection)
+        if node != state.get("pass_non_ip_node"):
+            outbound = fragment["outbounds"][0]
+            if isinstance(outbound.get("proxySettings"), dict):
+                route = outbound["proxySettings"]
+                key = "tag"
+            else:
+                route = outbound.get("streamSettings", {}).get("sockopt", {})
+                key = "dialerProxy"
+            if route.get(key) != state.get("pass_non_ip_node"):
+                return None
+            route[key] = node
+            next_state["pass_non_ip_node"] = node
+            next_state.pop("pass_non_ip_health", None)
+    if next_routing == routing and fragment == facts["fragment"] and next_state == state:
+        return None
+    remaining = [prefix for prefix in facts["selector"] if any(tag.startswith(prefix) for tag in facts["proxy_tags"])]
+    dead_reference = (len(remaining) != len(facts["selector"])
+                      or (state.get("pass_non_ip") and state.get("pass_non_ip_node") not in facts["proxy_tags"])
+                      or (fallback and not any(_clean_tag(item.get("tag")) == fallback for item in runtime.get("outbounds", []))))
+    # shortcut: legacy state has no clone history; resync only dead refs until snapshots exist.
+    return {"routing": next_routing, "fragment": fragment, "state": next_state,
+            "resync_safe": bool(dead_reference and clone["selector"] == remaining)}
 
 
 def follow_source_route(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dict[str, Any]:
@@ -3632,9 +3695,9 @@ def follow_source_route(*, configs_dir: str, routing_file: str, ui_state_dir: st
     core whether the result is sound -- so the clone is rebuilt here, inside
     the same operation, and costs no restart of its own.
 
-    Only the clone is rewritten; the rules, the fragment and the feature's own
-    notes stay as they are.  Where the clone cannot be rebuilt safely nothing
-    is written and the caller is told to send the owner to the DNS window.
+    A pass-through node removed with the subscription moves to a remaining
+    proxy of this route. The caller's transaction covers its fragment and state.
+    Where the route cannot be rebuilt safely nothing is written.
     """
     idle = {"status": "idle", "message": ""}
     with _LOCK:
@@ -3648,11 +3711,13 @@ def follow_source_route(*, configs_dir: str, routing_file: str, ui_state_dir: st
             return idle
         source_tag = selection[0]
         runtime = _collect_runtime(configs_dir, routing)
-        if _find_balancer(runtime, source_tag) and not _route_drift(runtime, routing, source_tag):
+        needs_pass = bool(state.get("pass_non_ip") and _clean_tag(state.get("pass_non_ip_node")) not in _pass_node_options(runtime, routing, selection))
+        if _find_balancer(runtime, source_tag) and not _route_drift(runtime, routing, source_tag) and not needs_pass:
             return idle
 
-        clone = _followed_clone(runtime, routing, state, selection)
-        if clone is None:
+        presence, facts = _presence_report(configs_dir, routing)
+        changes = _source_route_changes(runtime, routing, state, presence, facts)
+        if changes is None:
             return {
                 "status": "manual",
                 "message": (
@@ -3661,12 +3726,17 @@ def follow_source_route(*, configs_dir: str, routing_file: str, ui_state_dir: st
                 ),
             }
 
-        result = copy.deepcopy(routing)
-        balancers = result["routing"]["balancers"]
-        for index, item in enumerate(balancers):
-            if isinstance(item, dict) and _clean_tag(item.get("tag")) == BALANCER_TAG:
-                balancers[index] = copy.deepcopy(clone)
-        _write_routing_preserving_comments(routing_file, result)
+        managed_path = os.path.join(configs_dir, MANAGED_FRAGMENT)
+        guard = xray_transactions.MemoryGuard(paths=[routing_file, jsonc_path_for(routing_file), managed_path, _state_path(ui_state_dir)])
+        try:
+            _write_routing_preserving_comments(routing_file, changes["routing"])
+            if changes["fragment"] != facts["fragment"]:
+                _atomic_write_json(managed_path, changes["fragment"])
+            if changes["state"] != state:
+                _save_state(ui_state_dir, changes["state"])
+        except Exception:
+            guard.restore()
+            raise
         return {
             "status": "updated",
             "message": f"Маршрут DNS-over-VLESS обновлён вслед за балансировщиком «{source_tag}».",
@@ -3683,8 +3753,10 @@ def get_status(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dic
     available_cores = detect_available_cores()
     state = _load_state(ui_state_dir)
     hosts_list, hosts_on = _status_hosts(configs_dir, state)
+    route_changes = _source_route_changes(runtime, routing, state, presence, facts)
+    needs_resync = bool(route_changes and route_changes["resync_safe"])
     complete_config = _managed_config_complete(presence)
-    tampered = _managed_config_tampered(presence)
+    tampered = _managed_config_tampered(presence) and not needs_resync
     enabled = bool(complete_config and override is True)
     partial = bool(_managed_config_present(presence) and not complete_config)
     blockers: list[str] = []
@@ -3748,7 +3820,9 @@ def get_status(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dic
     # A hand edit also leaves the config incomplete in the panel's eyes, but
     # "an interrupted operation" would then be the wrong story: the window
     # lists what was edited instead.
-    if partial and not tampered:
+    if needs_resync:
+        blockers.append("Маршрут DNS-over-VLESS изменился после удаления узлов; нажмите «Проверить снова».")
+    elif partial and not tampered:
         blockers.append("Обнаружена неполная предыдущая настройка DNS-over-VLESS; сначала выполните восстановление/отключение.")
     if tampered:
         blockers.append("Служебные объекты DNS-over-VLESS изменены вручную; автоматическое удаление отключено.")
@@ -3758,6 +3832,9 @@ def get_status(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dic
         "prepared": bool(complete_config and not enabled),
         "partial": partial,
         "tampered": tampered,
+        "can_resync": needs_resync and core == "xray" and override is True,
+        "pass_non_ip_missing": bool(state.get("pass_non_ip") and state.get("pass_non_ip_node")
+                                    and state["pass_non_ip_node"] not in _pass_node_options(runtime, routing, _stored_selection(state))),
         "presence": presence,
         "dns_override": override,
         "dns_override_detail": override_detail,
@@ -3894,7 +3971,7 @@ def apply_action(
     discard_edits: Any = False,
 ) -> Dict[str, Any]:
     normalized = str(action or "").strip().lower()
-    if normalized not in {"enable", "disable"}:
+    if normalized not in {"enable", "disable", "resync"}:
         raise DnsOverVlessError("Неизвестное действие DNS-over-VLESS.", code="invalid_action")
     # Only switching off may throw hand edits away, and only when asked to:
     # the window sends it after the owner confirmed exactly that.
@@ -4086,6 +4163,17 @@ def apply_action(
                 "Не найден outbound прямого подключения (freedom) — локальные зоны некуда направить.",
                 code="direct_outbound_missing",
             )
+        route_changes = None
+        if normalized == "resync":
+            presence, facts = _presence_report(configs_dir, routing)
+            route_changes = _source_route_changes(runtime, routing, stored_state, presence, facts)
+            if before_override is not True or not route_changes or not route_changes["resync_safe"]:
+                raise DnsOverVlessError(
+                    "Безопасное восстановление маршрута недоступно; служебные файлы не изменены.",
+                    code="route_resync_unavailable",
+                )
+            _stage_and_test(configs_dir, {os.path.basename(routing_file): route_changes["routing"],
+                                        MANAGED_FRAGMENT: route_changes["fragment"]})
         routing_raw_path = jsonc_path_for(routing_file)
         state_path = _state_path(ui_state_dir)
         snapshot_dir, manifest = _snapshot(
@@ -4108,7 +4196,11 @@ def apply_action(
         }
 
         try:
-            if normalized == "enable":
+            if normalized == "resync":
+                target = None
+                next_routing = route_changes["routing"]
+                next_fragment = route_changes["fragment"]
+            elif normalized == "enable":
                 presence = _managed_presence(configs_dir, routing)
                 current_fragment = _read_json(managed_path, None)
                 current_upstreams = _safe_upstreams(
@@ -4177,8 +4269,9 @@ def apply_action(
                         "probe": {"ok": True, "skipped": True},
                         "target": None,
                     }
+                stale = _source_route_changes(runtime, routing, previous_state, presence, facts)
                 if not discard and (
-                    _managed_config_tampered(presence)
+                    (_managed_config_tampered(presence) and not (stale and stale["resync_safe"]))
                     or (_managed_config_present(presence) and not _managed_config_recognized(presence))
                 ):
                     raise DnsOverVlessError(
@@ -4196,15 +4289,13 @@ def apply_action(
                 # Preserve a setting that existed before this feature claimed it.
                 desired_override = bool(previous_state.get("original_dns_override", False))
 
-            _stage_and_test(
-                configs_dir,
-                {
-                    os.path.basename(routing_file): next_routing,
-                    MANAGED_FRAGMENT: next_fragment,
-                },
-            )
+            if normalized != "resync":
+                _stage_and_test(
+                    configs_dir,
+                    {os.path.basename(routing_file): next_routing, MANAGED_FRAGMENT: next_fragment},
+                )
 
-            if normalized == "enable":
+            if normalized != "disable":
                 _atomic_write_json(managed_path, next_fragment)
                 _write_routing_preserving_comments(routing_file, next_routing)
                 if before_override is not True:
@@ -4252,7 +4343,7 @@ def apply_action(
                     )
 
             probe: Dict[str, Any] = {"ok": True, "skipped": True}
-            if normalized == "enable":
+            if normalized != "disable":
                 probe = _dns_probe()
                 if not probe.get("ok"):
                     raise DnsOverVlessError(
@@ -4260,6 +4351,7 @@ def apply_action(
                         code="dns_probe_failed",
                         details=probe,
                     )
+            if normalized == "enable":
                 # Only now, with Xray answering, may devices be pointed at it.
                 # A failure here is reported rather than rolled back: the
                 # feature itself is already working for everyone else, and the
@@ -4319,6 +4411,8 @@ def apply_action(
                             "error": str(pass_probe.get("error") or ""),
                         },
                     )
+            elif normalized == "resync":
+                _save_state(ui_state_dir, route_changes["state"])
             else:
                 # Turning the feature off is not the same as forgetting how it
                 # was set up.  Nothing here is applied while it is off -- there
@@ -4354,7 +4448,7 @@ def apply_action(
             return {
                 "ok": True,
                 "action": normalized,
-                "enabled": normalized == "enable",
+                "enabled": normalized != "disable",
                 "discarded_edits": discard,
                 "capture": capture_result,
                 "restarted": True,

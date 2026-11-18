@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures.mjs';
-import { openDialog, STATUS } from './dns_over_vless_fixtures.mjs';
+import { openDialog, openZone, mockClients, STATUS } from './dns_over_vless_fixtures.mjs';
 
 
 // Пользователь дописал в служебный файл больше восьми серверов, и в окне не
@@ -26,6 +26,94 @@ const TAMPERED = {
   ],
 };
 const READY = { ...STATUS, dns_override: false };
+
+for (const [name, patch] of [
+  ['ручные правки', { tampered: true }],
+  ['устаревший маршрут', { route_drift: { source: 'proxy', managed: ['a', 'gone'], current: ['a'] } }],
+  ['удалённый узел прочих записей', { pass_non_ip: true, pass_non_ip_node: 'gone', pass_non_ip_options: ['a'], pass_non_ip_missing: true,
+    pass_non_ip_health: { ok: true, node: 'gone', checked_at: 1 } }],
+]) {
+  test(`pool2: зелёная точка не остаётся при проблеме — ${name}`, async ({ page }) => {
+    await openDialog(page, { ...ON, ...patch });
+    for (const id of ['routing-dns-over-vless-dot', 'routing-dns-over-vless-toolbar-dot']) {
+      await expect(page.locator(`#${id}`)).toHaveAttribute('data-state', 'blocked');
+    }
+    if (patch.pass_non_ip_missing) {
+      await expect(page.locator('#routing-dns-over-vless-pass-node')).toHaveValue('gone');
+      await expect(page.locator('#routing-dns-over-vless-pass-health')).not.toContainText('проходят через');
+    }
+  });
+}
+
+test('pool2: проверить снова восстанавливает разрешённое сервером расхождение', async ({ page }) => {
+  const stale = { ...ON, enabled: false, can_disable: false, can_resync: true, pass_non_ip_missing: true };
+  await openDialog(page, stale);
+  const actions = [];
+  let current = stale;
+  await page.route('**/api/routing/dns-over-vless', async (route) => {
+    if (route.request().method() === 'POST') {
+      actions.push(route.request().postDataJSON().action);
+      current = ON;
+      await route.fulfill({ json: { ok: true, action: 'resync', enabled: true, restarted: true } });
+    } else await route.fulfill({ json: current });
+  });
+  const button = page.locator('#routing-dns-over-vless-apply');
+  await expect(button).toHaveText('Проверить снова');
+  await button.click();
+  await expect(page.locator('#routing-dns-over-vless-badge')).toHaveText('Включено');
+  expect(actions).toEqual(['resync']);
+});
+
+test('pool2: событие изменения подписки обновляет обе точки с закрытым окном', async ({ page }) => {
+  await openDialog(page, ON);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#routing-dns-over-vless-modal')).toBeHidden();
+  await page.route('**/api/routing/dns-over-vless', async (route) => {
+    await route.fulfill({ json: { ...ON, tampered: true } });
+  });
+  await page.evaluate(() => document.dispatchEvent(new CustomEvent('xkeen-routing-fragment-saved', {
+    detail: { reason: 'xray-subscriptions' },
+  })));
+  for (const id of ['routing-dns-over-vless-dot', 'routing-dns-over-vless-toolbar-dot']) {
+    await expect(page.locator(`#${id}`)).toHaveAttribute('data-state', 'blocked');
+  }
+});
+
+test('pool2-review: ошибка фоновой проверки снимает зелёную индикацию', async ({ page }) => {
+  await openDialog(page, ON);
+  await page.route('**/api/routing/dns-over-vless', async (route) => {
+    await route.fulfill({ status: 503, json: { error: 'status unavailable' } });
+  });
+  await page.evaluate(() => document.dispatchEvent(new CustomEvent('xkeen-routing-fragment-saved', {
+    detail: { reason: 'xray-subscriptions' },
+  })));
+  await expect(page.locator('#routing-dns-over-vless-badge')).toHaveText('Ошибка проверки');
+  for (const id of ['routing-dns-over-vless-dot', 'routing-dns-over-vless-toolbar-dot']) {
+    await expect(page.locator(`#${id}`)).toHaveAttribute('data-state', 'blocked');
+  }
+});
+
+test('pool2-review: изменение подписки во время выбора устройств не теряет статус', async ({ page }) => {
+  await mockClients(page, { available: true, clients: [{ mac: 'aa:bb:cc:dd:ee:02', title: 'Телефон', active: true,
+    can_capture: true, verdict: 'intercepted' }], counts: { total: 1 } });
+  await openDialog(page, { ...ON, capture_clients: false, capture_macs: [] });
+  await openZone(page, 'devices');
+  await page.locator('.routing-dns-over-vless-clients-pick').check({ force: true });
+  let finishPost;
+  await page.route('**/api/routing/dns-over-vless', async (route) => {
+    if (route.request().method() === 'POST') {
+      await new Promise((resolve) => { finishPost = resolve; });
+      await route.fulfill({ json: { ok: true, action: 'capture', enabled: true } });
+    } else await route.fulfill({ json: { ...ON, tampered: true } });
+  });
+  await page.locator('#routing-dns-over-vless-clients-apply').click();
+  await expect.poll(() => !!finishPost).toBe(true);
+  await page.evaluate(() => document.dispatchEvent(new CustomEvent('xkeen-routing-fragment-saved', {
+    detail: { reason: 'xray-subscriptions' },
+  })));
+  finishPost();
+  await expect(page.locator('#routing-dns-over-vless-dot')).toHaveAttribute('data-state', 'blocked');
+});
 
 
 test('серверы сверх предела: метка называет лишние, отключить можно', async ({ page }) => {

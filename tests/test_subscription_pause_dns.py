@@ -337,6 +337,34 @@ def test_dns_on_owners_balancer_stays_on_it_and_follows_its_members(tmp_path: Pa
     assert _meaning(rig.bench.config_files()) == _meaning(active)
 
 
+def test_pause_and_resume_replace_the_non_ip_node_with_one_restart_each(tmp_path, monkeypatch):
+    rig = Rig(tmp_path, monkeypatch, own=("home-nl", "home-de"))
+    routing = json.loads(rig.routing.read_text(encoding="utf-8"))
+    routing["routing"]["balancers"] = [
+        {"tag": "my-pool", "selector": ["home-"], "strategy": {"type": "leastPing"}, "fallbackTag": "direct"}
+    ]
+    routing["routing"]["rules"] = [{"type": "field", "inboundTag": ["redirect", "tproxy"], "balancerTag": "my-pool"}]
+    rig.routing.write_bytes(json.dumps(routing).encode())
+    rig.bench.add("alpha", routing_mode="subscription-only", routing_balancer_tags=["my-pool"])
+    rig.dns_on("my-pool")
+    state = rig.dov._load_state(str(rig.bench.state))
+    runtime = rig.dov._collect_runtime(str(rig.bench.xray), json.loads(rig.routing.read_text(encoding="utf-8")))
+    node = next(item["tag"] for item in rig.dov._proxy_outbounds(runtime) if item["tag"].startswith("alpha"))
+    state.update(pass_non_ip=True, pass_non_ip_node=node)
+    rig.dov._save_state(str(rig.bench.state), state)
+    (rig.bench.xray / rig.dov.MANAGED_FRAGMENT).write_bytes(json.dumps(rig.dov._managed_fragment(pass_node=node)).encode())
+
+    assert rig.plan()["dns"]["restarts"] == 1
+    assert rig.pause()["dns"]["action"] == "resynced"
+    assert rig.restarts == ["xray-subscriptions-pause"]
+    assert rig.dov._load_state(str(rig.bench.state))["pass_non_ip_node"].startswith("home-")
+    rig.restarts.clear()
+    assert rig.plan()["dns"]["restarts"] == 1
+    assert rig.resume()["dns"]["action"] == "resynced"
+    assert rig.restarts == ["xray-subscriptions-resume"]
+    assert rig.dov._load_state(str(rig.bench.state))["pass_non_ip_node"].startswith("alpha")
+
+
 
 def _shared_pool(rig: Rig) -> None:
     """Балансировщик на свой сервер и две подписки, DNS-over-VLESS — на его копии."""

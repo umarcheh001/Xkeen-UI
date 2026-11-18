@@ -8035,6 +8035,7 @@ let outboundsModuleApi = null;
     }
 
     async function subsSyncRoutingViewAfterMutation(options) {
+      document.dispatchEvent(new CustomEvent('xkeen-routing-fragment-saved', { detail: { reason: 'xray-subscriptions' } }));
       const opts = (options && typeof options === 'object') ? options : {};
       const routingChanged = !!opts.routingChanged;
       const observatoryChanged = !!opts.observatoryChanged;

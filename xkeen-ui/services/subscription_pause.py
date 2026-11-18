@@ -257,14 +257,13 @@ def _follows_resume(view: Dict[str, Any], current: List[Dict[str, str]]) -> bool
 
     Only a forecast.  A route through one balancer keeps it: the balancer
     stays and its copy is rebuilt on the spot.  A route through the owner's
-    own servers, or non-IP records sent to one, has to move.
+    own servers has to move. A removed non-IP node follows the rebuilt route.
     """
     selection = view["selection"]
     kinds = {item["tag"]: item["kind"] for item in current}
     return (
         len(selection) == 1
         and kinds.get(selection[0]) == "balancer"
-        and not view["state"].get("pass_non_ip")
         and bool(dov._find_managed_clone(view["routing"]))
     )
 

@@ -201,6 +201,8 @@ def register_dns_over_vless_routes(
             )
             if action == "enable":
                 summary = "DNS-over-VLESS включён"
+            elif action == "resync":
+                summary = "Маршрут DNS-over-VLESS восстановлен после удаления узлов"
             elif result.get("discarded_edits"):
                 summary = "DNS-over-VLESS отключён, ручные правки служебной настройки удалены"
             else:

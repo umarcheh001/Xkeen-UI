@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures.mjs';
+import { STATUS as DNS_STATUS } from './dns_over_vless_fixtures.mjs';
 
 function sub(id, extra = {}) {
   const now = Math.floor(Date.now() / 1000);
@@ -394,6 +395,20 @@ async function deleteFirstSubscription(page) {
   await expect(page.locator('#confirm-modal-title')).toHaveText('Удалить подписку?');
   await page.locator('#confirm-modal-ok-btn').click();
 }
+
+test('pool2-integration: удаление подписки обновляет индикатор DNS без открытия окна', async ({ page }) => {
+  let dns = { ...DNS_STATUS, enabled: true, can_disable: true, dns_override: true };
+  await page.addInitScript(() => localStorage.setItem('xk.routing.rules.open.v2', '1'));
+  await page.route('**/api/routing/dns-over-vless', async (route) => route.fulfill({ json: dns }));
+  await mockSingleDelete(page, () => { dns = { ...dns, tampered: true }; });
+  await openSubscriptions(page);
+  await expect(page.locator('#routing-dns-over-vless-dot')).toHaveAttribute('data-state', 'enabled');
+  await deleteFirstSubscription(page);
+  await expect(page.locator('#outbounds-subscriptions-tbody tr')).toHaveCount(1);
+  for (const id of ['routing-dns-over-vless-dot', 'routing-dns-over-vless-toolbar-dot']) {
+    await expect(page.locator(`#${id}`)).toHaveAttribute('data-state', 'blocked');
+  }
+});
 
 test.describe('удаление одной подписки при обрыве связи', () => {
   const warning = 'Не возвращено на прежнее место, потому что изменено вручную: сервер «vless-reality».';

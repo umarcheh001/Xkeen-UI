@@ -696,6 +696,174 @@ def test_follow_leaves_a_matching_clone_alone(tmp_path: Path):
     assert routing_path.read_bytes() == before
 
 
+def _missing_pass_node(tmp_path):
+    configs, routing, state = _enabled_on_balancer_main(tmp_path)
+    _write(configs / dns.MANAGED_FRAGMENT, dns._managed_fragment(pass_node="my_proxy_1"))
+    _write(state / dns.STATE_FILENAME, {"enabled": True, "target": {"source": "balancer_main"},
+                                      "pass_non_ip": True, "pass_non_ip_node": "my_proxy_1"})
+    outbounds = json.loads((configs / "04_outbounds.json").read_text(encoding="utf-8"))
+    outbounds["outbounds"] = [item for item in outbounds["outbounds"] if item["tag"] != "my_proxy_1"]
+    _write(configs / "04_outbounds.json", outbounds)
+    return configs, routing, state
+
+
+def test_follow_replaces_a_missing_pass_node_even_when_prefix_selector_did_not_change(tmp_path):
+    configs, routing, state = _missing_pass_node(tmp_path)
+    before = _clone(routing)
+    result = dns.follow_source_route(configs_dir=str(configs), routing_file=str(routing), ui_state_dir=str(state))
+    assert result["status"] == "updated"
+    assert _clone(routing)["selector"] == before["selector"]
+    saved = json.loads((state / dns.STATE_FILENAME).read_text(encoding="utf-8"))
+    assert saved["pass_non_ip_node"] == "my_proxy_2"
+
+
+def test_follow_preserves_hand_edits_instead_of_rebuilding_the_fragment(tmp_path):
+    configs, routing, state = _missing_pass_node(tmp_path)
+    fragment = json.loads((configs / dns.MANAGED_FRAGMENT).read_text(encoding="utf-8"))
+    fragment["dns"]["queryStrategy"] = "UseIPv4"
+    _write(configs / dns.MANAGED_FRAGMENT, fragment)
+    before = {p: p.read_bytes() for p in [routing, configs / dns.MANAGED_FRAGMENT, state / dns.STATE_FILENAME]}
+    result = dns.follow_source_route(configs_dir=str(configs), routing_file=str(routing), ui_state_dir=str(state))
+    assert result["status"] == "manual"
+    assert all(p.read_bytes() == data for p, data in before.items())
+
+
+def test_replacing_a_deleted_pass_node_keeps_the_existing_safe_fallback(tmp_path):
+    configs, routing, state = _missing_pass_node(tmp_path)
+    model = json.loads(routing.read_text(encoding="utf-8"))
+    next(item for item in model["routing"]["balancers"] if item["tag"] == dns.BALANCER_TAG)["fallbackTag"] = "reserve_proxy_1"
+    _write(routing, model)
+
+    result = dns.follow_source_route(configs_dir=str(configs), routing_file=str(routing), ui_state_dir=str(state))
+
+    assert result["status"] == "updated"
+    assert _clone(routing)["fallbackTag"] == "reserve_proxy_1"
+
+
+def test_follow_keeps_the_strategy_when_subscription_probe_coverage_changes(tmp_path):
+    configs, routing, state = _scenario_config(tmp_path)
+    _write(configs / "07_observatory.json", {"burstObservatory": {"subjectSelector": ["my_proxy"]}})
+    model = json.loads(routing.read_text(encoding="utf-8"))
+    target = dns._select_target(dns._collect_runtime(str(configs), model), "balancer_main", model)
+    assert target["managed_balancer"]["strategy"]["type"] == "leastLoad"
+    _write(routing, dns._build_enabled_routing(model, target))
+    _write(configs / dns.MANAGED_FRAGMENT, dns._managed_fragment())
+    _write(state / dns.STATE_FILENAME, {"enabled": True, "target": {"source": "balancer_main"}})
+    _set_source_selector(routing, ["reserve_proxy"])
+
+    result = dns.follow_source_route(configs_dir=str(configs), routing_file=str(routing), ui_state_dir=str(state))
+
+    assert result["status"] == "updated"
+    assert _clone(routing)["selector"] == ["reserve_proxy"]
+    assert _clone(routing)["strategy"] == target["managed_balancer"]["strategy"]
+
+
+def test_follow_restores_all_files_when_a_state_write_fails(tmp_path, monkeypatch):
+    configs, routing, state = _missing_pass_node(tmp_path)
+    sidecar = Path(str(routing) + "c")
+    sidecar.write_bytes(b"// keep comments\n" + routing.read_bytes())
+    before = {p: p.read_bytes() for p in [routing, sidecar, configs / dns.MANAGED_FRAGMENT, state / dns.STATE_FILENAME]}
+    def fail(*args):
+        raise OSError("state disk failure")
+    monkeypatch.setattr(dns, "_save_state", fail)
+    with pytest.raises(OSError, match="state disk failure"):
+        dns.follow_source_route(configs_dir=str(configs), routing_file=str(routing), ui_state_dir=str(state))
+    assert all(p.read_bytes() == data for p, data in before.items())
+
+
+def _resync_runtime(monkeypatch):
+    monkeypatch.setattr(dns, "core_runtime", lambda: CoreRuntime(("xray",)))
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (True, "test"))
+    monkeypatch.setattr(dns, "_wait_for_xray", lambda: True)
+    monkeypatch.setattr(dns, "_dns_probe", lambda: {"ok": True})
+    monkeypatch.setattr(dns.firmware_resolvers, "discover", lambda: [])
+
+
+def test_status_offers_safe_resync_instead_of_calling_a_missing_node_a_hand_edit(tmp_path, monkeypatch):
+    configs, routing, state = _missing_pass_node(tmp_path)
+    _resync_runtime(monkeypatch)
+    result = dns.get_status(configs_dir=str(configs), routing_file=str(routing), ui_state_dir=str(state))
+    assert result["can_resync"] is True
+    assert result["tampered"] is False
+    assert result["pass_non_ip_missing"] is True
+
+
+@pytest.mark.parametrize("running,override", [(False, True), (True, False)])
+def test_a_stale_route_can_be_disabled_when_resync_is_unavailable(tmp_path, monkeypatch, running, override):
+    configs, routing, state = _missing_pass_node(tmp_path)
+    _resync_runtime(monkeypatch)
+    monkeypatch.setattr(dns, "core_runtime", lambda: CoreRuntime(("xray",) if running else ()))
+    monkeypatch.setattr(dns, "_dns_override_status", lambda: (override, "test"))
+    monkeypatch.setattr(dns, "_xray_binary", lambda: "/opt/sbin/xray")
+    monkeypatch.setattr(dns, "_stage_and_test", lambda *args: {"ok": True})
+    monkeypatch.setattr(dns, "_set_dns_override", lambda value: None)
+    monkeypatch.setattr(dns, "_wait_for_port_53", lambda **kw: True)
+    monkeypatch.setattr(dns.dns_client_capture, "remove", lambda: False)
+    status = dns.get_status(configs_dir=str(configs), routing_file=str(routing), ui_state_dir=str(state))
+    assert status["can_resync"] is False
+    assert status["can_disable"] is True
+
+    result = dns.apply_action("disable", configs_dir=str(configs), routing_file=str(routing), ui_state_dir=str(state),
+                              restart_xkeen=lambda **kw: True)
+    assert result["enabled"] is False
+    assert not (configs / dns.MANAGED_FRAGMENT).exists()
+
+
+@pytest.mark.parametrize("failure", [None, "preflight", "probe", "hand_edit"])
+def test_resync_uses_preflight_probe_and_rollback_without_flipping_firmware_dns(tmp_path, monkeypatch, failure):
+    configs, routing, state = _missing_pass_node(tmp_path)
+    _resync_runtime(monkeypatch)
+    if failure == "hand_edit":
+        fragment = json.loads((configs / dns.MANAGED_FRAGMENT).read_text(encoding="utf-8"))
+        fragment["dns"]["queryStrategy"] = "UseIPv4"
+        _write(configs / dns.MANAGED_FRAGMENT, fragment)
+    before = {p: p.read_bytes() for p in [routing, configs / dns.MANAGED_FRAGMENT, state / dns.STATE_FILENAME]}
+    checks, restarts, switches = [], [], []
+    def preflight(*args):
+        checks.append(args)
+        if failure == "preflight":
+            raise dns.DnsOverVlessError("rejected", code="xray_preflight_failed")
+        return {"ok": True}
+    monkeypatch.setattr(dns, "_stage_and_test", preflight)
+    monkeypatch.setattr(dns, "_set_dns_override", lambda value: switches.append(value))
+    if failure == "probe":
+        monkeypatch.setattr(dns, "_dns_probe", lambda: {"ok": False})
+    def run():
+        return dns.apply_action("resync", configs_dir=str(configs), routing_file=str(routing), ui_state_dir=str(state),
+                                restart_xkeen=lambda **kw: restarts.append(kw) or True)
+    if failure:
+        with pytest.raises(dns.DnsOverVlessError) as raised:
+            run()
+        assert raised.value.code == {"preflight": "xray_preflight_failed", "probe": "dns_probe_failed",
+                                     "hand_edit": "route_resync_unavailable"}[failure]
+        assert all(p.read_bytes() == data for p, data in before.items())
+        assert len(restarts) == (2 if failure == "probe" else 0)
+    else:
+        result = run()
+        assert result["action"] == "resync" and result["enabled"] is True
+        assert json.loads((state / dns.STATE_FILENAME).read_text(encoding="utf-8"))["pass_non_ip_node"] == "my_proxy_2"
+        assert len(restarts) == 1 and len(checks) == 1
+    assert switches == []
+
+
+def test_resync_post_uses_the_existing_operation_response_and_audit(tmp_path, monkeypatch):
+    from routes.routing import dns_over_vless as routes
+    configs, routing, state = _missing_pass_node(tmp_path)
+    _resync_runtime(monkeypatch)
+    monkeypatch.setattr(dns, "_stage_and_test", lambda *args: {"ok": True})
+    audit = []
+    app = Flask(__name__)
+    routes.register_dns_over_vless_routes(app, xray_configs_dir=str(configs), routing_file=str(routing),
+                                          ui_state_dir=str(state), restart_xkeen=lambda **kw: True,
+                                          append_restart_log=lambda ok, **kw: audit.append((ok, kw)))
+    result = app.test_client().post('/api/routing/dns-over-vless', json={"action": "resync"})
+    assert result.status_code == 200, result.get_json()
+    assert result.get_json()["action"] == "resync"
+    assert result.get_json()["enabled"] is True
+    assert audit[0][0] is True
+    assert "восстановлен" in audit[0][1]["summary"]
+
+
 def test_follow_does_nothing_while_the_feature_is_off(tmp_path: Path):
     configs, routing_path, state = _enabled_on_balancer_main(tmp_path)
     _write(state / dns.STATE_FILENAME, {"enabled": False, "target": {"source": "balancer_main"}})

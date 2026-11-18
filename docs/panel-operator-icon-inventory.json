@@ -2699,7 +2699,7 @@
           "accessible_label": "Пауза"
         },
         {
-          "location": "xkeen-ui/static/js/features/outbounds.js:L8601",
+          "location": "xkeen-ui/static/js/features/outbounds.js:L8602",
           "control_type": "runtime-action",
           "accessible_label": "Пауза"
         },
@@ -3579,7 +3579,7 @@
           "accessible_label": "Настройки"
         },
         {
-          "location": "xkeen-ui/static/js/features/outbounds.js:L9625",
+          "location": "xkeen-ui/static/js/features/outbounds.js:L9626",
           "control_type": "runtime-action",
           "accessible_label": "Настройки"
         },

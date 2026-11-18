@@ -643,10 +643,11 @@ import {
     const passOn = !!(pass && pass.checked);
     if (passRow) passRow.classList.toggle('hidden', !passOn);
     if (passNode) {
-      const options = (data && data.pass_non_ip_options) || [];
+      const options = ((data && data.pass_non_ip_options) || []).slice();
       const wanted = passNode.dataset.touched
         ? passNode.value
         : ((data && data.pass_non_ip_node) || '');
+      if (data && data.pass_non_ip_missing && wanted && !options.includes(wanted)) options.unshift(wanted);
       const same = JSON.stringify(options) === (passNode.dataset.options || '');
       if (!same) {
         passNode.dataset.options = JSON.stringify(options);
@@ -663,7 +664,8 @@ import {
       else if (options.length) passNode.value = options[0];
       passNode.disabled = busy || fieldsLocked || !options.length;
     }
-    renderPassHealth(passOn ? (data && data.pass_non_ip_health) : null);
+    renderPassHealth(passOn ? (data && data.pass_non_ip_missing
+      ? { missing: true, node: data.pass_non_ip_node } : (data && data.pass_non_ip_health)) : null);
     const fromRules = $(DOM.directFromRules);
     if (fromRules) {
       // Nothing to offer when no rule of the user's own goes out directly.
@@ -788,6 +790,11 @@ import {
     line.classList.remove('hidden');
     const node = String(health.node || '').trim();
     const from = String(health.switched_from || '').trim();
+    if (health.missing) {
+      line.dataset.state = 'dropped';
+      line.textContent = `Узел ${node} недоступен в выбранном маршруте. Нажмите «Проверить снова», чтобы проверить восстановление.`;
+      return;
+    }
     if (health.exhausted) {
       line.dataset.state = 'failed';
       line.textContent = 'Прочие типы записей не проходят: ни один узел маршрута на них не отвечает. '
@@ -992,6 +999,16 @@ import {
         state: 'blocked',
         summary: `служебная конфигурация на месте, но активно ядро ${otherCore}`,
         text: `DNS-фрагмент и правила Xray сохранены, но работают они только под Xray, а сейчас активно ядро ${otherCore} — через туннель запросы не идут. Порт 53 при этом остаётся отданным Xray, поэтому имена могут вообще не разрешаться: сторож заметит это и вернёт DNS прошивке. Верните активным ядром Xray либо отключите настройку здесь.`,
+      };
+    }
+    if (data && (data.can_resync || data.route_drift || data.pass_non_ip_missing)) {
+      return {
+        badge: 'Требуется проверка',
+        state: 'blocked',
+        summary: 'состав маршрута DNS изменился',
+        text: data.can_resync
+          ? 'После удаления узла служебный маршрут сохранил прежние ссылки. Нажмите «Проверить снова»: панель обновит маршрут, проверит конфигурацию Xray и ответ DNS. При ошибке изменения будут отменены.'
+          : 'Служебный маршрут не совпадает с выбранным источником. Проверьте маршрут и доступные узлы; при необходимости выключите и включите DNS-over-VLESS.',
       };
     }
     if (flags.enabled) {
@@ -1334,7 +1351,7 @@ import {
     }
     {
       const rollbackRestored = rollbackStatus && rollbackStatus.phase === 'restored';
-      const dotState = enabled ? 'enabled' : ((info.state === 'ready' || rollbackRestored) ? 'off' : 'blocked');
+      const dotState = info.state === 'enabled' ? 'enabled' : ((info.state === 'ready' || rollbackRestored) ? 'off' : 'blocked');
       // Кнопок у функции две — в блоке правил и в тулбаре редактора; точка
       // состояния должна быть одинаковой на обеих.
       [DOM.dot, DOM.toolbarDot].forEach((id) => {
@@ -1432,7 +1449,7 @@ import {
       const needsTarget = routeVisible && !chosenTargets.length;
       // При ручной правке основная кнопка перечитывает состояние: человек
       // исправил файл и хочет увидеть, приняла ли его панель.
-      const recheck = !!(data && data.tampered) && !canDisable;
+      const recheck = !!(data && (data.can_resync || (data.tampered && !canDisable)));
       apply.disabled = waitingForRollback || busy || (!recheck && !enabled && !canDisable && (blocked || needsTarget));
       // «Включить безопасно» на неподходящем ядре обещало бы невозможное.
       const applyCore = coreOf(data);
@@ -1467,6 +1484,10 @@ import {
 
   function renderError(error) {
     status = null;
+    [DOM.dot, DOM.toolbarDot].forEach((id) => {
+      const dot = $(id);
+      if (dot) dot.dataset.state = 'blocked';
+    });
     const badge = $(DOM.badge);
     const text = $(DOM.status);
     const apply = $(DOM.apply);
@@ -1660,13 +1681,15 @@ import {
     return setLayout('split');
   }
 
+  let refreshGeneration = 0;
   async function refresh() {
+    const generation = ++refreshGeneration;
     try {
       const data = await getStatus();
-      render(data);
+      if (generation === refreshGeneration) render(data);
       return data;
     } catch (error) {
-      renderError(error);
+      if (generation === refreshGeneration) renderError(error);
       return null;
     }
   }
@@ -1969,6 +1992,7 @@ import {
       busy = false;
     }
     await loadClients();
+    await refresh();
   }
 
   async function loadClients() {
@@ -1997,7 +2021,7 @@ import {
       await refresh();
       return;
     }
-    const action = (status.enabled || status.can_disable) ? 'disable' : 'enable';
+    const action = status.can_resync ? 'resync' : ((status.enabled || status.can_disable) ? 'disable' : 'enable');
     const labels = (status.candidates || [])
       .filter((item) => item && chosenTargets.indexOf(item.tag) !== -1)
       .map((item) => item.label);
@@ -2010,7 +2034,7 @@ import {
       ? routeNote + 'Панель создаст отдельный DNS-фрагмент, добавит два служебных правила в начало routing, выполнит xray -test, включит DNS override Keenetic, перезапустит Xray и проверит DNS. При любой ошибке всё будет восстановлено.'
       : 'Панель удалит только созданный ей DNS-фрагмент и служебные правила, восстановит исходное состояние DNS override Keenetic и перезапустит Xray.';
     let confirmed = true;
-    if (C && typeof C.confirmModal === 'function') {
+    if (action !== 'resync' && C && typeof C.confirmModal === 'function') {
       confirmed = await C.confirmModal({
         title: action === 'enable' ? 'Включить DNS-over-VLESS?' : 'Отключить DNS-over-VLESS?',
         message: question,
@@ -2027,9 +2051,9 @@ import {
     render(status);
     try {
       const result = await postAction(action, action === 'enable' ? chosenTargets : []);
-      toast(action === 'enable'
+      toast(action === 'resync' ? 'Маршрут DNS-over-VLESS восстановлен.' : (action === 'enable'
         ? `DNS-over-VLESS включён${result.probe && result.probe.latency_ms != null ? ` · DNS ${result.probe.latency_ms} мс` : ''}`
-        : 'DNS-over-VLESS отключён, исходная настройка восстановлена.');
+        : 'DNS-over-VLESS отключён, исходная настройка восстановлена.'));
       await refresh();
       // Строки списка сложились до применения: теперь у устройств другой
       // вердикт, и показывать прежний — значит показывать неправду.
@@ -2296,6 +2320,9 @@ import {
       if (!target || !target.closest) return;
       if (target.closest('.xk-dns-zone-head .dt-switch')) event.stopPropagation();
     }, true);
+    document.addEventListener('xkeen-routing-fragment-saved', (event) => {
+      if (event.detail && event.detail.reason === 'xray-subscriptions' && !busy) void refresh();
+    });
     refresh();
   }
 
