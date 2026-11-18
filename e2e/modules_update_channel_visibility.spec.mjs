@@ -6,6 +6,43 @@ import { test, expect } from './fixtures.mjs';
 const PROFILE = String(process.env.XKEEN_E2E_MODULE_PROFILE || 'full').toLowerCase();
 const server = JSON.parse(readFileSync(new URL('./fixtures/module_manager_server.json', import.meta.url), 'utf8'));
 
+test('a beta check that finishes after switching to stable cannot restore the beta offer', async ({ page }) => {
+  let selected = 'prerelease';
+  let releaseBetaCheck;
+  const betaWait = new Promise((resolve) => { releaseBetaCheck = resolve; });
+  await page.route('**/api/modules/installed', (route) => route.fulfill({
+    json: { ...server.installed, update_channel: selected },
+  }));
+  await page.route('**/api/modules/operations/status', (route) => route.fulfill({ json: server.status_none }));
+  await page.route('**/api/modules/update-channel', (route) => {
+    selected = route.request().postDataJSON().channel;
+    return route.fulfill({ json: { ok: true, channel: selected } });
+  });
+  await page.route('**/api/modules/panel/update-check', async (route) => {
+    const late = selected === 'prerelease' && route.request().postDataJSON().force_refresh;
+    if (late) await betaWait;
+    await route.fulfill({ json: {
+      ...server.update_check_current,
+      fetched_at: Date.now() / 1000,
+      ...(late ? { update_available: true, target_version: '2.12.0-beta.1' } : {}),
+    } });
+  });
+
+  await page.goto('/modules');
+  await expect(page.getByRole('button', { name: 'Проверить ещё раз' })).toBeVisible();
+  const pending = page.waitForRequest((request) => request.url().endsWith('/panel/update-check') && request.postDataJSON().force_refresh);
+  await page.getByRole('button', { name: 'Проверить ещё раз' }).click();
+  await pending;
+  const stable = page.locator('.modules-summary button[data-channel="stable"]');
+  await stable.click();
+  await expect(stable).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: 'Проверить ещё раз' })).toBeEnabled();
+  const response = page.waitForResponse((res) => res.url().endsWith('/panel/update-check') && res.request().postDataJSON().force_refresh);
+  releaseBetaCheck();
+  await (await response).finished();
+  await expect(page.getByRole('button', { name: 'Проверить ещё раз' })).toBeFocused();
+  await expect(page.getByText('2.12.0-beta.1', { exact: false })).toHaveCount(0);
+});
 
 test(`Modules screen shows the update channel in its summary: ${PROFILE}`, async ({ page }) => {
   let selected = 'stable';

@@ -606,7 +606,7 @@ class NotificationCenter:
                 steps = failures - len(SHORT_RETRY_S) - 1
                 delay = min(MAX_BACKOFF_S, self._background_interval_s * (2 ** min(steps, 3)))
             channel_state["next_poll_at"] = now + delay
-        result = self._public_snapshot_locked(state, channel, now)
+        result = self._public_snapshot_locked(state, read_channel(self.state_dir), now)
         self._write_state_locked(state)
         return result
 

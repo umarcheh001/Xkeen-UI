@@ -9,6 +9,8 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
 
   const SH = getDevtoolsSharedApi() || {};
   let _inited = false;
+  let actionPending = false;
+  let statusGeneration = 0;
   const toast = SH.toast || function (m) { try { console.log(m); } catch (e) {} };
   const getJSON = SH.getJSON || (async (u) => {
     const r = await fetch(u, { cache: 'no-store' });
@@ -25,10 +27,13 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   const byId = SH.byId || ((id) => { try { return document.getElementById(id); } catch (e) { return null; } });
 
   async function loadUiStatus() {
+    if (actionPending) return;
+    const generation = ++statusGeneration;
     const out = byId('dt-ui-status');
     if (out) out.textContent = 'Загрузка…';
     try {
       const data = await getJSON('/api/devtools/ui/status');
+      if (generation !== statusGeneration) return;
 
       // Dev/desktop: UI often isn't managed via init.d, so show that explicitly.
       const managed = data && data.managed ? String(data.managed) : '';
@@ -48,6 +53,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
         out.className = 'status ' + (running ? 'ok' : 'warn');
       }
     } catch (e) {
+      if (generation !== statusGeneration) return;
       if (out) {
         out.textContent = 'Ошибка: ' + (e && e.message ? e.message : String(e));
         out.className = 'status bad';
@@ -63,19 +69,54 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   };
 
   async function runUiAction(action) {
+    if (actionPending) return;
+    actionPending = true;
+    statusGeneration += 1;
+    const label = ACTION_LABELS[action] || action;
+    const out = byId('dt-ui-status');
     try {
       const data = await postJSON('/api/devtools/ui/' + encodeURIComponent(action), {});
-      const label = ACTION_LABELS[action] || action;
-      if (data && data.ok) {
-        toast(label + ': готово');
-      } else {
+      if (!data?.ok) {
         toast(label + ': не удалось', true);
+      } else if (data.scheduled) {
+        toast(label + ': команда принята');
+        if (action === 'restart' && data.mode === 'initd') {
+          if (out) {
+            out.textContent = 'Ожидаем перезапуска панели…';
+            out.className = 'status warn';
+          }
+          const deadline = Date.now() + 30_000;
+          while (Date.now() < deadline) {
+            await new Promise((resolve) => setTimeout(resolve, 750));
+            const status = await getJSON('/api/devtools/ui/status').catch(() => null);
+            if (!status?.running || !status.pid || status.pid === data.previous_pid) continue;
+            if (out) {
+              out.textContent = 'Панель работает';
+              out.className = 'status ok';
+            }
+            return;
+          }
+          if (out) {
+            out.textContent = 'Не удалось подтвердить перезапуск панели';
+            out.className = 'status warn';
+          }
+          return;
+        }
+        if (action === 'stop') {
+          if (out) {
+            out.textContent = 'Команда остановки принята';
+            out.className = 'status warn';
+          }
+          return;
+        }
+      } else {
+        toast(label + ': готово');
       }
     } catch (e) {
-      const label = ACTION_LABELS[action] || action;
       toast(label + ': ' + (e && e.message ? e.message : String(e)), true);
+    } finally {
+      actionPending = false;
     }
-    // status may change quickly
     setTimeout(loadUiStatus, 600);
   }
 

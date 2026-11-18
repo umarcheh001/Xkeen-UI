@@ -191,6 +191,8 @@ def launch(
                 "operation_rollback_failed",
                 "the previous operation could not be undone; repeat the undo or reinstall the panel",
             )
+        if Journal.find(panel_root) is not None:
+            raise ModuleTransactionError("operation_recovery_required", "the previous operation still needs recovery")
         if prepare_plan is not None:
             plan = prepare_plan()
         operation_id = new_operation_id()
@@ -266,10 +268,12 @@ def observe_status(panel_root: Path, state_dir: Path) -> dict[str, Any]:
 
     panel_root, state_dir = Path(panel_root), Path(state_dir)
     status = read_status(state_dir)
-    if status.get("result") != "running":
+    if status.get("result") not in {"running", "committed"}:
         return status
     operation_dir = Journal.find(panel_root)
     if operation_dir is None:
+        if status.get("result") == "committed":
+            return status
         if status.get("step") == "committed":
             # The runner confirmed the operation and put its record away, and
             # was cut short before the last word in the status: it is done.
@@ -283,8 +287,13 @@ def observe_status(panel_root: Path, state_dir: Path) -> dict[str, Any]:
         write_status(state_dir, status)
         return status
     try:
-        busy = Journal.open(operation_dir).busy()
+        journal = Journal.open(operation_dir)
+        busy = journal.busy()
+        if status.get("result") == "committed" and journal.meta().get("step") != "committed":
+            return status
     except ModuleTransactionError:
+        if status.get("result") == "committed":
+            return status
         busy = False
     if busy:
         return status

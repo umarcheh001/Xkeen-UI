@@ -25,7 +25,7 @@ from services.module_registry import (
     ModuleRegistry,
     module_set_name,
 )
-from services.module_update_channel import CHANNELS, read_channel, write_channel
+from services.module_update_channel import CHANNELS, panel_update_available, read_channel, write_channel
 from services.module_transactions.launcher import (
     ensure_restartable,
     launch,
@@ -678,7 +678,7 @@ class ModuleLifecycleService:
                     **self._module_update_check(client, source_version, force_refresh=bool(force_refresh)),
                 }
             target_version = str(snapshot.catalog.get("release_version") or "")
-            newer = compare_semver(target_version, source_version) > 0
+            newer = panel_update_available(source_version, target_version, read_channel(self.state_dir))
             descriptor = snapshot.catalog.get("panel")
             min_updater = descriptor.get("min_updater") if isinstance(descriptor, Mapping) else None
             # The release may say this panel is too old to lay it by itself:
@@ -833,7 +833,7 @@ class ModuleLifecycleService:
                 }
 
             target_version = str(snapshot.catalog.get("release_version") or "")
-            update_available = compare_semver(target_version, source_release) > 0
+            update_available = panel_update_available(source_release, target_version, channel)
             descriptor = snapshot.catalog.get("panel")
             target_panel = dict(descriptor) if isinstance(descriptor, Mapping) else {}
             min_updater = target_panel.get("min_updater")
@@ -1255,12 +1255,10 @@ class ModuleLifecycleService:
                     stable_unreleased=True,
                 ) from error
             if operation == "panel-update":
-                from services.module_package_contract import compare_semver
-
                 # Before the archive: a panel that is already current must
                 # not download the whole release to learn that.
                 target_version = str(snapshot.catalog.get("release_version") or "")
-                if compare_semver(target_version, source_version) <= 0:
+                if not panel_update_available(source_version, target_version, read_channel(self.state_dir)):
                     raise ModuleTransactionError(
                         "panel_update_not_newer",
                         "the selected catalog does not contain a newer panel release",

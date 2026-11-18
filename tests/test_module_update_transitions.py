@@ -572,7 +572,7 @@ def test_serial_floor_does_not_carry_over_to_next_panel(tree, tmp_path: Path, mo
     assert later.stale_reason == "module_updates_rollback"
 
 
-def test_rollback_is_not_offered_after_module_update(tree, tmp_path: Path) -> None:
+def test_rollback_is_still_offered_after_module_update(tree, tmp_path: Path) -> None:
     release = make_release(version=NEW_SMALL)
     _small_panel_update(tmp_path, tree, release)
     assert describe_previous_version(tree.root)["available"] is True
@@ -586,8 +586,8 @@ def test_rollback_is_not_offered_after_module_update(tree, tmp_path: Path) -> No
     assert _run_small(tree, plan, release) == "committed"
 
     described = describe_previous_version(tree.root)
-    assert described["available"] is False
-    assert described["reason"] in {"no_previous_version", "panel_changed_since_update"}
+    assert described["available"] is True
+    assert described["version"] == OLD_SMALL
 
 
 def test_panel_update_lays_release_module_over_updated_module_and_clears_its_record(tree, tmp_path: Path) -> None:

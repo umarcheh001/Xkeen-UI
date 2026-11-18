@@ -70,6 +70,10 @@ def restart_panel(source: str = "api") -> bool:
     command = panel_restart_command()
     if not command:
         return False
+    return launch_detached(command)
+
+
+def launch_detached(command: List[str]) -> bool:
     options: dict = {
         "stdin": subprocess.DEVNULL,
         "stdout": subprocess.DEVNULL,

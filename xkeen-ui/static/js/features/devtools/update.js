@@ -51,6 +51,7 @@ import {
 
   async function selectChannel(channel) {
     const result = await api.setUpdateChannel(channel);
+    window.dispatchEvent(new CustomEvent('xkeen:notification-channel-changed'));
     // У другого канала свой каталог и своя проверка обновлений.
     await load();
     return result;
@@ -101,7 +102,6 @@ import {
     if (!lifecycleAvailable(installed)) return null;
     try {
       const check = await api.checkPanelUpdate(false);
-      reconcileModulesUpdateCheck(check);
       return { ...check, checked: true };
     } catch (error) {
       return { checked: false, error };
@@ -125,7 +125,10 @@ import {
     const pending = lifecycleAvailable(installed) ? { loading: true } : null;
     render(installed, pending);
     const update = await loadUpdate(installed);
-    if (seq === _loadSeq) render(installed, update);
+    if (seq === _loadSeq) {
+      if (update?.checked) reconcileModulesUpdateCheck({ ...update, channel: installed.update_channel });
+      render(installed, update);
+    }
     return installed;
   }
 

@@ -80,13 +80,13 @@ def ui_action(action: str) -> Dict[str, Any]:
 
     # Prefer our dedicated init script when present.
     if ui_init_script:
-        # For stop/restart we run in background to increase chances that HTTP response is sent.
         if action in ("stop", "restart"):
-            try:
-                subprocess.Popen([ui_init_script, action], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            except Exception as e:
-                return {"ok": False, "action": action, "error": str(e)}
-            return {"ok": True, "action": action, "scheduled": True, "mode": "initd", "script": ui_init_script}
+            pid = ui_status().get("pid")
+            # Give the HTTP worker time to send the acknowledgement before it exits.
+            command = ["sh", "-c", 'sleep 1; exec "$@"', "xkeen-ui", ui_init_script, action]
+            if not panel_service.launch_detached(command):
+                return {"ok": False, "action": action, "error": "service_action_dispatch_failed"}
+            return {"ok": True, "action": action, "scheduled": True, "mode": "initd", "script": ui_init_script, "previous_pid": pid}
 
         try:
             subprocess.check_call([ui_init_script, action], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

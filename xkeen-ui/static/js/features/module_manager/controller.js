@@ -846,16 +846,19 @@ export function createModuleManagerController({ root, api, pollMs, reload = () =
   }
 
   async function requestUpdateCheck(event) {
-    if (!state.installed?.lifecycle?.available || busy || state.update.loading) return;
+    if (!state.installed?.lifecycle?.available || busy || channelBusy || state.update.loading) return;
     const trigger = event?.currentTarget;
     state.update = { ...state.update, loading: true, error: null };
+    const pending = state.update;
     render();
     try {
       const checked = await api.checkPanelUpdate(true);
+      if (state.update !== pending) return;
       state.update = { ...checked, checked: true, loading: false, error: null };
       reconcileModulesUpdateCheck({ ...checked, channel: state.installed?.update_channel });
       clearError();
     } catch (error) {
+      if (state.update !== pending) return;
       clearModulesUpdateBadge();
       state.update = { ...state.update, checked: false, loading: false, error };
     } finally {
@@ -870,10 +873,11 @@ export function createModuleManagerController({ root, api, pollMs, reload = () =
   async function loadKeptUpdateCheck() {
     if (!state.installed?.lifecycle?.available || state.update.loading || state.update.checked) return;
     const installed = state.installed;
+    const pending = state.update;
     let checked;
     try {
       checked = await api.checkPanelUpdate(false);
-      if (state.installed !== installed || state.update.loading || state.update.checked) return;
+      if (state.installed !== installed || state.update !== pending) return;
       state.update = { ...checked, checked: true, loading: false, error: null };
       reconcileModulesUpdateCheck({ ...checked, channel: state.installed?.update_channel });
     } catch (error) {
@@ -901,11 +905,11 @@ export function createModuleManagerController({ root, api, pollMs, reload = () =
     if (active) render();
     try {
       const result = await api.setUpdateChannel(channel);
-      state.installed = await api.loadInstalled();
       // Another channel has its own catalog and its own answer.
       state.update = { checked: false, loading: false, error: null };
       clearModulesUpdateBadge();
       try { window.dispatchEvent(new CustomEvent('xkeen:notification-channel-changed')); } catch (error) {}
+      state.installed = await api.loadInstalled();
       clearError();
       return result;
     } catch (error) {

@@ -91,3 +91,18 @@ def test_devtools_service_control_uses_the_same_script(init_dir):
     script = _script(init_dir / "S99xkeen-ui-umarcheh001")
 
     assert ui_service._resolve_ui_init_script() == script
+
+
+@pytest.mark.parametrize("action", ["stop", "restart"])
+def test_devtools_schedules_a_detached_service_action(init_dir, monkeypatch, action):
+    from services.devtools import ui_service
+
+    script = _script(init_dir / "S99xkeen-ui-umarcheh001")
+    calls = []
+    monkeypatch.setattr(panel_service.subprocess, "Popen", lambda command, **options: calls.append((command, options)))
+
+    assert ui_service.ui_action(action)["scheduled"] is True
+    command, options = calls[0]
+    assert command[-2:] == [script, action]
+    assert command[0] == "sh" and "sleep" in command[2]
+    assert options.get("start_new_session") is True or options.get("creationflags")

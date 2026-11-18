@@ -743,7 +743,9 @@ def _full_scope_plan(
     source_version = read_panel_version(panel_root)
     target_version = str(catalog.get("release_version") or "")
     comparison = compare_semver(target_version, source_version)
-    if require_newer and comparison <= 0:
+    from services.module_update_channel import panel_update_available, read_channel
+
+    if require_newer and not panel_update_available(source_version, target_version, read_channel(state_dir)):
         _fail(
             "panel_update_not_newer",
             "the stable catalog does not contain a newer panel release",

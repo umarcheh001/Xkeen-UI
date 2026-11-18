@@ -1,5 +1,30 @@
 import { test, expect } from './fixtures.mjs';
 
+test('DevTools waits for a new panel process after scheduling a restart', async ({ page }) => {
+  let scheduled = false;
+  let probes = 0;
+  await page.route('**/api/capabilities', async (route) => {
+    const response = await route.fetch();
+    const json = await response.json();
+    await route.fulfill({ response, json: { ...json, runtime: { ...json.runtime, mode: 'router' } } });
+  });
+  await page.route('**/api/devtools/ui/status', (route) => {
+    if (scheduled && ++probes === 2) return route.abort();
+    return route.fulfill({ json: { ok: true, running: true, pid: probes >= 3 ? 101 : 100 } });
+  });
+  await page.route('**/api/devtools/ui/restart', (route) => {
+    scheduled = true;
+    return route.fulfill({ json: { ok: true, scheduled: true, mode: 'initd', previous_pid: 100 } });
+  });
+  await page.goto('/devtools');
+  const status = page.locator('#dt-ui-status');
+  await expect(status).toHaveText('Панель работает');
+  await page.locator('#dt-ui-restart').click();
+  await expect(status).toHaveText('Ожидаем перезапуска панели…');
+  await expect(status).toHaveText('Панель работает');
+  expect(probes).toBeGreaterThanOrEqual(3);
+});
+
 test('stalled DevTools reads leave loading state with an error', async ({ page }) => {
   await page.clock.install();
   await page.addInitScript(() => {

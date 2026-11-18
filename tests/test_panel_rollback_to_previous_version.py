@@ -20,11 +20,14 @@ from flask import Flask
 from routes.modules import create_modules_blueprint
 from services.module_registry import ModuleRegistry
 from services.module_transactions.executor import recover, run_operation
+from services.module_transactions.install_state import state_file_updates
 from services.module_transactions.journal import Journal
+from services.module_transactions.launcher import observe_status
 from services.module_transactions.plan import (
     build_panel_rollback_plan,
     build_panel_update_plan,
     build_plan,
+    build_profile_transition_plan,
 )
 from services.module_transactions.previous_version import (
     describe_previous_version,
@@ -215,19 +218,21 @@ def test_going_back_restores_the_environment_of_the_previous_release(tmp_path):
 # --- устаревшая копия --------------------------------------------------------------------------
 
 
-def test_a_module_operation_after_the_update_makes_the_copy_stale(tmp_path):
-    panel, _before = _updated(tmp_path)
+@pytest.mark.parametrize("operation,module", [("install", "tool.terminal"), ("remove", "tool.files")])
+def test_module_operations_preserve_the_original_tree_for_panel_rollback(tmp_path, operation, module):
+    panel, before = _updated(tmp_path)
     release = make_release(version=NEW)
     plan = build_plan(
-        "install", "tool.terminal",
+        operation, module,
         panel_root=panel.root, state_dir=panel.state, catalog=release.catalog,
         architecture=ARCHITECTURE, free_bytes=1 << 40,
     )
 
     assert _run(panel, plan, release, name="module") == "committed"
 
-    assert not previous_version_root(panel.root).exists()
-    assert _reason(panel) == "no_previous_version"
+    assert describe_previous_version(panel.root)["version"] == OLD
+    assert _go_back(panel) == "committed"
+    assert changed_paths(before, _tree(panel)) == set()
 
 
 def test_a_tree_changed_behind_the_panels_back_is_not_laid_over(tmp_path):
@@ -237,6 +242,88 @@ def test_a_tree_changed_behind_the_panels_back_is_not_laid_over(tmp_path):
     (panel.root / "install-managed.json").write_text(json.dumps(managed), encoding="utf-8")
 
     assert _reason(panel) == "panel_changed_since_update"
+
+
+def test_panel_rollback_restores_the_logical_profile_after_a_profile_transition(tmp_path):
+    panel = make_panel(tmp_path, version=OLD)
+    release = make_release(version=NEW)
+    update = _update_plan(tmp_path, panel, release)
+    modules = panel.root / "modules.json"
+    modules.write_bytes(state_file_updates(panel.root, update)["modules.json"])
+    before = _tree(panel)
+    assert _run(panel, update, release, name="update") == "committed"
+    assert modules.read_bytes() == before["modules.json"]
+
+    registry = ModuleRegistry(str(panel.state), which=lambda _name: "/bin/tool")
+    registry.set_profile("mihomo-minimal")
+    archive = tmp_path / f"checked-{NEW}" / "panel.tar.gz"
+    plan = build_profile_transition_plan(
+        panel_root=panel.root, state_dir=panel.state, catalog=release.catalog,
+        target_archive=validate_panel_archive(archive, release.catalog["panel"], platform_architecture=ARCHITECTURE),
+        architecture=ARCHITECTURE, free_bytes=1 << 40,
+    )
+    assert _run(panel, plan, release, name="profile") == "committed"
+    assert _go_back(panel) == "committed"
+    assert changed_paths(before, _tree(panel)) == set()
+
+
+@pytest.mark.parametrize("interruption", [KeyboardInterrupt, OSError])
+def test_recovery_finishes_extending_the_previous_version(tmp_path, monkeypatch, interruption):
+    from services.module_transactions import executor
+
+    panel, before = _updated(tmp_path)
+    release = make_release(version=NEW)
+    plan = build_plan(
+        "remove", "tool.files", panel_root=panel.root, state_dir=panel.state,
+        catalog=release.catalog, architecture=ARCHITECTURE, free_bytes=1 << 40,
+    )
+    root = previous_version_root(panel.root)
+    replace = os.replace
+
+    def power_cut(source, target):
+        if Path(target) == root and Path(source).name == "previous":
+            raise interruption
+        return replace(source, target)
+
+    with monkeypatch.context() as m:
+        m.setattr(executor.os, "replace", power_cut)
+        if interruption is KeyboardInterrupt:
+            with pytest.raises(interruption):
+                _run(panel, plan, release, name="module")
+        else:
+            assert _run(panel, plan, release, name="module") == "committed"
+
+    assert not root.exists()
+    assert _reason(panel) == "operation_recovery_required"
+    assert observe_status(panel.root, panel.state)["result"] == "committed"
+    assert _go_back(panel) == "committed"
+    assert changed_paths(before, _tree(panel)) == set()
+
+
+def test_a_transient_read_error_keeps_the_previous_version_and_its_extension(tmp_path, monkeypatch):
+    panel, before = _updated(tmp_path)
+    release = make_release(version=NEW)
+    plan = build_plan(
+        "remove", "tool.files", panel_root=panel.root, state_dir=panel.state,
+        catalog=release.catalog, architecture=ARCHITECTURE, free_bytes=1 << 40,
+    )
+    previous_log = previous_version_root(panel.root) / "actions.log"
+    read_bytes = Path.read_bytes
+
+    def read(path):
+        if path == previous_log:
+            raise OSError("temporary read failure")
+        return read_bytes(path)
+
+    with monkeypatch.context() as m:
+        m.setattr(Path, "read_bytes", read)
+        assert _run(panel, plan, release, name="module") == "committed"
+
+    assert previous_log.exists()
+    assert _reason(panel) == "operation_recovery_required"
+    assert observe_status(panel.root, panel.state)["result"] == "committed"
+    assert _go_back(panel) == "committed"
+    assert changed_paths(before, _tree(panel)) == set()
 
 
 def test_a_copy_of_another_release_is_not_used(tmp_path):

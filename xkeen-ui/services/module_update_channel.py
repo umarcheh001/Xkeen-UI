@@ -10,6 +10,16 @@ from services.io.atomic import _atomic_write_json
 CHANNELS = frozenset({"stable", "prerelease"})
 
 
+def panel_update_available(source: str, target: str, channel: str) -> bool:
+    from services.module_package_contract import compare_semver
+
+    comparison = compare_semver(target, source)
+    return comparison > 0 or (
+        comparison < 0 and channel == "stable"
+        and "-" in source.partition("+")[0] and "-" not in target.partition("+")[0]
+    )
+
+
 def read_channel(state_dir: Path) -> str:
     try:
         data = json.loads((Path(state_dir) / "module-update-channel.json").read_text(encoding="utf-8"))

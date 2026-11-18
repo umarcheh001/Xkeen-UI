@@ -198,6 +198,7 @@ export function initNotificationCenter() {
   const checkButton = popover.querySelector('.xk-notification-check');
   const closeButton = popover.querySelector('.xk-notification-close');
   let snapshot = { records: [], unread_count: 0, status: {} };
+  let channelGeneration = 0;
   let loading = false;
   let open = false;
   let broadcast = null;
@@ -331,10 +332,14 @@ export function initNotificationCenter() {
   }
 
   async function load() {
+    const generation = channelGeneration;
     try {
-      snapshot = await request();
+      const next = await request();
+      if (generation !== channelGeneration) return;
+      snapshot = next;
       render();
     } catch (error) {
+      if (generation !== channelGeneration) return;
       snapshot = {
         records: [{ id: LOCAL_ERROR_ID, title: 'Центр уведомлений недоступен', message: error.message, kind: 'catalog-error' }],
         unread_count: 0,
@@ -372,10 +377,14 @@ export function initNotificationCenter() {
     loading = true;
     checkButton.disabled = true;
     render();
+    const generation = channelGeneration;
     try {
-      snapshot = await request('/check', 'POST', { force_refresh: true });
+      const next = await request('/check', 'POST', { force_refresh: true });
+      if (generation !== channelGeneration) return;
+      snapshot = next;
       publish();
     } catch (error) {
+      if (generation !== channelGeneration) return;
       status.textContent = error.message;
       status.className = 'xk-notification-status is-error';
     } finally {
@@ -399,6 +408,7 @@ export function initNotificationCenter() {
     if (event.key === 'xkeen.notification-center.changed') void load();
   });
   window.addEventListener('xkeen:notification-channel-changed', () => {
+    channelGeneration += 1;
     void load();
     publish();
   });

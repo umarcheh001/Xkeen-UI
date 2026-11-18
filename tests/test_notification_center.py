@@ -120,6 +120,23 @@ def test_notification_center_channel_state_isolated(tmp_path: Path):
     assert result["unread_count"] == 2
 
 
+def test_slow_beta_notification_check_returns_the_now_selected_stable_channel(tmp_path: Path):
+    class SlowBeta(FakeLifecycle):
+        def notification_catalog(self, *, force_refresh=False):
+            write_channel(tmp_path, "stable")
+            return super().notification_catalog(force_refresh=force_refresh)
+
+    write_channel(tmp_path, "prerelease")
+    center = NotificationCenter(SlowBeta(_payload("prerelease")), state_dir=tmp_path, now=lambda: 2_000.0)
+
+    result = center.check(force_refresh=True)
+
+    assert result["channel"] == "stable"
+    assert result["records"] == []
+    write_channel(tmp_path, "prerelease")
+    assert center.snapshot()["unread_count"] == 2
+
+
 def test_records_of_an_older_panel_vanish_and_poll_right_after_update(tmp_path: Path):
     version = ["2.10.0"]
     lifecycle = FakeLifecycle(_payload())
@@ -471,6 +488,7 @@ def _panel_with_modules(target_modules, installed_versions):
 
 def test_a_new_panel_lists_only_the_modules_whose_own_version_rose(tmp_path: Path):
     # As on 10.1 on 06.11.2026: a new beta changed one module, not all nine.
+    write_channel(tmp_path, "prerelease")
     payload = _panel_with_modules(
         [
             _target("core"),
@@ -494,6 +512,7 @@ def test_a_new_panel_lists_only_the_modules_whose_own_version_rose(tmp_path: Pat
 
 
 def test_a_module_updated_on_its_own_past_the_new_panel_is_not_listed(tmp_path: Path):
+    write_channel(tmp_path, "prerelease")
     payload = _panel_with_modules([_target("core"), _target("engine.xray", "1.0.3")], {"engine.xray": "1.0.4"})
     center = NotificationCenter(FakeLifecycle(payload), state_dir=tmp_path, now=lambda: 2_000.0)
 
@@ -506,6 +525,7 @@ def test_a_module_updated_on_its_own_past_the_new_panel_is_not_listed(tmp_path: 
 def test_a_catalog_without_module_versions_lists_no_module(tmp_path: Path):
     # A release built before module versions entered the catalog: saying
     # nothing is better than calling every module changed.
+    write_channel(tmp_path, "prerelease")
     payload = _panel_with_modules(
         [_target("core"), _target("engine.xray"), _target("tool.advanced-diagnostics")],
         {"engine.xray": "1.0.3", "tool.advanced-diagnostics": "1.0.5"},

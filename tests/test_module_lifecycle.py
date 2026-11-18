@@ -150,6 +150,22 @@ def test_update_channel_defaults_to_stable_and_persists(tmp_path):
         service.set_update_channel("main")
 
 
+@pytest.mark.parametrize("source,channel,offered", [
+    ("2.12.0-beta.1", "stable", True),
+    ("2.12.0-beta.1", "prerelease", False),
+    ("2.12.0", "stable", False),
+])
+def test_older_stable_is_only_offered_when_leaving_a_beta(tmp_path, source, channel, offered):
+    panel = make_panel(tmp_path, version=source)
+    release = make_release(version="2.11.0")
+    service, _ = make_service(panel, release)
+    service.set_update_channel(channel)
+
+    assert service.panel_update_check()["update_available"] is offered
+    assert service.notification_catalog()["update_available"] is offered
+    assert service.plan("panel-update", None)["applicable"] is offered
+
+
 def test_notification_catalog_reads_signed_metadata_without_downloading_archives(tmp_path):
     panel = make_panel(tmp_path)
     current = catalog_document(VERSION, OWNERSHIP)

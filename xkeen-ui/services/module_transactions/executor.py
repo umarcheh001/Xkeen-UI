@@ -18,6 +18,7 @@ from .plan import ROLLBACK_OPERATION, load_ownership_map
 from .previous_version import (
     RECORD_FILENAME,
     drop_previous_version,
+    extend_previous_version,
     previous_version_root,
     read_previous_version,
     record_for,
@@ -398,7 +399,9 @@ def run_operation(
                 shared[UNINSTALL_SCRIPT] = uninstall_script
         for relative, content in sorted(shared.items()):
             target = root.joinpath(*relative.split("/"))
-            if not target.is_file() or target.read_bytes() != content:
+            # The profile can change outside the file transaction after this update.
+            keep_profile = plan.operation == "panel-update" and relative == "modules.json"
+            if keep_profile or not target.is_file() or target.read_bytes() != content:
                 journal.write_state_file(relative, content)
 
         if provision is not None:
@@ -476,8 +479,7 @@ def _settle_previous_version(journal: Journal) -> None:
     """Confirm an operation and decide what becomes of the way back.
 
     A confirmed update of the panel is itself the way back: its copies are
-    the previous release. Any other confirmed operation changed the tree
-    the kept copy described, so that copy goes.
+    the previous release. Module and profile operations extend that copy.
     """
 
     plan = journal.plan
@@ -495,8 +497,20 @@ def _settle_previous_version(journal: Journal) -> None:
         except Exception:
             # The update is confirmed whatever happens to the copy.
             pass
-    journal.commit()
+    elif plan.scope in {"module", "profile"}:
+        try:
+            extend_previous_version(journal)
+        except OSError:
+            # Keep both journals so recovery can retry a failed write or rename.
+            return
+        except (ValueError, AttributeError, ModuleTransactionError):
+            # An incomplete delta must not be offered even when the manifest is unchanged.
+            pass
+        else:
+            journal.commit()
+            return
     drop_previous_version(root)
+    journal.commit()
 
 
 _UNTOUCHED_STEPS = frozenset({"prepared", "downloading", "verifying"})
@@ -562,10 +576,7 @@ def recover(
     step = meta.get("step")
 
     if readable and step == "committed":
-        # Confirmed, but cut short before its copies were kept or dropped:
-        # the way back that was there describes the tree before it.
-        journal.commit()
-        drop_previous_version(panel_root)
+        _settle_previous_version(journal)
         result = "committed"
     elif readable and step in _UNTOUCHED_STEPS:
         journal.commit()
