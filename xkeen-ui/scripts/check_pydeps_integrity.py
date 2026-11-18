@@ -13,6 +13,8 @@ gevent падал, панель молча уходила на Werkzeug без W
 
 Скрипт сверяет список файлов из RECORD с тем, что реально лежит на диске, и
 отдельно называет «обрезанные» файлы — те, чьё имя является префиксом ожидаемого.
+С --repair восстанавливает такие имена только при совпадении SHA256 и размера
+с RECORD. Без этого флага ничего на диске не меняет.
 
 Коды возврата: 0 — всё цело, 1 — есть потери, 2 — ошибка вызова.
 """
@@ -20,7 +22,9 @@ gevent падал, панель молча уходила на Werkzeug без W
 from __future__ import annotations
 
 import argparse
+import base64
 import csv
+import hashlib
 import json
 import sys
 import sysconfig
@@ -151,6 +155,45 @@ def check_record_integrity(site_packages: Path, package: str) -> Dict[str, objec
     return report
 
 
+def repair_truncated_files(site_packages: Path, package: str) -> List[str]:
+    """Restore only local files whose bytes match the wheel's recorded SHA256 and size."""
+    site_packages = Path(site_packages).resolve()
+    dist_info = find_dist_info(site_packages, package)
+    if dist_info is None or not (dist_info / "RECORD").is_file():
+        return []
+    repaired: List[str] = []
+    with (dist_info / "RECORD").open(encoding="utf-8", newline="") as fh:
+        rows = list(csv.reader(fh))
+        recorded_paths = {(site_packages / row[0]).resolve() for row in rows if row}
+        for row in rows:
+            if len(row) < 3 or not row[1].startswith("sha256=") or not row[2].isdigit():
+                continue
+            relative = row[0]
+            if _is_ignored(relative):
+                continue
+            expected = site_packages / relative
+            if expected.exists() or expected.is_symlink():
+                continue
+            sibling = _find_truncated_sibling(site_packages, relative)
+            if not sibling:
+                continue
+            source = site_packages / sibling
+            if source.resolve() in recorded_paths:
+                continue
+            if source.is_symlink() or not source.is_file():
+                continue
+            if not expected.resolve().is_relative_to(site_packages) or not source.resolve().is_relative_to(site_packages):
+                continue
+            if source.stat().st_size != int(row[2]):
+                continue
+            digest = base64.urlsafe_b64encode(hashlib.sha256(source.read_bytes()).digest()).decode().rstrip("=")
+            if row[1] != "sha256=" + digest:
+                continue
+            source.rename(expected)
+            repaired.append(relative)
+    return repaired
+
+
 def _print_human(report: Dict[str, object]) -> None:
     package = report["package"]
     status = report["status"]
@@ -184,11 +227,20 @@ def main(argv: Optional[List[str]] = None) -> int:
         help="каталог site-packages (по умолчанию — текущего интерпретатора)",
     )
     parser.add_argument("--json", action="store_true", help="выдать отчёт в JSON")
+    parser.add_argument("--repair", action="store_true", help="восстановить обрезанные имена при совпадении SHA256 и размера с RECORD")
     args = parser.parse_args(argv)
 
     site_packages = Path(args.site_packages) if args.site_packages else default_site_packages()
 
-    reports = {pkg: check_record_integrity(site_packages, pkg) for pkg in args.packages}
+    reports = {}
+    for pkg in args.packages:
+        repaired = repair_truncated_files(site_packages, pkg) if args.repair else []
+        reports[pkg] = check_record_integrity(site_packages, pkg)
+        if args.repair:
+            reports[pkg]["repaired"] = repaired
+            if not args.json:
+                for relative in repaired:
+                    print("[*] Восстановлено имя файла: %s" % relative)
     broken = any(rep["status"] == "broken" for rep in reports.values())
 
     if args.json:

@@ -10,6 +10,9 @@ satisfied», `run_server.py` глотал ошибку импорта в `except
 from __future__ import annotations
 
 import importlib.util
+import base64
+import hashlib
+import os
 import json
 import subprocess
 import sys
@@ -166,6 +169,99 @@ def test_record_check_cli_is_quiet_and_green_for_a_healthy_package(tmp_path):
     )
 
     assert proc.returncode == 0
+
+
+@pytest.mark.parametrize("damage", [None, "hash", "size", "no_hash"])
+def test_repair_restores_truncated_names_only_when_record_size_and_hash_match(tmp_path, damage):
+    valid = damage is None
+    expected = "gevent/_gevent_c_greenlet_primitives.cpython-313-aarch64-linux-gnu.so"
+    site = _make_site_packages(tmp_path, files={expected[:-1]: "elf"}, record=[expected])
+    digest = base64.urlsafe_b64encode(hashlib.sha256(b"elf").digest()).decode().rstrip("=")
+    record = site / "gevent-25.9.1.dist-info/RECORD"
+    record.write_bytes(f"{expected},sha256={digest},3\n".encode())
+    content = {None: b"elf", "hash": b"bad", "size": b"short", "no_hash": b"elf"}[damage]
+    (site / expected[:-1]).write_bytes(content)
+    if damage == "no_hash":
+        record.write_bytes(f"{expected},,3\n".encode())
+
+    proc = subprocess.run(
+        [sys.executable, str(CHECKER_PATH), "--site-packages", str(site), "--repair", "gevent"],
+        capture_output=True,
+    )
+
+    assert proc.returncode == (0 if valid else 1), proc.stderr
+    assert (site / expected).exists() is valid
+    assert (site / expected[:-1]).exists() is not valid
+    assert (site / (expected if valid else expected[:-1])).read_bytes() == content
+
+
+def test_installer_repairs_a_truncated_package_before_attempting_network_install(tmp_path):
+    expected = "gevent/extension.so"
+    site = _make_site_packages(tmp_path, files={expected[:-1]: "elf"}, record=[expected])
+    digest = base64.urlsafe_b64encode(hashlib.sha256(b"elf").digest()).decode().rstrip("=")
+    (site / "gevent-25.9.1.dist-info/RECORD").write_bytes(f"{expected},sha256={digest},3\n".encode())
+    (site / "gevent/__init__.py").write_bytes(
+        b"from pathlib import Path\nassert Path(__file__).with_name('extension.so').is_file()\n"
+    )
+    for module in ("flask", "cryptography", "yaml", "geventwebsocket"):
+        (site / (module + ".py")).write_bytes(b"")
+    (site / "sitecustomize.py").write_bytes(
+        b"import os, sysconfig\noriginal = sysconfig.get_paths\n"
+        b"def paths(*a, **kw):\n    result = original(*a, **kw)\n"
+        b"    result['purelib'] = os.environ['REPAIR_TEST_SITE']\n    return result\n"
+        b"sysconfig.get_paths = paths\n"
+    )
+    script = tmp_path / "install.sh"
+    script.write_bytes((
+        'set -e\n'
+        f'. "{(ROOT / "xkeen-ui/scripts/provision_env.sh").as_posix()}"\n'
+        f'PYTHON_BIN="{Path(sys.executable).as_posix()}"\n'
+        f'SRC_DIR="{(ROOT / "xkeen-ui").as_posix()}"\n'
+        f'UI_DIR="{tmp_path.as_posix()}"\n'
+        'WANT_GEVENT=1; ARCH=aarch64\n'
+        'provision_opkg_update() { echo unexpected-network; return 1; }\n'
+        'provision_python_libs_check\nprovision_python_libs_install\n'
+        'echo "gevent=$NEED_GEVENT ws=$WS_VERDICT"\n'
+    ).encode())
+    proc = subprocess.run(["sh", script.as_posix()], capture_output=True, env={
+        **os.environ, "PYTHONPATH": str(site), "REPAIR_TEST_SITE": str(site),
+    })
+
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert b"gevent=0 ws=on" in proc.stdout
+    assert b"unexpected-network" not in proc.stdout
+    assert (site / expected).read_bytes() == b"elf"
+
+
+def test_repair_does_not_follow_a_truncated_symlink_outside_site_packages(tmp_path):
+    checker = _load_checker()
+    site = _make_site_packages(tmp_path, files={}, record=["gevent/code.so"])
+    outside = tmp_path / "outside"
+    outside.write_bytes(b"elf")
+    try:
+        (site / "gevent").mkdir()
+        (site / "gevent/code.s").symlink_to(outside)
+    except OSError:
+        pytest.skip("symlinks unavailable")
+    digest = base64.urlsafe_b64encode(hashlib.sha256(b"elf").digest()).decode().rstrip("=")
+    (site / "gevent-25.9.1.dist-info/RECORD").write_bytes(f"gevent/code.so,sha256={digest},3\n".encode())
+
+    assert checker.repair_truncated_files(site, "gevent") == []
+    assert not (site / "gevent/code.so").exists()
+    assert outside.read_bytes() == b"elf"
+
+
+def test_repair_does_not_rename_another_file_listed_in_record(tmp_path):
+    checker = _load_checker()
+    site = _make_site_packages(tmp_path, files={"gevent/code.s": "elf"}, record=[])
+    digest = base64.urlsafe_b64encode(hashlib.sha256(b"elf").digest()).decode().rstrip("=")
+    (site / "gevent-25.9.1.dist-info/RECORD").write_bytes((
+        f"gevent/code.so,sha256={digest},3\n./gevent/code.s,sha256={digest},3\n"
+    ).encode())
+
+    assert checker.repair_truncated_files(site, "gevent") == []
+    assert (site / "gevent/code.s").read_bytes() == b"elf"
+    assert not (site / "gevent/code.so").exists()
 
 
 # --- Пункт 1: панель не деградирует молча -------------------------------------------

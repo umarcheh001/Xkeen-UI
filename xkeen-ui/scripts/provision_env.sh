@@ -1171,6 +1171,43 @@ ensure_opkg_bin() {
   return 1
 }
 
+repair_pip_ca() {
+  # opkg may target a newer Python: repair certifi for the interpreter we actually run.
+  if ! python_ssl_available; then
+    return 0
+  fi
+  "$PYTHON_BIN" - <<'PY'
+import os
+import ssl
+import tempfile
+from pathlib import Path
+from pip._vendor import certifi
+
+target = Path(certifi.where())
+context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+if target.is_file():
+    context.load_verify_locations(str(target))
+else:
+    source = ssl.get_default_verify_paths().cafile
+    if not source:
+        raise RuntimeError("Не найден системный файл CA для восстановления pip")
+    context.load_verify_locations(source)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=target.parent, delete=False) as output:
+            temporary = output.name
+            output.write(Path(source).read_bytes())
+            output.flush()
+            os.fsync(output.fileno())
+        os.chmod(temporary, 0o644)
+        os.replace(temporary, target)
+        print("[*] Файл CA рабочего pip восстановлен из системного хранилища.")
+    finally:
+        if temporary and os.path.exists(temporary):
+            os.unlink(temporary)
+PY
+}
+
 repair_python3_pip_package() {
   REPAIR_REASON="$1"
 
@@ -1179,6 +1216,13 @@ repair_python3_pip_package() {
     return 1
   fi
   PIP_REPAIR_ATTEMPTED=1
+
+  # A valid existing CA alone does not repair a broken pip/truststore module.
+  if "$PYTHON_BIN" -m pip --version >/dev/null 2>&1 && PIP_CA_REPAIR="$(repair_pip_ca)" && [ -n "$PIP_CA_REPAIR" ]; then
+    echo "$PIP_CA_REPAIR"
+    echo "[*] Рабочий pip и его сертификаты проверены для $PYTHON_BIN."
+    return 0
+  fi
 
   if ! ensure_opkg_bin; then
     echo "[!] Не найден opkg для автоматического ремонта python3-pip."
@@ -1194,8 +1238,8 @@ repair_python3_pip_package() {
     return 1
   fi
 
-  if ! "$PYTHON_BIN" -m pip --version >/dev/null 2>&1; then
-    echo "[!] python3-pip переустановлен, но модуль pip всё ещё недоступен из $PYTHON_BIN."
+  if ! "$PYTHON_BIN" -m pip --version >/dev/null 2>&1 || ! repair_pip_ca; then
+    echo "[!] python3-pip переустановлен, но рабочий pip или его сертификаты недоступны из $PYTHON_BIN."
     return 1
   fi
 
@@ -1385,8 +1429,11 @@ provision_python_libs_check() {
   if [ "$WANT_GEVENT" -eq 1 ]; then
     for MOD in gevent geventwebsocket; do
       if ! "$PYTHON_BIN" -c "import $MOD" >/dev/null 2>&1; then
-        NEED_GEVENT=1
-        break
+        verify_python_package_files --repair gevent gevent-websocket || true
+        if ! "$PYTHON_BIN" -c "import $MOD" >/dev/null 2>&1; then
+          NEED_GEVENT=1
+          break
+        fi
       fi
     done
   else
@@ -1600,7 +1647,11 @@ provision_python_libs_install() {
     echo "    Логи Xray будут отображаться через HTTP-пулинг."
   fi
 
-  echo "[*] Python-зависимости в порядке."
+  if [ "$WS_VERDICT" = "off" ] && [ "$WANT_GEVENT" -eq 1 ]; then
+    echo "[!] Обязательные Python-зависимости доступны; WebSocket не восстановлен."
+  else
+    echo "[*] Python-зависимости в порядке."
+  fi
 }
 
 # --- Чья служба --------------------------------------------------------------

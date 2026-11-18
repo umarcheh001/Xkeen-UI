@@ -38,13 +38,13 @@
         "gevent-websocket (optional)"
       ],
       "removable": false,
-      "unit_count": 681,
-      "size_bytes": 9064891,
+      "unit_count": 682,
+      "size_bytes": 9072544,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
         "backend_service": 99,
-        "backend_test": 304,
+        "backend_test": 305,
         "configuration": 12,
         "frontend_bundle": 10,
         "frontend_entrypoint": 4,
@@ -8503,6 +8503,26 @@
     {
       "module_id": "core",
       "kind": "backend_test",
+      "path": "tests/test_provision_pip_repair.py",
+      "size_bytes": 3063,
+      "depends_on": [],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "python3",
+        "flask",
+        "gevent (optional)",
+        "gevent-websocket (optional)"
+      ],
+      "environment_variables": [],
+      "removable": false
+    },
+    {
+      "module_id": "core",
+      "kind": "backend_test",
       "path": "tests/test_provision_python_libs.py",
       "size_bytes": 8476,
       "depends_on": [],
@@ -10195,7 +10215,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_ws_runtime_diagnostics.py",
-      "size_bytes": 10563,
+      "size_bytes": 15153,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
