@@ -45,6 +45,21 @@ const CORE_SOURCES = [
   [/^xray\b/i, 'Xray'],
 ];
 
+const CORE_EVENT_TEXT = {
+  'xkeen-ui init': 'Инициализация панели Xkeen UI',
+  'xray subscriptions auto-refresh': 'Автообновление подписок Xray',
+  'mihomo subscriptions auto-refresh': 'Автообновление подписок Mihomo',
+  'xray subscriptions scheduler failed': 'Ошибка автообновления подписок Xray',
+  'mihomo subscriptions scheduler failed': 'Ошибка автообновления подписок Mihomo',
+  'memory guard reclaimed runtime memory': 'Панель освободила часть памяти',
+  'xkeen.cmd_failed': 'Команда завершилась с ошибкой',
+  'routing.save.async_restart': 'Маршрутизация сохранена, перезапуск Xkeen поставлен в очередь',
+  'snapshot.delete_all': 'Массовое удаление снимков',
+  'fileops.job_create': 'Создана задача для файловой операции',
+  'devtools.log_truncate': 'Запрошена очистка журнала',
+  'optional module came without an explicit choice and is switched off': 'Дополнительный модуль отключён: он не был выбран пользователем',
+};
+
 export function panelLogKind(name) {
   const base = String(name || '').replace(/\.\d+$/, '');
   if (base === 'update') return 'update';
@@ -109,6 +124,7 @@ function record(fields) {
     level: 'info',
     source: '',
     msg: '',
+    summary: '',
     kv: [],
     extra: [],
     steps: [],
@@ -145,7 +161,7 @@ function finish(records, fold) {
     const n = (seen.get(first) || 0) + 1;
     seen.set(first, n);
     rec.id = `${n}:${first}`;
-    rec.text = [rec.source, rec.msg, ...rec.kv.map(([k, v]) => `${k}=${v}`), ...rec.raw, ...rec.extra]
+    rec.text = [rec.source, rec.msg, rec.summary, ...rec.kv.map(([k, v]) => `${k}=${v}`), ...rec.raw, ...rec.extra]
       .join('\n')
       .toLowerCase();
   }
@@ -153,6 +169,25 @@ function finish(records, fold) {
 }
 
 // ---------- core.log ----------
+
+function coreEventSummary(event, kv) {
+  const isRefresh = event === 'xray subscriptions auto-refresh' || event === 'mihomo subscriptions auto-refresh';
+  if (!isRefresh && event !== 'snapshot.delete_all') return '';
+
+  const fields = Object.fromEntries(kv);
+  const isCount = (value) => /^\d+$/.test(value ?? '');
+  const parts = [];
+  if (isRefresh) {
+    if (isCount(fields.ok) && isCount(fields.total)) parts.push(`успешно ${fields.ok} из ${fields.total}`);
+    const restarted = fields.restarted?.toLowerCase();
+    if (restarted === 'true') parts.push('Xkeen перезапущен');
+    if (restarted === 'false') parts.push('без перезапуска');
+  } else {
+    if (isCount(fields.deleted)) parts.push(`удалено ${fields.deleted}`);
+    if (isCount(fields.failed)) parts.push(`ошибок ${fields.failed}`);
+  }
+  return parts.join(' · ');
+}
 
 function parseCoreLine(line) {
   const m = CORE_RE.exec(line);
@@ -169,9 +204,8 @@ function parseCoreLine(line) {
     }
   }
   const source = panelLogCoreSource(msg);
-  if (msg === 'optional module came without an explicit choice and is switched off') {
-    msg = 'Дополнительный модуль отключён: он не был выбран пользователем';
-  }
+  const summary = coreEventSummary(msg, kv);
+  if (Object.hasOwn(CORE_EVENT_TEXT, msg)) msg = CORE_EVENT_TEXT[msg];
   // "DNS-over-VLESS: правило…" -- the source column already says it.
   if (source && msg.startsWith(`${source}: `)) msg = msg.slice(source.length + 2);
   return record({
@@ -180,6 +214,7 @@ function parseCoreLine(line) {
     level: normLevel(m[4]),
     source,
     msg,
+    summary,
     kv,
     raw: [line],
     key: `${normLevel(m[4])}|${rest}`,

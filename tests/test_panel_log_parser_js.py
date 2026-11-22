@@ -64,8 +64,32 @@ def test_core_line_is_split_into_time_level_source_message_and_parameters():
     rec = build("core", ["2026-10-02 15:37:46,664 [INFO] routing.save.async_restart | restart_job_id=a55a75049b2b, remote_addr=192.168.10.72"])[0]
     assert (rec["date"], rec["time"], rec["level"]) == ("2026-10-02", "15:37:46", "info")
     assert rec["source"] == "Маршрутизация"
-    assert rec["msg"] == "routing.save.async_restart"
+    assert rec["msg"] == "Маршрутизация сохранена, перезапуск Xkeen поставлен в очередь"
     assert rec["kv"] == [["restart_job_id", "a55a75049b2b"], ["remote_addr", "192.168.10.72"]]
+
+
+@pytest.mark.parametrize(("event", "label", "summary"), [
+    ("xkeen-ui init", "Инициализация панели Xkeen UI", ""),
+    ("xray subscriptions auto-refresh | total=9, ok=9, restarted=False", "Автообновление подписок Xray", "успешно 9 из 9 · без перезапуска"),
+    ("mihomo subscriptions auto-refresh | total=9, ok=7, restarted=True", "Автообновление подписок Mihomo", "успешно 7 из 9 · Xkeen перезапущен"),
+    ("xray subscriptions auto-refresh | total=invalid, ok=1", "Автообновление подписок Xray", ""),
+    ("xray subscriptions scheduler failed", "Ошибка автообновления подписок Xray", ""),
+    ("mihomo subscriptions scheduler failed", "Ошибка автообновления подписок Mihomo", ""),
+    ("memory guard reclaimed runtime memory", "Панель освободила часть памяти", ""),
+    ("xkeen.cmd_failed", "Команда завершилась с ошибкой", ""),
+    ("snapshot.delete_all | deleted=2, failed=1", "Массовое удаление снимков", "удалено 2 · ошибок 1"),
+    ("snapshot.delete_all | failed=0", "Массовое удаление снимков", "ошибок 0"),
+    ("fileops.job_create", "Создана задача для файловой операции", ""),
+    ("devtools.log_truncate", "Запрошена очистка журнала", ""),
+    ("unknown event", "unknown event", ""),
+])
+def test_core_events_are_localized_with_searchable_summaries(event, label, summary):
+    line = f"2026-11-22 15:37:46,664 [INFO] {event}"
+    rec = build("core", [line])[0]
+    assert (rec["msg"], rec["summary"]) == (label, summary)
+    assert rec["raw"] == [line]
+    assert summary.lower() in rec["text"]
+    assert event.lower() in rec["text"]
 
 
 def test_values_with_commas_inside_stay_whole():
@@ -88,6 +112,19 @@ def test_legacy_optional_module_event_is_translated():
 def test_mihomo_batch_restart_has_the_same_description_as_xray():
     out = run_js("return ['xray-subscriptions-batch', 'mihomo-subscriptions-batch'].map(s => RESTART_SOURCE_META[s]);", [])
     assert out[1] == {**out[0], "label": "Подписки Mihomo"}
+
+
+def test_restart_records_show_translated_operation_and_restart_result():
+    rows = [
+        ("xray-handler-setup", "OK", "Настройка API Xray", "Xkeen перезапущен"),
+        ("xray-handler-setup-recovery", "OK", "Откат настройки API Xray", "Xkeen перезапущен"),
+        ("core-install", "OK", "Установка ядра", "Xkeen перезапущен"),
+        ("core-install", "FAIL", "Установка ядра", "Не удалось перезапустить Xkeen"),
+    ]
+    lines = [f"[2026-11-19 21:26:50] source={source} result={result}" for source, result, _, _ in rows]
+    records = build("restart", lines)
+    assert [(rec["source"], rec["msg"]) for rec in records] == [(label, msg) for _, _, label, msg in rows]
+    assert [rec["raw"] for rec in records] == [[line] for line in lines]
 
 
 def test_sources_get_names_a_user_recognises():

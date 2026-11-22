@@ -116,6 +116,27 @@ test.describe('DevTools logs', () => {
     await expect(page.locator('#dt-log-stats')).toContainText('Показано: 1');
   });
 
+  test('localized events show counters and keep the raw entries in details', async ({ page }) => {
+    await openLogs(page, { files: { core: [
+      CORE[0],
+      CORE.at(-1),
+      '2026-10-23 15:10:00,000 [WARNING] snapshot.delete_all | deleted=2, failed=1\n',
+    ] } });
+    const events = rows(page).locator('.msg');
+    await expect(events.first()).toContainText('Инициализация панели Xkeen UI');
+    const subscription = events.nth(1);
+    await expect(subscription).toContainText('Автообновление подписок Xray');
+    await expect(subscription.locator('small')).toHaveText('успешно 7 из 7 · Xkeen перезапущен');
+    await expect(events.last().locator('small')).toHaveText('удалено 2 · ошибок 1');
+
+    await page.locator('#dt-log-search').fill('xray subscriptions auto-refresh');
+    await expect(rows(page)).toHaveCount(1);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await rows(page).first().click();
+    await expect(page.locator('#dt-log-view .detail .note')).toHaveText('успешно 7 из 7 · Xkeen перезапущен');
+    await expect(page.locator('#dt-log-view .detail pre')).toContainText('total=7, ok=7, restarted=True');
+  });
+
   test('обновления: одна строка на операцию, вывод подготовки свёрнут', async ({ page }) => {
     await openLogs(page);
     await page.locator('#dt-log-files [data-log-name="updates"]').click();
@@ -228,7 +249,7 @@ test.describe('DevTools logs: order and the new rows', () => {
     await expect.poll(() => host.evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop)).toBeLessThan(60);
     await expect(back).toBeHidden();
     state.appended.push('2026-10-23 13:00:00,000 [WARNING] memory guard reclaimed runtime memory | mode=auto\n');
-    await expect(rows(page).filter({ hasText: 'memory guard' })).toBeVisible();
+    await expect(rows(page).filter({ hasText: 'Панель освободила часть памяти' })).toBeVisible();
 
     // Away from them, it stays put and counts what came.
     await host.evaluate((el) => { el.scrollTop = 0; el.dispatchEvent(new Event('scroll')); });

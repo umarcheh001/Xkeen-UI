@@ -81,7 +81,7 @@ const VIEW_CSS = `
 .wrap.narrow .lvl { display: none; }
 .wrap.narrow .src { grid-column: 3; grid-row: 1; }
 .wrap.narrow .msg { grid-column: 3 / 5; grid-row: 2; }
-.wrap.narrow .msg small { display: none; }
+.wrap.narrow .msg small:not(.summary) { display: none; }
 .wrap.narrow .rep { grid-column: 4; grid-row: 1; justify-self: end; }
 .wrap.narrow .chev { grid-column: 5; grid-row: 1 / span 2; }
 .wrap.narrow .detail { padding-left: 14px; }
@@ -250,10 +250,12 @@ export function createPanelLogView(options) {
       rep = `вывод · ${rec.extra.length}`;
       repClass = 'rep dur';
     }
-    const inline = kvInline(rec);
+    const kv = rec.summary ? '' : kvInline(rec);
+    const inline = rec.summary ? `<small class="summary">${esc(rec.summary)}</small>` : (kv ? `<small>${kv}</small>` : '');
+    const title = rec.summary ? `${rec.msg} · ${rec.summary}` : rec.msg;
     return `<span class="lv"></span><span class="ts">${esc(rec.time)}</span><span class="lvl">${LEVEL_LABEL[rec.level] || ''}</span>`
       + `<span class="src">${esc(rec.source)}</span>`
-      + `<span class="msg" title="${esc(rec.msg)}">${esc(rec.msg)}${inline ? `<small>${inline}</small>` : ''}</span>`
+      + `<span class="msg" title="${esc(title)}">${esc(rec.msg)}${inline}</span>`
       + `<span class="${repClass}">${rep}</span><span class="chev">${icon('chevron-down')}</span>`;
   }
 
@@ -306,6 +308,7 @@ export function createPanelLogView(options) {
 
   function detailHtml(rec) {
     const parts = [];
+    if (rec.summary) parts.push(`<div class="note">${esc(rec.summary)}</div>`);
     if (rec.rep > 1) {
       parts.push(`<div class="note">Повторилось <b>${rec.rep} раз</b> подряд: с ${esc(shortDate(rec.firstDate))} ${esc(rec.firstTime)} по ${esc(shortDate(rec.date))} ${esc(rec.time)}. Между повторами других записей нет.</div>`);
     }

@@ -95,7 +95,7 @@ async function openLogs(page, theme, viewport, options = {}) {
   await selectPanelView(page, 'xray-logs');
   await expect(page.locator('#view-xray-logs')).toBeVisible();
   await expect(page.locator('#xray-log-output .tr').first()).toBeVisible();
-  await expect(page.locator('[data-xk-restart-log="1"]').last()).toContainText('Xray preflight');
+  await expect(page.locator('[data-xk-restart-log="1"]').last()).toContainText('Проверка конфигурации Xray');
 }
 
 const rows = (page) => page.locator('#xray-log-output .tr:not([hidden])');
@@ -932,6 +932,23 @@ test.describe('Operator Console Stage 4 logs', () => {
     await expect(row).toContainText('Xkeen перезапущен');
     await row.click();
     await expect(card.locator('.xk-jr-out')).toContainText('Xray output');
+  });
+
+  test('the journal translates setup and installation and shows source codes in details', async ({ page }) => {
+    await openLogs(page, 'dark', { width: 1440, height: 900 }, { restartLines: [
+      ...restartLines,
+      '[2026-07-29 09:13:00] source=xray-handler-setup result=OK duration_ms=3400\n',
+      '[2026-07-29 09:14:00] source=core-install result=OK duration_ms=3300\n',
+    ] });
+    const rows = page.locator('#view-xray-logs .xk-jr-row');
+    for (const [source, label] of [['xray-handler-setup', 'Настройка API Xray'], ['core-install', 'Установка ядра']]) {
+      const row = rows.filter({ hasText: label });
+      await expect(row.locator('.xk-jr-src')).toHaveText(label);
+      await expect(row.locator('.msg')).toHaveText('Xkeen перезапущен');
+      await row.click();
+      await expect(row.locator('xpath=following-sibling::*[1]').getByText(source, { exact: true })).toBeVisible();
+      await row.click();
+    }
   });
 
   test('the journal shows the newest first when asked and remembers it', async ({ page }) => {

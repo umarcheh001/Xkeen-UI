@@ -224,7 +224,7 @@ let restartLogModuleApi = null;
       return message.replace(/, Xray перезапущен$/, '');
     }
     if (source === 'xray-preflight') {
-      return ok ? message : 'конфиг отклонён preflight-проверкой';
+      return ok ? message : 'конфиг отклонён при проверке';
     }
 
     if (source !== 'core-switch') return message;
