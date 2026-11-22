@@ -47,6 +47,7 @@ const CORE_SOURCES = [
 
 const CORE_EVENT_TEXT = {
   'xkeen-ui init': 'Инициализация панели Xkeen UI',
+  'RCI access token loaded and accepted': 'Токен доступа RCI загружен и принят',
   'xray subscriptions auto-refresh': 'Автообновление подписок Xray',
   'mihomo subscriptions auto-refresh': 'Автообновление подписок Mihomo',
   'xray subscriptions scheduler failed': 'Ошибка автообновления подписок Xray',

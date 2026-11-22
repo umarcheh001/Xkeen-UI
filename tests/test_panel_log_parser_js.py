@@ -70,6 +70,7 @@ def test_core_line_is_split_into_time_level_source_message_and_parameters():
 
 @pytest.mark.parametrize(("event", "label", "summary"), [
     ("xkeen-ui init", "Инициализация панели Xkeen UI", ""),
+    ("RCI access token loaded and accepted", "Токен доступа RCI загружен и принят", ""),
     ("xray subscriptions auto-refresh | total=9, ok=9, restarted=False", "Автообновление подписок Xray", "успешно 9 из 9 · без перезапуска"),
     ("mihomo subscriptions auto-refresh | total=9, ok=7, restarted=True", "Автообновление подписок Mihomo", "успешно 7 из 9 · Xkeen перезапущен"),
     ("xray subscriptions auto-refresh | total=invalid, ok=1", "Автообновление подписок Xray", ""),
