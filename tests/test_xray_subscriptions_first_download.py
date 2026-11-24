@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -52,6 +53,25 @@ def test_scheduler_still_leaves_them_until_their_term(bench: Bench):
 
     assert results == []
     assert bench.fetched == []
+    assert restarts == []
+
+
+def test_batch_button_offers_optional_mapping_before_first_download(bench: Bench):
+    routing = bench.xray / "05_routing.json"
+    routing.write_text(json.dumps({"routing": {"rules": [{
+        "ruleTag": "ai", "domain": ["full:ai.example"], "outboundTag": "vless-reality",
+    }]}}), encoding="utf-8", newline="\n")
+    bench.subs.upsert_subscription(str(bench.state), {
+        "id": "alpha", "tag": "alpha", "url": "https://example.com/alpha",
+        "routing_mode": "subscription-only",
+    })
+    restarts: list = []
+    before = bench.config_files()
+    results = _refresh_due(bench, restarts, include_new=True, offer_route_mappings=True)
+    assert len(results) == 1
+    assert results[0]["code"] == "route_mapping_choice_required"
+    assert results[0]["route_mappings"][0]["required"] is False
+    assert bench.config_files() == before
     assert restarts == []
 
 

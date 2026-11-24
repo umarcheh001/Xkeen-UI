@@ -193,7 +193,7 @@ def return_rules(journal: Dict[str, Any], rules: List[Any]) -> List[Dict[str, st
             _skip(skipped, "rule", tag, "removed")
             continue
         used.add(id(rule))
-        still_ours = _rule_target(rule) == {"balancerTag": str(entry.get("to") or "")}
+        still_ours = _rule_target(rule) == {entry.get("to_kind", "balancerTag"): str(entry.get("to") or "")}
         if entry.get("stamped"):
             rule.pop("ruleTag", None)
         if not still_ours:
@@ -204,6 +204,40 @@ def return_rules(journal: Dict[str, Any], rules: List[Any]) -> List[Dict[str, st
             continue
         _set_target(rule, target)
     return skipped
+
+
+def retarget_outbounds(journal: Dict[str, Any], rules: List[Any], targets: Dict[str, str]) -> bool:
+    entries = journal.get("rules") or []
+    managed = {entry["tag"]: entry for entry in entries if entry.get("to_kind") == "outboundTag"}
+    changed = False
+    for rule in rules:
+        if not isinstance(rule, dict):
+            continue
+        tag = _tag(rule, "ruleTag")
+        outbound = _tag(rule, "outboundTag")
+        entry = managed.get(tag)
+        if entry:
+            if _rule_target(rule) != {"outboundTag": entry["to"]}:
+                continue
+            original = entry["target"]["outboundTag"]
+        else:
+            original = outbound
+        target = targets.get(original)
+        if not target or target == outbound:
+            continue
+        if tag and sum(_tag(item, "ruleTag") == tag for item in rules) > 1:
+            raise ValueError(f"Тег правила «{tag}» повторяется. Укажите уникальные теги перед переключением.")
+        if entry is None:
+            stamped = not tag
+            if stamped:
+                tag = _next_stamp(journal, rules)
+                rule["ruleTag"] = tag
+            entry = {"tag": tag, "target": {"outboundTag": original}, "stamped": stamped, "to_kind": "outboundTag"}
+            journal.setdefault("rules", []).append(entry)
+        entry["to"] = target
+        _set_target(rule, {"outboundTag": target})
+        changed = True
+    return changed
 
 
 def take_over_rule(journal: Dict[str, Any], rule: Dict[str, Any], index: int, service_rule_tag: str) -> bool:

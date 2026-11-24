@@ -55,7 +55,7 @@
             <span class="routing-dns-over-vless-lead-icon" aria-hidden="true">{{ op_icon('dns') }}</span>
             <div>
               <strong id="routing-dns-over-vless-lead-title">DNS через защищённый туннель Xray</strong>
-              <p id="routing-dns-over-vless-lead-text">Панель подготовит отдельный DNS-фрагмент, добавит только два служебных правила и включит перехват DNS в Keenetic.</p>
+              <p id="routing-dns-over-vless-lead-text">Панель подготовит DNS-фрагмент и служебные правила, затем включит перехват DNS в Keenetic.</p>
             </div>
             <span id="routing-dns-over-vless-badge" class="routing-dns-over-vless-badge">Проверка…</span>
           </div>
@@ -126,6 +126,63 @@
                     <p>Например <code>127.0.0.53</code> — штатный резолвер Ubuntu и Debian: тогда имена разрешает сам VPS, наружу не выходит ни одного открытого запроса, а адреса сайтов приходят ровно те, что видны из точки выхода. Так же указывается AdGuard Home, поднятый на VPS. Без этой отметки панель отвергает адреса петли и домашних сетей — их обычно вписывают по ошибке вместо поля локальных DNS. Проверьте, что на VPS ничего не блокирует обращения к приватным адресам: правило вида <code>geoip:private → block</code> оставит DNS без ответа. На ядре 26.5.3 и новее его не обязательно убирать — перенесите такое правило в <code>finalRules</code>: блокировка останется, а резолв на локальный адрес пройдёт.</p>
                   </details>
                 </div>
+              </div>
+            </details>
+
+            <details class="xk-dns-zone" data-zone="rule-dns">
+              <summary class="xk-dns-zone-head">
+                <b>DNS для отдельных правил</b>
+                <span id="routing-rule-dns-summary" class="xk-dns-zone-sum"></span>
+              </summary>
+              <div class="xk-dns-zone-body">
+                <b id="routing-rule-dns-list-title" hidden></b>
+                <div id="routing-rule-dns-list" class="xk-rule-dns-list"></div>
+                <div id="routing-rule-dns-editor"></div>
+                <p id="routing-rule-dns-note" class="modal-hint"></p>
+                <details class="xk-hint-more">
+                  <summary>Почему моего правила нет в списке?</summary>
+                  <p>В правиле маршрутизации Xray укажите уникальный ruleTag, например <code>"ruleTag": "50_ai_via_us"</code>. В список входят доменные правила с одним доступным прокси-выходом.</p>
+                </details>
+                <p id="routing-rule-dns-apply-note" class="modal-hint" hidden>Все добавленные правила применятся при включении DNS-over-VLESS.</p>
+                <button type="button" id="routing-rule-dns-add" class="routing-dns-over-vless-zone-preset">Добавить правило</button>
+                <template id="routing-rule-dns-entry">
+                  <div class="xk-rule-dns-row">
+                    <div class="xk-rule-dns-entry">
+                      <b data-rule-dns-name></b><span data-rule-dns-address></span><span data-rule-dns-target></span>
+                    </div>
+                    <div class="xk-rule-dns-actions">
+                      <button type="button" data-rule-dns-edit class="routing-dns-over-vless-zone-preset">Изменить</button>
+                      <button type="button" data-rule-dns-remove class="routing-dns-over-vless-zone-preset">Убрать</button>
+                    </div>
+                  </div>
+                </template>
+                <template id="routing-rule-dns-row">
+                  <div class="xk-rule-dns-row">
+                    <div class="xk-rule-dns-columns">
+                      <div class="xk-rule-dns-upstream">
+                        <label>Правило маршрутизации Xray
+                          <select class="routing-rule-input"></select>
+                        </label>
+                        <span class="xk-rule-dns-preview"><small>Домены из правила</small><b data-rule-dns-domains></b></span>
+                      </div>
+                      <div class="xk-rule-dns-upstream">
+                        <label>DNS-сервер
+                          <input type="text" class="routing-rule-input" placeholder="1.1.1.1" spellcheck="false">
+                        </label>
+                        <small class="modal-hint" data-rule-dns-help>Укажите IP-адрес, например 1.1.1.1, либо tcp://1.1.1.1 для DNS по TCP. Для DoH подойдёт https://1.1.1.1/dns-query.</small>
+                        <span class="xk-rule-dns-preview"><small>После включения DNS-over-VLESS трафик к сайтам из правила и их DNS-запросы пойдут только через</small><b data-rule-dns-outbound></b></span>
+                        <details class="xk-hint-more">
+                          <summary>Подробнее</summary>
+                          <p>В защищённом туннеле до VPS запросы уже зашифрованы. DoH дополнительно шифрует участок от VPS до DNS-сервера.</p>
+                        </details>
+                      </div>
+                    </div>
+                    <div class="xk-rule-dns-actions">
+                      <button type="button" data-rule-dns-save class="routing-dns-over-vless-zone-preset">Добавить правило</button>
+                      <button type="button" data-rule-dns-cancel class="routing-dns-over-vless-zone-preset">Отмена</button>
+                    </div>
+                  </div>
+                </template>
               </div>
             </details>
 

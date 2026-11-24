@@ -25,6 +25,8 @@ from urllib.parse import unquote, urlparse
 
 from flask import Blueprint, jsonify, request
 
+from services import dns_over_vless
+from services.xray_subscriptions import _serialize_config_update
 from services.command_jobs import create_command_job
 from services.latency_jobs import create_latency_job
 from services.io.atomic import _atomic_write_json, _atomic_write_text
@@ -1128,6 +1130,7 @@ def create_xray_configs_blueprint(
         )
 
     @bp.post("/api/inbounds")
+    @_serialize_config_update
     def api_set_inbounds():
         payload = request.get_json(silent=True) or {}
         file_arg = request.args.get("file", "")
@@ -1369,6 +1372,11 @@ def create_xray_configs_blueprint(
 
     @bp.post("/api/outbounds")
     def api_set_outbounds():
+        with dns_over_vless._LOCK:
+            return save_outbounds()
+
+    @_serialize_config_update
+    def save_outbounds():
         payload = request.get_json(silent=True) or {}
         file_arg = request.args.get("file", "")
         sel_path = resolve_xray_fragment_file(file_arg, kind="outbounds", default_path=OUTBOUNDS_FILE)
@@ -1393,6 +1401,11 @@ def create_xray_configs_blueprint(
 
             if not isinstance(obj, dict):
                 return error_response("config must be object", 400, ok=False)
+
+            try:
+                dns_over_vless.validate_rule_dns_outbound_save(XRAY_CONFIGS_DIR, ui_state_dir, sel_path, obj)
+            except dns_over_vless.DnsOverVlessError as exc:
+                return _xray_error(str(exc), 409, code=exc.code)
 
             raw_path = jsonc_path_for(sel_path)
             ensure_xray_jsonc_dir()
@@ -1470,6 +1483,10 @@ def create_xray_configs_blueprint(
                     hint="Проверьте формат ссылки и попробуйте снова.",
                 )
 
+        try:
+            dns_over_vless.validate_rule_dns_outbound_save(XRAY_CONFIGS_DIR, ui_state_dir, sel_path, cfg)
+        except dns_over_vless.DnsOverVlessError as exc:
+            return _xray_error(str(exc), 409, code=exc.code)
         snapshot_xray_config_before_overwrite(sel_path)
         try:
             save_json(sel_path, cfg)

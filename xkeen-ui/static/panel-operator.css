@@ -10042,6 +10042,21 @@ body.panel-page #confirm-modal .xk-sub-pause-choice select {
   max-width: 340px;
 }
 
+body.panel-page #confirm-modal .xk-sub-route-mapping {
+  padding: 12px;
+  gap: 8px;
+  border: 1px solid var(--op-border, #30343c);
+  border-radius: 8px;
+}
+
+body.panel-page #confirm-modal .xk-sub-route-mapping label {
+  font-weight: 700;
+}
+
+body.panel-page #confirm-modal .xk-sub-route-mapping select {
+  max-width: 100%;
+}
+
 body.panel-page #outbounds-subscriptions-modal .xk-sub-titleblock {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -13154,6 +13169,120 @@ body.panel-page .xk-dns-zone-body {
    * содержимое зон route/servers. Отсекать нечему: тело само скруглено
    * снизу под родительскую рамку. */
   border-radius: 0 0 var(--op-radius) var(--op-radius);
+}
+
+body.panel-page .xk-rule-dns-list,
+body.panel-page .xk-rule-dns-row {
+  display: grid;
+  gap: 10px;
+}
+
+body.panel-page .xk-rule-dns-list:empty {
+  display: none;
+}
+
+body.panel-page .xk-rule-dns-row {
+  padding: 10px;
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-control-radius);
+  background: var(--op-surface-2);
+}
+
+body.panel-page .xk-rule-dns-entry {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 6px;
+  overflow-wrap: anywhere;
+}
+
+body.panel-page .xk-rule-dns-entry > span::before {
+  content: "· ";
+}
+
+body.panel-page .xk-rule-dns-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  justify-self: start;
+  gap: 8px;
+}
+
+body.panel-page .xk-rule-dns-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+  gap: 10px;
+}
+
+body.panel-page .xk-rule-dns-columns :is(label, span, .xk-rule-dns-upstream) {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  min-width: 0;
+}
+
+body.panel-page .xk-rule-dns-columns .routing-rule-input {
+  width: 100%;
+}
+
+body.panel-page .xk-rule-dns-upstream > .modal-hint {
+  margin: 0;
+}
+
+body.panel-page .xk-rule-dns-columns select {
+  color-scheme: dark;
+}
+
+html[data-theme="light"] body.panel-page .xk-rule-dns-columns select {
+  color-scheme: light;
+}
+
+@supports (appearance: base-select) {
+  body.panel-page .xk-rule-dns-columns select,
+  body.panel-page .xk-rule-dns-columns select::picker(select) {
+    appearance: base-select;
+    background: var(--op-surface-2);
+    color: var(--op-text);
+    border: 1px solid var(--op-border-strong);
+    border-radius: var(--op-control-radius);
+  }
+
+  body.panel-page .xk-rule-dns-columns select::picker(select) {
+    margin-top: 4px;
+    padding: 4px;
+  }
+
+  body.panel-page .xk-rule-dns-columns select::picker-icon {
+    color: var(--op-data-muted);
+  }
+
+  body.panel-page .xk-rule-dns-columns option {
+    padding: 8px 12px;
+    border-radius: var(--op-radius-sm);
+  }
+
+  body.panel-page .xk-rule-dns-columns option:is(:checked, :hover, :focus) {
+    background: var(--op-accent-soft);
+  }
+}
+
+body.panel-page .xk-rule-dns-preview {
+  color: var(--op-text-strong);
+  overflow-wrap: anywhere;
+}
+
+body.panel-page .xk-rule-dns-preview small {
+  color: var(--op-data-muted);
+}
+
+body.panel-page .xk-rule-dns-row .xk-rule-dns-actions button {
+  justify-self: stretch;
+}
+
+body.panel-page #routing-rule-dns-add {
+  justify-self: start;
+}
+
+body.panel-page :is(#routing-rule-dns-editor:empty, #routing-rule-dns-add[hidden]) {
+  display: none;
 }
 
 /* Шаг между плитками равен боковому отступу тела окна и зазору между

@@ -20,6 +20,7 @@ from routes.common.errors import exception_response
 from services.command_jobs import create_command_job
 
 from services.io.atomic import _atomic_write_json, _atomic_write_text
+from services import dns_over_vless
 from services.request_limits import PayloadTooLargeError, get_routing_save_max_bytes, read_request_bytes_limited
 from utils.fs import load_text
 
@@ -27,6 +28,7 @@ from services.routing.templates import _paths_for_routing
 
 from services.xray_assets import ensure_xray_dat_assets
 from services.xray_config_files import ensure_xray_jsonc_dir, XRAY_JSONC_DIR_REAL
+from services.xray_subscriptions import _serialize_config_update
 
 from .errors import _no_cache
 
@@ -306,6 +308,7 @@ def _run_xray_preflight(
     sel_main: str,
     obj: Any,
     sync_dat_assets: bool = True,
+    extra_fragments: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Validate Xray configs with an edited fragment injected into a temp confdir.
 
@@ -349,6 +352,8 @@ def _run_xray_preflight(
             with open(target, 'w', encoding='utf-8') as f:
                 json.dump(obj, f, ensure_ascii=False, indent=2)
                 f.write('\n')
+            for name, fragment in (extra_fragments or {}).items():
+                _atomic_write_json(os.path.join(tmpdir, name), fragment)
 
             semantic_issue = _validate_routing_outbound_refs(tmpdir)
             if semantic_issue:
@@ -501,6 +506,7 @@ def register_config_routes(
     restart_xkeen: Callable[..., bool],
     append_restart_log: Callable[..., None] | None = None,
     save_operation_diagnostic: Callable[..., None] | None = None,
+    ui_state_dir: str = "",
 ) -> None:
     def _append_operation_log(ok: bool, source: str, **meta: object) -> None:
         if append_restart_log is None:
@@ -728,6 +734,11 @@ def register_config_routes(
 
     @bp.post("/api/routing")
     def api_set_routing() -> Any:
+        with dns_over_vless._LOCK:
+            return save_routing()
+
+    @_serialize_config_update
+    def save_routing() -> Any:
         """Accept raw routing JSON with comments, validate it and save.
 
         Supports optional query param ``?file=<name>`` to choose a fragment file.
@@ -787,6 +798,18 @@ def register_config_routes(
                 }
             ), 400
 
+        rule_dns_plan = None
+        if ui_state_dir and isinstance(obj, dict):
+            try:
+                if os.path.realpath(sel_main) == os.path.realpath(routing_file):
+                    rule_dns_plan = dns_over_vless.plan_rule_dns_routing_save(xray_configs_dir, sel_main, ui_state_dir, obj)
+                else:
+                    dns_over_vless.validate_rule_dns_outbound_save(xray_configs_dir, ui_state_dir, sel_main, obj)
+            except dns_over_vless.DnsOverVlessError as exc:
+                return jsonify({"ok": False, "error": str(exc), "code": exc.code}), 409
+        if rule_dns_plan:
+            obj = rule_dns_plan["routing"]
+
         skip_preflight_arg = str(
             request.args.get("skip_preflight")
             or request.args.get("skip_xray_preflight")
@@ -794,7 +817,7 @@ def register_config_routes(
         ).strip().lower()
         skip_preflight = skip_preflight_arg in ("1", "true", "yes", "on", "y")
 
-        if skip_preflight:
+        if skip_preflight and not rule_dns_plan:
             _core_log(
                 "warning",
                 "routing.save.preflight_skipped",
@@ -806,6 +829,7 @@ def register_config_routes(
                 xray_configs_dir_real=xray_configs_dir_real,
                 sel_main=sel_main,
                 obj=obj,
+                **({"extra_fragments": {dns_over_vless.MANAGED_FRAGMENT: rule_dns_plan["fragment"]}} if rule_dns_plan else {}),
             )
             if not preflight.get("ok"):
                 preflight_ref = "pf-" + uuid.uuid4().hex[:12]
@@ -879,7 +903,10 @@ def register_config_routes(
             d = os.path.dirname(sel_main)
             if d and not os.path.isdir(d):
                 os.makedirs(d, exist_ok=True)
-            _atomic_write_json(sel_main, obj)
+            if rule_dns_plan:
+                dns_over_vless.write_rule_dns_routing_save(rule_dns_plan, xray_configs_dir, sel_main, sel_raw, ui_state_dir, raw_text)
+            else:
+                _atomic_write_json(sel_main, obj)
         except Exception as e:
             return exception_response(
                 "Не удалось сохранить routing JSON-файл.",
@@ -896,7 +923,8 @@ def register_config_routes(
             d_raw = os.path.dirname(sel_raw)
             if d_raw and not os.path.isdir(d_raw):
                 os.makedirs(d_raw, exist_ok=True)
-            _atomic_write_text(sel_raw, raw_text)
+            if not rule_dns_plan:
+                _atomic_write_text(sel_raw, raw_text)
         except Exception as e:
             return exception_response(
                 "Не удалось сохранить raw routing JSONC-файл.",

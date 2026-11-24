@@ -139,6 +139,29 @@ def test_without_dns_over_vless_pause_is_one_restart(rig: Rig):
     assert rig.bench.sub("alpha")["paused"] is False
 
 
+def test_dns_rule_on_own_server_is_left_alone_during_subscription_pause(rig: Rig, monkeypatch):
+    rig.bench.add("alpha")
+    routing = json.loads(rig.routing.read_text(encoding="utf-8"))
+    routing["routing"]["rules"].insert(
+        0, {"ruleTag": "stream", "domain": ["domain:kino.example"], "outboundTag": "vless-reality"}
+    )
+    rig.routing.write_text(json.dumps(routing), encoding="utf-8")
+    monkeypatch.setattr(rig.dov, "_core_supports_rule_dns", lambda: True)
+    rig.dov.apply_action(
+        "enable", configs_dir=str(rig.bench.xray), routing_file=str(rig.routing),
+        ui_state_dir=str(rig.bench.state), restart_xkeen=rig._restart, target_tag="vless-reality",
+        rule_dns=[{"rule_tag": "stream", "upstream": "1.1.1.1"}],
+    )
+    fragment = rig.bench.xray / rig.dov.MANAGED_FRAGMENT
+    before = fragment.read_bytes()
+    rig.restarts.clear()
+
+    assert rig.pause()["ok"]
+    assert rig.restarts == ["xray-subscriptions-pause"]
+    assert rig.override
+    assert fragment.read_bytes() == before
+
+
 def test_dns_on_own_server_is_left_alone(rig: Rig):
     rig.bench.add("alpha")
     rig.dns_on("vless-reality")
@@ -265,7 +288,7 @@ def test_dns_changed_by_hand_during_pause_is_not_moved_back(tmp_path: Path, monk
     assert rig.restarts == ["xray-subscriptions-resume"]
 
 
-def test_resume_that_takes_away_the_dns_server_warns_of_two_restarts(tmp_path: Path, monkeypatch):
+def test_resume_that_takes_away_the_dns_server_offers_a_mapping(tmp_path: Path, monkeypatch):
     """«Только подписка» убирает свои серверы: DNS на своём сервере придётся перевести."""
     rig = Rig(tmp_path, monkeypatch, own=("home-nl",))
     rig.bench.add("alpha", routing_mode="subscription-only")
@@ -274,12 +297,206 @@ def test_resume_that_takes_away_the_dns_server_warns_of_two_restarts(tmp_path: P
 
     plan = rig.plan()
     assert plan["dns"]["outcome"] == "recheck"
-    assert plan["dns"]["restarts"] == 2
+    assert plan["dns"]["restarts"] == 1
+    assert plan["route_mappings"][0]["outbound_tag"] == "home-nl"
 
-    back = rig.resume(dns_target="proxy")
+    with pytest.raises(rig.pause_mod.PauseError) as required:
+        rig.resume(dns_target="proxy")
+    assert required.value.code == "route_mapping_choice_required"
+    assert not rig.restarts
 
-    assert back["dns"]["to"] == ["proxy"]
-    assert len(rig.restarts) == 2
+
+def test_bound_dns_rule_migrates_to_subscription_and_back(tmp_path, monkeypatch):
+    rig = Rig(tmp_path, monkeypatch, own=("VPS_US",))
+    rig.bench.add("alpha", routing_mode="subscription-only")
+    rig.pause()
+    model = json.loads(rig.routing.read_text(encoding="utf-8"))
+    domains = ["ext:geosite_v2fly.dat:anthropic", "ext:geosite_v2fly.dat:openai"]
+    model["routing"]["rules"] = [
+        {"ruleTag": "50_ai_via_us", "domain": domains, "outboundTag": "VPS_US"},
+        {"ruleTag": "52_streaming_us", "domain": ["domain:example.com"], "outboundTag": "VPS_US"},
+        {"ruleTag": "owner_catchall", "inboundTag": ["redirect", "tproxy"], "outboundTag": "VPS_US"},
+    ]
+    rig.routing.write_text(json.dumps(model), encoding="utf-8", newline="\n")
+    monkeypatch.setattr(rig.dov, "_core_supports_rule_dns", lambda: True)
+    rig.dov.apply_action(
+        "enable", configs_dir=str(rig.bench.xray), routing_file=str(rig.routing),
+        ui_state_dir=str(rig.bench.state), restart_xkeen=rig._restart, target_tag="VPS_US",
+        rule_dns=[{"rule_tag": "50_ai_via_us", "upstream": "8.8.8.8"}],
+    )
+    rig.restarts.clear()
+
+    before = rig.bench.config_files()
+    groups = rig.plan().get("route_mappings")
+    assert groups and len(groups) == 1
+    assert groups[0]["outbound_tag"] == "VPS_US"
+    assert [rule["ruleTag"] for rule in groups[0]["rules"]] == ["50_ai_via_us", "52_streaming_us", "owner_catchall"]
+    assert groups[0]["rules"][0]["domain"] == domains
+    assert rig.bench.config_files() == before
+    node = groups[0]["candidates"][0]
+    choice = {"outbound_tag": "VPS_US", "subscription_id": node["subscription_id"],
+              "node_key": node["node_key"], "revision": groups[0]["revision"]}
+
+    def assert_targets(tag):
+        rules = json.loads(rig.routing.read_text(encoding="utf-8"))["routing"]["rules"]
+        assert [rule["outboundTag"] for rule in rules if rule.get("ruleTag") in
+                {"50_ai_via_us", "52_streaming_us", "owner_catchall", rig.dov.PROXY_RULE_TAG}] == [tag] * 4
+        fragment = json.loads((rig.bench.xray / rig.dov.MANAGED_FRAGMENT).read_text(encoding="utf-8"))
+        assert fragment["outbounds"][1]["streamSettings"]["sockopt"]["dialerProxy"] == tag
+        assert next(item for item in fragment["dns"]["servers"]
+                    if isinstance(item, dict) and item.get("domains") == domains)["address"] == "8.8.8.8"
+        assert rig.override and rig.dns() == {"enabled": True, "selection": [tag]}
+
+    with pytest.raises(rig.pause_mod.PauseError) as stale:
+        rig.resume(route_mappings=[{**choice, "revision": "stale"}])
+    assert stale.value.code == "route_mapping_choice_required"
+    assert rig.bench.config_files() == before and not rig.restarts
+
+    rig.probes[:] = [False]
+    with pytest.raises(rig.pause_mod.PauseError) as broken:
+        rig.resume(route_mappings=[choice])
+    assert broken.value.code == "dns_switch_failed" and broken.value.details["rolled_back"]
+    assert rig.bench.config_files() == before and rig.bench.subs.subscriptions_paused(str(rig.bench.state))
+    rig.restarts.clear()
+
+    assert rig.resume(route_mappings=[choice])["restarts"] == 1
+    assert_targets(node["tag"])
+    assert rig.pause()["restarts"] == 1
+    assert_targets("VPS_US")
+    assert rig.resume()["restarts"] == 1
+    assert_targets(node["tag"])
+    edited = json.loads(rig.routing.read_text(encoding="utf-8"))
+    next(row for row in edited["routing"]["rules"] if row.get("ruleTag") == "52_streaming_us")["outboundTag"] = "direct"
+    rig.routing.write_text(json.dumps(edited), encoding="utf-8", newline="\n")
+    rig.pause()
+    restored = json.loads(rig.routing.read_text(encoding="utf-8"))["routing"]["rules"]
+    assert next(row for row in restored if row.get("ruleTag") == "52_streaming_us")["outboundTag"] == "direct"
+
+
+def test_rule_can_choose_a_subscription_node_before_dns_is_enabled(tmp_path, monkeypatch):
+    rig = Rig(tmp_path, monkeypatch, own=("VPS_US", "VPS_DE"))
+    rig.bench.add("alpha", routing_mode="subscription-only")
+    rig.pause()
+    model = json.loads(rig.routing.read_text(encoding="utf-8"))
+    model["routing"]["rules"] = [
+        {"ruleTag": "50_ai_via_us", "domain": ["ext:geosite_v2fly.dat:openai"], "outboundTag": "VPS_US"},
+        {"domain": ["full:untagged.example"], "outboundTag": "VPS_US"},
+        {"ruleTag": "51_de", "domain": ["full:portal.example"], "outboundTag": "VPS_DE"},
+    ]
+    rig.routing.write_text(json.dumps(model), encoding="utf-8", newline="\n")
+    groups = {group["outbound_tag"]: group for group in rig.plan()["route_mappings"]}
+    assert set(groups) == {"VPS_US", "VPS_DE"}
+    assert all(group["required"] is False for group in groups.values())
+    group = groups["VPS_US"]
+    node = group["candidates"][0]
+    picked = {"outbound_tag": "VPS_US", "revision": group["revision"],
+              "subscription_id": node["subscription_id"], "node_key": node["node_key"]}
+
+    def rule(tag):
+        rules = json.loads(rig.routing.read_text(encoding="utf-8"))["routing"]["rules"]
+        return next(row for row in rules if row.get("ruleTag") == tag)
+
+    assert rig.resume(route_mappings=[picked])["ok"]
+    assert rule("50_ai_via_us")["outboundTag"] == node["tag"]
+    assert rule("51_de").get("balancerTag")
+    assert not rig.dns()["enabled"]
+    status = rig.dov.get_status(configs_dir=str(rig.bench.xray), routing_file=str(rig.routing),
+                                ui_state_dir=str(rig.bench.state))
+    assert status["rule_dns_candidates"] == [
+        {"rule_tag": "50_ai_via_us", "domains": ["ext:geosite_v2fly.dat:openai"], "outbound_tag": node["tag"]},
+    ]
+    assert rig.pause()["ok"]
+    assert rule("50_ai_via_us")["outboundTag"] == "VPS_US"
+    assert rig.resume()["ok"]
+    assert rule("50_ai_via_us")["outboundTag"] == node["tag"]
+
+
+def test_first_subscription_only_refresh_offers_optional_rule_mapping(tmp_path, monkeypatch):
+    rig = Rig(tmp_path, monkeypatch, own=("VPS_US",))
+    rig.bench.add("alpha")
+    subs = rig.bench.subs
+    model = json.loads(rig.routing.read_text(encoding="utf-8"))
+    model["routing"]["rules"] = [
+        {"ruleTag": "50_ai_via_us", "domain": ["full:ai.example"], "outboundTag": "VPS_US"},
+    ]
+    rig.routing.write_text(json.dumps(model), encoding="utf-8", newline="\n")
+    subs.upsert_subscription(str(rig.bench.state), {
+        "id": "alpha", "tag": "alpha", "url": "https://example.com/alpha", "routing_mode": "subscription-only",
+    })
+    opts = {"xray_configs_dir": str(rig.bench.xray), "restart_xkeen": rig._restart, "offer_route_mappings": True}
+    before = rig.bench.config_files()
+    result = subs.refresh_subscription(str(rig.bench.state), "alpha", **opts)
+    assert result["code"] == "route_mapping_choice_required"
+    assert result["route_mappings"][0]["required"] is False
+    assert rig.bench.config_files() == before and not rig.restarts
+    assert subs.refresh_subscription(str(rig.bench.state), "alpha", **opts, route_mappings=[])["ok"]
+    assert subs.refresh_subscription(str(rig.bench.state), "alpha", **opts)["ok"]
+
+
+def test_pause_keeps_dns_working_when_its_main_node_has_no_manual_mapping(tmp_path, monkeypatch):
+    rig = Rig(tmp_path, monkeypatch, own=("VPS_US",))
+    rig.bench.add("alpha", routing_mode="subscription-only")
+    rig.pause()
+    model = json.loads(rig.routing.read_text(encoding="utf-8"))
+    model["routing"]["rules"] = [
+        {"ruleTag": "50_ai_via_us", "domain": ["full:ai.example"], "outboundTag": "VPS_US"},
+    ]
+    rig.routing.write_text(json.dumps(model), encoding="utf-8", newline="\n")
+    group = rig.plan()["route_mappings"][0]
+    node, unrelated = group["candidates"][:2]
+    assert rig.resume(route_mappings=[{
+        "outbound_tag": "VPS_US", "revision": group["revision"],
+        "subscription_id": node["subscription_id"], "node_key": node["node_key"],
+    }])["ok"]
+    rig.dns_on(unrelated["tag"])
+
+    assert rig.plan()["dns"]["restarts"] == 2
+    result = rig.pause()
+    assert result["ok"] and result["restarts"] == 2
+    assert rig.dns() == {"enabled": True, "selection": ["VPS_US"]}
+
+
+def test_refresh_prompts_before_first_subscription_only_application(tmp_path, monkeypatch):
+    rig = Rig(tmp_path, monkeypatch, own=("VPS_US",))
+    rig.bench.add("alpha")
+    rig.dns_on("VPS_US")
+    subs = rig.bench.subs
+    subs.upsert_subscription(str(rig.bench.state), {
+        "id": "alpha", "tag": "alpha", "url": "https://example.com/alpha", "routing_mode": "subscription-only",
+    })
+    before = rig.bench.config_files()
+    opts = {"xray_configs_dir": str(rig.bench.xray), "restart_xkeen": rig._restart}
+    result = subs.refresh_subscription(str(rig.bench.state), "alpha", **opts)
+    assert result["code"] == "route_mapping_choice_required"
+    assert rig.bench.config_files() == before and not rig.restarts
+    group = result["route_mappings"][0]
+    chosen = group["candidates"][0]
+    result = subs.refresh_subscription(str(rig.bench.state), "alpha", **opts, route_mappings=[{
+        "outbound_tag": "VPS_US", "revision": group["revision"],
+        "subscription_id": chosen["subscription_id"], "node_key": chosen["node_key"],
+    }])
+    assert result["ok"], result
+    assert rig.override and rig.dns() == {"enabled": True, "selection": [chosen["tag"]]}
+    subs.upsert_subscription(str(rig.bench.state), {
+        "id": "alpha", "tag": "renamed", "url": "https://example.com/alpha", "routing_mode": "subscription-only",
+    })
+    assert subs.refresh_subscription(str(rig.bench.state), "alpha", **opts)["ok"]
+    updated = next(node for node in subs.list_subscriptions(str(rig.bench.state))[0]["last_nodes"]
+                   if node["key"] == chosen["node_key"])
+    assert updated["tag"] != chosen["tag"]
+    assert rig.dns()["selection"] == [updated["tag"]]
+    subs.upsert_subscription(str(rig.bench.state), {
+        "id": "alpha", "tag": "renamed", "url": "https://example.com/alpha",
+        "routing_mode": "subscription-only", "name_filter": "Poland",
+    })
+    before = rig.bench.config_files()
+    missing = subs.refresh_subscription(str(rig.bench.state), "alpha", **opts)
+    assert missing["code"] == "route_mapping_choice_required"
+    assert rig.bench.config_files() == before and rig.dns()["selection"] == [updated["tag"]]
+    assert all(node["node_key"] != chosen["node_key"] for node in missing["route_mappings"][0]["candidates"])
+    removed = subs.delete_subscription(str(rig.bench.state), "alpha", **opts)
+    assert removed["restarted"]
+    assert rig.override and rig.dns() == {"enabled": True, "selection": ["VPS_US"]}
 
 
 def test_plan_changes_nothing(rig: Rig):

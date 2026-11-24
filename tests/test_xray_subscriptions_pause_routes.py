@@ -121,3 +121,34 @@ def test_list_carries_the_notice_of_the_last_switch(api, monkeypatch):
 
     assert response.status_code == 200
     assert response.get_json()["switch_notice"]["action"] == "pause"
+
+
+def test_switch_recovery_reads_state_and_notice_under_the_switch_lock(api, monkeypatch):
+    from contextlib import contextmanager
+
+    routes, client, _calls = api
+    held = False
+
+    @contextmanager
+    def switch_lock():
+        nonlocal held
+        held = True
+        try:
+            yield
+        finally:
+            held = False
+
+    def read_state(_dir):
+        assert held
+        return [{"paused": True, "paused_ts": 1790000000}]
+
+    def read_notice(_dir):
+        assert held
+        return {"action": "pause"}
+
+    monkeypatch.setattr(routes.subscription_pause, "_LOCK", switch_lock())
+    monkeypatch.setattr(routes, "list_subscriptions", read_state)
+    monkeypatch.setattr(routes.subscription_pause, "last_notice", read_notice)
+    response = client.get("/api/xray/subscriptions", headers={"X-Subscriptions-Wait-Switch": "1"})
+    assert response.status_code == 200
+    assert response.get_json()["switch_notice"]["action"] == "pause"

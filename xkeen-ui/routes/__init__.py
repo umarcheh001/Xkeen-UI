@@ -420,6 +420,7 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
                     _find_latest_auto_backup_for=ctx.find_latest_auto_backup_for,
                     strip_json_comments_text=ctx.strip_json_comments_text,
                     restart_xkeen=ctx.restart_xkeen,
+                    ui_state_dir=ctx.ui_state_dir,
                 ),
             )
 

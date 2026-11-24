@@ -10,6 +10,77 @@ const CLIENTS = {
   ],
 };
 
+test('отдельный DNS запоминает две привязки к правилам', async ({ page }) => {
+  const bindings = [
+    { rule_tag: 'Стриминг', upstream: 'https://1.1.1.1/dns-query' },
+    { rule_tag: 'Портал', upstream: '10.66.0.53' },
+  ];
+  const candidates = [
+    { rule_tag: 'Стриминг', domains: ['domain:kino.example', 'ext:geosite_v2fly.dat:streaming'], outbound_tag: 'vps-nl' },
+    { rule_tag: 'Портал', domains: ['full:portal.example'], outbound_tag: 'vps-de' },
+  ];
+  await mockClients(page, { available: true, clients: [] });
+  await openDialog(page, { ...STATUS, rule_dns_candidates: candidates });
+  await openZone(page, 'rule-dns');
+  const zone = page.locator('.xk-dns-zone[data-zone="rule-dns"]');
+  const add = zone.locator('#routing-rule-dns-add');
+  const save = zone.getByRole('button', { name: 'Добавить правило', exact: true });
+  const bindingsList = zone.locator('#routing-rule-dns-list');
+  await add.click();
+  await expect(save).toBeDisabled();
+  await expect(zone.getByLabel('DNS-сервер')).toHaveAttribute('placeholder', '1.1.1.1');
+  await expect(zone.getByLabel('DNS-сервер')).toHaveAccessibleDescription(/tcp:\/\/1\.1\.1\.1.*https:\/\/1\.1\.1\.1\/dns-query/);
+  await expect(zone.getByText('После включения DNS-over-VLESS трафик к сайтам из правила и их DNS-запросы пойдут только через')).toBeVisible();
+  await expect(zone.locator('#routing-rule-dns-note')).toContainText('Запасной VPS для этого правила не предусмотрен.');
+  const ruleSelect = zone.getByLabel('Правило маршрутизации Xray');
+  await page.locator('html').evaluate((html) => { html.dataset.theme = 'light'; });
+  await expect(ruleSelect).toHaveCSS('color-scheme', 'light');
+  await page.locator('html').evaluate((html) => { html.dataset.theme = 'dark'; });
+  await expect(ruleSelect).toHaveCSS('color-scheme', 'dark');
+  await ruleSelect.selectOption('Портал');
+  await zone.getByLabel('DNS-сервер').fill(bindings[1].upstream);
+  await expect(zone.getByText('vps-de', { exact: true })).toBeVisible();
+  await expect(bindingsList.getByText('Портал')).toHaveCount(0);
+  await save.click();
+  await expect(bindingsList.getByText('Портал')).toBeVisible();
+  await expect(zone.getByText('К применению')).toBeVisible();
+  const edit = await bindingsList.getByRole('button', { name: 'Изменить', exact: true }).boundingBox();
+  const remove = await bindingsList.getByRole('button', { name: 'Убрать', exact: true }).boundingBox();
+  expect(edit.width).toBe(remove.width);
+  await expect(add).toHaveText('Добавить ещё правило');
+  await add.click();
+  await zone.getByLabel('DNS-сервер').fill(bindings[0].upstream);
+  await expect(zone.getByText('kino.example и поддомены, ext:geosite_v2fly.dat:streaming', { exact: true })).toBeVisible();
+  await save.click();
+  await zone.getByRole('button', { name: 'Изменить', exact: true }).first().click();
+  await zone.getByLabel('DNS-сервер').fill('9.9.9.9');
+  await zone.getByRole('button', { name: 'Отмена', exact: true }).click();
+  await expect(bindingsList.getByText(bindings[1].upstream)).toBeVisible();
+  await zone.getByRole('button', { name: 'Убрать', exact: true }).first().click();
+  await add.click();
+  await zone.getByLabel('DNS-сервер').fill(bindings[1].upstream);
+  await save.click();
+  await expect(add).toBeHidden();
+  await zone.getByText('Почему моего правила нет в списке?', { exact: true }).click();
+  await expect(zone.getByText(/укажите уникальный ruleTag/)).toBeVisible();
+
+  let submitted;
+  await page.route('**/api/routing/dns-over-vless', async (route) => {
+    if (route.request().method() === 'POST') {
+      submitted = route.request().postDataJSON();
+      await route.fulfill({ json: { ok: true, enabled: true } });
+    } else {
+      await route.fulfill({ json: { ...STATUS, enabled: true, can_disable: true, rule_dns_candidates: candidates, rule_dns: bindings } });
+    }
+  });
+  await page.locator('#routing-dns-over-vless-apply').click();
+  await page.locator('#confirm-modal-ok-btn').click();
+  await expect.poll(() => submitted && submitted.rule_dns).toEqual(bindings);
+  await expect(zone.getByText('Применены', { exact: true })).toBeVisible();
+  await expect(zone.getByRole('button', { name: 'Изменить', exact: true })).toHaveCount(0);
+  await expect(zone.locator('#routing-rule-dns-note')).toContainText('Отключите защиту, чтобы изменить привязки');
+});
+
 
 test('окно открывается со свёрнутыми зонами', async ({ page }) => {
   await openDialog(page);
@@ -108,9 +179,43 @@ test('отмеченное, но не работающее устройство 
     // выше: добавлять нечего, а функция всё равно не доходит.
     clients: [{ title: 'Ноутбук', mac: 'aa:02', ip: '192.168.10.7', verdict: 'intercepted', captured: true, active: true, can_capture: true, reason: '' }],
   });
-  await openDialog(page);
+  await openDialog(page, { ...STATUS, enabled: true, can_disable: true });
   await expect(mark).toHaveText('правило не действует');
   await expect(mark).toHaveAttribute('data-state', 'warn');
+});
+
+test('после паузы подписок выключенная защита учитывает сохранённый выбор устройств и предлагает доступный узел', async ({ page }) => {
+  const mac = 'aa:bb:cc:dd:ee:01';
+  await mockClients(page, {
+    available: true,
+    counts: { total: 1, reaches: 0, intercepted: 1 },
+    clients: [{ ...CLIENTS.clients[0], captured: false }],
+  });
+  await openDialog(page, {
+    ...STATUS,
+    capture_macs: [mac],
+    pass_non_ip: true,
+    pass_non_ip_missing: true,
+    pass_non_ip_node: 'subscription-proxy',
+    pass_non_ip_options: ['manual-proxy'],
+  });
+  for (const id of ['routing-dns-over-vless-dot', 'routing-dns-over-vless-toolbar-dot']) {
+    await expect(page.locator(`#${id}`)).toHaveAttribute('data-state', 'off');
+  }
+  await expect(page.locator('[data-zone-req="devices"]')).toHaveAttribute('data-state', 'todo');
+  await expect(page.locator('[data-zone-sum="devices"]')).toHaveText('все 1 после включения');
+  await expect(page.locator('#routing-dns-over-vless-apply')).toBeEnabled();
+  await openZone(page, 'records');
+  const node = page.locator('#routing-dns-over-vless-pass-node');
+  await expect(node).toHaveValue('');
+  await expect(node.locator('option:checked')).toHaveText('Автоматически из выбранного маршрута');
+  await node.selectOption('manual-proxy');
+  await expect(page.locator('[data-zone-sum="records"]')).toContainText('manual-proxy');
+  await openZone(page, 'devices');
+  const device = page.getByRole('checkbox', { name: 'Завести DNS: DIGUS-01' });
+  await expect(device).toBeChecked();
+  await device.uncheck();
+  await expect(page.locator('[data-zone-req="devices"]')).toHaveText('есть кого добавить');
 });
 
 
@@ -178,7 +283,7 @@ test('сводка устройств обновляется, когда спи�
   // Список приходит отдельным запросом и позже остального окна. Раньше сводку
   // писали один раз вместе со статусом, и в свёрнутой зоне навсегда
   // оставалось «проверяем…».
-  await expect(page.locator('[data-zone-sum="devices"]')).toHaveText('14 из 25');
+  await expect(page.locator('[data-zone-sum="devices"]')).toHaveText('14 из 25 после включения');
 });
 
 

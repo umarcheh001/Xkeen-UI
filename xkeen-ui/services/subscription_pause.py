@@ -90,7 +90,7 @@ def _dns_now(ui_state_dir: str, xray_configs_dir: str, routing_file: str) -> Dic
         "state": state,
         "routing": routing,
         "runtime": dov._collect_runtime(xray_configs_dir, routing),
-        "presence": dov._managed_presence(xray_configs_dir, routing),
+        "presence": dov._presence_report(xray_configs_dir, routing, (state.get("rule_dns") or []) if enabled else [])[0],
     }
 
 
@@ -239,6 +239,12 @@ def _pause_outlook(ui_state_dir: str, xray_configs_dir: str, view: Dict[str, Any
     usable = _usable(runtime, routing)
     tags = {item["tag"] for item in usable}
     selection = view["selection"]
+    for entry in subs._load_displaced(ui_state_dir).get("rules", []):
+        if (entry["tag"] == dov.PROXY_RULE_TAG and entry.get("to_kind") == "outboundTag"
+                and selection == [entry["to"]]):
+            target = next((item for item in usable if item["tag"] == entry["target"]["outboundTag"]), None)
+            if target:
+                return {"outcome": "retarget", "to": target, "candidates": [], "restarts": 1}
     if selection and all(tag in tags for tag in selection):
         if _survives(selection, view["state"], runtime, routing):
             return {"outcome": "keep", "to": None, "candidates": [], "restarts": 1}
@@ -283,6 +289,16 @@ def plan(*, ui_state_dir: str, xray_configs_dir: str, routing_file: str) -> Dict
     paused = any(item.get("paused") for item in items)
     view = _dns_now(ui_state_dir, xray_configs_dir, routing_file)
     current = _usable(view["runtime"], view["routing"])
+    groups = []
+    journal = subs._load_displaced(ui_state_dir)
+    if paused:
+        state = subs.load_subscription_state(ui_state_dir)
+        resumed = {"subscriptions": [{**item, "paused": False} for item in state["subscriptions"]]}
+        if subs._build_runtime_sync_plan(resumed)["subscription_only"]:
+            groups = subs._route_mapping_groups(
+                ui_state_dir, xray_configs_dir, view["routing"].get("routing") or {},
+                state, journal, resume=True, include_optional=True,
+            )
 
     if paused:
         record = _read_record(ui_state_dir)
@@ -310,11 +326,17 @@ def plan(*, ui_state_dir: str, xray_configs_dir: str, routing_file: str) -> Dict
             }
     else:
         outlook = _pause_outlook(ui_state_dir, xray_configs_dir, view)
+    returned = sorted({entry["target"]["outboundTag"] for entry in journal.get("rules", [])
+                       if entry.get("to_kind") == "outboundTag"}) if not paused else []
+    if any(group["required"] for group in groups):
+        outlook["restarts"] = 1
 
     return {
         "ok": True,
         "paused": paused,
         "total": len(items),
+        "route_mappings": groups,
+        "returned_outbounds": returned,
         "dns": {
             "enabled": view["enabled"],
             "from": _with_kinds(view["selection"], current),
@@ -339,7 +361,7 @@ def _Guard(ui_state_dir: str, xray_configs_dir: str) -> xray_transactions.Memory
     )
 
 
-def _follow_route(ui_state_dir: str, xray_configs_dir: str, routing_file: str) -> bool:
+def _follow_route(ui_state_dir: str, xray_configs_dir: str, routing_file: str, mapped_target=None) -> bool:
     """Rebuild DNS-over-VLESS's copy of the balancer the switch just changed.
 
     False when there was nothing to rebuild or it could not be done safely:
@@ -347,8 +369,13 @@ def _follow_route(ui_state_dir: str, xray_configs_dir: str, routing_file: str) -
     """
     try:
         outcome = dov.follow_source_route(
-            configs_dir=xray_configs_dir, routing_file=routing_file, ui_state_dir=ui_state_dir
+            configs_dir=xray_configs_dir, routing_file=routing_file, ui_state_dir=ui_state_dir,
+            mapped_target=mapped_target,
         )
+    except dov.DnsOverVlessError as exc:
+        if exc.code == "rule_dns_invalid":
+            raise PauseError(str(exc), code=exc.code, details={"rolled_back": True}) from exc
+        return False
     except Exception:  # noqa: BLE001 - the long way round still works
         return False
     return isinstance(outcome, dict) and outcome.get("status") == "updated"
@@ -391,6 +418,7 @@ def _switch(
     snapshot: Callable[[str], None] | None,
     restart_xkeen: Callable[..., Any],
     dns_target: Any = "",
+    route_mappings: Any = None,
     source: str = "",
 ) -> Dict[str, Any]:
     pausing = direction == "pause"
@@ -402,7 +430,7 @@ def _switch(
         "restart_xkeen": restart_xkeen,
     }
 
-    with _LOCK:
+    with subs._CONFIG_LOCK, _LOCK:
         items = subs.list_subscriptions(ui_state_dir)
         pending = [item for item in items if bool(item.get("paused")) != pausing]
         view = _dns_now(ui_state_dir, xray_configs_dir, routing_file)
@@ -422,12 +450,24 @@ def _switch(
         restore = (not pausing) and _wants_restore(record, view)
         before_kinds = _with_kinds(before["selection"], _usable(view["runtime"], view["routing"]))
         outlook = _pause_outlook(ui_state_dir, xray_configs_dir, view) if pausing else {}
+        mapped_before = any(entry.get("to_kind") == "outboundTag"
+                            for entry in subs._load_displaced(ui_state_dir).get("rules", []))
+        mapped_resume = restore and any(
+            group["required"] for group in plan(
+                ui_state_dir=ui_state_dir, xray_configs_dir=xray_configs_dir, routing_file=routing_file,
+            )["route_mappings"]
+        )
 
         notes: Dict[str, Any] = {"warning": "", "skipped": []}
 
         def _apply_files() -> Dict[str, Any]:
             operation = subs.pause_subscriptions if pausing else subs.resume_subscriptions
-            applied = operation(ui_state_dir, xray_configs_dir=xray_configs_dir, snapshot=snapshot)
+            options = {} if pausing else {"route_mappings": route_mappings}
+            try:
+                applied = operation(ui_state_dir, xray_configs_dir=xray_configs_dir, snapshot=snapshot, **options)
+            except subs.RouteMappingRequired as exc:
+                raise PauseError(str(exc), code="route_mapping_choice_required",
+                                 details={"route_mappings": exc.groups, "rolled_back": True}) from exc
             # Запоминается последний проход: первый могли откатить и пойти длинным путём.
             notes["skipped"] = list(applied.get("skipped") or [])
             return applied
@@ -473,19 +513,34 @@ def _switch(
         # One restart, DNS left on: nothing to protect, the route survives, or
         # its copy of a balancer is rebuilt in place.
         dns_idle = not view["enabled"] and not restore
-        if dns_idle or (view["enabled"] and not restore and (not pausing or outlook.get("restarts") == 1)):
+        if dns_idle or mapped_before or mapped_resume or (view["enabled"] and not restore and (not pausing or outlook.get("restarts") == 1)):
             guard = _Guard(ui_state_dir, xray_configs_dir)
+            restart_attempted = False
             try:
-                _apply_files()
+                applied = _apply_files()
+                mapped = bool(applied.get("dns_route_mapped") and view["enabled"])
                 followed = False
                 if not dns_idle:
-                    followed = _follow_route(ui_state_dir, xray_configs_dir, routing_file)
+                    followed = _follow_route(ui_state_dir, xray_configs_dir, routing_file, applied.get("mapped_dns_target"))
                 if dns_idle or _intact(_dns_now(ui_state_dir, xray_configs_dir, routing_file)):
-                    _confirm(guard)
+                    if mapped:
+                        dov._stage_and_test(xray_configs_dir, {})
+                    else:
+                        _confirm(guard)
+                    restart_attempted = mapped
                     restarted = _restart(restart_xkeen, source)
+                    if mapped and not (restarted and dov._wait_for_xray() and dov._dns_probe().get("ok")):
+                        raise PauseError("Не удалось проверить Xray и DNS после переключения.", code="dns_switch_failed")
                     return _finish(restarts=1, restarted=restarted, round_trip=followed)
-            except Exception:
+                if applied.get("mapped_dns_target"):
+                    raise PauseError("После переключения не осталось рабочего маршрута DNS.", code="dns_switch_failed")
+            except Exception as exc:
                 guard.restore()
+                if restart_attempted:
+                    rolled_back = _restart(restart_xkeen, source + "-rollback")
+                    raise PauseError(str(exc), code="dns_switch_failed", details={"rolled_back": rolled_back}) from exc
+                if isinstance(exc, dov.DnsOverVlessError):
+                    raise PauseError(str(exc), code=exc.code, details={"rolled_back": True}) from exc
                 raise
             # The forecast was wrong: put the files back and go the long way.
             guard.restore()
@@ -585,7 +640,7 @@ def delete_all(
     succeeded -- and then the records and the nodes set aside are dropped,
     which the running core does not notice.
     """
-    with _LOCK:
+    with subs._CONFIG_LOCK, _LOCK:
         total = len(subs.list_subscriptions(ui_state_dir))
         if not total:
             view = _brief(_dns_now(ui_state_dir, xray_configs_dir, routing_file))

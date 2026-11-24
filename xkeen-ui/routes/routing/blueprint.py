@@ -76,6 +76,7 @@ def create_routing_blueprint(
         restart_xkeen=restart_xkeen,
         append_restart_log=append_restart_log,
         save_operation_diagnostic=save_operation_diagnostic,
+        ui_state_dir=UI_STATE_DIR,
     )
     register_dns_over_vless_routes(
         bp,

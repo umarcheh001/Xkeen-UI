@@ -25,7 +25,7 @@ function sub(id, extra = {}) {
 }
 
 // Подставной сервер: список подписок, прогноз и сам рубильник.
-async function mockApi(page, { subs = [sub('alpha'), sub('beta')], dns = { outcome: 'none', restarts: 1 }, onSwitch } = {}) {
+async function mockApi(page, { subs = [sub('alpha'), sub('beta')], dns = { outcome: 'none', restarts: 1 }, routeMappings = [], onSwitch } = {}) {
   const state = { paused: false, deleted: false, posts: [], notice: {} };
   await page.route('**/api/xray/subscriptions', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
@@ -41,7 +41,7 @@ async function mockApi(page, { subs = [sub('alpha'), sub('beta')], dns = { outco
     });
   });
   await page.route('**/api/xray/subscriptions/pause-plan', async (route) => {
-    await route.fulfill({ json: { ok: true, paused: state.paused, total: subs.length, dns: { enabled: true, from: [], ...dns } } });
+    await route.fulfill({ json: { ok: true, paused: state.paused, total: subs.length, route_mappings: routeMappings, dns: { enabled: true, from: [], ...dns } } });
   });
   await page.route(/\/api\/xray\/subscriptions\/(pause|resume|delete-all)$/, async (route) => {
     const action = route.request().url().split('/').pop();
@@ -96,6 +96,131 @@ const confirmText = (page) => page.locator('#confirm-modal-message');
 const deleteAll = (page) => page.locator('#outbounds-subscriptions-delete-all-btn');
 
 test.describe('рубильник подписок', () => {
+  test('возобновление показывает затронутые сайты и отправляет выбранную замену', async ({ page }) => {
+    const node = { subscription_id: 'alpha', node_key: 'us-reality', tag: 'alpha--US', label: 'США · Reality' };
+    const group = {
+      outbound_tag: 'VPS_US', revision: 'revision',
+      rules: [{ ruleTag: '50_ai_via_us', domain: ['ext:geosite_v2fly.dat:openai'] },
+        { ruleTag: '52_streaming_us', domain: ['domain:stream.example'] }],
+      candidates: [node], selected: null,
+    };
+    const state = await mockApi(page, { routeMappings: [
+      group,
+      { ...group, outbound_tag: 'VPS_DE', selected: node,
+        rules: [{ ruleTag: '60_games_de', domain: ['geosite:category-games'] },
+          { ruleTag: '65_updates_de', domain: ['full:updates.example'] }] },
+      { ...group, outbound_tag: 'VPS_NL', required: false, rules: [{ ruleTag: '70_work_nl', domain: ['full:portal.example'] }] },
+    ] });
+    state.paused = true;
+    await openSubscriptions(page);
+    const modal = page.locator('#confirm-modal');
+    const confirm = modal.getByRole('button', { name: 'Переключить' });
+    await masterWrap(page).click();
+    await expect(modal.getByRole('combobox')).toHaveCount(3);
+    await expect(confirm).toBeDisabled();
+    await modal.getByText('Какие сайты затронет выбор', { exact: true }).first().click();
+    await expect(modal.getByText('openai', { exact: false })).toBeVisible();
+    await expect(modal.getByText('updates.example', { exact: true })).toBeHidden();
+    const choose = async (tag) => modal.getByRole('combobox', { name: 'Узел подписки вместо ' + tag })
+      .selectOption({ label: node.label });
+    await choose('VPS_US');
+    await expect(confirm).toBeEnabled();
+    await expect(modal.getByRole('option', { name: 'Продолжить без замены' })).toHaveCount(1);
+    await modal.locator('#confirm-modal-close-btn').click();
+    expect(state.posts).toEqual([]);
+    await masterWrap(page).click();
+    await choose('VPS_US');
+    await confirm.click();
+    await expect.poll(() => state.posts).toEqual([{
+      action: 'resume',
+      body: { dns_target: '', route_mappings: [
+        ...['VPS_US', 'VPS_DE'].map((tag) =>
+          ({ outbound_tag: tag, subscription_id: 'alpha', node_key: 'us-reality', revision: 'revision' })),
+        { outbound_tag: 'VPS_NL', subscription_id: null, node_key: null, revision: 'revision' },
+      ] },
+    }]);
+  });
+
+  test('обновление предлагает замену при первом применении режима «Только подписка»', async ({ page }) => {
+    await mockApi(page);
+    const node = { subscription_id: 'alpha', node_key: 'us', tag: 'alpha--US', label: 'США · Reality' };
+    const posts = [];
+    await page.route(/\/api\/xray\/subscriptions\/alpha\/refresh\?/, (route) => {
+      const payload = route.request().postDataJSON();
+      posts.push(payload);
+      if (!payload.route_mappings) return route.fulfill({
+        status: 409,
+        json: { ok: false, code: 'route_mapping_choice_required', route_mappings: [{
+          outbound_tag: 'VPS_US', revision: 'fresh', rules: [], candidates: [node],
+        }] },
+      });
+      return route.fulfill({ json: { ok: true, count: 1 } });
+    });
+    await openSubscriptions(page);
+    await page.locator('#outbounds-subscriptions-tbody .xk-sub-refresh').first().click();
+    const modal = page.locator('#confirm-modal');
+    await expect(modal.locator('#confirm-modal-title')).toHaveText('Перейти в режим «Только подписка»?');
+    await modal.getByRole('combobox').selectOption({ label: node.label });
+    await modal.getByRole('button', { name: 'Переключить' }).click();
+    await expect.poll(() => posts).toEqual([{}, {
+      route_mappings: [{ outbound_tag: 'VPS_US', revision: 'fresh', subscription_id: 'alpha', node_key: 'us' }],
+    }]);
+  });
+  test('пропуск необязательной замены сохраняет настройку автоперезапуска', async ({ page }) => {
+    await mockApi(page);
+    const node = { subscription_id: 'alpha', node_key: 'us', tag: 'alpha--US', label: 'США · Reality' };
+    const restarts = [];
+    await page.route(/\/api\/xray\/subscriptions\/alpha\/refresh\?/, (route) => {
+      const request = route.request();
+      restarts.push(new URL(request.url()).searchParams.get('restart'));
+      if (!request.postDataJSON().route_mappings) return route.fulfill({
+        status: 409,
+        json: { ok: false, code: 'route_mapping_choice_required', route_mappings: [{
+          outbound_tag: 'VPS_US', revision: 'fresh', required: false, rules: [], candidates: [node],
+        }] },
+      });
+      return route.fulfill({ json: { ok: true, count: 1 } });
+    });
+    await openSubscriptions(page);
+    await page.locator('#global-autorestart-xkeen').evaluate((input) => { input.checked = false; });
+    await page.locator('#outbounds-subscriptions-tbody .xk-sub-refresh').first().click();
+    await page.locator('#confirm-modal').getByRole('button', { name: 'Переключить' }).click();
+    await expect.poll(() => restarts).toEqual(['0', '0']);
+  });
+  test('при обновлении просроченных актуальный выбор нужен только до первого применения', async ({ page }) => {
+    await mockApi(page, { subs: ['alpha', 'beta'].map((id) => sub(id, { next_update_ts: 1 })) });
+    const node = { subscription_id: 'alpha', node_key: 'us', tag: 'alpha--US', label: 'США · Reality' };
+    const group = { outbound_tag: 'VPS_US', revision: 'fresh', required: false, rules: [], candidates: [node] };
+    const posts = [];
+    await page.route(/\/api\/xray\/subscriptions\/refresh-due\?/, (route) => {
+      expect(new URL(route.request().url()).searchParams.get('offer_route_mappings')).toBe('1');
+      return route.fulfill({ json: { ok: true, updated: 2, ok_count: 0, results: ['alpha', 'beta'].map((id) => ({
+        id, ok: false, code: 'route_mapping_choice_required', route_mappings: [group],
+      })) } });
+    });
+    await page.route(/\/api\/xray\/subscriptions\/(alpha|beta)\/refresh\?/, (route) => {
+      const request = route.request();
+      const id = new URL(request.url()).pathname.split('/').at(-2);
+      const payload = request.postDataJSON();
+      posts.push({ id, payload });
+      if (id === 'alpha' && !payload.route_mappings) return route.fulfill({
+        status: 409,
+        json: { ok: false, code: 'route_mapping_choice_required', route_mappings: [group] },
+      });
+      return route.fulfill({ json: { ok: true, id, count: 1, changed: true, hot_applied: true } });
+    });
+    await openSubscriptions(page);
+    await page.locator('#outbounds-subscriptions-refresh-due-btn').click();
+    const modal = page.locator('#confirm-modal');
+    await modal.getByRole('button', { name: 'Переключить' }).click();
+    await expect.poll(() => posts).toEqual([
+      { id: 'alpha', payload: {} },
+      { id: 'alpha', payload: { route_mappings: [{ outbound_tag: 'VPS_US', revision: 'fresh', subscription_id: null, node_key: null }] } },
+      { id: 'beta', payload: {} },
+    ]);
+    await expect(page.getByText('Просроченные обновлены: 2 / 2')).toBeVisible();
+    await expect(page.getByText('Подписки Xray применены без перезапуска: 2.')).toBeVisible();
+  });
   test('без подписок рубильника нет', async ({ page }) => {
     await mockApi(page, { subs: [] });
     await openSubscriptions(page);

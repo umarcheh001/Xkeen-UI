@@ -328,7 +328,7 @@ async function routeClients(page, payload) {
 
 test('the dialog says who uses the feature and puts the taken-away devices first', async ({ page }) => {
   await routeClients(page, CLIENTS);
-  await openDialog(page);
+  await openDialog(page, { ...STATUS, enabled: true, can_disable: true });
 
   const summary = page.locator('#routing-dns-over-vless-clients-summary');
   await expect(summary).toContainText('Пользуются 1 из 3');

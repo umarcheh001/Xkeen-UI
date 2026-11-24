@@ -3775,7 +3775,14 @@ def test_http_clients_report_names_the_rules_it_took_away(tmp_path: Path, monkey
         restart_xkeen=lambda **_kwargs: True,
     )
 
-    payload = app.test_client().get("/api/routing/dns-over-vless/clients").get_json()
+    client = app.test_client()
+    background = client.get("/api/routing/dns-over-vless/clients?read_only=1").get_json()
+    assert "capture_dropped" not in background
+    assert background["clients"][1]["captured"] is True
+    saved = json.loads((state_dir / "dns_over_vless.json").read_text(encoding="utf-8"))
+    assert "3c:38:24:5f:86:c4" in saved["capture_macs"]
+
+    payload = client.get("/api/routing/dns-over-vless/clients").get_json()
 
     # Окно узнаёт о снятом правиле из того же ответа, которым рисует список:
     # иначе оно вернуло бы правило обратно ближайшим применением.
@@ -4273,6 +4280,191 @@ def _status(configs: Path, routing_path: Path, state: Path, monkeypatch) -> Dict
 
 
 M_YOUTUBE = {"full:m.youtube.com": "www.youtube.com"}
+
+
+def _rule_dns_env(tmp_path, monkeypatch):
+    configs, routing_path, state, common = _hosts_env(tmp_path, monkeypatch)
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    routing["routing"]["rules"][:0] = [
+        {"ruleTag": "stream", "domain": ["domain:kino.example"], "outboundTag": "my_proxy_1"},
+        {"ruleTag": "work", "domain": ["full:portal.example"], "outboundTag": "my_proxy_2"},
+    ]
+    _write(routing_path, routing)
+    monkeypatch.setattr(dns, "_core_supports_rule_dns", lambda: True, raising=False)
+    return configs, routing_path, state, common, routing
+
+
+def test_rule_dns_uses_external_and_builtin_geosite_lists(tmp_path, monkeypatch):
+    configs, routing_path, state, common, routing = _rule_dns_env(tmp_path, monkeypatch)
+    rule = routing["routing"]["rules"][0]
+    domains = ["ext:geosite_v2fly.dat:anthropic", "geosite:google@cn", "full:kino.example"]
+    rule["domain"] = domains
+    _write(routing_path, routing)
+    status = _status(configs, routing_path, state, monkeypatch)
+    assert {"rule_tag": "stream", "domains": domains, "outbound_tag": "my_proxy_1"} in status["rule_dns_candidates"]
+    dns.apply_action("enable", rule_dns=[{"rule_tag": "stream", "upstream": "1.1.1.1"}], **common)
+    assert any(server.get("domains") == domains for server in _fragment(configs)["dns"]["servers"]
+               if isinstance(server, dict))
+
+
+def test_rule_dns_uses_the_outbound_of_each_rule_and_survives_disable(tmp_path, monkeypatch):
+    configs, routing_path, state, common, original = _rule_dns_env(tmp_path, monkeypatch)
+    outbound_path = configs / "04_outbounds.json"
+    marked = json.loads(outbound_path.read_text(encoding="utf-8"))
+    for outbound in marked["outbounds"]:
+        if outbound["protocol"] != "loopback":
+            outbound["streamSettings"] = {"sockopt": {"mark": 255}}
+    _write(outbound_path, marked)
+    bindings = [
+        {"rule_tag": "work", "upstream": "https://1.1.1.1/dns-query"},
+        {"rule_tag": "stream", "upstream": "10.66.0.53:5353"},
+    ]
+    dns.apply_action("enable", rule_dns=bindings, **common)
+
+    servers = [server for server in _fragment(configs)["dns"]["servers"] if isinstance(server, dict) and server.get("tag")]
+    assert [server["address"] for server in servers] == ["10.66.0.53", "https://1.1.1.1/dns-query"]
+    assert servers[0]["port"] == 5353
+    assert [server["domains"] for server in servers] == [["domain:kino.example"], ["full:portal.example"]]
+    assert all(server["skipFallback"] and server["finalQuery"] for server in servers)
+    rules = json.loads(routing_path.read_text(encoding="utf-8"))["routing"]["rules"]
+    tags = {server["tag"] for server in servers}
+    dns_targets = [rule["outboundTag"] for rule in rules if tags.intersection(rule.get("inboundTag", []))]
+    outbounds = {outbound["tag"]: outbound for outbound in _fragment(configs)["outbounds"]}
+    assert [outbounds[tag]["streamSettings"]["sockopt"]["dialerProxy"] for tag in dns_targets] == [
+        "my_proxy_1", "my_proxy_2",
+    ]
+    assert all(outbounds[tag]["streamSettings"]["sockopt"]["mark"] == 255 for tag in dns_targets)
+    status = _status(configs, routing_path, state, monkeypatch)
+    assert status["enabled"] and not status["tampered"]
+    assert {item["rule_tag"] for item in status["rule_dns_candidates"]} == {"work", "stream"}
+    dns.apply_action("disable", **common)
+    assert json.loads(routing_path.read_text(encoding="utf-8")) == original
+    assert _status(configs, routing_path, state, monkeypatch)["rule_dns"] == bindings[::-1]
+    dns.apply_action("enable", **common)
+    assert [server["tag"] for server in _fragment(configs)["dns"]["servers"] if isinstance(server, dict) and server.get("tag")] == [s["tag"] for s in servers]
+
+
+def test_rule_dns_rejects_a_rule_with_other_conditions_before_writing(tmp_path, monkeypatch):
+    configs, routing_path, _state, common, routing = _rule_dns_env(tmp_path, monkeypatch)
+    routing["routing"]["rules"][0]["port"] = "443"
+    _write(routing_path, routing)
+    with pytest.raises(dns.DnsOverVlessError) as error:
+        dns.apply_action("enable", rule_dns=[{"rule_tag": "stream", "upstream": "1.1.1.1"}], **common)
+    assert error.value.code == "rule_dns_invalid"
+    assert json.loads(routing_path.read_text(encoding="utf-8")) == routing
+    assert not (configs / dns.MANAGED_FRAGMENT).exists()
+
+
+def test_rule_dns_routing_save_updates_the_generated_pair_and_keeps_jsonc(tmp_path, monkeypatch):
+    from routes.routing import config
+
+    configs, routing_path, state, common, _routing = _rule_dns_env(tmp_path, monkeypatch)
+    dns.apply_action("enable", rule_dns=[{"rule_tag": "stream", "upstream": "1.1.1.1"}], **common)
+    raw = routing_path.with_suffix(".jsonc")
+    monkeypatch.setattr(config, "_paths_for_routing", lambda *_args: (str(routing_path), str(raw), ""))
+    checked = []
+    monkeypatch.setattr(config, "_run_xray_preflight", lambda **kwargs: checked.append(kwargs) or {"ok": True})
+    monkeypatch.setattr("services.xray_subscriptions.jsonc_path_for", lambda path: str(path) + "c")
+    monkeypatch.setattr("services.xray_subscriptions.ensure_xray_jsonc_dir", lambda: None)
+    app = Flask(__name__)
+    config.register_config_routes(
+        app,
+        routing_file=str(routing_path),
+        routing_file_raw=str(raw),
+        xray_configs_dir=str(configs),
+        xray_configs_dir_real=str(configs),
+        backup_dir="",
+        backup_dir_real="",
+        load_json=lambda *_args, **_kwargs: None,
+        strip_json_comments_text=dns.strip_json_comments_text,
+        restart_xkeen=lambda **_kwargs: True,
+        ui_state_dir=str(state),
+    )
+    proposed = json.loads(routing_path.read_text(encoding="utf-8"))
+    source = next(rule for rule in proposed["routing"]["rules"] if rule.get("ruleTag") == "stream")
+    source["outboundTag"] = "my_proxy_2"
+    source["domain"] = ["full:cdn.kino.example"]
+    proposed["routing"]["rules"].insert(0, {"ruleTag": "dns-ip", "ip": ["1.1.1.1"], "outboundTag": "direct"})
+    client = app.test_client()
+    response = client.post("/api/routing?restart=0", data="// Комментарий владельца\n" + json.dumps(proposed))
+    assert response.status_code == 200
+    assert checked[0]["extra_fragments"][dns.MANAGED_FRAGMENT] == _fragment(configs)
+    applied = json.loads(routing_path.read_text(encoding="utf-8"))
+    tag = next(server["tag"] for server in _fragment(configs)["dns"]["servers"] if isinstance(server, dict) and server.get("tag"))
+    assert applied["routing"]["rules"][0]["ruleTag"] == tag
+    target = next(rule for rule in applied["routing"]["rules"] if rule.get("ruleTag") == tag)["outboundTag"]
+    bound = next(outbound for outbound in _fragment(configs)["outbounds"] if outbound["tag"] == target)
+    assert bound["streamSettings"]["sockopt"]["dialerProxy"] == "my_proxy_2"
+    assert "Комментарий владельца" in raw.read_text(encoding="utf-8-sig")
+    assert dns._load_state(str(state))["rule_dns"][0]["domains"] == ["full:cdn.kino.example"]
+
+    applied["routing"]["rules"] = [rule for rule in applied["routing"]["rules"] if rule.get("ruleTag") != "stream"]
+    response = client.post("/api/routing?restart=0", data=json.dumps(applied))
+    assert response.status_code == 409
+    assert response.get_json()["code"] == "rule_dns_invalid"
+    assert len(checked) == 1
+
+    changed = json.loads(routing_path.read_text(encoding="utf-8"))
+    next(rule for rule in changed["routing"]["rules"] if rule.get("ruleTag") == "stream")["outboundTag"] = "my_proxy_1"
+    paths = [routing_path, raw, configs / dns.MANAGED_FRAGMENT, Path(dns._state_path(str(state)))]
+    before = [path.read_bytes() for path in paths]
+    monkeypatch.setattr(dns, "_save_state", lambda *_args: (_ for _ in ()).throw(OSError("test write failure")))
+    response = client.post("/api/routing?restart=0", data=json.dumps(changed))
+    assert response.status_code == 500
+    assert [path.read_bytes() for path in paths] == before
+
+
+def test_rule_dns_rejects_subscription_change_that_removes_the_pinned_outbound(tmp_path, monkeypatch):
+    from services import xray_subscriptions as subscriptions
+
+    configs, routing_path, state, common, _routing = _rule_dns_env(tmp_path, monkeypatch)
+    dns.apply_action("enable", rule_dns=[{"rule_tag": "stream", "upstream": "1.1.1.1"}], **common)
+    outbounds = configs / "04_outbounds.json"
+    guard = dns.xray_transactions.MemoryGuard(paths=[str(outbounds)])
+    original = json.loads(outbounds.read_text(encoding="utf-8"))
+    changed = {"outbounds": [item for item in original["outbounds"] if item["tag"] != "my_proxy_1"]}
+    _write(outbounds, changed)
+    with pytest.raises(subscriptions.SubscriptionConfigRejected, match="stream"):
+        subscriptions._follow_dns_route(str(state), str(configs), routing_path.name, guard=guard)
+    assert json.loads(outbounds.read_text(encoding="utf-8")) == original
+
+
+def test_rule_dns_rejects_replacing_the_pinned_proxy_with_freedom(tmp_path, monkeypatch):
+    configs, _routing, state, common, _original = _rule_dns_env(tmp_path, monkeypatch)
+    dns.apply_action("enable", rule_dns=[{"rule_tag": "stream", "upstream": "1.1.1.1"}], **common)
+    path = configs / "04_outbounds.json"
+    changed = json.loads(path.read_text(encoding="utf-8"))
+    next(item for item in changed["outbounds"] if item["tag"] == "my_proxy_1")["protocol"] = "freedom"
+    with pytest.raises(dns.DnsOverVlessError, match="my_proxy_1"):
+        dns.validate_rule_dns_outbound_save(str(configs), str(state), str(path), changed)
+
+
+def test_rule_dns_snapshot_restore_updates_the_binding_with_its_source(tmp_path, monkeypatch):
+    from routes.backups import create_backups_blueprint
+
+    configs, routing_path, state, common, _original = _rule_dns_env(tmp_path, monkeypatch)
+    rows = [{"rule_tag": "stream", "upstream": "1.1.1.1"}]
+    dns.apply_action("enable", rule_dns=rows, **common)
+    backups = tmp_path / "backups"
+    backups.mkdir()
+    raw_path = routing_path.with_suffix(".jsonc")
+    monkeypatch.setattr("routes.backups.jsonc_path_for", lambda _path: str(raw_path))
+    (backups / routing_path.name).write_bytes(routing_path.read_bytes())
+    changed = json.loads(routing_path.read_text(encoding="utf-8"))
+    next(rule for rule in changed["routing"]["rules"] if rule.get("ruleTag") == "stream")["outboundTag"] = "my_proxy_2"
+    plan = dns.plan_rule_dns_routing_save(str(configs), str(routing_path), str(state), changed)
+    dns.write_rule_dns_routing_save(plan, str(configs), str(routing_path), str(raw_path), str(state), json.dumps(changed))
+    app = Flask(__name__)
+    app.register_blueprint(create_backups_blueprint(
+        str(backups), str(routing_path), str(raw_path), str(configs / "03_inbounds.json"),
+        str(configs / "04_outbounds.json"), dns._read_json, dns._atomic_write_json,
+        lambda: [], lambda _filename: "", lambda _path: (None, None),
+        dns.strip_json_comments_text, lambda **_kwargs: True, ui_state_dir=str(state),
+    ))
+    response = app.test_client().post("/api/xray/snapshots/restore", json={"name": routing_path.name, "restart": False})
+    assert response.status_code == 200
+    assert dns._load_state(str(state))["rule_dns"][0]["outbound_tag"] == "my_proxy_1"
+    assert _fragment(configs)["outbounds"][-1]["streamSettings"]["sockopt"]["dialerProxy"] == "my_proxy_1"
 
 
 def test_static_hosts_reach_the_fragment_and_are_not_drift(tmp_path: Path, monkeypatch):

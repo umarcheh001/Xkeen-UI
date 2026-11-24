@@ -75,6 +75,8 @@ def register_dns_over_vless_routes(
         # firmware and is far slower than everything else the card needs.
         try:
             report = client_report()
+            if request.args.get("read_only") == "1":
+                return jsonify(report)
             # Правило устройства, вышедшего из политики, снимается здесь:
             # прошивку только что спросили, и второй раз спрашивать незачем.
             # Окно открывают именно затем, чтобы увидеть, как обстоят дела --
@@ -197,6 +199,7 @@ def register_dns_over_vless_routes(
                 capture_macs=capture_macs,
                 hosts=hosts,
                 hosts_enabled=hosts_enabled,
+                rule_dns=payload.get("rule_dns"),
                 discard_edits=discard_edits,
             )
             if action == "enable":

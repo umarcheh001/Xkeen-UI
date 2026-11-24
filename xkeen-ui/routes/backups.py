@@ -79,6 +79,7 @@ def create_backups_blueprint(
     _find_latest_auto_backup_for: Callable[[str], tuple[Optional[str], Optional[float]]],
     strip_json_comments_text: Callable[[str], str],
     restart_xkeen: Callable[..., bool],
+    ui_state_dir: str = "",
 ) -> Blueprint:
     """Create blueprint with /backups page and backup-related endpoints."""
 
@@ -99,6 +100,50 @@ def create_backups_blueprint(
         _CONFIGS_DIR_REAL = os.path.realpath(_CONFIGS_DIR)
     except Exception:
         _CONFIGS_DIR_REAL = _CONFIGS_DIR
+
+    def _restore_with_rule_dns(path: str, payload: Any) -> tuple[bool, Any]:
+        if not ui_state_dir or not path.lower().endswith(".json"):
+            return False, None
+        try:
+            from services import dns_over_vless
+        except ImportError:
+            return False, None
+        with dns_over_vless._LOCK:
+            state = dns_over_vless._load_state(ui_state_dir)
+            if not (state.get("enabled") and state.get("rule_dns")):
+                return False, None
+            raw = payload.decode("utf-8-sig", errors="replace") if isinstance(payload, bytes) else ""
+            if isinstance(payload, dict):
+                raw = str(payload.get("__xkeen_raw_jsonc__") or "")
+                payload = payload.get("__xkeen_data__", payload)
+            if raw:
+                try:
+                    payload = json.loads(strip_json_comments_text(raw))
+                except ValueError:
+                    if not isinstance(payload, dict):
+                        return False, error_response("Некорректный снимок JSON/JSONC.", 400, ok=False)
+                    raw = ""
+            if not isinstance(payload, dict):
+                return False, error_response("Некорректный снимок конфигурации Xray.", 400, ok=False)
+            try:
+                if os.path.realpath(path) != os.path.realpath(ROUTING_FILE):
+                    dns_over_vless.validate_rule_dns_outbound_save(_CONFIGS_DIR, ui_state_dir, path, payload)
+                    return False, None
+                plan = dns_over_vless.plan_rule_dns_routing_save(_CONFIGS_DIR, path, ui_state_dir, payload)
+                if not plan:
+                    return False, None
+                dns_over_vless._stage_and_test(
+                    _CONFIGS_DIR, {os.path.basename(path): plan["routing"], dns_over_vless.MANAGED_FRAGMENT: plan["fragment"]}
+                )
+                dns_over_vless.write_rule_dns_routing_save(
+                    plan, _CONFIGS_DIR, path, jsonc_path_for(path), ui_state_dir,
+                    raw or json.dumps(payload, ensure_ascii=False),
+                )
+                return True, None
+            except dns_over_vless.DnsOverVlessError as exc:
+                return False, error_response(str(exc), 409, ok=False, code=exc.code)
+            except OSError:
+                return False, error_response("Не удалось восстановить routing и его DNS-привязки.", 500, ok=False)
 
     def _resolve_fragment(file_arg: str, fallback_path: str, kind: str = "") -> str:
         """Resolve selectable fragment file within configs dir (safe)."""
@@ -308,7 +353,10 @@ def create_backups_blueprint(
         except Exception:
             return error_response("read_failed", 400, ok=False)
 
-        ok = atomic_write_bytes(dst, data)
+        handled, error = _restore_with_rule_dns(dst, data)
+        if error:
+            return error
+        ok = handled or atomic_write_bytes(dst, data)
         if not ok:
             return error_response("write_failed", 400, ok=False)
 
@@ -592,8 +640,11 @@ def create_backups_blueprint(
         if not target_file:
             return jsonify({"ok": False, "error": "bad target"}), 400
 
+        handled, error = _restore_with_rule_dns(target_file, data)
+        if error:
+            return error
         # Backups may include raw JSONC with comments.
-        if isinstance(data, dict) and "__xkeen_raw_jsonc__" in data:
+        if not handled and isinstance(data, dict) and "__xkeen_raw_jsonc__" in data:
             raw = data.get("__xkeen_raw_jsonc__") or ""
             try:
                 # Restore raw JSONC into JSONC_DIR (UI sidecar dir).
@@ -610,7 +661,7 @@ def create_backups_blueprint(
                 cleaned_obj = data.get("__xkeen_data__")
                 if cleaned_obj is not None:
                     save_json(target_file, cleaned_obj)
-        else:
+        elif not handled:
             # If it's a wrapper payload, prefer __xkeen_data__.
             if isinstance(data, dict) and "__xkeen_data__" in data:
                 save_json(target_file, data.get("__xkeen_data__"))
@@ -673,7 +724,10 @@ def create_backups_blueprint(
             return jsonify({"ok": False, "error": "auto-backup file invalid"}), 400
 
         # If auto backup contains raw JSONC (rare), restore it too.
-        if target == "routing" and isinstance(data, dict) and "__xkeen_raw_jsonc__" in data:
+        handled, error = _restore_with_rule_dns(config_path, data)
+        if error:
+            return error
+        if not handled and target == "routing" and isinstance(data, dict) and "__xkeen_raw_jsonc__" in data:
             raw = data.get("__xkeen_raw_jsonc__") or ""
             try:
                 ensure_xray_jsonc_dir()
@@ -689,7 +743,7 @@ def create_backups_blueprint(
                 cleaned_obj = data.get("__xkeen_data__")
                 if cleaned_obj is not None:
                     save_json(config_path, cleaned_obj)
-        else:
+        elif not handled:
             save_json(config_path, data)
 
         filename = os.path.basename(backup_path)
@@ -724,7 +778,10 @@ def create_backups_blueprint(
             return jsonify({"ok": False, "error": "auto-backup file invalid"}), 400
 
         # If auto backup contains raw JSONC, restore it too.
-        if isinstance(data, dict) and "__xkeen_raw_jsonc__" in data:
+        handled, error = _restore_with_rule_dns(config_path, data)
+        if error:
+            return error
+        if not handled and isinstance(data, dict) and "__xkeen_raw_jsonc__" in data:
             raw = data.get("__xkeen_raw_jsonc__") or ""
             try:
                 ensure_xray_jsonc_dir()
@@ -740,7 +797,7 @@ def create_backups_blueprint(
                 cleaned_obj = data.get("__xkeen_data__")
                 if cleaned_obj is not None:
                     save_json(config_path, cleaned_obj)
-        else:
+        elif not handled:
             if isinstance(data, dict) and "__xkeen_data__" in data and "__xkeen_target_file__" in data:
                 save_json(config_path, data.get("__xkeen_data__"))
             else:

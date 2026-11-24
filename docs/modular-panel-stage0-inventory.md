@@ -36,13 +36,13 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 | Module ID | Единиц | Размер | Routes | Background | UI surfaces | Removable |
 |---|---:|---:|---:|---:|---:|---|
-| `core` | 682 | 8.68 МБ | 108 | 4 | 37 | нет |
-| `engine.xray` | 162 | 4.07 МБ | 70 | 3 | 14 | да |
+| `core` | 682 | 8.71 МБ | 108 | 4 | 37 | нет |
+| `engine.xray` | 162 | 4.14 МБ | 70 | 3 | 14 | да |
 | `engine.mihomo` | 161 | 3.72 МБ | 97 | 4 | 6 | да |
 | `tool.editor` | 25 | 814.7 КБ | 0 | 0 | 2 | да |
 | `tool.terminal` | 47 | 473.8 КБ | 3 | 2 | 2 | да |
 | `tool.files` | 86 | 1.04 МБ | 42 | 1 | 1 | да |
-| `tool.backups` | 8 | 99.8 КБ | 14 | 0 | 0 | да |
+| `tool.backups` | 8 | 102.7 КБ | 14 | 0 | 0 | да |
 | `integration.happ` | 22 | 325.0 КБ | 5 | 0 | 2 | да |
 | `tool.advanced-diagnostics` | 49 | 592.8 КБ | 16 | 0 | 1 | да |
 | `tool.server-diagnostics` | 17 | 365.9 КБ | 10 | 0 | 1 | да |
@@ -116,7 +116,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 | `engine.xray` | `core` | 162 | `xkeen-ui/routes/routing/__init__.py`<br>`xkeen-ui/routes/routing/blueprint.py`<br>`xkeen-ui/routes/routing/config.py` |
 | `engine.xray` | `engine.mihomo` | 1 | `xkeen-ui/services/xray_subscriptions.py` |
 | `engine.xray` | `integration.happ` | 2 | `xkeen-ui/services/xray_subscriptions.py`<br>`xkeen-ui/static/js/features/outbounds.js` |
-| `engine.xray` | `tool.backups` | 2 | `xkeen-ui/routes/routing/config.py`<br>`xkeen-ui/routes/xray_configs.py` |
+| `engine.xray` | `tool.backups` | 3 | `xkeen-ui/routes/routing/config.py`<br>`xkeen-ui/routes/xray_configs.py`<br>`tests/test_dns_over_vless.py` |
 | `engine.xray` | `tool.editor` | 162 | `xkeen-ui/routes/routing/__init__.py`<br>`xkeen-ui/routes/routing/blueprint.py`<br>`xkeen-ui/routes/routing/config.py` |
 | `engine.xray` | `tool.files` | 3 | `xkeen-ui/routes/routing/dat.py`<br>`xkeen-ui/routes/routing/dat_files.py`<br>`xkeen-ui/services/geodat/runner.py` |
 | `integration.happ` | `core` | 22 | `xkeen-ui/routes/happ_decryptor.py`<br>`xkeen-ui/services/happ_decryptor/__init__.py`<br>`xkeen-ui/services/happ_decryptor/engine.py` |

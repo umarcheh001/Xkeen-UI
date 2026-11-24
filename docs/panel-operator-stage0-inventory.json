@@ -597,7 +597,7 @@
           "narrow"
         ],
         "icon_inventory": {
-          "action_control_count": 33,
+          "action_control_count": 41,
           "operator_icon_control_count": 3,
           "close_control_count": 1,
           "close_icons": [
@@ -623,7 +623,7 @@
               "accessible_name": true
             },
             {
-              "control": "control@2802",
+              "control": "control@2779",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
@@ -641,55 +641,103 @@
               "accessible_name": false
             },
             {
-              "control": "control@4687",
+              "control": "control@4664",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@5729",
+              "control": "control@5706",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@7197",
+              "control": "control@7174",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@8113",
+              "control": "control@8094",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@9227",
+              "control": "control@8667",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@10302",
+              "control": "routing-rule-dns-add",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@11504",
+              "control": "control@9602",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@12014",
+              "control": "control@9726",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@12792",
+              "control": "control@11162",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "control@11501",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "control@11633",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "control@11933",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "control@13047",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "control@14122",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "control@15324",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "control@15834",
+              "icons": [],
+              "icon_only": false,
+              "accessible_name": false
+            },
+            {
+              "control": "control@16612",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
@@ -707,43 +755,43 @@
               "accessible_name": false
             },
             {
-              "control": "control@14420",
+              "control": "control@18240",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@14757",
+              "control": "control@18577",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@15930",
+              "control": "control@19750",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@16548",
+              "control": "control@20368",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@17289",
+              "control": "control@21109",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@18156",
+              "control": "control@21976",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@19422",
+              "control": "control@23242",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
@@ -761,25 +809,25 @@
               "accessible_name": false
             },
             {
-              "control": "control@21652",
+              "control": "control@25472",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@22530",
+              "control": "control@26350",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@23479",
+              "control": "control@27299",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
             },
             {
-              "control": "control@24340",
+              "control": "control@28160",
               "icons": [],
               "icon_only": false,
               "accessible_name": false
@@ -4584,7 +4632,7 @@
       {
         "index": 37,
         "locator": "#inbounds-apply-socks-row",
-        "line": 2858,
+        "line": 2915,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4596,8 +4644,8 @@
       },
       {
         "index": 38,
-        "locator": "div.xk-modal-gap-12@L2859",
-        "line": 2859,
+        "locator": "div.xk-modal-gap-12@L2916",
+        "line": 2916,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:flex-start; flex-wrap: wrap;",
         "declarations": [
@@ -4617,8 +4665,8 @@
       },
       {
         "index": 39,
-        "locator": "label.routing-rule-field.xk-modal-m-0@L2860",
-        "line": 2860,
+        "locator": "label.routing-rule-field.xk-modal-m-0@L2917",
+        "line": 2917,
         "kind": "presentation-geometry",
         "source": "min-width: 220px;",
         "declarations": [
@@ -4631,7 +4679,7 @@
       {
         "index": 40,
         "locator": "#inbounds-apply-warn",
-        "line": 2870,
+        "line": 2927,
         "kind": "mixed-state-and-presentation",
         "source": "display:none; color: var(--warning, #f59e0b);",
         "declarations": [
@@ -4648,7 +4696,7 @@
       {
         "index": 41,
         "locator": "#inbounds-apply-error",
-        "line": 2872,
+        "line": 2929,
         "kind": "mixed-state-and-presentation",
         "source": "display:none; color: var(--danger, #ef4444);",
         "declarations": [
@@ -4664,8 +4712,8 @@
       },
       {
         "index": 42,
-        "locator": "div.xk-editor-workbench-toolbar.xk-editor-workbench-toolbar--snapshot.xk-modal-gap-12@L3054",
-        "line": 3054,
+        "locator": "div.xk-editor-workbench-toolbar.xk-editor-workbench-toolbar--snapshot.xk-modal-gap-12@L3111",
+        "line": 3111,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:flex-start; justify-content:space-between;",
         "declarations": [
@@ -4685,8 +4733,8 @@
       },
       {
         "index": 43,
-        "locator": "div.modal-actions.xk-editor-workbench-actions@L3068",
-        "line": 3068,
+        "locator": "div.modal-actions.xk-editor-workbench-actions@L3125",
+        "line": 3125,
         "kind": "presentation-geometry",
         "source": "justify-content: space-between;",
         "declarations": [
@@ -4698,8 +4746,8 @@
       },
       {
         "index": 44,
-        "locator": "div.xk-editor-workbench-action-group.xk-modal-gap-10@L3070",
-        "line": 3070,
+        "locator": "div.xk-editor-workbench-action-group.xk-modal-gap-10@L3127",
+        "line": 3127,
         "kind": "presentation-geometry",
         "source": "display:flex;",
         "declarations": [
@@ -4711,8 +4759,8 @@
       },
       {
         "index": 45,
-        "locator": "div.xk-modal-gap-10@L3094",
-        "line": 3094,
+        "locator": "div.xk-modal-gap-10@L3151",
+        "line": 3151,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:flex-start; justify-content:space-between;",
         "declarations": [
@@ -4732,8 +4780,8 @@
       },
       {
         "index": 46,
-        "locator": "div.modal-actions@L3115",
-        "line": 3115,
+        "locator": "div.modal-actions@L3172",
+        "line": 3172,
         "kind": "presentation-geometry",
         "source": "justify-content: space-between;",
         "declarations": [
@@ -4745,8 +4793,8 @@
       },
       {
         "index": 47,
-        "locator": "div.xk-modal-gap-10@L3116",
-        "line": 3116,
+        "locator": "div.xk-modal-gap-10@L3173",
+        "line": 3173,
         "kind": "presentation-geometry",
         "source": "display:flex; flex-wrap: wrap;",
         "declarations": [
@@ -4762,8 +4810,8 @@
       },
       {
         "index": 48,
-        "locator": "div.xk-modal-gap-10@L3122",
-        "line": 3122,
+        "locator": "div.xk-modal-gap-10@L3179",
+        "line": 3179,
         "kind": "presentation-geometry",
         "source": "display:flex;",
         "declarations": [
@@ -4775,8 +4823,8 @@
       },
       {
         "index": 49,
-        "locator": "div.xk-modal-gap-10@L3171",
-        "line": 3171,
+        "locator": "div.xk-modal-gap-10@L3228",
+        "line": 3228,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -4793,7 +4841,7 @@
       {
         "index": 50,
         "locator": "#outbounds-gen-cred-trojan",
-        "line": 3312,
+        "line": 3369,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4806,7 +4854,7 @@
       {
         "index": 51,
         "locator": "#outbounds-gen-cred-vmess",
-        "line": 3317,
+        "line": 3374,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4819,7 +4867,7 @@
       {
         "index": 52,
         "locator": "#outbounds-gen-cred-ss",
-        "line": 3322,
+        "line": 3379,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4832,7 +4880,7 @@
       {
         "index": 53,
         "locator": "#outbounds-gen-cred-ss-pass",
-        "line": 3333,
+        "line": 3390,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4845,7 +4893,7 @@
       {
         "index": 54,
         "locator": "#outbounds-gen-cred-hy2",
-        "line": 3338,
+        "line": 3395,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4858,7 +4906,7 @@
       {
         "index": 55,
         "locator": "#outbounds-gen-field-ss-plugin",
-        "line": 3424,
+        "line": 3481,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4871,7 +4919,7 @@
       {
         "index": 56,
         "locator": "#outbounds-gen-field-hy2-insecure",
-        "line": 3429,
+        "line": 3486,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4884,7 +4932,7 @@
       {
         "index": 57,
         "locator": "#outbounds-gen-field-hy2-obfs",
-        "line": 3437,
+        "line": 3494,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4897,7 +4945,7 @@
       {
         "index": 58,
         "locator": "#outbounds-gen-field-hy2-obfspwd",
-        "line": 3445,
+        "line": 3502,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4910,7 +4958,7 @@
       {
         "index": 59,
         "locator": "#outbounds-gen-field-hy2-pinsha256",
-        "line": 3450,
+        "line": 3507,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4923,7 +4971,7 @@
       {
         "index": 60,
         "locator": "#routing-dat-contents-ipfilter",
-        "line": 3657,
+        "line": 3714,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4936,7 +4984,7 @@
       {
         "index": 61,
         "locator": "#routing-dat-contents-search-items-more",
-        "line": 3663,
+        "line": 3720,
         "kind": "state-visibility-hook",
         "source": "display:none",
         "declarations": [
@@ -4948,8 +4996,8 @@
       },
       {
         "index": 62,
-        "locator": "div.modal-actions.xk-dat-modal-actions@L3671",
-        "line": 3671,
+        "locator": "div.modal-actions.xk-dat-modal-actions@L3728",
+        "line": 3728,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -4962,7 +5010,7 @@
       {
         "index": 63,
         "locator": "#terminal-overlay",
-        "line": 3678,
+        "line": 3735,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -4974,8 +5022,8 @@
       },
       {
         "index": 64,
-        "locator": "div.xk-modal-gap-8.xk-modal-mb-10@L3860",
-        "line": 3860,
+        "locator": "div.xk-modal-gap-8.xk-modal-mb-10@L3917",
+        "line": 3917,
         "kind": "presentation-geometry",
         "source": "display:flex; flex-wrap:wrap;",
         "declarations": [
@@ -4992,7 +5040,7 @@
       {
         "index": 65,
         "locator": "#ssh-profiles-list",
-        "line": 3867,
+        "line": 3924,
         "kind": "presentation-geometry",
         "source": "display:flex; flex-direction:column;",
         "declarations": [
@@ -5008,8 +5056,8 @@
       },
       {
         "index": 66,
-        "locator": "hr.xk-modal-m-0.xk-modal-mt-12.xk-modal-mb-12@L3869",
-        "line": 3869,
+        "locator": "hr.xk-modal-m-0.xk-modal-mt-12.xk-modal-mb-12@L3926",
+        "line": 3926,
         "kind": "presentation-geometry",
         "source": "border:0; border-top:1px solid #334155;",
         "declarations": [
@@ -5025,8 +5073,8 @@
       },
       {
         "index": 67,
-        "locator": "div.xk-modal-gap-8@L3871",
-        "line": 3871,
+        "locator": "div.xk-modal-gap-8@L3928",
+        "line": 3928,
         "kind": "presentation-geometry",
         "source": "display:flex; flex-direction:column;",
         "declarations": [
@@ -5042,8 +5090,8 @@
       },
       {
         "index": 68,
-        "locator": "label@L3872",
-        "line": 3872,
+        "locator": "label@L3929",
+        "line": 3929,
         "kind": "presentation-geometry",
         "source": "opacity:.85;",
         "declarations": [
@@ -5056,7 +5104,7 @@
       {
         "index": 69,
         "locator": "#ssh-command-preview",
-        "line": 3873,
+        "line": 3930,
         "kind": "presentation-geometry",
         "source": "width:100%;",
         "declarations": [
@@ -5068,8 +5116,8 @@
       },
       {
         "index": 70,
-        "locator": "div.xk-modal-gap-8@L3874",
-        "line": 3874,
+        "locator": "div.xk-modal-gap-8@L3931",
+        "line": 3931,
         "kind": "presentation-geometry",
         "source": "display:flex; justify-content:flex-end; flex-wrap:wrap;",
         "declarations": [
@@ -5089,8 +5137,8 @@
       },
       {
         "index": 71,
-        "locator": "div.xk-modal-gap-8@L3916",
-        "line": 3916,
+        "locator": "div.xk-modal-gap-8@L3973",
+        "line": 3973,
         "kind": "presentation-geometry",
         "source": "display:flex; justify-content:flex-end;",
         "declarations": [
@@ -5107,7 +5155,7 @@
       {
         "index": 72,
         "locator": "#ssh-confirm-text",
-        "line": 3932,
+        "line": 3989,
         "kind": "presentation-geometry",
         "source": "white-space:pre-wrap;",
         "declarations": [
@@ -5119,8 +5167,8 @@
       },
       {
         "index": 73,
-        "locator": "div.modal-actions@L3934",
-        "line": 3934,
+        "locator": "div.modal-actions@L3991",
+        "line": 3991,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -5132,8 +5180,8 @@
       },
       {
         "index": 74,
-        "locator": "div.modal-body.xk-modal-gap-10@L3947",
-        "line": 3947,
+        "locator": "div.modal-body.xk-modal-gap-10@L4004",
+        "line": 4004,
         "kind": "presentation-geometry",
         "source": "display:flex; flex-direction:column;",
         "declarations": [
@@ -5150,7 +5198,7 @@
       {
         "index": 75,
         "locator": "#ssh-transfer-help",
-        "line": 3948,
+        "line": 4005,
         "kind": "presentation-geometry",
         "source": "opacity:.85;",
         "declarations": [
@@ -5163,7 +5211,7 @@
       {
         "index": 76,
         "locator": "#ssh-transfer-text",
-        "line": 3949,
+        "line": 4006,
         "kind": "presentation-geometry",
         "source": "min-height:280px;",
         "declarations": [
@@ -5175,8 +5223,8 @@
       },
       {
         "index": 77,
-        "locator": "div.xk-modal-gap-8@L3954",
-        "line": 3954,
+        "locator": "div.xk-modal-gap-8@L4011",
+        "line": 4011,
         "kind": "presentation-geometry",
         "source": "display:flex; justify-content:flex-end;",
         "declarations": [
@@ -5193,7 +5241,7 @@
       {
         "index": 78,
         "locator": "#github-catalog-error",
-        "line": 4077,
+        "line": 4134,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -5205,8 +5253,8 @@
       },
       {
         "index": 79,
-        "locator": "div.xk-modal-gap-8@L4082",
-        "line": 4082,
+        "locator": "div.xk-modal-gap-8@L4139",
+        "line": 4139,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center; flex-wrap:wrap;",
         "declarations": [
@@ -5226,8 +5274,8 @@
       },
       {
         "index": 80,
-        "locator": "div.xk-modal-gap-8@L4087",
-        "line": 4087,
+        "locator": "div.xk-modal-gap-8@L4144",
+        "line": 4144,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -5243,8 +5291,8 @@
       },
       {
         "index": 81,
-        "locator": "div.xk-card-desc@L4628",
-        "line": 4628,
+        "locator": "div.xk-card-desc@L4685",
+        "line": 4685,
         "kind": "presentation-geometry",
         "source": "opacity:0.75;",
         "declarations": [
@@ -5257,7 +5305,7 @@
       {
         "index": 82,
         "locator": "#mihomo-proxy-tools-no-proxies",
-        "line": 4740,
+        "line": 4797,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -5270,7 +5318,7 @@
       {
         "index": 83,
         "locator": "#mihomo-validation-summary-wrap",
-        "line": 4870,
+        "line": 4927,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -5283,7 +5331,7 @@
       {
         "index": 84,
         "locator": "#mihomo-validation-explain-wrap",
-        "line": 4875,
+        "line": 4932,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -5296,7 +5344,7 @@
       {
         "index": 85,
         "locator": "#mihomo-validation-side-panel",
-        "line": 4882,
+        "line": 4939,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -5309,7 +5357,7 @@
       {
         "index": 86,
         "locator": "#mihomo-validation-log-wrap",
-        "line": 4883,
+        "line": 4940,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -5321,8 +5369,8 @@
       },
       {
         "index": 87,
-        "locator": "p.modal-hint.xk-modal-m-0.xk-modal-mt-8@L5115",
-        "line": 5115,
+        "locator": "p.modal-hint.xk-modal-m-0.xk-modal-mt-8@L5172",
+        "line": 5172,
         "kind": "presentation-geometry",
         "source": "opacity:0.75; font-size: 0.85rem;",
         "declarations": [
@@ -5338,8 +5386,8 @@
       },
       {
         "index": 88,
-        "locator": "div.xk-modal-gap-8@L5138",
-        "line": 5138,
+        "locator": "div.xk-modal-gap-8@L5195",
+        "line": 5195,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -5356,7 +5404,7 @@
       {
         "index": 89,
         "locator": "#fm-conn-profile",
-        "line": 5139,
+        "line": 5196,
         "kind": "presentation-geometry",
         "source": "flex:1;",
         "declarations": [
@@ -5369,7 +5417,7 @@
       {
         "index": 90,
         "locator": "#fm-key-file-label",
-        "line": 5170,
+        "line": 5227,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -5382,7 +5430,7 @@
       {
         "index": 91,
         "locator": "#fm-key-file",
-        "line": 5171,
+        "line": 5228,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -5395,7 +5443,7 @@
       {
         "index": 92,
         "locator": "#fm-key-path-label",
-        "line": 5173,
+        "line": 5230,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -5408,7 +5456,7 @@
       {
         "index": 93,
         "locator": "#fm-key-path",
-        "line": 5174,
+        "line": 5231,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -5421,7 +5469,7 @@
       {
         "index": 94,
         "locator": "#fm-passphrase-label",
-        "line": 5176,
+        "line": 5233,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -5434,7 +5482,7 @@
       {
         "index": 95,
         "locator": "#fm-passphrase",
-        "line": 5177,
+        "line": 5234,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -5446,8 +5494,8 @@
       },
       {
         "index": 96,
-        "locator": "div.xk-modal-gap-8@L5180",
-        "line": 5180,
+        "locator": "div.xk-modal-gap-8@L5237",
+        "line": 5237,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -5464,7 +5512,7 @@
       {
         "index": 97,
         "locator": "#fm-hostkey-policy",
-        "line": 5181,
+        "line": 5238,
         "kind": "presentation-geometry",
         "source": "flex:1;",
         "declarations": [
@@ -5477,7 +5525,7 @@
       {
         "index": 98,
         "locator": "#fm-hostkey-row",
-        "line": 5190,
+        "line": 5247,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -5494,7 +5542,7 @@
       {
         "index": 99,
         "locator": "#fm-hostkey-fp",
-        "line": 5191,
+        "line": 5248,
         "kind": "presentation-geometry",
         "source": "padding:8px 10px; opacity:.85; flex:1;",
         "declarations": [
@@ -5514,8 +5562,8 @@
       },
       {
         "index": 100,
-        "locator": "div.xk-modal-gap-10@L5209",
-        "line": 5209,
+        "locator": "div.xk-modal-gap-10@L5266",
+        "line": 5266,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -5531,8 +5579,8 @@
       },
       {
         "index": 101,
-        "locator": "span@L5211",
-        "line": 5211,
+        "locator": "span@L5268",
+        "line": 5268,
         "kind": "presentation-geometry",
         "source": "opacity:.85;",
         "declarations": [
@@ -5545,7 +5593,7 @@
       {
         "index": 102,
         "locator": "#fm-connect-warn",
-        "line": 5215,
+        "line": 5272,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -5557,8 +5605,8 @@
       },
       {
         "index": 103,
-        "locator": "div.modal-actions@L5217",
-        "line": 5217,
+        "locator": "div.modal-actions@L5274",
+        "line": 5274,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -5571,7 +5619,7 @@
       {
         "index": 104,
         "locator": "#fm-knownhosts-path",
-        "line": 5233,
+        "line": 5290,
         "kind": "presentation-geometry",
         "source": "padding:8px 10px; opacity:.85;",
         "declarations": [
@@ -5587,8 +5635,8 @@
       },
       {
         "index": 105,
-        "locator": "div.form-row.xk-modal-gap-8.xk-modal-m-0@L5235",
-        "line": 5235,
+        "locator": "div.form-row.xk-modal-gap-8.xk-modal-m-0@L5292",
+        "line": 5292,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center; flex-wrap:wrap;",
         "declarations": [
@@ -5608,8 +5656,8 @@
       },
       {
         "index": 106,
-        "locator": "label@L5236",
-        "line": 5236,
+        "locator": "label@L5293",
+        "line": 5293,
         "kind": "presentation-geometry",
         "source": "min-width:170px;",
         "declarations": [
@@ -5622,7 +5670,7 @@
       {
         "index": 107,
         "locator": "#fm-knownhosts-remove-host",
-        "line": 5237,
+        "line": 5294,
         "kind": "presentation-geometry",
         "source": "flex:1; min-width:260px;",
         "declarations": [
@@ -5638,8 +5686,8 @@
       },
       {
         "index": 108,
-        "locator": "div.xk-modal-gap-8.xk-modal-mb-10@L5241",
-        "line": 5241,
+        "locator": "div.xk-modal-gap-8.xk-modal-mb-10@L5298",
+        "line": 5298,
         "kind": "presentation-geometry",
         "source": "display:flex; justify-content:flex-end; flex-wrap:wrap;",
         "declarations": [
@@ -5660,7 +5708,7 @@
       {
         "index": 109,
         "locator": "#fm-knownhosts-hashed-hint",
-        "line": 5246,
+        "line": 5303,
         "kind": "mixed-state-and-presentation",
         "source": "display:none; opacity:.75;",
         "declarations": [
@@ -5677,7 +5725,7 @@
       {
         "index": 110,
         "locator": "#fm-knownhosts-body",
-        "line": 5247,
+        "line": 5304,
         "kind": "presentation-geometry",
         "source": "max-height:380px; overflow:auto;",
         "declarations": [
@@ -5693,8 +5741,8 @@
       },
       {
         "index": 111,
-        "locator": "div.status.xk-modal-mt-10@L5248",
-        "line": 5248,
+        "locator": "div.status.xk-modal-mt-10@L5305",
+        "line": 5305,
         "kind": "presentation-geometry",
         "source": "opacity:.75;",
         "declarations": [
@@ -5706,8 +5754,8 @@
       },
       {
         "index": 112,
-        "locator": "div.modal-actions@L5250",
-        "line": 5250,
+        "locator": "div.modal-actions@L5307",
+        "line": 5307,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -5720,7 +5768,7 @@
       {
         "index": 113,
         "locator": "#fm-create-dest",
-        "line": 5269,
+        "line": 5326,
         "kind": "presentation-geometry",
         "source": "padding:8px 10px;",
         "declarations": [
@@ -5732,8 +5780,8 @@
       },
       {
         "index": 114,
-        "locator": "label.xk-modal-gap-8@L5272",
-        "line": 5272,
+        "locator": "label.xk-modal-gap-8@L5329",
+        "line": 5329,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -5750,7 +5798,7 @@
       {
         "index": 115,
         "locator": "#fm-create-createonly-row",
-        "line": 5278,
+        "line": 5335,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -5766,8 +5814,8 @@
       },
       {
         "index": 116,
-        "locator": "div.modal-actions@L5285",
-        "line": 5285,
+        "locator": "div.modal-actions@L5342",
+        "line": 5342,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -5780,7 +5828,7 @@
       {
         "index": 117,
         "locator": "#fm-rename-src",
-        "line": 5306,
+        "line": 5363,
         "kind": "presentation-geometry",
         "source": "padding:8px 10px;",
         "declarations": [
@@ -5792,8 +5840,8 @@
       },
       {
         "index": 118,
-        "locator": "div.status.xk-modal-mt-10@L5308",
-        "line": 5308,
+        "locator": "div.status.xk-modal-mt-10@L5365",
+        "line": 5365,
         "kind": "presentation-geometry",
         "source": "opacity:.8;",
         "declarations": [
@@ -5805,8 +5853,8 @@
       },
       {
         "index": 119,
-        "locator": "div.modal-actions@L5311",
-        "line": 5311,
+        "locator": "div.modal-actions@L5368",
+        "line": 5368,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -5818,8 +5866,8 @@
       },
       {
         "index": 120,
-        "locator": "div.fm-form-grid@L5326",
-        "line": 5326,
+        "locator": "div.fm-form-grid@L5383",
+        "line": 5383,
         "kind": "presentation-geometry",
         "source": "grid-template-columns: 160px 1fr;",
         "declarations": [
@@ -5832,7 +5880,7 @@
       {
         "index": 121,
         "locator": "#fm-archive-src",
-        "line": 5328,
+        "line": 5385,
         "kind": "presentation-geometry",
         "source": "padding:8px 10px;",
         "declarations": [
@@ -5845,7 +5893,7 @@
       {
         "index": 122,
         "locator": "#fm-archive-list",
-        "line": 5331,
+        "line": 5388,
         "kind": "presentation-geometry",
         "source": "max-height:180px;",
         "declarations": [
@@ -5857,8 +5905,8 @@
       },
       {
         "index": 123,
-        "locator": "label.xk-modal-gap-8@L5343",
-        "line": 5343,
+        "locator": "label.xk-modal-gap-8@L5400",
+        "line": 5400,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -5874,8 +5922,8 @@
       },
       {
         "index": 124,
-        "locator": "div.modal-actions@L5350",
-        "line": 5350,
+        "locator": "div.modal-actions@L5407",
+        "line": 5407,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -5887,8 +5935,8 @@
       },
       {
         "index": 125,
-        "locator": "div.fm-form-grid@L5365",
-        "line": 5365,
+        "locator": "div.fm-form-grid@L5422",
+        "line": 5422,
         "kind": "presentation-geometry",
         "source": "grid-template-columns: 160px 1fr;",
         "declarations": [
@@ -5901,7 +5949,7 @@
       {
         "index": 126,
         "locator": "#fm-extract-archive",
-        "line": 5367,
+        "line": 5424,
         "kind": "presentation-geometry",
         "source": "padding:8px 10px;",
         "declarations": [
@@ -5913,8 +5961,8 @@
       },
       {
         "index": 127,
-        "locator": "div.xk-modal-gap-8@L5373",
-        "line": 5373,
+        "locator": "div.xk-modal-gap-8@L5430",
+        "line": 5430,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center; flex-wrap:wrap;",
         "declarations": [
@@ -5935,7 +5983,7 @@
       {
         "index": 128,
         "locator": "#fm-extract-dest-here-btn",
-        "line": 5374,
+        "line": 5431,
         "kind": "presentation-geometry",
         "source": "padding:6px 10px; font-size:12px;",
         "declarations": [
@@ -5952,7 +6000,7 @@
       {
         "index": 129,
         "locator": "#fm-extract-dest-other-btn",
-        "line": 5375,
+        "line": 5432,
         "kind": "presentation-geometry",
         "source": "padding:6px 10px; font-size:12px;",
         "declarations": [
@@ -5969,7 +6017,7 @@
       {
         "index": 130,
         "locator": "#fm-extract-dest-pick-btn",
-        "line": 5376,
+        "line": 5433,
         "kind": "presentation-geometry",
         "source": "padding:6px 10px; font-size:12px;",
         "declarations": [
@@ -5985,8 +6033,8 @@
       },
       {
         "index": 131,
-        "locator": "span@L5377",
-        "line": 5377,
+        "locator": "span@L5434",
+        "line": 5434,
         "kind": "presentation-geometry",
         "source": "opacity:.7; font-size:12px;",
         "declarations": [
@@ -6002,8 +6050,8 @@
       },
       {
         "index": 132,
-        "locator": "label.xk-modal-gap-8@L5381",
-        "line": 5381,
+        "locator": "label.xk-modal-gap-8@L5438",
+        "line": 5438,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -6019,8 +6067,8 @@
       },
       {
         "index": 133,
-        "locator": "label.xk-modal-gap-8@L5387",
-        "line": 5387,
+        "locator": "label.xk-modal-gap-8@L5444",
+        "line": 5444,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -6036,8 +6084,8 @@
       },
       {
         "index": 134,
-        "locator": "label.xk-modal-gap-8@L5393",
-        "line": 5393,
+        "locator": "label.xk-modal-gap-8@L5450",
+        "line": 5450,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -6053,8 +6101,8 @@
       },
       {
         "index": 135,
-        "locator": "label.xk-modal-gap-8@L5399",
-        "line": 5399,
+        "locator": "label.xk-modal-gap-8@L5456",
+        "line": 5456,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -6070,8 +6118,8 @@
       },
       {
         "index": 136,
-        "locator": "div.status.xk-modal-mt-10@L5404",
-        "line": 5404,
+        "locator": "div.status.xk-modal-mt-10@L5461",
+        "line": 5461,
         "kind": "presentation-geometry",
         "source": "opacity:.75;",
         "declarations": [
@@ -6083,8 +6131,8 @@
       },
       {
         "index": 137,
-        "locator": "div.modal-actions@L5407",
-        "line": 5407,
+        "locator": "div.modal-actions@L5464",
+        "line": 5464,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -6096,8 +6144,8 @@
       },
       {
         "index": 138,
-        "locator": "div.xk-modal-gap-8.xk-modal-mb-10@L5422",
-        "line": 5422,
+        "locator": "div.xk-modal-gap-8.xk-modal-mb-10@L5479",
+        "line": 5479,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center; flex-wrap:wrap;",
         "declarations": [
@@ -6118,7 +6166,7 @@
       {
         "index": 139,
         "locator": "#fm-folder-picker-up-btn",
-        "line": 5423,
+        "line": 5480,
         "kind": "presentation-geometry",
         "source": "padding:6px 10px; font-size:12px;",
         "declarations": [
@@ -6135,7 +6183,7 @@
       {
         "index": 140,
         "locator": "#fm-folder-picker-home-btn",
-        "line": 5424,
+        "line": 5481,
         "kind": "presentation-geometry",
         "source": "padding:6px 10px; font-size:12px;",
         "declarations": [
@@ -6152,7 +6200,7 @@
       {
         "index": 141,
         "locator": "#fm-folder-picker-path",
-        "line": 5425,
+        "line": 5482,
         "kind": "presentation-geometry",
         "source": "flex:1; min-width:220px;",
         "declarations": [
@@ -6169,7 +6217,7 @@
       {
         "index": 142,
         "locator": "#fm-folder-picker-status",
-        "line": 5427,
+        "line": 5484,
         "kind": "presentation-geometry",
         "source": "padding:6px 10px; opacity:.85;",
         "declarations": [
@@ -6186,7 +6234,7 @@
       {
         "index": 143,
         "locator": "#fm-folder-picker-list",
-        "line": 5428,
+        "line": 5485,
         "kind": "presentation-geometry",
         "source": "max-height:420px; overflow:auto; padding:0;",
         "declarations": [
@@ -6206,8 +6254,8 @@
       },
       {
         "index": 144,
-        "locator": "div.modal-actions@L5431",
-        "line": 5431,
+        "locator": "div.modal-actions@L5488",
+        "line": 5488,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -6219,8 +6267,8 @@
       },
       {
         "index": 145,
-        "locator": "div.fm-form-grid@L5446",
-        "line": 5446,
+        "locator": "div.fm-form-grid@L5503",
+        "line": 5503,
         "kind": "presentation-geometry",
         "source": "grid-template-columns: 120px 1fr;",
         "declarations": [
@@ -6233,7 +6281,7 @@
       {
         "index": 146,
         "locator": "#fm-archive-list-path",
-        "line": 5448,
+        "line": 5505,
         "kind": "presentation-geometry",
         "source": "padding:8px 10px;",
         "declarations": [
@@ -6245,8 +6293,8 @@
       },
       {
         "index": 147,
-        "locator": "div.xk-modal-gap-8.xk-modal-m-0.xk-modal-mb-6@L5452",
-        "line": 5452,
+        "locator": "div.xk-modal-gap-8.xk-modal-m-0.xk-modal-mb-6@L5509",
+        "line": 5509,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -6263,7 +6311,7 @@
       {
         "index": 148,
         "locator": "#fm-archive-list-filter",
-        "line": 5453,
+        "line": 5510,
         "kind": "presentation-geometry",
         "source": "flex:1; min-width:200px;",
         "declarations": [
@@ -6280,7 +6328,7 @@
       {
         "index": 149,
         "locator": "#fm-archive-list-body",
-        "line": 5457,
+        "line": 5514,
         "kind": "presentation-geometry",
         "source": "max-height:420px; overflow:auto; padding:0;",
         "declarations": [
@@ -6301,7 +6349,7 @@
       {
         "index": 150,
         "locator": "#fm-archive-list-meta",
-        "line": 5461,
+        "line": 5518,
         "kind": "presentation-geometry",
         "source": "padding:6px 10px; opacity:.8;",
         "declarations": [
@@ -6317,8 +6365,8 @@
       },
       {
         "index": 151,
-        "locator": "div.modal-actions.xk-modal-gap-10@L5465",
-        "line": 5465,
+        "locator": "div.modal-actions.xk-modal-gap-10@L5522",
+        "line": 5522,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -6330,8 +6378,8 @@
       },
       {
         "index": 152,
-        "locator": "div.status.xk-modal-m-0@L5487",
-        "line": 5487,
+        "locator": "div.status.xk-modal-m-0@L5544",
+        "line": 5544,
         "kind": "presentation-geometry",
         "source": "padding:8px 10px;",
         "declarations": [
@@ -6343,8 +6391,8 @@
       },
       {
         "index": 153,
-        "locator": "div.modal-actions@L5491",
-        "line": 5491,
+        "locator": "div.modal-actions@L5548",
+        "line": 5548,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -6356,8 +6404,8 @@
       },
       {
         "index": 154,
-        "locator": "div.xk-modal-gap-2@L5502",
-        "line": 5502,
+        "locator": "div.xk-modal-gap-2@L5559",
+        "line": 5559,
         "kind": "presentation-geometry",
         "source": "display:flex; flex-direction:column;",
         "declarations": [
@@ -6374,7 +6422,7 @@
       {
         "index": 155,
         "locator": "#fm-props-modal-meta",
-        "line": 5504,
+        "line": 5561,
         "kind": "presentation-geometry",
         "source": "padding:0; background:transparent; border:none; opacity:.75; font-size:0.82rem;",
         "declarations": [
@@ -6402,8 +6450,8 @@
       },
       {
         "index": 156,
-        "locator": "div.modal-actions@L5511",
-        "line": 5511,
+        "locator": "div.modal-actions@L5568",
+        "line": 5568,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -6415,8 +6463,8 @@
       },
       {
         "index": 157,
-        "locator": "div.xk-modal-gap-2@L5521",
-        "line": 5521,
+        "locator": "div.xk-modal-gap-2@L5578",
+        "line": 5578,
         "kind": "presentation-geometry",
         "source": "display:flex; flex-direction:column;",
         "declarations": [
@@ -6433,7 +6481,7 @@
       {
         "index": 158,
         "locator": "#fm-hash-meta",
-        "line": 5523,
+        "line": 5580,
         "kind": "presentation-geometry",
         "source": "padding:0; background:transparent; border:none; opacity:.75; font-size:0.82rem;",
         "declarations": [
@@ -6461,8 +6509,8 @@
       },
       {
         "index": 159,
-        "locator": "div.fm-form-grid@L5528",
-        "line": 5528,
+        "locator": "div.fm-form-grid@L5585",
+        "line": 5585,
         "kind": "presentation-geometry",
         "source": "grid-template-columns: 120px 1fr auto; align-items:center;",
         "declarations": [
@@ -6478,8 +6526,8 @@
       },
       {
         "index": 160,
-        "locator": "div.modal-actions@L5543",
-        "line": 5543,
+        "locator": "div.modal-actions@L5600",
+        "line": 5600,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -6491,8 +6539,8 @@
       },
       {
         "index": 161,
-        "locator": "div.fm-form-grid@L5557",
-        "line": 5557,
+        "locator": "div.fm-form-grid@L5614",
+        "line": 5614,
         "kind": "presentation-geometry",
         "source": "grid-template-columns: 160px 1fr;",
         "declarations": [
@@ -6505,7 +6553,7 @@
       {
         "index": 162,
         "locator": "#fm-chmod-src",
-        "line": 5559,
+        "line": 5616,
         "kind": "presentation-geometry",
         "source": "padding:8px 10px;",
         "declarations": [
@@ -6518,7 +6566,7 @@
       {
         "index": 163,
         "locator": "#fm-chmod-list",
-        "line": 5562,
+        "line": 5619,
         "kind": "presentation-geometry",
         "source": "max-height:160px;",
         "declarations": [
@@ -6530,8 +6578,8 @@
       },
       {
         "index": 164,
-        "locator": "div.status.xk-modal-m-0@L5568",
-        "line": 5568,
+        "locator": "div.status.xk-modal-m-0@L5625",
+        "line": 5625,
         "kind": "presentation-geometry",
         "source": "opacity:.8;",
         "declarations": [
@@ -6543,8 +6591,8 @@
       },
       {
         "index": 165,
-        "locator": "div.modal-actions@L5595",
-        "line": 5595,
+        "locator": "div.modal-actions@L5652",
+        "line": 5652,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -6556,8 +6604,8 @@
       },
       {
         "index": 166,
-        "locator": "div.fm-form-grid@L5610",
-        "line": 5610,
+        "locator": "div.fm-form-grid@L5667",
+        "line": 5667,
         "kind": "presentation-geometry",
         "source": "grid-template-columns: 160px 1fr;",
         "declarations": [
@@ -6570,7 +6618,7 @@
       {
         "index": 167,
         "locator": "#fm-chown-src",
-        "line": 5612,
+        "line": 5669,
         "kind": "presentation-geometry",
         "source": "padding:8px 10px;",
         "declarations": [
@@ -6583,7 +6631,7 @@
       {
         "index": 168,
         "locator": "#fm-chown-list",
-        "line": 5615,
+        "line": 5672,
         "kind": "presentation-geometry",
         "source": "max-height:160px;",
         "declarations": [
@@ -6595,8 +6643,8 @@
       },
       {
         "index": 169,
-        "locator": "div.status.xk-modal-m-0@L5624",
-        "line": 5624,
+        "locator": "div.status.xk-modal-m-0@L5681",
+        "line": 5681,
         "kind": "presentation-geometry",
         "source": "opacity:.8;",
         "declarations": [
@@ -6608,8 +6656,8 @@
       },
       {
         "index": 170,
-        "locator": "div.modal-actions@L5628",
-        "line": 5628,
+        "locator": "div.modal-actions@L5685",
+        "line": 5685,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -6621,8 +6669,8 @@
       },
       {
         "index": 171,
-        "locator": "div.status.xk-modal-mt-10@L5645",
-        "line": 5645,
+        "locator": "div.status.xk-modal-mt-10@L5702",
+        "line": 5702,
         "kind": "presentation-geometry",
         "source": "opacity:.8;",
         "declarations": [
@@ -6634,8 +6682,8 @@
       },
       {
         "index": 172,
-        "locator": "div.modal-actions@L5647",
-        "line": 5647,
+        "locator": "div.modal-actions@L5704",
+        "line": 5704,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -6647,8 +6695,8 @@
       },
       {
         "index": 173,
-        "locator": "div.modal-actions@L5680",
-        "line": 5680,
+        "locator": "div.modal-actions@L5737",
+        "line": 5737,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -6661,7 +6709,7 @@
       {
         "index": 174,
         "locator": "#fm-bookmarks-error",
-        "line": 5699,
+        "line": 5756,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -6674,7 +6722,7 @@
       {
         "index": 175,
         "locator": "#fm-download-multi-desc",
-        "line": 5723,
+        "line": 5780,
         "kind": "presentation-geometry",
         "source": "opacity:.9;",
         "declarations": [
@@ -6686,8 +6734,8 @@
       },
       {
         "index": 176,
-        "locator": "div.xk-modal-gap-10@L5725",
-        "line": 5725,
+        "locator": "div.xk-modal-gap-10@L5782",
+        "line": 5782,
         "kind": "presentation-geometry",
         "source": "display:flex; flex-direction:column;",
         "declarations": [
@@ -6703,8 +6751,8 @@
       },
       {
         "index": 177,
-        "locator": "label.xk-modal-gap-10@L5726",
-        "line": 5726,
+        "locator": "label.xk-modal-gap-10@L5783",
+        "line": 5783,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:flex-start;",
         "declarations": [
@@ -6720,8 +6768,8 @@
       },
       {
         "index": 178,
-        "locator": "div@L5729",
-        "line": 5729,
+        "locator": "div@L5786",
+        "line": 5786,
         "kind": "presentation-geometry",
         "source": "font-weight:600;",
         "declarations": [
@@ -6733,8 +6781,8 @@
       },
       {
         "index": 179,
-        "locator": "div@L5730",
-        "line": 5730,
+        "locator": "div@L5787",
+        "line": 5787,
         "kind": "presentation-geometry",
         "source": "font-size:12px; opacity:.8;",
         "declarations": [
@@ -6750,8 +6798,8 @@
       },
       {
         "index": 180,
-        "locator": "label.xk-modal-gap-10@L5734",
-        "line": 5734,
+        "locator": "label.xk-modal-gap-10@L5791",
+        "line": 5791,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:flex-start;",
         "declarations": [
@@ -6767,8 +6815,8 @@
       },
       {
         "index": 181,
-        "locator": "div@L5737",
-        "line": 5737,
+        "locator": "div@L5794",
+        "line": 5794,
         "kind": "presentation-geometry",
         "source": "font-weight:600;",
         "declarations": [
@@ -6781,7 +6829,7 @@
       {
         "index": 182,
         "locator": "#fm-download-multi-queue-hint",
-        "line": 5738,
+        "line": 5795,
         "kind": "presentation-geometry",
         "source": "font-size:12px; opacity:.8;",
         "declarations": [
@@ -6797,8 +6845,8 @@
       },
       {
         "index": 183,
-        "locator": "label.xk-modal-gap-8.xk-modal-mt-12@L5743",
-        "line": 5743,
+        "locator": "label.xk-modal-gap-8.xk-modal-mt-12@L5800",
+        "line": 5800,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -6814,8 +6862,8 @@
       },
       {
         "index": 184,
-        "locator": "span@L5745",
-        "line": 5745,
+        "locator": "span@L5802",
+        "line": 5802,
         "kind": "presentation-geometry",
         "source": "font-size:12px; opacity:.9;",
         "declarations": [
@@ -6831,8 +6879,8 @@
       },
       {
         "index": 185,
-        "locator": "div.modal-actions.xk-modal-gap-10@L5748",
-        "line": 5748,
+        "locator": "div.modal-actions.xk-modal-gap-10@L5805",
+        "line": 5805,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -6844,8 +6892,8 @@
       },
       {
         "index": 186,
-        "locator": "div.modal-actions@L5769",
-        "line": 5769,
+        "locator": "div.modal-actions@L5826",
+        "line": 5826,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -6857,8 +6905,8 @@
       },
       {
         "index": 187,
-        "locator": "div.xk-modal-gap-8.xk-modal-mb-8@L5784",
-        "line": 5784,
+        "locator": "div.xk-modal-gap-8.xk-modal-mb-8@L5841",
+        "line": 5841,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap;",
         "declarations": [
@@ -6882,8 +6930,8 @@
       },
       {
         "index": 188,
-        "locator": "div.xk-modal-gap-8@L5785",
-        "line": 5785,
+        "locator": "div.xk-modal-gap-8@L5842",
+        "line": 5842,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center; flex-wrap:wrap;",
         "declarations": [
@@ -6903,8 +6951,8 @@
       },
       {
         "index": 189,
-        "locator": "label.xk-modal-gap-6@L5786",
-        "line": 5786,
+        "locator": "label.xk-modal-gap-6@L5843",
+        "line": 5843,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center; opacity:.9;",
         "declarations": [
@@ -6924,8 +6972,8 @@
       },
       {
         "index": 190,
-        "locator": "span@L5787",
-        "line": 5787,
+        "locator": "span@L5844",
+        "line": 5844,
         "kind": "presentation-geometry",
         "source": "font-size:12px;",
         "declarations": [
@@ -6938,7 +6986,7 @@
       {
         "index": 191,
         "locator": "#fm-ops-filter",
-        "line": 5788,
+        "line": 5845,
         "kind": "presentation-geometry",
         "source": "height:32px;",
         "declarations": [
@@ -6950,8 +6998,8 @@
       },
       {
         "index": 192,
-        "locator": "div.xk-modal-gap-8@L5796",
-        "line": 5796,
+        "locator": "div.xk-modal-gap-8@L5853",
+        "line": 5853,
         "kind": "presentation-geometry",
         "source": "display:flex; justify-content:flex-end; flex-wrap:wrap;",
         "declarations": [
@@ -6972,7 +7020,7 @@
       {
         "index": 193,
         "locator": "#fm-ops-summary",
-        "line": 5801,
+        "line": 5858,
         "kind": "presentation-geometry",
         "source": "font-size:12px; opacity:.85;",
         "declarations": [
@@ -6988,8 +7036,8 @@
       },
       {
         "index": 194,
-        "locator": "div.xk-modal-gap-8@L5821",
-        "line": 5821,
+        "locator": "div.xk-modal-gap-8@L5878",
+        "line": 5878,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center; flex-wrap:wrap;",
         "declarations": [
@@ -7010,7 +7058,7 @@
       {
         "index": 195,
         "locator": "#fm-volumes-spinner",
-        "line": 5823,
+        "line": 5880,
         "kind": "presentation-geometry",
         "source": "opacity:.85;",
         "declarations": [
@@ -7023,7 +7071,7 @@
       {
         "index": 196,
         "locator": "#fm-volumes-summary",
-        "line": 5825,
+        "line": 5882,
         "kind": "presentation-geometry",
         "source": "font-size:12px; opacity:.85;",
         "declarations": [
@@ -7039,8 +7087,8 @@
       },
       {
         "index": 197,
-        "locator": "div.modal-actions@L5894",
-        "line": 5894,
+        "locator": "div.modal-actions@L5951",
+        "line": 5951,
         "kind": "presentation-geometry",
         "source": "justify-content:flex-end;",
         "declarations": [
@@ -7052,8 +7100,8 @@
       },
       {
         "index": 198,
-        "locator": "div.xk-editor-workbench-title.xk-modal-gap-2@L5904",
-        "line": 5904,
+        "locator": "div.xk-editor-workbench-title.xk-modal-gap-2@L5961",
+        "line": 5961,
         "kind": "presentation-geometry",
         "source": "display:flex; flex-direction:column;",
         "declarations": [
@@ -7070,7 +7118,7 @@
       {
         "index": 199,
         "locator": "#fm-editor-subtitle",
-        "line": 5906,
+        "line": 5963,
         "kind": "presentation-geometry",
         "source": "font-size: 0.82rem; opacity:0.75;",
         "declarations": [
@@ -7086,8 +7134,8 @@
       },
       {
         "index": 200,
-        "locator": "div.xk-editor-workbench-header-tools.xk-modal-gap-10@L5908",
-        "line": 5908,
+        "locator": "div.xk-editor-workbench-header-tools.xk-modal-gap-10@L5965",
+        "line": 5965,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -7104,7 +7152,7 @@
       {
         "index": 201,
         "locator": "#fm-editor-warning",
-        "line": 5920,
+        "line": 5977,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -7117,7 +7165,7 @@
       {
         "index": 202,
         "locator": "#fm-editor-error",
-        "line": 5921,
+        "line": 5978,
         "kind": "state-visibility-hook",
         "source": "display:none;",
         "declarations": [
@@ -7129,8 +7177,8 @@
       },
       {
         "index": 203,
-        "locator": "div.xk-editor-workbench-action-group.xk-modal-gap-8@L5926",
-        "line": 5926,
+        "locator": "div.xk-editor-workbench-action-group.xk-modal-gap-8@L5983",
+        "line": 5983,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -7146,8 +7194,8 @@
       },
       {
         "index": 204,
-        "locator": "div.xk-editor-workbench-action-group.xk-modal-gap-8@L5929",
-        "line": 5929,
+        "locator": "div.xk-editor-workbench-action-group.xk-modal-gap-8@L5986",
+        "line": 5986,
         "kind": "presentation-geometry",
         "source": "display:flex; align-items:center;",
         "declarations": [
@@ -7164,8 +7212,8 @@
     ]
   },
   "dom_contract": {
-    "id_count": 1376,
-    "unique_id_count": 1376,
+    "id_count": 1385,
+    "unique_id_count": 1385,
     "duplicate_ids": [],
     "ids": [
       "backups-clear-snapshots-btn",
@@ -8256,6 +8304,15 @@
       "routing-import-template-btn",
       "routing-reset-btn",
       "routing-restore-auto-btn",
+      "routing-rule-dns-add",
+      "routing-rule-dns-apply-note",
+      "routing-rule-dns-editor",
+      "routing-rule-dns-entry",
+      "routing-rule-dns-list",
+      "routing-rule-dns-list-title",
+      "routing-rule-dns-note",
+      "routing-rule-dns-row",
+      "routing-rule-dns-summary",
       "routing-rules-add-btn",
       "routing-rules-apply-btn",
       "routing-rules-arrow",
@@ -8545,7 +8602,7 @@
       "xray-snapshot-status",
       "xray-snapshot-title"
     ],
-    "data_attribute_count": 694,
+    "data_attribute_count": 705,
     "data_attributes": [
       {
         "locator": "header.panel-header.panel-header-shell@L99",
@@ -10625,20 +10682,75 @@
       {
         "locator": "details.xk-dns-zone@L2636",
         "name": "data-zone",
+        "value": "rule-dns"
+      },
+      {
+        "locator": "b@L2655",
+        "name": "data-rule-dns-name",
+        "value": ""
+      },
+      {
+        "locator": "span@L2655",
+        "name": "data-rule-dns-address",
+        "value": ""
+      },
+      {
+        "locator": "span@L2655",
+        "name": "data-rule-dns-target",
+        "value": ""
+      },
+      {
+        "locator": "button.routing-dns-over-vless-zone-preset@L2658",
+        "name": "data-rule-dns-edit",
+        "value": ""
+      },
+      {
+        "locator": "button.routing-dns-over-vless-zone-preset@L2659",
+        "name": "data-rule-dns-remove",
+        "value": ""
+      },
+      {
+        "locator": "b@L2670",
+        "name": "data-rule-dns-domains",
+        "value": ""
+      },
+      {
+        "locator": "small.modal-hint@L2676",
+        "name": "data-rule-dns-help",
+        "value": ""
+      },
+      {
+        "locator": "b@L2677",
+        "name": "data-rule-dns-outbound",
+        "value": ""
+      },
+      {
+        "locator": "button.routing-dns-over-vless-zone-preset@L2685",
+        "name": "data-rule-dns-save",
+        "value": ""
+      },
+      {
+        "locator": "button.routing-dns-over-vless-zone-preset@L2686",
+        "name": "data-rule-dns-cancel",
+        "value": ""
+      },
+      {
+        "locator": "details.xk-dns-zone@L2693",
+        "name": "data-zone",
         "value": "home"
       },
       {
-        "locator": "span.xk-dns-zone-sum@L2639",
+        "locator": "span.xk-dns-zone-sum@L2696",
         "name": "data-zone-sum",
         "value": "home"
       },
       {
-        "locator": "details.xk-dns-zone@L2680",
+        "locator": "details.xk-dns-zone@L2737",
         "name": "data-zone",
         "value": "direct"
       },
       {
-        "locator": "span.xk-dns-zone-sum@L2683",
+        "locator": "span.xk-dns-zone-sum@L2740",
         "name": "data-zone-sum",
         "value": "direct"
       },
@@ -10648,62 +10760,62 @@
         "value": "Очистит и адреса DNS, и список доменов — область перестанет использоваться."
       },
       {
-        "locator": "details.xk-dns-zone@L2712",
+        "locator": "details.xk-dns-zone@L2769",
         "name": "data-zone",
         "value": "hosts"
       },
       {
-        "locator": "span.xk-dns-zone-sum@L2715",
+        "locator": "span.xk-dns-zone-sum@L2772",
         "name": "data-zone-sum",
         "value": "hosts"
       },
       {
-        "locator": "details.xk-dns-zone@L2733",
+        "locator": "details.xk-dns-zone@L2790",
         "name": "data-zone",
         "value": "records"
       },
       {
-        "locator": "span.xk-dns-zone-sum@L2736",
+        "locator": "span.xk-dns-zone-sum@L2793",
         "name": "data-zone-sum",
         "value": "records"
       },
       {
-        "locator": "details.xk-dns-zone@L2766",
+        "locator": "details.xk-dns-zone@L2823",
         "name": "data-required",
         "value": "1"
       },
       {
-        "locator": "details.xk-dns-zone@L2766",
+        "locator": "details.xk-dns-zone@L2823",
         "name": "data-zone",
         "value": "devices"
       },
       {
-        "locator": "span.xk-dns-zone-req@L2769",
+        "locator": "span.xk-dns-zone-req@L2826",
         "name": "data-zone-req",
         "value": "devices"
       },
       {
-        "locator": "span.xk-dns-zone-sum@L2770",
+        "locator": "span.xk-dns-zone-sum@L2827",
         "name": "data-zone-sum",
         "value": "devices"
       },
       {
-        "locator": "span@L2776",
+        "locator": "span@L2833",
         "name": "data-verdict",
         "value": "reaches"
       },
       {
-        "locator": "span@L2777",
+        "locator": "span@L2834",
         "name": "data-verdict",
         "value": "intercepted"
       },
       {
-        "locator": "span@L2778",
+        "locator": "span@L2835",
         "name": "data-verdict",
         "value": "unknown"
       },
       {
-        "locator": "span@L2779",
+        "locator": "span@L2836",
         "name": "data-verdict",
         "value": "offline"
       },
@@ -10718,7 +10830,7 @@
         "value": "confirm-compact-form"
       },
       {
-        "locator": "div.modal-content.xk-modal-width.xk-modal-width-760@L2835",
+        "locator": "div.modal-content.xk-modal-width.xk-modal-width-760@L2892",
         "name": "data-modal-key",
         "value": "inbounds-apply"
       },
@@ -10733,47 +10845,47 @@
         "value": "drawer-help"
       },
       {
-        "locator": "div.modal-content.xk-modal-width.xk-modal-width-980@L2883",
+        "locator": "div.modal-content.xk-modal-width.xk-modal-width-980@L2940",
         "name": "data-modal-key",
         "value": "routing-balancer-help"
       },
       {
-        "locator": "a@L2891",
+        "locator": "a@L2948",
         "name": "data-help-target",
         "value": "xk-bhelp-what"
       },
       {
-        "locator": "a@L2892",
+        "locator": "a@L2949",
         "name": "data-help-target",
         "value": "xk-bhelp-quickstart"
       },
       {
-        "locator": "a@L2893",
+        "locator": "a@L2950",
         "name": "data-help-target",
         "value": "xk-bhelp-manual"
       },
       {
-        "locator": "a@L2894",
+        "locator": "a@L2951",
         "name": "data-help-target",
         "value": "xk-bhelp-subscriptions"
       },
       {
-        "locator": "a@L2895",
+        "locator": "a@L2952",
         "name": "data-help-target",
         "value": "xk-bhelp-balancer"
       },
       {
-        "locator": "a@L2896",
+        "locator": "a@L2953",
         "name": "data-help-target",
         "value": "xk-bhelp-rules"
       },
       {
-        "locator": "a@L2897",
+        "locator": "a@L2954",
         "name": "data-help-target",
         "value": "xk-bhelp-forced"
       },
       {
-        "locator": "a@L2898",
+        "locator": "a@L2955",
         "name": "data-help-target",
         "value": "xk-bhelp-troubles"
       },
@@ -10788,7 +10900,7 @@
         "value": "editor-workbench"
       },
       {
-        "locator": "div.modal-content.xk-modal-width.xk-modal-width-980@L3048",
+        "locator": "div.modal-content.xk-modal-width.xk-modal-width-980@L3105",
         "name": "data-modal-key",
         "value": "xray-snapshot-preview"
       },
@@ -10813,7 +10925,7 @@
         "value": "master-detail"
       },
       {
-        "locator": "div.modal-content.xk-modal-width.xk-modal-width-860@L3079",
+        "locator": "div.modal-content.xk-modal-width.xk-modal-width-860@L3136",
         "name": "data-modal-key",
         "value": "routing-templates"
       },
@@ -10858,7 +10970,7 @@
         "value": "confirm-compact-form"
       },
       {
-        "locator": "div.modal-content.xk-modal-width.xk-modal-width-560@L3132",
+        "locator": "div.modal-content.xk-modal-width.xk-modal-width-560@L3189",
         "name": "data-modal-key",
         "value": "routing-template-save"
       },
@@ -10873,7 +10985,7 @@
         "value": "editor-workbench"
       },
       {
-        "locator": "div.modal-content.xk-modal-width.xk-modal-width-860@L3168",
+        "locator": "div.modal-content.xk-modal-width.xk-modal-width-860@L3225",
         "name": "data-modal-key",
         "value": "routing-template-edit"
       },
@@ -10898,7 +11010,7 @@
         "value": "master-detail"
       },
       {
-        "locator": "div.modal-content.xk-gen-modal@L3222",
+        "locator": "div.modal-content.xk-gen-modal@L3279",
         "name": "data-modal-key",
         "value": "outbounds-generator-premium-v1-content"
       },
@@ -10938,7 +11050,7 @@
         "value": "master-detail"
       },
       {
-        "locator": "div.modal-content@L3490",
+        "locator": "div.modal-content@L3547",
         "name": "data-modal-key",
         "value": "outbounds-pool-premium-v2-content"
       },
@@ -11048,57 +11160,57 @@
         "value": "stopped"
       },
       {
-        "locator": "div.terminal-menu-section@L3691",
+        "locator": "div.terminal-menu-section@L3748",
         "name": "data-collapsible",
         "value": "1"
       },
       {
-        "locator": "div.terminal-menu-section@L3691",
+        "locator": "div.terminal-menu-section@L3748",
         "name": "data-section",
         "value": "session"
       },
       {
-        "locator": "div.terminal-menu-section@L3703",
+        "locator": "div.terminal-menu-section@L3760",
         "name": "data-collapsible",
         "value": "1"
       },
       {
-        "locator": "div.terminal-menu-section@L3703",
+        "locator": "div.terminal-menu-section@L3760",
         "name": "data-section",
         "value": "signals"
       },
       {
-        "locator": "button.terminal-signals-item.terminal-pty-only@L3707",
+        "locator": "button.terminal-signals-item.terminal-pty-only@L3764",
         "name": "data-terminal-signal",
         "value": "INT"
       },
       {
-        "locator": "button.terminal-signals-item.terminal-pty-only@L3708",
+        "locator": "button.terminal-signals-item.terminal-pty-only@L3765",
         "name": "data-terminal-signal",
         "value": "TERM"
       },
       {
-        "locator": "button.terminal-signals-item.terminal-pty-only@L3709",
+        "locator": "button.terminal-signals-item.terminal-pty-only@L3766",
         "name": "data-terminal-signal",
         "value": "HUP"
       },
       {
-        "locator": "button.terminal-signals-item.terminal-tool-btn-danger.terminal-pty-only@L3710",
+        "locator": "button.terminal-signals-item.terminal-tool-btn-danger.terminal-pty-only@L3767",
         "name": "data-terminal-signal",
         "value": "KILL"
       },
       {
-        "locator": "button.terminal-signals-item.terminal-pty-only@L3711",
+        "locator": "button.terminal-signals-item.terminal-pty-only@L3768",
         "name": "data-terminal-signal",
         "value": "QUIT"
       },
       {
-        "locator": "div.terminal-menu-section@L3716",
+        "locator": "div.terminal-menu-section@L3773",
         "name": "data-collapsible",
         "value": "1"
       },
       {
-        "locator": "div.terminal-menu-section@L3716",
+        "locator": "div.terminal-menu-section@L3773",
         "name": "data-section",
         "value": "tools"
       },
@@ -11163,52 +11275,52 @@
         "value": "confirm-compact-form"
       },
       {
-        "locator": "div.xk-core-engine-row@L3984",
+        "locator": "div.xk-core-engine-row@L4041",
         "name": "data-core",
         "value": "xray"
       },
       {
-        "locator": "button.core-option.xk-core-option@L3985",
+        "locator": "button.core-option.xk-core-option@L4042",
         "name": "data-core",
         "value": "xray"
       },
       {
-        "locator": "span.xk-core-option-version@L3987",
+        "locator": "span.xk-core-option-version@L4044",
         "name": "data-core-option-version",
         "value": ""
       },
       {
-        "locator": "div.xk-core-engine-row@L3991",
+        "locator": "div.xk-core-engine-row@L4048",
         "name": "data-core",
         "value": "mihomo"
       },
       {
-        "locator": "button.core-option.xk-core-option@L3992",
+        "locator": "button.core-option.xk-core-option@L4049",
         "name": "data-core",
         "value": "mihomo"
       },
       {
-        "locator": "span.xk-core-option-version@L3994",
+        "locator": "span.xk-core-option-version@L4051",
         "name": "data-core-option-version",
         "value": ""
       },
       {
-        "locator": "div.xk-core-source-control.xk-core-source-control-absent@L4014",
+        "locator": "div.xk-core-source-control.xk-core-source-control-absent@L4071",
         "name": "data-core-absent",
         "value": ""
       },
       {
-        "locator": "div.xk-core-source-control.xk-core-source-control-absent@L4014",
+        "locator": "div.xk-core-source-control.xk-core-source-control-absent@L4071",
         "name": "data-mihomo-module-state",
         "value": "{{ page_context.engine_module_states.get('mihomo', '') }}"
       },
       {
-        "locator": "div.xk-core-source-control.xk-core-source-control-absent@L4014",
+        "locator": "div.xk-core-source-control.xk-core-source-control-absent@L4071",
         "name": "data-xray-module-state",
         "value": "{{ page_context.engine_module_states.get('xray', '') }}"
       },
       {
-        "locator": "p@L4015",
+        "locator": "p@L4072",
         "name": "data-core-absent-text",
         "value": ""
       },
@@ -11253,42 +11365,42 @@
         "value": "confirm-compact-form"
       },
       {
-        "locator": "button.donate-address.xk-tooltip@L4110",
+        "locator": "button.donate-address.xk-tooltip@L4167",
         "name": "data-copy",
         "value": "UQBm03wCEyD99CkEjjrfbtk08WrlgKqfyQGoueAwvhMEYV7L"
       },
       {
-        "locator": "button.donate-address.xk-tooltip@L4110",
+        "locator": "button.donate-address.xk-tooltip@L4167",
         "name": "data-tooltip",
         "value": "Копировать"
       },
       {
-        "locator": "button.donate-address.xk-tooltip@L4118",
+        "locator": "button.donate-address.xk-tooltip@L4175",
         "name": "data-copy",
         "value": "UQBm03wCEyD99CkEjjrfbtk08WrlgKqfyQGoueAwvhMEYV7L"
       },
       {
-        "locator": "button.donate-address.xk-tooltip@L4118",
+        "locator": "button.donate-address.xk-tooltip@L4175",
         "name": "data-tooltip",
         "value": "Копировать"
       },
       {
-        "locator": "button.donate-address.xk-tooltip@L4126",
+        "locator": "button.donate-address.xk-tooltip@L4183",
         "name": "data-copy",
         "value": "bc1quhqk7l53vgmm9djyfktl6sflcvk83wgw0zqka6"
       },
       {
-        "locator": "button.donate-address.xk-tooltip@L4126",
+        "locator": "button.donate-address.xk-tooltip@L4183",
         "name": "data-tooltip",
         "value": "Копировать"
       },
       {
-        "locator": "button.donate-address.xk-tooltip@L4134",
+        "locator": "button.donate-address.xk-tooltip@L4191",
         "name": "data-copy",
         "value": "0x8BA4b535ef7C990B96bc982083f9bFB392134F5e"
       },
       {
-        "locator": "button.donate-address.xk-tooltip@L4134",
+        "locator": "button.donate-address.xk-tooltip@L4191",
         "name": "data-tooltip",
         "value": "Копировать"
       },
@@ -11303,7 +11415,7 @@
         "value": "master-detail"
       },
       {
-        "locator": "div.modal-content.xk-ui-settings-modal-content@L4152",
+        "locator": "div.modal-content.xk-ui-settings-modal-content@L4209",
         "name": "data-modal-key",
         "value": "ui-settings"
       },
@@ -11363,7 +11475,7 @@
         "value": "Найти серверы в введённых адресах, ссылках или подписке"
       },
       {
-        "locator": "label@L4225",
+        "locator": "label@L4282",
         "name": "data-tooltip",
         "value": "Выбрать или снять выбор со всех серверов"
       },
@@ -11423,7 +11535,7 @@
         "value": "Проверяет обход на самом роутере: WAN DNS, IPv6 DNS, транзитный перехват и DNS override."
       },
       {
-        "locator": "details.xk-dns-zone.mihomo-dns-route-zone@L4292",
+        "locator": "details.xk-dns-zone.mihomo-dns-route-zone@L4349",
         "name": "data-zone",
         "value": "mihomo-route"
       },
@@ -11498,52 +11610,52 @@
         "value": "editor-workbench"
       },
       {
-        "locator": "div.modal-content.xk-mi-modal.xk-mi-modal--source@L4419",
+        "locator": "div.modal-content.xk-mi-modal.xk-mi-modal--source@L4476",
         "name": "data-modal-key",
         "value": "mihomo-import"
       },
       {
-        "locator": "button.btn-secondary.btn-compact@L4463",
+        "locator": "button.btn-secondary.btn-compact@L4520",
         "name": "data-mi-placement",
         "value": "start"
       },
       {
-        "locator": "button.btn-secondary.btn-compact@L4463",
+        "locator": "button.btn-secondary.btn-compact@L4520",
         "name": "data-tooltip",
         "value": "Добавить импортируемые узлы перед существующими в секции config.yaml."
       },
       {
-        "locator": "button.btn-secondary.btn-compact@L4464",
+        "locator": "button.btn-secondary.btn-compact@L4521",
         "name": "data-mi-placement",
         "value": "end"
       },
       {
-        "locator": "button.btn-secondary.btn-compact@L4464",
+        "locator": "button.btn-secondary.btn-compact@L4521",
         "name": "data-tooltip",
         "value": "Добавить импортируемые узлы после существующих в секции config.yaml."
       },
       {
-        "locator": "button.btn-secondary.btn-compact@L4465",
+        "locator": "button.btn-secondary.btn-compact@L4522",
         "name": "data-mi-placement",
         "value": "replace"
       },
       {
-        "locator": "button.btn-secondary.btn-compact@L4465",
+        "locator": "button.btn-secondary.btn-compact@L4522",
         "name": "data-tooltip",
         "value": "Заменить выбранный существующий узел. Доступно для одного статического узла."
       },
       {
-        "locator": "div.xk-mi-custom-select@L4480",
+        "locator": "div.xk-mi-custom-select@L4537",
         "name": "data-mi-select-for",
         "value": "mihomo-import-fingerprint"
       },
       {
-        "locator": "span.xk-mi-info@L4500",
+        "locator": "span.xk-mi-info@L4557",
         "name": "data-tooltip",
         "value": "Для Reality: если в источнике значение не задано, включается автоматически. Требует Mihomo v1.19.29 или новее и подходящий отпечаток."
       },
       {
-        "locator": "div.xk-mi-custom-select@L4501",
+        "locator": "div.xk-mi-custom-select@L4558",
         "name": "data-mi-select-for",
         "value": "mihomo-import-x25519"
       },
@@ -11588,7 +11700,7 @@
         "value": "master-detail"
       },
       {
-        "locator": "div.modal-content.xk-pt-modal.xk-modal-width@L4694",
+        "locator": "div.modal-content.xk-pt-modal.xk-modal-width@L4751",
         "name": "data-modal-key",
         "value": "mihomo-proxy-tools"
       },
@@ -11633,7 +11745,7 @@
         "value": "master-detail"
       },
       {
-        "locator": "button.modal-close@L4852",
+        "locator": "button.modal-close@L4909",
         "name": "data-dismiss",
         "value": "mihomo-validation"
       },
@@ -11643,12 +11755,12 @@
         "value": "0"
       },
       {
-        "locator": "button.btn-primary@L4895",
+        "locator": "button.btn-primary@L4952",
         "name": "data-dismiss",
         "value": "mihomo-validation"
       },
       {
-        "locator": "button.btn-primary@L4895",
+        "locator": "button.btn-primary@L4952",
         "name": "data-operator-dismiss-duplicate",
         "value": "true"
       },
@@ -11658,7 +11770,7 @@
         "value": "editor-workbench"
       },
       {
-        "locator": "div.modal-content.xk-hw-modal.xk-modal-width@L4903",
+        "locator": "div.modal-content.xk-hw-modal.xk-modal-width@L4960",
         "name": "data-modal-key",
         "value": "mihomo-hwid"
       },
@@ -11843,7 +11955,7 @@
         "value": "confirm-compact-form"
       },
       {
-        "locator": "div.status.xk-modal-mt-10@L5645",
+        "locator": "div.status.xk-modal-mt-10@L5702",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
@@ -11928,42 +12040,42 @@
         "value": "drawer-help"
       },
       {
-        "locator": "li@L5866",
+        "locator": "li@L5923",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "li@L5867",
+        "locator": "li@L5924",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "li@L5869",
+        "locator": "li@L5926",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "li@L5870",
+        "locator": "li@L5927",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "li@L5871",
+        "locator": "li@L5928",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "li@L5886",
+        "locator": "li@L5943",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "li@L5887",
+        "locator": "li@L5944",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
       {
-        "locator": "li@L5888",
+        "locator": "li@L5945",
         "name": "data-fm-lite-hide",
         "value": "1"
       },
@@ -12217,7 +12329,7 @@
       "#outbounds-file-code",
       ".xk-mihomo-topbar .xk-routing-active-inline"
     ],
-    "js_referenced_template_id_count": 1289,
+    "js_referenced_template_id_count": 1298,
     "js_referenced_template_ids": {
       "backups-clear-snapshots-btn": [
         "xkeen-ui/static/js/features/backups.js"
@@ -12261,6 +12373,7 @@
         "xkeen-ui/static/js/ui/confirm_modal.js"
       ],
       "confirm-modal-ok-btn": [
+        "xkeen-ui/static/js/features/outbounds.js",
         "xkeen-ui/static/js/ui/confirm_modal.js"
       ],
       "confirm-modal-title": [
@@ -15393,6 +15506,33 @@
       ],
       "routing-restore-auto-btn": [
         "xkeen-ui/static/js/features/routing.js"
+      ],
+      "routing-rule-dns-add": [
+        "xkeen-ui/static/js/features/routing_cards/rules/dns_over_vless.js"
+      ],
+      "routing-rule-dns-apply-note": [
+        "xkeen-ui/static/js/features/routing_cards/rules/dns_over_vless.js"
+      ],
+      "routing-rule-dns-editor": [
+        "xkeen-ui/static/js/features/routing_cards/rules/dns_over_vless.js"
+      ],
+      "routing-rule-dns-entry": [
+        "xkeen-ui/static/js/features/routing_cards/rules/dns_over_vless.js"
+      ],
+      "routing-rule-dns-list": [
+        "xkeen-ui/static/js/features/routing_cards/rules/dns_over_vless.js"
+      ],
+      "routing-rule-dns-list-title": [
+        "xkeen-ui/static/js/features/routing_cards/rules/dns_over_vless.js"
+      ],
+      "routing-rule-dns-note": [
+        "xkeen-ui/static/js/features/routing_cards/rules/dns_over_vless.js"
+      ],
+      "routing-rule-dns-row": [
+        "xkeen-ui/static/js/features/routing_cards/rules/dns_over_vless.js"
+      ],
+      "routing-rule-dns-summary": [
+        "xkeen-ui/static/js/features/routing_cards/rules/dns_over_vless.js"
       ],
       "routing-rules-add-btn": [
         "xkeen-ui/static/js/features/routing_cards/ids.js"

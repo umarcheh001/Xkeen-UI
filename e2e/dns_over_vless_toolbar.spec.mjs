@@ -26,3 +26,32 @@ test('кнопка DNS в тулбаре редактора открывает �
   await button.click();
   await expect(page.locator('#routing-dns-over-vless-modal')).toBeVisible();
 });
+
+test('обе точки DNS показывают предупреждение об устройствах при закрытом окне', async ({ page }) => {
+  await page.clock.install();
+  await page.route('**/api/routing/dns-over-vless', (route) => route.fulfill({
+    json: { ...STATUS, enabled: true, can_enable: false, can_disable: true },
+  }));
+  let device = { verdict: 'intercepted', captured: false };
+  await page.route('**/api/routing/dns-over-vless/clients?read_only=1', (route) => route.fulfill({
+    json: { available: true, clients: [device] },
+  }));
+  await page.addInitScript(() => localStorage.setItem('xk.routing.rules.open.v2', '1'));
+  await page.goto('/');
+
+  const dot = page.locator('#routing-dns-over-vless-dot');
+  const toolbarDot = page.locator('#routing-dns-over-vless-toolbar-dot');
+  await expect(page.locator('#routing-dns-over-vless-modal')).toBeHidden();
+  await expect(dot).toHaveAttribute('data-state', 'blocked');
+  await expect(toolbarDot).toHaveAttribute('data-state', 'blocked');
+
+  device = { verdict: 'reaches', captured: true };
+  await page.clock.fastForward(60000);
+  await expect(dot).toHaveAttribute('data-state', 'enabled');
+  await expect(toolbarDot).toHaveAttribute('data-state', 'enabled');
+
+  device = { verdict: 'intercepted', captured: true };
+  await page.clock.fastForward(60000);
+  await expect(dot).toHaveAttribute('data-state', 'blocked');
+  await expect(toolbarDot).toHaveAttribute('data-state', 'blocked');
+});

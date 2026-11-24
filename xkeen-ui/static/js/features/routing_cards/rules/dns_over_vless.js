@@ -76,6 +76,8 @@ import {
   };
 
   let status = null;
+  let baseDotState = 'off';
+  let clientWarning = '';
   let busy = false;
   // Итог «Выключить и удалить правки» — строка в списке окна. Нужна она в ту
   // минуту, когда это случилось; при следующем открытии окна её уже нет.
@@ -83,6 +85,8 @@ import {
   // Функция включена: поля показываем, но правку запрещаем — применяются
   // они всё равно только при включении.
   let fieldsLocked = false;
+  let ruleDnsDraft = null;
+  let ruleDnsEditor = null;
   let chosenTargets = [];
   // Устройства, чей DNS заводим в туннель. Живёт отдельно от списка на
   // экране: список перечитывается сам по себе, а выбор должен пережить
@@ -189,6 +193,7 @@ import {
     // захват. Список шлём всегда -- снятая галочка должна запомниться.
     settings.capture_clients = !!capturedMacs.length;
     settings.capture_macs = capturedMacs.slice();
+    settings.rule_dns = (ruleDnsDraft || []).map(({ rule_tag, upstream }) => ({ rule_tag, upstream: upstream.trim() }));
     return settings;
   }
 
@@ -560,6 +565,111 @@ import {
     }
   }
 
+  function renderRuleDns(data) {
+    const list = $('routing-rule-dns-list');
+    if (!list) return;
+    const candidates = (data && data.rule_dns_candidates) || [];
+    if (ruleDnsDraft === null || fieldsLocked) {
+      ruleDnsDraft = ((data && data.rule_dns) || []).map((row) => ({ ...row }));
+    }
+    if (fieldsLocked) ruleDnsEditor = null;
+    const locked = busy || fieldsLocked;
+    const selected = new Set(ruleDnsDraft.map((row) => row.rule_tag));
+    const free = candidates.find((option) => !selected.has(option.rule_tag));
+    const summary = $('routing-rule-dns-summary');
+    summary.textContent = ruleDnsDraft.length ? `${ruleDnsDraft.length} • ${ruleDnsDraft.map((row) => row.rule_tag).join(', ')}` : 'не настроен';
+    const note = $('routing-rule-dns-note');
+    note.textContent = (data && data.rule_dns_drift) || (fieldsLocked
+      ? 'Отключите защиту, чтобы изменить привязки. Они применятся при следующем включении.'
+      : (candidates.length
+        ? 'Для сайтов, которым важен регион подключения. Запросы A и AAAA идут через тот же прокси, что и трафик к сайту. Если VPS недоступен, сайты из правила не откроются, а DNS-запросы для них не пройдут. Запасной VPS для этого правила не предусмотрен.'
+        : 'Нет подходящих правил Xray. Нужно доменное правило с уникальным ruleTag и одним доступным прокси-выходом.'));
+    const title = $('routing-rule-dns-list-title');
+    title.hidden = !ruleDnsDraft.length;
+    title.textContent = fieldsLocked ? 'Применены' : 'К применению';
+    $('routing-rule-dns-apply-note').hidden = fieldsLocked || !ruleDnsDraft.length;
+    const add = $('routing-rule-dns-add');
+    const editor = $('routing-rule-dns-editor');
+    const beginEdit = (index, row) => {
+      ruleDnsEditor = { index, row: { ...row } };
+      renderRuleDns(data);
+      editor.querySelector('select').focus();
+    };
+    add.textContent = ruleDnsDraft.length ? 'Добавить ещё правило' : 'Добавить правило';
+    add.hidden = fieldsLocked || !free || !!ruleDnsEditor;
+    add.disabled = locked;
+    add.onclick = () => beginEdit(ruleDnsDraft.length, { rule_tag: free.rule_tag, upstream: '' });
+    list.replaceChildren();
+    ruleDnsDraft.forEach((row, index) => {
+      const item = $('routing-rule-dns-entry').content.firstElementChild.cloneNode(true);
+      const current = candidates.find((option) => option.rule_tag === row.rule_tag);
+      item.querySelector('[data-rule-dns-name]').textContent = row.rule_tag;
+      item.querySelector('[data-rule-dns-address]').textContent = row.upstream;
+      item.querySelector('[data-rule-dns-target]').textContent = current ? current.outbound_tag : 'Правило недоступно';
+      const actions = item.querySelector('.xk-rule-dns-actions');
+      if (fieldsLocked) actions.remove();
+      else {
+        const edit = actions.querySelector('[data-rule-dns-edit]');
+        const remove = actions.querySelector('[data-rule-dns-remove]');
+        edit.disabled = remove.disabled = locked || !!ruleDnsEditor;
+        edit.onclick = () => beginEdit(index, row);
+        remove.onclick = () => {
+          ruleDnsDraft.splice(index, 1);
+          renderRuleDns(data);
+          (list.children[index]?.querySelector('[data-rule-dns-edit]') || add).focus();
+        };
+      }
+      list.appendChild(item);
+    });
+    editor.replaceChildren();
+    if (!ruleDnsEditor) return;
+    const { index, row } = ruleDnsEditor;
+    const editing = index < ruleDnsDraft.length;
+    const item = $('routing-rule-dns-row').content.firstElementChild.cloneNode(true);
+    const select = item.querySelector('select');
+    const available = candidates.filter((option) => option.rule_tag === ruleDnsDraft[index]?.rule_tag || !selected.has(option.rule_tag));
+    if (!available.some((option) => option.rule_tag === row.rule_tag)) {
+      select.add(new Option(`${row.rule_tag} (недоступно)`, row.rule_tag));
+    }
+    available.forEach((option) => select.add(new Option(option.rule_tag, option.rule_tag)));
+    select.value = row.rule_tag;
+    select.disabled = locked;
+    const resolver = item.querySelector('input');
+    item.querySelector('[data-rule-dns-help]').id = 'routing-rule-dns-help';
+    resolver.setAttribute('aria-describedby', 'routing-rule-dns-help');
+    resolver.value = row.upstream;
+    resolver.disabled = locked;
+    const save = item.querySelector('[data-rule-dns-save]');
+    save.textContent = editing ? 'Сохранить правило' : 'Добавить правило';
+    const update = () => {
+      const current = available.find((option) => option.rule_tag === select.value);
+      row.rule_tag = select.value;
+      row.upstream = resolver.value;
+      save.disabled = locked || !current || !row.upstream.trim();
+      item.querySelector('[data-rule-dns-domains]').textContent = current
+        ? current.domains.map((domain) => domain.startsWith('domain:')
+          ? `${domain.slice(7)} и поддомены`
+          : domain.replace(/^full:/, '')).join(', ')
+        : 'Правило недоступно';
+      item.querySelector('[data-rule-dns-outbound]').textContent = current ? current.outbound_tag : '—';
+    };
+    const endEdit = () => {
+      ruleDnsEditor = null;
+      renderRuleDns(data);
+      (list.children[index]?.querySelector('[data-rule-dns-edit]') || add).focus();
+    };
+    select.onchange = resolver.oninput = update;
+    save.onclick = () => {
+      ruleDnsDraft[index] = { ...row, upstream: row.upstream.trim() };
+      endEdit();
+    };
+    const cancel = item.querySelector('[data-rule-dns-cancel]');
+    cancel.disabled = locked;
+    cancel.onclick = endEdit;
+    update();
+    editor.appendChild(item);
+  }
+
   function renderDnsFields(data) {
     const upstreams = $(DOM.upstreams);
     const local = $(DOM.local);
@@ -641,13 +751,18 @@ import {
     }
     // The node matters only while the switch is on, so it appears with it.
     const passOn = !!(pass && pass.checked);
+    const missingPassNode = !!(data && data.pass_non_ip_missing);
+    const passApplied = !!(data && (data.enabled || data.can_disable || data.can_resync));
     if (passRow) passRow.classList.toggle('hidden', !passOn);
     if (passNode) {
       const options = ((data && data.pass_non_ip_options) || []).slice();
       const wanted = passNode.dataset.touched
         ? passNode.value
         : ((data && data.pass_non_ip_node) || '');
-      if (data && data.pass_non_ip_missing && wanted && !options.includes(wanted)) options.unshift(wanted);
+      if (missingPassNode) {
+        if (!passApplied) options.unshift('');
+        else if (wanted && !options.includes(wanted)) options.unshift(wanted);
+      }
       const same = JSON.stringify(options) === (passNode.dataset.options || '');
       if (!same) {
         passNode.dataset.options = JSON.stringify(options);
@@ -655,17 +770,17 @@ import {
         options.forEach((tag) => {
           const option = document.createElement('option');
           option.value = tag;
-          option.textContent = tag;
+          option.textContent = tag || 'Автоматически из выбранного маршрута';
           passNode.appendChild(option);
         });
       }
-      // A remembered node that no longer exists must not look chosen.
       if (wanted && options.indexOf(wanted) >= 0) passNode.value = wanted;
       else if (options.length) passNode.value = options[0];
       passNode.disabled = busy || fieldsLocked || !options.length;
     }
-    renderPassHealth(passOn ? (data && data.pass_non_ip_missing
-      ? { missing: true, node: data.pass_non_ip_node } : (data && data.pass_non_ip_health)) : null);
+    renderPassHealth(passOn ? (missingPassNode
+      ? { missing: true, node: data.pass_non_ip_node, applied: passApplied, resync: data.can_resync }
+      : (data && data.pass_non_ip_health)) : null);
     const fromRules = $(DOM.directFromRules);
     if (fromRules) {
       // Nothing to offer when no rule of the user's own goes out directly.
@@ -792,7 +907,12 @@ import {
     const from = String(health.switched_from || '').trim();
     if (health.missing) {
       line.dataset.state = 'dropped';
-      line.textContent = `Узел ${node} недоступен в выбранном маршруте. Нажмите «Проверить снова», чтобы проверить восстановление.`;
+      const next = health.resync
+        ? 'Нажмите «Проверить снова», чтобы восстановить маршрут.'
+        : (health.applied
+          ? 'Чтобы выбрать другой узел, отключите защиту.'
+          : 'При включении панель использует узел из текущего маршрута.');
+      line.textContent = `Узел ${node} недоступен в выбранном маршруте. ${next}`;
       return;
     }
     if (health.exhausted) {
@@ -936,7 +1056,7 @@ import {
     const core = coreOf(data);
     if (core === 'xray') {
       title.textContent = 'DNS через защищённый туннель Xray';
-      text.textContent = 'Панель подготовит отдельный DNS-фрагмент, добавит только два служебных правила и включит перехват DNS в Keenetic.';
+      text.textContent = 'Панель подготовит DNS-фрагмент и служебные правила, затем включит перехват DNS в Keenetic.';
       return;
     }
     if (core === 'mihomo') {
@@ -1001,7 +1121,8 @@ import {
         text: `DNS-фрагмент и правила Xray сохранены, но работают они только под Xray, а сейчас активно ядро ${otherCore} — через туннель запросы не идут. Порт 53 при этом остаётся отданным Xray, поэтому имена могут вообще не разрешаться: сторож заметит это и вернёт DNS прошивке. Верните активным ядром Xray либо отключите настройку здесь.`,
       };
     }
-    if (data && (data.can_resync || data.route_drift || data.pass_non_ip_missing)) {
+    if (data && (data.can_resync || data.route_drift
+        || (data.pass_non_ip_missing && (flags.enabled || flags.canDisable)))) {
       return {
         badge: 'Требуется проверка',
         state: 'blocked',
@@ -1012,6 +1133,14 @@ import {
       };
     }
     if (flags.enabled) {
+      if (data.rule_dns_drift) {
+        return {
+          badge: 'Требуется проверка',
+          state: 'blocked',
+          summary: 'привязки DNS расходятся с правилами Xray',
+          text: data.rule_dns_drift,
+        };
+      }
       return {
         badge: 'Включено',
         state: 'enabled',
@@ -1150,9 +1279,9 @@ import {
       return { text: on && !on.checked ? `выключено · ${text}` : text };
     }
     if (zone === 'records') {
-      if (!(data && data.pass_non_ip)) return { text: 'выключено' };
-      const node = (data && data.pass_non_ip_node) || '';
-      return { text: node ? `включено · узел ${node}` : 'включено' };
+      if (!$(DOM.pass)?.checked) return { text: 'выключено' };
+      const node = $(DOM.passNode)?.value;
+      return { text: node ? `включено · узел ${node}` : 'включено · узел из маршрута' };
     }
     if (zone === 'devices') {
       // Список устройств приходит отдельным запросом и позже остального:
@@ -1163,8 +1292,10 @@ import {
       const counts = lastClients.counts || {};
       const total = counts.total || 0;
       if (!total) return { text: 'устройств не видно' };
-      const taken = counts.intercepted || 0;
-      return { text: taken ? `${counts.reaches || 0} из ${total}` : `все ${total}` };
+      const reaches = (counts.reaches || 0) + (data?.enabled ? 0
+        : (lastClients.clients || []).filter(plannedCapture).length);
+      const coverage = reaches === total ? `все ${total}` : `${reaches} из ${total}`;
+      return { text: data?.enabled ? coverage : `${coverage} после включения` };
     }
     return { text: '' };
   }
@@ -1254,21 +1385,37 @@ import {
       // Эта зона не ждёт применения: устройства, сидящие в политике доступа,
       // видно сразу, и решить по ним нужно до включения, а не после.
       if (!lastClients || lastClients.available === false) return { text: 'обязательно', state: 'todo' };
-      const clients = lastClients.clients || [];
-      // Отмечено, но не доходит: прошивка перестроила цепочки и поставила
-      // своё правило выше нашего. Добавлять нечего, чинить есть что.
-      if (clients.some((item) => item.captured && item.verdict !== 'reaches')) {
-        return { text: 'правило не действует', state: 'warn' };
-      }
-      if (clients.some((item) => item.verdict === 'intercepted' && !item.captured)) {
-        return { text: 'есть кого добавить', state: 'warn' };
-      }
+      const warning = deviceWarning(lastClients, applied);
+      if (warning) return { text: warning, state: 'warn' };
       // «Определить не удалось» -- это не «всё хорошо»: зелёным не обещаем.
-      if (clients.some((item) => item.verdict === 'unknown')) return { text: 'обязательно', state: 'todo' };
+      if ((lastClients.clients || []).some((item) => item.verdict === 'unknown')) {
+        return { text: 'обязательно', state: 'todo' };
+      }
       if (!applied) return { text: 'обязательно', state: 'todo' };
       return { text: 'все пользуются', state: 'done' };
     }
     return null;
+  }
+
+  function plannedCapture(item) {
+    return item.verdict === 'intercepted' && item.can_capture && capturedMacs.includes(item.mac);
+  }
+
+  function deviceWarning(data, applied) {
+    const clients = data.clients || [];
+    if (applied && clients.some((item) => item.captured && item.verdict !== 'reaches')) return 'правило не действует';
+    if (clients.some((item) => item.verdict === 'intercepted' && !(applied ? item.captured : plannedCapture(item)))) {
+      return 'есть кого добавить';
+    }
+    return '';
+  }
+
+  function renderDots() {
+    const state = baseDotState === 'enabled' && clientWarning ? 'blocked' : baseDotState;
+    [DOM.dot, DOM.toolbarDot].forEach((id) => {
+      const dot = $(id);
+      if (dot) dot.dataset.state = state;
+    });
   }
 
   // Лишние серверы: строка в списке справа и пояснение под полем. Поле
@@ -1349,16 +1496,9 @@ import {
       // для тех, кто читает карточку экранным диктором.
       badge.title = `${info.badge} — ${info.summary}`;
     }
-    {
-      const rollbackRestored = rollbackStatus && rollbackStatus.phase === 'restored';
-      const dotState = info.state === 'enabled' ? 'enabled' : ((info.state === 'ready' || rollbackRestored) ? 'off' : 'blocked');
-      // Кнопок у функции две — в блоке правил и в тулбаре редактора; точка
-      // состояния должна быть одинаковой на обеих.
-      [DOM.dot, DOM.toolbarDot].forEach((id) => {
-        const el = $(id);
-        if (el) el.dataset.state = dotState;
-      });
-    }
+    const rollbackRestored = rollbackStatus && rollbackStatus.phase === 'restored';
+    baseDotState = info.state === 'enabled' ? 'enabled' : ((info.state === 'ready' || rollbackRestored) ? 'off' : 'blocked');
+    renderDots();
     if (text) {
       text.textContent = '';
       const summary = document.createElement('b');
@@ -1438,6 +1578,7 @@ import {
     // перечитывать с сервера и отмеченные устройства, и все прочие поля,
     // показывая вместо них то, что осталось в DOM.
     renderDnsFields(data);
+    renderRuleDns(data);
     renderOverLimit(data);
     if (discardNote) addDetail(discardNote, 'warn');
     renderZoneSummaries(data);
@@ -1484,10 +1625,8 @@ import {
 
   function renderError(error) {
     status = null;
-    [DOM.dot, DOM.toolbarDot].forEach((id) => {
-      const dot = $(id);
-      if (dot) dot.dataset.state = 'blocked';
-    });
+    baseDotState = 'blocked';
+    renderDots();
     const badge = $(DOM.badge);
     const text = $(DOM.status);
     const apply = $(DOM.apply);
@@ -1508,6 +1647,8 @@ import {
   // только при включении, как и любые другие правки в нём.
   function resetFields() {
     const data = status || {};
+    ruleDnsDraft = [];
+    ruleDnsEditor = null;
     const values = [
       [DOM.upstreams, ((data.default_upstreams) || []).join(', ')],
       [DOM.local, ''],
@@ -1753,6 +1894,8 @@ import {
     targetsTouched = false;
     routePool = [];
     routeVisible = false;
+    ruleDnsDraft = null;
+    ruleDnsEditor = null;
     // Все поля, а не три: тронутый один раз переключатель иначе навсегда
     // переставал обновляться с сервера, даже после переоткрытия окна.
     [
@@ -1886,9 +2029,11 @@ import {
     const counts = data.counts || {};
     const total = counts.total || 0;
     const taken = counts.intercepted || 0;
-    summary.textContent = taken
-      ? `Пользуются ${counts.reaches || 0} из ${total}; у ${taken} DNS забирает политика доступа.`
-      : `Пользуются все ${total}.`;
+    const reaches = counts.reaches || 0;
+    summary.textContent = status?.enabled
+      ? (reaches === total ? `Пользуются все ${total}.` : `Пользуются ${reaches} из ${total}.`)
+      : 'Отмеченные устройства будут добавлены при включении защиты.';
+    if (taken) summary.textContent += ` Сейчас у ${taken} DNS забирает политика доступа.`;
     if (data.error) summary.textContent += ` Правила прочитать не удалось: ${data.error}`;
     // Сторож не смог поставить правило захвата на место. Без этой строки
     // метка «правило не действует» оставалась загадкой: видно, что не
@@ -1925,6 +2070,7 @@ import {
           if (!pick.checked && at !== -1) capturedMacs.splice(at, 1);
           capturedTouched = true;
           renderCaptureActions();
+          if (!status?.enabled) renderZoneSummaries(status);
         });
         title.appendChild(pick);
       }
@@ -1995,23 +2141,39 @@ import {
     await refresh();
   }
 
-  async function loadClients() {
-    const summary = $(DOM.clientsSummary);
-    const list = $(DOM.clientsList);
+  let clientsGeneration = 0;
+  async function loadClients(readOnly = false) {
+    const generation = ++clientsGeneration;
+    const summary = readOnly ? null : $(DOM.clientsSummary);
+    const list = readOnly ? null : $(DOM.clientsList);
+    const url = '/api/routing/dns-over-vless/clients' + (readOnly ? '?read_only=1' : '');
     if (summary) summary.textContent = 'Проверяем…';
     if (list) list.textContent = '';
     try {
       const client = http();
       const data = (client && typeof client.fetchJSON === 'function')
-        ? await client.fetchJSON('/api/routing/dns-over-vless/clients', { cache: 'no-store', timeoutMs: 25000 })
-        : await (await fetch('/api/routing/dns-over-vless/clients', { cache: 'no-store' })).json();
-      renderClients(data);
+        ? await client.fetchJSON(url, { cache: 'no-store', timeoutMs: 25000 })
+        : await (await fetch(url, { cache: 'no-store' })).json();
+      if (generation !== clientsGeneration) return;
+      if (data && data.available !== false) {
+        clientWarning = deviceWarning(data, true);
+        renderDots();
+      }
+      if (!readOnly) renderClients(data);
     } catch (error) {
+      if (readOnly || generation !== clientsGeneration) return;
       if (summary) {
         summary.textContent = `Проверить не удалось: ${error && error.message ? error.message : error}`;
       }
       lastClients = { available: false };
       renderZoneSummaries(status);
+    }
+  }
+
+  function refreshClientWarning() {
+    const modal = $(DOM.modal);
+    if (!document.hidden && status && status.enabled && !busy && modal && modal.classList.contains('hidden')) {
+      void loadClients(true);
     }
   }
 
@@ -2022,6 +2184,10 @@ import {
       return;
     }
     const action = status.can_resync ? 'resync' : ((status.enabled || status.can_disable) ? 'disable' : 'enable');
+    if (action === 'enable' && ruleDnsEditor) {
+      toast('Добавьте или отмените текущую привязку DNS перед включением защиты.', true);
+      return;
+    }
     const labels = (status.candidates || [])
       .filter((item) => item && chosenTargets.indexOf(item.tag) !== -1)
       .map((item) => item.label);
@@ -2031,7 +2197,7 @@ import {
         : `DNS пойдёт через ${labels[0]}. `)
       : '';
     const question = action === 'enable'
-      ? routeNote + 'Панель создаст отдельный DNS-фрагмент, добавит два служебных правила в начало routing, выполнит xray -test, включит DNS override Keenetic, перезапустит Xray и проверит DNS. При любой ошибке всё будет восстановлено.'
+      ? routeNote + 'Панель создаст DNS-фрагмент и служебные правила, выполнит xray -test, включит DNS override Keenetic, перезапустит Xray и проверит DNS. При ошибке прежняя настройка будет восстановлена.'
       : 'Панель удалит только созданный ей DNS-фрагмент и служебные правила, восстановит исходное состояние DNS override Keenetic и перезапустит Xray.';
     let confirmed = true;
     if (action !== 'resync' && C && typeof C.confirmModal === 'function') {
@@ -2279,11 +2445,15 @@ import {
       passBox.addEventListener('change', () => {
         passBox.dataset.touched = '1';
         if (status) renderDnsFields(status);
+        renderZoneSummaries(status);
       });
     }
     const passNodeBox = $(DOM.passNode);
     if (passNodeBox) {
-      passNodeBox.addEventListener('change', () => { passNodeBox.dataset.touched = '1'; });
+      passNodeBox.addEventListener('change', () => {
+        passNodeBox.dataset.touched = '1';
+        renderZoneSummaries(status);
+      });
     }
     const applyPick = $(DOM.clientsApply);
     if (applyPick) applyPick.addEventListener('click', (event) => { event.preventDefault(); applyCapture(); });
@@ -2323,7 +2493,8 @@ import {
     document.addEventListener('xkeen-routing-fragment-saved', (event) => {
       if (event.detail && event.detail.reason === 'xray-subscriptions' && !busy) void refresh();
     });
-    refresh();
+    void refresh().then(refreshClientWarning);
+    setInterval(refreshClientWarning, 60000);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });

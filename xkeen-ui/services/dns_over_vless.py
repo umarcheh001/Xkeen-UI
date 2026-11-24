@@ -15,6 +15,7 @@ It never rewrites proxy outbounds or unrelated routing rules.
 from __future__ import annotations
 
 import copy
+import hashlib
 import ipaddress
 import json
 import os
@@ -28,6 +29,7 @@ import threading
 import time
 import uuid
 import re
+from collections import Counter
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, Optional
 
@@ -42,6 +44,7 @@ from services.io.atomic import _atomic_write_json, _atomic_write_text
 from services.xray_config_files import jsonc_path_for
 from services import dns_client_capture
 from services import firmware_resolvers
+from services import xray_subscription_displacement
 from services import xray_transactions
 from utils.firmware import ndmc_path as _resolve_ndmc, run_ndmc
 from utils.jsonc import strip_json_comments_text
@@ -73,6 +76,7 @@ LOCAL_RULE_TAG = "xk_dns_over_vless_local"
 # a resolver of the user's choosing, not through VLESS, so the address they get
 # is the near one instead of one next to the exit point.
 DIRECT_RULE_TAG = "xk_dns_over_vless_direct"
+RULE_DNS_PREFIX = "xk-dns-rule-"
 # Zones that must never be answered from the other side of the tunnel: the
 # router's own names, home network names, and reverse lookups for private
 # ranges (a PTR for 192.168.x.x tells a public resolver about your LAN).
@@ -408,7 +412,9 @@ def _iter_json_fragments(configs_dir: str) -> Iterable[tuple[str, Dict[str, Any]
     return result
 
 
-def _collect_runtime(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, Any]:
+def _collect_runtime(
+    configs_dir: str, routing: Dict[str, Any], *, replacement: Optional[tuple[str, Dict[str, Any]]] = None
+) -> Dict[str, Any]:
     outbounds: list[Dict[str, str]] = []
     inbound_tags: set[str] = set()
     inbound_ports: list[Dict[str, Any]] = []
@@ -423,7 +429,14 @@ def _collect_runtime(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, Any
     observatory_by_kind: Dict[str, list[str]] = {KIND_PLAIN: [], KIND_BURST: []}
     observatory_present: set[str] = set()
 
-    for name, obj in _iter_json_fragments(configs_dir):
+    fragments = dict(_iter_json_fragments(configs_dir))
+    if replacement:
+        path, obj = replacement
+        resolved = os.path.realpath(path)
+        names = [name for name in fragments if os.path.realpath(os.path.join(configs_dir, name)) == resolved]
+        for name in names or [os.path.basename(path)]:
+            fragments[name] = obj
+    for name, obj in fragments.items():
         dns = obj.get("dns")
         if isinstance(dns, dict) and dns:
             dns_fragments.append(name)
@@ -502,7 +515,8 @@ def _service_mark(runtime: Dict[str, Any]) -> Optional[int]:
     for item in runtime.get("outbounds", []):
         if _clean_tag(item.get("protocol")).lower() in {"blackhole", "loopback"}:
             continue
-        if _clean_tag(item.get("tag")) == DNS_OUT_TAG:
+        tag = _clean_tag(item.get("tag"))
+        if tag == DNS_OUT_TAG or _is_rule_dns_tag(tag.removesuffix("-via")):
             continue
         mark = item.get("mark")
         if mark is None or isinstance(mark, bool):
@@ -1778,6 +1792,119 @@ def _dns_outbound(
     return outbound
 
 
+def _rule_dns_tag(rule_tag: str) -> str:
+    return RULE_DNS_PREFIX + hashlib.sha256(rule_tag.encode("utf-8")).hexdigest()[:24]
+
+
+def _is_rule_dns_tag(tag: Any) -> bool:
+    return isinstance(tag, str) and re.fullmatch(RULE_DNS_PREFIX + r"[0-9a-f]{24}", tag) is not None
+
+
+def _rule_dns_proxy_tags(runtime: Dict[str, Any]) -> set[str]:
+    counts = Counter(item["tag"] for item in runtime["outbounds"])
+    return {item["tag"] for item in _proxy_outbounds(runtime) if counts[item["tag"]] == 1}
+
+
+_RULE_DNS_DOMAIN = re.compile(
+    r"(?:full|domain):[\w.-]+|(?:geosite:|ext:[\w.-]+:)[\w-]+(?:@[\w-]+)*",
+    re.ASCII,
+)
+
+
+def _rule_dns_candidates(runtime: Dict[str, Any], routing: Dict[str, Any]) -> list[Dict[str, Any]]:
+    model = routing.get("routing")
+    if not isinstance(model, dict) or not isinstance(model.get("rules"), list):
+        return []
+    rules = [rule for rule in model["rules"] if isinstance(rule, dict)]
+    proxy_tags = _rule_dns_proxy_tags(runtime)
+    tags = [_clean_tag(rule.get("ruleTag")) for rule in rules]
+    counts = Counter(tags)
+    candidates = []
+    for rule, tag in zip(rules, tags):
+        domains = rule.get("domain")
+        outbound = _clean_tag(rule.get("outboundTag"))
+        if (
+            not tag or counts[tag] != 1 or _owned_rule(rule)
+            or tag.startswith(xray_subscription_displacement.RULE_STAMP_PREFIX)
+            or outbound not in proxy_tags or rule.get("type", "field") != "field"
+            or set(rule) - {"ruleTag", "type", "domain", "outboundTag"}
+            or not isinstance(domains, list) or not domains
+            or not all(isinstance(domain, str) and _RULE_DNS_DOMAIN.fullmatch(domain) for domain in domains)
+        ):
+            continue
+        candidates.append({"rule_tag": tag, "domains": domains, "outbound_tag": outbound})
+    return candidates
+
+
+def _resolve_rule_dns(value: Any, candidates: list[Dict[str, Any]]) -> list[Dict[str, Any]]:
+    if not isinstance(value, list):
+        raise DnsOverVlessError("Укажите список привязок DNS к правилам.", code="rule_dns_invalid")
+    available = {item["rule_tag"]: item for item in candidates}
+    rows = []
+    seen = set()
+    for item in value:
+        tag = _clean_tag(item.get("rule_tag")) if isinstance(item, dict) else ""
+        upstream = _clean_tag(item.get("upstream")) if isinstance(item, dict) else ""
+        if tag not in available or tag in seen:
+            raise DnsOverVlessError(f"Правило «{tag}» отсутствует, повторяется или больше не подходит для привязки DNS.", code="rule_dns_invalid")
+        problem = _upstream_problem(upstream, allow_remote=True)
+        if problem:
+            raise DnsOverVlessError(f"DNS-сервер для правила «{tag}»: {problem}.", code="rule_dns_invalid")
+        rows.append({**available[tag], "upstream": upstream})
+        seen.add(tag)
+    return rows
+
+
+def _ordered_rule_dns(rows: list[Dict[str, Any]], routing: Dict[str, Any]) -> list[Dict[str, Any]]:
+    by_tag = {row["rule_tag"]: row for row in rows}
+    return [
+        by_tag[tag] for rule in (routing.get("routing") or {}).get("rules", [])
+        if isinstance(rule, dict) and (tag := _clean_tag(rule.get("ruleTag"))) in by_tag
+    ]
+
+
+def _rule_dns_server(row: Dict[str, Any]) -> Dict[str, Any]:
+    host, port = _split_upstream(row["upstream"])
+    return {
+        "address": row["upstream"] if row["upstream"].lower().startswith(UPSTREAM_SCHEMES) else host,
+        **({"port": port} if port and port != LISTENER_PORT else {}),
+        "domains": row["domains"],
+        "tag": _rule_dns_tag(row["rule_tag"]),
+        "skipFallback": True,
+        "finalQuery": True,
+    }
+
+
+def _rule_dns_route(row: Dict[str, Any]) -> Dict[str, Any]:
+    tag = _rule_dns_tag(row["rule_tag"])
+    return {"type": "field", "inboundTag": [tag], "ruleTag": tag, "outboundTag": tag + "-via"}
+
+
+def _rule_dns_outbound(row: Dict[str, Any], mark: Optional[int]) -> Dict[str, Any]:
+    # A missing routing target would fall back to Xray's first outbound.
+    # A missing dialerProxy fails the query instead.
+    return {
+        "tag": _rule_dns_tag(row["rule_tag"]) + "-via",
+        "protocol": "freedom",
+        "streamSettings": {"sockopt": {
+            "dialerProxy": row["outbound_tag"],
+            **({"mark": mark} if mark is not None else {}),
+        }},
+    }
+
+
+def _rule_dns_drift(rows: list[Dict[str, Any]], candidates: list[Dict[str, Any]], routing: Dict[str, Any]) -> str:
+    if not rows:
+        return ""
+    try:
+        current = _ordered_rule_dns(_resolve_rule_dns(rows, candidates), routing)
+    except DnsOverVlessError as exc:
+        return str(exc)
+    if current != rows:
+        return "Домены или выходы связанных правил изменились. Сохраните основной routing в панели, чтобы обновить DNS."
+    return ""
+
+
 def _managed_fragment(
     upstreams: Optional[list[str]] = None,
     local_resolvers: Optional[list[Dict[str, Any]]] = None,
@@ -1789,7 +1916,9 @@ def _managed_fragment(
     modern: bool = True,
     legacy_route: bool = False,
     hosts: Optional[Dict[str, Any]] = None,
+    rule_dns: Iterable[Dict[str, Any]] = (),
 ) -> Dict[str, Any]:
+    rule_dns = list(rule_dns)
     servers: list[Any] = []
     resolvers = list(local_resolvers or [])
     zones = list(local_domains or DEFAULT_LOCAL_DOMAINS)
@@ -1808,6 +1937,7 @@ def _managed_fragment(
     for resolver in bypass:
         if bypass_zones:
             servers.append(_local_server(resolver, bypass_zones))
+    servers.extend(_rule_dns_server(row) for row in rule_dns)
     # A server without a port stays a plain string, exactly as it has always
     # been written: an installation configured earlier must keep byte-identical
     # config.  A port can only be said in the object form.
@@ -1852,7 +1982,8 @@ def _managed_fragment(
         "dns": dns_section,
         "inbounds": [_dns_listener()],
         "outbounds": [
-            _dns_outbound(pass_node, public_upstreams, mark, modern, legacy_route)
+            _dns_outbound(pass_node, public_upstreams, mark, modern, legacy_route),
+            *(_rule_dns_outbound(row, mark) for row in rule_dns),
         ],
     }
 
@@ -1903,7 +2034,10 @@ def migrate_managed_fragment(*, configs_dir: str) -> Dict[str, Any]:
 
 
 def _owned_rule(rule: Any) -> bool:
-    return isinstance(rule, dict) and _clean_tag(rule.get("ruleTag")) in {
+    if not isinstance(rule, dict):
+        return False
+    tag = _clean_tag(rule.get("ruleTag"))
+    return _is_rule_dns_tag(tag) or tag in {
         PROXY_RULE_TAG,
         CAPTURE_RULE_TAG,
         LOCAL_RULE_TAG,
@@ -1926,8 +2060,9 @@ def _rule_as_written(rule: Any) -> Any:
 def _direct_outbound_tag(runtime: Dict[str, Any]) -> str:
     """Tag of a freedom outbound, i.e. the one that leaves the tunnel."""
     for item in runtime.get("outbounds", []):
-        if _clean_tag(item.get("protocol")).lower() == "freedom":
-            return _clean_tag(item.get("tag"))
+        tag = _clean_tag(item.get("tag"))
+        if _clean_tag(item.get("protocol")).lower() == "freedom" and not _is_rule_dns_tag(tag.removesuffix("-via")):
+            return tag
     return ""
 
 
@@ -2010,6 +2145,7 @@ def _build_enabled_routing(
     target: Dict[str, Any],
     local_rule: Optional[Dict[str, Any]] = None,
     direct_rule: Optional[Dict[str, Any]] = None,
+    rule_dns: Iterable[Dict[str, Any]] = (),
 ) -> Dict[str, Any]:
     result = copy.deepcopy(routing if isinstance(routing, dict) else {})
     model = result.get("routing")
@@ -2026,7 +2162,8 @@ def _build_enabled_routing(
     capture_rule = _capture_rule()
     # The bypass rules must be matched before the proxy rule, otherwise the
     # query for a home name would already be on its way through the tunnel.
-    ordered = [item for item in (local_rule, direct_rule) if item]
+    ordered = [_rule_dns_route(row) for row in rule_dns]
+    ordered.extend(item for item in (local_rule, direct_rule) if item)
     ordered.extend([proxy_rule, capture_rule])
     model["rules"] = [*ordered, *rules]
 
@@ -2046,6 +2183,7 @@ def _rebuild_local_rule(
     routing: Dict[str, Any],
     local_rule: Optional[Dict[str, Any]],
     direct_rule: Optional[Dict[str, Any]] = None,
+    rule_dns: Iterable[Dict[str, Any]] = (),
 ) -> Dict[str, Any]:
     """Replace our bypass rules in place, leaving the other managed rules alone."""
     result = copy.deepcopy(routing if isinstance(routing, dict) else {})
@@ -2057,10 +2195,11 @@ def _rebuild_local_rule(
         for item in (model.get("rules") if isinstance(model.get("rules"), list) else [])
         if not (
             isinstance(item, dict)
-            and _clean_tag(item.get("ruleTag")) in {LOCAL_RULE_TAG, DIRECT_RULE_TAG}
+            and (_clean_tag(item.get("ruleTag")) in {LOCAL_RULE_TAG, DIRECT_RULE_TAG}
+                 or _is_rule_dns_tag(item.get("ruleTag")))
         )
     ]
-    model["rules"] = [item for item in (local_rule, direct_rule) if item] + rules
+    model["rules"] = [_rule_dns_route(row) for row in rule_dns] + [item for item in (local_rule, direct_rule) if item] + rules
     return result
 
 
@@ -2105,12 +2244,8 @@ def _conflicts(runtime: Dict[str, Any], routing: Dict[str, Any]) -> list[str]:
     return conflicts
 
 
-def _managed_presence(configs_dir: str, routing: Dict[str, Any]) -> Dict[str, bool]:
-    return _presence_report(configs_dir, routing)[0]
-
-
 def _presence_report(
-    configs_dir: str, routing: Dict[str, Any]
+    configs_dir: str, routing: Dict[str, Any], rule_dns: Iterable[Dict[str, Any]] = ()
 ) -> tuple[Dict[str, bool], Dict[str, Any]]:
     """Which managed objects are in place and intact, plus what was compared.
 
@@ -2135,13 +2270,13 @@ def _presence_report(
     local_objs = [
         item
         for item in raw_servers
-        if isinstance(item, dict) and item.get("address") and item.get("domains")
+        if isinstance(item, dict) and item.get("address") and item.get("domains") and not _is_rule_dns_tag(item.get("tag"))
     ]
     declared = _safe_upstreams(
         [
             _upstream_text(item)
             for item in raw_servers
-            if not (isinstance(item, dict) and item.get("domains"))
+            if not (isinstance(item, dict) and (item.get("domains") or _is_rule_dns_tag(item.get("tag"))))
         ]
     )
     declared_resolvers: list[Dict[str, Any]] = []
@@ -2241,6 +2376,7 @@ def _presence_report(
             declared_modern,
             declared_legacy_route,
             declared_hosts,
+            rule_dns,
         )
         if declared and declared_hosts is not None
         else None
@@ -2293,6 +2429,9 @@ def _presence_report(
         expected_direct is not None and direct_rule_obj == expected_direct
     )
     safe_capture_rule = capture_rule_obj == _capture_rule()
+    found_rule_dns = [rule for rule in rules if isinstance(rule, dict) and _is_rule_dns_tag(rule.get("ruleTag"))]
+    expected_rule_dns = [_rule_dns_route(row) for row in rule_dns]
+    safe_rule_dns = found_rule_dns == expected_rule_dns == rules[:len(expected_rule_dns)]
     facts = {
         "fragment": fragment,
         "fragment_exists": os.path.isfile(managed_path),
@@ -2300,6 +2439,7 @@ def _presence_report(
         "declared": declared,
         "declared_hosts": declared_hosts,
         "expected_fragment": expected_fragment,
+        "service_mark": declared_mark,
         "proxy_rule": proxy_rule_obj,
         "capture_rule": capture_rule_obj,
         "local_rule": local_rule_obj,
@@ -2324,13 +2464,15 @@ def _presence_report(
         "local_rule_owned": local_rule_obj is not None,
         "direct_rule": safe_direct_rule,
         "direct_rule_owned": direct_rule_obj is not None,
+        "rule_dns": safe_rule_dns,
+        "rule_dns_owned": bool(found_rule_dns or expected_rule_dns),
         "balancer": safe_balancer,
         "balancer_owned": balancer_obj is not None,
     }, facts
 
 
 def _managed_config_complete(presence: Dict[str, bool]) -> bool:
-    if not (presence.get("fragment") and presence.get("proxy_rule") and presence.get("capture_rule")):
+    if not (presence.get("fragment") and presence.get("proxy_rule") and presence.get("capture_rule") and presence.get("rule_dns", True)):
         return False
     # BALANCER_TAG is optional when the assistant could route straight to one
     # proxy outbound.
@@ -2346,6 +2488,7 @@ def _managed_config_present(presence: Dict[str, bool]) -> bool:
             "capture_rule_owned",
             "local_rule_owned",
             "direct_rule_owned",
+            "rule_dns_owned",
             "balancer_owned",
         )
     )
@@ -2364,6 +2507,7 @@ def _managed_config_tampered(presence: Dict[str, bool]) -> bool:
             ("capture_rule_owned", "capture_rule"),
             ("local_rule_owned", "local_rule"),
             ("direct_rule_owned", "direct_rule"),
+            ("rule_dns_owned", "rule_dns"),
             ("balancer_owned", "balancer"),
         )
     )
@@ -2485,6 +2629,9 @@ def _tamper_details(
         elif not balancer_tag and not outbound_tag:
             reasons.append("не указано, куда отправлять DNS-запросы: нет ни balancerTag, ни outboundTag")
         add("route", f"Правило {PROXY_RULE_TAG} в {routing_name}: " + "; ".join(reasons or ["изменено вручную"]) + ".")
+
+    if presence.get("rule_dns_owned") and not presence.get("rule_dns"):
+        add("rule-dns", f"Служебные правила отдельных DNS-привязок в {routing_name} не совпадают с настройкой панели.")
 
     def rule_lines(key: str, tag: str, wanted: Any, zone: str, missing: str) -> None:
         if not presence.get(key + "_owned") or presence.get(key):
@@ -2705,6 +2852,18 @@ def _xray_binary() -> str:
     return xray_transactions.xray_binary()
 
 
+def _core_supports_rule_dns() -> bool:
+    binary = _xray_binary()
+    if not binary:
+        return False
+    try:
+        result = subprocess.run([binary, "version"], capture_output=True, text=True, timeout=5, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    match = re.search(r"(?m)^Xray\s+(\d+)\.(\d+)\.(\d+)\b", result.stdout)
+    return bool(result.returncode == 0 and match and tuple(map(int, match.groups())) >= (26, 11, 9))
+
+
 def _core_supports_dns_rules() -> bool:
     """Does this core understand the DNS outbound ``rules`` list?
 
@@ -2793,6 +2952,76 @@ def _write_routing_preserving_comments(
         preserve_existing_comments=True,
     )
     _atomic_write_json(path, obj)
+
+
+def plan_rule_dns_routing_save(configs_dir: str, routing_file: str, ui_state_dir: str, proposed: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Prepare the derived DNS config for the same preflight as its source."""
+    state = _load_state(ui_state_dir)
+    rows = state.get("rule_dns") or []
+    if not (state.get("enabled") and rows):
+        return None
+    current, _raw = _read_routing_with_raw(routing_file)
+    presence, facts = _presence_report(configs_dir, current, rows)
+    if not (presence["fragment"] and presence["rule_dns"]):
+        raise DnsOverVlessError("Служебные объекты привязок DNS были изменены вручную.", code="rule_dns_invalid")
+    runtime = _collect_runtime(configs_dir, proposed, replacement=(routing_file, proposed))
+    next_rows = _ordered_rule_dns(_resolve_rule_dns(rows, _rule_dns_candidates(runtime, proposed)), proposed)
+    result = copy.deepcopy(proposed)
+    rules = result["routing"]["rules"]
+    existing = [rule for rule in rules if isinstance(rule, dict) and _is_rule_dns_tag(rule.get("ruleTag"))]
+    capture = next((rule for rule in rules if isinstance(rule, dict) and rule.get("ruleTag") == CAPTURE_RULE_TAG), None)
+    if capture is None:
+        raise DnsOverVlessError("В основном routing отсутствует служебное правило перехвата DNS.", code="rule_dns_invalid")
+    expected = [_rule_dns_route(row) for row in next_rows]
+    if next_rows == rows and [_rule_as_written(rule) for rule in existing] == expected == [_rule_as_written(rule) for rule in rules[:len(expected)]]:
+        return None
+    rules = [rule for rule in rules if rule not in existing]
+    result["routing"]["rules"] = expected + rules
+
+    fragment = facts["fragment"]
+    servers = fragment["dns"]["servers"]
+    first = next(index for index, server in enumerate(servers) if isinstance(server, dict) and _is_rule_dns_tag(server.get("tag")))
+    servers[first:first + len(rows)] = [_rule_dns_server(row) for row in next_rows]
+    fragment["outbounds"][1:] = [_rule_dns_outbound(row, facts["service_mark"]) for row in next_rows]
+    return {"routing": result, "fragment": fragment, "state": {**state, "rule_dns": next_rows}}
+
+
+def validate_rule_dns_outbound_save(configs_dir: str, ui_state_dir: str, path: str, obj: Dict[str, Any]) -> None:
+    if not ui_state_dir:
+        return
+    state = _load_state(ui_state_dir)
+    rows = state.get("rule_dns") or []
+    if not (state.get("enabled") and rows):
+        return
+    if os.path.realpath(path) == os.path.realpath(os.path.join(configs_dir, MANAGED_FRAGMENT)):
+        if obj != _read_json(path, None):
+            raise DnsOverVlessError("Служебный DNS-фрагмент изменяется через окно DNS-over-VLESS.", code="rule_dns_invalid")
+        return
+    live = _rule_dns_proxy_tags(_collect_runtime(configs_dir, {}, replacement=(path, obj)))
+    for row in rows:
+        if row["outbound_tag"] not in live:
+            raise DnsOverVlessError(
+                f"Выход «{row['outbound_tag']}» используется в DNS-привязке «{row['rule_tag']}». "
+                "Сначала измените или снимите привязку.",
+                code="rule_dns_invalid",
+            )
+
+
+def write_rule_dns_routing_save(plan: Dict[str, Any], configs_dir: str, routing_file: str, raw_path: str, ui_state_dir: str, raw: str) -> None:
+    from services.xray_subscriptions import _collect_jsonc_comments_by_semantic_key, _render_jsonc_with_comments
+
+    fragment_path = os.path.join(configs_dir, MANAGED_FRAGMENT)
+    guard = xray_transactions.MemoryGuard(paths=[routing_file, raw_path, fragment_path, _state_path(ui_state_dir)])
+    original = json.loads(strip_json_comments_text(raw))
+    comments = _collect_jsonc_comments_by_semantic_key(raw, original, header=MANAGED_JSONC_HEADER)
+    try:
+        _atomic_write_json(routing_file, plan["routing"])
+        _atomic_write_text(raw_path, _render_jsonc_with_comments(plan["routing"], comments, header=MANAGED_JSONC_HEADER))
+        _atomic_write_json(fragment_path, plan["fragment"])
+        _save_state(ui_state_dir, plan["state"])
+    except Exception:
+        guard.restore()
+        raise
 
 
 # Снимок нужен только для отката внутри операции, которая его сделала; после
@@ -3631,7 +3860,7 @@ def _source_route_changes(
         return None
     selection = _stored_selection(state)
     clone = _followed_clone(runtime, routing, state, selection)
-    if clone is None or not all(presence.get(key) for key in ("fragment", "capture_rule", "local_rule", "direct_rule")):
+    if clone is None or not all(presence.get(key) for key in ("fragment", "capture_rule", "local_rule", "direct_rule", "rule_dns")):
         return None
     expected_rule = {"type": "field", "inboundTag": [DNS_IN_TAG], "ruleTag": PROXY_RULE_TAG, "balancerTag": BALANCER_TAG}
     if facts.get("proxy_rule") != expected_rule:
@@ -3684,7 +3913,8 @@ def _source_route_changes(
             "resync_safe": bool(dead_reference and clone["selector"] == remaining)}
 
 
-def follow_source_route(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dict[str, Any]:
+def follow_source_route(*, configs_dir: str, routing_file: str, ui_state_dir: str,
+                        mapped_target: tuple[str, str] | None = None) -> Dict[str, Any]:
     """Bring the managed clone in line with the balancer it was copied from.
 
     The clone is a snapshot taken when the feature was switched on.  A
@@ -3704,8 +3934,42 @@ def follow_source_route(*, configs_dir: str, routing_file: str, ui_state_dir: st
         state = _load_state(ui_state_dir)
         if not state.get("enabled"):
             return idle
+        routing, raw = _read_routing_with_raw(routing_file)
+        binding_plan = plan_rule_dns_routing_save(configs_dir, routing_file, ui_state_dir, routing) if state.get("rule_dns") else None
+        if binding_plan:
+            raw_path = jsonc_path_for(routing_file)
+            try:
+                raw = Path(raw_path).read_text(encoding="utf-8-sig")
+            except OSError:
+                pass
+            write_rule_dns_routing_save(
+                binding_plan, configs_dir, routing_file, raw_path, ui_state_dir,
+                raw or json.dumps(routing, ensure_ascii=False),
+            )
+            routing, state = binding_plan["routing"], binding_plan["state"]
+            idle = {"status": "updated", "message": "Обновлены DNS-привязки к правилам Xray."}
+        if mapped_target:
+            old, new = mapped_target
+            runtime = _collect_runtime(configs_dir, routing)
+            presence, facts = _presence_report(configs_dir, routing, state.get("rule_dns") or [])
+            if (_stored_selection(state) != [old] or facts.get("proxy_rule", {}).get("outboundTag") != new
+                    or new not in _rule_dns_proxy_tags(runtime)):
+                raise DnsOverVlessError("Не удалось заменить действующий маршрут DNS.", code="rule_dns_invalid")
+            state["target"] = _select_target(runtime, new, routing)
+            if state.get("pass_non_ip") and state.get("pass_non_ip_node") == old:
+                fragment = facts["fragment"]
+                if not presence.get("fragment"):
+                    raise DnsOverVlessError("Служебный фрагмент DNS был изменён.", code="rule_dns_invalid")
+                outbound = fragment["outbounds"][0]
+                if "proxySettings" in outbound:
+                    outbound["proxySettings"]["tag"] = new
+                else:
+                    outbound["streamSettings"]["sockopt"]["dialerProxy"] = new
+                state["pass_non_ip_node"] = new
+                _atomic_write_json(os.path.join(configs_dir, MANAGED_FRAGMENT), fragment)
+            _save_state(ui_state_dir, state)
+            idle = {"status": "updated", "message": "Обновлён маршрут DNS-over-VLESS."}
         selection = _stored_selection(state)
-        routing, _raw = _read_routing_with_raw(routing_file)
         if len(selection) != 1 or not _find_managed_clone(routing):
             # A route built from hand-picked proxies is not a copy of anything.
             return idle
@@ -3715,11 +3979,11 @@ def follow_source_route(*, configs_dir: str, routing_file: str, ui_state_dir: st
         if _find_balancer(runtime, source_tag) and not _route_drift(runtime, routing, source_tag) and not needs_pass:
             return idle
 
-        presence, facts = _presence_report(configs_dir, routing)
+        presence, facts = _presence_report(configs_dir, routing, state.get("rule_dns") or [])
         changes = _source_route_changes(runtime, routing, state, presence, facts)
         if changes is None:
             return {
-                "status": "manual",
+                "status": "updated" if binding_plan else "manual",
                 "message": (
                     f"DNS-over-VLESS остался на прежнем маршруте: балансировщик «{source_tag}» "
                     "больше не подходит для DNS. Откройте окно DNS-over-VLESS и выберите маршрут заново."
@@ -3746,12 +4010,14 @@ def follow_source_route(*, configs_dir: str, routing_file: str, ui_state_dir: st
 def get_status(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dict[str, Any]:
     routing, _raw = _read_routing_with_raw(routing_file)
     runtime = _collect_runtime(configs_dir, routing)
-    presence, facts = _presence_report(configs_dir, routing)
+    state = _load_state(ui_state_dir)
+    saved_rule_dns = state.get("rule_dns") or []
+    rule_dns_candidates = _rule_dns_candidates(runtime, routing)
+    presence, facts = _presence_report(configs_dir, routing, saved_rule_dns if state.get("enabled") else [])
     override, override_detail = _dns_override_status()
     running_cores = core_runtime().running
     core = resolve_running_core_for_status(running_cores) or ""
     available_cores = detect_available_cores()
-    state = _load_state(ui_state_dir)
     hosts_list, hosts_on = _status_hosts(configs_dir, state)
     route_changes = _source_route_changes(runtime, routing, state, presence, facts)
     needs_resync = bool(route_changes and route_changes["resync_safe"])
@@ -3854,6 +4120,9 @@ def get_status(*, configs_dir: str, routing_file: str, ui_state_dir: str) -> Dic
         "blockers": blockers,
         "target": ({k: v for k, v in target.items() if k != "managed_balancer"} if target else None),
         "candidates": candidates,
+        "rule_dns": [{"rule_tag": row["rule_tag"], "upstream": row["upstream"]} for row in saved_rule_dns],
+        "rule_dns_candidates": rule_dns_candidates,
+        "rule_dns_drift": _rule_dns_drift(saved_rule_dns, rule_dns_candidates, routing) if state.get("enabled") else "",
         "upstreams": upstreams,
         "default_upstreams": list(DEFAULT_UPSTREAMS),
         # Whether the DNS servers above live on the far side of the tunnel.
@@ -3968,6 +4237,7 @@ def apply_action(
     capture_macs: Any = None,
     hosts: Any = None,
     hosts_enabled: Any = None,
+    rule_dns: Any = None,
     discard_edits: Any = False,
 ) -> Dict[str, Any]:
     normalized = str(action or "").strip().lower()
@@ -4018,6 +4288,17 @@ def apply_action(
         runtime = _collect_runtime(configs_dir, routing)
         managed_path = os.path.join(configs_dir, MANAGED_FRAGMENT)
         stored_state = _load_state(ui_state_dir)
+        saved_rule_dns = stored_state.get("rule_dns") or []
+        applied_rule_dns = saved_rule_dns if stored_state.get("enabled") else []
+        wanted_rule_dns = []
+        if normalized == "enable":
+            incoming = saved_rule_dns if rule_dns is None else rule_dns
+            if incoming != []:
+                wanted_rule_dns = _ordered_rule_dns(
+                    _resolve_rule_dns(incoming, _rule_dns_candidates(runtime, routing)), routing
+                )
+                if not _core_supports_rule_dns():
+                    raise DnsOverVlessError("Для DNS по правилам нужен Xray 26.11.9 или новее.", code="rule_dns_core_unsupported")
         # An explicit request wins; otherwise keep what this install chose.
         # An address on the far side of the tunnel is only allowed when the
         # user says that is what they meant.
@@ -4165,7 +4446,7 @@ def apply_action(
             )
         route_changes = None
         if normalized == "resync":
-            presence, facts = _presence_report(configs_dir, routing)
+            presence, facts = _presence_report(configs_dir, routing, applied_rule_dns)
             route_changes = _source_route_changes(runtime, routing, stored_state, presence, facts)
             if before_override is not True or not route_changes or not route_changes["resync_safe"]:
                 raise DnsOverVlessError(
@@ -4201,7 +4482,7 @@ def apply_action(
                 next_routing = route_changes["routing"]
                 next_fragment = route_changes["fragment"]
             elif normalized == "enable":
-                presence = _managed_presence(configs_dir, routing)
+                presence, _facts = _presence_report(configs_dir, routing, applied_rule_dns)
                 current_fragment = _read_json(managed_path, None)
                 current_upstreams = _safe_upstreams(
                     ((current_fragment or {}).get("dns") or {}).get("servers")
@@ -4216,8 +4497,9 @@ def apply_action(
                     _service_mark(runtime),
                     _core_supports_dns_rules() if wanted_pass_node else True,
                     hosts=wanted_hosts if wanted_hosts_on else None,
+                    rule_dns=wanted_rule_dns,
                 )
-                if _managed_config_complete(presence) and current_fragment == expected_fragment:
+                if _managed_config_complete(presence) and current_fragment == expected_fragment and applied_rule_dns == wanted_rule_dns:
                     # Idempotent recovery path: configuration is already
                     # prepared, so only revalidate it and claim DNS override.
                     target = None
@@ -4231,6 +4513,7 @@ def apply_action(
                         routing,
                         _local_rule(wanted_local, direct_tag),
                         _direct_rule(wanted_direct, direct_tag),
+                        wanted_rule_dns,
                     )
                     next_fragment = expected_fragment
                 else:
@@ -4254,11 +4537,12 @@ def apply_action(
                         target,
                         _local_rule(wanted_local, direct_tag),
                         _direct_rule(wanted_direct, direct_tag),
+                        wanted_rule_dns,
                     )
                     next_fragment = expected_fragment
                 desired_override = True
             else:
-                presence, facts = _presence_report(configs_dir, routing)
+                presence, facts = _presence_report(configs_dir, routing, applied_rule_dns)
                 if not _managed_config_present(presence) and not previous_state.get("enabled"):
                     _drop_snapshot(snapshot_dir)
                     return {
@@ -4390,6 +4674,7 @@ def apply_action(
                         "capture_macs": wanted_capture_macs,
                         "hosts": wanted_hosts,
                         "hosts_enabled": wanted_hosts_on,
+                        "rule_dns": wanted_rule_dns,
                         "target": ({k: v for k, v in target.items() if k != "managed_balancer"} if target else previous_state.get("target")),
                     },
                 )

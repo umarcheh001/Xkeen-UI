@@ -8371,20 +8371,34 @@ let outboundsModuleApi = null;
       try {
         let res = null;
         let data = null;
-        try {
-          res = await fetch('/api/xray/subscriptions/' + encodeURIComponent(subId) + '/refresh?restart=' + (restart ? '1' : '0'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: '{}',
-          });
-        } catch (eLink) {
-          data = (await subsRefreshOutcomeAfterLinkLoss(stamps, subId))[0];
+        let routeMappings;
+        const title = 'Перейти в режим «Только подписка»?';
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          try {
+            const applyNow = restart || routeMappings?.some((item) => item.node_key);
+            res = await fetch('/api/xray/subscriptions/' + encodeURIComponent(subId) + '/refresh?offer_route_mappings=1&restart=' + (applyNow ? '1' : '0'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(routeMappings ? { route_mappings: routeMappings } : {}),
+            });
+            data = await res.json().catch(() => ({}));
+          } catch (eLink) {
+            res = null;
+            data = (await subsRefreshOutcomeAfterLinkLoss(stamps, subId))[0];
+          }
+          if (data?.code !== 'route_mapping_choice_required' || attempt === 2) break;
+          if (!data.route_mappings?.length) break;
+          routeMappings = await subsConfirmRouteMappings(data.route_mappings, title);
+          if (!routeMappings) {
+            subsSetStatus('', false);
+            return false;
+          }
         }
-        if (res) data = await res.json().catch(() => ({}));
         if ((res && !res.ok) || !data || data.ok === false) {
           const err = String((data && (data.error || data.message)) || ('HTTP ' + (res ? res.status : 0)));
           throw new Error(err);
         }
+        if (opts.batch) return data;
         const fileChanged = !!data.changed;
         const observatoryChanged = !!data.observatory_changed;
         const routingChanged = !!data.routing_changed;
@@ -8606,6 +8620,9 @@ let outboundsModuleApi = null;
           ? `${all} ${stop}. ${offOwn} ${keep}`
           : `${all} ${stop}, трафик пойдёт через ваши серверы. ${keep}`;
         details.push(...subsPauseDnsDetails(dns));
+        if (planData.returned_outbounds?.length) {
+          details.push('Затронутые правила вернутся на ваши серверы — ' + planData.returned_outbounds.join(', ') + '.');
+        }
       } else {
         const back = one
           ? 'вернётся в работу с теми узлами, с которыми была приостановлена'
@@ -8684,6 +8701,90 @@ let outboundsModuleApi = null;
       return { ok: !!ok, target: select ? String(select.value || '') : '' };
     }
 
+    async function subsConfirmRouteMappings(groups, title) {
+      const ui = window.XKeen && XKeen.ui;
+      const host = document.getElementById('confirm-modal-message');
+      const button = document.getElementById('confirm-modal-ok-btn');
+      if (!ui?.confirm || !host || !button || !Array.isArray(groups) || !groups.length) return null;
+      const pending = ui.confirm({
+        title,
+        message: groups.some((group) => group.required === false)
+          ? 'Здесь можно закрепить отдельный узел подписки за вашим правилом. Если для него уже настроен DNS, выберите узел обязательно.'
+          : groups.some((group) => group.rules.length)
+          ? 'Некоторые сайты сейчас открываются через ваши серверы. Выберите для них узлы подписки.'
+          : 'Выберите узлы подписки вместо ваших серверов.',
+        okText: 'Переключить',
+        danger: false,
+        focus: 'cancel',
+      });
+      const fields = groups.map((group, i) => {
+        const card = document.createElement('span');
+        card.className = 'xk-sub-pause-choice xk-sub-route-mapping';
+        const label = document.createElement('label');
+        label.htmlFor = 'xk-sub-route-mapping-' + i;
+        label.textContent = 'Сейчас через ' + group.outbound_tag;
+        const select = document.createElement('select');
+        select.id = label.htmlFor;
+        select.className = 'xray-log-filter';
+        select.setAttribute('aria-label', 'Узел подписки вместо ' + group.outbound_tag);
+        const placeholder = group.required === false ? 'Продолжить без замены' : 'Выберите узел подписки';
+        select.add(new Option(group.candidates.length ? placeholder : 'Нет доступных узлов подписки', ''));
+        group.candidates.forEach((node, index) => {
+          const selected = group.selected?.subscription_id === node.subscription_id && group.selected?.node_key === node.node_key;
+          select.add(new Option(node.label, String(index), false, selected));
+        });
+        card.append(label, select);
+        if (group.rules.length) {
+          const details = document.createElement('details');
+          details.className = 'xk-hint-more';
+          const summary = document.createElement('summary');
+          summary.textContent = 'Какие сайты затронет выбор';
+          details.append(summary);
+          group.rules.forEach((rule) => {
+            const row = document.createElement('p');
+            const name = document.createElement('b');
+            name.textContent = rule.ruleTag || 'Правило без названия';
+            const domains = (Array.isArray(rule.domain) ? rule.domain : []).filter((domain) => typeof domain === 'string').map((domain) => {
+              if (domain.startsWith('domain:')) return domain.slice(7) + ' и поддомены';
+              if (/^ext:[^:]+:/.test(domain)) return 'Список GeoSite · ' + domain.split(':').slice(2).join(':');
+              if (domain.startsWith('geosite:')) return 'Список GeoSite · ' + domain.slice(8);
+              return domain.replace(/^full:/, '');
+            });
+            const conditions = Object.entries(rule)
+              .filter(([key]) => key !== 'ruleTag' && key !== 'domain')
+              .map(([key, value]) => key + ' ' + (Array.isArray(value) ? value.join(', ') : String(value)));
+            row.append(name, document.createElement('br'), [...domains, ...conditions].join(', ') || 'Все сайты');
+            details.append(row);
+          });
+          card.append(details);
+        }
+        host.append(card);
+        return { group, select };
+      });
+      const note = document.createElement('span');
+      note.className = 'xk-sub-pause-choice';
+      const pauseNote = groups.some((group) => group.rules.length)
+        ? 'При паузе подписок эти сайты снова будут открываться через ваши серверы. '
+        : 'При паузе подписок панель вернёт ваши серверы. ';
+      note.textContent = pauseNote + 'Если проверка не пройдёт, панель вернёт прежние настройки.';
+      host.append(note);
+      const update = () => {
+        button.disabled = fields.some(({ group, select }) => group.required !== false && select.value === '');
+      };
+      fields.forEach(({ select }) => select.addEventListener('change', update));
+      update();
+      try {
+        if (!(await pending) || button.disabled) return null;
+        return fields.map(({ group, select }) => {
+          const node = group.candidates[select.value];
+          return { outbound_tag: group.outbound_tag, subscription_id: node?.subscription_id ?? null,
+            node_key: node?.node_key ?? null, revision: group.revision };
+        });
+      } finally {
+        button.disabled = false;
+      }
+    }
+
     // Чем кончилась операция, видно по списку подписок.
     function subsSwitchReached(mode, data) {
       if (mode === 'delete') return !(Array.isArray(data.subscriptions) && data.subscriptions.length);
@@ -8703,7 +8804,9 @@ let outboundsModuleApi = null;
         try {
           const ctrl = new AbortController();
           const timer = setTimeout(() => ctrl.abort(), 5000);
-          const res = await fetch('/api/xray/subscriptions', { cache: 'no-store', signal: ctrl.signal });
+          const res = await fetch('/api/xray/subscriptions', {
+            cache: 'no-store', signal: ctrl.signal, headers: { 'X-Subscriptions-Wait-Switch': '1' },
+          });
           clearTimeout(timer);
           const data = await res.json().catch(() => null);
           if (res.ok && data && data.ok !== false) {
@@ -8717,7 +8820,7 @@ let outboundsModuleApi = null;
       return answered ? false : null;
     }
 
-    async function subsSendSwitch(mode, dnsTarget) {
+    async function subsSendSwitch(mode, dnsTarget, routeMappings) {
       const endpoint = { pause: 'pause', resume: 'resume', delete: 'delete-all' }[mode];
       let res = null;
       let data = null;
@@ -8725,7 +8828,7 @@ let outboundsModuleApi = null;
         res = await fetch('/api/xray/subscriptions/' + endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ dns_target: dnsTarget || '' }),
+          body: JSON.stringify({ dns_target: dnsTarget || '', route_mappings: routeMappings }),
         });
         data = await res.json().catch(() => ({}));
       } catch (e) {
@@ -8746,6 +8849,7 @@ let outboundsModuleApi = null;
       if (res.status === 409 && data && data.code === 'dns_target_choice_required') {
         return { choice: Array.isArray(data.candidates) ? data.candidates : [] };
       }
+      if (res.status === 409 && data?.code === 'route_mapping_choice_required') return { routeMappings: data.route_mappings };
       if (!res.ok || !data || data.ok === false) {
         throw new Error(String((data && (data.error || data.message)) || ('HTTP ' + res.status)));
       }
@@ -8816,7 +8920,11 @@ let outboundsModuleApi = null;
       }
 
       let options = subsSwitchConfirmOptions(planData, mode);
-      let answer = await subsConfirmPause(options);
+      const groups = mode === 'resume' ? planData.route_mappings : null;
+      let answer = groups?.length
+        ? { routeMappings: await subsConfirmRouteMappings(groups, options.confirm.title) }
+        : await subsConfirmPause(options);
+      if (groups?.length) answer.ok = !!answer.routeMappings;
       if (!answer.ok) return false;
 
       const prevActive = getActiveFragment();
@@ -8824,16 +8932,26 @@ let outboundsModuleApi = null;
       subsRenderPauseState();
       try {
         let data = null;
-        for (let attempt = 0; attempt < 2; attempt += 1) {
+        for (let attempt = 0; attempt < 3; attempt += 1) {
           subsSetStatus(texts.busy, false, false, { busy: true });
-          data = await subsSendSwitch(mode, answer.target);
+          data = await subsSendSwitch(mode, answer.target, answer.routeMappings);
+          if (data?.routeMappings) {
+            if (attempt === 2) throw new Error('Список узлов или правил меняется. Повторите переключение.');
+            answer = { ...answer, routeMappings: await subsConfirmRouteMappings(data.routeMappings, options.confirm.title) };
+            if (!answer.routeMappings) {
+              subsSetStatus('', false);
+              return false;
+            }
+            data = null;
+            continue;
+          }
           if (!data || !data.choice) break;
           // Прогноз не угадал: маршрутов для DNS оказалось несколько. Ничего не изменено.
           options = subsSwitchConfirmOptions(
             { total: planData.total, dns: { outcome: 'choose', candidates: data.choice, restarts: 2 } },
             mode,
           );
-          answer = await subsConfirmPause(options);
+          answer = { ...answer, ...await subsConfirmPause(options) };
           if (!answer.ok) {
             subsSetStatus('', false);
             return false;
@@ -8898,7 +9016,7 @@ let outboundsModuleApi = null;
         let res = null;
         let data = null;
         try {
-          res = await fetch('/api/xray/subscriptions/refresh-due?restart=' + (restart ? '1' : '0'), {
+          res = await fetch('/api/xray/subscriptions/refresh-due?offer_route_mappings=1&restart=' + (restart ? '1' : '0'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: '{}',
@@ -8914,8 +9032,16 @@ let outboundsModuleApi = null;
           }
         }
         const results = Array.isArray(data.results) ? data.results : [];
+        let resolved = 0;
+        for (const [index, item] of results.entries()) {
+          if (item?.code !== 'route_mapping_choice_required') continue;
+          const result = await subsRefresh(item.id, { skipDraftConfirm: true, batch: true });
+          if (!result) break;
+          results[index] = result;
+          resolved += 1;
+        }
         const updatedCount = Number(data.updated || 0);
-        const okCount = Number(data.ok_count || 0);
+        const okCount = Number(data.ok_count || 0) + resolved;
         const failedItems = results.filter((item) => item && item.ok === false);
         const failedCount = failedItems.length;
         const firstError = String((failedItems[0] && (failedItems[0].error || failedItems[0].message)) || '').trim();

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import time
+from contextlib import nullcontext
 from typing import Any, Callable
 
 from flask import Blueprint, jsonify, request
@@ -86,7 +87,10 @@ def create_xray_subscriptions_blueprint(
     @bp.get("/api/xray/subscriptions")
     def api_list_xray_subscriptions():
         try:
-            subscriptions = list_subscriptions(ui_state_dir)
+            wait_for_switch = request.headers.get("X-Subscriptions-Wait-Switch") == "1"
+            with subscription_pause._LOCK if wait_for_switch else nullcontext():
+                subscriptions = list_subscriptions(ui_state_dir)
+                switch_notice = subscription_pause.last_notice(ui_state_dir)
             subscriptions = [
                 {**sub, "next_update_local": time.strftime("%Y-%m-%d %H:%M", time.localtime(float(sub["next_update_ts"])))}
                 if sub.get("schedule_mode") == "cron" and sub.get("next_update_ts") else sub
@@ -110,7 +114,7 @@ def create_xray_subscriptions_blueprint(
                         "paused": bool(paused_since),
                         "paused_ts": min((ts for ts in paused_since if ts), default=None),
                         # Для окна, которое потеряло ответ на перезапуске ядра.
-                        "switch_notice": subscription_pause.last_notice(ui_state_dir),
+                        "switch_notice": switch_notice,
                         "routing_balancers": list_subscription_routing_balancers(xray_configs_dir),
                         "routing_meta": get_subscription_routing_meta(xray_configs_dir),
                     }
@@ -281,6 +285,7 @@ def create_xray_subscriptions_blueprint(
     @bp.post("/api/xray/subscriptions/<string:sub_id>/refresh")
     def api_refresh_xray_subscription(sub_id: str):
         restart = _bool_arg("restart", True)
+        payload = request.get_json(silent=True) or {}
         try:
             result = refresh_subscription(
                 ui_state_dir,
@@ -289,6 +294,8 @@ def create_xray_subscriptions_blueprint(
                 snapshot=snapshot_xray_config_before_overwrite,
                 restart_xkeen=restart_xkeen,
                 restart=restart,
+                **({"route_mappings": payload["route_mappings"]} if "route_mappings" in payload else {}),
+                **({"offer_route_mappings": True} if _bool_arg("offer_route_mappings", False) else {}),
             )
         except KeyError:
             return error_response("subscription not found", 404, ok=False)
@@ -302,7 +309,7 @@ def create_xray_subscriptions_blueprint(
                 exc=exc,
                 log_tag="xray_subscriptions.refresh_failed",
             )
-        status = 200 if result.get("ok") else 400
+        status = 200 if result.get("ok") else (409 if result.get("code") == "route_mapping_choice_required" else 400)
         return jsonify(result), status
 
     @bp.post("/api/xray/subscriptions/<string:sub_id>/nodes/ping")
@@ -422,6 +429,7 @@ def create_xray_subscriptions_blueprint(
                 restart_xkeen=restart_xkeen,
                 restart=restart,
                 include_new=True,
+                **({"offer_route_mappings": True} if _bool_arg("offer_route_mappings", False) else {}),
             )
         except Exception as exc:
             return exception_response(
@@ -493,6 +501,7 @@ def create_xray_subscriptions_blueprint(
                 snapshot=snapshot_xray_config_before_overwrite,
                 restart_xkeen=restart_xkeen,
                 dns_target=payload.get("dns_target") or "",
+                **({"route_mappings": payload["route_mappings"]} if action == "resume" and "route_mappings" in payload else {}),
             )
         except subscription_pause.PauseError as exc:
             # Nothing is left half-done: the switch undoes itself before raising.

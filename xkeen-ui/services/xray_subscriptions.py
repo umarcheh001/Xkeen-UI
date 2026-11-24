@@ -11,6 +11,8 @@ import base64
 import concurrent.futures
 import contextlib
 import copy
+from collections import Counter
+from functools import wraps
 import hashlib
 import ipaddress
 import json
@@ -73,6 +75,7 @@ STATE_FILENAME = "xray_subscriptions.json"
 PAUSED_STORE_DIRNAME = os.path.join("xray-subscriptions", "paused")
 MANAGED_BASELINES_KEY = "managed_baselines"
 DISPLACED_KEY = "displaced"
+ROUTE_MAPPINGS_KEY = "route_mappings"
 MANAGED_BASELINE_ROUTING_KEY = "routing"
 MANAGED_BASELINE_OBSERVATORY_KEY = "observatory"
 MANAGED_BASELINE_OUTBOUNDS_KEY = "outbounds"
@@ -144,6 +147,15 @@ _SUPPORTED_LINK_RE = re.compile(
 )
 
 _STATE_LOCK = threading.RLock()
+_CONFIG_LOCK = threading.RLock()
+
+
+def _serialize_config_update(func):
+    @wraps(func)
+    def run(*args, **kwargs):
+        with _CONFIG_LOCK:
+            return func(*args, **kwargs)
+    return run
 _REFRESH_LOCKS: weakref.WeakValueDictionary = weakref.WeakValueDictionary()
 _BATCH_FETCH_CACHE: ContextVar[dict | None] = ContextVar("subscription_batch_fetch", default=None)
 _SCHEDULER_LOCK = threading.Lock()
@@ -904,6 +916,13 @@ def _normalize_state(obj: Any) -> Dict[str, Any]:
     displaced = displacement.normalize(obj.get(DISPLACED_KEY))
     if displaced:
         state[DISPLACED_KEY] = displaced
+    pairs = obj.get(ROUTE_MAPPINGS_KEY)
+    if isinstance(pairs, dict):
+        state[ROUTE_MAPPINGS_KEY] = {
+            tag: pair for tag, pair in pairs.items()
+            if isinstance(pair, dict) and all(isinstance(pair.get(key), str) and pair[key]
+                                              for key in ("subscription_id", "node_key"))
+        }
     return state
 
 
@@ -927,6 +946,7 @@ def _find_subscription(state: Dict[str, Any], sub_id: str) -> Tuple[int, Dict[st
     return -1, None
 
 
+@_serialize_config_update
 def upsert_subscription(ui_state_dir: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     data = payload if isinstance(payload, dict) else {}
     url = str(data.get("url") or "").strip()
@@ -1087,6 +1107,7 @@ def upsert_subscription(ui_state_dir: str, payload: Dict[str, Any]) -> Dict[str,
     return sub
 
 
+@_serialize_config_update
 def delete_subscription(
     ui_state_dir: str,
     sub_id: str,
@@ -1206,15 +1227,18 @@ def _delete_subscription_guarded(
     dns_route_note = ""
     if output_removed or routing_changed:
         dns_route_note, dns_route_rewritten = _follow_dns_route(
-            ui_state_dir, xray_configs_dir, str(routing_sync.get("routing_file") or "")
+            ui_state_dir, xray_configs_dir, str(routing_sync.get("routing_file") or ""), guard=guard,
+            mapped_target=rebuild_stats.get("mapped_dns_target"),
         )
         routing_changed = bool(routing_changed or dns_route_rewritten)
 
     preflight_warning = ""
+    mapped = bool(rebuild_stats.get("dns_route_mapped"))
     if output_removed or observatory_changed or routing_changed or outbounds_changed:
-        preflight_warning = _confirm_live_config(guard, xray_configs_dir)
-
-    snapshots_removed = _remove_config_snapshots_for_paths(xray_configs_dir, snapshot_cleanup_paths)
+        if mapped:
+            _confirm_mapped_dns(ui_state_dir, xray_configs_dir)
+        else:
+            preflight_warning = _confirm_live_config(guard, xray_configs_dir)
 
     skipped = list(rebuild_stats.get("skipped") or [])
     warning = " ".join(
@@ -1231,6 +1255,11 @@ def _delete_subscription_guarded(
             restarted = bool(restart_xkeen())
         except Exception:
             restarted = False
+        if mapped and not (restarted and _mapped_dns_healthy(ui_state_dir)):
+            _rollback_mapped_dns(guard, restart_xkeen, "xray-subscription-delete")
+            raise SubscriptionConfigRejected("Не удалось проверить Xray и DNS после удаления подписки.")
+
+    snapshots_removed = _remove_config_snapshots_for_paths(xray_configs_dir, snapshot_cleanup_paths)
 
     return {
         "deleted": removed,
@@ -1722,6 +1751,12 @@ class SubscriptionConfigRejected(RuntimeError):
     """Ядро отклонило конфиг, который получился после операции; она отменена."""
 
 
+class RouteMappingRequired(SubscriptionConfigRejected):
+    def __init__(self, groups: List[Dict[str, Any]]):
+        super().__init__("Выберите узлы подписки вместо ваших серверов.")
+        self.groups = groups
+
+
 def _operation_guard(ui_state_dir: str, xray_configs_dir: str) -> xray_transactions.MemoryGuard:
     """Слепок всего, что может переписать одна операция над подписками."""
     try:
@@ -1817,7 +1852,10 @@ PREFLIGHT_ALREADY_BROKEN_WARNING = (
 )
 
 
-def _follow_dns_route(ui_state_dir: str, xray_configs_dir: str, routing_file: str = "") -> Tuple[str, bool]:
+def _follow_dns_route(
+    ui_state_dir: str, xray_configs_dir: str, routing_file: str = "",
+    *, guard: xray_transactions.MemoryGuard | None = None, mapped_target=None,
+) -> Tuple[str, bool]:
     """Let DNS-over-VLESS rebuild its copy of a balancer this operation changed.
 
     The copy is a snapshot of the owner's balancer.  Adding or removing a
@@ -1829,14 +1867,20 @@ def _follow_dns_route(ui_state_dir: str, xray_configs_dir: str, routing_file: st
     Returns what the owner should be told (or an empty string) and whether
     the routing file was rewritten.
     """
-    try:
-        from services import dns_over_vless
+    from services import dns_over_vless
 
+    try:
         outcome = dns_over_vless.follow_source_route(
             configs_dir=xray_configs_dir,
             routing_file=_config_fragment_path(xray_configs_dir, routing_file or ROUTING_FILE),
             ui_state_dir=ui_state_dir,
+            mapped_target=mapped_target,
         )
+    except dns_over_vless.DnsOverVlessError as exc:
+        if guard is None or exc.code != "rule_dns_invalid":
+            raise
+        guard.restore()
+        raise SubscriptionConfigRejected(str(exc)) from exc
     except Exception:
         return (
             "Не удалось обновить маршрут DNS-over-VLESS. Откройте окно DNS-over-VLESS "
@@ -1869,6 +1913,29 @@ def _confirm_live_config(guard: xray_transactions.MemoryGuard, xray_configs_dir:
     raise SubscriptionConfigRejected(
         "Xray отклонил новую конфигурацию, изменения отменены." + (f" Причина: {reason}" if reason else "")
     )
+
+
+def _confirm_mapped_dns(ui_state_dir: str, configs_dir: str) -> None:
+    from services import dns_over_vless as dov, subscription_pause
+
+    view = subscription_pause._dns_now(ui_state_dir, configs_dir, _config_fragment_path(configs_dir, ROUTING_FILE))
+    if view["enabled"] and not subscription_pause._intact(view):
+        raise SubscriptionConfigRejected("Не удалось сохранить рабочий маршрут DNS.")
+    dov._stage_and_test(configs_dir, {})
+
+
+def _mapped_dns_healthy(ui_state_dir: str) -> bool:
+    from services import dns_over_vless as dov
+
+    return (not dov._load_state(ui_state_dir).get("enabled")
+            or (dov._wait_for_xray() and bool(dov._dns_probe().get("ok"))))
+
+
+def _rollback_mapped_dns(guard: xray_transactions.MemoryGuard, restart_xkeen, source: str) -> bool:
+    from services import subscription_pause
+
+    guard.restore()
+    return subscription_pause._restart(restart_xkeen, source + "-rollback")
 
 
 class SubscriptionPlaceholderError(RuntimeError):
@@ -4954,14 +5021,14 @@ def _find_auto_rule_idx(rules: List[Any], auto_tag: str = AUTO_BALANCER_RULE_TAG
     return -1
 
 
-def _find_subscription_only_catch_all_rule_idx(rules: List[Any]) -> int:
+def _find_subscription_only_catch_all_rule_idx(rules: List[Any], mapped_rules=()) -> int:
     if not isinstance(rules, list):
         return -1
     candidate_idx = -1
     for idx, rule in enumerate(rules):
         if not isinstance(rule, dict):
             continue
-        if str(rule.get("ruleTag") or "").strip() == AUTO_BALANCER_RULE_TAG:
+        if str(rule.get("ruleTag") or "").strip() == AUTO_BALANCER_RULE_TAG or rule.get("ruleTag") in mapped_rules:
             continue
         if _is_proxy_inbound_catchall_rule(rule):
             candidate_idx = idx
@@ -5125,6 +5192,8 @@ def _subscription_only_retarget_proxy_rules(
     balancer_tag: str,
     journal: Dict[str, Any] | None = None,
 ) -> Dict[str, int | bool]:
+    from services.dns_over_vless import _owned_rule
+
     rules = routing.get("rules")
     if not isinstance(rules, list):
         return {"changed": False, "retargeted": 0}
@@ -5132,12 +5201,14 @@ def _subscription_only_retarget_proxy_rules(
     journal = journal if journal is not None else {}
     target_balancer = str(balancer_tag or AUTO_BALANCER_TAG).strip() or AUTO_BALANCER_TAG
     terminal_targets = {"direct", "block", "blackhole", "reject", "dns"}
+    mapped_rules = {AUTO_BALANCER_RULE_TAG}
+    mapped_rules.update(entry["tag"] for entry in journal.get("rules", []) if entry.get("to_kind") == "outboundTag")
     changed = False
     retargeted = 0
     for rule in rules:
-        if not isinstance(rule, dict) or not _rule_touches_proxy_inbound(rule):
+        if not isinstance(rule, dict) or _owned_rule(rule) or not _rule_touches_proxy_inbound(rule):
             continue
-        if str(rule.get("ruleTag") or "").strip() == AUTO_BALANCER_RULE_TAG:
+        if str(rule.get("ruleTag") or "").strip() in mapped_rules:
             continue
         outbound_tag = str(rule.get("outboundTag") or "").strip()
         balancer = str(rule.get("balancerTag") or "").strip()
@@ -5446,7 +5517,8 @@ def _ensure_default_balancer_rule(
 
     candidate_idx = _find_auto_rule_idx(rules)
     if subscription_only:
-        catch_all_idx = _find_subscription_only_catch_all_rule_idx(rules)
+        mapped = {entry["tag"] for entry in (journal or {}).get("rules", []) if entry.get("to_kind") == "outboundTag"}
+        catch_all_idx = _find_subscription_only_catch_all_rule_idx(rules, mapped)
         if catch_all_idx >= 0:
             if journal is not None:
                 # Правило владельца сейчас станет служебным: запомнить, каким было.
@@ -5770,6 +5842,121 @@ def _normalize_runtime_manual_balancers(plan: Any) -> Dict[str, List[str]]:
     return out
 
 
+def _route_mapping_groups(ui_state_dir, configs_dir, routing, state, journal, *, resume=False, include_optional=False):
+    from services import dns_over_vless as dov
+
+    dns = dov._load_state(ui_state_dir)
+    required_rules = {row["rule_tag"] for row in dns.get("rule_dns") or []}
+    if dns.get("enabled"):
+        required_rules.add(dov.PROXY_RULE_TAG)
+    base = _read_json_file(_config_fragment_path(configs_dir, OUTBOUNDS_FILE), {})
+    own = _subscription_outbounds_from_obj(base)
+    own += [row["outbound"] for row in journal.get("outbounds", []) if isinstance(row.get("outbound"), dict)]
+    own_tags = {row["tag"] for row in own if _is_proxy_outbound(row) and row.get("tag")}
+    managed = {row["tag"]: row for row in journal.get("rules", []) if row.get("to_kind") == "outboundTag"}
+    optional = {
+        row["outbound_tag"]
+        for row in dov._rule_dns_candidates(
+            {"outbounds": [outbound for outbound in own if isinstance(outbound.get("tag"), str)]},
+            {"routing": routing},
+        )
+        if row["outbound_tag"] in own_tags
+    } if include_optional else set()
+    if not required_rules and not managed and not optional:
+        return []
+    affected: Dict[str, List[Dict[str, Any]]] = {}
+    required = set()
+    for rule in routing.get("rules") or []:
+        if not isinstance(rule, dict):
+            continue
+        tag = rule.get("ruleTag")
+        if dov._owned_rule(rule) and tag != dov.PROXY_RULE_TAG:
+            continue
+        outbound = rule.get("outboundTag")
+        entry = managed.get(tag)
+        if entry and outbound == entry["to"]:
+            outbound = entry["target"]["outboundTag"]
+        else:
+            entry = None
+        if outbound not in own_tags:
+            continue
+        if tag in required_rules or entry:
+            required.add(outbound)
+        if tag != dov.PROXY_RULE_TAG:
+            affected.setdefault(outbound, []).append({
+                key: value for key, value in rule.items() if key not in {"balancerTag", "outboundTag", "type"}
+            })
+    if not (required or optional):
+        return []
+
+    candidates: list[Dict[str, str]] = []
+    for sub in state["subscriptions"]:
+        if sub.get("paused") and not resume:
+            continue
+        path = _subscription_output_path(configs_dir, sub)
+        if sub.get("paused"):
+            paused_path = _paused_store_path(ui_state_dir, path)
+            path = paused_path if os.path.isfile(paused_path) else _legacy_paused_config_path(path)
+        tags = {item.get("tag") for item in _subscription_outbounds_from_obj(_read_json_file(path, {}))
+                if _is_proxy_outbound(item)}
+        candidates.extend(
+            {"subscription_id": sub["id"], "node_key": node["key"], "tag": node["tag"],
+             "label": f"{sub['name']} · {node['name']}"}
+            for node in sub.get("last_nodes", []) if node.get("tag") in tags
+        )
+    counts = Counter(candidate["tag"] for candidate in candidates)
+    candidates = [candidate for candidate in candidates if counts[candidate["tag"]] == 1]
+    saved = state.get(ROUTE_MAPPINGS_KEY) or {}
+    groups = []
+    for tag in sorted(required | (optional if candidates else set())):
+        rules = affected.get(tag, [])
+        mandatory = tag in required
+        revision = hashlib.sha256(json.dumps([rules, candidates, mandatory], sort_keys=True).encode()).hexdigest()
+        selected = next((node for node in candidates if all(
+            node[key] == saved.get(tag, {}).get(key) for key in ("subscription_id", "node_key")
+        )), None)
+        groups.append({"outbound_tag": tag, "rules": rules, "candidates": candidates,
+                       "selected": selected, "revision": revision, "required": mandatory})
+    return groups
+
+
+def _resolve_route_mappings(groups, saved, requested):
+    choices = dict(saved)
+    if requested is not None:
+        if not isinstance(requested, list):
+            raise RouteMappingRequired(groups)
+        by_tag = {group["outbound_tag"]: group for group in groups}
+        submitted = set()
+        for row in requested:
+            if not isinstance(row, dict) or not isinstance(row.get("outbound_tag"), str):
+                raise RouteMappingRequired(groups)
+            tag = row["outbound_tag"]
+            group = by_tag.get(tag)
+            if not group or tag in submitted or row.get("revision") != group["revision"]:
+                raise RouteMappingRequired(groups)
+            submitted.add(tag)
+            pair = {key: row.get(key) for key in ("subscription_id", "node_key")}
+            if not group["required"] and all(value is None for value in pair.values()):
+                choices.pop(tag, None)
+                continue
+            if not any(all(node[key] == value for key, value in pair.items()) for node in group["candidates"]):
+                raise RouteMappingRequired(groups)
+            choices[tag] = pair
+    resolved = {}
+    for group in groups:
+        tag = group["outbound_tag"]
+        pair = choices.get(tag, {})
+        matches = [node for node in group["candidates"] if all(
+            node[key] == pair.get(key) for key in ("subscription_id", "node_key")
+        )]
+        if len(matches) != 1:
+            if group["required"]:
+                raise RouteMappingRequired(groups)
+            continue
+        resolved[tag] = matches[0]["tag"]
+    return resolved, choices
+
+
 def sync_subscription_runtime_plan_delta(
     *,
     xray_configs_dir: str,
@@ -5777,6 +5964,7 @@ def sync_subscription_runtime_plan_delta(
     next_plan: Dict[str, Any] | None = None,
     snapshot: SnapshotCallback | None = None,
     journal: Dict[str, Any] | None = None,
+    route_targets: Dict[str, str] | None = None,
 ) -> Dict[str, Any]:
     prev = previous_plan if isinstance(previous_plan, dict) else {}
     nxt = next_plan if isinstance(next_plan, dict) else {}
@@ -5806,6 +5994,8 @@ def sync_subscription_runtime_plan_delta(
 
     next_subscription_only = bool(nxt.get("subscription_only")) and bool(next_auto_terms)
     entering_subscription_only = next_subscription_only and not bool(prev.get("subscription_only"))
+    if next_subscription_only and route_targets:
+        changed = displacement.retarget_outbounds(journal, routing["rules"], route_targets) or changed
 
     subscription_only_excluded_tags = (
         _subscription_only_excluded_runtime_tags(xray_configs_dir, next_auto_terms)
@@ -6221,6 +6411,18 @@ def _rebuild_subscription_runtime(ui_state_dir: str, *, xray_configs_dir: str, *
     if before == after:
         for flag in ("routing_changed", "observatory_changed", "outbounds_changed"):
             result[flag] = False
+    if result.get("dns_route_mapped"):
+        from services.dns_over_vless import PROXY_RULE_TAG
+
+        def target(files):
+            routing = files.get(os.path.basename(ROUTING_FILE)) or {}
+            rules = routing.get("routing", {}).get("rules", []) if isinstance(routing, dict) else []
+            return next((row.get("outboundTag") for row in rules
+                         if isinstance(row, dict) and row.get("ruleTag") == PROXY_RULE_TAG), None)
+
+        old, new = target(before), target(after)
+        if old and new and old != new:
+            result["mapped_dns_target"] = (old, new)
     return result
 
 
@@ -6232,6 +6434,8 @@ def _rebuild_subscription_runtime_impl(
     previous_state: Dict[str, Any] | None = None,
     state_override: Dict[str, Any] | None = None,
     rebuild_from_baseline: bool = False,
+    route_mappings: Any = None,
+    offer_route_mappings: bool = False,
 ) -> Dict[str, Any]:
     prev_state = _normalize_state(previous_state) if isinstance(previous_state, dict) else load_subscription_state(ui_state_dir)
     next_state = _normalize_state(state_override) if isinstance(state_override, dict) else load_subscription_state(ui_state_dir)
@@ -6246,6 +6450,26 @@ def _rebuild_subscription_runtime_impl(
         next_state.get(MANAGED_BASELINES_KEY) or load_subscription_state(ui_state_dir).get(MANAGED_BASELINES_KEY)
     )
     journal = _load_displaced(ui_state_dir)
+    targets = {}
+    if next_subscription_only:
+        routing_path = _config_fragment_path(xray_configs_dir, ROUTING_FILE)
+        _, routing, _ = _ensure_routing_model(_read_routing_file_for_update(routing_path))
+        first_application = not prev_subscription_only
+        groups = _route_mapping_groups(
+            ui_state_dir, xray_configs_dir, routing, next_state, journal,
+            include_optional=first_application or route_mappings is not None,
+        )
+        if offer_route_mappings and first_application and route_mappings is None and any(
+            not group["required"] and not group["selected"] for group in groups
+        ):
+            raise RouteMappingRequired(groups)
+        targets, choices = _resolve_route_mappings(groups, next_state.get(ROUTE_MAPPINGS_KEY) or {}, route_mappings)
+        if groups:
+            with _STATE_LOCK:
+                stored = load_subscription_state(ui_state_dir)
+                stored[ROUTE_MAPPINGS_KEY] = choices
+                _write_state(ui_state_dir, stored)
+    mapped_before = any(row.get("to_kind") == "outboundTag" for row in journal.get("rules", []))
     legacy_mode = bool(legacy_baselines and prev_subscription_only)
     if legacy_baselines and not legacy_mode:
         _seed_journal_from_legacy_baselines(journal, legacy_baselines)
@@ -6289,6 +6513,7 @@ def _rebuild_subscription_runtime_impl(
             next_plan=next_plan,
             snapshot=snapshot,
             journal=journal,
+            route_targets=targets,
         )
         _store_displaced(ui_state_dir, journal)
         rebuilt["baseline_restored"] = bool(restored.get("restored"))
@@ -6297,18 +6522,20 @@ def _rebuild_subscription_runtime_impl(
         )
         rebuilt["routing_changed"] = bool(restored.get("routing_changed") or rebuilt.get("routing_changed"))
         rebuilt["outbounds_changed"] = bool(restored.get("outbounds_changed") or rebuilt.get("outbounds_changed"))
-        return rebuilt
+        return {**rebuilt, "dns_route_mapped": bool(targets or mapped_before)}
     result = sync_subscription_runtime_plan_delta(
         xray_configs_dir=xray_configs_dir,
         previous_plan=prev_plan,
         next_plan=next_plan,
         snapshot=snapshot,
         journal=journal,
+        route_targets=targets,
     )
     if not result.get("has_runtime_targets"):
         undone = _undo_observatory_conversion(xray_configs_dir, journal, snapshot=snapshot)
         result["observatory_changed"] = bool(result.get("observatory_changed") or undone)
     _store_displaced(ui_state_dir, journal)
+    result["dns_route_mapped"] = bool(targets or mapped_before)
     return result
 
 
@@ -6559,6 +6786,7 @@ def preview_subscription(payload: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+@_serialize_config_update
 def refresh_subscription(
     ui_state_dir: str,
     sub_id: str,
@@ -6567,6 +6795,8 @@ def refresh_subscription(
     snapshot: SnapshotCallback | None = None,
     restart_xkeen: RestartCallback | None = None,
     restart: bool = True,
+    route_mappings: Any = None,
+    offer_route_mappings: bool = False,
 ) -> Dict[str, Any]:
     # A manual request can arrive while the scheduler is downloading this source.
     # Keep the lock alive locally; unused subscription IDs do not accumulate.
@@ -6580,6 +6810,8 @@ def refresh_subscription(
         return _refresh_subscription_impl(
             ui_state_dir, sub_id, xray_configs_dir=xray_configs_dir,
             snapshot=snapshot, restart_xkeen=restart_xkeen, restart=restart,
+            route_mappings=route_mappings,
+            offer_route_mappings=offer_route_mappings,
         )
 
 
@@ -6591,6 +6823,8 @@ def _refresh_subscription_impl(
     snapshot: SnapshotCallback | None = None,
     restart_xkeen: RestartCallback | None = None,
     restart: bool = True,
+    route_mappings: Any = None,
+    offer_route_mappings: bool = False,
 ) -> Dict[str, Any]:
     with _STATE_LOCK:
         state = load_subscription_state(ui_state_dir)
@@ -6901,6 +7135,8 @@ def _refresh_subscription_impl(
             previous_state=previous_state_for_runtime,
             state_override=state_for_runtime,
             rebuild_from_baseline=True,
+            route_mappings=route_mappings,
+            offer_route_mappings=offer_route_mappings,
         )
         observatory_changed = bool(rebuild_stats.get("observatory_changed"))
         routing_changed = bool(rebuild_stats.get("routing_changed"))
@@ -6915,14 +7151,20 @@ def _refresh_subscription_impl(
             sub["last_warnings"] = warnings
         if changed or routing_changed:
             dns_route_note, dns_route_rewritten = _follow_dns_route(
-                ui_state_dir, xray_configs_dir, str(routing_sync.get("routing_file") or "")
+                ui_state_dir, xray_configs_dir, str(routing_sync.get("routing_file") or ""), guard=guard,
+                mapped_target=rebuild_stats.get("mapped_dns_target"),
             )
             routing_changed = bool(routing_changed or dns_route_rewritten)
             if dns_route_note:
                 warnings = warnings + [dns_route_note]
                 sub["last_warnings"] = warnings
         if changed or observatory_changed or routing_changed or outbounds_changed:
-            preflight_warning = _confirm_live_config(guard, xray_configs_dir)
+            mapped = rebuild_stats.get("dns_route_mapped")
+            if mapped:
+                _confirm_mapped_dns(ui_state_dir, xray_configs_dir)
+                preflight_warning = ""
+            else:
+                preflight_warning = _confirm_live_config(guard, xray_configs_dir)
             if preflight_warning:
                 warnings = warnings + [preflight_warning]
                 sub["last_warnings"] = warnings
@@ -6944,6 +7186,10 @@ def _refresh_subscription_impl(
             restarted = applied["restarted"]
             if not restarted and not applied.get("hot_applied"):
                 raise RuntimeError(applied["error"])
+            if mapped and not _mapped_dns_healthy(ui_state_dir):
+                recovered = _rollback_mapped_dns(guard, restart_xkeen, "xray-subscription-refresh")
+                result.update(restarted=False, recovered=recovered, code="dns_switch_failed")
+                raise SubscriptionConfigRejected("Не удалось проверить Xray и DNS после обновления.")
 
         result.update(
             {
@@ -6981,8 +7227,14 @@ def _refresh_subscription_impl(
                 "routing_removed_manual_balancers": int(routing_sync.get("removed_manual_balancers") or 0) if "routing_sync" in locals() else 0,
                 "disabled_manual_outbounds": int(routing_sync.get("disabled_manual_outbounds") or 0) if "routing_sync" in locals() else 0,
                 "next_update_ts": sub.get("next_update_ts"),
+                "dns_route_mapped": bool(rebuild_stats.get("dns_route_mapped")),
             }
         )
+    except RouteMappingRequired as exc:
+        if guard is not None:
+            guard.restore()
+        return {**result, "error": str(exc), "code": "route_mapping_choice_required",
+                "route_mappings": exc.groups}
     except Exception as exc:
         if guard is not None:
             # Запись уже началась: на диске не должно остаться ни фрагмента без
@@ -7136,6 +7388,8 @@ def pause_subscriptions(
         "observatory_changed": observatory_changed,
         "routing_changed": routing_changed,
         "outbounds_changed": outbounds_changed,
+        "dns_route_mapped": rebuild_stats.get("dns_route_mapped", False),
+        "mapped_dns_target": rebuild_stats.get("mapped_dns_target"),
     }
 
 
@@ -7144,6 +7398,7 @@ def resume_subscriptions(
     *,
     xray_configs_dir: str,
     snapshot: SnapshotCallback | None = None,
+    route_mappings: Any = None,
 ) -> Dict[str, Any]:
     """Put paused subscriptions back to work with the nodes they were paused with.
 
@@ -7181,6 +7436,7 @@ def resume_subscriptions(
         previous_state=previous_state,
         state_override=next_state,
         rebuild_from_baseline=True,
+        route_mappings=route_mappings,
     )
     if not rebuild_stats.get("has_runtime_targets"):
         _clear_subscription_managed_baselines(ui_state_dir)
@@ -7195,6 +7451,8 @@ def resume_subscriptions(
         "observatory_changed": observatory_changed,
         "routing_changed": routing_changed,
         "outbounds_changed": outbounds_changed,
+        "dns_route_mapped": rebuild_stats.get("dns_route_mapped", False),
+        "mapped_dns_target": rebuild_stats.get("mapped_dns_target"),
     }
 
 
@@ -7261,6 +7519,7 @@ def _refresh_result_needs_restart(result: Any) -> bool:
     )
 
 
+@_serialize_config_update
 def refresh_due_subscriptions(
     ui_state_dir: str,
     *,
@@ -7269,6 +7528,7 @@ def refresh_due_subscriptions(
     restart_xkeen: RestartCallback | None = None,
     restart: bool = True,
     include_new: bool = False,
+    offer_route_mappings: bool = False,
 ) -> List[Dict[str, Any]]:
     """Refresh what is due, as one batch with one restart.
 
@@ -7323,6 +7583,7 @@ def refresh_due_subscriptions(
                         snapshot=snapshot,
                         restart_xkeen=restart_xkeen,
                         restart=item_restart,
+                        offer_route_mappings=offer_route_mappings,
                     )
                 )
             except Exception as exc:
@@ -7331,11 +7592,28 @@ def refresh_due_subscriptions(
     finally:
         _BATCH_FETCH_CACHE.reset(cache_token)
 
+    needs_mapping = {item["id"]: item for item in results if item.get("code") == "route_mapping_choice_required"}
+    if needs_mapping and not offer_route_mappings:
+        with _STATE_LOCK:
+            state = load_subscription_state(ui_state_dir)
+            for sub in state["subscriptions"]:
+                if sub["id"] in needs_mapping:
+                    retry = _refresh_error_retry_seconds(sub["interval_hours"])
+                    sub.update(last_ok=False, last_error=needs_mapping[sub["id"]]["error"],
+                               next_update_ts=_now() + retry)
+            _write_state(ui_state_dir, state)
+
     if batch_restart and any(_refresh_result_needs_restart(item) for item in results):
         applied = _restart_subscription_update(
             restart_xkeen, batch_guard, xray_configs_dir, "xray-subscriptions-batch"
         )
         apply_ok = applied["restarted"] or applied.get("hot_applied")
+        if apply_ok and any(item.get("dns_route_mapped") and _refresh_result_needs_restart(item) for item in results):
+            if not _mapped_dns_healthy(ui_state_dir):
+                recovered = _rollback_mapped_dns(batch_guard, restart_xkeen, "xray-subscriptions-batch")
+                apply_ok = False
+                applied = {"restarted": False, "recovered": recovered, "code": "dns_switch_failed",
+                           "error": "Не удалось проверить Xray и DNS после обновления подписок."}
         failed = [item for item in results if not item.get("ok")] if not apply_ok else []
         for item in results:
             if _refresh_result_needs_restart(item):
