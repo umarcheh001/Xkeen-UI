@@ -6067,6 +6067,26 @@ def _sync_transport_routes(configs_dir, routing, transports):
     return True
 
 
+def _prune_route_mappings(choices, routing, journal):
+    """Drop saved node choices for outputs that no longer exist anywhere.
+
+    The key of a choice is the owner's original outbound: a rule still points at
+    it, or the journal remembers replacing it.  A key seen in neither belongs to
+    a rule that was deleted, and keeping it grows the state file for good.
+    """
+    live = {
+        str(rule.get("outboundTag") or "").strip()
+        for rule in routing.get("rules") or [] if isinstance(rule, dict)
+    }
+    live.update(
+        str(row.get("target", {}).get("outboundTag") or "").strip()
+        for row in journal.get("rules", [])
+        if isinstance(row, dict) and row.get("to_kind") == "outboundTag"
+    )
+    live.discard("")
+    return {tag: pair for tag, pair in choices.items() if tag in live}
+
+
 def sync_subscription_runtime_plan_delta(
     *,
     xray_configs_dir: str,
@@ -6589,6 +6609,7 @@ def _rebuild_subscription_runtime_impl(
             groups, next_state.get(ROUTE_MAPPINGS_KEY) or {}, route_mappings,
         )
         if groups:
+            choices = _prune_route_mappings(choices, routing, journal)
             with _STATE_LOCK:
                 stored = load_subscription_state(ui_state_dir)
                 stored[ROUTE_MAPPINGS_KEY] = choices

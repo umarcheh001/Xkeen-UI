@@ -734,7 +734,7 @@ def register_config_routes(
 
     @bp.post("/api/routing")
     def api_set_routing() -> Any:
-        with dns_over_vless._LOCK:
+        with dns_over_vless.config_update_lock():
             return save_routing()
 
     @_serialize_config_update

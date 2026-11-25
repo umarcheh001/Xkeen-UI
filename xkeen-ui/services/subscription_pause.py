@@ -285,22 +285,29 @@ def _wants_restore(record: Dict[str, Any], view: Dict[str, Any]) -> bool:
     return before != after and _brief(view) == after
 
 
+def _resume_groups(ui_state_dir: str, xray_configs_dir: str, routing: Dict[str, Any],
+                   journal: Dict[str, Any] | None = None) -> list:
+    """Node choices a resume would offer: the same count for forecast and switch."""
+    state = subs.load_subscription_state(ui_state_dir)
+    resumed = {"subscriptions": [{**item, "paused": False} for item in state["subscriptions"]]}
+    if not subs._build_runtime_sync_plan(resumed)["subscription_only"]:
+        return []
+    return subs._route_mapping_groups(
+        ui_state_dir, xray_configs_dir, routing.get("routing") or {},
+        state,
+        journal if journal is not None else subs._load_displaced(ui_state_dir),
+        resume=True, include_optional=True,
+    )
+
+
 def plan(*, ui_state_dir: str, xray_configs_dir: str, routing_file: str) -> Dict[str, Any]:
     """What the switch would do right now.  Reads only."""
     items = subs.list_subscriptions(ui_state_dir)
     paused = any(item.get("paused") for item in items)
     view = _dns_now(ui_state_dir, xray_configs_dir, routing_file)
     current = _usable(view["runtime"], view["routing"])
-    groups = []
     journal = subs._load_displaced(ui_state_dir)
-    if paused:
-        state = subs.load_subscription_state(ui_state_dir)
-        resumed = {"subscriptions": [{**item, "paused": False} for item in state["subscriptions"]]}
-        if subs._build_runtime_sync_plan(resumed)["subscription_only"]:
-            groups = subs._route_mapping_groups(
-                ui_state_dir, xray_configs_dir, view["routing"].get("routing") or {},
-                state, journal, resume=True, include_optional=True,
-            )
+    groups = _resume_groups(ui_state_dir, xray_configs_dir, view["routing"], journal) if paused else []
 
     if paused:
         record = _read_record(ui_state_dir)
@@ -455,9 +462,8 @@ def _switch(
         mapped_before = any(entry.get("to_kind") == "outboundTag"
                             for entry in subs._load_displaced(ui_state_dir).get("rules", []))
         mapped_resume = restore and any(
-            group["required"] for group in plan(
-                ui_state_dir=ui_state_dir, xray_configs_dir=xray_configs_dir, routing_file=routing_file,
-            )["route_mappings"]
+            group["required"]
+            for group in _resume_groups(ui_state_dir, xray_configs_dir, view["routing"])
         )
 
         notes: Dict[str, Any] = {"warning": "", "skipped": []}

@@ -1366,7 +1366,7 @@ def create_xray_configs_blueprint(
 
     @bp.post("/api/outbounds")
     def api_set_outbounds():
-        with dns_over_vless._LOCK:
+        with dns_over_vless.config_update_lock():
             return save_outbounds()
 
     @_serialize_config_update

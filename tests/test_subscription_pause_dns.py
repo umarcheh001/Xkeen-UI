@@ -871,3 +871,75 @@ def test_a_clean_delete_leaves_no_stale_notice(rig: Rig):
     _delete_one(rig, "alpha")
 
     assert rig.pause_mod.last_notice(str(rig.bench.state)) == {}
+
+
+def test_switching_does_not_recompute_the_whole_forecast(tmp_path: Path, monkeypatch):
+    """`_switch` нужен только признак обязательных привязок, а не весь прогноз."""
+    rig = Rig(tmp_path, monkeypatch, own=("home-nl",))
+    rig.bench.add("alpha", routing_mode="subscription-only")
+    rig.dns_on("proxy")
+    rig.pause(dns_target="home-nl")
+
+    def _no_full_plan(**_kwargs):
+        raise AssertionError("plan() не должен вызываться внутри переключения")
+
+    monkeypatch.setattr(rig.pause_mod, "plan", _no_full_plan)
+
+    with pytest.raises(rig.pause_mod.PauseError) as required:
+        rig.resume()
+
+    assert required.value.code == "route_mapping_choice_required"
+
+
+def test_transport_group_survives_later_dns_saves_and_keeps_priority(tmp_path: Path, monkeypatch):
+    """Порядок служебных правил собирается в трёх местах: проверяем их композицию.
+
+    Группа транспортов распознаётся только пока её правила идут впереди
+    пользовательских. Включение DNS, пересборка маршрутов подписки и
+    последующее сохранение с другими настройками собирают правила по-своему;
+    здесь они идут подряд, и после каждого шага группа обязана остаться живой.
+    """
+    from services.xray_transport_groups import tag_for
+
+    rig = Rig(tmp_path, monkeypatch, own=("VPS_US",))
+    rig.bench.add("alpha", routing_mode="subscription-only")
+    rig.pause()
+    model = json.loads(rig.routing.read_text(encoding="utf-8"))
+    model["routing"]["rules"] = [
+        {"ruleTag": "50_ai_via_us", "domain": ["domain:example.com"], "outboundTag": "VPS_US"},
+        {"ruleTag": "owner_web", "domain": ["domain:site.example"], "outboundTag": "direct"},
+    ]
+    rig.routing.write_text(json.dumps(model), encoding="utf-8", newline="\n")
+    monkeypatch.setattr(rig.dov, "_core_supports_rule_dns", lambda: True)
+    rig.dov.apply_action(
+        "enable", configs_dir=str(rig.bench.xray), routing_file=str(rig.routing),
+        ui_state_dir=str(rig.bench.state), restart_xkeen=rig._restart, target_tag="VPS_US",
+        rule_dns=[{"rule_tag": "50_ai_via_us", "upstream": "8.8.8.8"}],
+    )
+    group, = rig.plan()["route_mappings"]
+    nodes = group["candidates"][:2]
+    choice = {
+        "outbound_tag": "VPS_US",
+        "subscription_id": nodes[0]["subscription_id"],
+        "node_keys": [node["node_key"] for node in nodes],
+        "revision": group["revision"],
+    }
+    assert rig.resume(route_mappings=[choice])["ok"]
+    tag = tag_for("VPS_US")
+
+    def check() -> None:
+        routing = json.loads(rig.routing.read_text(encoding="utf-8"))
+        runtime = rig.dov._collect_runtime(str(rig.bench.xray), routing)
+        assert tag in runtime["transport_groups"], "группа перестала распознаваться"
+        tags = [rule.get("ruleTag") for rule in routing["routing"]["rules"] if isinstance(rule, dict)]
+        assert tags.index(tag) < tags.index("owner_web")
+
+    check()
+    # Сохранение с другими серверами собирает правила заново и не должно
+    # уронить распознавание группы.
+    rig.dov.apply_action(
+        "enable", configs_dir=str(rig.bench.xray), routing_file=str(rig.routing),
+        ui_state_dir=str(rig.bench.state), restart_xkeen=rig._restart,
+        upstreams=["1.1.1.1"],
+    )
+    check()

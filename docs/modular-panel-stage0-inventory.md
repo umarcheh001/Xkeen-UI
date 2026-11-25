@@ -36,13 +36,13 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 
 | Module ID | Единиц | Размер | Routes | Background | UI surfaces | Removable |
 |---|---:|---:|---:|---:|---:|---|
-| `core` | 682 | 8.72 МБ | 108 | 4 | 37 | нет |
+| `core` | 685 | 8.73 МБ | 108 | 4 | 37 | нет |
 | `engine.xray` | 163 | 4.17 МБ | 70 | 3 | 14 | да |
 | `engine.mihomo` | 161 | 3.72 МБ | 97 | 4 | 6 | да |
 | `tool.editor` | 25 | 814.8 КБ | 0 | 0 | 2 | да |
 | `tool.terminal` | 47 | 473.8 КБ | 3 | 2 | 2 | да |
 | `tool.files` | 86 | 1.04 МБ | 42 | 1 | 1 | да |
-| `tool.backups` | 8 | 102.7 КБ | 14 | 0 | 0 | да |
+| `tool.backups` | 8 | 102.8 КБ | 14 | 0 | 0 | да |
 | `integration.happ` | 22 | 325.0 КБ | 5 | 0 | 2 | да |
 | `tool.advanced-diagnostics` | 49 | 592.8 КБ | 16 | 0 | 1 | да |
 | `tool.server-diagnostics` | 17 | 365.9 КБ | 10 | 0 | 1 | да |
@@ -100,7 +100,7 @@ python .\scripts\generate_modular_panel_inventory.py --root .
 | From | To | Units | Примеры |
 |---|---|---:|---|
 | `core` | `engine.mihomo` | 19 | `xkeen-ui/app_factory.py`<br>`xkeen-ui/run_server.py`<br>`xkeen-ui/routes/__init__.py` |
-| `core` | `engine.xray` | 35 | `xkeen-ui/app.py`<br>`xkeen-ui/app_factory.py`<br>`xkeen-ui/routes/__init__.py` |
+| `core` | `engine.xray` | 36 | `xkeen-ui/app.py`<br>`xkeen-ui/app_factory.py`<br>`xkeen-ui/routes/__init__.py` |
 | `core` | `integration.happ` | 7 | `xkeen-ui/routes/__init__.py`<br>`xkeen-ui/services/devtools/env.py`<br>`xkeen-ui/services/subscription_request_profile.py` |
 | `core` | `tool.advanced-diagnostics` | 6 | `xkeen-ui/run_server.py`<br>`xkeen-ui/routes/__init__.py`<br>`xkeen-ui/routes/devtools.py` |
 | `core` | `tool.backups` | 7 | `xkeen-ui/app_factory.py`<br>`xkeen-ui/routes/__init__.py`<br>`tests/test_backup_path_hardening.py` |

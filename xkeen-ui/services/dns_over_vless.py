@@ -30,6 +30,7 @@ import time
 import uuid
 import re
 from collections import Counter
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, Optional
 
@@ -41,7 +42,7 @@ from services.cores import (
 )
 from services.xray_observatory import KIND_BURST, KIND_PLAIN, LEAST_LOAD_EXPECTED, LEAST_LOAD_TOLERANCE
 from services.io.atomic import _atomic_write_json, _atomic_write_text
-from services.xray_config_files import jsonc_path_for
+from services.xray_config_files import ROUTING_FILE, jsonc_path_for
 from services import dns_client_capture
 from services import firmware_resolvers
 from services import xray_subscription_displacement
@@ -246,6 +247,23 @@ FIRMWARE_PROBE_ATTEMPTS = 2
 STATE_VERSION = 3
 
 _LOCK = threading.RLock()
+
+
+@contextmanager
+def config_update_lock():
+    """Take both configuration locks in the one order that cannot deadlock.
+
+    Saving routing or outbounds through the API and switching subscriptions
+    write the same files, so each path needs the subscription lock and this
+    module's lock.  The server runs gevent with monkey-patched locks, so a
+    crossed order hangs the panel for good instead of timing out: actions
+    first, DNS second, everywhere.
+    """
+    from services import xray_subscriptions
+
+    with xray_subscriptions._CONFIG_LOCK:
+        with _LOCK:
+            yield
 
 # Watchdog: while the feature is on, the firmware resolver is disabled and Xray
 # owns port 53.  If the core dies, nothing else answers DNS for the whole LAN,
@@ -3077,7 +3095,11 @@ def validate_rule_dns_outbound_save(configs_dir: str, ui_state_dir: str, path: s
         if obj != _read_json(path, None):
             raise DnsOverVlessError("Служебный DNS-фрагмент изменяется через окно DNS-over-VLESS.", code="rule_dns_invalid")
         return
-    live = _rule_dns_proxy_tags(_collect_runtime(configs_dir, {}, replacement=(path, obj)))
+    # A transport group is recognised only together with its routing rule and
+    # balancer, so the current routing has to be part of the runtime here.
+    routing_file = os.path.join(configs_dir, os.path.basename(ROUTING_FILE))
+    routing, _raw = _read_routing_with_raw(routing_file)
+    live = _rule_dns_proxy_tags(_collect_runtime(configs_dir, routing, replacement=(path, obj)))
     for row in rows:
         if row["outbound_tag"] not in live:
             raise DnsOverVlessError(

@@ -108,7 +108,7 @@ def create_backups_blueprint(
             from services import dns_over_vless
         except ImportError:
             return False, None
-        with dns_over_vless._LOCK:
+        with dns_over_vless.config_update_lock():
             state = dns_over_vless._load_state(ui_state_dir)
             if not (state.get("enabled") and state.get("rule_dns")):
                 return False, None
