@@ -34,7 +34,9 @@ def test_no_explanation_is_lost():
 
 def test_long_explanations_live_under_a_disclosure():
     assert MODAL.count('<details class="xk-hint-more">') >= 6
-    assert MODAL.count("<summary>Подробнее</summary>") == MODAL.count('<details class="xk-hint-more">')
+    summaries = re.findall(r'<details class="xk-hint-more">\s*<summary>([^<]+)</summary>', MODAL)
+    assert len(summaries) == MODAL.count('<details class="xk-hint-more">')
+    assert set(summaries) == {"Подробнее", "Почему моего правила нет в списке?"}
 
 
 def test_visible_part_of_a_hint_stays_short():

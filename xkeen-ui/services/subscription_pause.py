@@ -81,20 +81,6 @@ def _store_notice(ui_state_dir: str, action: str, warning: str, skipped: List[An
 # --- reading DNS-over-VLESS ----------------------------------------------------
 
 
-def _dns_now(ui_state_dir: str, xray_configs_dir: str, routing_file: str) -> Dict[str, Any]:
-    state = dov._load_state(ui_state_dir)
-    routing, _raw = dov._read_routing_with_raw(routing_file)
-    enabled = bool(state.get("enabled"))
-    return {
-        "enabled": enabled,
-        "selection": dov._stored_selection(state) if enabled else [],
-        "state": state,
-        "routing": routing,
-        "runtime": dov._collect_runtime(xray_configs_dir, routing),
-        "presence": dov._presence_report(xray_configs_dir, routing, (state.get("rule_dns") or []) if enabled else [])[0],
-    }
-
-
 def _brief(view: Dict[str, Any]) -> Dict[str, Any]:
     return {"enabled": bool(view.get("enabled")), "selection": list(view.get("selection") or [])}
 
@@ -109,40 +95,6 @@ def _usable(runtime: Dict[str, Any], routing: Dict[str, Any]) -> List[Dict[str, 
 def _with_kinds(tags: List[str], known: List[Dict[str, str]]) -> List[Dict[str, str]]:
     kinds = {item["tag"]: item["kind"] for item in known}
     return [{"tag": tag, "kind": kinds.get(tag, "outbound")} for tag in tags]
-
-
-def _drift(runtime: Dict[str, Any], routing: Dict[str, Any], selection: List[str]) -> Any:
-    if not selection or not dov._find_managed_clone(routing):
-        return None
-    if len(selection) == 1:
-        return dov._route_drift(runtime, routing, selection[0])
-    return dov._combined_drift(runtime, routing, selection)
-
-
-def _survives(
-    selection: List[str],
-    state: Dict[str, Any],
-    runtime: Dict[str, Any],
-    routing: Dict[str, Any],
-) -> bool:
-    """Whether DNS can stay exactly as it is on the given configuration."""
-    tags = {item["tag"] for item in _usable(runtime, routing)}
-    if not selection or any(tag not in tags for tag in selection):
-        return False
-    if _drift(runtime, routing, selection):
-        return False
-    if state.get("pass_non_ip"):
-        live = {item["tag"] for item in dov._proxy_outbounds(runtime)}
-        if dov._clean_tag(state.get("pass_non_ip_node")) not in live:
-            return False
-    return True
-
-
-def _intact(view: Dict[str, Any]) -> bool:
-    presence = view["presence"]
-    if not dov._managed_config_complete(presence) or dov._managed_config_tampered(presence):
-        return False
-    return _survives(view["selection"], view["state"], view["runtime"], view["routing"])
 
 
 # --- what the configs will look like once the subscriptions are out ------------
@@ -248,7 +200,7 @@ def _pause_outlook(ui_state_dir: str, xray_configs_dir: str, view: Dict[str, Any
             if target:
                 return {"outcome": "retarget", "to": target, "candidates": [], "restarts": 1}
     if selection and all(tag in tags for tag in selection):
-        if _survives(selection, view["state"], runtime, routing):
+        if dov._selection_survives(selection, view["state"], runtime, routing):
             return {"outcome": "keep", "to": None, "candidates": [], "restarts": 1}
         # A copied balancer is rebuilt on the spot; anything else needs DNS switched off and on.
         in_place = dov._followed_clone(runtime, routing, view["state"], selection) is not None
@@ -304,7 +256,7 @@ def plan(*, ui_state_dir: str, xray_configs_dir: str, routing_file: str) -> Dict
     """What the switch would do right now.  Reads only."""
     items = subs.list_subscriptions(ui_state_dir)
     paused = any(item.get("paused") for item in items)
-    view = _dns_now(ui_state_dir, xray_configs_dir, routing_file)
+    view = dov._read_route_view(ui_state_dir, xray_configs_dir, routing_file)
     current = _usable(view["runtime"], view["routing"])
     journal = subs._load_displaced(ui_state_dir)
     groups = _resume_groups(ui_state_dir, xray_configs_dir, view["routing"], journal) if paused else []
@@ -390,15 +342,6 @@ def _follow_route(ui_state_dir: str, xray_configs_dir: str, routing_file: str, m
     return isinstance(outcome, dict) and outcome.get("status") == "updated"
 
 
-def _restart(restart_xkeen: Callable[..., Any], source: str) -> bool:
-    try:
-        return bool(restart_xkeen(source=source))
-    except TypeError:
-        return bool(restart_xkeen())
-    except Exception:
-        return False
-
-
 def _dns_result(before: Dict[str, Any], after: Dict[str, Any], *, round_trip: bool, restored: bool) -> Dict[str, Any]:
     if not before["enabled"] and not after["enabled"]:
         action = "none"
@@ -442,7 +385,7 @@ def _switch(
     with subs._CONFIG_LOCK, _LOCK:
         items = subs.list_subscriptions(ui_state_dir)
         pending = [item for item in items if bool(item.get("paused")) != pausing]
-        view = _dns_now(ui_state_dir, xray_configs_dir, routing_file)
+        view = dov._read_route_view(ui_state_dir, xray_configs_dir, routing_file)
         before = _brief(view)
         if not pending:
             return {
@@ -492,7 +435,7 @@ def _switch(
                 raise PauseError(str(exc), code="xray_config_rejected", details={"rolled_back": True})
 
         def _finish(*, restarts: int, restarted: bool, round_trip: bool) -> Dict[str, Any]:
-            after = _brief(_dns_now(ui_state_dir, xray_configs_dir, routing_file))
+            after = _brief(dov._read_route_view(ui_state_dir, xray_configs_dir, routing_file))
             if pausing:
                 _atomic_write_json(
                     _record_path(ui_state_dir),
@@ -533,13 +476,13 @@ def _switch(
                 followed = False
                 if not dns_idle:
                     followed = _follow_route(ui_state_dir, xray_configs_dir, routing_file, applied.get("mapped_dns_target"))
-                if dns_idle or _intact(_dns_now(ui_state_dir, xray_configs_dir, routing_file)):
+                if dns_idle or dov._route_view_intact(dov._read_route_view(ui_state_dir, xray_configs_dir, routing_file)):
                     if mapped:
                         dov._stage_and_test(xray_configs_dir, {})
                     else:
                         _confirm(guard)
                     restart_attempted = mapped
-                    restarted = _restart(restart_xkeen, source)
+                    restarted = subs._restart_xkeen_once(restart_xkeen, source)
                     if mapped and not (restarted and dov._wait_for_xray() and dov._dns_probe().get("ok")):
                         raise PauseError("Не удалось проверить Xray и DNS после переключения.", code="dns_switch_failed")
                     return _finish(restarts=1, restarted=restarted, round_trip=followed)
@@ -548,7 +491,7 @@ def _switch(
             except Exception as exc:
                 guard.restore()
                 if restart_attempted:
-                    rolled_back = _restart(restart_xkeen, source + "-rollback")
+                    rolled_back = subs._restart_xkeen_once(restart_xkeen, source + "-rollback")
                     raise PauseError(str(exc), code="dns_switch_failed", details={"rolled_back": rolled_back}) from exc
                 if isinstance(exc, dov.DnsOverVlessError):
                     raise PauseError(str(exc), code=exc.code, details={"rolled_back": True}) from exc
@@ -578,7 +521,7 @@ def _switch(
         guard = _Guard(ui_state_dir, xray_configs_dir)
         try:
             _apply_files()
-            after_view = _dns_now(ui_state_dir, xray_configs_dir, routing_file)
+            after_view = dov._read_route_view(ui_state_dir, xray_configs_dir, routing_file)
             usable = _usable(after_view["runtime"], after_view["routing"])
             tags = {item["tag"] for item in usable}
             preferred = [record["before"]["selection"]] if restore else []
@@ -597,7 +540,7 @@ def _switch(
                 restarted = True
             else:
                 _confirm(guard)
-                restarted = _restart(restart_xkeen, source)
+                restarted = subs._restart_xkeen_once(restart_xkeen, source)
             restarts += 1
         except Exception as exc:
             guard.restore()
@@ -608,7 +551,7 @@ def _switch(
                 except Exception:  # noqa: BLE001 - reported below, nothing more to try
                     rolled_back = False
             else:
-                rolled_back = _restart(restart_xkeen, source + "-rollback")
+                rolled_back = subs._restart_xkeen_once(restart_xkeen, source + "-rollback")
             if isinstance(exc, _ChoiceNeeded):
                 raise PauseError(
                     "Выберите, через какой ваш сервер пустить DNS-over-VLESS.",
@@ -654,7 +597,7 @@ def delete_all(
     with subs._CONFIG_LOCK, _LOCK:
         total = len(subs.list_subscriptions(ui_state_dir))
         if not total:
-            view = _brief(_dns_now(ui_state_dir, xray_configs_dir, routing_file))
+            view = _brief(dov._read_route_view(ui_state_dir, xray_configs_dir, routing_file))
             return {
                 "ok": True,
                 "changed": False,

@@ -39,8 +39,10 @@ from services.io.atomic import _atomic_write_json, _atomic_write_text
 from services.subscription_cron import next_cron, next_update
 from services.subscription_schedule import plan_alignment
 from services.subscription_request_profile import (
+    conditional_request_headers as _conditional_subscription_headers,
     normalize_request_profile,
     request_headers_for_profile,
+    request_headers_key as _subscription_request_key,
 )
 from services.url_policy import URLPolicy, env_flag, is_url_allowed
 from services.xray_config_files import OUTBOUNDS_FILE, ROUTING_FILE, ensure_xray_jsonc_dir, jsonc_path_for
@@ -1359,7 +1361,13 @@ def _read_subscription_response(
     headers = {"User-Agent": "XKeen-UI Subscription Fetcher"}
     headers.update({str(k): str(v) for k, v in (request_headers or {}).items() if str(k or "").strip()})
     req = urllib.request.Request(str(url or "").strip(), headers=headers)
-    with opener.open(req, timeout=timeout) as resp:
+    try:
+        response = opener.open(req, timeout=timeout)
+    except urllib.error.HTTPError as exc:
+        if exc.code != 304 or not any(key.lower() in {"if-none-match", "if-modified-since"} for key in headers):
+            raise
+        response = exc
+    with response as resp:
         status = getattr(resp, "status", None)
         if isinstance(status, int) and status >= 400:
             raise RuntimeError(f"http_{status}")
@@ -1382,6 +1390,9 @@ def _read_subscription_response(
             chunks.append(chunk)
 
         response_headers = {str(k).lower(): str(v) for k, v in dict(resp.headers.items()).items()}
+        response_headers["x-xkeen-request-key"] = _subscription_request_key(headers)
+        if status == 304:
+            response_headers["x-xkeen-not-modified"] = "1"
         if proxy_port is not None:
             response_headers[SUBSCRIPTION_FETCH_VIA_HEADER] = SUBSCRIPTION_FETCH_VIA_MIHOMO
         body = b"".join(chunks).decode("utf-8", errors="replace")
@@ -1658,6 +1669,8 @@ def fetch_subscription_body(
             if resolved:
                 return str(resolved.get("body") or ""), dict(resolved.get("headers") or {})
         raise
+    if headers.get("x-xkeen-not-modified") == "1":
+        return body, headers
     try:
         decrypted_body = happ_payloads.decrypt_subscription_body(url_s, body, headers)
     except happ_payloads.HappPayloadError as exc:
@@ -1920,10 +1933,10 @@ def _confirm_live_config(guard: xray_transactions.MemoryGuard, xray_configs_dir:
 
 
 def _confirm_mapped_dns(ui_state_dir: str, configs_dir: str) -> None:
-    from services import dns_over_vless as dov, subscription_pause
+    from services import dns_over_vless as dov
 
-    view = subscription_pause._dns_now(ui_state_dir, configs_dir, _config_fragment_path(configs_dir, ROUTING_FILE))
-    if view["enabled"] and not subscription_pause._intact(view):
+    view = dov._read_route_view(ui_state_dir, configs_dir, _config_fragment_path(configs_dir, ROUTING_FILE))
+    if view["enabled"] and not dov._route_view_intact(view):
         raise SubscriptionConfigRejected("Не удалось сохранить рабочий маршрут DNS.")
     dov._stage_and_test(configs_dir, {})
 
@@ -1935,11 +1948,18 @@ def _mapped_dns_healthy(ui_state_dir: str) -> bool:
             or (dov._wait_for_xray() and bool(dov._dns_probe().get("ok"))))
 
 
-def _rollback_mapped_dns(guard: xray_transactions.MemoryGuard, restart_xkeen, source: str) -> bool:
-    from services import subscription_pause
+def _restart_xkeen_once(restart_xkeen: Callable[..., Any], source: str) -> bool:
+    try:
+        return bool(restart_xkeen(source=source))
+    except TypeError:
+        return bool(restart_xkeen())
+    except Exception:
+        return False
 
+
+def _rollback_mapped_dns(guard: xray_transactions.MemoryGuard, restart_xkeen, source: str) -> bool:
     guard.restore()
-    return subscription_pause._restart(restart_xkeen, source + "-rollback")
+    return _restart_xkeen_once(restart_xkeen, source + "-rollback")
 
 
 class SubscriptionPlaceholderError(RuntimeError):
@@ -2153,17 +2173,20 @@ def _try_subscription_request_variants(
     variants: List[Tuple[str, Dict[str, str], str]],
     *,
     timeout_seconds: int | None = None,
+    validators: Dict[str, str] | None = None,
 ) -> Tuple[Tuple[str, Dict[str, str], Dict[str, Any]] | None, List[str]]:
     errors: List[str] = []
     for fetch_mode, request_headers, success_message in variants:
         try:
             fetch_kwargs = {"timeout_seconds": timeout_seconds} if timeout_seconds is not None else {}
             body, headers = fetch_subscription_body(
-                url, request_headers=request_headers, **fetch_kwargs
+                url, request_headers=_conditional_subscription_headers(request_headers, validators), **fetch_kwargs
             )
         except Exception as exc:
             errors.append(f"{fetch_mode}:{exc}")
             continue
+        if headers.get("x-xkeen-not-modified") == "1":
+            return (body, headers, {"fetch_mode": fetch_mode, "not_modified": True}), errors
         probe = _subscription_body_source_probe(body)
         hwid_headers = _subscription_hwid_response_headers(headers)
         if bool(probe.get("has_source")) and not bool(probe.get("placeholder")):
@@ -2199,6 +2222,7 @@ def fetch_subscription_body_for_xray(
     request_profile: Dict[str, Any] | None = None,
     timeout_seconds: int | None = None,
     max_request_variants: int | None = None,
+    validators: Dict[str, str] | None = None,
 ) -> Tuple[str, Dict[str, str], Dict[str, Any]]:
     """Fetch subscription text, retrying with HWID headers when needed.
 
@@ -2212,6 +2236,7 @@ def fetch_subscription_body_for_xray(
     profile = normalize_request_profile(request_profile)
     profile_mode = profile["mode"]
     fetch_kwargs = {"timeout_seconds": timeout_seconds} if timeout_seconds is not None else {}
+    variant_kwargs = {"validators": validators} if validators else {}
 
     def request_variants():
         items = _subscription_request_variants()
@@ -2221,6 +2246,7 @@ def fetch_subscription_body_for_xray(
         selected_headers = (
             request_headers_for_profile(profile) if profile_mode == "custom" else {}
         )
+        selected_headers = _conditional_subscription_headers(selected_headers, validators)
         body, headers = fetch_subscription_body(
             url, request_headers=selected_headers, profile_headers=profile_mode == "custom", **fetch_kwargs
         )
@@ -2238,6 +2264,9 @@ def fetch_subscription_body_for_xray(
     body = ""
     headers: Dict[str, str] = {}
     try:
+        direct_headers = _conditional_subscription_headers({}, validators)
+        if direct_headers:
+            fetch_kwargs["request_headers"] = direct_headers
         body, headers = fetch_subscription_body(url, **fetch_kwargs)
     except RuntimeError as exc:
         reason = str(exc or "").strip()
@@ -2253,12 +2282,14 @@ def fetch_subscription_body_for_xray(
 
     if direct_fetch_error is not None:
         result, _errors = _try_subscription_request_variants(
-            url, request_variants(), timeout_seconds=timeout_seconds
+            url, request_variants(), timeout_seconds=timeout_seconds, **variant_kwargs
         )
         if result is not None:
             return result
         raise direct_fetch_error
 
+    if headers.get("x-xkeen-not-modified") == "1":
+        return body, headers, {"not_modified": True}
     probe = _subscription_body_source_probe(body)
     hwid_headers = _subscription_hwid_response_headers(headers)
     needs_hwid = (
@@ -2288,7 +2319,7 @@ def fetch_subscription_body_for_xray(
         return body, headers, meta
 
     result, retry_errors = _try_subscription_request_variants(
-        url, request_variants(), timeout_seconds=timeout_seconds
+        url, request_variants(), timeout_seconds=timeout_seconds, **variant_kwargs
     )
     if result is not None:
         return result

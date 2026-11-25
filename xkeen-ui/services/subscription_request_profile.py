@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import hashlib
+import json
 import os
 import re
 import subprocess
@@ -173,3 +175,22 @@ def profile_fields_from_headers(headers: Mapping[str, Any] | None) -> dict[str, 
             "device_model": lower.get("x-device-model"),
         }
     )
+
+
+def request_headers_key(headers: Mapping[str, str]) -> str:
+    values = {str(k).lower(): str(v) for k, v in headers.items()
+              if str(k).lower() not in {"if-none-match", "if-modified-since"}}
+    values.setdefault("user-agent", "XKeen-UI Subscription Fetcher")
+    return hashlib.sha256(json.dumps(values, sort_keys=True).encode()).hexdigest()
+
+
+def conditional_request_headers(headers: Mapping[str, str], validators: Mapping[str, str] | None) -> dict[str, str]:
+    result = dict(headers)
+    cached = validators or {}
+    if cached.get("request_key") != request_headers_key(result):
+        return result
+    for field, header in (("etag", "If-None-Match"), ("last_modified", "If-Modified-Since")):
+        value = str(cached.get(field) or "")
+        if value and len(value) <= 1024 and "\r" not in value and "\n" not in value:
+            result[header] = value
+    return result

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import http.client
 import json
+import os
 import select
 import socket
 import time
@@ -89,6 +90,7 @@ MIHOMO_CLASH_ENDPOINTS: Mapping[str, MihomoClashEndpoint] = MappingProxyType(
     {
         "version": MihomoClashEndpoint("GET", "/version", 2.0, 64 * 1024),
         "configs": MihomoClashEndpoint("GET", "/configs", 3.0, 512 * 1024),
+        "config_reload": MihomoClashEndpoint("PUT", "/configs?force=false", 30.0, 64 * 1024),
         "runtime_mode": MihomoClashEndpoint("PATCH", "/configs", 5.0, 64 * 1024),
         "proxies": MihomoClashEndpoint("GET", "/proxies", 5.0),
         "groups": MihomoClashEndpoint("GET", "/group", 5.0),
@@ -595,6 +597,27 @@ class MihomoClashClient:
                 )
             ),
         )
+
+    def reload_config(self, content: str) -> MihomoClashJSONResponse:
+        """Apply server-owned YAML without forcing listener recreation."""
+
+        spec = self._endpoint("config_reload", stream=False)
+        if not isinstance(content, str) or not content.strip() or len(content.encode("utf-8")) > 4 * 1024 * 1024:
+            raise MihomoClashClientError("config_payload_invalid", "Invalid Mihomo config payload.", status=400)
+        body = json.dumps(
+            {"payload": content},
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        return self._request(spec, path=spec.path, body=body, expect_json=False)
+
+    def reload_config_file(self, config_path: str) -> MihomoClashJSONResponse:
+        """Reload a server-owned absolute path; the core enforces SAFE_PATHS."""
+        if not isinstance(config_path, str) or not os.path.isabs(config_path) or "\0" in config_path:
+            raise MihomoClashClientError("config_path_invalid", "Invalid Mihomo config path.", status=400)
+        spec = self._endpoint("config_reload", stream=False)
+        body = json.dumps({"path": config_path}, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        return self._request(spec, path=spec.path, body=body, expect_json=False)
 
     def disconnect_all_connections(self) -> MihomoClashJSONResponse:
         """Close all connections through the dedicated allow-listed operation."""

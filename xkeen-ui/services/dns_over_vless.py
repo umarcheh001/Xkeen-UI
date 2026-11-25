@@ -2568,6 +2568,54 @@ def _presence_report(
     }, facts
 
 
+def _read_route_view(ui_state_dir: str, xray_configs_dir: str, routing_file: str) -> Dict[str, Any]:
+    state = _load_state(ui_state_dir)
+    routing, _raw = _read_routing_with_raw(routing_file)
+    enabled = bool(state.get("enabled"))
+    return {
+        "enabled": enabled,
+        "selection": _stored_selection(state) if enabled else [],
+        "state": state,
+        "routing": routing,
+        "runtime": _collect_runtime(xray_configs_dir, routing),
+        "presence": _presence_report(xray_configs_dir, routing, (state.get("rule_dns") or []) if enabled else [])[0],
+    }
+
+
+def _selection_drift(runtime: Dict[str, Any], routing: Dict[str, Any], selection: list[str]) -> Any:
+    if not selection or not _find_managed_clone(routing):
+        return None
+    if len(selection) == 1:
+        return _route_drift(runtime, routing, selection[0])
+    return _combined_drift(runtime, routing, selection)
+
+
+def _selection_survives(
+    selection: list[str],
+    state: Dict[str, Any],
+    runtime: Dict[str, Any],
+    routing: Dict[str, Any],
+) -> bool:
+    """Whether DNS can stay exactly as it is on the given configuration."""
+    tags = {item["tag"] for item in _usable_candidates(list_candidates(runtime, routing))}
+    if not selection or any(tag not in tags for tag in selection):
+        return False
+    if _selection_drift(runtime, routing, selection):
+        return False
+    if state.get("pass_non_ip"):
+        live = {item["tag"] for item in _proxy_outbounds(runtime)}
+        if _clean_tag(state.get("pass_non_ip_node")) not in live:
+            return False
+    return True
+
+
+def _route_view_intact(view: Dict[str, Any]) -> bool:
+    presence = view["presence"]
+    if not _managed_config_complete(presence) or _managed_config_tampered(presence):
+        return False
+    return _selection_survives(view["selection"], view["state"], view["runtime"], view["routing"])
+
+
 def _managed_config_complete(presence: Dict[str, bool]) -> bool:
     if not (presence.get("fragment") and presence.get("proxy_rule") and presence.get("capture_rule") and presence.get("rule_dns", True)):
         return False
