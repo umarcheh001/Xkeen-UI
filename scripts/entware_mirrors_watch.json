@@ -1,4 +1,6 @@
 {
+  "http://mirrors.bfsu.edu.cn/entware": "2026-11-25",
   "http://mirrors.nju.edu.cn/entware": "2026-11-25",
+  "https://mirrors.bfsu.edu.cn/entware": "2026-11-25",
   "https://mirrors.nju.edu.cn/entware": "2026-11-25"
 }
