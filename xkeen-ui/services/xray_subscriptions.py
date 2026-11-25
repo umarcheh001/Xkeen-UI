@@ -44,6 +44,7 @@ from services.subscription_request_profile import (
 )
 from services.url_policy import URLPolicy, env_flag, is_url_allowed
 from services.xray_config_files import OUTBOUNDS_FILE, ROUTING_FILE, ensure_xray_jsonc_dir, jsonc_path_for
+from services import xray_transport_groups as transport_groups
 from services.xray_outbounds import (
     LEGACY_VLESS_TAG,
     apply_sockopt_mark_profile,
@@ -919,9 +920,7 @@ def _normalize_state(obj: Any) -> Dict[str, Any]:
     pairs = obj.get(ROUTE_MAPPINGS_KEY)
     if isinstance(pairs, dict):
         state[ROUTE_MAPPINGS_KEY] = {
-            tag: pair for tag, pair in pairs.items()
-            if isinstance(pair, dict) and all(isinstance(pair.get(key), str) and pair[key]
-                                              for key in ("subscription_id", "node_key"))
+            tag: pair for tag, pair in pairs.items() if _route_mapping_keys(pair)
         }
     return state
 
@@ -1116,6 +1115,7 @@ def delete_subscription(
     snapshot: SnapshotCallback | None = None,
     remove_file: bool = True,
     restart_xkeen: RestartCallback | None = None,
+    route_mappings: Any = None,
 ) -> Dict[str, Any]:
     guard = _operation_guard(ui_state_dir, xray_configs_dir)
     try:
@@ -1127,6 +1127,7 @@ def delete_subscription(
             snapshot=snapshot,
             remove_file=remove_file,
             restart_xkeen=restart_xkeen,
+            route_mappings=route_mappings,
         )
     except KeyError:
         raise
@@ -1149,6 +1150,7 @@ def _delete_subscription_guarded(
     snapshot: SnapshotCallback | None,
     remove_file: bool,
     restart_xkeen: RestartCallback | None,
+    route_mappings: Any = None,
 ) -> Dict[str, Any]:
     removed: Dict[str, Any] | None = None
     remaining_state: Dict[str, Any] = {"subscriptions": []}
@@ -1195,6 +1197,7 @@ def _delete_subscription_guarded(
         previous_state=previous_state,
         state_override=remaining_state,
         rebuild_from_baseline=True,
+        route_mappings=route_mappings,
     )
     restored_baseline = bool(rebuild_stats.get("baseline_restored"))
     observatory_changed = bool(rebuild_stats.get("observatory_changed"))
@@ -1241,9 +1244,10 @@ def _delete_subscription_guarded(
             preflight_warning = _confirm_live_config(guard, xray_configs_dir)
 
     skipped = list(rebuild_stats.get("skipped") or [])
-    warning = " ".join(
-        part for part in (displaced_skipped_warning(skipped), dns_route_note, preflight_warning) if part
-    )
+    warning = " ".join(part for part in (
+        displaced_skipped_warning(skipped), dns_route_note, preflight_warning,
+        *rebuild_stats.get("transport_warnings", []),
+    ) if part)
     # До перезапуска: он может оборвать связь с окном раньше, чем уйдёт ответ.
     store_operation_notice(ui_state_dir, "delete", warning, skipped, subject=str(removed.get("id") or ""))
 
@@ -5842,6 +5846,15 @@ def _normalize_runtime_manual_balancers(plan: Any) -> Dict[str, List[str]]:
     return out
 
 
+def _route_mapping_keys(choice):
+    if not isinstance(choice, dict) or not isinstance(choice.get("subscription_id"), str) or not choice["subscription_id"]:
+        return []
+    keys = choice.get("node_keys", [choice.get("node_key")])
+    if not isinstance(keys, list) or not all(isinstance(key, str) and key for key in keys):
+        return []
+    return keys if len(set(keys)) == len(keys) else []
+
+
 def _route_mapping_groups(ui_state_dir, configs_dir, routing, state, journal, *, resume=False, include_optional=False):
     from services import dns_over_vless as dov
 
@@ -5900,8 +5913,8 @@ def _route_mapping_groups(ui_state_dir, configs_dir, routing, state, journal, *,
         tags = {item.get("tag") for item in _subscription_outbounds_from_obj(_read_json_file(path, {}))
                 if _is_proxy_outbound(item)}
         candidates.extend(
-            {"subscription_id": sub["id"], "node_key": node["key"], "tag": node["tag"],
-             "label": f"{sub['name']} · {node['name']}"}
+            {"subscription_id": sub["id"], "subscription_name": sub["name"], "node_key": node["key"],
+             "node_name": node["name"], "tag": node["tag"], "label": f"{sub['name']} · {node['name']}"}
             for node in sub.get("last_nodes", []) if node.get("tag") in tags
         )
     counts = Counter(candidate["tag"] for candidate in candidates)
@@ -5912,11 +5925,18 @@ def _route_mapping_groups(ui_state_dir, configs_dir, routing, state, journal, *,
         rules = affected.get(tag, [])
         mandatory = tag in required
         revision = hashlib.sha256(json.dumps([rules, candidates, mandatory], sort_keys=True).encode()).hexdigest()
-        selected = next((node for node in candidates if all(
-            node[key] == saved.get(tag, {}).get(key) for key in ("subscription_id", "node_key")
-        )), None)
+        choice = saved.get(tag, {})
+        keys = _route_mapping_keys(choice)
+        selected = [node for node in candidates
+                    if node["subscription_id"] == choice.get("subscription_id") and node["node_key"] in keys]
+        missing = set(keys) - {node["node_key"] for node in selected}
+        names = choice.get("node_names")
+        names = names if isinstance(names, dict) else {}
         groups.append({"outbound_tag": tag, "rules": rules, "candidates": candidates,
-                       "selected": selected, "revision": revision, "required": mandatory})
+                       "selected": selected[0] if len(keys) == 1 and selected else None,
+                       "selected_nodes": selected,
+                       "missing_nodes": [str(names.get(key) or key) for key in keys if key in missing],
+                       "revision": revision, "required": mandatory})
     return groups
 
 
@@ -5935,26 +5955,116 @@ def _resolve_route_mappings(groups, saved, requested):
             if not group or tag in submitted or row.get("revision") != group["revision"]:
                 raise RouteMappingRequired(groups)
             submitted.add(tag)
-            pair = {key: row.get(key) for key in ("subscription_id", "node_key")}
-            if not group["required"] and all(value is None for value in pair.values()):
+            if not group["required"] and row.get("subscription_id") is None and row.get("node_key") is None and not row.get("node_keys"):
                 choices.pop(tag, None)
                 continue
-            if not any(all(node[key] == value for key, value in pair.items()) for node in group["candidates"]):
+            keys = _route_mapping_keys(row)
+            subscription_id = row.get("subscription_id")
+            available = {node["node_key"]: node["node_name"] for node in group["candidates"]
+                         if node["subscription_id"] == subscription_id}
+            if not keys or not set(keys) <= available.keys():
                 raise RouteMappingRequired(groups)
-            choices[tag] = pair
+            choices[tag] = {"subscription_id": subscription_id, **(
+                {"node_key": keys[0]} if len(keys) == 1 else
+                {"node_keys": keys, "node_names": {key: available[key] for key in keys}}
+            )}
     resolved = {}
+    transports = {}
+    warnings = []
     for group in groups:
         tag = group["outbound_tag"]
         pair = choices.get(tag, {})
-        matches = [node for node in group["candidates"] if all(
-            node[key] == pair.get(key) for key in ("subscription_id", "node_key")
-        )]
-        if len(matches) != 1:
+        keys = _route_mapping_keys(pair)
+        matches = [node["tag"] for node in group["candidates"]
+                   if node["subscription_id"] == pair.get("subscription_id") and node["node_key"] in keys]
+        if not matches:
             if group["required"]:
                 raise RouteMappingRequired(groups)
             continue
-        resolved[tag] = matches[0]["tag"]
-    return resolved, choices
+        target = matches[0] if len(keys) == 1 else transport_groups.tag_for(tag)
+        if transport_groups.is_group(target):
+            transports[target] = matches
+            if len(keys) > len(matches):
+                warnings.append(f"В группе «{tag}» недоступны: {', '.join(group['missing_nodes'])}.")
+        resolved[tag] = target
+    return resolved, choices, transports, warnings
+
+
+def _sync_transport_outbounds(configs_dir, transports, snapshot):
+    # Xray appends outbounds from a tail fragment so the default exit stays put.
+    path = os.path.join(configs_dir, transport_groups.OUTBOUNDS_FILE)
+    block = {"tag": transport_groups.BLOCK, "protocol": "blackhole"}
+    if os.path.isfile(path):
+        cfg = _read_json_file(path, None)
+        if (not isinstance(cfg, dict) or set(cfg) != {"outbounds"} or not isinstance(cfg["outbounds"], list)
+                or not all(isinstance(item, dict) and (
+                    item == block or (transport_groups.is_group(item.get("tag")) and item == transport_groups.outbound(item["tag"]))
+                ) for item in cfg["outbounds"])):
+            raise SubscriptionConfigRejected("Служебный файл выходов группы транспортов был изменён вручную.")
+    if transports:
+        outbounds = [transport_groups.outbound(tag) for tag in sorted(transports)] + [block]
+        return _write_json_if_changed(path, {"outbounds": outbounds}, snapshot=snapshot)
+    if not os.path.isfile(path):
+        return False
+    if snapshot is not None:
+        snapshot(path)
+    os.unlink(path)
+    return True
+
+
+def _sync_transport_routes(configs_dir, routing, transports):
+    from services import dns_over_vless as dov
+
+    path = os.path.join(configs_dir, transport_groups.OUTBOUNDS_FILE)
+    if not transports and not os.path.isfile(path):
+        return False
+    runtime = dov._collect_runtime(configs_dir, {"routing": routing})
+    previous_tags = {row["tag"] for row in runtime["outbounds"] if row["file"] == transport_groups.OUTBOUNDS_FILE
+                     and row["protocol"] == "loopback" and transport_groups.is_group(row["tag"])}
+    rules = [rule for rule in routing["rules"] if not isinstance(rule, dict)
+             or rule.get("ruleTag") not in previous_tags or rule != transport_groups.dispatch_rule(rule["ruleTag"])]
+    previous = routing.get("balancers", [])
+    balancers = [row for row in previous if not isinstance(row, dict) or row.get("tag") not in previous_tags]
+    if any(isinstance(rule, dict) and rule.get("ruleTag") in previous_tags for rule in rules):
+        raise SubscriptionConfigRejected("Служебное правило группы транспортов было изменено вручную.")
+    if transports:
+        owned_tags = set(transports) | {transport_groups.BLOCK}
+        if any(row["tag"] in owned_tags and row["file"] != transport_groups.OUTBOUNDS_FILE for row in runtime["outbounds"]):
+            raise SubscriptionConfigRejected("Служебный тег группы транспортов уже использован в конфигурации Xray.")
+        if (set(transports) & runtime["inbound_tags"]
+                or any(inbound in transports and source not in previous_tags for source, inbound in runtime["loopback_targets"].items())
+                or any(isinstance(rule, dict) and rule.get("ruleTag") in transports for rule in rules)
+                or any(isinstance(pool, dict) and pool.get("tag") in transports for pool in balancers)):
+            raise SubscriptionConfigRejected("Служебный тег группы транспортов уже используется в маршрутизации Xray.")
+        main_routing = os.path.basename(_config_fragment_path(configs_dir, ROUTING_FILE))
+        other_balancers = list(balancers)
+        for filename, fragment in dov._iter_json_fragments(configs_dir):
+            if filename != main_routing and isinstance(fragment.get("routing"), dict):
+                extra = fragment["routing"].get("balancers")
+                if isinstance(extra, list):
+                    other_balancers.extend(extra)
+        if any(
+            _selector_term_matches_any_tag(prefix, owned_tags)
+            for pool in other_balancers if isinstance(pool, dict) and isinstance(pool.get("selector"), list)
+            for prefix in pool["selector"]
+        ):
+            raise SubscriptionConfigRejected("Селектор существующего балансировщика захватывает выходы группы транспортов.")
+        all_tags = [row["tag"] for row in runtime["outbounds"]]
+        for tag, nodes in sorted(transports.items()):
+            matching = [candidate for candidate in all_tags if candidate.startswith(tuple(nodes))]
+            if sorted(matching) != sorted(nodes):
+                raise SubscriptionConfigRejected("Теги выбранных транспортов пересекаются с другими выходами Xray.")
+            balancers.append({"tag": tag, "selector": nodes, "fallbackTag": transport_groups.BLOCK,
+                              "strategy": {"type": "leastLoad", "settings": {"expected": 2, "tolerance": 0.5}}})
+        # The loopback must claim resolver traffic before the generic port-53 rule.
+        index = next((i for i, rule in enumerate(rules)
+                      if not isinstance(rule, dict) or not dov._is_rule_dns_tag(rule.get("ruleTag"))), len(rules))
+        rules[index:index] = [transport_groups.dispatch_rule(tag) for tag in sorted(transports)]
+    if rules == routing["rules"] and balancers == previous:
+        return False
+    routing["rules"] = rules
+    routing["balancers"] = balancers
+    return True
 
 
 def sync_subscription_runtime_plan_delta(
@@ -5965,6 +6075,7 @@ def sync_subscription_runtime_plan_delta(
     snapshot: SnapshotCallback | None = None,
     journal: Dict[str, Any] | None = None,
     route_targets: Dict[str, str] | None = None,
+    transports: Dict[str, List[str]] | None = None,
 ) -> Dict[str, Any]:
     prev = previous_plan if isinstance(previous_plan, dict) else {}
     nxt = next_plan if isinstance(next_plan, dict) else {}
@@ -6172,6 +6283,9 @@ def sync_subscription_runtime_plan_delta(
     changed = bool(changed or retarget_stats.get("changed"))
     changed = bool(changed or prune_stats.get("changed"))
     changed = bool(changed or migrate_stats.get("changed"))
+    transports = transports or {}
+    changed = _sync_transport_routes(xray_configs_dir, routing, transports) or changed
+    transport_outbounds_changed = _sync_transport_outbounds(xray_configs_dir, transports, snapshot)
 
     routing_changed = False
     if changed:
@@ -6215,13 +6329,19 @@ def sync_subscription_runtime_plan_delta(
         journal=journal,
         restore_subjects=returned_subjects,
     )
+    if transports:
+        from services import dns_over_vless as dov
+
+        runtime = dov._collect_runtime(xray_configs_dir, cfg)
+        if not set(transports) <= runtime["transport_groups"]:
+            raise SubscriptionConfigRejected("Для группы транспортов включите проверку выбранных узлов в подписке.")
 
     return {
         "skipped": not_returned,
         "baseline_restored": False,
         "observatory_changed": bool(observatory_changed),
         "routing_changed": bool(routing_changed),
-        "outbounds_changed": bool(outbounds_stats.get("changed")),
+        "outbounds_changed": bool(outbounds_stats.get("changed") or transport_outbounds_changed),
         "routing_sync": {
             "changed": bool(routing_changed),
             "selector": selector,
@@ -6451,6 +6571,8 @@ def _rebuild_subscription_runtime_impl(
     )
     journal = _load_displaced(ui_state_dir)
     targets = {}
+    transports = {}
+    transport_warnings = []
     if next_subscription_only:
         routing_path = _config_fragment_path(xray_configs_dir, ROUTING_FILE)
         _, routing, _ = _ensure_routing_model(_read_routing_file_for_update(routing_path))
@@ -6460,10 +6582,12 @@ def _rebuild_subscription_runtime_impl(
             include_optional=first_application or route_mappings is not None,
         )
         if offer_route_mappings and first_application and route_mappings is None and any(
-            not group["required"] and not group["selected"] for group in groups
+            not group["required"] and not group["selected_nodes"] for group in groups
         ):
             raise RouteMappingRequired(groups)
-        targets, choices = _resolve_route_mappings(groups, next_state.get(ROUTE_MAPPINGS_KEY) or {}, route_mappings)
+        targets, choices, transports, transport_warnings = _resolve_route_mappings(
+            groups, next_state.get(ROUTE_MAPPINGS_KEY) or {}, route_mappings,
+        )
         if groups:
             with _STATE_LOCK:
                 stored = load_subscription_state(ui_state_dir)
@@ -6514,6 +6638,7 @@ def _rebuild_subscription_runtime_impl(
             snapshot=snapshot,
             journal=journal,
             route_targets=targets,
+            transports=transports,
         )
         _store_displaced(ui_state_dir, journal)
         rebuilt["baseline_restored"] = bool(restored.get("restored"))
@@ -6522,7 +6647,7 @@ def _rebuild_subscription_runtime_impl(
         )
         rebuilt["routing_changed"] = bool(restored.get("routing_changed") or rebuilt.get("routing_changed"))
         rebuilt["outbounds_changed"] = bool(restored.get("outbounds_changed") or rebuilt.get("outbounds_changed"))
-        return {**rebuilt, "dns_route_mapped": bool(targets or mapped_before)}
+        return {**rebuilt, "dns_route_mapped": bool(targets or mapped_before), "transport_warnings": transport_warnings}
     result = sync_subscription_runtime_plan_delta(
         xray_configs_dir=xray_configs_dir,
         previous_plan=prev_plan,
@@ -6530,12 +6655,14 @@ def _rebuild_subscription_runtime_impl(
         snapshot=snapshot,
         journal=journal,
         route_targets=targets,
+        transports=transports,
     )
     if not result.get("has_runtime_targets"):
         undone = _undo_observatory_conversion(xray_configs_dir, journal, snapshot=snapshot)
         result["observatory_changed"] = bool(result.get("observatory_changed") or undone)
     _store_displaced(ui_state_dir, journal)
     result["dns_route_mapped"] = bool(targets or mapped_before)
+    result["transport_warnings"] = transport_warnings
     return result
 
 
@@ -7146,8 +7273,9 @@ def _refresh_subscription_impl(
             _clear_subscription_managed_baselines(ui_state_dir)
 
         skipped_warning = displaced_skipped_warning(rebuild_stats.get("skipped"))
-        if skipped_warning:
-            warnings = warnings + [skipped_warning]
+        rebuild_warnings = [warning for warning in (skipped_warning, *rebuild_stats.get("transport_warnings", [])) if warning]
+        if rebuild_warnings:
+            warnings = warnings + rebuild_warnings
             sub["last_warnings"] = warnings
         if changed or routing_changed:
             dns_route_note, dns_route_rewritten = _follow_dns_route(
@@ -7390,6 +7518,7 @@ def pause_subscriptions(
         "outbounds_changed": outbounds_changed,
         "dns_route_mapped": rebuild_stats.get("dns_route_mapped", False),
         "mapped_dns_target": rebuild_stats.get("mapped_dns_target"),
+        "transport_warnings": rebuild_stats.get("transport_warnings", []),
     }
 
 
@@ -7453,6 +7582,7 @@ def resume_subscriptions(
         "outbounds_changed": outbounds_changed,
         "dns_route_mapped": rebuild_stats.get("dns_route_mapped", False),
         "mapped_dns_target": rebuild_stats.get("mapped_dns_target"),
+        "transport_warnings": rebuild_stats.get("transport_warnings", []),
     }
 
 

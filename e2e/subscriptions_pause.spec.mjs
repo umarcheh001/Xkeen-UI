@@ -96,6 +96,29 @@ const confirmText = (page) => page.locator('#confirm-modal-message');
 const deleteAll = (page) => page.locator('#outbounds-subscriptions-delete-all-btn');
 
 test.describe('рубильник подписок', () => {
+  test('возобновление сохраняет выбранные транспорты одной подписки', async ({ page }) => {
+    const reality = { subscription_id: 'us', subscription_name: 'VPS_US_SUB', node_key: 'r',
+      tag: 'us--reality', node_name: 'Reality', label: 'VPS_US_SUB · Reality' };
+    const xhttp = { ...reality, node_key: 'x', tag: 'us--xhttp', node_name: 'XHTTP', label: 'VPS_US_SUB · XHTTP' };
+    const state = await mockApi(page, { routeMappings: [{
+      outbound_tag: 'VPS_US', revision: 'transport', required: true, rules: [],
+      candidates: [reality, xhttp], selected: reality, selected_nodes: [reality],
+    }] });
+    state.paused = true;
+    await openSubscriptions(page);
+    await masterWrap(page).click();
+    const dialog = page.locator('#confirm-modal');
+    await expect(dialog.getByRole('checkbox', { name: 'Reality' })).toBeChecked();
+    await expect(confirmText(page)).toHaveCSS('font-size', '13px');
+    await expect(dialog.getByRole('combobox')).toHaveCSS('font-size', '13px');
+    await expect(dialog.locator('.xk-sub-transport-options label').first()).toHaveCSS('font-size', '13px');
+    await expect(dialog.locator('.xk-sub-transport-options .modal-hint')).toHaveCSS('font-size', '12.5px');
+    await dialog.getByRole('checkbox', { name: 'XHTTP' }).check();
+    await dialog.getByRole('button', { name: 'Переключить' }).click();
+    await expect.poll(() => state.posts.find((item) => item.action === 'resume')?.body.route_mappings)
+      .toEqual([{ outbound_tag: 'VPS_US', revision: 'transport', subscription_id: 'us', node_keys: ['r', 'x'] }]);
+  });
+
   test('возобновление показывает затронутые сайты и отправляет выбранную замену', async ({ page }) => {
     const node = { subscription_id: 'alpha', node_key: 'us-reality', tag: 'alpha--US', label: 'США · Reality' };
     const group = {
@@ -506,8 +529,9 @@ async function mockSingleDelete(page, onDelete) {
     if (route.request().method() !== 'DELETE') return route.fallback();
     const id = new URL(route.request().url()).pathname.split('/').pop();
     state.deletes.push(id);
-    const custom = onDelete({ id, state });
+    const custom = onDelete({ id, state, payload: route.request().postDataJSON() });
     if (custom === 'abort') return route.abort('connectionreset');
+    if (custom) return route.fulfill(custom);
     state.removed.push(id);
     await route.fulfill({ json: { ok: true, deleted: { id, output_file: `04_outbounds.${id}.json` }, warning: '', skipped: [] } });
   });
@@ -518,8 +542,29 @@ async function deleteFirstSubscription(page) {
   await expect(page.locator('#outbounds-subscriptions-tbody tr')).toHaveCount(2);
   await page.locator('#outbounds-subscriptions-tbody tr').first().locator('.xk-sub-delete').click();
   await expect(page.locator('#confirm-modal-title')).toHaveText('Удалить подписку?');
+  await expect(confirmText(page)).toHaveCSS('font-size', '13px');
   await page.locator('#confirm-modal-ok-btn').click();
 }
+
+test('удаление подписки с группой запрашивает узлы для замены', async ({ page }) => {
+  const node = { subscription_id: 'beta', node_key: 'backup', tag: 'beta--backup', label: 'Резерв' };
+  const state = await mockSingleDelete(page, ({ payload }) => {
+    if (payload?.route_mappings?.[0]?.node_key === node.node_key) return undefined;
+    return {
+      status: 409,
+      json: { code: 'route_mapping_choice_required', route_mappings: [{
+        outbound_tag: 'VPS_US', revision: 'delete', required: true, candidates: [node], rules: [],
+      }] },
+    };
+  });
+  await openSubscriptions(page);
+  await deleteFirstSubscription(page);
+  const dialog = page.locator('#confirm-modal');
+  await dialog.getByRole('combobox', { name: 'Узел подписки вместо VPS_US' }).selectOption({ label: node.label });
+  await dialog.getByRole('button', { name: 'Удалить и применить' }).click();
+  await expect(page.locator('#outbounds-subscriptions-tbody tr')).toHaveCount(1);
+  expect(state.deletes).toEqual(['alpha', 'alpha']);
+});
 
 test('pool2-integration: удаление подписки обновляет индикатор DNS без открытия окна', async ({ page }) => {
   let dns = { ...DNS_STATUS, enabled: true, can_disable: true, dns_override: true };

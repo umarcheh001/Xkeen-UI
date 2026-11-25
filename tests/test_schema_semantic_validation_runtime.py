@@ -512,14 +512,14 @@ console.log(JSON.stringify(result.map((item) => ({
     assert "/routing/rules/0/inboundTag/0" not in pointers
 
 
-def test_xray_semantic_validation_accepts_dns_tag_as_virtual_inbound():
+def test_xray_semantic_validation_accepts_dns_virtual_inbounds():
     script = """
 import { validateXrayRoutingSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';
 
 const result = validateXrayRoutingSemantics({
   dns: {
     tag: 'dns-in',
-    servers: ['8.8.8.8']
+    servers: ['8.8.8.8', { address: '1.1.1.1', tag: 'xk-dns-rule-example' }]
   },
   outbounds: [
     { tag: 'dns-out', protocol: 'dns' },
@@ -530,6 +530,10 @@ const result = validateXrayRoutingSemantics({
       {
         inboundTag: ['dns-in'],
         outboundTag: 'dns-out'
+      },
+      {
+        inboundTag: ['xk-dns-rule-example'],
+        outboundTag: 'proxy'
       }
     ]
   }

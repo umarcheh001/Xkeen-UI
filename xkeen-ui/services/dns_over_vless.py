@@ -45,6 +45,7 @@ from services.xray_config_files import jsonc_path_for
 from services import dns_client_capture
 from services import firmware_resolvers
 from services import xray_subscription_displacement
+from services import xray_transport_groups as transport_groups
 from services import xray_transactions
 from utils.firmware import ndmc_path as _resolve_ndmc, run_ndmc
 from utils.jsonc import strip_json_comments_text
@@ -484,7 +485,7 @@ def _collect_runtime(
         else KIND_BURST if KIND_BURST in observatory_present
         else ""
     )
-    return {
+    runtime = {
         "outbounds": outbounds,
         "inbound_tags": inbound_tags,
         "inbound_ports": inbound_ports,
@@ -494,6 +495,45 @@ def _collect_runtime(
         "observatory_selectors": observatory_by_kind.get(observatory_kind, []),
         "observatory_kind": observatory_kind,
     }
+    runtime["transport_groups"] = _runtime_transport_groups(runtime, routing_obj.get("rules", []))
+    return runtime
+
+
+def _runtime_transport_groups(runtime, rules):
+    outbounds = runtime["outbounds"]
+    counts = Counter(item["tag"] for item in outbounds)
+    owned = {item["tag"]: item["protocol"] for item in outbounds if item["file"] == transport_groups.OUTBOUNDS_FILE}
+    if counts[transport_groups.BLOCK] != 1 or owned.get(transport_groups.BLOCK) != "blackhole":
+        return set()
+    dispatch = set()
+    for rule in rules if isinstance(rules, list) else ():
+        tag = rule.get("ruleTag") if isinstance(rule, dict) else None
+        if _is_rule_dns_tag(tag) or tag in (LOCAL_RULE_TAG, DIRECT_RULE_TAG, PROXY_RULE_TAG):
+            continue
+        if not transport_groups.is_group(tag) or rule != transport_groups.dispatch_rule(tag):
+            break
+        dispatch.add(tag)
+    valid = set()
+    proxies = {item["tag"] for item in _proxy_outbounds(runtime)}
+    for balancer in runtime["balancers"]:
+        tag = balancer.get("tag")
+        if (tag not in dispatch or owned.get(tag) != "loopback" or tag in runtime["inbound_tags"] or counts[tag] != 1
+                or runtime["loopback_targets"].get(tag) != tag):
+            continue
+        if balancer.get("fallbackTag") != transport_groups.BLOCK:
+            continue
+        strategy = balancer.get("strategy")
+        if not isinstance(strategy, dict) or strategy.get("type") != "leastLoad":
+            continue
+        selector = balancer.get("selector")
+        if not isinstance(selector, list) or not selector or not all(isinstance(node, str) for node in selector):
+            continue
+        matched = [node for node in counts if node.startswith(tuple(selector))]
+        if (set(matched) != set(selector) or not set(selector) <= proxies
+                or any(counts[node] != 1 for node in selector) or not _observatory_covers(runtime, selector)):
+            continue
+        valid.add(tag)
+    return valid
 
 
 def _service_mark(runtime: Dict[str, Any]) -> Optional[int]:
@@ -537,7 +577,9 @@ def _proxy_outbounds(runtime: Dict[str, Any]) -> list[Dict[str, str]]:
     for item in runtime.get("outbounds", []):
         tag = _clean_tag(item.get("tag"))
         protocol = _clean_tag(item.get("protocol")).lower()
-        if not tag or tag in seen or tag.lower() in reserved or protocol in ignored:
+        if not tag or tag in seen or tag.lower() in reserved:
+            continue
+        if protocol in ignored and tag not in runtime.get("transport_groups", ()):
             continue
         seen.add(tag)
         result.append(item)
@@ -585,7 +627,7 @@ def list_candidates(
 
     for item in runtime.get("balancers", []):
         tag = _clean_tag(item.get("tag"))
-        if not tag or tag == BALANCER_TAG:
+        if not tag or tag == BALANCER_TAG or tag in runtime.get("transport_groups", ()):
             continue
         selector = _usable_selector(item, proxy_tags)
         strategy = item.get("strategy") if isinstance(item.get("strategy"), dict) else {}
@@ -1836,10 +1878,13 @@ def _rule_dns_candidates(runtime: Dict[str, Any], routing: Dict[str, Any]) -> li
     return candidates
 
 
-def _resolve_rule_dns(value: Any, candidates: list[Dict[str, Any]]) -> list[Dict[str, Any]]:
+def _resolve_rule_dns(
+    value: Any, candidates: list[Dict[str, Any]], *, saved: Iterable[Dict[str, Any]] = ()
+) -> list[Dict[str, Any]]:
     if not isinstance(value, list):
         raise DnsOverVlessError("Укажите список привязок DNS к правилам.", code="rule_dns_invalid")
     available = {item["rule_tag"]: item for item in candidates}
+    saved_upstreams = {row["rule_tag"]: row["upstream"] for row in saved}
     rows = []
     seen = set()
     for item in value:
@@ -1847,10 +1892,15 @@ def _resolve_rule_dns(value: Any, candidates: list[Dict[str, Any]]) -> list[Dict
         upstream = _clean_tag(item.get("upstream")) if isinstance(item, dict) else ""
         if tag not in available or tag in seen:
             raise DnsOverVlessError(f"Правило «{tag}» отсутствует, повторяется или больше не подходит для привязки DNS.", code="rule_dns_invalid")
-        problem = _upstream_problem(upstream, allow_remote=True)
-        if problem:
-            raise DnsOverVlessError(f"DNS-сервер для правила «{tag}»: {problem}.", code="rule_dns_invalid")
-        rows.append({**available[tag], "upstream": upstream})
+        # Saved lists use ", " so a comma inside a legacy single DoH URL stays intact.
+        upstreams = upstream.split(", ") if upstream and saved_upstreams.get(tag) == upstream else normalize_upstreams(upstream)
+        if not upstreams:
+            raise DnsOverVlessError(f"Укажите DNS-серверы для правила «{tag}».", code="rule_dns_invalid")
+        try:
+            upstreams = validate_upstreams(upstreams, allow_remote=True)
+        except DnsOverVlessError as exc:
+            raise DnsOverVlessError(f"DNS-серверы для правила «{tag}». {exc}", code="rule_dns_invalid") from exc
+        rows.append({**available[tag], "upstream": ", ".join(upstreams)})
         seen.add(tag)
     return rows
 
@@ -1863,16 +1913,23 @@ def _ordered_rule_dns(rows: list[Dict[str, Any]], routing: Dict[str, Any]) -> li
     ]
 
 
-def _rule_dns_server(row: Dict[str, Any]) -> Dict[str, Any]:
-    host, port = _split_upstream(row["upstream"])
-    return {
-        "address": row["upstream"] if row["upstream"].lower().startswith(UPSTREAM_SCHEMES) else host,
-        **({"port": port} if port and port != LISTENER_PORT else {}),
-        "domains": row["domains"],
-        "tag": _rule_dns_tag(row["rule_tag"]),
-        "skipFallback": True,
-        "finalQuery": True,
-    }
+def _rule_dns_servers(rows: Iterable[Dict[str, Any]]) -> list[Dict[str, Any]]:
+    servers = []
+    for row in rows:
+        upstreams = row["upstream"].split(", ")
+        tag = _rule_dns_tag(row["rule_tag"])
+        for index, upstream in enumerate(upstreams, 1):
+            host, port = _split_upstream(upstream)
+            servers.append({
+                "address": upstream if upstream.lower().startswith(UPSTREAM_SCHEMES) else host,
+                **({"port": port} if port and port != LISTENER_PORT else {}),
+                "domains": row["domains"],
+                "tag": tag,
+                "skipFallback": True,
+                # End the candidate list only after all resolvers of this rule.
+                **({"finalQuery": True} if index == len(upstreams) else {}),
+            })
+    return servers
 
 
 def _rule_dns_route(row: Dict[str, Any]) -> Dict[str, Any]:
@@ -1897,7 +1954,7 @@ def _rule_dns_drift(rows: list[Dict[str, Any]], candidates: list[Dict[str, Any]]
     if not rows:
         return ""
     try:
-        current = _ordered_rule_dns(_resolve_rule_dns(rows, candidates), routing)
+        current = _ordered_rule_dns(_resolve_rule_dns(rows, candidates, saved=rows), routing)
     except DnsOverVlessError as exc:
         return str(exc)
     if current != rows:
@@ -1937,7 +1994,7 @@ def _managed_fragment(
     for resolver in bypass:
         if bypass_zones:
             servers.append(_local_server(resolver, bypass_zones))
-    servers.extend(_rule_dns_server(row) for row in rule_dns)
+    servers.extend(_rule_dns_servers(rule_dns))
     # A server without a port stays a plain string, exactly as it has always
     # been written: an installation configured earlier must keep byte-identical
     # config.  A port can only be said in the object form.
@@ -1974,7 +2031,9 @@ def _managed_fragment(
             # The flag is global, so it also decides whether a delegated zone
             # may leave a silent local resolver for a public one: when such a
             # server exists, the fallback has to stay on even with one upstream.
-            "disableFallback": public_count < 2 and not needs_fallback,
+            # For unmatched domains Xray must be able to skip dedicated resolvers.
+            # Matched domains stop at the dedicated server with finalQuery.
+            "disableFallback": public_count < 2 and not (needs_fallback or rule_dns),
             "tag": DNS_IN_TAG,
         }
     )
@@ -2002,6 +2061,9 @@ def migrate_managed_fragment(*, configs_dir: str) -> Dict[str, Any]:
     The running core is not restarted.  It keeps serving from the configuration
     it already loaded, and the corrected file is what it reads next time --
     including the restart the guard is about to attempt when the core is down.
+
+    Repair the fallback flag on older fragments with a dedicated rule and one
+    common resolver so unmatched domains can reach that resolver.
     """
     managed_path = os.path.join(configs_dir, MANAGED_FRAGMENT)
     if not os.path.isfile(managed_path):
@@ -2009,26 +2071,39 @@ def migrate_managed_fragment(*, configs_dir: str) -> Dict[str, Any]:
     fragment = _read_json(managed_path, None)
     outbounds = (fragment or {}).get("outbounds") if isinstance(fragment, dict) else None
     first = next(iter(outbounds or []), None)
-    # Only our own DNS outbound is rewritten.  ``proxySettings`` on anything
-    # else belongs to whoever wrote it.
+    # Require the panel's own DNS outbound before changing the fragment.
     if not isinstance(first, dict) or _clean_tag(first.get("tag")) != DNS_OUT_TAG:
         return {"action": "idle"}
-    if first.get("protocol") != "dns" or not isinstance(first.get("proxySettings"), dict):
+    if first.get("protocol") != "dns":
         return {"action": "idle"}
 
-    node = _clean_tag(first["proxySettings"].get("tag"))
-    first.pop("proxySettings", None)
-    stream = first.get("streamSettings")
-    stream = stream if isinstance(stream, dict) else {}
-    sockopt = stream.get("sockopt")
-    sockopt = sockopt if isinstance(sockopt, dict) else {}
-    # A fragment carrying both spellings keeps the one the core still reads.
-    if node and not _clean_tag(sockopt.get("dialerProxy")):
-        sockopt["dialerProxy"] = node
-    if sockopt:
-        stream["sockopt"] = sockopt
-    if stream:
-        first["streamSettings"] = stream
+    section = fragment.get("dns")
+    servers = section.get("servers") if isinstance(section, dict) else None
+    repair_fallback = (
+        isinstance(servers, list) and section.get("tag") == DNS_IN_TAG and section.get("disableFallback") is True
+        and any(isinstance(server, dict) and _is_rule_dns_tag(server.get("tag")) for server in servers)
+        and sum(not isinstance(server, dict) or not server.get("domains") for server in servers) == 1
+    )
+    legacy_proxy = first.get("proxySettings")
+    if not repair_fallback and not isinstance(legacy_proxy, dict):
+        return {"action": "idle"}
+    if repair_fallback:
+        section["disableFallback"] = False
+    node = ""
+    if isinstance(legacy_proxy, dict):
+        node = _clean_tag(legacy_proxy.get("tag"))
+        first.pop("proxySettings")
+        stream = first.get("streamSettings")
+        stream = stream if isinstance(stream, dict) else {}
+        sockopt = stream.get("sockopt")
+        sockopt = sockopt if isinstance(sockopt, dict) else {}
+        # A fragment carrying both spellings keeps the one the core still reads.
+        if node and not _clean_tag(sockopt.get("dialerProxy")):
+            sockopt["dialerProxy"] = node
+        if sockopt:
+            stream["sockopt"] = sockopt
+        if stream:
+            first["streamSettings"] = stream
     _atomic_write_json(managed_path, fragment)
     return {"action": "migrated", "node": node}
 
@@ -2162,10 +2237,14 @@ def _build_enabled_routing(
     capture_rule = _capture_rule()
     # The bypass rules must be matched before the proxy rule, otherwise the
     # query for a home name would already be on its way through the tunnel.
-    ordered = [_rule_dns_route(row) for row in rule_dns]
-    ordered.extend(item for item in (local_rule, direct_rule) if item)
-    ordered.extend([proxy_rule, capture_rule])
-    model["rules"] = [*ordered, *rules]
+    group_rules = [item for item in rules if isinstance(item, dict) and transport_groups.is_group(item.get("ruleTag"))]
+    rules = [item for item in rules if item not in group_rules]
+    model["rules"] = [
+        *(_rule_dns_route(row) for row in rule_dns),
+        *group_rules,
+        *(item for item in (local_rule, direct_rule) if item),
+        proxy_rule, capture_rule, *rules,
+    ]
 
     balancers = [
         item
@@ -2965,7 +3044,7 @@ def plan_rule_dns_routing_save(configs_dir: str, routing_file: str, ui_state_dir
     if not (presence["fragment"] and presence["rule_dns"]):
         raise DnsOverVlessError("Служебные объекты привязок DNS были изменены вручную.", code="rule_dns_invalid")
     runtime = _collect_runtime(configs_dir, proposed, replacement=(routing_file, proposed))
-    next_rows = _ordered_rule_dns(_resolve_rule_dns(rows, _rule_dns_candidates(runtime, proposed)), proposed)
+    next_rows = _ordered_rule_dns(_resolve_rule_dns(rows, _rule_dns_candidates(runtime, proposed), saved=rows), proposed)
     result = copy.deepcopy(proposed)
     rules = result["routing"]["rules"]
     existing = [rule for rule in rules if isinstance(rule, dict) and _is_rule_dns_tag(rule.get("ruleTag"))]
@@ -2981,7 +3060,8 @@ def plan_rule_dns_routing_save(configs_dir: str, routing_file: str, ui_state_dir
     fragment = facts["fragment"]
     servers = fragment["dns"]["servers"]
     first = next(index for index, server in enumerate(servers) if isinstance(server, dict) and _is_rule_dns_tag(server.get("tag")))
-    servers[first:first + len(rows)] = [_rule_dns_server(row) for row in next_rows]
+    count = sum(isinstance(server, dict) and _is_rule_dns_tag(server.get("tag")) for server in servers)
+    servers[first:first + count] = _rule_dns_servers(next_rows)
     fragment["outbounds"][1:] = [_rule_dns_outbound(row, facts["service_mark"]) for row in next_rows]
     return {"routing": result, "fragment": fragment, "state": {**state, "rule_dns": next_rows}}
 
@@ -3879,7 +3959,12 @@ def _source_route_changes(
     if not facts.get("safe_fallback") and any(_clean_tag(item.get("tag")) == fallback for item in runtime.get("outbounds", [])):
         return None
     if fallback and facts.get("safe_fallback"):
-        clone["fallbackTag"] = fallback
+        source = _find_balancer(runtime, selection[0]) or {}
+        uses_source_fallback = clone.get("fallbackTag") == _clean_tag(source.get("fallbackTag"))
+        if clone["selector"] == previous["selector"] or (
+            not uses_source_fallback and fallback in _selector_members(runtime, clone["selector"])
+        ):
+            clone["fallbackTag"] = fallback
     next_routing = copy.deepcopy(routing)
     balancers = next_routing["routing"]["balancers"]
     for index, item in enumerate(balancers):
@@ -4295,7 +4380,7 @@ def apply_action(
             incoming = saved_rule_dns if rule_dns is None else rule_dns
             if incoming != []:
                 wanted_rule_dns = _ordered_rule_dns(
-                    _resolve_rule_dns(incoming, _rule_dns_candidates(runtime, routing)), routing
+                    _resolve_rule_dns(incoming, _rule_dns_candidates(runtime, routing), saved=saved_rule_dns), routing
                 )
                 if not _core_supports_rule_dns():
                     raise DnsOverVlessError("Для DNS по правилам нужен Xray 26.11.9 или новее.", code="rule_dns_core_unsupported")

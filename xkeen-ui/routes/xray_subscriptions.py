@@ -17,6 +17,7 @@ from services.subscription_request_profile import (
 )
 from services.xray_config_files import ROUTING_FILE
 from services.xray_subscriptions import (
+    RouteMappingRequired,
     SubscriptionConfigRejected,
     SubscriptionPlaceholderError,
     _compile_regex_filter,
@@ -257,6 +258,8 @@ def create_xray_subscriptions_blueprint(
     def api_delete_xray_subscription(sub_id: str):
         restart = _bool_arg("restart", True)
         remove_file = _bool_arg("remove_file", True)
+        payload = request.get_json(silent=True)
+        payload = payload if isinstance(payload, dict) else {}
         try:
             result = delete_subscription(
                 ui_state_dir,
@@ -265,9 +268,13 @@ def create_xray_subscriptions_blueprint(
                 snapshot=snapshot_xray_config_before_overwrite,
                 remove_file=remove_file,
                 restart_xkeen=restart_xkeen if restart else None,
+                **({"route_mappings": payload["route_mappings"]} if "route_mappings" in payload else {}),
             )
         except KeyError:
             return error_response("subscription not found", 404, ok=False)
+        except RouteMappingRequired as exc:
+            return jsonify({"ok": False, "error": str(exc), "code": "route_mapping_choice_required",
+                            "route_mappings": exc.groups}), 409
         except SubscriptionConfigRejected as exc:
             return error_response(str(exc), 409, ok=False, code="xray_config_rejected")
         except Exception as exc:

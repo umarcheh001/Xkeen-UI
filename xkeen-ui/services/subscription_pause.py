@@ -21,6 +21,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from services import dns_over_vless as dov
 from services import xray_subscription_displacement as displacement
+from services import xray_transport_groups as transport_groups
 from services import xray_subscriptions as subs
 from services import xray_transactions
 from services.io.atomic import _atomic_write_json
@@ -163,7 +164,8 @@ def _predict_paused(ui_state_dir: str, xray_configs_dir: str, view: Dict[str, An
     terms = {term for item in active for term in subs._subscription_runtime_selector_terms(item)}
 
     runtime = dict(view["runtime"])
-    outbounds = [item for item in runtime.get("outbounds", []) if item.get("file") not in files]
+    outbounds = [item for item in runtime.get("outbounds", [])
+                 if item.get("file") not in files and item.get("file") != transport_groups.OUTBOUNDS_FILE]
     known = {item["tag"] for item in outbounds}
     # "Subscription only" moved the owner's servers aside; a pause brings them back.
     journal = displacement.normalize(state.get(subs.DISPLACED_KEY))
@@ -468,8 +470,11 @@ def _switch(
             except subs.RouteMappingRequired as exc:
                 raise PauseError(str(exc), code="route_mapping_choice_required",
                                  details={"route_mappings": exc.groups, "rolled_back": True}) from exc
+            except subs.SubscriptionConfigRejected as exc:
+                raise PauseError(str(exc), code="xray_config_rejected", details={"rolled_back": True}) from exc
             # Запоминается последний проход: первый могли откатить и пойти длинным путём.
             notes["skipped"] = list(applied.get("skipped") or [])
+            notes["transport_warnings"] = applied.get("transport_warnings", [])
             return applied
 
         def _confirm(guard: xray_transactions.MemoryGuard) -> None:
@@ -494,9 +499,9 @@ def _switch(
                 )
             else:
                 _drop_record(ui_state_dir)
-            warning = " ".join(
-                part for part in (subs.displaced_skipped_warning(notes["skipped"]), notes["warning"]) if part
-            )
+            warning = " ".join(part for part in (
+                subs.displaced_skipped_warning(notes["skipped"]), notes["warning"], *notes.get("transport_warnings", []),
+            ) if part)
             _store_notice(ui_state_dir, direction, warning, notes["skipped"])
             return {
                 "ok": True,

@@ -516,6 +516,8 @@ def test_xray_inbound_tags_all_collects_tags_across_all_fragments_and_jsonc(tmp_
 
 
 def test_xray_inbound_tags_all_includes_loopback_outbound_inboundtag_refs(tmp_path, monkeypatch):
+    from services import xray_transport_groups as transports
+
     configs_dir = tmp_path / "configs"
     jsonc_dir = tmp_path / "jsonc"
     configs_dir.mkdir()
@@ -524,6 +526,10 @@ def test_xray_inbound_tags_all_includes_loopback_outbound_inboundtag_refs(tmp_pa
     inbounds_name = "03_inbounds.json"
     outbounds_name = "04_outbounds.json"
     extra_outbounds_name = "04_outbounds.extra.json"
+    group = transports.tag_for("VPS_US")
+    (configs_dir / transports.OUTBOUNDS_FILE).write_text(
+        json.dumps({"outbounds": [transports.outbound(group)]}), encoding="utf-8",
+    )
 
     (configs_dir / inbounds_name).write_text(
         json.dumps(
@@ -607,6 +613,7 @@ def test_xray_inbound_tags_all_includes_loopback_outbound_inboundtag_refs(tmp_pa
         "tproxy",
         "toSecondVPS",
         "toThirdVPS",
+        group,
     ]
 
 
@@ -691,7 +698,7 @@ def test_xray_inbound_tags_all_includes_reverse_proxy_virtual_tags(tmp_path, mon
     ]
 
 
-def test_xray_inbound_tags_all_includes_dns_tag_virtual_inbound(tmp_path, monkeypatch):
+def test_xray_inbound_tags_all_includes_dns_virtual_inbounds(tmp_path, monkeypatch):
     configs_dir = tmp_path / "configs"
     jsonc_dir = tmp_path / "jsonc"
     configs_dir.mkdir()
@@ -710,7 +717,12 @@ def test_xray_inbound_tags_all_includes_dns_tag_virtual_inbound(tmp_path, monkey
             {
                 "dns": {
                     "tag": "dns-in",
-                    "servers": ["8.8.8.8"],
+                    "servers": [
+                        "8.8.8.8",
+                        {"address": "1.1.1.1", "tag": "xk-dns-rule-95d1c3a87ee2e2a4453f4708"},
+                        {"address": "127.0.0.1"},
+                        {"address": "8.8.4.4", "tag": "dns-in"},
+                    ],
                 }
             },
             ensure_ascii=False,
@@ -751,6 +763,7 @@ def test_xray_inbound_tags_all_includes_dns_tag_virtual_inbound(tmp_path, monkey
     assert response.get_json()["tags"] == [
         "redirect",
         "dns-in",
+        "xk-dns-rule-95d1c3a87ee2e2a4453f4708",
     ]
 
 

@@ -481,10 +481,12 @@ def create_xray_configs_blueprint(
         return tags
 
     def _dns_inbound_tags_from_config(cfg: Any) -> list[str]:
-        root = cfg if isinstance(cfg, dict) else {}
-        dns = root.get("dns") if isinstance(root.get("dns"), dict) else {}
-        tag = str(dns.get("tag") or "").strip() if isinstance(dns, dict) else ""
-        return [tag] if tag else []
+        dns = cfg.get("dns") if isinstance(cfg, dict) else None
+        if not isinstance(dns, dict):
+            return []
+        servers = dns.get("servers")
+        entries = [dns, *(servers if isinstance(servers, list) else [])]
+        return [tag for entry in entries if isinstance(entry, dict) and (tag := str(entry.get("tag") or "").strip())]
 
     def _api_outbound_tags_from_config(cfg: Any) -> list[str]:
         """Return Xray's implicit outbound created by the ``api`` block.
@@ -1038,16 +1040,8 @@ def create_xray_configs_blueprint(
                 return
 
         if all_fragments:
-            try:
-                for item in list_xray_fragments("outbounds"):
-                    name = str((item or {}).get("name") or "")
-                    if not name:
-                        continue
-                    sel_path = resolve_xray_fragment_file(name, kind="outbounds", default_path=default_path)
-                    sel_path = _normalize_main_json_path(sel_path)
-                    _collect_from_path(sel_path)
-            except Exception:
-                return []
+            for path in _iter_semantic_tag_context_paths(all_fragments=True):
+                _collect_from_path(path)
         else:
             file_arg = request.args.get("file", "")
             sel_path = resolve_xray_fragment_file(file_arg, kind="outbounds", default_path=default_path)

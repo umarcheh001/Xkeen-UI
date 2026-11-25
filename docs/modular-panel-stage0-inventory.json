@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 682,
-      "size_bytes": 9131164,
+      "size_bytes": 9142073,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -87,11 +87,11 @@
         "xray"
       ],
       "removable": true,
-      "unit_count": 162,
-      "size_bytes": 4344023,
+      "unit_count": 163,
+      "size_bytes": 4367780,
       "kind_counts": {
         "backend_route": 13,
-        "backend_service": 23,
+        "backend_service": 24,
         "backend_test": 57,
         "configuration": 4,
         "editor_schema": 4,
@@ -180,7 +180,7 @@
       ],
       "removable": true,
       "unit_count": 25,
-      "size_bytes": 834290,
+      "size_bytes": 834385,
       "kind_counts": {
         "frontend_javascript": 3,
         "frontend_ui": 22
@@ -3410,7 +3410,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/subscription_pause.py",
-      "size_bytes": 30559,
+      "size_bytes": 30985,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -9020,7 +9020,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_schema_semantic_validation_runtime.py",
-      "size_bytes": 39060,
+      "size_bytes": 39197,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -9433,8 +9433,10 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_subscription_pause_dns.py",
-      "size_bytes": 32761,
-      "depends_on": [],
+      "size_bytes": 38968,
+      "depends_on": [
+        "engine.xray"
+      ],
       "starts_background_task": false,
       "background_markers": [],
       "registers_routes": false,
@@ -15039,7 +15041,7 @@
       "module_id": "core",
       "kind": "frontend_test",
       "path": "e2e/subscriptions_pause.spec.mjs",
-      "size_bytes": 36218,
+      "size_bytes": 39113,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -15863,7 +15865,7 @@
       "module_id": "core",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/panel-operator.css",
-      "size_bytes": 602614,
+      "size_bytes": 603465,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -16305,7 +16307,7 @@
       "module_id": "core",
       "kind": "template",
       "path": "xkeen-ui/templates/panel/modals/routing.html",
-      "size_bytes": 106988,
+      "size_bytes": 107381,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -21247,7 +21249,7 @@
       "module_id": "engine.xray",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/xray_configs.py",
-      "size_bytes": 94423,
+      "size_bytes": 94161,
       "depends_on": [
         "core",
         "tool.editor",
@@ -21446,7 +21448,7 @@
       "module_id": "engine.xray",
       "kind": "backend_route",
       "path": "xkeen-ui/routes/xray_subscriptions.py",
-      "size_bytes": 23865,
+      "size_bytes": 24317,
       "depends_on": [
         "core",
         "tool.editor"
@@ -21563,7 +21565,7 @@
       "module_id": "engine.xray",
       "kind": "backend_service",
       "path": "xkeen-ui/services/dns_over_vless.py",
-      "size_bytes": 227623,
+      "size_bytes": 232357,
       "depends_on": [
         "core",
         "tool.editor"
@@ -22039,7 +22041,7 @@
       "module_id": "engine.xray",
       "kind": "backend_service",
       "path": "xkeen-ui/services/xray_subscriptions.py",
-      "size_bytes": 357846,
+      "size_bytes": 366267,
       "depends_on": [
         "core",
         "tool.editor",
@@ -22109,9 +22111,30 @@
     },
     {
       "module_id": "engine.xray",
+      "kind": "backend_service",
+      "path": "xkeen-ui/services/xray_transport_groups.py",
+      "size_bytes": 649,
+      "depends_on": [
+        "core",
+        "tool.editor"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "xkeen",
+        "xray"
+      ],
+      "environment_variables": [],
+      "removable": true
+    },
+    {
+      "module_id": "engine.xray",
       "kind": "backend_test",
       "path": "tests/test_dns_over_vless.py",
-      "size_bytes": 232435,
+      "size_bytes": 236022,
       "depends_on": [
         "core",
         "tool.editor",
@@ -22573,7 +22596,7 @@
       "module_id": "engine.xray",
       "kind": "backend_test",
       "path": "tests/test_xray_config_tag_endpoints.py",
-      "size_bytes": 44873,
+      "size_bytes": 45440,
       "depends_on": [
         "core",
         "tool.editor"
@@ -23624,7 +23647,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/outbounds.js",
-      "size_bytes": 476976,
+      "size_bytes": 481177,
       "depends_on": [
         "core",
         "tool.editor",
@@ -24195,7 +24218,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/routing_cards/rules/dns_over_vless.js",
-      "size_bytes": 135784,
+      "size_bytes": 135887,
       "depends_on": [
         "core",
         "tool.editor"
@@ -24914,7 +24937,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_test",
       "path": "e2e/dns_over_vless_zones.spec.mjs",
-      "size_bytes": 30959,
+      "size_bytes": 32264,
       "depends_on": [
         "core",
         "tool.editor"
@@ -27716,7 +27739,7 @@
       "module_id": "tool.editor",
       "kind": "frontend_ui",
       "path": "xkeen-ui/static/js/ui/schema_semantic_validation.js",
-      "size_bytes": 80871,
+      "size_bytes": 80966,
       "depends_on": [
         "core"
       ],
@@ -36816,7 +36839,7 @@
       {
         "from": "core",
         "to": "engine.xray",
-        "unit_count": 34,
+        "unit_count": 35,
         "examples": [
           "xkeen-ui/app.py",
           "xkeen-ui/app_factory.py",
@@ -36988,7 +37011,7 @@
       {
         "from": "engine.xray",
         "to": "core",
-        "unit_count": 162,
+        "unit_count": 163,
         "examples": [
           "xkeen-ui/routes/routing/__init__.py",
           "xkeen-ui/routes/routing/blueprint.py",
@@ -37030,7 +37053,7 @@
       {
         "from": "engine.xray",
         "to": "tool.editor",
-        "unit_count": 162,
+        "unit_count": 163,
         "examples": [
           "xkeen-ui/routes/routing/__init__.py",
           "xkeen-ui/routes/routing/blueprint.py",
@@ -37409,7 +37432,7 @@
       {
         "from": "engine.xray",
         "to": "core",
-        "unit_count": 91,
+        "unit_count": 92,
         "examples": [
           "xkeen-ui/routes/routing/__init__.py",
           "xkeen-ui/routes/routing/blueprint.py",
@@ -37450,7 +37473,7 @@
       {
         "from": "engine.xray",
         "to": "tool.editor",
-        "unit_count": 91,
+        "unit_count": 92,
         "examples": [
           "xkeen-ui/routes/routing/__init__.py",
           "xkeen-ui/routes/routing/blueprint.py",
@@ -37785,7 +37808,7 @@
       {
         "from": "core",
         "to": "engine.xray",
-        "unit_count": 34,
+        "unit_count": 35,
         "examples": [
           "xkeen-ui/app.py",
           "xkeen-ui/app_factory.py",
@@ -38097,7 +38120,7 @@
       "evidence": {
         "tool.editor": {
           "unit_count": 25,
-          "size_bytes": 834290
+          "size_bytes": 834385
         },
         "tool.terminal": {
           "unit_count": 47,

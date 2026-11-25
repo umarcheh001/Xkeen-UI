@@ -7191,6 +7191,10 @@ body.panel-page .modal-hint {
   line-height: 1.45;
 }
 
+body.panel-page #confirm-modal .modal-description {
+  font-size: calc(13px * var(--xk-font-scale, 1));
+}
+
 body.panel-page :is(.modal-close, .routing-dns-over-vless-layout-btn),
 html[data-theme="light"] body.panel-page :is(.modal-close, .routing-dns-over-vless-layout-btn) {
   display: inline-grid;
@@ -10040,6 +10044,11 @@ body.panel-page #confirm-modal .xk-sub-pause-choice {
 body.panel-page #confirm-modal .xk-sub-pause-choice select {
   width: 100%;
   max-width: 340px;
+  font-size: inherit;
+}
+
+body.panel-page #confirm-modal :is(.xk-sub-pause-choice-note, .xk-sub-transport-options .modal-hint) {
+  font-size: calc(12.5px * var(--xk-font-scale, 1));
 }
 
 body.panel-page #confirm-modal .xk-sub-route-mapping {
@@ -10055,6 +10064,30 @@ body.panel-page #confirm-modal .xk-sub-route-mapping label {
 
 body.panel-page #confirm-modal .xk-sub-route-mapping select {
   max-width: 100%;
+}
+
+body.panel-page #confirm-modal .xk-sub-transport-options {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+body.panel-page #confirm-modal .xk-sub-transport-options legend {
+  margin-bottom: 6px;
+}
+
+body.panel-page #confirm-modal .xk-sub-transport-options > div {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+body.panel-page #confirm-modal .xk-sub-transport-options label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: normal;
 }
 
 body.panel-page #outbounds-subscriptions-modal .xk-sub-titleblock {
@@ -13196,7 +13229,11 @@ body.panel-page .xk-rule-dns-entry {
 }
 
 body.panel-page .xk-rule-dns-entry > span::before {
-  content: "· ";
+  content: "→ ";
+}
+
+body.panel-page .xk-rule-dns-entry[data-unavailable] > span::before {
+  content: "— ";
 }
 
 body.panel-page .xk-rule-dns-actions {

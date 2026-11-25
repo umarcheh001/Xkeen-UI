@@ -604,8 +604,9 @@ import {
       const item = $('routing-rule-dns-entry').content.firstElementChild.cloneNode(true);
       const current = candidates.find((option) => option.rule_tag === row.rule_tag);
       item.querySelector('[data-rule-dns-name]').textContent = row.rule_tag;
-      item.querySelector('[data-rule-dns-address]').textContent = row.upstream;
       item.querySelector('[data-rule-dns-target]').textContent = current ? current.outbound_tag : 'Правило недоступно';
+      item.querySelector('[data-rule-dns-address]').textContent = `DNS ${row.upstream}`;
+      item.querySelector('.xk-rule-dns-entry').toggleAttribute('data-unavailable', !current);
       const actions = item.querySelector('.xk-rule-dns-actions');
       if (fieldsLocked) actions.remove();
       else {

@@ -740,6 +740,22 @@ def test_replacing_a_deleted_pass_node_keeps_the_existing_safe_fallback(tmp_path
     assert _clone(routing)["fallbackTag"] == "reserve_proxy_1"
 
 
+def test_follow_restores_the_sources_safe_fallback_when_membership_changes(tmp_path):
+    configs, routing, state = _enabled_on_balancer_main(tmp_path)
+    model = json.loads(routing.read_text(encoding="utf-8"))
+    source = next(item for item in model["routing"]["balancers"] if item["tag"] == "balancer_main")
+    source["selector"] = ["my_proxy", "reserve_proxy"]
+    source["fallbackTag"] = "my_proxy_2"
+    _write(routing, model)
+
+    result = dns.follow_source_route(configs_dir=str(configs), routing_file=str(routing), ui_state_dir=str(state))
+
+    assert result["status"] == "updated"
+    assert _clone(routing)["fallbackTag"] == "my_proxy_2"
+    updated = json.loads(routing.read_text(encoding="utf-8"))
+    assert dns._route_drift(dns._collect_runtime(str(configs), updated), updated, "balancer_main") is None
+
+
 def test_follow_keeps_the_strategy_when_subscription_probe_coverage_changes(tmp_path):
     configs, routing, state = _scenario_config(tmp_path)
     _write(configs / "07_observatory.json", {"burstObservatory": {"subjectSelector": ["my_proxy"]}})
@@ -1590,6 +1606,17 @@ def test_several_upstreams_enable_fallback_between_them():
     assert single["dns"]["disableFallback"] is True
     assert several["dns"]["disableFallback"] is False
     assert several["dns"]["servers"] == ["8.8.8.8", "1.1.1.1"]
+
+
+def test_rule_dns_leaves_the_only_common_upstream_available_for_other_domains():
+    binding = {"rule_tag": "work", "upstream": "1.1.1.1", "domains": ["domain:example.com"],
+               "outbound_tag": "my_proxy_1"}
+    section = dns._managed_fragment(["8.8.8.8"], rule_dns=[binding])["dns"]
+
+    assert section["disableFallback"] is False
+    assert section["servers"][0]["skipFallback"] is True
+    assert section["servers"][0]["finalQuery"] is True
+    assert section["servers"][1] == "8.8.8.8"
 
 
 def test_local_resolver_takes_the_home_zones_out_of_the_tunnel(tmp_path: Path):
@@ -3458,6 +3485,19 @@ def test_a_fragment_already_in_the_new_form_is_left_alone(tmp_path: Path):
     assert path.stat().st_mtime_ns == before
 
 
+def test_the_repair_keeps_the_only_common_dns_reachable_with_rule_dns(tmp_path: Path):
+    path = tmp_path / dns.MANAGED_FRAGMENT
+    binding = {"rule_tag": "work", "upstream": "1.1.1.1", "domains": ["domain:example.com"],
+               "outbound_tag": "my_proxy_1"}
+    fragment = dns._managed_fragment(["8.8.8.8"], rule_dns=[binding])
+    fragment["dns"]["disableFallback"] = True
+    _write(path, fragment)
+
+    assert dns.migrate_managed_fragment(configs_dir=str(tmp_path))["action"] == "migrated"
+    assert _fragment(tmp_path) == dns._managed_fragment(["8.8.8.8"], rule_dns=[binding])
+    assert dns.migrate_managed_fragment(configs_dir=str(tmp_path))["action"] == "idle"
+
+
 def test_the_repair_keeps_its_hands_off_somebody_elses_outbound(tmp_path: Path):
     """``proxySettings`` elsewhere is not this panel's to rewrite."""
     configs = tmp_path / "configs"
@@ -4317,15 +4357,19 @@ def test_rule_dns_uses_the_outbound_of_each_rule_and_survives_disable(tmp_path, 
     _write(outbound_path, marked)
     bindings = [
         {"rule_tag": "work", "upstream": "https://1.1.1.1/dns-query"},
-        {"rule_tag": "stream", "upstream": "10.66.0.53:5353"},
+        {"rule_tag": "stream", "upstream": "10.66.0.53:5353, 127.0.0.53, 8.8.8.8"},
     ]
     dns.apply_action("enable", rule_dns=bindings, **common)
 
     servers = [server for server in _fragment(configs)["dns"]["servers"] if isinstance(server, dict) and server.get("tag")]
-    assert [server["address"] for server in servers] == ["10.66.0.53", "https://1.1.1.1/dns-query"]
+    assert [server["address"] for server in servers] == [
+        "10.66.0.53", "127.0.0.53", "8.8.8.8", "https://1.1.1.1/dns-query",
+    ]
     assert servers[0]["port"] == 5353
-    assert [server["domains"] for server in servers] == [["domain:kino.example"], ["full:portal.example"]]
-    assert all(server["skipFallback"] and server["finalQuery"] for server in servers)
+    assert [server["domains"] for server in servers] == [["domain:kino.example"]] * 3 + [["full:portal.example"]]
+    assert all(server["skipFallback"] for server in servers)
+    assert [server.get("finalQuery", False) for server in servers] == [False, False, True, True]
+    assert len({server["tag"] for server in servers[:3]}) == 1
     rules = json.loads(routing_path.read_text(encoding="utf-8"))["routing"]["rules"]
     tags = {server["tag"] for server in servers}
     dns_targets = [rule["outboundTag"] for rule in rules if tags.intersection(rule.get("inboundTag", []))]
@@ -4355,11 +4399,28 @@ def test_rule_dns_rejects_a_rule_with_other_conditions_before_writing(tmp_path, 
     assert not (configs / dns.MANAGED_FRAGMENT).exists()
 
 
+def test_rule_dns_keeps_a_saved_single_doh_url_with_a_comma(tmp_path, monkeypatch):
+    configs, routing_path, state, common, routing = _rule_dns_env(tmp_path, monkeypatch)
+    binding = {"rule_tag": "stream", "upstream": "https://1.1.1.1/dns-query?tags=a,b"}
+    runtime = dns._collect_runtime(str(configs), routing)
+    source = next(row for row in dns._rule_dns_candidates(runtime, routing) if row["rule_tag"] == "stream")
+    dns._save_state(str(state), {"rule_dns": [{**source, **binding}]})
+
+    dns.apply_action("enable", rule_dns=[binding], **common)
+
+    servers = _fragment(configs)["dns"]["servers"]
+    special = [server for server in servers if isinstance(server, dict) and server.get("tag")]
+    assert [server["address"] for server in special] == [binding["upstream"]]
+    status = _status(configs, routing_path, state, monkeypatch)
+    assert status["enabled"] and not status["rule_dns_drift"]
+    assert status["rule_dns"] == [binding]
+
+
 def test_rule_dns_routing_save_updates_the_generated_pair_and_keeps_jsonc(tmp_path, monkeypatch):
     from routes.routing import config
 
     configs, routing_path, state, common, _routing = _rule_dns_env(tmp_path, monkeypatch)
-    dns.apply_action("enable", rule_dns=[{"rule_tag": "stream", "upstream": "1.1.1.1"}], **common)
+    dns.apply_action("enable", rule_dns=[{"rule_tag": "stream", "upstream": "127.0.0.53, 1.1.1.1"}], **common)
     raw = routing_path.with_suffix(".jsonc")
     monkeypatch.setattr(config, "_paths_for_routing", lambda *_args: (str(routing_path), str(raw), ""))
     checked = []
@@ -4391,6 +4452,11 @@ def test_rule_dns_routing_save_updates_the_generated_pair_and_keeps_jsonc(tmp_pa
     assert checked[0]["extra_fragments"][dns.MANAGED_FRAGMENT] == _fragment(configs)
     applied = json.loads(routing_path.read_text(encoding="utf-8"))
     tag = next(server["tag"] for server in _fragment(configs)["dns"]["servers"] if isinstance(server, dict) and server.get("tag"))
+    servers = _fragment(configs)["dns"]["servers"]
+    bound_servers = [server for server in servers if isinstance(server, dict) and server.get("tag") == tag]
+    assert [server["address"] for server in bound_servers] == ["127.0.0.53", "1.1.1.1"]
+    assert all(server["domains"] == ["full:cdn.kino.example"] for server in bound_servers)
+    assert _status(configs, routing_path, state, monkeypatch)["enabled"]
     assert applied["routing"]["rules"][0]["ruleTag"] == tag
     target = next(rule for rule in applied["routing"]["rules"] if rule.get("ruleTag") == tag)["outboundTag"]
     bound = next(outbound for outbound in _fragment(configs)["outbounds"] if outbound["tag"] == target)

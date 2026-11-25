@@ -776,10 +776,10 @@ function collectXrayVlessReverseInboundTags(outbounds) {
 }
 
 function collectXrayDnsInboundTags(data) {
-  if (!isPlainObject(data)) return [];
-  const dns = isPlainObject(data.dns) ? data.dns : null;
-  const tag = cleanName(dns && dns.tag);
-  return tag ? [tag] : [];
+  if (!isPlainObject(data) || !isPlainObject(data.dns)) return [];
+  const dns = data.dns;
+  const servers = Array.isArray(dns.servers) ? dns.servers : [];
+  return [dns, ...servers].filter(isPlainObject).map((entry) => cleanName(entry.tag)).filter(Boolean);
 }
 
 function collectXrayApiOutboundTags(data) {

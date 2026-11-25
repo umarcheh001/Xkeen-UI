@@ -13,7 +13,7 @@ const CLIENTS = {
 test('отдельный DNS запоминает две привязки к правилам', async ({ page }) => {
   const bindings = [
     { rule_tag: 'Стриминг', upstream: 'https://1.1.1.1/dns-query' },
-    { rule_tag: 'Портал', upstream: '10.66.0.53' },
+    { rule_tag: 'Портал', upstream: '10.66.0.53, 127.0.0.53' },
   ];
   const candidates = [
     { rule_tag: 'Стриминг', domains: ['domain:kino.example', 'ext:geosite_v2fly.dat:streaming'], outbound_tag: 'vps-nl' },
@@ -23,13 +23,26 @@ test('отдельный DNS запоминает две привязки к п�
   await openDialog(page, { ...STATUS, rule_dns_candidates: candidates });
   await openZone(page, 'rule-dns');
   const zone = page.locator('.xk-dns-zone[data-zone="rule-dns"]');
+  const standardHint = page.locator('[data-zone="servers"] .xk-hint-more summary').first();
+  const typography = (locator) => locator.evaluate((element) => {
+    const { fontSize, lineHeight } = getComputedStyle(element);
+    return { fontSize, lineHeight };
+  });
+  const standardTypography = await typography(standardHint);
   const add = zone.locator('#routing-rule-dns-add');
   const save = zone.getByRole('button', { name: 'Добавить правило', exact: true });
   const bindingsList = zone.locator('#routing-rule-dns-list');
   await add.click();
   await expect(save).toBeDisabled();
-  await expect(zone.getByLabel('DNS-сервер')).toHaveAttribute('placeholder', '1.1.1.1');
-  await expect(zone.getByLabel('DNS-сервер')).toHaveAccessibleDescription(/tcp:\/\/1\.1\.1\.1.*https:\/\/1\.1\.1\.1\/dns-query/);
+  const resolverInput = zone.getByLabel('DNS-серверы');
+  await expect(resolverInput).toHaveAttribute('placeholder', '8.8.8.8, 1.1.1.1');
+  await expect(resolverInput).toHaveAccessibleDescription(/через запятую.*127\.0\.0\.53.*tcp:\/\/1\.1\.1\.1.*https:\/\/1\.1\.1\.1\/dns-query/);
+  const dohHint = zone.locator('#routing-rule-dns-editor .xk-hint-more');
+  await dohHint.locator('summary').click();
+  await expect(dohHint.locator('p')).toBeVisible();
+  expect(await typography(dohHint.locator('summary'))).toEqual(standardTypography);
+  expect(await typography(dohHint.locator('p'))).toEqual(standardTypography);
+  await dohHint.locator('summary').click();
   await expect(zone.getByText('После включения DNS-over-VLESS трафик к сайтам из правила и их DNS-запросы пойдут только через')).toBeVisible();
   await expect(zone.locator('#routing-rule-dns-note')).toContainText('Запасной VPS для этого правила не предусмотрен.');
   const ruleSelect = zone.getByLabel('Правило маршрутизации Xray');
@@ -38,31 +51,41 @@ test('отдельный DNS запоминает две привязки к п�
   await page.locator('html').evaluate((html) => { html.dataset.theme = 'dark'; });
   await expect(ruleSelect).toHaveCSS('color-scheme', 'dark');
   await ruleSelect.selectOption('Портал');
-  await zone.getByLabel('DNS-сервер').fill(bindings[1].upstream);
+  await resolverInput.fill(bindings[1].upstream);
   await expect(zone.getByText('vps-de', { exact: true })).toBeVisible();
   await expect(bindingsList.getByText('Портал')).toHaveCount(0);
   await save.click();
   await expect(bindingsList.getByText('Портал')).toBeVisible();
+  const routeSteps = bindingsList.locator('.xk-rule-dns-entry > *');
+  await expect(routeSteps).toHaveText(['Портал', 'vps-de', `DNS ${bindings[1].upstream}`]);
+  for (const step of [routeSteps.nth(1), routeSteps.nth(2)]) {
+    expect(await step.evaluate((element) => getComputedStyle(element, '::before').content)).toBe('"→ "');
+  }
   await expect(zone.getByText('К применению')).toBeVisible();
   const edit = await bindingsList.getByRole('button', { name: 'Изменить', exact: true }).boundingBox();
   const remove = await bindingsList.getByRole('button', { name: 'Убрать', exact: true }).boundingBox();
   expect(edit.width).toBe(remove.width);
   await expect(add).toHaveText('Добавить ещё правило');
   await add.click();
-  await zone.getByLabel('DNS-сервер').fill(bindings[0].upstream);
+  await resolverInput.fill(bindings[0].upstream);
   await expect(zone.getByText('kino.example и поддомены, ext:geosite_v2fly.dat:streaming', { exact: true })).toBeVisible();
   await save.click();
   await zone.getByRole('button', { name: 'Изменить', exact: true }).first().click();
-  await zone.getByLabel('DNS-сервер').fill('9.9.9.9');
+  await expect(resolverInput).toHaveValue(bindings[1].upstream);
+  await resolverInput.fill('9.9.9.9');
   await zone.getByRole('button', { name: 'Отмена', exact: true }).click();
   await expect(bindingsList.getByText(bindings[1].upstream)).toBeVisible();
   await zone.getByRole('button', { name: 'Убрать', exact: true }).first().click();
   await add.click();
-  await zone.getByLabel('DNS-сервер').fill(bindings[1].upstream);
+  await resolverInput.fill(bindings[1].upstream);
   await save.click();
   await expect(add).toBeHidden();
-  await zone.getByText('Почему моего правила нет в списке?', { exact: true }).click();
-  await expect(zone.getByText(/укажите уникальный ruleTag/)).toBeVisible();
+  const ruleHint = zone.getByText('Почему моего правила нет в списке?', { exact: true });
+  const ruleHintText = zone.getByText(/укажите уникальный ruleTag/);
+  expect(await typography(ruleHint)).toEqual(standardTypography);
+  await ruleHint.click();
+  await expect(ruleHintText).toBeVisible();
+  expect(await typography(ruleHintText)).toEqual(standardTypography);
 
   let submitted;
   await page.route('**/api/routing/dns-over-vless', async (route) => {
