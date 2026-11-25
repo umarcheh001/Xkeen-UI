@@ -88,7 +88,7 @@
       ],
       "removable": true,
       "unit_count": 163,
-      "size_bytes": 4370373,
+      "size_bytes": 4370401,
       "kind_counts": {
         "backend_route": 13,
         "backend_service": 24,
@@ -25085,7 +25085,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_test",
       "path": "e2e/xray_module_parts.spec.mjs",
-      "size_bytes": 7455,
+      "size_bytes": 7483,
       "depends_on": [
         "core",
         "tool.editor"

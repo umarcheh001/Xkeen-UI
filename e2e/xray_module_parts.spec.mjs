@@ -71,7 +71,7 @@ test.describe('Xray module parts on a fresh page', () => {
 
     const button = page.locator(`#view-xkeen [data-xk-restart-log-preflight-ref="${PREFLIGHT_REF}"]`);
     if (!(await button.isVisible())) {
-      await page.locator('#view-xkeen .xk-jr-row').filter({ hasText: /preflight/i }).first().click();
+      await page.locator('#view-xkeen .xk-jr-row').filter({ hasText: 'Проверка конфигурации Xray' }).click();
     }
     await button.click();
 
