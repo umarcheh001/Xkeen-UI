@@ -29,7 +29,7 @@ const WARNING_RE = /\b(warn|warning)\b|предупрежд/i;
 const CORE_SOURCES = [
   [/^DNS-over-VLESS|^dns_over_vless/i, 'DNS-over-VLESS'],
   [/^xkeen-ui init\b/i, 'Запуск панели'],
-  [/^(panel\b|logging setup|core logger|core_log|broadcast_event)/i, 'Панель'],
+  [/^(panel\b|logging setup|core logger|core_log|broadcast_event|ui\.event diff\.compare$)/i, 'Панель'],
   [/^(xray |mihomo )?subscriptions?\b/i, 'Подписки'],
   [/^(fileops|fs|remotefs)[.:\s]/i, 'Файлы'],
   [/^self_update\b/i, 'Обновление'],
@@ -56,9 +56,27 @@ const CORE_EVENT_TEXT = {
   'xkeen.cmd_failed': 'Команда завершилась с ошибкой',
   'routing.save.async_restart': 'Маршрутизация сохранена, перезапуск Xkeen поставлен в очередь',
   'snapshot.delete_all': 'Массовое удаление снимков',
+  'ui.event diff.compare': 'Сравнение',
   'fileops.job_create': 'Создана задача для файловой операции',
   'devtools.log_truncate': 'Запрошена очистка журнала',
   'optional module came without an explicit choice and is switched off': 'Дополнительный модуль отключён: он не был выбран пользователем',
+};
+
+const DIFF_SCOPE_LABELS = {
+  routing: 'Маршрутизация',
+  mihomo: 'Конфигурация Mihomo',
+  'json-editor': 'Редактор JSON',
+  file_manager: 'Файловый менеджер',
+};
+
+const DIFF_SOURCE_LABELS = {
+  buffer: 'текст в редакторе',
+  disk: 'последняя сохранённая версия',
+  reload: 'версия с диска',
+  snapshot: 'снимок',
+  text: 'внешний текст',
+  'fs:local': 'локальный файл',
+  'fs:remote': 'удалённый файл',
 };
 
 export function panelLogKind(name) {
@@ -172,6 +190,14 @@ function finish(records, fold) {
 // ---------- core.log ----------
 
 function coreEventSummary(event, kv) {
+  if (event === 'ui.event diff.compare') {
+    const { scope, left, right } = Object.fromEntries(kv);
+    const section = Object.hasOwn(DIFF_SCOPE_LABELS, scope) ? DIFF_SCOPE_LABELS[scope] : scope;
+    const sources = [left, right].filter(Boolean).map((source) =>
+      Object.hasOwn(DIFF_SOURCE_LABELS, source) ? DIFF_SOURCE_LABELS[source] : source);
+    return [section, sources.join(' ↔ ')].filter(Boolean).join(' · ');
+  }
+
   const isRefresh = event === 'xray subscriptions auto-refresh' || event === 'mihomo subscriptions auto-refresh';
   if (!isRefresh && event !== 'snapshot.delete_all') return '';
 

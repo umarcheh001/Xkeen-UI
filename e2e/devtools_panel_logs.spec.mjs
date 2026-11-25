@@ -116,18 +116,23 @@ test.describe('DevTools logs', () => {
     await expect(page.locator('#dt-log-stats')).toContainText('Показано: 1');
   });
 
-  test('localized events show counters and keep the raw entries in details', async ({ page }) => {
+  test('localized events show summaries and keep the raw entries in details', async ({ page }) => {
     await openLogs(page, { files: { core: [
       CORE[0],
       CORE.at(-1),
       '2026-10-23 15:10:00,000 [WARNING] snapshot.delete_all | deleted=2, failed=1\n',
+      '2026-10-23 15:11:00,000 [INFO] ui.event diff.compare | scope=routing, left=buffer, right=snapshot\n',
     ] } });
     const events = rows(page).locator('.msg');
     await expect(events.first()).toContainText('Инициализация панели Xkeen UI');
     const subscription = events.nth(1);
     await expect(subscription).toContainText('Автообновление подписок Xray');
     await expect(subscription.locator('small')).toHaveText('успешно 7 из 7 · Xkeen перезапущен');
-    await expect(events.last().locator('small')).toHaveText('удалено 2 · ошибок 1');
+    await expect(events.nth(2).locator('small')).toHaveText('удалено 2 · ошибок 1');
+    const comparison = rows(page).last();
+    await expect(comparison.locator('.src')).toHaveText('Панель');
+    await expect(comparison.locator('.msg')).toContainText('Сравнение');
+    await expect(comparison.locator('.summary')).toHaveText('Маршрутизация · текст в редакторе ↔ снимок');
 
     await page.locator('#dt-log-search').fill('xray subscriptions auto-refresh');
     await expect(rows(page)).toHaveCount(1);

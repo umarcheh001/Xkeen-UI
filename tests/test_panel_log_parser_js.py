@@ -93,6 +93,22 @@ def test_core_events_are_localized_with_searchable_summaries(event, label, summa
     assert event.lower() in rec["text"]
 
 
+@pytest.mark.parametrize(("fields", "summary"), [
+    ("scope=routing, left=buffer, right=disk", "Маршрутизация · текст в редакторе ↔ последняя сохранённая версия"),
+    ("scope=routing, left=buffer, right=snapshot", "Маршрутизация · текст в редакторе ↔ снимок"),
+    ("scope=json-editor, left=text, right=reload", "Редактор JSON · внешний текст ↔ версия с диска"),
+    ("scope=file_manager, left=fs:local, right=fs:remote", "Файловый менеджер · локальный файл ↔ удалённый файл"),
+    ("scope=constructor, left=unknown, right=", "constructor · unknown"),
+])
+def test_diff_comparison_shows_scope_and_both_sources(fields, summary):
+    line = f"2026-11-25 21:00:49,000 [INFO] ui.event diff.compare | {fields}"
+    [rec] = build("core", [line])
+    assert (rec["source"], rec["msg"], rec["summary"]) == ("Панель", "Сравнение", summary)
+    assert rec["raw"] == [line]
+    assert summary.lower() in rec["text"]
+    assert f"ui.event diff.compare | {fields}" in rec["text"]
+
+
 def test_values_with_commas_inside_stay_whole():
     rec = build("core", [MEMORY])[0]
     assert rec["level"] == "warning"
