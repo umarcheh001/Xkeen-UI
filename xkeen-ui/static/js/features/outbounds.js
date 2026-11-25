@@ -8719,6 +8719,7 @@ let outboundsModuleApi = null;
       fieldset.className = 'xk-sub-transport-options';
       const legend = document.createElement('legend');
       const list = document.createElement('div');
+      const unknownCountry = countryFlag('ZZ');
       const help = document.createElement('span');
       help.className = 'modal-hint';
       help.textContent = 'Xray выберет доступный транспорт для DNS и трафика сайтов. Отмечайте узлы одного VPS.';
@@ -8744,7 +8745,11 @@ let outboundsModuleApi = null;
             else checked.delete(node.tag);
             updateLegend();
           });
-          option.append(input, node.node_name || node.label);
+          const transport = { name: node.node_name };
+          const country = nodeCountryFlagInfo(transport);
+          option.append(input);
+          option.insertAdjacentHTML('beforeend', countryFlagBadgeHtml(country?.code ? country : unknownCountry));
+          option.append(nodeDisplayNameWithCountry(transport, node.label));
           list.append(option);
         }
         updateLegend();
@@ -8775,11 +8780,10 @@ let outboundsModuleApi = null;
         card.className = 'xk-sub-pause-choice xk-sub-route-mapping';
         const label = document.createElement('label');
         label.htmlFor = 'xk-sub-route-mapping-' + i;
-        label.textContent = 'Сейчас через ' + group.outbound_tag;
+        label.textContent = 'Узлы подписки вместо сервера ' + group.outbound_tag;
         const select = document.createElement('select');
         select.id = label.htmlFor;
         select.className = 'xray-log-filter';
-        select.setAttribute('aria-label', 'Узел подписки вместо ' + group.outbound_tag);
         const picker = subsTransportPicker(group, select);
         if (!picker) {
           const placeholder = group.required === false ? 'Продолжить без замены' : 'Выберите узел подписки';
@@ -8789,7 +8793,16 @@ let outboundsModuleApi = null;
             select.add(new Option(node.label, String(index), false, selected));
           });
         }
-        card.append(label, select);
+        card.append(label);
+        const ruleNames = group.rules.map((rule) => rule.ruleTag || 'Правило без названия');
+        if (ruleNames.length) {
+          const affectedRules = document.createElement('span');
+          affectedRules.id = select.id + '-rules';
+          affectedRules.textContent = (ruleNames.length === 1 ? 'Правило · ' : 'Правила · ') + ruleNames.join(', ');
+          select.setAttribute('aria-describedby', affectedRules.id);
+          card.append(affectedRules);
+        }
+        card.append(select);
         if (picker) card.append(picker.fieldset);
         if (group.rules.length) {
           const details = document.createElement('details');
@@ -8797,10 +8810,10 @@ let outboundsModuleApi = null;
           const summary = document.createElement('summary');
           summary.textContent = 'Какие сайты затронет выбор';
           details.append(summary);
-          group.rules.forEach((rule) => {
+          group.rules.forEach((rule, index) => {
             const row = document.createElement('p');
             const name = document.createElement('b');
-            name.textContent = rule.ruleTag || 'Правило без названия';
+            name.textContent = ruleNames[index];
             const domains = (Array.isArray(rule.domain) ? rule.domain : []).filter((domain) => typeof domain === 'string').map((domain) => {
               if (domain.startsWith('domain:')) return domain.slice(7) + ' и поддомены';
               if (/^ext:[^:]+:/.test(domain)) return 'Список GeoSite · ' + domain.split(':').slice(2).join(':');

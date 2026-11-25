@@ -10056,6 +10056,7 @@ body.panel-page #confirm-modal .xk-sub-route-mapping {
   gap: 8px;
   border: 1px solid var(--op-border, #30343c);
   border-radius: 8px;
+  overflow-wrap: anywhere;
 }
 
 body.panel-page #confirm-modal .xk-sub-route-mapping label {

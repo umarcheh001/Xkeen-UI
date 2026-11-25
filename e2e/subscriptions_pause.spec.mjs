@@ -98,17 +98,27 @@ const deleteAll = (page) => page.locator('#outbounds-subscriptions-delete-all-bt
 test.describe('рубильник подписок', () => {
   test('возобновление сохраняет выбранные транспорты одной подписки', async ({ page }) => {
     const reality = { subscription_id: 'us', subscription_name: 'VPS_US_SUB', node_key: 'r',
-      tag: 'us--reality', node_name: 'Reality', label: 'VPS_US_SUB · Reality' };
-    const xhttp = { ...reality, node_key: 'x', tag: 'us--xhttp', node_name: 'XHTTP', label: 'VPS_US_SUB · XHTTP' };
+      tag: 'us--reality', node_name: '🇺🇸 Reality', label: 'VPS_US_SUB · Reality' };
+    const xhttp = { ...reality, node_key: 'x', tag: 'us--xhttp', node_name: 'us [USA] XHTTP', label: 'VPS_US_SUB · XHTTP' };
+    const grpc = { ...reality, node_key: 'g', tag: 'us--grpc', node_name: 'gRPC', label: 'VPS_US_SUB · gRPC' };
     const state = await mockApi(page, { routeMappings: [{
       outbound_tag: 'VPS_US', revision: 'transport', required: true, rules: [],
-      candidates: [reality, xhttp], selected: reality, selected_nodes: [reality],
+      candidates: [reality, xhttp, grpc], selected: reality, selected_nodes: [reality],
     }] });
     state.paused = true;
     await openSubscriptions(page);
     await masterWrap(page).click();
     const dialog = page.locator('#confirm-modal');
     await expect(dialog.getByRole('checkbox', { name: 'Reality' })).toBeChecked();
+    const transports = dialog.locator('.xk-sub-transport-options');
+    const realityRow = transports.locator('label').filter({ has: page.getByRole('checkbox', { name: 'Reality' }) });
+    await expect(realityRow.getByRole('img', { name: 'United States' })).toBeVisible();
+    await expect(realityRow.getByText('Reality', { exact: true })).toBeVisible();
+    await expect(transports.getByRole('img', { name: 'United States' })).toHaveCount(2);
+    await expect(transports.getByRole('img', { name: 'Страна не определена' }).locator('.xk-country-globe')).toBeVisible();
+    await expect(transports.getByRole('checkbox', { name: 'gRPC' })).not.toBeChecked();
+    await expect(dialog.getByText('Узлы подписки вместо сервера VPS_US', { exact: true })).toBeVisible();
+    await expect(dialog.getByText(/^Правила? · /)).toHaveCount(0);
     await expect(confirmText(page)).toHaveCSS('font-size', '13px');
     await expect(dialog.getByRole('combobox')).toHaveCSS('font-size', '13px');
     await expect(dialog.locator('.xk-sub-transport-options label').first()).toHaveCSS('font-size', '13px');
@@ -131,7 +141,8 @@ test.describe('рубильник подписок', () => {
       group,
       { ...group, outbound_tag: 'VPS_DE', selected: node,
         rules: [{ ruleTag: '60_games_de', domain: ['geosite:category-games'] },
-          { ruleTag: '65_updates_de', domain: ['full:updates.example'] }] },
+          { ruleTag: '65_updates_de', domain: ['full:updates.example'] },
+          { domain: ['full:example.org'] }] },
       { ...group, outbound_tag: 'VPS_NL', required: false, rules: [{ ruleTag: '70_work_nl', domain: ['full:portal.example'] }] },
     ] });
     state.paused = true;
@@ -140,11 +151,17 @@ test.describe('рубильник подписок', () => {
     const confirm = modal.getByRole('button', { name: 'Переключить' });
     await masterWrap(page).click();
     await expect(modal.getByRole('combobox')).toHaveCount(3);
+    const cards = modal.locator('.xk-sub-route-mapping');
+    await expect(cards.nth(0).getByText('Узлы подписки вместо сервера VPS_US', { exact: true })).toBeVisible();
+    await expect(cards.nth(0).getByText('Правила · 50_ai_via_us, 52_streaming_us', { exact: true })).toBeVisible();
+    await expect(cards.nth(0).getByRole('combobox')).toHaveAccessibleDescription('Правила · 50_ai_via_us, 52_streaming_us');
+    await expect(cards.nth(1).getByText('Правила · 60_games_de, 65_updates_de, Правило без названия', { exact: true })).toBeVisible();
+    await expect(cards.nth(2).getByText('Правило · 70_work_nl', { exact: true })).toBeVisible();
     await expect(confirm).toBeDisabled();
     await modal.getByText('Какие сайты затронет выбор', { exact: true }).first().click();
     await expect(modal.getByText('openai', { exact: false })).toBeVisible();
     await expect(modal.getByText('updates.example', { exact: true })).toBeHidden();
-    const choose = async (tag) => modal.getByRole('combobox', { name: 'Узел подписки вместо ' + tag })
+    const choose = async (tag) => modal.getByRole('combobox', { name: 'Узлы подписки вместо сервера ' + tag })
       .selectOption({ label: node.label });
     await choose('VPS_US');
     await expect(confirm).toBeEnabled();
@@ -560,7 +577,7 @@ test('удаление подписки с группой запрашивает
   await openSubscriptions(page);
   await deleteFirstSubscription(page);
   const dialog = page.locator('#confirm-modal');
-  await dialog.getByRole('combobox', { name: 'Узел подписки вместо VPS_US' }).selectOption({ label: node.label });
+  await dialog.getByRole('combobox', { name: 'Узлы подписки вместо сервера VPS_US' }).selectOption({ label: node.label });
   await dialog.getByRole('button', { name: 'Удалить и применить' }).click();
   await expect(page.locator('#outbounds-subscriptions-tbody tr')).toHaveCount(1);
   expect(state.deletes).toEqual(['alpha', 'alpha']);
