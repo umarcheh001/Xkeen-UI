@@ -1,3 +1,4 @@
+import ast
 from pathlib import Path
 
 
@@ -78,7 +79,11 @@ def test_mihomo_runtime_helpers_are_extracted_from_core_module():
     assert 'def ensure_mihomo_layout() -> None:' in runtime_text
     assert 'def list_profiles() -> List[ProfileInfo]:' in runtime_text
     assert 'def list_backups(profile: Optional[str] = None) -> List[BackupInfo]:' in runtime_text
-    assert 'def save_config(new_content: str) -> BackupInfo:' in runtime_text
+    save_config = next(node for node in ast.parse(runtime_text).body
+                       if isinstance(node, ast.FunctionDef) and node.name == 'save_config')
+    assert [arg.arg for arg in save_config.args.args] == ['new_content']
+    assert all(default is not None for default in save_config.args.kw_defaults)
+    assert ast.unparse(save_config.returns) == 'BackupInfo'
     assert 'def restart_mihomo_and_get_log(new_content: Optional[str] = None) -> str:' in runtime_text
     assert 'def validate_config(new_content: Optional[str] = None) -> str:' in runtime_text
 

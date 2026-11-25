@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 682,
-      "size_bytes": 9101933,
+      "size_bytes": 9102240,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -9162,7 +9162,7 @@
       "module_id": "core",
       "kind": "backend_test",
       "path": "tests/test_service_concurrency_contracts.py",
-      "size_bytes": 10830,
+      "size_bytes": 11137,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
