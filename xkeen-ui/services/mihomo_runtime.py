@@ -285,7 +285,7 @@ def switch_active_profile(name: str) -> None:
 
 
 def _parse_backup_filename(path: Path) -> Optional[BackupInfo]:
-    m = re.match(r"(.+?)_(\d{8})_(\d{6})\.yaml$", path.name)
+    m = re.match(r"(.+?)_(\d{8})_(\d{6})(?:_(\d{6}))?\.yaml$", path.name)
     if not m:
         return None
 
@@ -296,6 +296,8 @@ def _parse_backup_filename(path: Path) -> Optional[BackupInfo]:
         profile = base + ".yaml"
 
     dt = datetime.strptime(m.group(2) + m.group(3), "%Y%m%d%H%M%S")
+    if m.group(4):
+        dt = dt.replace(microsecond=int(m.group(4)))
     return BackupInfo(filename=path.name, path=path, profile=profile, created_at=dt)
 
 
@@ -323,7 +325,12 @@ def create_backup_for_active_profile() -> BackupInfo:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_name = f"{profile_base}_{ts}.yaml"
     backup_path = BACKUP_DIR / backup_name
-    shutil.copy2(active_path, backup_path)
+    if backup_path.exists():
+        backup_path = BACKUP_DIR / f"{profile_base}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.yaml"
+    backup_name = backup_path.name
+    from services.mihomo_subscription_providers import freeze_for_backup
+
+    backup_path.write_text(freeze_for_backup(active_path.read_text(encoding="utf-8"), MIHOMO_ROOT), encoding="utf-8")
 
     infos = [b for b in list_backups(profile_name) if b.filename != backup_name]
     if len(infos) >= MAX_BACKUPS_PER_PROFILE:
@@ -397,11 +404,16 @@ def clean_backups(limit: int = 5, profile: Optional[str] = None) -> List[BackupI
     return keep
 
 
-def save_config(new_content: str) -> BackupInfo:
+def save_config(new_content: str, *, provider_updates: dict[str, str] | None = None) -> BackupInfo:
     ensure_mihomo_layout()
     backup_info = create_backup_for_active_profile()
     active_path = _active_profile_path()
-    active_path.write_text(new_content, encoding="utf-8")
+    from services.io.atomic import _atomic_write_text
+
+    for path, payload in (provider_updates or {}).items():
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        _atomic_write_text(path, payload)
+    _atomic_write_text(str(active_path), new_content)
     try:
         from services.mihomo_clash_cache import invalidate_shared_mihomo_cache
 

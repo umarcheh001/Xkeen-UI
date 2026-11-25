@@ -1,10 +1,4 @@
-"""Managed Mihomo subscriptions produced from Xray-JSON sources.
-
-Mihomo cannot consume XKeen/Xray JSON subscriptions directly as
-``proxy-provider`` entries, so the generator converts them to static proxy YAML.
-This service keeps the original URL next to the generated YAML block and can
-refresh that block later from the saved generator state.
-"""
+"""Managed Mihomo subscriptions with conditional fetches and file-provider updates."""
 
 from __future__ import annotations
 
@@ -49,8 +43,8 @@ RestartCallback = Callable[..., Any]
 SaveCallback = Callable[[str], Any]
 
 
-def _fetch_xray_subscription_body(url: str) -> Tuple[str, Dict[str, str], Dict[str, Any]]:
-    result = fetch_subscription_body(str(url or ""))
+def _fetch_xray_subscription_body(url: str, validators: Dict[str, str] | None = None) -> Tuple[str, Dict[str, str], Dict[str, Any]]:
+    result = fetch_subscription_body(str(url or ""), **({"validators": validators} if validators else {}))
     if not isinstance(result, tuple):
         raise RuntimeError("unexpected_subscription_fetch_result")
     if len(result) == 2:
@@ -469,8 +463,13 @@ def delete_subscription(
                 active_text = load_text(mihomo_config_file, default="") or ""
                 should_write = True
 
-            patched = _remove_group_references(active_text, old_names)
-            patched = _remove_proxy_blocks(patched, old_names)
+            if entry.get("provider_name"):
+                from services.mihomo_subscription_providers import remove_provider
+
+                patched = remove_provider(active_text, entry["provider_name"])
+            else:
+                patched = _remove_group_references(active_text, old_names)
+                patched = _remove_proxy_blocks(patched, old_names)
             patched_content = patched.rstrip("\n")
             changed = _hash_text(patched_content) != _hash_text(active_text)
             removed_config_blocks = True
@@ -648,6 +647,16 @@ def sync_from_generator_state(
             proxy.pop("xrayJsonSubscription", None)
             proxy.pop("xraySubscription", None)
             entries.append(_entry_from_proxy_meta(proxy, meta, previous=previous, now_ts=now_ts))
+            if config_text is not None:
+                entry = entries[-1]
+                if entry.get("provider_name") and entry["provider_name"] not in config_text:
+                    entry.pop("provider_name", None)
+                    entry.pop("pending_apply", None)
+                block = str(proxy.get("yaml") or "")
+                if _hash_text(block) != entry.get("last_hash"):
+                    entry.pop("http_validators", None)
+                entry["managed_yaml"] = block
+                entry["proxy_names"] = _extract_proxy_names_from_yaml(block)
 
         generator_ids = {str(item.get("id") or "") for item in entries if isinstance(item, dict)}
         preserved_entries = [
@@ -743,6 +752,11 @@ def sync_imported_xray_subscription(
             "last_count": len(proxy_names),
             "last_hash": _hash_text("\n\n".join(blocks)),
         }
+        if prev.get("last_hash") != entry["last_hash"] or prev.get("connection_options") != options:
+            entry.pop("http_validators", None)
+        if entry.get("provider_name") and entry["provider_name"] not in config_text:
+            entry.pop("provider_name", None)
+            entry.pop("pending_apply", None)
         entry.setdefault("created_ts", now_ts)
         if not enabled:
             entry["next_update_ts"] = None
@@ -864,12 +878,17 @@ def _provider_proxy_blocks_from_payload(payload: Any, *, max_count: int = 256) -
     return blocks
 
 
-def _fetch_mihomo_provider_proxy_blocks(url: str) -> Tuple[List[str], List[Dict[str, Any]]]:
+def _fetch_mihomo_provider_proxy_blocks(url: str, *, validators=None, metadata=None) -> Tuple[List[str], List[Dict[str, Any]]]:
     from services.mihomo_hwid_sub import fetch_provider_payload, get_device_info
 
     info = get_device_info()
     headers = info.get("headers") if isinstance(info, dict) else {}
-    payload, meta = fetch_provider_payload(str(url or ""), headers=headers if isinstance(headers, dict) else {})
+    payload, meta = fetch_provider_payload(str(url or ""), headers=headers if isinstance(headers, dict) else {},
+                                         **({"validators": validators} if validators else {}))
+    if metadata is not None:
+        metadata.update(meta)
+    if meta.get("not_modified"):
+        return [], []
     blocks = _provider_proxy_blocks_from_payload(payload)
     skipped: List[Dict[str, Any]] = []
     if isinstance(meta, dict) and meta.get("skipped_count"):
@@ -1101,6 +1120,53 @@ def _schedule_next(entry: Dict[str, Any], now_ts: float) -> None:
     entry["next_update_ts"] = now_ts + _clamp_interval(entry.get("interval_hours")) * 3600
 
 
+def _apply_or_restart(
+    mihomo_config_file: str,
+    restart_xkeen: RestartCallback | None,
+    *,
+    source: str,
+) -> Dict[str, Any]:
+    """Reload with Mihomo/Prizrak, preserving restart for unavailable APIs."""
+    from services.mihomo_clash_client import MihomoClashClient, MihomoClashClientError
+    from services.mihomo_clash_target import discover_mihomo_clash_target
+
+    discovery = discover_mihomo_clash_target(
+        mihomo_config_file, os.path.dirname(os.path.abspath(mihomo_config_file)),
+    )
+    reason = "controller_unavailable"
+    if discovery.target is not None:
+        try:
+            MihomoClashClient(discovery.target).reload_config_file(os.path.abspath(mihomo_config_file))
+            from services.mihomo_clash_cache import invalidate_shared_mihomo_cache
+
+            try:
+                invalidate_shared_mihomo_cache(namespaces={"status", "groups", "providers", "rules", "dns"})
+            except Exception:
+                pass  # A cache failure cannot undo a successful core apply.
+            return {"restarted": False, "hot_applied": True, "apply_method": "mihomo-api"}
+        except MihomoClashClientError as exc:
+            # A parse rejection leaves the old runtime intact. Never
+            # restart into a config the running core has just rejected.
+            if exc.upstream_status in {400, 422} or exc.code == "config_payload_invalid":
+                raise RuntimeError("mihomo_config_rejected") from exc
+            reason = exc.code
+    if restart_xkeen is None:
+        raise RuntimeError("mihomo_apply_unavailable")
+    try:
+        try:
+            restarted = restart_xkeen(source=source)
+        except TypeError:
+            restarted = restart_xkeen(source)
+        if restarted is False:
+            raise RuntimeError("mihomo_restart_failed")
+    except Exception as exc:
+        raise RuntimeError("mihomo_restart_failed") from exc
+    return {
+        "restarted": True, "hot_applied": False, "apply_method": "restart",
+        "hot_apply_fallback": True, "hot_apply_reason": reason,
+    }
+
+
 def _mark_failed(
     ui_state_dir: str,
     state: Dict[str, Any],
@@ -1109,270 +1175,274 @@ def _mark_failed(
     error: str,
     *,
     now_ts: float,
+    persist: bool = True,
 ) -> Dict[str, Any]:
     entry = dict(entry)
     entry["last_ok"] = False
     entry["last_error"] = str(error or "refresh_failed")
     entry["last_update_ts"] = now_ts
-    _schedule_next(entry, now_ts)
+    entry["failure_count"] = min(3, int(entry.get("failure_count") or 0) + 1)
+    retry = (300, 900, 3600)[entry["failure_count"] - 1]
+    entry["last_error_retry_seconds"] = retry
+    entry["next_update_ts"] = now_ts + min(retry, _clamp_interval(entry.get("interval_hours")) * 3600) if entry.get("enabled", True) else None
     state["subscriptions"][sub_idx] = entry
-    _write_state(ui_state_dir, state)
+    if persist:
+        _write_state(ui_state_dir, state)
     return {
         "ok": False,
         "id": entry.get("id"),
         "changed": False,
         "restarted": False,
+        "hot_applied": False,
         "error": entry["last_error"],
         "next_update_ts": entry.get("next_update_ts"),
     }
 
 
-def _refresh_config_subscription(
-    ui_state_dir: str,
-    state: Dict[str, Any],
-    sub_idx: int,
-    sub: Dict[str, Any],
-    *,
-    active_text: str,
-    mihomo_config_file: str,
-    restart_xkeen: RestartCallback | None,
-    restart: bool,
-    save_callback: SaveCallback | None,
-    now_ts: float,
-) -> Dict[str, Any]:
-    try:
-        old_names = _clean_string_list(sub.get("proxy_names"))
-        if not old_names:
-            old_names = _extract_proxy_names_from_yaml(sub.get("managed_yaml") or "")
-        if not old_names:
-            raise RuntimeError("managed_proxy_not_found")
+def _prepare_subscription(state, sub, active_text, *, config_file, migrate):
+    from services import mihomo_subscription_providers as providers
 
-        old_names_set = set(old_names)
-        existing_names = [name for name in _all_proxy_names_from_config(active_text) if name not in old_names_set]
-        parser = _clean_refresh_parser(sub.get("refresh_parser") or sub.get("refreshParser"))
-        if parser == REFRESH_PARSER_MIHOMO_PROVIDER:
-            new_blocks, skipped = _fetch_mihomo_provider_proxy_blocks(str(sub.get("url") or ""))
+    entry = copy.deepcopy(sub)
+    generator = state.get('generator_state') or {}
+    index = _find_proxy_index_for_subscription(generator, sub)
+    is_generator = sub.get('source', 'generator') == 'generator'
+    if is_generator and index < 0:
+        raise RuntimeError('managed_proxy_not_found')
+    old_yaml = str(sub.get('managed_yaml') or '')
+    if not old_yaml and is_generator:
+        old_yaml = str(generator['proxies'][index].get('yaml') or '')
+    old_names = _clean_string_list(sub.get('proxy_names')) or _extract_proxy_names_from_yaml(old_yaml)
+    if not old_names:
+        raise RuntimeError('managed_proxy_not_found')
+    parser = _clean_refresh_parser(sub.get('refresh_parser'))
+    validators = dict(sub.get('http_validators') or {})
+    if validators.get('url') != sub.get('url') or not validators.get('request_key') or not (validators.get('etag') or validators.get('last_modified')):
+        validators = {}
+    meta, headers = {}, {}
+    if parser == REFRESH_PARSER_MIHOMO_PROVIDER:
+        blocks, skipped = _fetch_mihomo_provider_proxy_blocks(sub['url'], validators=validators, metadata=meta)
+    else:
+        body, headers, meta = _fetch_xray_subscription_body(sub['url'], **({'validators': validators} if validators else {}))
+        if meta.get('not_modified') or headers.get('x-xkeen-not-modified') == '1':
+            blocks, skipped = [], []
         else:
-            body, _headers, _meta = _fetch_xray_subscription_body(str(sub.get("url") or ""))
-            proxies, skipped, _source_format = convert_subscription_source_text(
-                body,
-                existing_names=existing_names,
-            )
-            if not proxies:
-                raise RuntimeError("no_supported_proxies")
-            new_blocks = [str(getattr(proxy, "yaml", "") or "").strip() for proxy in proxies]
-        new_blocks = [block for block in new_blocks if block]
-        if not new_blocks:
-            raise RuntimeError("empty_proxy_yaml")
-        new_blocks = _apply_connection_options_to_blocks(new_blocks, sub.get("connection_options"))
-
-        new_names = _extract_proxy_names_from_yaml("\n\n".join(new_blocks))
-        groups = _clean_string_list(sub.get("groups"))
-        patched = _replace_config_subscription_blocks(
-            active_text,
-            old_proxy_names=old_names,
-            new_proxy_blocks=new_blocks,
-            groups=groups,
-        )
-        cfg_to_save = patched.rstrip("\n")
-        changed = _hash_text(cfg_to_save) != _hash_text(active_text)
-        if changed:
-            if save_callback is not None:
-                save_callback(cfg_to_save)
-            else:
-                _atomic_write_text(mihomo_config_file, cfg_to_save + "\n")
-
-            if restart and restart_xkeen is not None:
-                try:
-                    restart_xkeen(source="mihomo-subscription-refresh")
-                except TypeError:
-                    restart_xkeen("mihomo-subscription-refresh")
-
-        sub["source"] = "config"
-        sub["refresh_parser"] = parser
-        sub["groups"] = groups
-        sub["proxy_names"] = new_names
-        sub["managed_yaml"] = "\n\n".join(new_blocks)
-        sub["last_ok"] = True
-        sub["last_error"] = ""
-        sub["last_update_ts"] = now_ts
-        sub["last_count"] = len(new_names)
-        sub["last_skipped_count"] = len(skipped)
-        sub["last_hash"] = _hash_text(sub["managed_yaml"])
-        sub["last_changed"] = bool(changed)
-        _schedule_next(sub, now_ts)
-
-        state["last_config_hash"] = _hash_text(cfg_to_save if changed else active_text)
-        state["last_synced_ts"] = now_ts
-        state["subscriptions"][sub_idx] = sub
-        _write_state(ui_state_dir, state)
-
-        return {
-            "ok": True,
-            "id": sub.get("id"),
-            "changed": bool(changed),
-            "restarted": bool(changed and restart and restart_xkeen is not None),
-            "count": len(new_names),
-            "skipped": skipped,
-            "next_update_ts": sub.get("next_update_ts"),
+            existing = [name for name in _all_proxy_names_from_config(active_text) if name not in set(old_names)]
+            for other in state.get('subscriptions', []):
+                if other.get('id') != sub['id']:
+                    existing.extend(other.get('proxy_names') or [])
+            parsed, skipped, _ = convert_subscription_source_text(body, existing_names=existing)
+            blocks = [str(proxy.yaml).strip() for proxy in parsed]
+    not_modified = bool(meta.get('not_modified') or headers.get('x-xkeen-not-modified') == '1')
+    if not_modified:
+        if not old_yaml:
+            raise RuntimeError('subscription_cache_missing')
+        entry['http_validators'] = {**validators, **{k: v for k, v in meta.get('validators', {}).items() if v}}
+        blocks = _provider_proxy_blocks_from_payload(providers.provider_payload([old_yaml]))
+        skipped = []
+    else:
+        if not blocks:
+            raise RuntimeError('no_supported_proxies')
+        blocks = _apply_connection_options_to_blocks(blocks, sub.get('connection_options'))
+        incoming = meta.get('validators') or {
+            'etag': headers.get('etag', ''), 'last_modified': headers.get('last-modified', ''),
+            'request_key': headers.get('x-xkeen-request-key', ''),
         }
-    except RuntimeError as exc:
-        return _mark_failed(ui_state_dir, state, sub_idx, sub, str(exc), now_ts=now_ts)
-    except Exception as exc:
-        return _mark_failed(
-            ui_state_dir,
-            state,
-            sub_idx,
-            sub,
-            f"{type(exc).__name__}: {exc}",
-            now_ts=now_ts,
-        )
-
-
-def refresh_subscription(
-    ui_state_dir: str,
-    sub_id: str,
-    *,
-    mihomo_config_file: str,
-    restart_xkeen: RestartCallback | None = None,
-    restart: bool = True,
-    force: bool = False,
-    save_callback: SaveCallback | None = None,
-) -> Dict[str, Any]:
-    now_ts = _now()
-    with _STATE_LOCK:
-        state = load_subscription_state(ui_state_dir)
-        sub_idx, sub = _find_subscription(state, sub_id)
-        if sub_idx < 0 or sub is None:
-            raise KeyError("subscription not found")
-        sub = dict(sub)
-
-        active_text = load_text(mihomo_config_file, default="") or ""
-        expected_hash = str(state.get("last_config_hash") or "")
-        if expected_hash and _hash_text(active_text) != expected_hash and not force:
-            return _mark_failed(
-                ui_state_dir,
-                state,
-                sub_idx,
-                sub,
-                "active_config_changed",
-                now_ts=now_ts,
-            )
-
-        if str(sub.get("source") or "generator") == "config":
-            return _refresh_config_subscription(
-                ui_state_dir,
-                state,
-                sub_idx,
-                sub,
-                active_text=active_text,
-                mihomo_config_file=mihomo_config_file,
-                restart_xkeen=restart_xkeen,
-                restart=restart,
-                save_callback=save_callback,
-                now_ts=now_ts,
-            )
-
-        generator_state = copy.deepcopy(state.get("generator_state") or {})
-        proxy_index = _find_proxy_index_for_subscription(generator_state, sub)
-        if proxy_index < 0:
-            return _mark_failed(
-                ui_state_dir,
-                state,
-                sub_idx,
-                sub,
-                "managed_proxy_not_found",
-                now_ts=now_ts,
-            )
-
-        try:
-            body, _headers, _meta = _fetch_xray_subscription_body(str(sub.get("url") or ""))
-            proxies, skipped, _source_format = convert_subscription_source_text(
-                body,
-                existing_names=_existing_names_for_refresh(generator_state, skip_index=proxy_index),
-            )
-            if not proxies:
-                raise RuntimeError("no_supported_proxies")
-            proxy_yaml = _format_proxy_yaml_blocks(proxies)
-            if not proxy_yaml.strip():
-                raise RuntimeError("empty_proxy_yaml")
-
-            proxies_list = generator_state.get("proxies")
-            if not isinstance(proxies_list, list):
-                raise RuntimeError("generator_state_invalid")
-            proxy_item = proxies_list[proxy_index]
-            if not isinstance(proxy_item, dict):
-                raise RuntimeError("managed_proxy_invalid")
-
-            proxy_item["kind"] = "yaml"
-            proxy_item["yaml"] = proxy_yaml
-            tags = _clean_string_list(proxy_item.get("tags"))
-            tag = str(sub.get("tag") or _derive_tag_from_url(sub.get("url") or "")).strip() or "xray-sub"
-            if tag not in tags:
-                tags.append(tag)
-            proxy_item["tags"] = tags
-            proxy_item["xray_json_subscription"] = {
-                "id": sub.get("id"),
-                "url": sub.get("url"),
-                "tag": tag,
-                "enabled": bool(sub.get("enabled", True)),
-                "interval_hours": _clamp_interval(sub.get("interval_hours")),
-                "proxy_index": proxy_index,
-            }
-
-            cfg = build_full_config(generator_state)
-            cfg_to_save = cfg.rstrip("\n")
-            changed = _hash_text(cfg_to_save) != _hash_text(active_text)
-            if changed:
-                if save_callback is not None:
-                    save_callback(cfg_to_save)
+        entry['http_validators'] = {**incoming, 'url': sub['url']}
+    names = _extract_proxy_names_from_yaml('\n\n'.join(blocks))
+    name, cache_path = providers.provider_identity(config_file, sub['id'])
+    migrated = False
+    native = bool(sub.get('provider_name'))
+    if native:
+        if sub['provider_name'] != name:
+            raise RuntimeError('managed_provider_identity_changed')
+        patched = providers.check_provider(active_text, name, cache_path)
+    else:
+        patched = active_text
+        if migrate:
+            migrated_text = providers.migrate_config(active_text, old_names, name, cache_path)
+            if migrated_text is not None:
+                patched, native, migrated = migrated_text, True, True
+        if not native:
+            if is_generator:
+                proxy = generator['proxies'][index]
+                proxy['kind'] = 'yaml'
+                proxy['yaml'] = '\n\n'.join(blocks)
+                try:
+                    import yaml
+                except ImportError:
+                    patched = build_full_config(generator).rstrip('\n')
                 else:
-                    _atomic_write_text(mihomo_config_file, cfg_to_save + "\n")
+                    groups = [group['name'] for group in (yaml.safe_load(active_text).get('proxy-groups') or [])
+                              if set(old_names).intersection(group.get('proxies') or [])]
+                    patched = _replace_config_subscription_blocks(active_text, old_proxy_names=old_names,
+                        new_proxy_blocks=blocks, groups=groups).rstrip('\n')
+            else:
+                patched = _replace_config_subscription_blocks(active_text, old_proxy_names=old_names,
+                    new_proxy_blocks=blocks, groups=_clean_string_list(sub.get('groups'))).rstrip('\n')
+    if native:
+        entry['provider_name'] = name
+    if is_generator:
+        generator['proxies'][index]['yaml'] = '\n\n'.join(blocks)
+    entry.update(managed_yaml='\n\n'.join(blocks), proxy_names=names,
+                 last_count=len(names), last_skipped_count=len(skipped), refresh_parser=parser,
+                 last_hash=_hash_text('\n\n'.join(blocks)))
+    payload = providers.provider_payload(blocks) if native else None
+    cache_changed = native and (not cache_path.exists() or _hash_text(cache_path.read_text(encoding='utf-8')) != _hash_text(payload))
+    changed = bool(migrated or cache_changed or _hash_text(patched) != _hash_text(active_text))
+    result = {'ok': True, 'id': sub['id'], 'count': len(names), 'skipped': skipped,
+              'changed': changed, 'restarted': False, 'hot_applied': False, 'not_modified': not_modified}
+    return {'entry': entry, 'content': patched, 'cache_path': cache_path if native else None,
+            'payload': payload, 'cache_changed': cache_changed, 'migrated': migrated, 'result': result}
 
-                if restart and restart_xkeen is not None:
-                    try:
-                        restart_xkeen(source="mihomo-subscription-refresh")
-                    except TypeError:
-                        restart_xkeen("mihomo-subscription-refresh")
 
-            final_hash = _hash_text(cfg_to_save if changed else active_text)
-            sub["proxy_index"] = proxy_index
-            sub["last_ok"] = True
-            sub["last_error"] = ""
-            sub["last_update_ts"] = now_ts
-            sub["last_count"] = len(proxies)
-            sub["last_skipped_count"] = len(skipped)
-            sub["last_hash"] = _hash_text(proxy_yaml)
-            sub["last_changed"] = bool(changed)
-            _schedule_next(sub, now_ts)
+def _refresh_many(ui_state_dir, ids, *, mihomo_config_file, restart_xkeen, restart, force=False, save_callback=None):
+    from services.mihomo_clash_client import MihomoClashClient
+    from services.mihomo_clash_target import discover_mihomo_clash_target
 
-            state["generator_state"] = generator_state
-            state["last_config_hash"] = final_hash
-            state["last_synced_ts"] = now_ts
-            state["subscriptions"][sub_idx] = sub
+    with _STATE_LOCK:
+        previous = load_subscription_state(ui_state_dir)
+        state = copy.deepcopy(previous)
+        original = load_text(mihomo_config_file, default='') or ''
+        content = original
+        now_ts = _now()
+        active_apply = bool(restart and restart_xkeen is not None)
+        client = None
+        if active_apply:
+            discovery = discover_mihomo_clash_target(mihomo_config_file, os.path.dirname(os.path.abspath(mihomo_config_file)))
+            if discovery.target is not None:
+                try:
+                    probe = MihomoClashClient(discovery.target)
+                    probe.request_json('providers_proxies')
+                    client = probe
+                except Exception:
+                    pass  # Existing static configs retain their reload/restart path.
+        prepared, results = [], []
+        # Move tail members first so each provider keeps its position relative
+        # to other subscriptions in fallback/select groups.
+        for sub_id in reversed(ids):
+            idx, sub = _find_subscription(state, sub_id)
+            if sub is None:
+                raise KeyError('subscription not found')
+            try:
+                expected = previous.get('last_config_hash')
+                rebasing = bool(expected and _hash_text(original) != expected and not force and not sub.get('provider_name'))
+                if rebasing:
+                    from services.mihomo_subscription_providers import owned_nodes_unchanged
+                    if client is None or sub.get('source') != 'config' or not owned_nodes_unchanged(original, sub.get('managed_yaml') or ''):
+                        raise RuntimeError('active_config_changed')
+                candidate_state = copy.deepcopy(state)
+                item = _prepare_subscription(candidate_state, sub, content, config_file=mihomo_config_file, migrate=client is not None)
+                if rebasing and not item['entry'].get('provider_name'):
+                    raise RuntimeError('active_config_changed')
+                state = candidate_state
+                content = item['content']
+                entry = item['entry']
+                entry.update(last_ok=True, last_error='', last_update_ts=now_ts, last_success_ts=now_ts,
+                             last_changed=item['result']['changed'], failure_count=0)
+                entry.pop('last_error_retry_seconds', None)
+                _schedule_next(entry, now_ts)
+                state['subscriptions'][idx] = entry
+                item['result']['next_update_ts'] = entry.get('next_update_ts')
+                prepared.append(item)
+                results.append(item['result'])
+            except Exception as exc:
+                results.append(_mark_failed(ui_state_dir, state, idx, sub, str(exc), now_ts=now_ts, persist=False))
+        config_changed = _hash_text(content) != _hash_text(original)
+        changed_files = [item for item in prepared if item['cache_changed']]
+        pending = [item for item in prepared if item['entry'].get('pending_apply')]
+        snapshots, updated = {}, []
+        attempted_reload = False
+        wrote_config = False
+        try:
+            for item in changed_files:
+                path = item['cache_path']
+                snapshots[path] = path.read_text(encoding='utf-8') if path.exists() else None
+            # One save creates one backup, including provider snapshots, before
+            # any cache is overwritten. Provider-only updates do not reload YAML.
+            if config_changed or changed_files:
+                if _hash_text(load_text(mihomo_config_file, default='') or '') != _hash_text(original):
+                    raise RuntimeError('active_config_changed')
+                wrote_config = True
+                if save_callback is not None:
+                    from services.mihomo_runtime import save_config
+                    if save_callback is save_config:
+                        save_callback(content, provider_updates={str(item['cache_path']): item['payload'] for item in changed_files})
+                    else:
+                        save_callback(content)
+                elif config_changed:
+                    _atomic_write_text(os.path.realpath(mihomo_config_file), content + '\n')
+            for item in changed_files:
+                path = item['cache_path']
+                if path.exists() and path.read_text(encoding='utf-8') == item['payload']:
+                    continue
+                path.parent.mkdir(parents=True, exist_ok=True)
+                _atomic_write_text(str(path), item['payload'])
+            if active_apply and (config_changed or any(not item['entry'].get('provider_name') for item in pending)):
+                attempted_reload = True
+                applied = _apply_or_restart(mihomo_config_file, restart_xkeen, source='mihomo-subscriptions-batch' if len(ids) > 1 else 'mihomo-subscription-refresh')
+                for item in prepared:
+                    if item['result']['changed'] or item in pending:
+                        item['result'].update(applied)
+                        item['entry'].pop('pending_apply', None)
+            elif active_apply:
+                for item in changed_files + [p for p in pending if p not in changed_files]:
+                    if client is None:
+                        raise RuntimeError('mihomo_provider_api_unavailable')
+                    updated.append(item)
+                    client.update_provider('proxy', item['entry']['provider_name'])
+                    item['result'].update(hot_applied=True, apply_method='mihomo-provider')
+                    item['entry'].pop('pending_apply', None)
+            elif config_changed or changed_files:
+                for item in prepared:
+                    if item['result']['changed']:
+                        item['entry']['pending_apply'] = True
+            state['last_config_hash'] = _hash_text(content)
+            state['last_synced_ts'] = now_ts
             _write_state(ui_state_dir, state)
-
-            return {
-                "ok": True,
-                "id": sub.get("id"),
-                "changed": bool(changed),
-                "restarted": bool(changed and restart and restart_xkeen is not None),
-                "count": len(proxies),
-                "skipped": skipped,
-                "next_update_ts": sub.get("next_update_ts"),
-                "generator_state": copy.deepcopy(generator_state),
-            }
-        except RuntimeError as exc:
-            return _mark_failed(ui_state_dir, state, sub_idx, sub, str(exc), now_ts=now_ts)
         except Exception as exc:
-            return _mark_failed(
-                ui_state_dir,
-                state,
-                sub_idx,
-                sub,
-                f"{type(exc).__name__}: {exc}",
-                now_ts=now_ts,
-            )
+            for path, text in snapshots.items():
+                if text is None:
+                    path.unlink(missing_ok=True)
+                else:
+                    _atomic_write_text(str(path), text)
+            if config_changed and wrote_config:
+                _atomic_write_text(os.path.realpath(mihomo_config_file), original)
+            recovery_failed = False
+            if client is not None:
+                try:
+                    if attempted_reload and str(exc) != 'mihomo_config_rejected':
+                        client.reload_config(original)
+                    for item in updated:
+                        client.update_provider('proxy', item['entry']['provider_name'])
+                except Exception:
+                    recovery_failed = True
+            state = copy.deepcopy(previous)
+            for result in results:
+                idx, sub = _find_subscription(state, result['id'])
+                error = str(exc) if result.get('ok') else result.get('error', 'refresh_failed')
+                result.update(_mark_failed(ui_state_dir, state, idx, sub, error, now_ts=now_ts, persist=False))
+                if recovery_failed:
+                    result['recovery_failed'] = True
+            _write_state(ui_state_dir, state)
+        else:
+            try:
+                from services.mihomo_clash_cache import invalidate_shared_mihomo_cache
+                invalidate_shared_mihomo_cache(namespaces={'status', 'groups', 'providers', 'rules', 'yaml'})
+            except Exception:
+                pass
+            for item in prepared:
+                if item['entry'].get('source') == 'generator':
+                    item['result']['generator_state'] = copy.deepcopy(state.get('generator_state') or {})
+        order = {sub_id: index for index, sub_id in enumerate(ids)}
+        return sorted(results, key=lambda result: order[result['id']])
+
+
+def refresh_subscription(ui_state_dir: str, sub_id: str, *, mihomo_config_file: str,
+                         restart_xkeen: RestartCallback | None = None, restart: bool = True,
+                         force: bool = False, save_callback: SaveCallback | None = None) -> Dict[str, Any]:
+    return _refresh_many(ui_state_dir, [sub_id], mihomo_config_file=mihomo_config_file,
+                         restart_xkeen=restart_xkeen, restart=restart, force=force,
+                         save_callback=save_callback)[0]
 
 
 def _refresh_lookahead_seconds() -> int:
@@ -1430,10 +1500,6 @@ def apply_schedule_alignment(ui_state_dir: str) -> Dict[str, Any]:
     return plan
 
 
-def _refresh_result_needs_restart(result: Any) -> bool:
-    return bool(isinstance(result, dict) and result.get("ok") and result.get("changed"))
-
-
 def refresh_due_subscriptions(
     ui_state_dir: str,
     *,
@@ -1442,67 +1508,40 @@ def refresh_due_subscriptions(
     restart: bool = True,
     save_callback: SaveCallback | None = None,
 ) -> List[Dict[str, Any]]:
-    state = load_subscription_state(ui_state_dir)
-    now_ts = _now()
-    lookahead = _refresh_lookahead_seconds()
+    with _STATE_LOCK:
+        state = load_subscription_state(ui_state_dir)
+        now_ts = _now()
+        lookahead = _refresh_lookahead_seconds()
 
-    due_subs: List[Dict[str, Any]] = []
-    has_due = False
-    for sub in list(state.get("subscriptions") or []):
-        if not isinstance(sub, dict) or not bool(sub.get("enabled", True)):
-            continue
-        try:
-            due_ts = float(sub.get("next_update_ts") or 0)
-        except Exception:
-            due_ts = 0.0
-        if due_ts <= now_ts:
-            has_due = True
-        elif due_ts > now_ts + lookahead:
-            continue
-        due_subs.append(sub)
-
-    # Never refresh early on its own: the look-ahead only widens a batch that
-    # already has at least one genuinely due subscription. Without this guard
-    # every tick would keep pulling schedules forward.
-    if not has_due:
-        return []
-
-    batch_restart = bool(
-        restart and restart_xkeen is not None and env_flag("XKEEN_MIHOMO_SUBSCRIPTIONS_RESTART_BATCH", True)
-    )
-    item_restart = bool(restart and not batch_restart)
-
-    results: List[Dict[str, Any]] = []
-    for sub in due_subs:
-        try:
-            results.append(
-                refresh_subscription(
-                    ui_state_dir,
-                    str(sub.get("id") or ""),
-                    mihomo_config_file=mihomo_config_file,
-                    restart_xkeen=restart_xkeen,
-                    restart=item_restart,
-                    save_callback=save_callback,
-                )
-            )
-        except Exception as exc:
-            results.append({"ok": False, "id": sub.get("id"), "error": str(exc)})
-
-    if batch_restart and any(_refresh_result_needs_restart(item) for item in results):
-        restarted = False
-        try:
+        due_subs: List[Dict[str, Any]] = []
+        has_due = False
+        for sub in list(state.get("subscriptions") or []):
+            if not isinstance(sub, dict) or not bool(sub.get("enabled", True)):
+                continue
             try:
-                restart_xkeen(source="mihomo-subscriptions-batch")
-            except TypeError:
-                restart_xkeen("mihomo-subscriptions-batch")
-            restarted = True
-        except Exception:
-            restarted = False
-        for item in results:
-            if _refresh_result_needs_restart(item):
-                item["restarted"] = restarted
+                due_ts = float(sub.get("next_update_ts") or 0)
+            except Exception:
+                due_ts = 0.0
+            if due_ts <= now_ts:
+                has_due = True
+            elif due_ts > now_ts + lookahead:
+                continue
+            due_subs.append(sub)
 
-    return results
+        # Never refresh early on its own: the look-ahead only widens a batch that
+        # already has at least one genuinely due subscription. Without this guard
+        # every tick would keep pulling schedules forward.
+        if not has_due:
+            return []
+
+        batch = env_flag("XKEEN_MIHOMO_SUBSCRIPTIONS_RESTART_BATCH", True)
+        if batch:
+            return _refresh_many(ui_state_dir, [sub["id"] for sub in due_subs],
+                mihomo_config_file=mihomo_config_file, restart_xkeen=restart_xkeen,
+                restart=restart, save_callback=save_callback)
+        return [refresh_subscription(ui_state_dir, sub["id"], mihomo_config_file=mihomo_config_file,
+                    restart_xkeen=restart_xkeen, restart=restart, save_callback=save_callback)
+                for sub in due_subs]
 
 
 def start_subscription_scheduler(
@@ -1550,6 +1589,7 @@ def start_subscription_scheduler(
                             total=len(results),
                             ok=sum(1 for r in results if r.get("ok")),
                             restarted=any(r.get("restarted") for r in results),
+                            hot_applied=any(r.get("hot_applied") for r in results),
                         )
                     except Exception:
                         pass

@@ -1062,7 +1062,22 @@ def _fetch_provider_subscription_text(
         handlers.append(urllib.request.HTTPSHandler(context=ctx))
 
     opener = urllib.request.build_opener(*handlers)
-    with opener.open(req, timeout=float(timeout)) as resp:
+    try:
+        response = opener.open(req, timeout=float(timeout))
+    except urllib.error.HTTPError as exc:
+        if exc.code != 304 or not any(key.lower() in {"if-none-match", "if-modified-since"} for key in headers):
+            raise
+        response = exc
+    with response as resp:
+        from services.subscription_request_profile import request_headers_key
+
+        validators = {
+            "etag": resp.headers.get("ETag") or "",
+            "last_modified": resp.headers.get("Last-Modified") or "",
+            "request_key": request_headers_key(headers),
+        }
+        if getattr(resp, "status", None) == 304:
+            return "", {"not_modified": True, "validators": validators}
         raw = resp.read(max(1, int(max_bytes)) + 1)
         if len(raw) > max_bytes:
             raise ValueError("subscription_too_large")
@@ -1082,6 +1097,7 @@ def _fetch_provider_subscription_text(
         "content_type": content_type,
         "bytes": len(raw),
         "hwid_response_headers": hwid_response_headers,
+        "validators": validators,
     }
 
 
@@ -1089,6 +1105,7 @@ def _happ_fallback_headers(headers: Dict[str, str]) -> Dict[str, str] | None:
     if not env_flag(_HAPP_FALLBACK_ENABLED_ENV, True):
         return None
     h = dict(headers or {})
+    h = {key: value for key, value in h.items() if key.lower() not in {"if-none-match", "if-modified-since"}}
     hwid = ""
     ua = ""
     for key, value in h.items():
@@ -1201,6 +1218,7 @@ def fetch_provider_payload(
     timeout: float = 20.0,
     policy: URLPolicy | None = None,
     max_bytes: int = 2 * 1024 * 1024,
+    validators: Dict[str, str] | None = None,
 ) -> tuple[str, Dict[str, Any]]:
     """Fetch a HWID subscription and return provider-compatible YAML/text."""
 
@@ -1243,6 +1261,10 @@ def fetch_provider_payload(
 
     req_headers = dict(headers or {})
     req_headers.setdefault("Accept", "text/yaml, text/plain, */*")
+    if validators:
+        from services.subscription_request_profile import conditional_request_headers
+
+        req_headers = conditional_request_headers(req_headers, validators)
     text, fetch_meta = _fetch_provider_subscription_text(
         u,
         headers=req_headers,
@@ -1251,6 +1273,8 @@ def fetch_provider_payload(
         policy=effective_policy,
         max_bytes=max_bytes,
     )
+    if fetch_meta.get("not_modified"):
+        return "", fetch_meta
     payload, meta = provider_payload_from_subscription_text(text)
     meta.update(fetch_meta)
     landing_reason = _provider_payload_landing_page_reason(payload, meta)

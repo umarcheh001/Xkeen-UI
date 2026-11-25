@@ -154,6 +154,39 @@ def test_tcp_client_uses_allowlisted_operation_and_injects_bearer_header():
     ]
 
 
+def test_reload_sends_yaml_without_forcing_listeners_or_exposing_paths():
+    from services.mihomo_clash_client import MIHOMO_CLASH_ENDPOINTS
+
+    content = "proxies: []\n# Prizrak: расширения остаются в YAML\n"
+    with tcp_server({"PUT /configs?force=false": (204, "", b"")}) as (port, handler):
+        result = client_for_port(port, MIHOMO_CLASH_ENDPOINTS, secret="fixture-secret").reload_config(content)
+    assert result.status == 204
+    assert len(handler.seen) == 1
+    request = handler.seen[0]
+    assert request["path"] == "/configs?force=false"
+    assert request["authorization"] == "Bearer fixture-secret"
+    assert json.loads(request["body"]) == {"payload": content}
+
+
+def test_reload_file_sends_only_the_server_path(tmp_path):
+    from services.mihomo_clash_client import MIHOMO_CLASH_ENDPOINTS
+
+    path = str(tmp_path / "config.yaml")
+    with tcp_server({"PUT /configs?force=false": (204, "", b"")}) as (port, handler):
+        result = client_for_port(port, MIHOMO_CLASH_ENDPOINTS).reload_config_file(path)
+    assert result.status == 204
+    assert json.loads(handler.seen[0]["body"]) == {"path": path}
+
+
+@pytest.mark.parametrize("content", [None, "", " \n", "x" * (4 * 1024 * 1024 + 1)],
+                         ids=["none", "empty", "whitespace", "oversized"])
+def test_reload_rejects_empty_or_oversized_config_before_connecting(content):
+    from services.mihomo_clash_client import MIHOMO_CLASH_ENDPOINTS
+
+    with pytest.raises(MihomoClashClientError, match="Invalid Mihomo config payload"):
+        client_for_port(9, MIHOMO_CLASH_ENDPOINTS).reload_config(content)
+
+
 def test_client_rejects_unknown_operation_before_connecting():
     client = client_for_port(9, {})
     with pytest.raises(MihomoClashClientError) as captured:

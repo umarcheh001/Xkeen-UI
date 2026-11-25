@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 682,
-      "size_bytes": 9101008,
+      "size_bytes": 9101933,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -88,7 +88,7 @@
       ],
       "removable": true,
       "unit_count": 162,
-      "size_bytes": 4272126,
+      "size_bytes": 4273484,
       "kind_counts": {
         "backend_route": 13,
         "backend_service": 23,
@@ -133,13 +133,13 @@
         "mihomo"
       ],
       "removable": true,
-      "unit_count": 161,
-      "size_bytes": 3898096,
+      "unit_count": 163,
+      "size_bytes": 3937986,
       "kind_counts": {
         "app_runtime": 4,
         "backend_route": 2,
-        "backend_service": 31,
-        "backend_test": 54,
+        "backend_service": 32,
+        "backend_test": 55,
         "configuration": 3,
         "editor_schema": 1,
         "frontend_bundle": 2,
@@ -324,7 +324,7 @@
       ],
       "removable": true,
       "unit_count": 22,
-      "size_bytes": 332810,
+      "size_bytes": 333895,
       "kind_counts": {
         "backend_route": 1,
         "backend_service": 6,
@@ -3430,7 +3430,7 @@
       "module_id": "core",
       "kind": "backend_service",
       "path": "xkeen-ui/services/subscription_request_profile.py",
-      "size_bytes": 6064,
+      "size_bytes": 6989,
       "depends_on": [
         "integration.happ"
       ],
@@ -17264,7 +17264,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_service",
       "path": "xkeen-ui/services/mihomo_clash_client.py",
-      "size_bytes": 37087,
+      "size_bytes": 38481,
       "depends_on": [
         "core",
         "tool.editor"
@@ -17767,7 +17767,28 @@
       "module_id": "engine.mihomo",
       "kind": "backend_service",
       "path": "xkeen-ui/services/mihomo_runtime.py",
-      "size_bytes": 16567,
+      "size_bytes": 17233,
+      "depends_on": [
+        "core",
+        "tool.editor"
+      ],
+      "starts_background_task": false,
+      "background_markers": [],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "xkeen",
+        "mihomo"
+      ],
+      "environment_variables": [],
+      "removable": true
+    },
+    {
+      "module_id": "engine.mihomo",
+      "kind": "backend_service",
+      "path": "xkeen-ui/services/mihomo_subscription_providers.py",
+      "size_bytes": 10253,
       "depends_on": [
         "core",
         "tool.editor"
@@ -17788,7 +17809,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_service",
       "path": "xkeen-ui/services/mihomo_subscriptions.py",
-      "size_bytes": 59535,
+      "size_bytes": 67102,
       "depends_on": [
         "core",
         "tool.editor",
@@ -17932,7 +17953,7 @@
       "module_id": "engine.mihomo",
       "kind": "backend_test",
       "path": "tests/test_mihomo_clash_client.py",
-      "size_bytes": 22704,
+      "size_bytes": 24320,
       "depends_on": [
         "core",
         "tool.editor"
@@ -18785,8 +18806,39 @@
     {
       "module_id": "engine.mihomo",
       "kind": "backend_test",
+      "path": "tests/test_mihomo_subscription_providers.py",
+      "size_bytes": 13799,
+      "depends_on": [
+        "core",
+        "tool.editor",
+        "engine.xray"
+      ],
+      "starts_background_task": true,
+      "background_markers": [
+        "daemon_thread",
+        "threading.Thread"
+      ],
+      "registers_routes": false,
+      "routes": [],
+      "frontend_bundle": [],
+      "system_requirements": [
+        "xkeen",
+        "mihomo"
+      ],
+      "environment_variables": [
+        "XKEEN_MIHOMO_HWID_ALLOW_HTTP",
+        "XKEEN_MIHOMO_HWID_ALLOW_PRIVATE_HOSTS",
+        "XKEEN_SUBSCRIPTION_ALLOW_HTTP",
+        "XKEEN_SUBSCRIPTION_ALLOW_PRIVATE_HOSTS",
+        "XKEEN_SUBSCRIPTION_HAPP_FALLBACK"
+      ],
+      "removable": true
+    },
+    {
+      "module_id": "engine.mihomo",
+      "kind": "backend_test",
       "path": "tests/test_mihomo_subscriptions.py",
-      "size_bytes": 34784,
+      "size_bytes": 39379,
       "depends_on": [
         "core",
         "tool.editor"
@@ -22039,7 +22091,7 @@
       "module_id": "engine.xray",
       "kind": "backend_service",
       "path": "xkeen-ui/services/xray_subscriptions.py",
-      "size_bytes": 344020,
+      "size_bytes": 345378,
       "depends_on": [
         "core",
         "tool.editor",
@@ -25346,7 +25398,7 @@
       "module_id": "integration.happ",
       "kind": "backend_service",
       "path": "xkeen-ui/services/mihomo_hwid_sub.py",
-      "size_bytes": 71327,
+      "size_bytes": 72412,
       "depends_on": [
         "core",
         "engine.xray",
@@ -36925,7 +36977,7 @@
       {
         "from": "engine.mihomo",
         "to": "core",
-        "unit_count": 161,
+        "unit_count": 163,
         "examples": [
           "xkeen-ui/bootstrap_mihomo_env.py",
           "xkeen-ui/mihomo_config_generator.py",
@@ -36940,13 +36992,14 @@
       {
         "from": "engine.mihomo",
         "to": "engine.xray",
-        "unit_count": 6,
+        "unit_count": 7,
         "examples": [
           "xkeen-ui/routes/mihomo.py",
           "xkeen-ui/services/mihomo_clash_devices.py",
           "xkeen-ui/services/mihomo_clash_dto.py",
           "xkeen-ui/services/mihomo_subscriptions.py",
           "xkeen-ui/services/mihomo_xray_json.py",
+          "tests/test_mihomo_subscription_providers.py",
           "tests/test_mihomo_xray_json_route.py"
         ]
       },
@@ -36972,7 +37025,7 @@
       {
         "from": "engine.mihomo",
         "to": "tool.editor",
-        "unit_count": 161,
+        "unit_count": 163,
         "examples": [
           "xkeen-ui/bootstrap_mihomo_env.py",
           "xkeen-ui/mihomo_config_generator.py",
@@ -37346,7 +37399,7 @@
       {
         "from": "engine.mihomo",
         "to": "core",
-        "unit_count": 88,
+        "unit_count": 89,
         "examples": [
           "xkeen-ui/bootstrap_mihomo_env.py",
           "xkeen-ui/mihomo_config_generator.py",
@@ -37392,7 +37445,7 @@
       {
         "from": "engine.mihomo",
         "to": "tool.editor",
-        "unit_count": 88,
+        "unit_count": 89,
         "examples": [
           "xkeen-ui/bootstrap_mihomo_env.py",
           "xkeen-ui/mihomo_config_generator.py",

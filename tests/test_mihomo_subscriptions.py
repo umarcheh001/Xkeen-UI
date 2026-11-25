@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+from pathlib import Path
 
 import pytest
 import yaml
@@ -375,7 +376,7 @@ def test_refresh_mihomo_provider_static_subscription_uses_provider_parser(tmp_pa
     )
     assert saved["refresh_parser"] == "mihomo-provider"
 
-    def fake_provider_blocks(url):
+    def fake_provider_blocks(url, **kwargs):
         assert url == "https://provider.example/sub"
         return (
             ["- name: New Node\n  type: vless\n  server: 2.2.2.2\n  port: 443\n"],
@@ -721,6 +722,92 @@ def _set_due_offsets(tmp_path, offsets):
     for item in state["subscriptions"]:
         item["next_update_ts"] = now_ts + offsets[item["id"]]
     svc._write_state(str(tmp_path), state)
+
+
+@pytest.mark.parametrize("source", ["config", "generator"])
+@pytest.mark.parametrize("outcome", ["reload", "rejected", "unreachable", "restart-failed"])
+def test_refresh_hot_apply_and_failure_recovery(tmp_path, monkeypatch, source, outcome):
+    from services.mihomo_clash_client import MihomoClashClient, MihomoClashClientError
+
+    old = svc.convert_subscription_text(_subscription_body("Old", "old.example", "11111111-1111-1111-1111-111111111111"))[0][0]
+    state = _state_with_managed_yaml(old.yaml)
+    if source == "generator":
+        content = build_full_config(state)
+        svc.sync_from_generator_state(str(tmp_path), state, config_text=content)
+        sub_id = "xray-example"
+    else:
+        content = "external-controller: 127.0.0.1:9090\nproxies:\n" + "\n".join("  " + line for line in old.yaml.splitlines()) + "\n"
+        sub_id = svc.sync_imported_xray_subscription(
+            str(tmp_path), url="https://example.test/xray.json", config_text=content,
+            proxy_yamls=[old.yaml], groups=[],
+        )["id"]
+    path = tmp_path / "config.yaml"
+    path.write_text(content, encoding="utf-8")
+    # Exercise the same API path for generated and imported configs.
+    from types import SimpleNamespace
+    from services import mihomo_clash_target
+    from services.mihomo_clash_target import MihomoClashTarget
+    monkeypatch.setattr(mihomo_clash_target, "discover_mihomo_clash_target", lambda *args: SimpleNamespace(
+        target=MihomoClashTarget(transport="tcp", port=9090, loopback_host="127.0.0.1"),
+    ))
+    body = _subscription_body("New", "new.example", "22222222-2222-2222-2222-222222222222")
+    monkeypatch.setattr(svc, "fetch_subscription_body", lambda url: (body, {}, {}))
+    reloads, restarts = [], []
+
+    def reload(_self, text):
+        reloads.append(text)
+        if outcome != "reload":
+            raise MihomoClashClientError("upstream_http_error" if outcome == "rejected" else "upstream_unreachable",
+                                         "safe error", upstream_status=400 if outcome == "rejected" else None)
+
+    def restart(**kwargs):
+        restarts.append(kwargs)
+        return outcome != "restart-failed"
+
+    monkeypatch.setattr(MihomoClashClient, "reload_config", reload)
+    monkeypatch.setattr(MihomoClashClient, "reload_config_file", lambda self, path: reload(self, Path(path).read_text(encoding="utf-8")))
+    result = svc.refresh_subscription(str(tmp_path), sub_id, mihomo_config_file=str(path), restart_xkeen=restart)
+    assert len(reloads) == 1 and "new.example" in reloads[0]
+    if outcome in {"rejected", "restart-failed"}:
+        assert result["ok"] is False
+        assert path.read_text(encoding="utf-8") == content
+        saved = svc.load_subscription_state(str(tmp_path))
+        assert saved["subscriptions"][0]["last_ok"] is False
+        assert saved["last_config_hash"] == svc._hash_text(content)
+    else:
+        assert result["ok"] is True
+        assert result["hot_applied"] is (outcome == "reload")
+        assert result["restarted"] is (outcome == "unreachable")
+    assert len(restarts) == int(outcome in {"unreachable", "restart-failed"})
+
+
+@pytest.mark.parametrize("rejected", [False, True])
+def test_batch_reloads_once_or_restores_all_subscriptions(tmp_path, monkeypatch, rejected):
+    config_path, save = _prepare_two_subscriptions(tmp_path, monkeypatch)
+    _set_due_offsets(tmp_path, {"sub-one": -10, "sub-two": -10})
+    original = config_path.read_text(encoding="utf-8")
+    reloads = []
+
+    def apply(path, restart, **kwargs):
+        reloads.append(config_path.read_text(encoding="utf-8"))
+        if rejected:
+            raise RuntimeError("mihomo_config_rejected")
+        return {"restarted": False, "hot_applied": True, "apply_method": "mihomo-api"}
+
+    monkeypatch.setattr(svc, "_apply_or_restart", apply)
+    results = svc.refresh_due_subscriptions(
+        str(tmp_path), mihomo_config_file=str(config_path), save_callback=save,
+        restart_xkeen=lambda **kwargs: pytest.fail("must not restart"),
+    )
+    assert len(reloads) == 1
+    assert "New One" in reloads[0] and "New Two" in reloads[0]
+    assert all(item["ok"] is not rejected for item in results)
+    assert all(item.get("hot_applied", False) is not rejected for item in results)
+    if rejected:
+        assert config_path.read_text(encoding="utf-8") == original
+        restored = svc.load_subscription_state(str(tmp_path))
+        assert restored["last_config_hash"] == svc._hash_text(original)
+        assert all(not item["last_ok"] for item in restored["subscriptions"])
 
 
 def test_refresh_due_subscriptions_restarts_once_for_whole_batch(tmp_path, monkeypatch):
