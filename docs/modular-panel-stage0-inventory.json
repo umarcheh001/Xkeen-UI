@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 685,
-      "size_bytes": 9159406,
+      "size_bytes": 9160301,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -16369,7 +16369,7 @@
       "module_id": "core",
       "kind": "template",
       "path": "xkeen-ui/templates/panel/modals/routing.html",
-      "size_bytes": 107381,
+      "size_bytes": 108276,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
