@@ -88,7 +88,7 @@
       ],
       "removable": true,
       "unit_count": 163,
-      "size_bytes": 4373809,
+      "size_bytes": 4374427,
       "kind_counts": {
         "backend_route": 13,
         "backend_service": 24,
@@ -22155,7 +22155,7 @@
       "module_id": "engine.xray",
       "kind": "backend_service",
       "path": "xkeen-ui/services/xray_subscriptions.py",
-      "size_bytes": 368675,
+      "size_bytes": 368375,
       "depends_on": [
         "core",
         "tool.editor",
@@ -23258,7 +23258,7 @@
       "module_id": "engine.xray",
       "kind": "backend_test",
       "path": "tests/test_xray_subscription_panel_owned_balancers.py",
-      "size_bytes": 2285,
+      "size_bytes": 3203,
       "depends_on": [
         "core",
         "tool.editor"

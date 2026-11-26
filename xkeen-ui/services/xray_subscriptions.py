@@ -201,10 +201,7 @@ AUTO_BALANCER_FALLBACK_TAG = "direct"
 AUTO_BALANCER_PRESERVE_TAGS = ("vless-reality",)
 AUTO_MIGRATED_RULE_TAG_PREFIX = "xk_auto_vless_pool_"
 ROUTING_SCENARIO_RULE_PREFIX = "xk_scenario_mobile_whitelist_"
-# Балансировщики, которые панель строит и пересобирает сама (сейчас это копия
-# маршрута DNS-over-VLESS, `dns_over_vless.BALANCER_TAG`). Подписка в них свои
-# узлы не дописывает и в форме их не предлагает: иначе объект разошёлся бы с
-# тем, что его хозяин записал о нём у себя. Равенство стережёт тест.
+# Фиксированный тег копии маршрута DNS-over-VLESS, `dns_over_vless.BALANCER_TAG`.
 PANEL_OWNED_BALANCER_TAGS = frozenset({"xk-dns-over-vless"})
 ROUTING_SCENARIO_MAIN_BALANCER_TAG = "balancer_main"
 ROUTING_SCENARIO_RESERVE_BALANCER_TAG = "balancer_reserv"
@@ -456,6 +453,14 @@ def _read_string_list_value(data: Any, keys: tuple[str, ...]) -> List[str]:
         if key in data:
             return _clean_string_list(data.get(key))
     return []
+
+
+def _is_panel_owned_balancer_tag(tag: str) -> bool:
+    return tag in PANEL_OWNED_BALANCER_TAGS or transport_groups.is_group(tag)
+
+
+def _read_user_balancer_tags(data: Any, keys: tuple[str, ...] = ROUTING_BALANCER_TAGS_KEYS) -> List[str]:
+    return [tag for tag in _read_string_list_value(data, keys) if not _is_panel_owned_balancer_tag(tag)]
 
 
 def _has_any_key(data: Any, keys: tuple[str, ...]) -> bool:
@@ -833,7 +838,7 @@ def _normalize_state(obj: Any) -> Dict[str, Any]:
         excluded_node_keys = _read_string_list_value(item, EXCLUDED_NODE_KEYS_KEYS)
         last_warnings = _read_string_list_value(item, LAST_WARNINGS_KEYS)
         ping_enabled = bool(item.get("ping_enabled", item.get("pingEnabled", True)))
-        routing_balancer_tags = _read_string_list_value(item, ROUTING_BALANCER_TAGS_KEYS)
+        routing_balancer_tags = _read_user_balancer_tags(item)
         routing_auto_rule = _read_bool_value(item, ROUTING_AUTO_RULE_KEYS, True)
         sockopt_mark_255 = _read_bool_value(item, SOCKOPT_MARK_255_KEYS, False)
         runtime_active_default = bool(ping_enabled or routing_auto_rule or routing_balancer_tags)
@@ -903,7 +908,7 @@ def _normalize_state(obj: Any) -> Dict[str, Any]:
                 if isinstance(item.get("last_tags"), list)
                 else [],
                 "last_selector_terms": _read_string_list_value(item, LAST_SELECTOR_TERMS_KEYS),
-                "last_routing_balancer_tags": _read_string_list_value(item, LAST_RUNTIME_BALANCER_TAGS_KEYS),
+                "last_routing_balancer_tags": _read_user_balancer_tags(item, LAST_RUNTIME_BALANCER_TAGS_KEYS),
                 "last_routing_auto_rule": _read_bool_value(item, LAST_RUNTIME_AUTO_RULE_KEYS, True),
                 "last_routing_mode": _clean_routing_mode(
                     item.get("last_routing_mode", item.get("lastRoutingMode", item.get("routing_mode")))
@@ -1004,15 +1009,9 @@ def upsert_subscription(ui_state_dir: str, payload: Dict[str, Any]) -> Dict[str,
             _stored_filter_value(base, TRANSPORT_FILTER_KEYS) if transport_filter_raw is _MISSING else transport_filter_raw
         )
         routing_mode = _clean_routing_mode(data.get("routing_mode", data.get("routingMode", base.get("routing_mode"))))
-        routing_balancer_tags = [
-            item
-            for item in (
-                _read_string_list_value(data, ROUTING_BALANCER_TAGS_KEYS)
-                if _has_any_key(data, ROUTING_BALANCER_TAGS_KEYS)
-                else _read_string_list_value(base, ROUTING_BALANCER_TAGS_KEYS)
-            )
-            if item not in PANEL_OWNED_BALANCER_TAGS
-        ]
+        routing_balancer_tags = _read_user_balancer_tags(
+            data if _has_any_key(data, ROUTING_BALANCER_TAGS_KEYS) else base
+        )
         routing_auto_rule = _read_bool_value(
             data,
             ROUTING_AUTO_RULE_KEYS,
@@ -4880,7 +4879,7 @@ def list_subscription_routing_balancers(xray_configs_dir: str) -> List[Dict[str,
         if not isinstance(balancer, dict):
             continue
         tag = str(balancer.get("tag") or "").strip()
-        if not tag or tag in PANEL_OWNED_BALANCER_TAGS:
+        if not tag or _is_panel_owned_balancer_tag(tag):
             continue
         strategy = str(((balancer.get("strategy") or {}).get("type") if isinstance(balancer.get("strategy"), dict) else "") or "").strip()
         selector = _clean_tags_list(balancer.get("selector") if isinstance(balancer.get("selector"), list) else [])
