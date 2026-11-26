@@ -1353,7 +1353,7 @@ let xrayLogsModuleApi = null;
     const uiStatus = readXrayLogUiStatus();
     const fileLabel = formatXrayLogFileLabel(runtime.currentFile);
     const pending = Math.max(0, parseInt(runtime.pendingCount || 0, 10) || 0);
-    const filterText = String(snapshot.filterText || '').trim();
+    const filterText = xrayLogPrivacyActive() ? '' : String(snapshot.filterText || '').trim();
 
     if (snapshot.entries.length) return null;
 
@@ -1874,7 +1874,9 @@ let xrayLogsModuleApi = null;
       const hidden = stats ? stats.hiddenRaw : 0;
       note.hidden = !hidden;
       note.textContent = hidden ? ('Не разобрано и скрыто: ' + hidden) : '';
-      note.title = 'Строки, которые панель не смогла разобрать. Показать их можно в меню «⋯».';
+      note.title = xrayLogPrivacyActive()
+        ? 'Неразобранные строки скрыты, пока включено скрытие устройств и узлов.'
+        : 'Строки, которые панель не смогла разобрать. Показать их можно в меню «⋯».';
     }
     const visibleCount = document.querySelector('[data-xlog-visible-count]');
     if (visibleCount) visibleCount.textContent = stats && stats.shown ? (stats.shown + ' стр.') : '';
@@ -4519,6 +4521,10 @@ function closeXrayContextModal() {
   } catch (e) {}
 }
 
+function xrayLogPrivacyActive() {
+  return $('xray-log-privacy')?.getAttribute('aria-pressed') === 'true';
+}
+
 function copyXrayContextModal() {
   const out = $('xray-context-output');
   if (!out) return;
@@ -4574,6 +4580,20 @@ function copyXrayContextModal() {
 	  const dlBtn = $('xray-log-download');
 	  const outputEl = $('xray-log-output');
 	  const scrollBottomBtn = $('xray-log-scroll-bottom');
+	  const privacyBtn = $('xray-log-privacy');
+
+	  if (privacyBtn) {
+	    privacyBtn.addEventListener('click', () => {
+	      const active = !xrayLogPrivacyActive();
+	      privacyBtn.setAttribute('aria-pressed', String(active));
+	      privacyBtn.textContent = active ? 'Показать устройства и узлы' : 'Скрыть устройства и узлы';
+	      closeLineMenu();
+	      $('xray-log-devices-btn').disabled = active;
+	      $('xray-log-show-raw').disabled = active;
+	      ensureXrayLogView()?.setPrivacy(active);
+	      applyXrayLogFilterToOutput();
+	    });
+	  }
 
 	  if (viewBtn) {
 	    viewBtn.addEventListener('click', (e) => {

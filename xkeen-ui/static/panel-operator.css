@@ -18917,6 +18917,16 @@ body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-btn .xk-action
   height: 15px;
 }
 
+body.panel-page #xray-log-privacy[aria-pressed="true"] {
+  color: var(--op-accent);
+  border-color: color-mix(in srgb, var(--op-accent) 50%, var(--op-border));
+  background: color-mix(in srgb, var(--op-accent) 12%, var(--op-surface));
+}
+
+body.panel-page #view-xray-logs .xk-xlog-head:has(#xray-log-privacy[aria-pressed="true"]) #xray-log-filter {
+  visibility: hidden;
+}
+
 /* error.log stream: rows wrap; off-screen rows skip layout and paint. */
 body.panel-page :is(#view-xray-logs, #mihomo-clash-logs) .xk-xlog-stream {
   padding: 4px 0;

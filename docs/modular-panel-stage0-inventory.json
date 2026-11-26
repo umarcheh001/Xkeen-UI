@@ -39,7 +39,7 @@
       ],
       "removable": false,
       "unit_count": 685,
-      "size_bytes": 9159792,
+      "size_bytes": 9160164,
       "kind_counts": {
         "app_runtime": 3,
         "backend_route": 19,
@@ -88,7 +88,7 @@
       ],
       "removable": true,
       "unit_count": 163,
-      "size_bytes": 4375788,
+      "size_bytes": 4382560,
       "kind_counts": {
         "backend_route": 13,
         "backend_service": 24,
@@ -15927,7 +15927,7 @@
       "module_id": "core",
       "kind": "stylesheet",
       "path": "xkeen-ui/static/panel-operator.css",
-      "size_bytes": 603492,
+      "size_bytes": 603864,
       "depends_on": [],
       "starts_background_task": false,
       "background_markers": [],
@@ -24812,7 +24812,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/xray_log_view.js",
-      "size_bytes": 63617,
+      "size_bytes": 64975,
       "depends_on": [
         "core",
         "tool.editor"
@@ -24842,7 +24842,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_feature",
       "path": "xkeen-ui/static/js/features/xray_logs.js",
-      "size_bytes": 194451,
+      "size_bytes": 195361,
       "depends_on": [
         "core",
         "tool.editor"
@@ -25093,7 +25093,7 @@
       "module_id": "engine.xray",
       "kind": "frontend_test",
       "path": "e2e/xray_log_rules.spec.mjs",
-      "size_bytes": 29268,
+      "size_bytes": 33608,
       "depends_on": [
         "core",
         "tool.editor"
@@ -25253,7 +25253,7 @@
       "module_id": "engine.xray",
       "kind": "template",
       "path": "xkeen-ui/templates/panel/screens/xray_logs.html",
-      "size_bytes": 12719,
+      "size_bytes": 12883,
       "depends_on": [
         "core",
         "tool.editor"

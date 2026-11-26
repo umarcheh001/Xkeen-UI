@@ -212,6 +212,9 @@ export function createXrayLogView(options) {
     visible: [],
     frozen: false,
     rulesVisible: false,
+    privacy: false,
+    deviceAliases: new Map(),
+    nodeAliases: new Map(),
     pendingRulesVisible: null,
     pendingRulesLookup: null,
     // The newest first or, as before, the oldest. The table follows the new
@@ -278,16 +281,28 @@ export function createXrayLogView(options) {
     const rawName = (known && known.name) || split.node || tag;
     const code = nodeCountryCode(rawName);
     const flag = code ? countryFlag(code) : null;
+    const name = (code ? nodeDisplayName(rawName, code) : rawName) || tag;
     const info = {
       tag,
       code,
       flagSvg: flag && flag.svg ? flag.svg : '',
       flagLabel: flag ? flag.label : '',
-      label: (code ? nodeDisplayName(rawName, code) : rawName) || tag,
-      group: (known && known.subscription) || split.group,
+      name,
+      label: state.privacy ? alias(state.nodeAliases, tag, 'Узел') : name,
+      group: state.privacy ? '' : (known && known.subscription) || split.group,
     };
     state.nodeCache.set(tag, info);
     return info;
+  }
+
+  function alias(map, key, label) {
+    if (!key) return '—';
+    if (!map.has(key)) map.set(key, `${label} ${map.size + 1}`);
+    return map.get(key);
+  }
+
+  function deviceLabel(ip) {
+    return state.privacy ? alias(state.deviceAliases, ip, 'Устройство') : hooks.deviceName(ip) || ip;
   }
 
   // Domain for the summary and its conditions: an IP becomes the domain the
@@ -353,7 +368,7 @@ export function createXrayLogView(options) {
   function matches(record) {
     const f = state.filter;
     if (!record.p) {
-      if (!f.showRaw) return false;
+      if (!f.showRaw || state.privacy) return false;
     } else if (state.mode === 'access') {
       if (record.kind && !f.kinds.has(record.kind)) return false;
       if (f.nodes.size && !(record.kind === 'proxy' && f.nodes.has(record.p.outTag))) return false;
@@ -426,14 +441,6 @@ export function createXrayLogView(options) {
 
   // ---------- Access table ----------
 
-  function deviceHtml(ip) {
-    const name = hooks.deviceName(ip);
-    const value = String(ip || '');
-    // The full address follows the name in grey: a bare ".22" read as part of the name.
-    if (name) return `${escapeHtml(name)} <small>${escapeHtml(value)}</small>`;
-    return escapeHtml(value);
-  }
-
   function destinationHtml(record) {
     const p = record.p;
     if (isIpAddress(p.host) && hooks.domainsVisible() && record.confirmedDomain) {
@@ -455,9 +462,10 @@ export function createXrayLogView(options) {
     if (kind === 'proxy') {
       const info = nodeInfo(p.outTag);
       const group = info.group ? `<span class="grp">${escapeHtml(info.group)}</span>` : '';
-      return `${inPill}${arrow}<span class="pill proxy" title="${escapeHtml(p.outTag)}"><span class="label">Через прокси · </span>${flagHtml(info)}${escapeHtml(info.label)}</span>${group}`;
+      return `${inPill}${arrow}<span class="pill proxy" title="${escapeHtml(state.privacy ? info.label : p.outTag)}"><span class="label">Через прокси · </span>${flagHtml(info)}${escapeHtml(info.label)}</span>${group}`;
     }
-    return `${inPill}${arrow}<span class="pill ${kind || 'proxy'}" title="${escapeHtml(p.outTag)}">${escapeHtml(KIND_LABEL[kind] || p.outTag)}</span>`;
+    const label = KIND_LABEL[kind] || (state.privacy ? 'Выход' : p.outTag);
+    return `${inPill}${arrow}<span class="pill ${kind || 'proxy'}" title="${escapeHtml(state.privacy ? label : p.outTag)}">${escapeHtml(label)}</span>`;
   }
 
   function rowHtml(record) {
@@ -468,14 +476,18 @@ export function createXrayLogView(options) {
     if (!p) {
       record.html = `<span class="lv"></span>${cb}<span class="raw">${escapeHtml(record.line)}</span>`;
     } else if (state.mode !== 'access') {
-      const message = escapeHtml(p.message);
+      const message = state.privacy ? 'Сообщение скрыто' : escapeHtml(p.message);
       record.html = `<span class="lv"></span>${cb}<span class="ts">${escapeHtml(p.time)}<i>${escapeHtml(p.frac.slice(0, 4))}</i></span>`
         + `<span class="lvl">${LEVEL_LABEL[p.level] || p.level}</span>`
         + `<span class="mod" title="${escapeHtml(p.module)}">${escapeHtml(p.module || '—')}</span>`
         + `<span class="msg" title="${message}">${p.session ? `<span class="sid">[${escapeHtml(p.session)}]</span> ` : ''}${message}</span>${chev}`;
     } else {
+      const device = deviceLabel(p.srcIp);
+      const showIp = !state.privacy && device !== p.srcIp;
+      const title = showIp ? `${device} · ${p.srcIp}` : device;
+      const address = showIp ? ` <small>${escapeHtml(p.srcIp)}</small>` : '';
       record.html = `<span class="lv"></span>${cb}<span class="ts">${escapeHtml(p.time)}</span>`
-        + `<span class="dev" title="${escapeHtml(hooks.deviceName(p.srcIp) ? `${hooks.deviceName(p.srcIp)} · ${p.srcIp}` : p.srcIp)}">${deviceHtml(p.srcIp)}</span>`
+        + `<span class="dev" title="${escapeHtml(title)}">${escapeHtml(device)}${address}</span>`
         + `<span class="dst" title="${escapeHtml(p.host ? `${p.host}:${p.port}` : '')}">${destinationHtml(record)}</span>`
         + `<span class="rt">${routeHtml(p, p.outKind)}</span>`
         + (state.rulesVisible ? `<span class="rule" title="${escapeHtml(record.ruleTag)}">${escapeHtml(record.ruleTag || '—')}</span>` : '')
@@ -568,7 +580,7 @@ export function createXrayLogView(options) {
   function errorDetailHtml(record) {
     const p = record.p;
     const icon = (name) => iconInShadow(hooks.icon(name));
-    const message = hooks.ansi ? hooks.ansi(escapeHtml(p.message)) : escapeHtml(p.message);
+    const message = state.privacy ? 'Сообщение скрыто' : hooks.ansi ? hooks.ansi(escapeHtml(p.message)) : escapeHtml(p.message);
     return `
       <dl>
         <div><dt>Время</dt><dd>${escapeHtml(p.date)} ${escapeHtml(p.time)}${escapeHtml(p.frac)}</dd></div>
@@ -589,25 +601,27 @@ export function createXrayLogView(options) {
     if (!p) return '';
     if (state.mode !== 'access') return errorDetailHtml(record);
     const info = p.outKind === 'proxy' ? nodeInfo(p.outTag) : null;
-    const device = hooks.deviceName(p.srcIp);
+    const name = hooks.deviceName(p.srcIp);
+    const device = state.privacy ? deviceLabel(p.srcIp) : name || p.srcIp;
+    const deviceDetail = state.privacy ? device : `${name || '—'} · ${p.srcIp}`;
     const icon = (name) => iconInShadow(hooks.icon(name));
     const nodeBtn = info
       ? `<button type="button" class="btn${condOn('node', p.outTag)}" data-act="cond" data-field="node" data-value="${escapeHtml(p.outTag)}" data-label="${escapeHtml(info.label)}">${flagHtml(info) || icon('search')}Только узел ${escapeHtml(info.label)}</button>`
       : '';
     return `
       <dl>
-        <div><dt>Устройство</dt><dd>${escapeHtml(device || '—')} · ${escapeHtml(p.srcIp)}</dd></div>
+        <div><dt>Устройство</dt><dd>${escapeHtml(deviceDetail)}</dd></div>
         <div><dt>Назначение</dt><dd>${escapeHtml(p.host || '—')}${p.port ? ':' + escapeHtml(p.port) : ''}${p.proto ? ' (' + escapeHtml(p.proto) + ')' : ''}</dd></div>
         ${hooks.domainsVisible() && record.confirmedDomain && isIpAddress(p.host) ? `<div><dt>Домен</dt><dd>${escapeHtml(record.confirmedDomain)}</dd></div>` : ''}
         ${state.rulesVisible ? `<div><dt>Правило</dt><dd>${escapeHtml(record.ruleTag || 'Не определено')}</dd></div>` : ''}
-        <div><dt>${info ? 'Узел' : 'Outbound'}</dt><dd>${info ? flagHtml(info) + escapeHtml(info.label) : escapeHtml(p.outTag || '—')}</dd></div>
-        ${info ? `<div><dt>Тег outbound${info.group ? ' / подписка' : ''}</dt><dd>${escapeHtml(p.outTag)}${info.group ? ' · ' + escapeHtml(info.group) : ''}</dd></div>` : ''}
-        ${p.reason ? `<div><dt>Причина</dt><dd>${escapeHtml(p.reason)}</dd></div>` : ''}
+        <div><dt>${info ? 'Узел' : 'Outbound'}</dt><dd>${info ? flagHtml(info) + escapeHtml(info.label) : escapeHtml((state.privacy ? KIND_LABEL[p.outKind] : p.outTag) || '—')}</dd></div>
+        ${info && !state.privacy ? `<div><dt>Тег outbound${info.group ? ' / подписка' : ''}</dt><dd>${escapeHtml(p.outTag)}${info.group ? ' · ' + escapeHtml(info.group) : ''}</dd></div>` : ''}
+        ${p.reason && !state.privacy ? `<div><dt>Причина</dt><dd>${escapeHtml(p.reason)}</dd></div>` : ''}
       </dl>
-      <div class="line">${escapeHtml(record.line)}</div>
+      ${state.privacy ? '' : `<div class="line">${escapeHtml(record.line)}</div>`}
       <div class="acts">
         <button type="button" class="btn${condOn('ip', p.srcIp)}" data-act="cond" data-field="ip" data-value="${escapeHtml(p.srcIp)}" data-label="${escapeHtml(device || p.srcIp)}">${icon('devices')}Только это устройство</button>
-        ${hooks.onRenameDevice && /[.:]/.test(p.srcIp) ? `<button type="button" class="btn" data-act="rename-device" data-ip="${escapeHtml(p.srcIp)}" data-name="${escapeHtml(device)}">${icon('devices')}Имя устройства…</button>` : ''}
+        ${!state.privacy && hooks.onRenameDevice && /[.:]/.test(p.srcIp) ? `<button type="button" class="btn" data-act="rename-device" data-ip="${escapeHtml(p.srcIp)}" data-name="${escapeHtml(name)}">${icon('devices')}Имя устройства…</button>` : ''}
         ${p.host ? `<button type="button" class="btn${condOn('host', p.host)}" data-act="cond" data-field="host" data-value="${escapeHtml(p.host)}" data-label="${escapeHtml(p.host)}">${icon('search')}Только ${escapeHtml(p.host)}</button>` : ''}
         ${nodeBtn}
         <button type="button" class="btn" data-act="copy-line" data-seq="${record.seq}">${icon('duplicate')}Копировать строку</button>
@@ -820,7 +834,9 @@ export function createXrayLogView(options) {
       })).join('');
       const conds = f.conditions.map((cond, idx) => (
         `<button type="button" class="xk-xlog-chip is-cond" data-xlog-act="drop-cond" data-index="${idx}" title="Снять условие">`
-        + `${cond.field === 'ip' ? hooks.icon('devices') : ''}${escapeHtml(cond.label || cond.value)}<span class="x" aria-hidden="true">✕</span></button>`
+        + `${cond.field === 'ip' ? hooks.icon('devices') : ''}${escapeHtml(
+          cond.field === 'ip' ? deviceLabel(cond.value) : cond.field === 'node' ? nodeInfo(cond.value).label : cond.label || cond.value
+        )}<span class="x" aria-hidden="true">✕</span></button>`
       )).join('');
       const hint = f.conditions.length ? '' : '<span class="xk-xlog-hint">Alt+клик по ячейке — добавить условие</span>';
       const dirty = f.conditions.length || f.nodes.size || f.kinds.size !== DEFAULT_KINDS.length || !DEFAULT_KINDS.every((kind) => f.kinds.has(kind));
@@ -896,7 +912,7 @@ export function createXrayLogView(options) {
       return { text: info.label, html: `${lightFlagHtml(info)}${escapeHtml(info.label)}` };
     }, 'node');
     const devices = topListHtml(topEntries(c.devices, TOP_N), (ip) => {
-      const name = hooks.deviceName(ip) || ip;
+      const name = deviceLabel(ip);
       return { text: name, html: escapeHtml(name) };
     }, 'ip');
     const domains = topListHtml(topEntries(domainCounts, TOP_N), (d) => ({ text: d, html: escapeHtml(d) }), 'domain');
@@ -1238,7 +1254,7 @@ export function createXrayLogView(options) {
         p.proto,
         p.inTag,
         p.outTag,
-        info ? info.label : '',
+        info ? info.name : '',
         ...(state.rulesVisible ? [record.ruleTag, record.line] : []),
       ];
     });
@@ -1328,7 +1344,7 @@ export function createXrayLogView(options) {
   }
 
   function onShadowContextMenu(e) {
-    if (!hooks.onContextMenu) return;
+    if (!hooks.onContextMenu || state.privacy) return;
     const record = recordFromEvent(e.target);
     if (!record) return;
     e.preventDefault();
@@ -1418,7 +1434,7 @@ export function createXrayLogView(options) {
       total: state.records.length,
       shown: state.visible.length,
       raw: state.counts.raw,
-      hiddenRaw: state.filter.showRaw ? 0 : state.counts.raw,
+      hiddenRaw: state.filter.showRaw && !state.privacy ? 0 : state.counts.raw,
       selected: state.selected.size,
     };
   }
@@ -1456,6 +1472,16 @@ export function createXrayLogView(options) {
       if (state.filter.showRaw === !!on) return;
       state.filter.showRaw = !!on;
       applyFilter();
+    },
+    setPrivacy(on) {
+      if (state.privacy === on) return;
+      state.privacy = on;
+      state.decoVersion += 1;
+      state.nodeCache.clear();
+      if (state.filter.showRaw && state.counts.raw) refilter();
+      renderAll();
+      // Pooled rows still have markup from before the switch.
+      for (const row of state.freeRows.splice(0)) row.remove();
     },
     setEmptyHtml(html) {
       state.emptyHtml = String(html || '');

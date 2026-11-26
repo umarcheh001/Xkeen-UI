@@ -266,8 +266,8 @@ async function openController(page, options = {}) {
     supported: options.supported !== false, version: options.version || '26.11.9',
     reason: options.reason || '', generation: String(options.generation || 1) });
   await page.route('**/api/xray-logs/status', route => options.statusError ? route.fulfill({ status: 500, json: {} }) : route.fulfill({ json: { loglevel: options.level || 'info', has_rule_tags: 'tags' in options ? options.tags : true, log_generation: options.generation || 1, routing_debug: debugStatus() } }));
-  await page.route('**/api/xray-logs/devices**', route => route.fulfill({ json: { devices: [] } }));
-  await page.route('**/api/xray-logs/outbound-names', route => route.fulfill({ json: { ok: true, names: {} } }));
+  await page.route('**/api/xray-logs/devices**', route => route.fulfill({ json: { devices: options.devices || [] } }));
+  await page.route('**/api/xray-logs/outbound-names', route => route.fulfill({ json: { ok: true, names: options.names || {} } }));
   await page.route('**/api/restart-log', route => route.fulfill({ json: { lines: [] } }));
   await page.route('**/api/ws-token', route => route.fulfill({ status: 503, json: { ok: false } }));
   let diagnosticRequests = 0;
@@ -303,6 +303,80 @@ async function openController(page, options = {}) {
   await expect(page.locator('#xray-log-output .tr').first()).toBeVisible();
   return () => diagnosticRequests;
 }
+
+test('screenshot mode masks devices and nodes throughout the access log', async ({ page }) => {
+  const ip = '192.168.10.2';
+  const tag = 'private-outbound';
+  const target = 'example.org';
+  await openController(page, {
+    debug: false,
+    devices: [{ ip, name: 'Private laptop' }],
+    names: { [tag]: { name: 'DE Private node', subscription: 'Private subscription' } },
+    lines: [
+      `2026/11/14 17:00:00 from ${ip}:53000 accepted tcp:${target}:443 [redirect -> ${tag}]`,
+      `2026/11/14 17:00:01 from ${ip}:53001 accepted tcp:203.0.113.9:80 [redirect -> ${tag}]`,
+      `Unparsed private record with ${ip} via ${tag}`,
+    ],
+  });
+  const output = page.locator('#xray-log-output');
+  const summary = page.locator('#xray-log-summary');
+  const chips = page.locator('#xray-log-chips');
+  await expect(output.locator('.dev').first()).toContainText('Private laptop');
+  await expect(output.locator('.rt').first()).toContainText('Private node');
+  const more = page.locator('#xray-log-more > summary');
+  await more.click();
+  await page.locator('label').filter({ has: page.locator('#xray-log-show-raw') }).click();
+  await more.click();
+  await expect(output.locator('.tr.is-raw')).toContainText(ip);
+  const search = page.locator('#xray-log-filter');
+  await search.fill(ip);
+  await search.press('Enter');
+  await summary.locator('[data-xlog-summary-toggle]').click();
+  await output.locator('.dev').first().click({ modifiers: ['Alt'] });
+  await output.locator('.chev').first().click();
+  await page.getByRole('button', { name: 'Скрыть устройства и узлы', exact: true }).click({ timeout: 3000 });
+  await expect(search).toBeHidden();
+  await expect(output.locator('.dev')).toHaveText(['Устройство 1', 'Устройство 1']);
+  await expect(output.locator('.tr.is-raw')).toHaveCount(0);
+  await expect(output.locator('.dev').first()).toHaveAttribute('title', 'Устройство 1');
+  await expect(output.locator('.pill.proxy').first()).toHaveAttribute('title', 'Узел 1');
+  await expect(output.locator('.dst').filter({ hasText: target })).toBeVisible();
+  await expect(output.locator('.dst').filter({ hasText: '203.0.113.9' })).toBeVisible();
+  await expect(output.locator('.detail')).toContainText('Устройство 1');
+  await expect(output.locator('.detail')).toContainText('Узел 1');
+  await expect(summary).toContainText('Устройство 1');
+  await expect(summary).toContainText('Узел 1');
+  await expect(chips.locator('.is-cond')).toContainText('Устройство 1');
+  for (const panel of [output.locator('.tr').first(), output.locator('.detail'), summary, chips]) {
+    await expect(panel).not.toContainText(/192\.168\.10\.2|Private|private-outbound/);
+  }
+  await page.getByRole('button', { name: 'Показать устройства и узлы', exact: true }).click();
+  await expect(search).toBeVisible();
+  await expect(search).toHaveValue(ip);
+  await expect(output.locator('.dev').first()).toContainText(ip);
+  await expect(output.locator('.rt').first()).toContainText('Private subscription');
+  await expect(output.locator('.detail')).toContainText(tag);
+  await expect(chips.locator('.is-cond')).toContainText('Private laptop');
+  await expect(output.locator('.tr.is-raw')).toContainText(ip);
+});
+
+test('screenshot mode stays active when switching to error.log', async ({ page }) => {
+  const message = 'request from 192.168.10.2 via private-outbound';
+  await openController(page, {
+    debug: false,
+    diagnostic: [`2026/11/14 17:00:00 [Info] [1234] proxy/dokodemo: ${message}`],
+  });
+  await page.getByRole('button', { name: 'Скрыть устройства и узлы', exact: true }).click();
+  await page.locator('[data-xlog-file-btn="error"]').click();
+  const output = page.locator('#xray-log-output');
+  const row = output.locator('.tr').first();
+  await expect(row.locator('.msg')).toHaveAttribute('title', 'Сообщение скрыто');
+  await expect(row).not.toContainText(message);
+  await row.locator('.chev').click();
+  await expect(output.locator('.detail')).not.toContainText(message);
+  await page.getByRole('button', { name: 'Показать устройства и узлы', exact: true }).click();
+  await expect(output.locator('.detail')).toContainText(message);
+});
 
 for (const debug of [false, true]) {
   test(`shared metadata polling refreshes every second: routing debug=${debug}`, async ({ page }) => {
