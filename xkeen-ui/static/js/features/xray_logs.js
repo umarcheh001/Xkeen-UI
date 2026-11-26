@@ -92,6 +92,7 @@ let xrayLogsModuleApi = null;
   // Кеш IP->домен сохраняется в localStorage, чтобы DNS-записи переживали
   // перезагрузку страницы (иначе при F5 модуль пересоздаётся с пустым кешем).
   const XRAY_DOMAIN_CACHE_STORAGE_KEY = 'xkeen.ui.xrayLogs.domainCache.v1';
+  const XRAY_DOMAIN_CACHE_VERSION = 2;
   const XRAY_DOMAIN_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
   const XRAY_DOMAIN_CACHE_SAVE_DEBOUNCE_MS = 1000;
   // Переключатель отображения доменных имён рядом с IP — чистый display-флаг,
@@ -2318,10 +2319,10 @@ let xrayLogsModuleApi = null;
       const raw = localStorage.getItem(XRAY_DOMAIN_CACHE_STORAGE_KEY);
       if (!raw) return;
       const obj = JSON.parse(raw);
-      const items = (obj && Array.isArray(obj.items)) ? obj.items : [];
+      if (obj?.v !== XRAY_DOMAIN_CACHE_VERSION || !Array.isArray(obj.items)) return;
       const now = Date.now();
       let restored = 0;
-      items.forEach((it) => {
+      obj.items.forEach((it) => {
         if (!it || restored >= XRAY_DESTINATION_DOMAIN_CACHE_MAX) return;
         const ip = normalizeXrayDeviceIp(it.ip);
         const domain = normalizeXrayLogDomain(it.domain);
@@ -2356,7 +2357,7 @@ let xrayLogsModuleApi = null;
       }
       localStorage.setItem(
         XRAY_DOMAIN_CACHE_STORAGE_KEY,
-        JSON.stringify({ v: 1, items: items.slice(-XRAY_DESTINATION_DOMAIN_CACHE_MAX) })
+        JSON.stringify({ v: XRAY_DOMAIN_CACHE_VERSION, items: items.slice(-XRAY_DESTINATION_DOMAIN_CACHE_MAX) })
       );
     } catch (e) {}
   }

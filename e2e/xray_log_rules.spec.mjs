@@ -236,6 +236,30 @@ test('domain confirmation works through the shared diagnostic poll without rule 
   await expect(page.locator('#xray-log-output .detail')).toContainText('exact.example');
 });
 
+test('XHTTP server names and old cached hints do not label access destinations', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('xkeen.ui.xrayLogs.domainCache.v1', JSON.stringify({
+    v: 1,
+    items: [{ ip: '203.0.113.8', domain: 'vps.example', updatedAt: Date.now() }],
+  })));
+  await openController(page, { domains: true, debug: false,
+    lines: [
+      '2026/11/14 17:00:00 from 192.168.10.2:53000 accepted tcp:203.0.113.7:80 [redirect -> proxy]',
+      '2026/11/14 17:00:01 from 192.168.10.3:53001 accepted tcp:203.0.113.8:5222 [redirect -> proxy]',
+      '2026/11/14 17:00:02 from 192.168.10.4:53002 accepted tcp:203.0.113.9:443 [redirect -> proxy]',
+    ],
+    diagnostic: [
+      '2026/11/14 17:00:00 [Info] [1234] transport/internet/splithttp: XHTTP is dialing to tcp:vps.example:443, mode packet-up, HTTP version 2, host vps.example',
+      '2026/11/14 17:00:00 [Info] [1234] proxy/vless/outbound: tunneling request to tcp:203.0.113.7:80 via vps.example:443',
+      '2026/11/14 17:00:02 [Info] [5678] app/dispatcher: sniffed domain: target.example',
+      '2026/11/14 17:00:02 [Info] [5678] proxy/vless/outbound: tunneling request to tcp:203.0.113.9:443 via vps.example:443',
+    ],
+  });
+  const destinations = page.locator('#xray-log-output .dst');
+  await expect(destinations.filter({ hasText: '203.0.113.9' })).toHaveText('203.0.113.9 · target.example');
+  await expect(destinations.filter({ hasText: '203.0.113.7' })).toHaveText('203.0.113.7');
+  await expect(destinations.filter({ hasText: '203.0.113.8' })).toHaveText('203.0.113.8');
+});
+
 async function openController(page, options = {}) {
   await page.addInitScript(domains => localStorage.setItem('xkeen.ui.xrayLogs.domainsWanted.v1', domains ? '1' : '0'), !!options.domains);
   const debugStatus = () => ({ enabled: options.debug !== false, active: options.active ?? (options.debug !== false && options.level !== 'none'),

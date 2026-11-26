@@ -3,7 +3,7 @@
   "generated_from": "docs/modular-panel-stage0-inventory.json",
   "modules": {
     "core": 5194896,
-    "engine.xray": 3221772,
+    "engine.xray": 3221544,
     "engine.mihomo": 2943895,
     "tool.editor": 834385,
     "tool.terminal": 484314,

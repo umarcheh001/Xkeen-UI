@@ -120,25 +120,17 @@ function addDomainCandidate(out, seen, raw, source) {
   out.push({ domain, source: String(source || '') });
 }
 
-function isXrayOutboundEndpointDialLine(line) {
-  const s = String(line || '');
-  // Matches both:
-  //   transport/internet/tcp: dialing TCP to tcp:DOMAIN  (Info level, with sub-protocol)
-  //   transport/internet: dialing to tcp:DOMAIN          (Debug level, without sub-protocol)
-  return /\btransport\/internet(?:\/[A-Za-z0-9_.-]+)?:\s+dialing(?:\s+(?:tcp|udp))?\s+to\s+(?:tcp|udp):/i.test(s);
-}
-
 export function collectXrayLogDomainCandidates(line) {
   const s = String(line || '');
   if (!s) return [];
+  // Transport logs can name the proxy server, as in XHTTP's "is dialing to".
+  if (/\btransport\/internet(?:\/[\w./-]+)?:\s/i.test(s)) return [];
 
   const out = [];
   const seen = new Set();
 
   const sniffed = s.match(/\bsniffed domain:\s*([A-Za-z0-9.-]+\.[A-Za-z0-9-]+)(?=$|[\s,\]])/i);
   if (sniffed && sniffed[1]) addDomainCandidate(out, seen, sniffed[1], 'sniffed');
-
-  if (isXrayOutboundEndpointDialLine(s)) return out;
 
   const domainTargets = [
     /\b(?:accepted|to|for)\s+\[(?:tcp|udp):([A-Za-z0-9.-]+\.[A-Za-z0-9-]+)(?::\d{1,5})?\]/gi,
